@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Document名／file session状態をDocumentTestDriver.createNameObservation／createFileObservationへ、表示設定をCanvasTestDriver.createViewObservationへ、Sketch可視性をSketchTreeTestDriver.createVisibilityObservationへ、themeをPropertiesTestDriver.createThemeObservationへ分離。既存Document名getter／有効名／保存値・title／handle、viewState／拘束表示状態、Sketch／保存値／effective可視性／Tree button、設定／保存theme・既定Geometry色getter／Canvas色変換・contrastへ役割別に接続する。呼出し時の最新値・objectコピー・null／boolean／fallbackと照会順を保持し、元の五つの本体との一致をgetter置換後に再確認。app.jsは5,667→5,635行（32行減、今回の再開から合計2,099行減）。構文483ファイル・単体1,298件・関連E2E129件が成功（すべてexit 0、E2E14.5分）。全利用箇所のfile-safety／unified-ui／constraint-drag-regressionsを実行。新規テストはなく、既存Document保存／読込・file handle／名前・可視性／テーマ／表示と長時間ドラッグ回帰を確認した。ログはcad-runtime-state-observations-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Document／file session・可視性／表示／theme状態・保存規則／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 寸法コマンド中のLine drag・クリック配置・線／円と半径差の準備／状態観測と半径差求解確認を既存DimensionTestDriverの七つの入口へ分離。既存reset／Geometry・寸法生成／Selection／command・fit／UI／draw／座標変換、姿勢変更→snapshot／依存求解→解析→UI→draw、呼出し時のscope／拘束・pending／operands・input／drag・計測／保存へ役割別に接続する。観測側には生成／reset依存を渡さず、固定入力・同一参照・null／fallback・pointerコピーと呼出し順を保持する。元の七つの処理本体との一致を依存port置換後に確認。app.jsは5,816→5,667行（149行減、今回の再開から合計2,067行減）。構文483ファイル・単体1,298件・関連E2E144件が成功（すべてexit 0、E2E1.9分）。全利用箇所のdimension-prefix／blocks／unified-uiを実行。新規テストはなく、既存寸法配置／command drag・線／円と半径差・求解回復と周辺操作を確認した。ログはcad-dimension-command-fixtures-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自寸法／Selection・pending／drag・求解／layout・scope／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

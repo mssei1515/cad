@@ -283,5 +283,19 @@
     return Object.freeze({ state });
   }
 
-  window.SketchTreeTestDriver = Object.freeze({ createRootHoverFixture, createBlockHoverFixture, createSiblingVisibilityFixture, createInactiveHoverFixture, createIdentityObservation, createSubtreeReferenceFixture, createSubtreeVisibilityObservation });
+  function createVisibilityObservation({ sketchById, serializeModel, isVisibleSketchId, document }) {
+    function state(sketchId) {
+      const sketch = sketchById(sketchId);
+      const serialized = serializeModel().sketches.find((item) => item.id === sketchId);
+      return {
+        preferenceVisible: sketch?.visible !== false,
+        effectiveVisible: isVisibleSketchId(sketchId),
+        serializedVisible: serialized?.appearance?.visible,
+        buttonPressed: document.querySelector(`.sketchVisibilityBtn[data-id="${sketchId}"]`)?.getAttribute("aria-pressed") || null,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.SketchTreeTestDriver = Object.freeze({ createRootHoverFixture, createBlockHoverFixture, createSiblingVisibilityFixture, createInactiveHoverFixture, createIdentityObservation, createSubtreeReferenceFixture, createSubtreeVisibilityObservation, createVisibilityObservation });
 })();

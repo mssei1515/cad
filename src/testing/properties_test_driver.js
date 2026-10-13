@@ -227,5 +227,20 @@
     return Object.freeze({ keys });
   }
 
-  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation });
+  function createThemeObservation({ applicationSettings, readDefaultGeometryColor, canvasThemeColor, CanvasThemeColors }) {
+    function state() {
+      return {
+        theme: applicationSettings.theme,
+        stored: applicationSettings.storedTheme(),
+        defaultGeometryColor: readDefaultGeometryColor(),
+        displayedDefaultGeometryColor: canvasThemeColor(readDefaultGeometryColor()),
+        displayedDefaultGeometryContrast: applicationSettings.theme === "dark"
+          ? CanvasThemeColors.contrast(CanvasThemeColors.channels(canvasThemeColor(readDefaultGeometryColor())), [15, 23, 42])
+          : null,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
 })();

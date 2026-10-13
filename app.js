@@ -5091,6 +5091,11 @@
     const radiusDifferenceRecovery = window.DimensionTestDriver.createRadiusDifferenceRecovery({ currentScope: workspace.current, ConcentricRadiusDifferenceConstraint, hypot2, solveSketchAndDependents, activeSketchId, snapshotModelState, refreshConstraintAnalysis, updateUI, draw, vectorNorm });
     const clickPlacementObservation = window.DimensionTestDriver.createClickPlacementObservation({ currentScope: workspace.current, isDimensionConstraint, dimensionValueInput, pendingCommandSession });
     const commandLineDragObservation = window.DimensionTestDriver.createCommandLineDragObservation({ currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionAnchor, constraintTargetSession, pendingCommandSession, canvasSelection, dimensionDrag });
+    const themeObservation = window.PropertiesTestDriver.createThemeObservation({ applicationSettings, readDefaultGeometryColor: () => DEFAULT_APPEARANCE.color, canvasThemeColor, CanvasThemeColors: window.CanvasThemeColors });
+    const documentNameObservation = window.DocumentTestDriver.createNameObservation({ readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document });
+    const fileObservation = window.DocumentTestDriver.createFileObservation({ fileSession });
+    const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
+    const sketchVisibilityObservation = window.SketchTreeTestDriver.createVisibilityObservation({ sketchById, serializeModel, isVisibleSketchId, document });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
     const offsetChainObservation = window.OffsetTestDriver.createChainObservation({ currentScope: workspace.current, OffsetChainConstraint, serializeModel, offsetSelection, pendingCommandSession, Line });
@@ -5352,17 +5357,7 @@
       blockDefinitionDrawableSketchIds, invalidateBlockProjectionCache, blockProjectionBundle, updateUI, draw,
     });
     window.__jot2dTest = {
-      applicationThemeStateForTest() {
-        return {
-          theme: applicationSettings.theme,
-          stored: applicationSettings.storedTheme(),
-          defaultGeometryColor: DEFAULT_APPEARANCE.color,
-          displayedDefaultGeometryColor: canvasThemeColor(DEFAULT_APPEARANCE.color),
-          displayedDefaultGeometryContrast: applicationSettings.theme === "dark"
-            ? window.CanvasThemeColors.contrast(window.CanvasThemeColors.channels(canvasThemeColor(DEFAULT_APPEARANCE.color)), [15, 23, 42])
-            : null,
-        };
-      },
+      applicationThemeStateForTest: themeObservation.state,
       startInteractionProfileForTest() {
         flushScheduledCanvasPointerMove();
         interactionProfiler.start();
@@ -5405,20 +5400,8 @@
       resetForGeometryClipboardTest: geometryClipboardFixture.reset,
       resetForBlockClipboardTest: blockClipboardFixture.reset,
       clipboardStateForTest: clipboardTestObservation.state,
-      documentNameState() {
-        return {
-          modelName: documentModel.documentName,
-          displayName: effectiveDocumentName(),
-          serializedName: serializeModel().documentName,
-          title: document.title,
-        };
-      },
-      fileSystemAccessStateForTest() {
-        return {
-          hasHandle: Boolean(fileSession.handle),
-          handleName: fileSession.handle?.name || null,
-        };
-      },
+      documentNameState: documentNameObservation.state,
+      fileSystemAccessStateForTest: fileObservation.state,
       serializedModelForTest() {
         return structuredClone(serializeModel());
       },
@@ -5469,13 +5452,7 @@
       multiplePropertiesStateForTest: propertiesObservation.state,
       resetForMultipleFixedTest: propertiesFixture.resetFixed,
       multipleFixedStateForTest: fixedObservation.state,
-      viewStateForTest() {
-        return {
-          ...viewState,
-          mouseLatched: constraintStatusView.mouseLatched,
-          spaceHeld: constraintStatusView.spaceHeld,
-        };
-      },
+      viewStateForTest: viewObservation.state,
       importDocumentNameFixture: documentTestImport.importName,
       loadDocumentFixtureForDragTest: documentTestLoad.load,
       selectedGeometryIdsForTest: readTestSelectedGeometry,
@@ -5554,16 +5531,7 @@
       deleteSketchForTest: sketchDeletionFixture.remove,
       referenceDependencyOrderCase: dependencyOrderFixture.orderCase,
       cyclicReferenceLoadCase: cyclicReferenceFixture.loadCase,
-      sketchVisibilityState(sketchId) {
-        const sketch = sketchById(sketchId);
-        const serialized = serializeModel().sketches.find((item) => item.id === sketchId);
-        return {
-          preferenceVisible: sketch?.visible !== false,
-          effectiveVisible: isVisibleSketchId(sketchId),
-          serializedVisible: serialized?.appearance?.visible,
-          buttonPressed: document.querySelector(`.sketchVisibilityBtn[data-id="${sketchId}"]`)?.getAttribute("aria-pressed") || null,
-        };
-      },
+      sketchVisibilityState: sketchVisibilityObservation.state,
       resetForConstraintDimensionSelection: dimensionSelectionFixture.reset,
       constraintDimensionSelectionState: dimensionSelectionObservation.state,
       resetForSupportConstraintStatus: supportStatusFixture.reset,

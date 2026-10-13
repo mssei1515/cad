@@ -235,5 +235,16 @@
     return Object.freeze({ reset });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture });
+  function createViewObservation({ viewState, constraintStatusView }) {
+    function state() {
+      return {
+        ...viewState,
+        mouseLatched: constraintStatusView.mouseLatched,
+        spaceHeld: constraintStatusView.spaceHeld,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation });
 })();

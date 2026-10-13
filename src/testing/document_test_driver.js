@@ -89,5 +89,27 @@
     return Object.freeze({ loadCase });
   }
 
-  window.DocumentTestDriver = Object.freeze({ createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture });
+  function createNameObservation({ readDocumentName, effectiveDocumentName, serializeModel, document }) {
+    function state() {
+      return {
+        modelName: readDocumentName(),
+        displayName: effectiveDocumentName(),
+        serializedName: serializeModel().documentName,
+        title: document.title,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createFileObservation({ fileSession }) {
+    function state() {
+      return {
+        hasHandle: Boolean(fileSession.handle),
+        handleName: fileSession.handle?.name || null,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.DocumentTestDriver = Object.freeze({ createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation });
 })();
