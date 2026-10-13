@@ -650,7 +650,7 @@
   const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, readPixelRatio: () => canvasSurface.dpr, paintState: geometryPaintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
   const geometryLayer = window.GeometryRenderer.createLayer({ renderer: geometryRenderer, isVisibleSketchElement, drawOrderBySketch, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines });
-  const interactionOverlay = window.InteractionOverlayRenderer.create({ ctx, viewport,
+  const interactionOverlay = window.InteractionOverlayRenderer.create({ ctx, viewport, withCanvasState,
     elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName });
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { resolvedLoopBounds } = window.HatchRegionEngine;
@@ -2611,19 +2611,7 @@
     }, setHint, updateGeometrySelectionUI, draw,
   });
 
-  function drawSelectionRect() {
-    const preview = selectionRectangle.preview();
-    if (!preview) return;
-    const { rect, crossing } = preview;
-    withCanvasState(() => {
-      ctx.strokeStyle = crossing ? "#f59e0b" : "#2563eb";
-      ctx.fillStyle = crossing ? "rgba(245, 158, 11, 0.08)" : "rgba(37, 99, 235, 0.08)";
-      ctx.lineWidth = 1.2 / viewport.scale;
-      ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
-      ctx.fillRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
-      ctx.strokeRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
-    });
-  }
+  function drawSelectionRect() { return interactionOverlay.drawSelectionRect(selectionRectangle.preview()); }
 
   function lineDisplaySegment(...args) { return lineDisplay.lineDisplaySegment(...args); }
 

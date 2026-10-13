@@ -62,3 +62,18 @@ test('relation labels and colors use current language and retain distinct refere
   assert.equal(f.calls.filter(c=>c[0]==='fillText').at(-1)[1],'別スケッチ / 参照不可（子孫）');
   assert.equal(f.ctx.fillStyle,'#b91c1c');assert.equal(f.calls.at(-1)[0],'restore');
 });
+
+test('selection rectangle paints crossing/enclosing states at current zoom, preserves input and skips absent preview', () => {
+  const calls = [], ctx = {}, viewport = { scale: 2 };
+  for (const name of ['setLineDash', 'fillRect', 'strokeRect']) ctx[name] = (...args) => calls.push([name, ...args]);
+  const renderer = sandbox.window.InteractionOverlayRenderer.create({ ctx, viewport,
+    withCanvasState: callback => { calls.push(['enter']); callback(); calls.push(['exit']); } });
+  renderer.drawSelectionRect(null); assert.equal(calls.length, 0);
+  const preview = { rect: { x1: 10, y1: 20, x2: 40, y2: 60 }, crossing: true }, before = JSON.stringify(preview);
+  renderer.drawSelectionRect(preview); assert.equal(ctx.strokeStyle, '#f59e0b'); assert.equal(ctx.fillStyle, 'rgba(245, 158, 11, 0.08)'); assert.equal(ctx.lineWidth, 0.6);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['enter'], ['setLineDash', [2.5, 2]], ['fillRect', 10, 20, 30, 40], ['strokeRect', 10, 20, 30, 40], ['exit']]);
+  assert.equal(JSON.stringify(preview), before);
+  calls.length = 0; viewport.scale = 4; preview.crossing = false; renderer.drawSelectionRect(preview);
+  assert.equal(ctx.strokeStyle, '#2563eb'); assert.equal(ctx.fillStyle, 'rgba(37, 99, 235, 0.08)'); assert.equal(ctx.lineWidth, 0.3);
+  assert.equal(JSON.stringify(calls[1]), '["setLineDash",[1.25,1]]');
+});

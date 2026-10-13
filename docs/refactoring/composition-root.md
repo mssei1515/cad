@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+選択矩形の表示を既存InteractionOverlayRenderer.drawSelectionRectへ分離。appはSelectionRectangle.previewの取得と描画呼出だけを持ち、rendererはpreview不在の短絡・crossing／enclosingの色・現在倍率に応じた線幅／破線・fill→strokeを扱う。既存withCanvasStateを接続し、session／Selection変更・pointer lifecycleへ依存しない。元body一致とwithCanvasStateの初期化位置・preview参照時点をaudit。app.jsは5,064→5,052行（12行減、今回の再開から合計2,682行減）。構文501ファイル・単体1,356件・関連E2E188件が成功（すべてexit 0、E2E2.5分）。既存overlay unitへ1件追加し、preview不在短絡・crossing／enclosingと倍率・描画順／Canvas隔離入口・preview無変更を確認。unified-ui／blocks／sketch-projection／png-export／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-selection-overlay-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Construction線分の表示延長を既存GeometryPresentation.createLineDisplayへ、描画対象のfilter／現在一覧／Sketch順とpainter呼出をGeometryRenderer.createLayerへ分離。表示線分3port、描画対象7portで既存viewport／外観／現在Geometry一覧とrendererへ接続する。短小線・非正／非有限延長量・overhang無効時の元point参照、倍率、explicit外観、空array／null／undefinedとoptions・painter receiver／元の戻り値を維持し、モデル端点は変更しない。renderer生成前のcallback登録に必要なhoisted入口をappへ残す。app.jsは5,088→5,064行（24行減、今回の再開から合計2,670行減）。構文501ファイル・単体1,355件・関連E2E198件が成功（すべてexit 0、E2E2.6分）。既存2unitへ3件追加し、live倍率／延長と無変更・参照、degenerate／非有限短絡、explicit／既定／空itemsと現在一覧・順序／options／receiverを確認。元body一致と3／7portの初期化順をaudit。unified-ui／hatching／selection-zoom-shadow／spline／blocks／png-export／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-geometry-display-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
