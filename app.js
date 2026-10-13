@@ -5029,6 +5029,12 @@
       resetModelState, viewport, drawingPreview, selectionRectangle, setMode: setTestDrawingMode, ctx, drawSelectionRect, draftCases: draftDashCases, blockCases: blockDashCases, drawAnnotationLeader, addLine, addPoint, draw,
     });
     const sketchDeletionFixture = window.DocumentTestDriver.createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch });
+    const strokeStyleCases = window.PropertiesTestDriver.createStrokeStyleCases({ resetModelState, addLine, addPoint, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, geometryStrokeWidth, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA });
+    const constructionHoverFixture = window.CanvasRenderTestDriver.createConstructionHoverFixture({
+      ctx, viewport, drawLines, resetModelState, addLine, addPoint, canvasHover, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), currentScope: workspace.current, invalidateBlockProjectionCache, blockProjectionBundle,
+    });
+    const constructionLineObservation = window.CanvasRenderTestDriver.createConstructionLineObservation({ allGeometryLines, ctx, drawLines, viewport, effectiveAppearanceForElement });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5484,128 +5490,9 @@
       resetForSiblingVisibility: siblingVisibilityFixture.reset,
       resetForInactiveDimensionAndBlockHover: inactiveHoverFixture.reset,
       hoverIdentityStateForTest: hoverIdentityObservation.state,
-      geometryStrokeStyleCasesForTest() {
-        resetModelState();
-        const activeNormal = addLine(addPoint(-80, -25, false, "endpoint"), addPoint(80, -25, false, "endpoint"));
-        const activeConstruction = addLine(addPoint(-80, 25, false, "endpoint"), addPoint(80, 25, false, "endpoint"), true);
-        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
-        model.activeSketchId = "S2";
-        const inactiveNormal = addLine(addPoint(-80, 75, false, "endpoint"), addPoint(80, 75, false, "endpoint"));
-        const inactiveConstruction = addLine(addPoint(-80, 125, false, "endpoint"), addPoint(80, 125, false, "endpoint"), true);
-        model.activeSketchId = DEFAULT_SKETCH_ID;
-        return {
-          activeNormal: geometryStrokeWidth(activeNormal),
-          activeConstruction: geometryStrokeWidth(activeConstruction, { construction: true }),
-          inactiveNormal: geometryStrokeWidth(inactiveNormal),
-          inactiveConstruction: geometryStrokeWidth(inactiveConstruction, { construction: true }),
-          selected: geometryStrokeWidth(activeNormal, { selected: true }),
-          hovered: geometryStrokeWidth(activeNormal, { hovered: true }),
-          constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
-        };
-      },
-      constructionLineHoverDisplayCasesForTest() {
-        const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-        const captureOverhang = (line, setupHover) => {
-          const segments = [];
-          let start = null;
-          const originalMoveTo = ctx.moveTo;
-          const originalLineTo = ctx.lineTo;
-          ctx.moveTo = (x, y) => {
-            start = { x, y };
-          };
-          ctx.lineTo = (x, y) => {
-            if (start) segments.push({ p1: start, p2: { x, y } });
-          };
-          try {
-            setupHover();
-            drawLines();
-          } finally {
-            ctx.moveTo = originalMoveTo;
-            ctx.lineTo = originalLineTo;
-          }
-          const segment = segments[0];
-          return segment ? ((distance(segment.p1, line.p1) + distance(segment.p2, line.p2)) / 2) * viewport.scale : null;
-        };
-
-        resetModelState();
-        viewport.update({ scale: 2 });
-        const line = addLine(addPoint(-40, 0, false, "endpoint"), addPoint(40, 0, false, "endpoint"), true);
-        const direct = captureOverhang(line, () => {
-          canvasHover.update({ line: line });
-        });
-
-        resetModelState();
-        viewport.update({ scale: 2 });
-        const definition = createEmptyBlockDefinition("Block-Construction-Hover");
-        const p1 = new Point("BP1", -40, 0, false, "endpoint");
-        const p2 = new Point("BP2", 40, 0, false, "endpoint");
-        p1.sketchId = DEFAULT_SKETCH_ID;
-        p2.sketchId = DEFAULT_SKETCH_ID;
-        const localLine = new Line("BL1", p1, p2, true);
-        localLine.sketchId = DEFAULT_SKETCH_ID;
-        definition.points.push(p1, p2);
-        definition.lines.push(localLine);
-        documentModel.blockDefinitions.push(definition);
-        const instance = {
-          id: "BI-HOVER",
-          definitionId: definition.id,
-          sketchId: DEFAULT_SKETCH_ID,
-          x: 0,
-          y: 0,
-          rotation: 0,
-          fixed: false,
-          rotationLocked: false,
-          enabledSketchIds: [DEFAULT_SKETCH_ID],
-          appearanceOverride: {},
-        };
-        model.blockInstances.push(instance);
-        invalidateBlockProjectionCache();
-        const projection = blockProjectionBundle(instance).lines[0];
-        const block = captureOverhang(projection, () => {
-          canvasHover.update({ block: instance });
-        });
-        canvasHover.update({
-          line: null, block: null,
-        });
-        return { direct, block };
-      },
-      constructionLineRenderingForTest(lineId) {
-        const line = allGeometryLines().find((item) => item.id === lineId);
-        if (!line) return null;
-        const segments = [];
-        let start = null;
-        let endpointMarkerCount = 0;
-        const originalMoveTo = ctx.moveTo;
-        const originalLineTo = ctx.lineTo;
-        const originalArc = ctx.arc;
-        ctx.moveTo = (x, y) => {
-          start = { x, y };
-        };
-        ctx.lineTo = (x, y) => {
-          if (start) segments.push({ p1: start, p2: { x, y } });
-        };
-        ctx.arc = (...args) => {
-          endpointMarkerCount += 1;
-          return originalArc.apply(ctx, args);
-        };
-        try {
-          drawLines();
-        } finally {
-          ctx.moveTo = originalMoveTo;
-          ctx.lineTo = originalLineTo;
-          ctx.arc = originalArc;
-        }
-        const segment = segments[0];
-        const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-        const overhangPx = segment ? ((distance(segment.p1, line.p1) + distance(segment.p2, line.p2)) / 2) * viewport.scale : null;
-        const appearance = effectiveAppearanceForElement(line);
-        return {
-          endpointOverhang: appearance.endpointOverhang !== false,
-          endpointMarkers: appearance.endpointMarkers !== false,
-          overhangPx: overhangPx == null ? null : Number(overhangPx.toFixed(6)),
-          endpointMarkerCount,
-        };
-      },
+      geometryStrokeStyleCasesForTest: strokeStyleCases.cases,
+      constructionLineHoverDisplayCasesForTest: constructionHoverFixture.cases,
+      constructionLineRenderingForTest: constructionLineObservation.state,
       resetForSiblingSubtreeReference() {
         resetModelState();
         const parentSketchId = "S10";

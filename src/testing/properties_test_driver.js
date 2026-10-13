@@ -157,5 +157,28 @@
     return Object.freeze({ reset });
   }
 
-  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture });
+  function createStrokeStyleCases({ resetModelState, addLine, addPoint, currentScope, rootSketchId, defaultSketchId, geometryStrokeWidth, constructionAlpha }) {
+    function cases() {
+      resetModelState();
+      const activeNormal = addLine(addPoint(-80, -25, false, "endpoint"), addPoint(80, -25, false, "endpoint"));
+      const activeConstruction = addLine(addPoint(-80, 25, false, "endpoint"), addPoint(80, 25, false, "endpoint"), true);
+      currentScope().sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: rootSketchId, kind: "sketch", visible: true });
+      currentScope().activeSketchId = "S2";
+      const inactiveNormal = addLine(addPoint(-80, 75, false, "endpoint"), addPoint(80, 75, false, "endpoint"));
+      const inactiveConstruction = addLine(addPoint(-80, 125, false, "endpoint"), addPoint(80, 125, false, "endpoint"), true);
+      currentScope().activeSketchId = defaultSketchId;
+      return {
+        activeNormal: geometryStrokeWidth(activeNormal),
+        activeConstruction: geometryStrokeWidth(activeConstruction, { construction: true }),
+        inactiveNormal: geometryStrokeWidth(inactiveNormal),
+        inactiveConstruction: geometryStrokeWidth(inactiveConstruction, { construction: true }),
+        selected: geometryStrokeWidth(activeNormal, { selected: true }),
+        hovered: geometryStrokeWidth(activeNormal, { hovered: true }),
+        constructionAlpha: constructionAlpha,
+      };
+    }
+    return Object.freeze({ cases });
+  }
+
+  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases });
 })();
