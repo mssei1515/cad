@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Sidebar highlight ID／hover Geometry keyの観測を既存PropertiesTestDriver.createHighlightObservation／createHoverKeyObservationへ分離。現在SelectionのGeometry／端点・中心、既存effective拘束／highlight nodes・selectionHighlight・Canvas dimension Hover、全Geometry／Sidebar Hover判定／keyへ役割別に接続する。重複除外・優先順・null除外／sortと照会順を維持し、元の二つの処理本体との一致を確認。app.jsは5,925→5,890行（35行減、今回の再開から合計1,844行減）。構文483ファイル・単体1,298件・関連E2E142件が成功（すべてexit 0、E2E1.9分）。全利用箇所のblocks／unified-uiを実行。新規テストはなく、既存Block／Sidebar／Canvasの選択・拘束highlight／hoverの連携と周辺操作を確認した。ログはcad-sidebar-highlight-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Selection／highlight・所属／編集先・hover規則は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Block状態観測と通常／旧versionの保存再読込を既存BlockTestDriver.createStateObservation／createReload／createLegacyReloadへ分離。既存投影bundle・呼出し時のDocument Definition／scope／Selection／mode・serialize／load・UI→drawへ接続し、配列コピー・boolean／fallback・同一参照と照会順を維持する。旧版は保存値のJSON cloneだけをversion 7相当に加工し、製品migrationは持たない。元の三つの処理本体との一致を依存port置換後に確認。app.jsは6,004→5,925行（79行減、今回の再開から合計1,809行減）。構文483ファイル・単体1,298件・関連E2E142件が成功（すべてexit 0、E2E1.9分）。全利用箇所のblocks／unified-uiを実行。新規テストはなく、既存Block状態／通常保存再読込・旧versionの階層／origin／所属・enabled Sketch／rotation lock・投影と周辺操作を確認した。ログはcad-block-reload-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Document／Definition／cache／保存規則／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

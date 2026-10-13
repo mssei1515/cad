@@ -5074,6 +5074,8 @@
     const blockStateObservation = window.BlockTestDriver.createStateObservation({ blockProjectionBundles, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, canvasSelection, readMode: () => mode, serializeModel });
     const blockReload = window.BlockTestDriver.createReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, allGeometryLines });
     const legacyBlockReload = window.BlockTestDriver.createLegacyReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockProjectionBundle });
+    const sidebarHighlightObservation = window.PropertiesTestDriver.createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover });
+    const sidebarHoverKeyObservation = window.PropertiesTestDriver.createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5835,45 +5837,8 @@
       completeBlockEditor: blockCompleteAction.complete,
       setFirstBlockInstanceSketches: blockEnabledSketchAction.set,
       blockCreationRejectionCases: blockRejectionFixture.cases,
-      sidebarHighlightIds() {
-        const ids = new Set();
-        for (const point of canvasSelection.points) ids.add(point.id);
-        for (const line of canvasSelection.lines) {
-          ids.add(line.id);
-          ids.add(line.p1.id);
-          ids.add(line.p2.id);
-        }
-        for (const circle of canvasSelection.circles) {
-          ids.add(circle.id);
-          ids.add(circle.center.id);
-        }
-        for (const arc of canvasSelection.arcs) {
-          ids.add(arc.id);
-          ids.add(arc.center.id);
-        }
-        for (const spline of canvasSelection.splines) ids.add(spline.id);
-        const constraint = effectiveSelectedConstraint() || canvasSelection.dimensionConstraint;
-        if (constraint) {
-          for (const item of constraintHighlightNodes(constraint)) {
-            if (item?.id) ids.add(item.id);
-          }
-        }
-        for (const item of selectionHighlight.current?.elements || []) {
-          if (item?.id) ids.add(item.id);
-        }
-        if (canvasHover.current.dimension) {
-          for (const item of constraintHighlightNodes(canvasHover.current.dimension)) {
-            if (item?.id) ids.add(item.id);
-          }
-        }
-        return [...ids].sort();
-      },
-      currentSidebarHoveredGeometryKeys() {
-        return [...allGeometryPoints(), ...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()]
-          .filter(isSidebarHoveredElement)
-          .map(geometryElementKey)
-          .sort();
-      },
+      sidebarHighlightIds: sidebarHighlightObservation.ids,
+      currentSidebarHoveredGeometryKeys: sidebarHoverKeyObservation.keys,
     };
   }
 

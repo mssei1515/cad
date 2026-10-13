@@ -180,5 +180,52 @@
     return Object.freeze({ cases });
   }
 
-  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases });
+  function createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover }) {
+    function ids() {
+      const ids = new Set();
+      for (const point of canvasSelection.points) ids.add(point.id);
+      for (const line of canvasSelection.lines) {
+        ids.add(line.id);
+        ids.add(line.p1.id);
+        ids.add(line.p2.id);
+      }
+      for (const circle of canvasSelection.circles) {
+        ids.add(circle.id);
+        ids.add(circle.center.id);
+      }
+      for (const arc of canvasSelection.arcs) {
+        ids.add(arc.id);
+        ids.add(arc.center.id);
+      }
+      for (const spline of canvasSelection.splines) ids.add(spline.id);
+      const constraint = effectiveSelectedConstraint() || canvasSelection.dimensionConstraint;
+      if (constraint) {
+        for (const item of constraintHighlightNodes(constraint)) {
+          if (item?.id) ids.add(item.id);
+        }
+      }
+      for (const item of selectionHighlight.current?.elements || []) {
+        if (item?.id) ids.add(item.id);
+      }
+      if (canvasHover.current.dimension) {
+        for (const item of constraintHighlightNodes(canvasHover.current.dimension)) {
+          if (item?.id) ids.add(item.id);
+        }
+      }
+      return [...ids].sort();
+    }
+    return Object.freeze({ ids });
+  }
+
+  function createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey }) {
+    function keys() {
+      return [...allGeometryPoints(), ...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()]
+        .filter(isSidebarHoveredElement)
+        .map(geometryElementKey)
+        .sort();
+    }
+    return Object.freeze({ keys });
+  }
+
+  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation });
 })();
