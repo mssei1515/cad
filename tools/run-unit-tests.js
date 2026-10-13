@@ -157,7 +157,7 @@ const files = [
   "tests/unit/pointer-hover.test.js",
   "tests/unit/geometry-hit-query.test.js",
   "tests/unit/canvas-hover.test.js",
-  "tests/unit/canvas-context-query.test.js",
+  "tests/unit/canvas-context-query.test.js", "tests/unit/canvas-context-target.test.js",
   "tests/unit/canvas-context-menu.test.js",
   "tests/unit/annotation-spatial-query.test.js",
   "tests/unit/annotation-anchor-query.test.js",

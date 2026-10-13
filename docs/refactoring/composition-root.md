@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Canvas context targetの選択照会／選択更新・拘束hit構成とFix状態照会をsrc/editing/canvas_context_target.jsのCanvasContextTarget.createSelection／createFixObservationへ分離。既存CanvasSelection・端点照合／計算・clearとbatch／固定拘束／Geometry照会へ四port／六portで接続し、同一参照・既選択集合保持／明示置換・既存hit優先／fallback・batch優先・null／booleanと短絡順を保持する。元の四つの処理本体との一致を確認。候補収集／順位・menu表示は既存所有者、項目構成／action調整はappへ留める。app.jsは5,612→5,556行（56行減、今回の再開から合計2,178行減）。構文485ファイル・単体1,301件・関連E2E157件が成功（すべてexit 0、E2E2.1分）。新単体3件で実際のCanvasSelectionを使い、集合保持／置換・IDが同じ別参照・Arc端点／複数寸法・hit参照／計算fallback・live batch／固定拘束・Fix可否の非破壊観測を確認。unified-ui／blocks／fixed-command／sketch-permissionsを実行し、context menu／重複候補選択・Fix／Undo・権限／Blockとfile URL読込を確認した。新scriptはindex／構文・単体一覧／読込期待値を同期。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-context-target-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Selection／拘束・履歴・DOM／描画・menu表示／action実行は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 共通Selection ID一覧をCanvasSelectionTestDriver.createIdObservationへ、active履歴／Block編集・Undo／Redo／Construction表示の観測をDocumentTestDriver.createHistoryObservationへ、responsive drag準備をGeometryDragTestDriver.createResponsiveFixtureへ分離。既存所有者の最新状態・ID配列の順とコピー・DOM要素なしのundefined／boolean、sample→fit→draw→履歴reset→保存値取得の順を維持し、元の三つの処理本体との一致を確認。公開APIと各test driverへの共通照会入口を維持する。app.jsは5,635→5,612行（23行減、今回の再開から合計2,122行減）。構文483ファイル・単体1,298件・関連E2E262件が成功（すべてexit 0、13ファイル255件5.2分＋constraint-drag-regressions内のnative pointer／Undo7件25.9秒）。最初のE2Eは共有HTTPサーバー停止によるERR_CONNECTION_REFUSEDで中断（exit 1）し、製品／テストを変更せず専用port 8784で全13ファイルを再実行して成功。専用サーバーは実体を確認して検証後に終了。ログはcad-common-test-observations-{check,unit,e2e,e2e-final,native-e2e}.log。新規テストはなく、既存Geometry／Block編集・Selection・Undo／Redo／履歴・表示とnative pointerの連携を確認した。constraint-drag-regressions全体と全E2Eはこの単位では未実行。独自履歴／Selection・モデル／viewport・Geometry生成／求解規則は追加していない。全体目標は未完了。
 
 ### 前回の区切り
