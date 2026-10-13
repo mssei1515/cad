@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Annotationの実効外観を既存GeometryAppearanceQuery.createAnnotationへ、表示色をAnnotationRenderer.createColorへ、描画対象巡回をcreateLayerへ分離。外観照会2port・色決定5port・巡回5portに限定し、現在Document／Sketch一覧、Block definition／localElement、継承／precision／affix・順序付きBlock override、PNG→選択／inspection→Hover→通常色、可視性短絡と元の対象参照／描画順を維持する。状態複製・保存styleへの代入・求解／履歴を持たない。appのhoisted入口は先に登録されたcallbackの参照時点を維持。app.jsは5,113→5,088行（25行減、今回の再開から合計2,646行減）。構文501ファイル・単体1,352件・関連E2E216件が成功（すべてexit 0、E2E3.1分）。既存2unitへ4件追加し、plain Textの短絡とlive Document／Sketch、投影local参照とoverride／無変更、explicit styleと色優先／PNG短絡、live対象／visibility／描画順と参照を検証。元body一致と全portの初期化順をaudit。unified-ui／unified-annotations／leader-appearance／annotation-display-size／blocks／png-export／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-annotation-presentation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 通常寸法の表示情報取得と矩形選択用boundsを新しいsrc/rendering/dimension_presentation.jsへ分離。createLayerは19portで現在表示scope・可視性／外観／配置／ラベル、Selectionとhover／drag／pending／PNG／statusのread入口と既存rendererへ接続し、createSelectionBoundsは12portで現在配置・Text metricsから回転／複数行／式記号を含むboundsを返す。元body・短絡／順序・target／dimension参照とsave／restore・例外伝播を維持し、採否とSelection変更は既存RectangleSelectionQuery／CanvasSelectionに残す。app.jsは5,131→5,113行（18行減、今回の再開から合計2,621行減）。構文501ファイル・単体1,348件・関連E2E181件が成功（すべてexit 0、E2E2.5分）。新しいunit3件で回転複数行ラベルとshaft bounds、visibility／target／layout短絡とdefault、live scope／interaction／PNGの情報と順序を確認。元body一致と各port初期化順をauditし、後に生成されるdimensionDragはgetterで描画時に読む。unified-ui／dimension-prefix／png-export／blocks／annotation-display-size／phase0-characterizationを実行。index.html、構文／unit実行リスト、file URLのscript期待値を同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-dimension-presentation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

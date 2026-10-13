@@ -52,3 +52,29 @@ test('visibility combines sketch and element appearance and reads show-hidden st
   f.state.hidden = false; f.line.appearance = {}; f.sketches[1].appearance.visible = false;
   assert.equal(q.isVisibleSketchId(), false); assert.equal(q.isVisibleSketchElement(f.line), false);
 });
+
+test('annotation appearance keeps plain text independent and reads current defaults/sketches for inherited leaders', () => {
+  let sketches = [{ id: 'S', leaderAppearance: { color: '#333333' } }], reads = 0;
+  const document = { defaultLeaderAppearance: { color: '#111111' }, defaultTerminatorAppearance: { terminatorType: 'dot' } };
+  const query = sandbox.window.GeometryAppearanceQuery.createAnnotation({ document, currentSketches: () => { reads++; return sketches; } });
+  const plain = { type: 'text', style: { color: '#222222', precision: 2, prefix: 'p' } };
+  assert.equal(query.effectiveAnnotationStyle(plain).color, '#222222'); assert.equal(reads, 0);
+  const leader = { type: 'leader', appearanceInheritance: true, sketchId: 'S', style: { precision: 3, prefix: 'a', suffix: 'b' } };
+  const before = JSON.stringify(leader), style = query.effectiveAnnotationStyle(leader);
+  assert.equal(style.color, '#333333'); assert.equal(style.terminatorType, 'dot'); assert.equal(style.precision, 3); assert.equal(style.prefix, 'a'); assert.equal(style.suffix, 'b');
+  sketches = [{ id: 'S', leaderAppearance: { color: '#444444' } }]; document.defaultTerminatorAppearance = { terminatorType: 'filledArrow' };
+  assert.equal(query.effectiveAnnotationStyle(leader).color, '#444444'); assert.equal(query.effectiveAnnotationStyle(leader).terminatorType, 'filledArrow');
+  assert.equal(query.effectiveLeaderAppearanceForSketch(sketches[0]).color, '#444444');
+  assert.equal(JSON.stringify(leader), before);
+});
+test('projected annotation appearance uses definition/local source and ordered Block overrides without changing stored styles', () => {
+  const document = { defaultLeaderAppearance: { color: '#111111' }, defaultTerminatorAppearance: {} };
+  const query = sandbox.window.GeometryAppearanceQuery.createAnnotation({ document, currentSketches: () => { throw new Error('definition sketch must short circuit scope'); } });
+  const source = { type: 'leader', sketchId: 'local', appearanceInheritance: true, style: { precision: 1, prefix: 'local', suffix: 'mm', lineWidth: 2 } };
+  const element = { type: 'leader', sketchId: 'outer', localElement: source, style: { color: '#ff0000' }, blockDefinition: { sketches: [{ id: 'local', leaderAppearance: { color: '#333333' } }] },
+    blockAppearanceOverrides: [{ color: '#444444', lineWidth: 3 }, { color: '#555555' }] };
+  const before = JSON.stringify(element), style = query.effectiveAnnotationStyle(element);
+  assert.equal(style.color, '#555555'); assert.equal(style.lineWidth, 3); assert.equal(style.prefix, 'local'); assert.equal(style.suffix, 'mm'); assert.equal(style.precision, 1); assert.equal(JSON.stringify(element), before);
+  source.appearanceInheritance = false; source.rotation = 27;
+  assert.equal(query.effectiveAnnotationStyle(element).rotation, 27);
+});

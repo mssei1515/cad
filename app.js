@@ -300,6 +300,7 @@
     document: documentModel, readAppearance: geometryReads.readAppearance, cacheAppearance: geometryReads.cacheAppearance,
     sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements: () => viewState.showHiddenElements,
   });
+  const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document: documentModel, currentSketches: () => model.sketches });
   const { hitAnnotationTarget, annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
     isReferenceSourceSketchId,
     selectedGeometryItems, elementSketchId, activeSketchId, resolveGeometryRef,
@@ -668,12 +669,17 @@
     readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRendering.frame),
     sketchAlpha, readMode: () => mode, readCommand: () => hatchCommand,
   });
+  const annotationColor = window.AnnotationRenderer.createColor({
+    effectiveAnnotationStyle, readExportFrame: () => pngRendering.frame, canvasSelection,
+    readHoveredAnnotation: () => canvasHover.current.annotation, canvasThemeColor,
+  });
   const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
     resolvePlacement: (element, base) => window.AnnotationAnchorConstraints.resolve(element, base, resolveGeometryRef),
     showFrame: element => !pngRendering.frame && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
     showResizeHandles: element => !pngRendering.frame && !element.blockProjection && canvasSelection.annotations.includes(element) && isEditableSketchElement(element) && annotationDrag.resizeEnabled(element),
     isResizeHandleHovered: (element, handle) => canvasHover.current.annotationHandle?.element === element && canvasHover.current.annotationHandle.resizeX === handle.resizeX && canvasHover.current.annotationHandle.resizeY === handle.resizeY,
     showLeaderEndHandle: element => !pngRendering.frame && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
+  const annotationLayer = window.AnnotationRenderer.createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText });
   function annotationPlacementAnchor(element) {
     const layout = annotationTextLayout(element) || annotationTextMetrics(element, element.type === "leader" ? annotationLeaderDisplayGeometry(element) : element);
     return { x: layout.anchorX ?? layout.x, y: layout.anchorY ?? layout.y };
@@ -2702,42 +2708,11 @@
 
   function drawDimensions() { return dimensionLayer.draw(); }
 
-  function drawAnnotations() {
-    for (const element of allAnnotations()) {
-      if (!isVisibleValue(element.visible) || !isVisibleSketchId(element.sketchId)) continue;
-      if (element.type === "leader") drawAnnotationLeader(element);
-      else if (element.type === "text") drawAnnotationText(element);
-    }
-  }
+  function drawAnnotations() { return annotationLayer.draw(); }
 
-  function effectiveLeaderAppearanceForSketch(sketch) {
-    return window.Appearance.resolveLeaderAppearance(documentModel.defaultLeaderAppearance, documentModel.defaultTerminatorAppearance, sketch?.leaderAppearance);
-  }
-
-  function effectiveAnnotationStyle(element) {
-    if (element?.type !== "leader" && !element?.appearanceInheritance) return normalizeAnnotationStyle(element?.style);
-    const source = element.localElement || element;
-    const sketches = element.blockDefinition?.sketches || model.sketches;
-    const sketch = sketches.find(item => item.id === source.sketchId);
-    const direct = source.appearanceInheritance ? source.style : {
-      ...normalizeAnnotationStyle(source.style), ...window.Appearance.annotationDisplaySettings(source.style), rotation: Number(source.rotation) || 0
-    };
-    const style = window.Appearance.resolveLeaderAppearance(documentModel.defaultLeaderAppearance, documentModel.defaultTerminatorAppearance, sketch?.leaderAppearance, direct);
-    Object.assign(style, { precision: normalizeAnnotationStyle(source.style).precision, prefix: String(source.style?.prefix || ""), suffix: String(source.style?.suffix || "") });
-    for (const override of element.blockAppearanceOverrides || []) {
-      const normalized = normalizeAppearance(override);
-      if (normalized.color) style.color = normalized.color;
-      if (normalized.lineWidth != null) style.lineWidth = normalized.lineWidth;
-    }
-    return style;
-  }
-
-  function annotationDisplayColor(element, style = effectiveAnnotationStyle(element)) {
-    if (pngRendering.frame) return canvasThemeColor(style.color);
-    if (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasSelection.inspectionContains(element.blockInstance)) return canvasThemeColor("#2563eb");
-    if (element === canvasHover.current.annotation) return canvasThemeColor("#0ea5e9");
-    return canvasThemeColor(style.color);
-  }
+  function effectiveLeaderAppearanceForSketch(sketch) { return annotationAppearance.effectiveLeaderAppearanceForSketch(sketch); }
+  function effectiveAnnotationStyle(element) { return annotationAppearance.effectiveAnnotationStyle(element); }
+  function annotationDisplayColor(...args) { return annotationColor.annotationDisplayColor(...args); }
 
 
 
