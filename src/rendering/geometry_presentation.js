@@ -158,5 +158,36 @@
     }
     return Object.freeze({ lineDisplaySegment });
   }
-  window.GeometryPresentation = Object.freeze({ create, createLineDisplay });
+  function createCommandTargets({ readPanelSelection, readMode, instanceSourceCommand, sketchProjectionCommand,
+    geometryInstanceCommand, geometryRefsEqual, geometryRefForItem, readOperands, sameArcEndpoint, operandElement,
+    readConstraintCommand, isActiveSketchElement, isReferenceSourceSketchId, elementSketchId, readPending }) {
+    function isConstraintOperandSelected(item, options = {}) {
+      if (!item) return false;
+      if (readPanelSelection()) return geometryRefsEqual(geometryRefForItem(item), geometryRefForItem(readPanelSelection()));
+      if (readMode() === "instance-sources" && instanceSourceCommand.includesRef(geometryRefForItem(item))) return true;
+      if (readMode() === "sketch-projection" && sketchProjectionCommand.includes(item)) return true;
+      if (readMode().startsWith("pattern-placement-")) {
+        if (item === geometryInstanceCommand.reference || geometryInstanceCommand.sources.some(ref => geometryRefsEqual(ref, geometryRefForItem(item)))) return true;
+      }
+      if (options.arcEndpoint) {
+        return readOperands().some((operand) => operand.kind === "arc-endpoint" && sameArcEndpoint(operand, options.arcEndpoint));
+      }
+      return readOperands().some((operand) => operandElement(operand) === item);
+    }
+
+    function isReferenceHoverElement(item) {
+      return Boolean(readConstraintCommand() && item && !isActiveSketchElement(item) && isReferenceSourceSketchId(elementSketchId(item)));
+    }
+
+    function isPendingReferenceTarget(item) {
+      const target = readConstraintCommand()?.referenceTarget || readPending()?.referenceTarget;
+      if (!target || !item) return false;
+      if (target.kind === "point") return target.point === item;
+      if (target.kind === "line") return target.line === item;
+      if (target.kind === "primitive") return target.primitive === item;
+      return false;
+    }
+    return Object.freeze({ isConstraintOperandSelected, isReferenceHoverElement, isPendingReferenceTarget });
+  }
+  window.GeometryPresentation = Object.freeze({ create, createLineDisplay, createCommandTargets });
 })();

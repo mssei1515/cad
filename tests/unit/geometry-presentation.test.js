@@ -172,3 +172,46 @@ test('construction extension guard returns original refs for zero length and non
   assert.equal(display.lineDisplaySegment(line).p1, line.p1); line.length = () => 10;
   for (const scale of [0, -1, NaN, Infinity]) { viewport.scale = scale; const segment = display.lineDisplaySegment(line); assert.equal(segment.p1, line.p1); assert.equal(segment.p2, line.p2); }
 });
+
+function commandTargetFixture() {
+  const calls = [], item = { id: 'I', sketchId: 'reference' }, selected = { id: 'I' };
+  const state = { panel: null, mode: 'select', operands: [], command: null, pending: null, active: false, reference: true };
+  const sources = { includesRef(ref) { assert.equal(this, sources); calls.push('sources'); return ref.id === 'I'; } };
+  const projection = { includes(value) { assert.equal(this, projection); calls.push('projection'); return value === item; } };
+  const instance = { reference: null, sources: [] };
+  const api = sandbox.window.GeometryPresentation.createCommandTargets({ readPanelSelection: () => state.panel, readMode: () => state.mode, instanceSourceCommand: sources, sketchProjectionCommand: projection, geometryInstanceCommand: instance,
+    geometryRefForItem: value => { calls.push('ref'); return value; }, geometryRefsEqual: (a, b) => a.id === b.id,
+    readOperands: () => { calls.push('operands'); return state.operands; }, sameArcEndpoint: (a, b) => a.arc === b.arc && a.endpoint === b.endpoint, operandElement: op => op.item,
+    readConstraintCommand: () => state.command, isActiveSketchElement: () => { calls.push('active'); return state.active; },
+    isReferenceSourceSketchId: id => { calls.push('reference'); assert.equal(id, item.sketchId); return state.reference; }, elementSketchId: value => value.sketchId,
+    readPending: () => { calls.push('pending'); return state.pending; },
+  });
+  return { api, state, calls, item, selected, instance };
+}
+test('command target highlight keeps panel snapshot precedence and current Instance/projection/pattern sources', () => {
+  const h = commandTargetFixture(); assert.equal(h.api.isConstraintOperandSelected(null), false); assert.equal(h.calls.length, 0);
+  h.state.mode = 'instance-sources'; h.state.panel = { id: 'other' }; h.state.operands = [{ item: h.item }]; assert.equal(h.api.isConstraintOperandSelected(h.item), false);
+  assert.equal(h.calls.includes('sources'), false); assert.equal(h.calls.includes('operands'), false);
+  h.state.panel = h.selected; assert.equal(h.api.isConstraintOperandSelected(h.item), true);
+  h.state.panel = null; h.calls.length = 0; assert.equal(h.api.isConstraintOperandSelected(h.item), true); assert.equal(h.calls.includes('operands'), false);
+  h.state.mode = 'sketch-projection'; h.calls.length = 0; assert.equal(h.api.isConstraintOperandSelected(h.item), true); assert.deepEqual(h.calls, ['projection']);
+  h.state.mode = 'pattern-placement-rotate'; h.instance.reference = h.item; h.calls.length = 0; assert.equal(h.api.isConstraintOperandSelected(h.item), true); assert.equal(h.calls.length, 0);
+  h.instance.reference = null; h.instance.sources = [h.selected]; assert.equal(h.api.isConstraintOperandSelected(h.item), true);
+});
+test('operand highlighting preserves identity and explicit arc-endpoint priority over matching element operands', () => {
+  const h = commandTargetFixture(), arc = {}, endpoint = { arc, endpoint: 'start' };
+  h.state.operands = [{ item: h.item }]; assert.equal(h.api.isConstraintOperandSelected(h.item), true); assert.equal(h.api.isConstraintOperandSelected({ ...h.item }), false);
+  assert.equal(h.api.isConstraintOperandSelected(h.item, { arcEndpoint: endpoint }), false);
+  h.state.operands = [{ kind: 'arc-endpoint', ...endpoint, item: h.item }]; assert.equal(h.api.isConstraintOperandSelected(h.item, { arcEndpoint: endpoint }), true);
+  assert.equal(h.api.isConstraintOperandSelected(h.item, { arcEndpoint: { arc, endpoint: 'end' } }), false);
+});
+test('reference hover and pending target reads keep command priority, short circuit and point/line/primitive identity', () => {
+  const h = commandTargetFixture(); assert.equal(h.api.isReferenceHoverElement(h.item), false); assert.equal(h.calls.length, 0);
+  h.state.command = {}; assert.equal(h.api.isReferenceHoverElement(h.item), true); h.state.active = true; h.calls.length = 0; assert.equal(h.api.isReferenceHoverElement(h.item), false); assert.deepEqual(h.calls, ['active']);
+  for (const [kind, key] of [['point', 'point'], ['line', 'line'], ['primitive', 'primitive']]) {
+    h.state.command = { referenceTarget: { kind, [key]: h.item } }; h.state.pending = { referenceTarget: { kind: 'point', point: {} } }; h.calls.length = 0;
+    assert.equal(h.api.isPendingReferenceTarget(h.item), true); assert.equal(h.calls.includes('pending'), false); assert.equal(h.api.isPendingReferenceTarget({ ...h.item }), false);
+  }
+  h.state.command = { referenceTarget: { kind: 'unknown' } }; h.state.pending = { referenceTarget: { kind: 'point', point: h.item } }; h.calls.length = 0; assert.equal(h.api.isPendingReferenceTarget(h.item), false); assert.equal(h.calls.length, 0);
+  h.state.command = null; assert.equal(h.api.isPendingReferenceTarget(h.item), true); h.state.pending = null; assert.equal(h.api.isPendingReferenceTarget(h.item), false);
+});

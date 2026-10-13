@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+拘束operand／command対象／pending referenceの表示強調照会を既存GeometryPresentation.createCommandTargetsへ分離。panel snapshot／現在mode／Instance・Sketch投影・pattern command、Geometry ref／同一性、現在operand／拘束command／pendingと参照Sketch照会の15portに接続。panel最優先とfalse短絡、Instance／投影／pattern→arc endpoint／operand、command referenceTarget→pendingの優先・kind／Object同一性、reference hover短絡を維持する。状態複製・Selection／session更新・Canvas命令を持たず、appのhoisted入口は先に登録されたpaint callbackの参照時点を保持する。app.jsは5,010→4,994行（16行減、今回の再開から合計2,740行減）。構文503ファイル・単体1,370件・関連E2E188件が成功（すべてexit 0、E2E2.5分）。既存GeometryPresentation unitへ3件追加し、panel優先／false短絡と現在Instance／投影／pattern、operand同一性とarc endpoint優先、reference hover・command／pending優先と各kind・nullを確認。元3body一致と15portの初期化順をaudit。unified-ui／blocks／sketch-projection／derived-selection-copy／constraint-fixed／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-command-target-presentation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Canvas表示更新の調整とpanel選択対象の表示snapshotを新しいsrc/ui/canvas_refresh.jsのCanvasRefresh.createへ分離。PNG command／pending・mode照会、CommandPanel／DerivedPanel、Annotation入力同期、profiling／Geometry read cache／Canvas描画の10portに接続する。取消→panel→入力→snapshot→profile／cache→描画の順、PNG busy／session／mode短絡とreceiver、代入前の失敗時は旧snapshot保持、描画失敗の既存例外伝播とprofile／cacheのcleanup範囲を維持。commandPanelSelectedItemをprivate状態へ移し、Geometry強調はgetterへ接続。モデル／session／commandは複製しない。app.jsは5,017→5,010行（7行減、今回の再開から合計2,724行減）。構文503ファイル・単体1,367件・関連E2E192件が成功（すべてexit 0、E2E2.7分）。新unit3件で現在panel／入力／snapshot／profiling／cache順、PNG busy／終了判定とmode短絡、snapshot代入前／後の例外範囲・cleanupを検証。元body一致と10portの初期化順をauditし、後に生成されるAnnotation入力／panelはcallbackで参照。unified-ui／png-export／authoring-performance／blocks／unified-annotations／phase0-characterizationを実行。index.html、構文／unit実行リスト、file URLのscript期待値を同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-canvas-refresh-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

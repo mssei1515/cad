@@ -641,6 +641,11 @@
     renderer: dimensionRenderer, layouts: dimensionLayouts, metrics: dimensionMetrics, dimensionLayout,
     effectiveDimensionAppearance, activeSketchId, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
   });
+  const commandTargetPresentation = window.GeometryPresentation.createCommandTargets({
+    readPanelSelection: () => canvasRefresh.selectedItem, readMode: () => mode, instanceSourceCommand, sketchProjectionCommand,
+    geometryInstanceCommand, geometryRefsEqual, geometryRefForItem, readOperands: () => constraintTargetSession.operands, sameArcEndpoint, operandElement,
+    readConstraintCommand: () => constraintTargetSession.command, isActiveSketchElement, isReferenceSourceSketchId, elementSketchId, readPending: () => pendingCommandSession.current,
+  });
   const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
     Point, canvasSelection, canvasHover, viewState,
     isExporting: () => Boolean(pngRendering.frame),
@@ -1393,19 +1398,7 @@
     return null;
   }
 
-  function isConstraintOperandSelected(item, options = {}) {
-    if (!item) return false;
-    if (canvasRefresh.selectedItem) return geometryRefsEqual(geometryRefForItem(item), geometryRefForItem(canvasRefresh.selectedItem));
-    if (mode === "instance-sources" && instanceSourceCommand.includesRef(geometryRefForItem(item))) return true;
-    if (mode === "sketch-projection" && sketchProjectionCommand.includes(item)) return true;
-    if (mode.startsWith("pattern-placement-")) {
-      if (item === geometryInstanceCommand.reference || geometryInstanceCommand.sources.some(ref => geometryRefsEqual(ref, geometryRefForItem(item)))) return true;
-    }
-    if (options.arcEndpoint) {
-      return constraintTargetSession.operands.some((operand) => operand.kind === "arc-endpoint" && sameArcEndpoint(operand, options.arcEndpoint));
-    }
-    return constraintTargetSession.operands.some((operand) => operandElement(operand) === item);
-  }
+  function isConstraintOperandSelected(...args) { return commandTargetPresentation.isConstraintOperandSelected(...args); }
 
   function syncSelectionFromConstraintOperands() { canvasSelection.applyConstraintTargets(constraintTargetsFromOperands(constraintTargetSession.operands)); }
 
@@ -1479,18 +1472,9 @@
     return window.CanvasThemeColors.color(value, applicationSettings.theme);
   }
 
-  function isReferenceHoverElement(item) {
-    return Boolean(constraintTargetSession.command && item && !isActiveSketchElement(item) && isReferenceSourceSketchId(elementSketchId(item)));
-  }
+  function isReferenceHoverElement(...args) { return commandTargetPresentation.isReferenceHoverElement(...args); }
 
-  function isPendingReferenceTarget(item) {
-    const target = constraintTargetSession.command?.referenceTarget || pendingCommandSession.current?.referenceTarget;
-    if (!target || !item) return false;
-    if (target.kind === "point") return target.point === item;
-    if (target.kind === "line") return target.line === item;
-    if (target.kind === "primitive") return target.primitive === item;
-    return false;
-  }
+  function isPendingReferenceTarget(...args) { return commandTargetPresentation.isPendingReferenceTarget(...args); }
 
   function drawOrderBySketch(items) {
     return items.filter(isVisibleSketchElement).sort((a, b) => Number(isActiveSketchElement(a)) - Number(isActiveSketchElement(b)));
