@@ -299,5 +299,67 @@
     return Object.freeze({ reload });
   }
 
-  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload });
+  function createDefinitionUpdateFixture({ readDefinitions, currentScope, blockProjectionBundle, enterBlockDefinitionEdit, blockEditor, completeBlockDefinitionEdit }) {
+    function run() {
+      const definition = readDefinitions()[0];
+      if (!definition || currentScope().blockInstances.length === 0) return null;
+      const before = blockProjectionBundle(currentScope().blockInstances[0]).lines[0].length();
+      enterBlockDefinitionEdit(definition.id);
+      const editableLine = blockEditor.current.draft.lines[0];
+      editableLine.p2.x += 40;
+      completeBlockDefinitionEdit({ rotationLocked: true });
+      const lengths = currentScope().blockInstances.map((instance) => blockProjectionBundle(instance).lines[0].length());
+      return { before, lengths, revision: definition.revision, editing: Boolean(blockEditor.current) };
+    }
+    return Object.freeze({ run });
+  }
+
+  function createReadOnlyDimensionFixture({ currentScope, blockProjectionBundle, defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint }) {
+    function run() {
+      const instance = currentScope().blockInstances[0];
+      if (!instance) return null;
+      const line = blockProjectionBundle(instance).lines[0];
+      const target = { kind: "line-length", line, p1: line.p1, p2: line.p2, value: line.length() };
+      const dimension = defaultDimensionForTarget(target);
+      const constraint = readOnlyDimensionConstraintForPlacement(target, target.value, dimension, { sketchId: instance.sketchId });
+      if (!constraint) return { created: false };
+      addReadOnlyDimensionConstraint(constraint, instance.sketchId, "ブロック固有寸法");
+      return {
+        created: true,
+        readOnly: constraint.readOnlyDimension,
+        enabled: constraint.enabled,
+        target: constraint.target,
+      };
+    }
+    return Object.freeze({ run });
+  }
+
+  function createExternalConstraintFixture({ currentScope, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 }) {
+    function run() {
+      const instance = currentScope().blockInstances[1] || currentScope().blockInstances[0];
+      if (!instance) return null;
+      const definition = blockDefinitionById(instance.definitionId);
+      const localPoint = definition?.points[0];
+      const projectedPoint = blockProjectionBundle(instance).points.find((point) => point.localElement === localPoint);
+      if (!localPoint || !projectedPoint) return null;
+      const localBefore = { x: localPoint.x, y: localPoint.y };
+      const anchor = addPoint(projectedPoint.x + 75, projectedPoint.y + 40, true, "explicit");
+      const constraint = new CoincidentConstraint(projectedPoint, anchor);
+      pushModelConstraint(constraint, instance.sketchId);
+      const result = solveSketchById(instance.sketchId);
+      invalidateBlockProjectionCache(instance.id);
+      const nextProjection = blockProjectionBundle(instance).points.find((point) => point.localElement === localPoint);
+      return {
+        success: result.success,
+        errorNorm: result.errorNorm,
+        projectedError: hypot2(nextProjection.x - anchor.x, nextProjection.y - anchor.y),
+        localBefore,
+        localAfter: { x: localPoint.x, y: localPoint.y },
+        instance: { x: instance.x, y: instance.y, rotation: instance.rotation },
+      };
+    }
+    return Object.freeze({ run });
+  }
+
+  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture });
 })();

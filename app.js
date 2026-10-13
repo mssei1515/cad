@@ -5076,6 +5076,9 @@
     const legacyBlockReload = window.BlockTestDriver.createLegacyReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockProjectionBundle });
     const sidebarHighlightObservation = window.PropertiesTestDriver.createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover });
     const sidebarHoverKeyObservation = window.PropertiesTestDriver.createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey });
+    const definitionUpdateFixture = window.BlockTestDriver.createDefinitionUpdateFixture({ readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockProjectionBundle, enterBlockDefinitionEdit, blockEditor, completeBlockDefinitionEdit });
+    const blockDimensionFixture = window.BlockTestDriver.createReadOnlyDimensionFixture({ currentScope: workspace.current, blockProjectionBundle, defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint });
+    const blockExternalFixture = window.BlockTestDriver.createExternalConstraintFixture({ currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5777,56 +5780,9 @@
         updateUI();
         draw();
       },
-      blockDefinitionUpdateCase() {
-        const definition = documentModel.blockDefinitions[0];
-        if (!definition || model.blockInstances.length === 0) return null;
-        const before = blockProjectionBundle(model.blockInstances[0]).lines[0].length();
-        enterBlockDefinitionEdit(definition.id);
-        const editableLine = blockEditor.current.draft.lines[0];
-        editableLine.p2.x += 40;
-        completeBlockDefinitionEdit({ rotationLocked: true });
-        const lengths = model.blockInstances.map((instance) => blockProjectionBundle(instance).lines[0].length());
-        return { before, lengths, revision: definition.revision, editing: Boolean(blockEditor.current) };
-      },
-      blockReadOnlyDimensionCase() {
-        const instance = model.blockInstances[0];
-        if (!instance) return null;
-        const line = blockProjectionBundle(instance).lines[0];
-        const target = { kind: "line-length", line, p1: line.p1, p2: line.p2, value: line.length() };
-        const dimension = defaultDimensionForTarget(target);
-        const constraint = readOnlyDimensionConstraintForPlacement(target, target.value, dimension, { sketchId: instance.sketchId });
-        if (!constraint) return { created: false };
-        addReadOnlyDimensionConstraint(constraint, instance.sketchId, "ブロック固有寸法");
-        return {
-          created: true,
-          readOnly: constraint.readOnlyDimension,
-          enabled: constraint.enabled,
-          target: constraint.target,
-        };
-      },
-      blockExternalConstraintCase() {
-        const instance = model.blockInstances[1] || model.blockInstances[0];
-        if (!instance) return null;
-        const definition = blockDefinitionById(instance.definitionId);
-        const localPoint = definition?.points[0];
-        const projectedPoint = blockProjectionBundle(instance).points.find((point) => point.localElement === localPoint);
-        if (!localPoint || !projectedPoint) return null;
-        const localBefore = { x: localPoint.x, y: localPoint.y };
-        const anchor = addPoint(projectedPoint.x + 75, projectedPoint.y + 40, true, "explicit");
-        const constraint = new CoincidentConstraint(projectedPoint, anchor);
-        pushModelConstraint(constraint, instance.sketchId);
-        const result = solveSketchById(instance.sketchId);
-        invalidateBlockProjectionCache(instance.id);
-        const nextProjection = blockProjectionBundle(instance).points.find((point) => point.localElement === localPoint);
-        return {
-          success: result.success,
-          errorNorm: result.errorNorm,
-          projectedError: hypot2(nextProjection.x - anchor.x, nextProjection.y - anchor.y),
-          localBefore,
-          localAfter: { x: localPoint.x, y: localPoint.y },
-          instance: { x: instance.x, y: instance.y, rotation: instance.rotation },
-        };
-      },
+      blockDefinitionUpdateCase: definitionUpdateFixture.run,
+      blockReadOnlyDimensionCase: blockDimensionFixture.run,
+      blockExternalConstraintCase: blockExternalFixture.run,
       reloadBlockState: blockReload.reload,
       reloadLegacyBlockState: legacyBlockReload.reload,
       blockEditorState: blockEditorObservation.state,

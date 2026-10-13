@@ -4,7 +4,11 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-13）
+## 現在の再開地点（2026-10-14）
+
+Block Definition更新・read-only寸法・外部拘束のfixtureを既存BlockTestDriver.createDefinitionUpdateFixture／createReadOnlyDimensionFixture／createExternalConstraintFixtureへ分離。呼出し時のDefinition／scope、既存下書き編集／確定・投影・寸法生成／追加・拘束生成／求解・cache更新へ役割別に接続し、固定入力・同一Definition／投影参照・nullと操作／観測順を保持する。元の三つの処理本体との一致を依存port置換後に確認。app.jsは5,890→5,846行（44行減、今回の再開から合計1,888行減）。構文483ファイル・単体1,298件・関連E2E39件が成功（すべてexit 0、E2E32.0秒）。全利用箇所のblocksを実行。新規テストはなく、既存Definition編集／全Instance投影更新・固有寸法・外部拘束によるInstance移動と周辺操作を確認した。ログはcad-block-definition-fixtures-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自下書き／Definition・投影／寸法／求解・cache／保存規則／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
 
 Sidebar highlight ID／hover Geometry keyの観測を既存PropertiesTestDriver.createHighlightObservation／createHoverKeyObservationへ分離。現在SelectionのGeometry／端点・中心、既存effective拘束／highlight nodes・selectionHighlight・Canvas dimension Hover、全Geometry／Sidebar Hover判定／keyへ役割別に接続する。重複除外・優先順・null除外／sortと照会順を維持し、元の二つの処理本体との一致を確認。app.jsは5,925→5,890行（35行減、今回の再開から合計1,844行減）。構文483ファイル・単体1,298件・関連E2E142件が成功（すべてexit 0、E2E1.9分）。全利用箇所のblocks／unified-uiを実行。新規テストはなく、既存Block／Sidebar／Canvasの選択・拘束highlight／hoverの連携と周辺操作を確認した。ログはcad-sidebar-highlight-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Selection／highlight・所属／編集先・hover規則は追加していない。全体目標は未完了。
 
