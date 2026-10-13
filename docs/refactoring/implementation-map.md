@@ -833,3 +833,6 @@ CanvasContextActions（src/commands/canvas_context_actions.js）はCanvas contex
 
 
 CanvasContextMenu.createEntryはCanvas context menu開始時の進行を所有する。menu有無／Geometry mode→native event抑制→既存menu終了→Canvas座標／last pointer更新→command照会→候補取得／表示分岐→単一対象選択／UI→draw→項目構成／既存sessionのopenという順と短絡を維持する。通常commandでは候補照会を省略し、拘束commandと重複候補では候補表示を優先する。pointer更新はappのsetterへ、候補／Selection・command・項目・表示sessionは既存所有者へ委譲し、新しいsession／操作状態を持たない。CanvasContextTarget.createCandidateActionは現在拘束commandがあれば既存hit構成→operand処理へ、それ以外は明示的な対象置換→UI→drawへ進める。pointerなしの原点fallback・同一target／pointer参照・未定義returnと例外伝播を保持する。appは両factoryを生成・接続し、早いmenu callback登録を保つ薄い委譲関数を残す。後で初期化されるmenu終了入口は操作時のcallbackで照会する。
+
+
+FixedToggleCommand（src/commands/fixed_toggle_command.js）は固定状態切替のoperand経路（createOperand）とSelection経路（createSelection）を独立した依存で生成する。operandは既存Sketch／投影shape guard後にLine／Arc端点／Geometryの固定拘束を照会し、同じ対象参照で既存delete／commitへ委譲する。Selectionは既存guard後、単一Instanceまたは同一Instanceだけの投影選択・Arc端点・Point／Line batchの優先順で切り替える。Instanceの更新／表示／履歴、端点commit失敗時のsnapshot復元、batchの固定拘束追加／逆順除去→依存求解→主／依存失敗または許容誤差超過時の復元と表示、成功時の解析→hint→UI→draw→log→履歴の順を維持する。現在scopeはgetter、許容誤差・型／参照照合・batch判定・snapshot／restore・求解／履歴は明示した既存所有者へ接続し、独自モデル／Selection・拘束型／Solver／snapshot形式／履歴を持たない。無関係な拘束・同一参照・既存enabled判定・boolean／return／例外伝播を保持する。appは二factoryを生成し、早いConstraintTargetCommand callback登録を維持する薄い委譲関数と既存button経路へ接続する。

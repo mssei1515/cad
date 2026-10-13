@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+固定切替のoperand／Selection経路をsrc/commands/fixed_toggle_command.jsのFixedToggleCommand.createOperand／createSelectionへ分離。現在scope・許容誤差・型／参照照合・batch／guardと既存追加／削除・snapshot／restore・依存求解／解析・UI／履歴へ接続し、Instance／端点／batchの優先順と同一参照・enabled／return・失敗復元／成功更新順を維持する。元の二つの本体との一致を依存port置換後に確認。早いConstraintTargetCommand callback登録はappの薄い委譲関数で保持。app.jsは5,429→5,349行（80行減、今回の再開から合計2,385行減）。構文490ファイル・単体1,318件・関連E2E201件が成功（すべてexit 0、E2E2.6分）。新単体5件で現在scope／enabledとoperand return、同一Instance投影の固定・混在時の拒否、端点unfixの既存return／commit失敗復元、主／依存／誤差失敗でのPoint flag／拘束復元と履歴なし、batch解除で無関係拘束／配列参照保持と成功時の履歴順を確認。unified-ui／blocks／fixed-command／block-geometry-fixed／sketch-permissions／sketch-projection／phase0-characterizationを実行。新scriptはindex／構文・単体一覧／読込期待値を同期。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-fixed-toggle-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自モデル／Selection・拘束型／Solver／snapshot形式／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Canvas context menu開始の進行を既存CanvasContextMenu.createEntryへ、候補確定の進行をCanvasContextTarget.createCandidateActionへ分離。menu／modeの短絡→native event抑制→menu終了→pointer更新→command／候補照会→単一対象選択／UI→draw→項目構成／session開始と、拘束command時のhit→operand／通常時の対象置換→UI→drawを維持する。pointerはappのsetterへ接続し、同一参照・原点fallbackと元の二つの本体との一致を確認。早いcallback登録は薄いapp委譲関数で維持。app.jsは5,448→5,429行（19行減、今回の再開から合計2,305行減）。構文488ファイル・単体1,313件・関連E2E178件が成功（最終すべてexit 0、E2E2.3分）。既存unitへ4件追加し、menu不在／mode拒否、単一対象／pointer／UI／menu順、通常／拘束command／重複候補と候補確定時の最新command／operand／Selection分岐を確認。初回E2EはcloseAppMenusの早いconst参照による起動ReferenceErrorを確認して中断（exit 1）。runner終了後に操作時callbackへ修正し、他portの初期化位置を監査、構文／全単体／同じ5ファイルE2Eを再実行して成功。再開手順にもportの参照時点監査を明記。unified-ui／blocks／fixed-command／sketch-permissions／phase0-characterizationを実行。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-context-entry-{check,unit,e2e,check-final,unit-final,e2e-final}.log。全E2Eはこの単位では未実行。独自表示session／Selection／command状態は追加していない。全体目標は未完了。
 
 ### 前回の区切り
