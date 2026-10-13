@@ -4972,6 +4972,11 @@
       currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
       computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), targetConstraintCount: geometryDragSolver.targetConstraintCount, now: () => performance.now(),
     });
+    const annotationSnapshotObservation = window.AnnotationTestDriver.createSnapshot({ currentScope: workspace.current, annotationLeaderDisplayGeometry, canvas, worldToCanvasScreen });
+    const annotationDragFixture = window.AnnotationTestDriver.createDragFixture({
+      resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas, readSnapshot: annotationSnapshotObservation.snapshot,
+    });
+    const annotationHitObservation = window.AnnotationTestDriver.createHitObservation({ canvas, screenToWorld, hitAnnotationElement });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const sketchProjectionTestObservation = window.SketchProjectionTestDriver.createObservation({
       types: { Point, Line, Circle, Arc }, currentScope: workspace.current, readMode: () => mode,
@@ -5354,30 +5359,7 @@
       constraintAnalysisForTest: constraintAnalysisObservation.analysis,
       blockConstraintStatusForTest: blockConstraintObservation.state,
       addBlockPointOnLineConstraintForTest: blockConstraintInsertion.add,
-      resetForAnnotationDrag() {
-        resetModelState();
-        const p1 = addPoint(-60, -25, false, "endpoint");
-        const p2 = addPoint(60, -25, false, "endpoint");
-        const p3 = addPoint(60, 35, false, "endpoint");
-        const p4 = addPoint(-60, 35, false, "endpoint");
-        addLine(p1, p2);
-        addLine(p2, p3);
-        const l3 = addLine(p3, p4);
-        addLine(p4, p1);
-        const leaderTarget = annotationLeaderTargetFromItem(l3, { x: 0, y: 35 });
-        pushAnnotation({
-          type: "leader",
-          text: "注記",
-          start: { ...leaderTarget.anchor },
-          elbow: { x: 56, y: 82 },
-          end: { x: 112, y: 82 },
-          geometryRef: leaderTarget.geometryRef,
-          style: { ...DEFAULT_ANNOTATION_STYLE },
-        });
-        pushAnnotation({ type: "text", text: "自由テキスト", x: -90, y: 80, style: { ...DEFAULT_ANNOTATION_STYLE } });
-        resizeCanvas({ centerWorld: { x: 20, y: 20 } });
-        return this.annotationSnapshot();
-      },
+      resetForAnnotationDrag: annotationDragFixture.reset,
       resetForReadOnlyDuplicateDimension() {
         resetModelState();
         const p1 = addPoint(-50, 0, false, "endpoint");
@@ -5711,29 +5693,7 @@
           dimension: retained?.dimension || null,
         };
       },
-      annotationSnapshot() {
-        const leaderElement = [...model.annotations].reverse().find((element) => element.type === "leader");
-        const textElement = [...model.annotations].reverse().find((element) => element.type === "text");
-        const leaderGeometry = leaderElement ? annotationLeaderDisplayGeometry(leaderElement) : null;
-        const canvasRect = canvas.getBoundingClientRect();
-        const toViewport = (point) => {
-          const screen = worldToCanvasScreen(point);
-          return { x: canvasRect.left + screen.x, y: canvasRect.top + screen.y };
-        };
-        return {
-          leader: leaderElement
-            ? {
-                world: { ...leaderElement.end },
-                viewport: toViewport(leaderGeometry.end),
-                displayEnd: { ...leaderGeometry.end },
-                bodyViewport: toViewport({ x: (leaderGeometry.elbow.x + leaderGeometry.end.x) / 2, y: leaderGeometry.end.y }),
-                end: { ...leaderElement.end },
-                elbow: leaderElement.elbow ? { ...leaderElement.elbow } : null,
-              }
-            : null,
-          text: textElement ? { world: { x: textElement.x, y: textElement.y }, viewport: toViewport(textElement) } : null,
-        };
-      },
+      annotationSnapshot: annotationSnapshotObservation.snapshot,
       annotationDimensionStateForTest() {
         return annotationDimensions.entries().map(constraint => {
           const target = targetFromConstraint(constraint), dimension = constraint.dimension;
@@ -5797,12 +5757,7 @@
         draw();
         return fitted;
       },
-      annotationHitAt(viewportPoint) {
-        const canvasRect = canvas.getBoundingClientRect();
-        const world = screenToWorld({ x: viewportPoint.x - canvasRect.left, y: viewportPoint.y - canvasRect.top });
-        const hit = hitAnnotationElement(world.x, world.y);
-        return hit ? { type: hit.type, part: hit.part } : null;
-      },
+      annotationHitAt: annotationHitObservation.hit,
       annotationDragActive() {
         return annotationDrag.inspect();
       },

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+注記のドラッグfixture・snapshot・hit観測をAnnotationTestDriver.createDragFixture／createSnapshot／createHitObservationへ分離。既存reset／Geometry・注記追加／Leader参照／表示Geometry／座標変換／hitへ役割別に接続し、準備後のsnapshot入口を明示する。固定座標／文字列／styleコピー、最後のLeader／Text優先、world／display／viewport座標とコピー・null・照会順を保持する。元の三つの処理本体との一致を依存port置換後に確認。app.jsは7,445→7,400行（45行減、今回の再開から合計334行減）。構文476ファイル・単体1,296件・関連E2E203件が成功（すべてexit 0、E2E3.1分）。全利用箇所のannotation-anchors／leader-appearance／phase0-characterization／png-export／unified-uiを実行。新規テストはなく、既存の注記drag／hit／ハンドル／Undo・外観・PNGとfile URL読込期待で確認した。classic scriptと構文一覧・E2E読込期待を同期。ログはcad-annotation-drag-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自注記モデル／表示・hitルール／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 拘束診断とBlock投影支援を既存ConstraintTestDriverのcreateStatusObservation／createAnalysisObservation／createBlockObservation／createBlockConstraintInsertionへ分離。既存refresh・Solver解析・scope／投影／commitへ役割別の依存を渡し、所属Sketch・同一参照status照会、誤差閾値／降順／上位12件、summaryコピー、対象なしの理由とliteral true判定、解析→Block状態→保存値の観測順を保持する。Geometryドラッグにも同じstatus観測を渡し、公開hook同士のthis依存を解消。元の四つの処理本体との一致を依存port置換後に確認。app.jsは7,507→7,445行（62行減、今回の再開から合計289行減）。構文475ファイル・単体1,296件・関連E2E239件が成功（すべてexit 0、E2E5.0分）。診断・Block支援の利用9ファイルとunified-uiの計10ファイルを実行し、単体3件でcall-time scope・誤差順位／件数・投影参照・summaryコピーと拒否後の観測順を確認した。ログはcad-constraint-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Solver／拘束状態／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
