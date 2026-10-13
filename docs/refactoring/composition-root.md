@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+拘束／固定入力の判断をsrc/commands/constraint_control_command.jsのConstraintControlCommandへ、拘束／menu／Fix buttonのイベント接続を既存ConstraintControlsView.createBindingへ分離。再click取消／Annotationの経路別優先順、Symmetry／距離／通常拘束・固定の分岐と既存pending／command／UI／拘束追加順を維持する。menuは既存button click→details終了、datasetは操作時照会とし、bindingだけが二重登録防止・listener解除／再bindを所有する。状態表示createとは独立した依存で生成。元の三つのhandler本体を維持。app.jsは5,349→5,314行（35行減、今回の再開から合計2,420行減）。構文492ファイル・単体1,323件・関連E2E237件が成功（すべてexit 0、E2E3.3分）。新単体4件で経路別取消／Annotation優先、Symmetry／距離、通常拘束更新順、固定のmode／Selection分岐を確認。既存View unitへ1件追加し、dataset更新・menu経路／閉じ順・未知menu・二重登録／解除／再bindを確認。unified-ui／annotation-anchors／blocks／fixed-command／block-geometry-fixed／sketch-permissions／phase0-characterizationを実行。新scriptはindex／構文・単体一覧／読込期待値を同期。仕様の状態表示担当はcreateへ限定して入力担当を追記。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-constraint-controls-input-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自mode／pending／Selection／拘束・求解／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 固定切替のoperand／Selection経路をsrc/commands/fixed_toggle_command.jsのFixedToggleCommand.createOperand／createSelectionへ分離。現在scope・許容誤差・型／参照照合・batch／guardと既存追加／削除・snapshot／restore・依存求解／解析・UI／履歴へ接続し、Instance／端点／batchの優先順と同一参照・enabled／return・失敗復元／成功更新順を維持する。元の二つの本体との一致を依存port置換後に確認。早いConstraintTargetCommand callback登録はappの薄い委譲関数で保持。app.jsは5,429→5,349行（80行減、今回の再開から合計2,385行減）。構文490ファイル・単体1,318件・関連E2E201件が成功（すべてexit 0、E2E2.6分）。新単体5件で現在scope／enabledとoperand return、同一Instance投影の固定・混在時の拒否、端点unfixの既存return／commit失敗復元、主／依存／誤差失敗でのPoint flag／拘束復元と履歴なし、batch解除で無関係拘束／配列参照保持と成功時の履歴順を確認。unified-ui／blocks／fixed-command／block-geometry-fixed／sketch-permissions／sketch-projection／phase0-characterizationを実行。新scriptはindex／構文・単体一覧／読込期待値を同期。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-fixed-toggle-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自モデル／Selection・拘束型／Solver／snapshot形式／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

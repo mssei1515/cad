@@ -1,4 +1,4 @@
-/* Reflect constraint and Fix controls; selection capabilities and pending-command actions are caller-owned. */
+/* Reflect and bind constraint/Fix controls; command decisions and selection state are caller-owned. */
 (() => {
   "use strict";
   function create({ document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
@@ -56,5 +56,35 @@
 
     return Object.freeze({ update });
   }
-  window.ConstraintControlsView = Object.freeze({ create });
+  function createBinding({ constraintButtons, constraintMenuButtons, fixPointBtn, onConstraint, onFixed }) {
+    let bound = false;
+    const removers = [];
+    function listen(button, handler) {
+      button.addEventListener("click", handler);
+      removers.push(() => button.removeEventListener("click", handler));
+    }
+    function bind() {
+      if (bound) return;
+      bound = true;
+      for (const btn of constraintButtons) listen(btn, () => onConstraint(btn.dataset.constraint));
+      for (const btn of constraintMenuButtons) {
+        listen(btn, () => {
+          const type = btn.dataset.menuConstraint;
+          const target = type === "fixed"
+            ? fixPointBtn
+            : constraintButtons.find((candidate) => candidate.dataset.constraint === type);
+          target?.click();
+          btn.closest("details")?.removeAttribute("open");
+        });
+      }
+      listen(fixPointBtn, onFixed);
+    }
+    function dispose() {
+      for (const remove of removers.splice(0)) remove();
+      bound = false;
+    }
+    return Object.freeze({ bind, dispose });
+  }
+
+  window.ConstraintControlsView = Object.freeze({ create, createBinding });
 })();

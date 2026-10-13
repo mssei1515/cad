@@ -4596,40 +4596,7 @@
 
   window.SidebarController.create({ document, setHint }).bind();
 
-  for (const btn of constraintButtons) {
-    btn.addEventListener("click", () => {
-      const type = btn.dataset.constraint;
-      if (constraintTargetSession.command?.type === type) {
-        cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
-      } else if (startAnnotationAnchorConstraint(type)) {
-        return;
-      } else if (type === "symmetry") {
-        startConstraintTargetCommand(type);
-      } else if (canApplyConstraint(type)) {
-        cancelConstraintTargetCommand("");
-        if (type === "distance") startDistanceCommand();
-        else {
-          cancelPendingCommand("");
-          constraintTargetSession.replaceCommand({ type });
-          updateToolbar();
-          updateConstraintButtons();
-          addConstraint(type);
-        }
-      } else {
-        startConstraintTargetCommand(type);
-      }
-    });
-  }
-  for (const btn of constraintMenuButtons) {
-    btn.addEventListener("click", () => {
-      const type = btn.dataset.menuConstraint;
-      const target = type === "fixed"
-        ? fixPointBtn
-        : constraintButtons.find((candidate) => candidate.dataset.constraint === type);
-      target?.click();
-      btn.closest("details")?.removeAttribute("open");
-    });
-  }
+
 
   const fixedOperandCommand = window.FixedToggleCommand.createOperand({
     guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText,
@@ -4648,17 +4615,15 @@
   });
   function toggleSelectedFixed() { return fixedSelectionCommand.toggle(); }
 
-  fixPointBtn.addEventListener("click", () => {
-    if (!isGeometryMode()) return;
-    if (startAnnotationAnchorConstraint("fixed")) return;
-    if (constraintTargetSession.command?.type === "fixed") {
-      cancelConstraintTargetCommand();
-    } else if (!hasSelection()) {
-      startConstraintTargetCommand("fixed");
-    } else {
-      toggleSelectedFixed();
-    }
+  const constraintControlCommand = window.ConstraintControlCommand.create({
+    constraintTargetSession, cancelConstraintTargetCommand, constraintLabel, startAnnotationAnchorConstraint, startConstraintTargetCommand,
+    canApplyConstraint, startDistanceCommand, cancelPendingCommand, updateToolbar, updateConstraintButtons, addConstraint,
+    isGeometryMode, hasSelection, toggleSelectedFixed,
   });
+  const constraintControlBinding = window.ConstraintControlsView.createBinding({
+    constraintButtons, constraintMenuButtons, fixPointBtn, onConstraint: constraintControlCommand.activate, onFixed: constraintControlCommand.activateFixed,
+  });
+  constraintControlBinding.bind();
 
   document.getElementById("toolHatch")?.addEventListener("click", startHatchCreation);
 
