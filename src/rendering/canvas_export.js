@@ -25,5 +25,20 @@
     }
     return Object.freeze({ capture });
   }
-  window.CanvasExport = Object.freeze({ create });
+  function createRenderer({ viewport, withGeometryReadCache, drawCanvas, syncCanvasBitmapSize, draw }) {
+    let frame = null;
+    function render(region, ratio) {
+      frame = { region: { x: viewport.x + region.x * viewport.scale, y: viewport.y + region.y * viewport.scale },
+        ratio: { x: ratio.x / viewport.scale, y: ratio.y / viewport.scale },
+        worldBounds: { x1: region.x, y1: region.y, x2: region.x + region.width, y2: region.y + region.height } };
+      withGeometryReadCache(drawCanvas);
+    }
+    function restore() {
+      frame = null;
+      syncCanvasBitmapSize();
+      draw();
+    }
+    return Object.freeze({ render, restore, get frame() { return frame; } });
+  }
+  window.CanvasExport = Object.freeze({ create, createRenderer });
 })();

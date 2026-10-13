@@ -123,3 +123,12 @@ test('begin cancels input before reading selection and preserves circle or chain
     if (selected.length === 1) assert.equal(selection.source, selected[0]);
   }
 });
+
+test('offset preview layer defers plan reads outside offset mode and preserves current pointer/plan and receivers', () => {
+  const calls = []; let mode = 'select', pointer = { x: 1, y: 2 }, plan = {};
+  const command = { preview(p) { assert.equal(this, command); assert.equal(p, pointer); calls.push(['plan', p]); return plan; } };
+  const renderer = { draw(value) { assert.equal(this, renderer); assert.equal(value, plan); calls.push(['draw', value]); } };
+  const layer = w.OffsetPreviewRenderer.createLayer({ renderer, command, readMode: () => mode, readPointer: () => { calls.push(['pointer']); return pointer; } });
+  layer.draw(); assert.equal(calls.length, 0); mode = 'offset'; assert.equal(layer.draw(), undefined); assert.deepEqual(calls.map(c => c[0]), ['pointer', 'plan', 'draw']);
+  calls.length = 0; pointer = null; plan = null; layer.draw(); assert.equal(calls[1][1], null); assert.equal(calls[2][1], null);
+});

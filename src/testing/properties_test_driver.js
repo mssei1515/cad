@@ -119,5 +119,128 @@
     return Object.freeze({ state });
   }
 
-  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation });
+  function createInspectionFixture({ resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, assignConstraintSketchId, activeSketchId, currentScope, updateUI, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen }) {
+    function reset() {
+      resetModelState();
+      const p1 = addPoint(-80, 0, true, "endpoint");
+      const p2 = addPoint(20, 0, false, "endpoint");
+      const line = addLine(p1, p2);
+      const circleCenter = addPoint(80, 0, false, "endpoint");
+      const circle = addCircle(circleCenter, 28);
+      const arcCenter = addPoint(0, 80, false, "endpoint");
+      const arc = addArc(arcCenter, 32, Math.PI, Math.PI * 1.75);
+      const horizontal = pushModelConstraint(new HorizontalConstraint(line));
+      horizontal.reference = true;
+      const readOnly = new DistanceConstraint(p1, p2, line.length());
+      readOnly.dimension = dimensionFromAnchor({ kind: "line-length", line, p1, p2, value: line.length() }, { x: -30, y: -28 });
+      readOnly.readOnlyDimension = true;
+      readOnly.enabled = false;
+      assignConstraintSketchId(readOnly, activeSketchId());
+      currentScope().constraints.push(readOnly);
+      updateUI();
+      fitAllGeometryToViewport(140);
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      const lineMid = worldToCanvasScreen({ x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 });
+      return {
+        line: line.id,
+        lineEndpoints: [p1.id, p2.id],
+        fixedPoint: p1.id,
+        circle: circle.id,
+        circleCenter: circleCenter.id,
+        arc: arc.id,
+        arcCenter: arcCenter.id,
+        lineMid: { x: rect.left + lineMid.x, y: rect.top + lineMid.y },
+        blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 },
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createStrokeStyleCases({ resetModelState, addLine, addPoint, currentScope, rootSketchId, defaultSketchId, geometryStrokeWidth, constructionAlpha }) {
+    function cases() {
+      resetModelState();
+      const activeNormal = addLine(addPoint(-80, -25, false, "endpoint"), addPoint(80, -25, false, "endpoint"));
+      const activeConstruction = addLine(addPoint(-80, 25, false, "endpoint"), addPoint(80, 25, false, "endpoint"), true);
+      currentScope().sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: rootSketchId, kind: "sketch", visible: true });
+      currentScope().activeSketchId = "S2";
+      const inactiveNormal = addLine(addPoint(-80, 75, false, "endpoint"), addPoint(80, 75, false, "endpoint"));
+      const inactiveConstruction = addLine(addPoint(-80, 125, false, "endpoint"), addPoint(80, 125, false, "endpoint"), true);
+      currentScope().activeSketchId = defaultSketchId;
+      return {
+        activeNormal: geometryStrokeWidth(activeNormal),
+        activeConstruction: geometryStrokeWidth(activeConstruction, { construction: true }),
+        inactiveNormal: geometryStrokeWidth(inactiveNormal),
+        inactiveConstruction: geometryStrokeWidth(inactiveConstruction, { construction: true }),
+        selected: geometryStrokeWidth(activeNormal, { selected: true }),
+        hovered: geometryStrokeWidth(activeNormal, { hovered: true }),
+        constructionAlpha: constructionAlpha,
+      };
+    }
+    return Object.freeze({ cases });
+  }
+
+  function createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover }) {
+    function ids() {
+      const ids = new Set();
+      for (const point of canvasSelection.points) ids.add(point.id);
+      for (const line of canvasSelection.lines) {
+        ids.add(line.id);
+        ids.add(line.p1.id);
+        ids.add(line.p2.id);
+      }
+      for (const circle of canvasSelection.circles) {
+        ids.add(circle.id);
+        ids.add(circle.center.id);
+      }
+      for (const arc of canvasSelection.arcs) {
+        ids.add(arc.id);
+        ids.add(arc.center.id);
+      }
+      for (const spline of canvasSelection.splines) ids.add(spline.id);
+      const constraint = effectiveSelectedConstraint() || canvasSelection.dimensionConstraint;
+      if (constraint) {
+        for (const item of constraintHighlightNodes(constraint)) {
+          if (item?.id) ids.add(item.id);
+        }
+      }
+      for (const item of selectionHighlight.current?.elements || []) {
+        if (item?.id) ids.add(item.id);
+      }
+      if (canvasHover.current.dimension) {
+        for (const item of constraintHighlightNodes(canvasHover.current.dimension)) {
+          if (item?.id) ids.add(item.id);
+        }
+      }
+      return [...ids].sort();
+    }
+    return Object.freeze({ ids });
+  }
+
+  function createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey }) {
+    function keys() {
+      return [...allGeometryPoints(), ...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()]
+        .filter(isSidebarHoveredElement)
+        .map(geometryElementKey)
+        .sort();
+    }
+    return Object.freeze({ keys });
+  }
+
+  function createThemeObservation({ applicationSettings, readDefaultGeometryColor, canvasThemeColor, CanvasThemeColors }) {
+    function state() {
+      return {
+        theme: applicationSettings.theme,
+        stored: applicationSettings.storedTheme(),
+        defaultGeometryColor: readDefaultGeometryColor(),
+        displayedDefaultGeometryColor: canvasThemeColor(readDefaultGeometryColor()),
+        displayedDefaultGeometryContrast: applicationSettings.theme === "dark"
+          ? CanvasThemeColors.contrast(CanvasThemeColors.channels(canvasThemeColor(readDefaultGeometryColor())), [15, 23, 42])
+          : null,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
 })();

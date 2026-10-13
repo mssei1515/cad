@@ -193,3 +193,28 @@ test("shelf text has a half-font-height inset in either direction and rotated bl
     assert.ok(Math.abs((layout.x - left.x) * c + (layout.y - left.y) * s - layout.fontSize / 2) < 1e-8);
   }
 });
+
+test('annotation color preserves export/selection/inspection/hover priority and explicit-style/default reads', () => {
+  const element = { blockInstance: {} }, calls = [], selection = { annotations: [], selected: null,
+    inspectionContains(item) { assert.equal(this, selection); calls.push(['inspect', item]); return this.selected === item; } };
+  let frame = null, hovered = element, styleReads = 0;
+  const colors = sandbox.window.AnnotationRenderer.createColor({ effectiveAnnotationStyle: item => { assert.equal(item, element); styleReads++; return { color: '#111111' }; },
+    readExportFrame: () => frame, canvasSelection: selection, readHoveredAnnotation: () => hovered, canvasThemeColor: color => color });
+  assert.equal(colors.annotationDisplayColor(element), '#0ea5e9'); assert.equal(styleReads, 1);
+  selection.annotations.push(element); calls.length = 0; assert.equal(colors.annotationDisplayColor(element, { color: '#222222' }), '#2563eb'); assert.equal(styleReads, 1); assert.equal(calls.length, 0);
+  frame = {}; assert.equal(colors.annotationDisplayColor(element, { color: '#222222' }), '#222222'); assert.equal(calls.length, 0);
+  frame = null; selection.annotations.length = 0; selection.selected = element.blockInstance; assert.equal(colors.annotationDisplayColor(element), '#2563eb');
+  selection.selected = null; hovered = null; assert.equal(colors.annotationDisplayColor(element), '#111111');
+});
+test('annotation layer reads current ordered elements, keeps visibility short circuit and sends original refs to painters', () => {
+  const calls = [], a = { type: 'leader', visible: true, sketchId: 'A' }, b = { type: 'text', visible: true, sketchId: 'B' }, hidden = { type: 'text', visible: false, sketchId: 'hidden' };
+  let elements = [a, hidden, b, { type: 'unknown', visible: true, sketchId: 'A' }];
+  const layer = sandbox.window.AnnotationRenderer.createLayer({ allAnnotations: () => elements,
+    isVisibleValue: value => value, isVisibleSketchId: id => { calls.push(['sketch', id]); return id !== 'B'; },
+    drawAnnotationLeader: (...args) => calls.push(['leader', ...args]), drawAnnotationText: (...args) => calls.push(['text', ...args]),
+  });
+  layer.draw(); assert.equal(calls.some(call => call[0] === 'sketch' && call[1] === 'hidden'), false);
+  assert.equal(calls.filter(call => ['leader', 'text'].includes(call[0])).length, 1); assert.equal(calls.find(call => call[0] === 'leader')[1], a);
+  calls.length = 0; b.sketchId = 'A'; elements = [b, a]; layer.draw(); assert.deepEqual(calls.filter(call => ['leader', 'text'].includes(call[0])).map(call => call[0]), ['text', 'leader']);
+  assert.equal(calls.find(call => call[0] === 'text').length, 2); assert.equal(calls.find(call => call[0] === 'text')[1], b);
+});

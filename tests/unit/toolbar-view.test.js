@@ -5,6 +5,41 @@ const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync('src/ui/toolbar_view.js','utf8'),sandbox);
 const modeButtons = { select:'toolSelect',point:'toolPoint',line:'toolLine',centerline:'toolCenterline','circle-center-cross':'toolCircleCenterCross',rectangle:'toolRectangle',slot:'toolSlot',fillet:'toolFillet',trim:'toolTrim',offset:'toolOffset',circle:'toolCircle',arc:'toolArc','three-point-arc':'toolThreePointArc',spline:'toolSpline','sketch-projection':'toolSketchProjection','pattern-placement-origin':'toolPattern','pattern-placement-place':'toolPattern',hatch:'toolHatch','hatch-repair':'toolHatch' };
+
+function bindingSurface(ids) {
+ const nodes=new Map(ids.map(id=>{const listeners=new Set();const node={listeners,
+  addEventListener(type,handler){assert.equal(type,'click');listeners.add(handler);},
+  removeEventListener(type,handler){assert.equal(type,'click');listeners.delete(handler);},
+  click(){for(const handler of listeners)handler.call(node);}};return [id,node];}));
+ return {nodes,document:{getElementById:id=>nodes.get(id)||null}};
+}
+test('drawing tool binding preserves live lifecycle receiver, raw handlers and registration lifetime',()=>{
+ const f=bindingSurface(['toolSelect','toolPoint','toolLine','toolCircle','toolArc','toolMirror','toolConstructionLine','toolFillet','toolHatch']);
+ const calls=[];
+ const lifecycle={start(mode){assert.equal(this,lifecycle);calls.push(['mode',mode]);}};
+ const construction={toggle(){assert.equal(this,f.nodes.get('toolConstructionLine'));calls.push(['construction']);}};
+ const fillet={begin(){assert.equal(this,f.nodes.get('toolFillet'));calls.push(['fillet']);}};
+ const hatch=()=>calls.push(['hatch']);
+ const binding=sandbox.window.ToolbarView.createBinding({document:f.document,drawOperationLifecycle:lifecycle,constructionCommand:construction,filletCommand:fillet,
+  startGeometryInstanceCommand:type=>calls.push(['instance',type]),startHatchCreation:hatch});
+ binding.bind();binding.bind();assert.equal(f.nodes.get('toolLine').listeners.size,1);
+ assert.equal([...f.nodes.get('toolFillet').listeners][0],fillet.begin);
+ assert.equal([...f.nodes.get('toolHatch').listeners][0],hatch);
+ f.nodes.get('toolLine').click();f.nodes.get('toolMirror').click();f.nodes.get('toolConstructionLine').click();f.nodes.get('toolFillet').click();f.nodes.get('toolHatch').click();
+ assert.deepEqual(calls,[['mode','line'],['instance','mirror'],['construction'],['fillet'],['hatch']]);
+ lifecycle.start=function(mode){assert.equal(this,lifecycle);calls.push(['updated',mode]);};f.nodes.get('toolPoint').click();
+ assert.deepEqual(calls.at(-1),['updated','point']);
+ binding.dispose();for(const node of f.nodes.values())assert.equal(node.listeners.size,0);
+ binding.bind();f.nodes.get('toolLine').click();assert.deepEqual(calls.at(-1),['updated','line']);binding.dispose();
+});
+test('absent optional tools skip handler lookup while mandatory drawing controls remain required',()=>{
+ const f=bindingSurface(['toolSelect','toolPoint','toolLine','toolCircle','toolArc']);
+ const unavailable=new Proxy({}, {get(){throw new Error('absent optional tool must not read a command handler');}});
+ const binding=sandbox.window.ToolbarView.createBinding({document:f.document,drawOperationLifecycle:{start(){}},
+  constructionCommand:unavailable,filletCommand:unavailable,offsetCommand:unavailable});
+ binding.bind();assert.equal(f.nodes.get('toolLine').listeners.size,1);binding.dispose();
+ assert.throws(()=>sandbox.window.ToolbarView.createBinding({document:{getElementById:()=>null}}).bind(),/addEventListener/);
+});
 function fixture() {
  const events=[],buttons=new Map();
  for(const id of [...new Set(Object.values(modeButtons)),'toolConstructionLine','toolCreateBlock','annotationTextBtn','selectionVisibilityBtn']) buttons.set(id,{active:false,disabled:false,attributes:{},classList:{toggle(name,value){buttons.get(id)[name]=value;}},setAttribute(name,value){this.attributes[name]=value;}});

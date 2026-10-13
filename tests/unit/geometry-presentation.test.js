@@ -154,3 +154,94 @@ test('spline handle state follows current scope identity and point selection', (
   assert.equal(state.closed, true); assert.equal(state.points[0].point, a);
   assert.equal(state.points[0].selected, false); assert.equal(state.points[1].selected, true);
 });
+
+test('construction line display preserves endpoint refs when disabled and computes zoom-dependent extensions without editing geometry', () => {
+  const viewport = { scale: 2 }, p1 = { x: 0, y: 0 }, p2 = { x: 6, y: 8 }, line = { p1, p2, construction: true, length: () => 10, dx: () => 6, dy: () => 8 };
+  let appearance = {}, reads = 0;
+  const display = sandbox.window.GeometryPresentation.createLineDisplay({ viewport, constructionExtensionScreenPx: 12,
+    effectiveAppearanceForElement: item => { assert.equal(item, line); reads++; return appearance; } });
+  let segment = display.lineDisplaySegment(line); assert.ok(Math.abs(segment.p1.x + 3.6) < 1e-10); assert.ok(Math.abs(segment.p1.y + 4.8) < 1e-10); assert.ok(Math.abs(segment.p2.x - 9.6) < 1e-10); assert.equal(reads, 1);
+  assert.equal(line.p1, p1); assert.equal(line.p2, p2); assert.equal(p1.x, 0); assert.equal(p2.x, 6);
+  viewport.scale = 4; segment = display.lineDisplaySegment(line); assert.ok(Math.abs(segment.p1.x + 1.8) < 1e-10);
+  appearance = { endpointOverhang: false }; segment = display.lineDisplaySegment(line); assert.equal(segment.p1, p1); assert.equal(segment.p2, p2);
+  const before = reads; line.construction = false; segment = display.lineDisplaySegment(line, {}); assert.equal(reads, before); assert.equal(segment.p1, p1);
+});
+test('construction extension guard returns original refs for zero length and nonpositive/nonfinite world extensions', () => {
+  const viewport = { scale: 1 }, line = { p1: {}, p2: {}, construction: true, length: () => 0, dx: () => { throw Error('must not evaluate direction'); }, dy: () => { throw Error('must not evaluate direction'); } };
+  const display = sandbox.window.GeometryPresentation.createLineDisplay({ viewport, constructionExtensionScreenPx: 12, effectiveAppearanceForElement: () => ({}) });
+  assert.equal(display.lineDisplaySegment(line).p1, line.p1); line.length = () => 10;
+  for (const scale of [0, -1, NaN, Infinity]) { viewport.scale = scale; const segment = display.lineDisplaySegment(line); assert.equal(segment.p1, line.p1); assert.equal(segment.p2, line.p2); }
+});
+
+function commandTargetFixture() {
+  const calls = [], item = { id: 'I', sketchId: 'reference' }, selected = { id: 'I' };
+  const state = { panel: null, mode: 'select', operands: [], command: null, pending: null, active: false, reference: true };
+  const sources = { includesRef(ref) { assert.equal(this, sources); calls.push('sources'); return ref.id === 'I'; } };
+  const projection = { includes(value) { assert.equal(this, projection); calls.push('projection'); return value === item; } };
+  const instance = { reference: null, sources: [] };
+  const api = sandbox.window.GeometryPresentation.createCommandTargets({ readPanelSelection: () => state.panel, readMode: () => state.mode, instanceSourceCommand: sources, sketchProjectionCommand: projection, geometryInstanceCommand: instance,
+    geometryRefForItem: value => { calls.push('ref'); return value; }, geometryRefsEqual: (a, b) => a.id === b.id,
+    readOperands: () => { calls.push('operands'); return state.operands; }, sameArcEndpoint: (a, b) => a.arc === b.arc && a.endpoint === b.endpoint, operandElement: op => op.item,
+    readConstraintCommand: () => state.command, isActiveSketchElement: () => { calls.push('active'); return state.active; },
+    isReferenceSourceSketchId: id => { calls.push('reference'); assert.equal(id, item.sketchId); return state.reference; }, elementSketchId: value => value.sketchId,
+    readPending: () => { calls.push('pending'); return state.pending; },
+  });
+  return { api, state, calls, item, selected, instance };
+}
+test('command target highlight keeps panel snapshot precedence and current Instance/projection/pattern sources', () => {
+  const h = commandTargetFixture(); assert.equal(h.api.isConstraintOperandSelected(null), false); assert.equal(h.calls.length, 0);
+  h.state.mode = 'instance-sources'; h.state.panel = { id: 'other' }; h.state.operands = [{ item: h.item }]; assert.equal(h.api.isConstraintOperandSelected(h.item), false);
+  assert.equal(h.calls.includes('sources'), false); assert.equal(h.calls.includes('operands'), false);
+  h.state.panel = h.selected; assert.equal(h.api.isConstraintOperandSelected(h.item), true);
+  h.state.panel = null; h.calls.length = 0; assert.equal(h.api.isConstraintOperandSelected(h.item), true); assert.equal(h.calls.includes('operands'), false);
+  h.state.mode = 'sketch-projection'; h.calls.length = 0; assert.equal(h.api.isConstraintOperandSelected(h.item), true); assert.deepEqual(h.calls, ['projection']);
+  h.state.mode = 'pattern-placement-rotate'; h.instance.reference = h.item; h.calls.length = 0; assert.equal(h.api.isConstraintOperandSelected(h.item), true); assert.equal(h.calls.length, 0);
+  h.instance.reference = null; h.instance.sources = [h.selected]; assert.equal(h.api.isConstraintOperandSelected(h.item), true);
+});
+test('operand highlighting preserves identity and explicit arc-endpoint priority over matching element operands', () => {
+  const h = commandTargetFixture(), arc = {}, endpoint = { arc, endpoint: 'start' };
+  h.state.operands = [{ item: h.item }]; assert.equal(h.api.isConstraintOperandSelected(h.item), true); assert.equal(h.api.isConstraintOperandSelected({ ...h.item }), false);
+  assert.equal(h.api.isConstraintOperandSelected(h.item, { arcEndpoint: endpoint }), false);
+  h.state.operands = [{ kind: 'arc-endpoint', ...endpoint, item: h.item }]; assert.equal(h.api.isConstraintOperandSelected(h.item, { arcEndpoint: endpoint }), true);
+  assert.equal(h.api.isConstraintOperandSelected(h.item, { arcEndpoint: { arc, endpoint: 'end' } }), false);
+});
+test('reference hover and pending target reads keep command priority, short circuit and point/line/primitive identity', () => {
+  const h = commandTargetFixture(); assert.equal(h.api.isReferenceHoverElement(h.item), false); assert.equal(h.calls.length, 0);
+  h.state.command = {}; assert.equal(h.api.isReferenceHoverElement(h.item), true); h.state.active = true; h.calls.length = 0; assert.equal(h.api.isReferenceHoverElement(h.item), false); assert.deepEqual(h.calls, ['active']);
+  for (const [kind, key] of [['point', 'point'], ['line', 'line'], ['primitive', 'primitive']]) {
+    h.state.command = { referenceTarget: { kind, [key]: h.item } }; h.state.pending = { referenceTarget: { kind: 'point', point: {} } }; h.calls.length = 0;
+    assert.equal(h.api.isPendingReferenceTarget(h.item), true); assert.equal(h.calls.includes('pending'), false); assert.equal(h.api.isPendingReferenceTarget({ ...h.item }), false);
+  }
+  h.state.command = { referenceTarget: { kind: 'unknown' } }; h.state.pending = { referenceTarget: { kind: 'point', point: h.item } }; h.calls.length = 0; assert.equal(h.api.isPendingReferenceTarget(h.item), false); assert.equal(h.calls.length, 0);
+  h.state.command = null; assert.equal(h.api.isPendingReferenceTarget(h.item), true); h.state.pending = null; assert.equal(h.api.isPendingReferenceTarget(h.item), false);
+});
+
+function sketchStyleFixture() {
+  const calls = [], state = { error: false, relation: 'active', status: 'under' };
+  const api = sandbox.window.GeometryPresentation.createSketchStyle({ sketchHasSolveError: id => { calls.push(['error', id]); return state.error; }, elementSketchId: item => { calls.push(['sketch', item]); return item.sketchId; },
+    sketchRelationOfElement: item => { calls.push(['relation', item]); return item.relation ?? state.relation; }, constraintStatusOf: item => { calls.push(['status', item]); return state.status; },
+    isVisibleSketchElement: item => item.visible, isActiveSketchElement: item => item.active,
+  });
+  return { api, state, calls, item: { sketchId: 'S' } };
+}
+test('Sketch status color preserves selected/hover/error/inactive/status priority and only reads required current state', () => {
+  const h = sketchStyleFixture(); h.state.error = true;
+  assert.equal(h.api.constraintStatusColor(h.item, true, true), '#1d4ed8'); assert.equal(h.calls.length, 0);
+  assert.equal(h.api.constraintStatusColor(h.item, false, true), '#3b82f6'); assert.equal(h.calls.length, 0);
+  assert.equal(h.api.constraintStatusColor(h.item), '#dc2626'); assert.deepEqual(h.calls.map(c => c[0]), ['sketch', 'error']);
+  h.calls.length = 0; h.state.error = false; h.state.relation = 'reference'; assert.equal(h.api.constraintStatusColor(h.item), sandbox.window.GeometryPresentation.INACTIVE_CONSTRAINT_STATUS_COLOR);
+  assert.deepEqual(h.calls.map(c => c[0]), ['sketch', 'error', 'relation']);
+  h.state.relation = 'active'; for (const [status, color] of [['conflict', '#dc2626'], ['under', '#f59e0b'], ['support', '#0f766e'], ['full', '#111827'], ['unknown', '#111827']]) { h.state.status = status; assert.equal(h.api.constraintStatusColor(h.item), color); }
+});
+test('Sketch width and alpha read current relation and retain each supported/unknown relation rule', () => {
+  const h = sketchStyleFixture();
+  for (const [relation, width, alpha] of [['active', 2, 1], ['reference', 1.2, 1], ['descendant', 1.2, 1], ['inactive', 1.2, 1], ['other', 0, 0], [null, 0, 0]]) {
+    h.state.relation = relation; assert.equal(h.api.sketchStrokeWidth(h.item), width); assert.equal(h.api.sketchAlpha(h.item), alpha);
+  }
+});
+test('Sketch draw ordering filters visibility, retains item identity/stable order and never reorders the supplied array', () => {
+  const h = sketchStyleFixture(), active1 = { visible: true, active: true }, active2 = { visible: true, active: true }, inactive1 = { visible: true, active: false }, inactive2 = { visible: true, active: false }, hidden = { visible: false, active: false };
+  const items = [active1, inactive1, hidden, active2, inactive2], before = [...items]; let result = h.api.drawOrderBySketch(items);
+  assert.deepEqual(Array.from(result), [inactive1, inactive2, active1, active2]); assert.deepEqual(items, before);
+  inactive1.visible = false; inactive2.active = true; result = h.api.drawOrderBySketch(items); assert.deepEqual(Array.from(result), [active1, active2, inactive2]); assert.deepEqual(items, before);
+});

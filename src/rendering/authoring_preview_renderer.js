@@ -217,5 +217,41 @@
     }
     return Object.freeze({ drawSpline, drawCenterline, drawTrim, drawFilletArc, drawLine, drawRectangle, drawSlot, drawCircle, drawArc, drawThreePointArc });
   }
-  window.AuthoringPreviewRenderer = Object.freeze({ create });
+  function createLayer({ renderer, readMode, readPointer, readTrim, lineCommand, rectangleCommand, slotCommand,
+    circularCommands, splineDraft, centerlineCommand, projectPointToCenterlineSupport, readCanvasSize }) {
+    function drawTemporaryLine() { if (readMode() === "line") renderer.drawLine(lineCommand.startPoint, readPointer()); }
+
+    function drawCenterlinePreview() {
+      if (readMode() !== "centerline" || !centerlineCommand.support?.ok) return;
+      renderer.drawCenterline(centerlineCommand.support, centerlineCommand.firstPoint,
+        readPointer() ? projectPointToCenterlineSupport(readPointer()) : null,
+        readCanvasSize());
+    }
+
+    function drawRectanglePreview() { if (readMode() === "rectangle") renderer.drawRectangle(rectangleCommand.startPoint, readPointer()); }
+
+    function drawSlotPreview() { if (readMode() === "slot") renderer.drawSlot(slotCommand.firstCenter, slotCommand.secondCenter, readPointer()); }
+
+    function drawCirclePreview() { if (readMode() === "circle") renderer.drawCircle(circularCommands.circleCenterPoint, readPointer()); }
+
+    function drawArcPreview() { if (readMode() === "arc") renderer.drawArc(circularCommands.arcCenterPoint, circularCommands.arcStartPoint, readPointer()); }
+
+    function drawThreePointArcPreview() { if (readMode() === "three-point-arc") renderer.drawThreePointArc(circularCommands.threePointArcStart, circularCommands.threePointArcEnd, readPointer()); }
+
+    function drawSplinePreview() { if (readMode() === "spline") renderer.drawSpline(splineDraft.points, readPointer()); }
+
+    function drawTrimPreview() { if (readMode() === "trim") renderer.drawTrim(readTrim()); }
+    function draw() {
+      drawTemporaryLine();
+      drawCenterlinePreview();
+      drawRectanglePreview();
+      drawSlotPreview();
+      drawCirclePreview();
+      drawArcPreview();
+      drawThreePointArcPreview();
+      drawSplinePreview();
+    }
+    return Object.freeze({ draw, drawTemporaryLine, drawCenterlinePreview, drawRectanglePreview, drawSlotPreview, drawCirclePreview, drawArcPreview, drawThreePointArcPreview, drawSplinePreview, drawTrimPreview });
+  }
+  window.AuthoringPreviewRenderer = Object.freeze({ create, createLayer });
 })();

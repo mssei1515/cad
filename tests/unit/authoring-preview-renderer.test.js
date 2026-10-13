@@ -99,3 +99,38 @@ test('trim preview retains line intervals, signed arc parameters and whole-circl
   f.calls.length=0;f.renderer.drawTrim({kind:'circle',item:arc,interval:{left:{angle:1},right:{angle:3}}});
   assert.deepEqual(f.calls.find(c=>c[0]==='arc'),['arc',1,2,9,1,3]);
 });
+
+function commandLayerFixture() {
+  const calls = [], pointer = { x: 10, y: 20 }, start = {}, rectangle = {}, center = {}, second = {}, arcStart = {}, arcEnd = {}, points = [], trim = {}, support = { ok: true };
+  const state = { mode: 'select', pointer, support, firstPoint: start, changeAfterLine: false };
+  const renderer = {};
+  for (const name of ['drawLine', 'drawCenterline', 'drawRectangle', 'drawSlot', 'drawCircle', 'drawArc', 'drawThreePointArc', 'drawSpline', 'drawTrim']) renderer[name] = function (...args) { assert.equal(this, renderer); calls.push([name, ...args]); if (name === 'drawLine' && state.changeAfterLine) state.mode = 'rectangle'; };
+  const layer = sandbox.window.AuthoringPreviewRenderer.createLayer({ renderer,
+    readMode: () => state.mode, readPointer: () => state.pointer, readTrim: () => trim,
+    lineCommand: { startPoint: start }, rectangleCommand: { startPoint: rectangle }, slotCommand: { firstCenter: center, secondCenter: second },
+    circularCommands: { circleCenterPoint: center, arcCenterPoint: center, arcStartPoint: arcStart, threePointArcStart: arcStart, threePointArcEnd: arcEnd }, splineDraft: { points },
+    centerlineCommand: { get support() { return state.support; }, get firstPoint() { return state.firstPoint; } },
+    projectPointToCenterlineSupport: p => { assert.equal(p, state.pointer); calls.push(['project', p]); return second; },
+    readCanvasSize: () => { calls.push(['size']); return { width: 100, height: 80 }; },
+  });
+  return { layer, calls, state, pointer, start, rectangle, center, second, arcStart, arcEnd, points, trim, support };
+}
+test('authoring command layer reads current mode/draft points and preserves painter refs/receiver and stage order', () => {
+  const h = commandLayerFixture(); h.layer.draw(); assert.equal(h.calls.length, 0);
+  for (const [mode, painter, expected] of [['line', 'drawLine', [h.start, h.pointer]], ['rectangle', 'drawRectangle', [h.rectangle, h.pointer]],
+    ['slot', 'drawSlot', [h.center, h.second, h.pointer]], ['circle', 'drawCircle', [h.center, h.pointer]], ['arc', 'drawArc', [h.center, h.arcStart, h.pointer]],
+    ['three-point-arc', 'drawThreePointArc', [h.arcStart, h.arcEnd, h.pointer]], ['spline', 'drawSpline', [h.points, h.pointer]]]) {
+    h.state.mode = mode; h.calls.length = 0; h.layer.draw(); assert.equal(h.calls.length, 1); assert.equal(h.calls[0][0], painter);
+    assert.equal(h.calls[0].length, expected.length + 1); expected.forEach((value, i) => assert.equal(h.calls[0][i + 1], value));
+  }
+  h.state.mode = 'line'; h.state.changeAfterLine = true; h.calls.length = 0; h.layer.draw(); assert.deepEqual(h.calls.map(c => c[0]), ['drawLine', 'drawRectangle']);
+  h.state.mode = 'trim'; h.calls.length = 0; h.layer.draw(); assert.equal(h.calls.length, 0); h.layer.drawTrimPreview(); assert.equal(h.calls[0][1], h.trim);
+});
+test('centerline command preview keeps support/mode guards, projects current pointer and defers canvas size reads', () => {
+  const h = commandLayerFixture(); h.state.support = null; h.state.mode = 'centerline'; h.layer.draw(); assert.equal(h.calls.length, 0);
+  h.state.support = { ok: false }; h.layer.drawCenterlinePreview(); assert.equal(h.calls.length, 0);
+  h.state.support = h.support; h.state.mode = 'select'; h.layer.drawCenterlinePreview(); assert.equal(h.calls.length, 0);
+  h.state.mode = 'centerline'; h.layer.drawCenterlinePreview(); assert.deepEqual(h.calls.map(c => c[0]), ['project', 'size', 'drawCenterline']);
+  const call = h.calls.at(-1); assert.equal(call[1], h.support); assert.equal(call[2], h.start); assert.equal(call[3], h.second); assert.equal(call[4].width, 100); assert.equal(call[4].height, 80);
+  h.state.pointer = null; h.calls.length = 0; h.layer.drawCenterlinePreview(); assert.deepEqual(h.calls.map(c => c[0]), ['size', 'drawCenterline']); assert.equal(h.calls.at(-1)[3], null);
+});

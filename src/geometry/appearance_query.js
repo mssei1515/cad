@@ -72,5 +72,32 @@
 
     return Object.freeze({ effectiveAppearanceForElement, effectiveConstructionAppearanceForSketch, effectiveAppearanceForSketch, isVisibleValue, isVisibleSketchId, isVisibleSketchElement });
   }
-  window.GeometryAppearanceQuery = Object.freeze({ create });
+  function createAnnotation({ document, currentSketches }) {
+    const { normalizeAnnotationStyle, normalizeAppearance } = window.Appearance;
+    function effectiveLeaderAppearanceForSketch(sketch) {
+      return window.Appearance.resolveLeaderAppearance(document.defaultLeaderAppearance, document.defaultTerminatorAppearance, sketch?.leaderAppearance);
+    }
+
+    function effectiveAnnotationStyle(element) {
+      if (element?.type !== "leader" && !element?.appearanceInheritance) return normalizeAnnotationStyle(element?.style);
+      const source = element.localElement || element;
+      const sketches = element.blockDefinition?.sketches || currentSketches();
+      const sketch = sketches.find(item => item.id === source.sketchId);
+      const direct = source.appearanceInheritance ? source.style : {
+        ...normalizeAnnotationStyle(source.style), ...window.Appearance.annotationDisplaySettings(source.style), rotation: Number(source.rotation) || 0
+      };
+      const style = window.Appearance.resolveLeaderAppearance(document.defaultLeaderAppearance, document.defaultTerminatorAppearance, sketch?.leaderAppearance, direct);
+      Object.assign(style, { precision: normalizeAnnotationStyle(source.style).precision, prefix: String(source.style?.prefix || ""), suffix: String(source.style?.suffix || "") });
+      for (const override of element.blockAppearanceOverrides || []) {
+        const normalized = normalizeAppearance(override);
+        if (normalized.color) style.color = normalized.color;
+        if (normalized.lineWidth != null) style.lineWidth = normalized.lineWidth;
+      }
+      return style;
+    }
+
+
+    return Object.freeze({ effectiveLeaderAppearanceForSketch, effectiveAnnotationStyle });
+  }
+  window.GeometryAppearanceQuery = Object.freeze({ create, createAnnotation });
 })();

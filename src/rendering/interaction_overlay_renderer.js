@@ -1,7 +1,7 @@
 /* Present transient snap and Sketch identity overlays without owning interaction state. */
 (() => {
   "use strict";
-  function create({ ctx, viewport, elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName }) {
+  function create({ ctx, viewport, withCanvasState, elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName }) {
     function drawSnapMarker(snap) {
       if (!snap) return;
       ctx.save();
@@ -105,7 +105,19 @@
       }
       ctx.restore();
     }
-    return Object.freeze({ drawSnapMarker, drawSketchIdentityLabel, sketchIdentityRelationLabel, sketchIdentityRelationColor });
+    function drawSelectionRect(preview) {
+      if (!preview) return;
+      const { rect, crossing } = preview;
+      withCanvasState(() => {
+        ctx.strokeStyle = crossing ? "#f59e0b" : "#2563eb";
+        ctx.fillStyle = crossing ? "rgba(245, 158, 11, 0.08)" : "rgba(37, 99, 235, 0.08)";
+        ctx.lineWidth = 1.2 / viewport.scale;
+        ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+        ctx.fillRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
+        ctx.strokeRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
+      });
+    }
+    return Object.freeze({ drawSelectionRect, drawSnapMarker, drawSketchIdentityLabel, sketchIdentityRelationLabel, sketchIdentityRelationColor });
   }
   window.InteractionOverlayRenderer = Object.freeze({ create });
 })();

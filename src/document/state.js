@@ -89,5 +89,12 @@
     for (const item of [...scope.points, ...scope.lines, ...scope.circles, ...scope.arcs, ...scope.splines]) item.appearance = normalizeAppearance(item.appearance);
   }
 
-  window.DocumentState = Object.freeze({ DEFAULT_DOCUMENT_UNITS, create, clearContent, resetDefaults, normalizeAppearanceState });
+  function normalizeDimensionState(scope, targetFromConstraint, normalizeDimension) {
+    for (const constraint of scope.constraints) {
+      const target = targetFromConstraint(constraint);
+      if (target) constraint.dimension = normalizeDimension(target, constraint.dimension);
+    }
+  }
+
+  window.DocumentState = Object.freeze({ DEFAULT_DOCUMENT_UNITS, create, clearContent, resetDefaults, normalizeAppearanceState, normalizeDimensionState });
 })();

@@ -1,5 +1,28 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const sandbox={window:{}};vm.createContext(sandbox);vm.runInContext(fs.readFileSync('src/ui/constraint_controls_view.js','utf8'),sandbox);
+
+test('constraint control binding reads current datasets, routes menu through button and owns listener lifetime', () => {
+ const calls=[];
+ function control(dataset) {
+  const handlers=new Set();
+  return {dataset, handlers,
+   addEventListener(type, handler) {assert.equal(type,'click'); handlers.add(handler);},
+   removeEventListener(type, handler) {assert.equal(type,'click'); handlers.delete(handler);},
+   click() {for(const handler of [...handlers]) handler();},
+   closest(selector) {assert.equal(selector,'details');return {removeAttribute(name) {assert.equal(name,'open');calls.push(['close']);}};}};
+ }
+ const source=control({constraint:'horizontal'}),fixed=control({}),menu=control({menuConstraint:'horizontal'});
+ const binding=sandbox.window.ConstraintControlsView.createBinding({constraintButtons:[source],constraintMenuButtons:[menu],fixPointBtn:fixed,
+  onConstraint:type=>calls.push(['constraint',type]),onFixed:()=>calls.push(['fixed'])});
+ binding.bind();binding.bind();assert.equal(source.handlers.size,1);assert.equal(fixed.handlers.size,1);
+ menu.click();assert.deepEqual(calls,[['constraint','horizontal'],['close']]);
+ calls.length=0;source.dataset.constraint='vertical';source.click();assert.deepEqual(calls,[['constraint','vertical']]);
+ calls.length=0;menu.dataset.menuConstraint='fixed';menu.click();assert.deepEqual(calls,[['fixed'],['close']]);
+ calls.length=0;menu.dataset.menuConstraint='missing';menu.click();assert.deepEqual(calls,[['close']]);
+ binding.dispose();assert.equal(source.handlers.size+fixed.handlers.size+menu.handlers.size,0);
+ calls.length=0;source.click();assert.equal(calls.length,0);
+ binding.bind();source.click();assert.deepEqual(calls,[['constraint','vertical']]);binding.dispose();
+});
 function button(dataset={},title='') {
  const attrs={},classes=new Set();return {dataset,title,attrs,classes,
  setAttribute:(key,value)=>{attrs[key]=value;},getAttribute:key=>attrs[key],

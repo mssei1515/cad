@@ -5,6 +5,57 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/testing/constraint_test_driver.js'), 'utf8'), sandbox);
+
+test('analysis observation uses current scope and preserves error ranking, indices and top twelve', () => {
+  const constraints = Array.from({ length: 16 }, (_, index) => ({ name: 'c' + index, error: () => index === 4 ? [4, 0] : index }));
+  const variables = [{}], lines = [{}], calls = [];
+  let scope = { points: [{ sketchId: 'S1' }, { sketchId: 'S2' }], lines: [], circles: [], arcs: [], splines: [] };
+  const observation = sandbox.window.ConstraintTestDriver.createAnalysisObservation({
+    activeSketchId: () => 'S1', currentScope: () => scope, elementSketchId: value => value.sketchId,
+    sketchSolveVariables: id => { calls.push(['variables', id]); return variables; },
+    sketchSolveConstraints: id => { calls.push(['constraints', id]); return constraints; },
+    sketchSolveLines: id => { calls.push(['lines', id]); return lines; }, acceptError: 0.01,
+    analyzeConstraintState: options => { assert.equal(options.variables, variables); assert.equal(options.constraints, constraints); assert.equal(options.lines, lines); assert.equal(options.errorTolerance, 0.01); return { stable: true, rank: 2 }; },
+    vectorNorm: values => Math.hypot(...values),
+  });
+  const result = observation.analysis();
+  assert.equal(result.pointCount, 1); assert.equal(result.constraintCount, 16); assert.equal(result.rank, 2);
+  assert.deepEqual(Array.from(result.largestConstraintErrors, value => value.index), [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4]);
+  assert.deepEqual(calls, [['variables', 'S1'], ['constraints', 'S1'], ['lines', 'S1']]);
+  scope = { ...scope, points: [] }; assert.equal(observation.analysis().pointCount, 0);
+});
+
+test('block observation refreshes first, filters bundles and preserves identity lookup and summary copy', () => {
+  const point = { id: 'P1' }, spline = { id: 'SP1' }, summary = { nested: {} }, calls = [];
+  const observation = sandbox.window.ConstraintTestDriver.createBlockObservation({
+    refreshConstraintAnalysis: () => { calls.push('refresh'); return { analysis: { stable: true }, summary, statuses: new Map([[point, 'fixed'], [spline, 'free']]) }; },
+    blockProjectionBundles: () => { calls.push('bundles'); return [
+      { instance: { id: 'BI1' }, points: [point], lines: [], circles: [], arcs: [] },
+      { instance: { id: 'BI2' }, points: [], lines: [], circles: [], arcs: [], splines: [spline] },
+    ]; },
+  });
+  const result = observation.state('BI2');
+  assert.deepEqual(calls, ['refresh', 'bundles']);
+  assert.deepEqual(Array.from(result.projections, value => ({ ...value })), [{ id: 'SP1', status: 'free' }]);
+  assert.notEqual(result.summary, summary); assert.equal(result.summary.nested, summary.nested);
+  assert.equal(observation.state().projections.length, 2);
+});
+
+test('block constraint insertion resolves original projections and observes even a refused commit in order', () => {
+  const point = { localElement: { id: 'P1' } }, line = { localElement: { id: 'L1' } }, calls = [];
+  class PointOnLineConstraint { constructor(p, l) { assert.equal(p, point); assert.equal(l, line); } }
+  const insertion = sandbox.window.ConstraintTestDriver.createBlockConstraintInsertion({
+    blockInstanceById: id => id === 'missing' ? null : { id },
+    blockProjectionBundle: () => ({ points: [point], lines: [line] }), PointOnLineConstraint,
+    commitNewConstraint: (type, constraint) => { assert.equal(type, 'coincident'); assert.ok(constraint instanceof PointOnLineConstraint); calls.push('commit'); return 1; },
+    readAnalysis: () => { calls.push('analysis'); return {}; },
+    readBlockState: id => { calls.push(['status', id]); return {}; },
+    serializeModel: () => { calls.push('serialize'); return {}; },
+  });
+  assert.equal(insertion.add('missing', 'P1', 'BI2', 'L1').reason, 'projection-not-found'); assert.deepEqual(calls, []);
+  assert.equal(insertion.add('BI1', 'P1', 'BI2', 'L1').committed, false);
+  assert.deepEqual(calls, ['commit', 'analysis', ['status', 'BI1'], 'serialize']);
+});
 class DistanceConstraint { constructor(p1, p2, value) { Object.assign(this, { p1, p2, value }); } }
 function fixture() {
   const original = () => 'original', solver = { solveSubset: original }, calls = [], hint = { textContent: 'result', classList: { contains: value => value === 'error' } };

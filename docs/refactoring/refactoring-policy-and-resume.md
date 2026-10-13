@@ -10,7 +10,7 @@
 
 ユーザーは長時間の段階的な実装を許可している。「無理に終わらせる必要はない」「今後の開発に過不足なく良い単位で分離する」が最新方針であり、残りクレジットに合わせて設計を急いだり、分離数を固定したりしない。
 
-2026-10-11の最新目標に従い、週枠の残量が70%を下回った時点で新たな分離を停止する。残量はusage toolの100−usedPercentとして確認する。検証・Commit・Push・main反映の余裕を確保する。停止時は検証・Commit・Pushを済ませ、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。
+2026-10-13の最新目標に従い、週枠の残量が60%を下回った時点で新たな分離を停止する。残量はusage toolの100−usedPercentとして確認する。検証・Commit・Push・main反映の余裕を確保する。停止時は検証・Commit・Pushを済ませ、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。
 
 ## 2. 維持するもの
 
@@ -73,15 +73,15 @@
 ## 6. 実装・検証・履歴の進め方
 
 - サブエージェントは使わない（ユーザーの明示指示）。
-- 2026-10-11の目標継続指示により停止条件は週枠残量70%未満へ変更。以前の50%／尽きる前の条件は過去の記録として扱う。停止時の最後のコミットをmainへマージする指示も受領。残量はusage toolで確認し、リリース時はdevelop先行・main最後・両ブランチ同期の手順を守る。
+- 2026-10-13の目標継続指示により停止条件は週枠残量60%未満へ変更。以前の70%／50%／尽きる前の条件は過去の記録として扱う。停止時の最後のコミットをmainへマージする指示も受領。残量はusage toolで確認し、リリース時はdevelop先行・main最後・両ブランチ同期の手順を守る。
 - 開始時にAGENTS.md、Gitのbranch／status、関連仕様・テストを確認する。既存の無関係な変更を混ぜない。
 - 責務としてまとまった単位で実装し、差分を確認し、関連仕様を更新して検証・Commit・Pushする。将来の原因調査で区切りを追える履歴を残す。
 - 構文は`npm run check`、単体は`npm run test:unit`。関連E2Eを実施し、全体完了前には全体E2Eも確認する。
 - `.test.js`の変更は分離した責務の境界検証や読込一覧の更新に必要な範囲とする。テストの整備だけで分離が進んだことにはしない。
-- 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`package.json`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。
+- 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/clipboard-placement`。停止時の統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/interaction-observation`。停止時の統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -97,7 +97,11 @@
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-10-12）
+## 8. 再開地点（2026-10-14）
+
+週枠残量94%で再開し、直近確認は60%。develop 7a1983eを基準にcodex/interaction-observationで継続中。開始時app.jsは7,734行。停止条件は残量60%未満（60%ちょうどでは未到達）。selectionItems／selectionSketchIdを既存CanvasSelection.createScopeQueryへ、identity選択更新をCanvasSelectionInteraction.createIdentitySelectionへ分離。照会2port・更新5portに限定し、category順／重複／元参照と先頭itemのSketch→inspection→null、Block→derived owner優先、additive Sketch拒否／ID toggleとnon-additive clear→kind判定→set、UI→draw／結果とidentity無変更を維持する。appは早期callback用hoisted入口と生成接続を持つ。app.jsは4,854→4,840行（14行減、今回の再開から合計2,894行減）。構文506ファイル・単体1,391件・関連E2E199件が成功（すべてexit 0、E2E2.6分）。既存Selection／CanvasSelectionInteraction unitへ3件追加し、一覧順／重複／refとSketch fallback、全kind更新とowner優先／UI順、additive拒否／toggle receiver・unknown-kind時の元clear順を確認。元3body一致と2／5portの初期化順・既存callback登録をaudit。unified-ui／blocks／derived-selection-copy／sketch-permissions／sketch-projection／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-selection-identity-entry-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。 次の分離前にusageを確認し、60%未満なら新規分離を止め、develop先行で統合／Push・最新全E2Eを行い、mainを最後に反映してdevelopを同期して一時停止する。条件未到達ならguardSketchEdit／guardSelectionEdit／canCreateInActiveSketch／rejectRootSketchCreationの操作拒否・hintと、ordinarySelectionMode／hitSketchAllowed／hitElementAllowedの可視性・mode照会を分析する。既存SketchContextの権限規則は所有を維持し、操作のguard／通知とhit queryを分けて、既存Sketch／Selection moduleへ集約できるか確認する。拒否時の無変更・default Sketch／operationと短絡／メッセージ・UI順を維持し、新permission／scope規則を導入しない。late const／callback登録順をauditし、巨大mutable contextや別巨大appへの移動を避ける。数百行のcomposition rootという全体目標を維持する。
+
+### 前回の停止地点（2026-10-12）
 
 2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は7,630行（今回の合計3,428行減）で、全体目標は未完了。週枠残量69%を確認したため新規分離を停止。76個の区切りのcommitを保持し、コード最終commit 8e6fc2aをdevelopのcab7c6dへ統合・Pushして最新全体検証を完了した。この停止記録をCommit／Pushした後、mainへ反映し、直ちにdevelopをmainへfast-forwardして両者をPush・同期する。統合済み作業branchはローカル・リモートとも削除し、runtime再生成後に目標を一時停止する。停止条件と手順はsection 1／6に従う。
 

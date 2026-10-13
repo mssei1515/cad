@@ -39,3 +39,37 @@ test("drawing failures restore context and reset leaking stroke state", () => {
   assert.equal(h.ctx.globalAlpha, 1); assert.equal(h.ctx.shadowBlur, 0); assert.equal(h.ctx.lineJoin, "miter");
   assert.deepEqual(Array.from(h.surface.appearanceLineDash("dashdot")), [6, 2, 1, 2]);
 });
+
+function createFrameHarness() {
+  const calls = [], canvas = { width: 200, height: 120 }, viewport = { x: 10, y: 20, scale: 3 };
+  let frame = null, width = 0, height = 0, dpr = 2, failure = null;
+  const ctx = Object.fromEntries(['setTransform', 'clearRect', 'save', 'translate', 'scale', 'restore'].map(name => [name, (...args) => calls.push([name, ...args])]));
+  const surface = { get width() { return width; }, get height() { return height; }, get dpr() { return dpr; },
+    syncCanvasBitmapSize() { assert.equal(this, surface); calls.push(['size']); width = 100; height = 60; },
+    resetCanvasStrokeState() { assert.equal(this, surface); calls.push(['stroke']); },
+  };
+  function stage(name) { return () => { calls.push([name]); if (failure === name) throw new Error(name); }; }
+  const renderer = sandbox.window.CanvasSurface.createFrameRenderer({ canvas, ctx, viewport, surface,
+    syncZoom: stage('zoom'), readExportFrame: () => frame, recordDraw: stage('record'),
+    drawContent: stage('content'), drawExport: stage('export'), drawInteractive: stage('interactive'),
+  });
+  return { renderer, calls, viewport, setFrame: value => { frame = value; }, setDpr: value => { dpr = value; }, fail: value => { failure = value; } };
+}
+test('canvas frame uses live DPR/viewport and preserves interactive versus PNG stage and stroke/transform order', () => {
+  const h = createFrameHarness(); h.renderer.draw();
+  assert.deepEqual(h.calls, [['zoom'], ['size'], ['record'], ['setTransform', 1, 0, 0, 1, 0, 0], ['stroke'], ['clearRect', 0, 0, 200, 120],
+    ['setTransform', 2, 0, 0, 2, 0, 0], ['stroke'], ['save'], ['translate', 10, 20], ['scale', 3, 3], ['stroke'], ['content'], ['interactive'], ['stroke'], ['restore'], ['stroke']]);
+  h.calls.length = 0; h.setFrame({ ratio: { x: 4, y: 5 }, region: { x: 6, y: 7 } }); h.viewport.scale = 8; h.renderer.draw();
+  assert.deepEqual(h.calls, [['zoom'], ['setTransform', 1, 0, 0, 1, 0, 0], ['stroke'], ['clearRect', 0, 0, 200, 120],
+    ['setTransform', 4, 0, 0, 5, -24, -35], ['stroke'], ['save'], ['translate', 10, 20], ['scale', 8, 8], ['stroke'], ['content'], ['export'], ['restore'], ['stroke']]);
+  h.calls.length = 0; h.setFrame(null); h.setDpr(1.5); h.renderer.draw();
+  assert.ok(h.calls.some(call => call[0] === 'record'));
+  assert.deepEqual(h.calls.filter(call => call[0] === 'setTransform').at(-1), ['setTransform', 1.5, 0, 0, 1.5, 0, 0]);
+});
+test('canvas frame propagates stage failures without introducing new restore/finally semantics', () => {
+  for (const stage of ['content', 'interactive', 'export']) {
+    const h = createFrameHarness(); if (stage === 'export') h.setFrame({ ratio: { x: 1, y: 1 }, region: { x: 0, y: 0 } });
+    h.fail(stage); assert.throws(() => h.renderer.draw(), new RegExp(stage));
+    assert.equal(h.calls.at(-1)[0], stage); assert.equal(h.calls.some(call => call[0] === 'restore'), false);
+  }
+});

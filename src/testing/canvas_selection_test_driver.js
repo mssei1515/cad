@@ -152,5 +152,19 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasSelectionTestDriver = Object.freeze({ createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection, createMoveObservation });
+  function createIdObservation({ canvasSelection }) {
+    function state() {
+      return {
+        points: canvasSelection.points.map((point) => point.id),
+        lines: canvasSelection.lines.map((line) => line.id),
+        circles: canvasSelection.circles.map((circle) => circle.id),
+        arcs: canvasSelection.arcs.map((arc) => arc.id),
+        splines: canvasSelection.splines.map((spline) => spline.id),
+        blockInstances: canvasSelection.blockInstances.map((instance) => instance.id),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.CanvasSelectionTestDriver = Object.freeze({ createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection, createMoveObservation, createIdObservation });
 })();

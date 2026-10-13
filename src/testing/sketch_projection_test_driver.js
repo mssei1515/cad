@@ -467,5 +467,33 @@
     return Object.freeze({ copyAndPaste, blockize });
   }
 
-  window.SketchProjectionTestDriver = Object.freeze({ createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload, createEligibilityFixture, createTransfer });
+  function createLegacyTargetConstruction({ addPointToSketch, addLine, addCircle, addArc, addSpline }) {
+    function projectedPointForCreation(sourcePoint, targetSketchId) {
+      return addPointToSketch(sourcePoint.x, sourcePoint.y, targetSketchId, sourcePoint.kind || "endpoint");
+    }
+
+    function createSketchProjectionTarget(entry, targetSketchId) {
+      const source = entry.item;
+      if (entry.kind === "point") return projectedPointForCreation(source, targetSketchId);
+      if (entry.kind === "line") {
+        return addLine(
+          addPointToSketch(source.p1.x, source.p1.y, targetSketchId, source.p1.kind || "endpoint"),
+          addPointToSketch(source.p2.x, source.p2.y, targetSketchId, source.p2.kind || "endpoint"),
+          source.construction,
+        );
+      }
+      if (entry.kind === "circle") {
+        return addCircle(projectedPointForCreation(source.center, targetSketchId), source.radius(), source.construction);
+      }
+      if (entry.kind === "arc") {
+        return addArc(projectedPointForCreation(source.center, targetSketchId), source.radius(), source.startAngle, source.endAngle, source.construction);
+      }
+      if (entry.kind === "spline") {
+        return addSpline(source.fitPoints.map((point) => projectedPointForCreation(point, targetSketchId)), source.closed, source.construction);
+      }
+      return null;
+    }
+    return Object.freeze({ createSketchProjectionTarget });
+  }
+  window.SketchProjectionTestDriver = Object.freeze({ createLegacyTargetConstruction, createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload, createEligibilityFixture, createTransfer });
 })();
