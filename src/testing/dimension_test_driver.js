@@ -456,5 +456,60 @@
     return Object.freeze({ followCase });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture });
+  function createSketchVisibilityFixture({ resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope, rootSketchId, ctx, drawDimensions, sketchById, isDimensionConstraint, constraintSketchId, isVisibleSketchId }) {
+    function reset() {
+      resetModelState();
+      const firstSketchId = activeSketchId();
+      const p1 = addPoint(0, 0, false, "endpoint");
+      const p2 = addPoint(100, 0, false, "endpoint");
+      const firstLine = addLine(p1, p2);
+      addDistanceConstraintFromTarget(
+        { kind: "line-length", line: firstLine, p1, p2, value: firstLine.length() },
+        firstLine.length(),
+        dimensionFromAnchor({ kind: "line-length", line: firstLine, p1, p2, value: firstLine.length() }, { x: 50, y: -30 }),
+        { sketchId: firstSketchId },
+      );
+
+      const secondSketchId = "S2";
+      currentScope().sketches.push({ id: secondSketchId, name: "Sketch-2", parentSketchId: rootSketchId, kind: "sketch" });
+      currentScope().activeSketchId = secondSketchId;
+      const p3 = addPoint(0, 80, false, "endpoint");
+      const p4 = addPoint(160, 80, false, "endpoint");
+      const secondLine = addLine(p3, p4);
+      addDistanceConstraintFromTarget(
+        { kind: "line-length", line: secondLine, p1: p3, p2: p4, value: secondLine.length() },
+        secondLine.length(),
+        dimensionFromAnchor({ kind: "line-length", line: secondLine, p1: p3, p2: p4, value: secondLine.length() }, { x: 80, y: 50 }),
+        { sketchId: secondSketchId },
+      );
+      currentScope().activeSketchId = firstSketchId;
+      const captureDimensionLabels = () => {
+        const labels = [];
+        const originalFillText = ctx.fillText;
+        ctx.fillText = (value) => labels.push(String(value));
+        try {
+          drawDimensions();
+        } finally {
+          ctx.fillText = originalFillText;
+        }
+        return labels;
+      };
+      const drawnDimensionLabels = captureDimensionLabels();
+      sketchById(secondSketchId).appearance = { ...sketchById(secondSketchId).appearance, visible: false };
+      const labelsAfterHidingSecondSketch = captureDimensionLabels();
+      sketchById(secondSketchId).appearance = { ...sketchById(secondSketchId).appearance, visible: true };
+      return {
+        activeSketchId: firstSketchId,
+        dimensionSketchIds: currentScope().constraints.filter(isDimensionConstraint).map((constraint) => constraintSketchId(constraint)),
+        drawnDimensionSketchIds: currentScope().constraints
+          .filter((constraint) => isDimensionConstraint(constraint) && isVisibleSketchId(constraintSketchId(constraint)))
+          .map((constraint) => constraintSketchId(constraint)),
+        drawnDimensionLabels,
+        labelsAfterHidingSecondSketch,
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture });
 })();

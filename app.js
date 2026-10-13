@@ -5012,6 +5012,10 @@
     const middleButtonFitFixture = window.CanvasTestDriver.createMiddleButtonFitFixture({ resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, updateUI, draw, canvas });
     const fitObservation = window.CanvasTestDriver.createFitObservation({ canvas, viewport, screenBoxForBounds, visibleGeometryBounds, isVisibleSketchId });
     const testFitOperation = window.CanvasTestDriver.createFitOperation({ fitAllGeometryToViewport, draw });
+    const sketchVisibilityFixture = window.DimensionTestDriver.createSketchVisibilityFixture({
+      resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID,
+      ctx, drawDimensions, sketchById, isDimensionConstraint, constraintSketchId, isVisibleSketchId,
+    });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const sketchProjectionTestObservation = window.SketchProjectionTestDriver.createObservation({
       types: { Point, Line, Circle, Arc }, currentScope: workspace.current, readMode: () => mode,
@@ -5414,57 +5418,7 @@
         return annotationDrag.inspect();
       },
       historyState: readTestHistory,
-      resetForActiveSketchDimensionVisibility() {
-        resetModelState();
-        const firstSketchId = activeSketchId();
-        const p1 = addPoint(0, 0, false, "endpoint");
-        const p2 = addPoint(100, 0, false, "endpoint");
-        const firstLine = addLine(p1, p2);
-        addDistanceConstraintFromTarget(
-          { kind: "line-length", line: firstLine, p1, p2, value: firstLine.length() },
-          firstLine.length(),
-          dimensionFromAnchor({ kind: "line-length", line: firstLine, p1, p2, value: firstLine.length() }, { x: 50, y: -30 }),
-          { sketchId: firstSketchId },
-        );
-
-        const secondSketchId = "S2";
-        model.sketches.push({ id: secondSketchId, name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
-        model.activeSketchId = secondSketchId;
-        const p3 = addPoint(0, 80, false, "endpoint");
-        const p4 = addPoint(160, 80, false, "endpoint");
-        const secondLine = addLine(p3, p4);
-        addDistanceConstraintFromTarget(
-          { kind: "line-length", line: secondLine, p1: p3, p2: p4, value: secondLine.length() },
-          secondLine.length(),
-          dimensionFromAnchor({ kind: "line-length", line: secondLine, p1: p3, p2: p4, value: secondLine.length() }, { x: 80, y: 50 }),
-          { sketchId: secondSketchId },
-        );
-        model.activeSketchId = firstSketchId;
-        const captureDimensionLabels = () => {
-          const labels = [];
-          const originalFillText = ctx.fillText;
-          ctx.fillText = (value) => labels.push(String(value));
-          try {
-            drawDimensions();
-          } finally {
-            ctx.fillText = originalFillText;
-          }
-          return labels;
-        };
-        const drawnDimensionLabels = captureDimensionLabels();
-        sketchById(secondSketchId).appearance = { ...sketchById(secondSketchId).appearance, visible: false };
-        const labelsAfterHidingSecondSketch = captureDimensionLabels();
-        sketchById(secondSketchId).appearance = { ...sketchById(secondSketchId).appearance, visible: true };
-        return {
-          activeSketchId: firstSketchId,
-          dimensionSketchIds: model.constraints.filter(isDimensionConstraint).map((constraint) => constraintSketchId(constraint)),
-          drawnDimensionSketchIds: model.constraints
-            .filter((constraint) => isDimensionConstraint(constraint) && isVisibleSketchId(constraintSketchId(constraint)))
-            .map((constraint) => constraintSketchId(constraint)),
-          drawnDimensionLabels,
-          labelsAfterHidingSecondSketch,
-        };
-      },
+      resetForActiveSketchDimensionVisibility: sketchVisibilityFixture.reset,
       resetForAllGeometryFit: allGeometryFitFixture.reset,
       resetForMiddleButtonFit: middleButtonFitFixture.reset,
       middleButtonFitState: fitObservation.state,

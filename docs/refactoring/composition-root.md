@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Sketch寸法の可視性fixtureを既存DimensionTestDriver.createSketchVisibilityFixtureへ分離。二つのSketchの固定寸法準備は既存reset／Geometry・寸法生成へ、active Sketch切替と復元・可視性／描画は既存所有者へ接続する。非表示→label観測→再表示とfilter／返却値の順を維持し、fillText差替えは各描画のtry／finallyで元のmethodへ復元する。元の処理本体との一致を依存port置換後に確認。app.jsは7,002→6,956行（46行減、今回の再開から合計778行減）。構文477ファイル・単体1,297件・関連E2E116件が成功（すべてexit 0、E2E1.6分）。全利用箇所のview-visibility／multiple-dimensions／unified-uiを実行。単体1件を追加し、成功と一回目／二回目の描画例外でCanvas methodの復元と既存復元範囲を確認した。ログはcad-sketch-dimension-visibility-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Sketch／寸法モデル・可視性／描画ルール／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Canvas fitの全図形fixture／中ボタンfixture・表示範囲観測・fit実行を既存CanvasTestDriver.createAllGeometryFitFixture／createMiddleButtonFitFixture／createFitObservation／createFitOperationへ分離。固定Geometry／Sketch準備は既存reset／生成と現在scopeへ、viewport・fit／可視性／座標変換は既存所有者へ委譲する。固定座標・所属／active Sketch切替と復元、viewport更新順、paddingの数値化／fallback、fit→drawと各照会順を保持し、元の四つの処理本体との一致を依存port置換後に確認。app.jsは7,050→7,002行（48行減、今回の再開から合計732行減）。構文477ファイル・単体1,296件・関連E2E139件が成功（すべてexit 0、E2E1.8分）。全利用箇所のannotation-display-size／canvas-zoom-input／hatching／sketch-permissions／unified-uiを実行。新規テストはなく、既存の全図形fit／中ボタン／visible bounds・倍率・領域／権限と周辺操作を確認した。ログはcad-canvas-fit-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自scope／viewport／fit・可視性ルール／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
