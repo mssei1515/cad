@@ -4932,28 +4932,10 @@
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
-    function readTestHistory() {
-      const history = activeEditHistory();
-      return {
-        undoCount: history.undoCount,
-        redoCount: history.redoCount,
-        blockEditing: Boolean(blockEditor.current),
-        undoDisabled: document.getElementById("undoBtn")?.disabled,
-        redoDisabled: document.getElementById("redoBtn")?.disabled,
-        constructionLineMode: constructionCommand.enabled,
-        constructionButtonActive: document.getElementById("toolConstructionLine")?.classList.contains("active"),
-      };
-    }
-    function readTestSelectedGeometry() {
-      return {
-        points: canvasSelection.points.map((point) => point.id),
-        lines: canvasSelection.lines.map((line) => line.id),
-        circles: canvasSelection.circles.map((circle) => circle.id),
-        arcs: canvasSelection.arcs.map((arc) => arc.id),
-        splines: canvasSelection.splines.map((spline) => spline.id),
-        blockInstances: canvasSelection.blockInstances.map((instance) => instance.id),
-      };
-    }
+    const historyObservation = window.DocumentTestDriver.createHistoryObservation({ activeEditHistory, blockEditor, document, constructionCommand });
+    const readTestHistory = historyObservation.state;
+    const selectedGeometryObservation = window.CanvasSelectionTestDriver.createIdObservation({ canvasSelection });
+    const readTestSelectedGeometry = selectedGeometryObservation.state;
     const constraintStatusObservation = window.ConstraintTestDriver.createStatusObservation({ refreshConstraintAnalysis, elementSketchId, activeSketchId });
     const readTestConstraintStatuses = constraintStatusObservation.state;
     const constraintAnalysisObservation = window.ConstraintTestDriver.createAnalysisObservation({
@@ -5096,6 +5078,7 @@
     const fileObservation = window.DocumentTestDriver.createFileObservation({ fileSession });
     const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
     const sketchVisibilityObservation = window.SketchTreeTestDriver.createVisibilityObservation({ sketchById, serializeModel, isVisibleSketchId, document });
+    const responsiveDragFixture = window.GeometryDragTestDriver.createResponsiveFixture({ sampleModel, fitAllGeometryToViewport, draw, resetHistory, serializeModel });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
     const offsetChainObservation = window.OffsetTestDriver.createChainObservation({ currentScope: workspace.current, OffsetChainConstraint, serializeModel, offsetSelection, pendingCommandSession, Line });
@@ -5371,13 +5354,7 @@
       interactionFrameStatsForTest() {
         return pointerMoveScheduler.stats();
       },
-      resetForResponsiveLineDragTest() {
-        sampleModel();
-        fitAllGeometryToViewport(160);
-        draw();
-        resetHistory("responsive line drag test");
-        return serializeModel();
-      },
+      resetForResponsiveLineDragTest: responsiveDragFixture.reset,
       resetForSplineTest: splineTestDriver.reset,
       splineStateForTest: splineTestDriver.state,
       splineHatchPreviewCacheForTest: splineTestDriver.hatchPreviewCache,

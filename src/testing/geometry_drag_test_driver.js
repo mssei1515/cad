@@ -207,5 +207,16 @@
     return Object.freeze({ path });
   }
 
-  window.GeometryDragTestDriver = Object.freeze({ createPointDriver, createGeometryDriver });
+  function createResponsiveFixture({ sampleModel, fitAllGeometryToViewport, draw, resetHistory, serializeModel }) {
+    function reset() {
+      sampleModel();
+      fitAllGeometryToViewport(160);
+      draw();
+      resetHistory("responsive line drag test");
+      return serializeModel();
+    }
+    return Object.freeze({ reset });
+  }
+
+  window.GeometryDragTestDriver = Object.freeze({ createPointDriver, createGeometryDriver, createResponsiveFixture });
 })();

@@ -111,5 +111,21 @@
     return Object.freeze({ state });
   }
 
-  window.DocumentTestDriver = Object.freeze({ createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation });
+  function createHistoryObservation({ activeEditHistory, blockEditor, document, constructionCommand }) {
+    function state() {
+      const history = activeEditHistory();
+      return {
+        undoCount: history.undoCount,
+        redoCount: history.redoCount,
+        blockEditing: Boolean(blockEditor.current),
+        undoDisabled: document.getElementById("undoBtn")?.disabled,
+        redoDisabled: document.getElementById("redoBtn")?.disabled,
+        constructionLineMode: constructionCommand.enabled,
+        constructionButtonActive: document.getElementById("toolConstructionLine")?.classList.contains("active"),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.DocumentTestDriver = Object.freeze({ createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation, createHistoryObservation });
 })();

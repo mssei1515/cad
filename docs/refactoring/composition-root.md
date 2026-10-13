@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+共通Selection ID一覧をCanvasSelectionTestDriver.createIdObservationへ、active履歴／Block編集・Undo／Redo／Construction表示の観測をDocumentTestDriver.createHistoryObservationへ、responsive drag準備をGeometryDragTestDriver.createResponsiveFixtureへ分離。既存所有者の最新状態・ID配列の順とコピー・DOM要素なしのundefined／boolean、sample→fit→draw→履歴reset→保存値取得の順を維持し、元の三つの処理本体との一致を確認。公開APIと各test driverへの共通照会入口を維持する。app.jsは5,635→5,612行（23行減、今回の再開から合計2,122行減）。構文483ファイル・単体1,298件・関連E2E262件が成功（すべてexit 0、13ファイル255件5.2分＋constraint-drag-regressions内のnative pointer／Undo7件25.9秒）。最初のE2Eは共有HTTPサーバー停止によるERR_CONNECTION_REFUSEDで中断（exit 1）し、製品／テストを変更せず専用port 8784で全13ファイルを再実行して成功。専用サーバーは実体を確認して検証後に終了。ログはcad-common-test-observations-{check,unit,e2e,e2e-final,native-e2e}.log。新規テストはなく、既存Geometry／Block編集・Selection・Undo／Redo／履歴・表示とnative pointerの連携を確認した。constraint-drag-regressions全体と全E2Eはこの単位では未実行。独自履歴／Selection・モデル／viewport・Geometry生成／求解規則は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Document名／file session状態をDocumentTestDriver.createNameObservation／createFileObservationへ、表示設定をCanvasTestDriver.createViewObservationへ、Sketch可視性をSketchTreeTestDriver.createVisibilityObservationへ、themeをPropertiesTestDriver.createThemeObservationへ分離。既存Document名getter／有効名／保存値・title／handle、viewState／拘束表示状態、Sketch／保存値／effective可視性／Tree button、設定／保存theme・既定Geometry色getter／Canvas色変換・contrastへ役割別に接続する。呼出し時の最新値・objectコピー・null／boolean／fallbackと照会順を保持し、元の五つの本体との一致をgetter置換後に再確認。app.jsは5,667→5,635行（32行減、今回の再開から合計2,099行減）。構文483ファイル・単体1,298件・関連E2E129件が成功（すべてexit 0、E2E14.5分）。全利用箇所のfile-safety／unified-ui／constraint-drag-regressionsを実行。新規テストはなく、既存Document保存／読込・file handle／名前・可視性／テーマ／表示と長時間ドラッグ回帰を確認した。ログはcad-runtime-state-observations-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Document／file session・可視性／表示／theme状態・保存規則／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
