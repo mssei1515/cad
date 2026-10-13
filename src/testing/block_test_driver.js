@@ -82,5 +82,125 @@
     return Object.freeze({ state });
   }
 
-  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation });
+  function createEditorObservation({ blockEditor, blockEditorSessionChain, currentScope }) {
+    function state() {
+      return {
+        editing: Boolean(blockEditor.current),
+        depth: blockEditorSessionChain().length,
+        isNew: Boolean(blockEditor.current?.isNew),
+        name: blockEditor.current?.draft?.name || null,
+        sketches: currentScope().sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId, kind: sketch.kind })),
+        activeSketchId: currentScope().activeSketchId,
+        hostLineCount: blockEditor.current?.original?.values.lines?.length || 0,
+        hostBlockInstanceCount: blockEditor.current?.original?.values.blockInstances?.length || 0,
+        editorLineCount: currentScope().lines.length,
+        editorBlockInstances: currentScope().blockInstances.map((instance) => ({ id: instance.id, definitionId: instance.definitionId, x: instance.x, y: instance.y, rotation: instance.rotation, rotationLocked: Boolean(instance.rotationLocked) })),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createPlacementAction({ readMode, blockPlacementCommand, commitBlockPlacement }) {
+    function commit(anchor, rotation = 0) {
+      if (readMode() !== "block-place" || !blockPlacementCommand.definitionId) return null;
+      blockPlacementCommand.setAnchor({ x: Number(anchor?.x) || 0, y: Number(anchor?.y) || 0 });
+      const instance = commitBlockPlacement(Number(rotation) || 0);
+      return instance ? { id: instance.id, definitionId: instance.definitionId, x: instance.x, y: instance.y, rotation: instance.rotation, rotationLocked: Boolean(instance.rotationLocked) } : null;
+    }
+    return Object.freeze({ commit });
+  }
+
+  function createNestedConstraintAction({ currentScope, blockProjectionBundle, HorizontalConstraint, VerticalConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, recordHistory, updateUI, draw, serializeConstraint }) {
+    function constrain(type = "vertical") {
+      const instance = currentScope().blockInstances[0];
+      const line = instance ? blockProjectionBundle(instance).lines[0] : null;
+      if (!line) return null;
+      const constraint = type === "horizontal" ? new HorizontalConstraint(line) : new VerticalConstraint(line);
+      pushModelConstraint(constraint, instance.sketchId);
+      const result = solveSketchById(instance.sketchId);
+      invalidateBlockProjectionCache(instance.id);
+      recordHistory("入れ子ブロック拘束");
+      updateUI();
+      draw();
+      return { success: result.success, errorNorm: result.errorNorm, line: serializeConstraint(constraint).line };
+    }
+    return Object.freeze({ constrain });
+  }
+
+  function createChildGeometryAction({ blockEditor, createSketch, activeSketchId, addLine, addPoint, recordHistory, updateUI, draw, currentScope }) {
+    function add() {
+      if (!blockEditor.current) return null;
+      createSketch("child");
+      const sketchId = activeSketchId();
+      addLine(addPoint(-20, 50, false, "endpoint"), addPoint(20, 50, false, "endpoint"));
+      recordHistory("ブロック内図形追加");
+      updateUI();
+      draw();
+      return { sketchId, sketches: currentScope().sketches.map((sketch) => ({ id: sketch.id, parentSketchId: sketch.parentSketchId })), lineCount: currentScope().lines.length };
+    }
+    return Object.freeze({ add });
+  }
+
+  function createCancelAction({ cancelBlockDefinitionEdit, blockEditor, readDefinitionCount, currentScope }) {
+    function cancel() {
+      cancelBlockDefinitionEdit();
+      return { editing: Boolean(blockEditor.current), definitions: readDefinitionCount(), instances: currentScope().blockInstances.length, lines: currentScope().lines.length };
+    }
+    return Object.freeze({ cancel });
+  }
+
+  function createCompleteAction({ completeBlockDefinitionEdit, blockEditor, readDefinitionCount, currentScope }) {
+    function complete() {
+      completeBlockDefinitionEdit({ rotationLocked: true });
+      return { editing: Boolean(blockEditor.current), definitions: readDefinitionCount(), instances: currentScope().blockInstances.length };
+    }
+    return Object.freeze({ complete });
+  }
+
+  function createEnabledSketchAction({ currentScope, setBlockInstanceEnabledSketchIds }) {
+    function set(ids) {
+      const instance = currentScope().blockInstances[0];
+      if (!instance) return false;
+      return setBlockInstanceEnabledSketchIds(instance, ids);
+    }
+    return Object.freeze({ set });
+  }
+
+  function createRejectionFixture({ resetModelState, addPoint, addLine, canvasSelection, blockSelectionGeometry, readDefinitionCount, currentScope, activeSketchId, geometryRefForItem }) {
+    function cases() {
+      resetModelState();
+      const p1 = addPoint(0, 0, false, "endpoint");
+      const p2 = addPoint(60, 0, false, "endpoint");
+      const p3 = addPoint(100, 30, false, "endpoint");
+      const selectedLine = addLine(p1, p2);
+      addLine(p2, p3);
+      canvasSelection.set("lines", [selectedLine]);
+      const sharedPointError = blockSelectionGeometry().error || null;
+      const sharedCounts = { definitions: readDefinitionCount(), instances: currentScope().blockInstances.length, lines: currentScope().lines.length };
+
+      resetModelState();
+      const line = addLine(addPoint(0, 0, false, "endpoint"), addPoint(60, 0, false, "endpoint"));
+      currentScope().annotations.push({
+        id: "AN-block-ref",
+        type: "leader",
+        visible: true,
+        sketchId: activeSketchId(),
+        geometryRef: geometryRefForItem(line),
+        start: { x: 0, y: 0 },
+        end: { x: 30, y: 20 },
+        style: {},
+      });
+      canvasSelection.set("lines", [line]);
+      const annotationError = blockSelectionGeometry().error || null;
+      return {
+        sharedPointError,
+        sharedCounts,
+        annotationError,
+        annotationCounts: { definitions: readDefinitionCount(), instances: currentScope().blockInstances.length, lines: currentScope().lines.length },
+      };
+    }
+    return Object.freeze({ cases });
+  }
+
+  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture });
 })();

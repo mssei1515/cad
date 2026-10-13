@@ -5063,6 +5063,14 @@
     const blockRotationObservation = window.BlockTestDriver.createRotationObservation({ blockInstanceById, currentScope: workspace.current, blockInstanceDisplayCenter, readSolverVariables: () => solver.getVariables(), buildDragSession });
     const blockEndpointObservation = window.BlockTestDriver.createEndpointObservation({ currentScope: workspace.current, blockProjectionBundle, worldToCanvasScreen, canvas });
     const blockHoverObservation = window.BlockTestDriver.createHoverObservation({ constraintTargetSession, canvasHover });
+    const blockEditorObservation = window.BlockTestDriver.createEditorObservation({ blockEditor, blockEditorSessionChain, currentScope: workspace.current });
+    const blockPlacementAction = window.BlockTestDriver.createPlacementAction({ readMode: () => mode, blockPlacementCommand, commitBlockPlacement });
+    const nestedConstraintAction = window.BlockTestDriver.createNestedConstraintAction({ currentScope: workspace.current, blockProjectionBundle, HorizontalConstraint, VerticalConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, recordHistory, updateUI, draw, serializeConstraint });
+    const blockChildGeometryAction = window.BlockTestDriver.createChildGeometryAction({ blockEditor, createSketch, activeSketchId, addLine, addPoint, recordHistory, updateUI, draw, currentScope: workspace.current });
+    const blockCancelAction = window.BlockTestDriver.createCancelAction({ cancelBlockDefinitionEdit, blockEditor, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current });
+    const blockCompleteAction = window.BlockTestDriver.createCompleteAction({ completeBlockDefinitionEdit, blockEditor, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current });
+    const blockEnabledSketchAction = window.BlockTestDriver.createEnabledSketchAction({ currentScope: workspace.current, setBlockInstanceEnabledSketchIds });
+    const blockRejectionFixture = window.BlockTestDriver.createRejectionFixture({ resetModelState, addPoint, addLine, canvasSelection, blockSelectionGeometry, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current, activeSketchId, geometryRefForItem });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5898,94 +5906,14 @@
           projectionLineIds: instance ? blockProjectionBundle(instance).lines.map((line) => line.id) : [],
         };
       },
-      blockEditorState() {
-        return {
-          editing: Boolean(blockEditor.current),
-          depth: blockEditorSessionChain().length,
-          isNew: Boolean(blockEditor.current?.isNew),
-          name: blockEditor.current?.draft?.name || null,
-          sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId, kind: sketch.kind })),
-          activeSketchId: model.activeSketchId,
-          hostLineCount: blockEditor.current?.original?.values.lines?.length || 0,
-          hostBlockInstanceCount: blockEditor.current?.original?.values.blockInstances?.length || 0,
-          editorLineCount: model.lines.length,
-          editorBlockInstances: model.blockInstances.map((instance) => ({ id: instance.id, definitionId: instance.definitionId, x: instance.x, y: instance.y, rotation: instance.rotation, rotationLocked: Boolean(instance.rotationLocked) })),
-        };
-      },
-      commitBlockPlacementForTest(anchor, rotation = 0) {
-        if (mode !== "block-place" || !blockPlacementCommand.definitionId) return null;
-        blockPlacementCommand.setAnchor({ x: Number(anchor?.x) || 0, y: Number(anchor?.y) || 0 });
-        const instance = commitBlockPlacement(Number(rotation) || 0);
-        return instance ? { id: instance.id, definitionId: instance.definitionId, x: instance.x, y: instance.y, rotation: instance.rotation, rotationLocked: Boolean(instance.rotationLocked) } : null;
-      },
-      constrainFirstNestedBlockLineForTest(type = "vertical") {
-        const instance = model.blockInstances[0];
-        const line = instance ? blockProjectionBundle(instance).lines[0] : null;
-        if (!line) return null;
-        const constraint = type === "horizontal" ? new HorizontalConstraint(line) : new VerticalConstraint(line);
-        pushModelConstraint(constraint, instance.sketchId);
-        const result = solveSketchById(instance.sketchId);
-        invalidateBlockProjectionCache(instance.id);
-        recordHistory("入れ子ブロック拘束");
-        updateUI();
-        draw();
-        return { success: result.success, errorNorm: result.errorNorm, line: serializeConstraint(constraint).line };
-      },
-      addBlockEditorChildGeometry() {
-        if (!blockEditor.current) return null;
-        createSketch("child");
-        const sketchId = activeSketchId();
-        addLine(addPoint(-20, 50, false, "endpoint"), addPoint(20, 50, false, "endpoint"));
-        recordHistory("ブロック内図形追加");
-        updateUI();
-        draw();
-        return { sketchId, sketches: model.sketches.map((sketch) => ({ id: sketch.id, parentSketchId: sketch.parentSketchId })), lineCount: model.lines.length };
-      },
-      cancelBlockEditor() {
-        cancelBlockDefinitionEdit();
-        return { editing: Boolean(blockEditor.current), definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
-      },
-      completeBlockEditor() {
-        completeBlockDefinitionEdit({ rotationLocked: true });
-        return { editing: Boolean(blockEditor.current), definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length };
-      },
-      setFirstBlockInstanceSketches(ids) {
-        const instance = model.blockInstances[0];
-        if (!instance) return false;
-        return setBlockInstanceEnabledSketchIds(instance, ids);
-      },
-      blockCreationRejectionCases() {
-        resetModelState();
-        const p1 = addPoint(0, 0, false, "endpoint");
-        const p2 = addPoint(60, 0, false, "endpoint");
-        const p3 = addPoint(100, 30, false, "endpoint");
-        const selectedLine = addLine(p1, p2);
-        addLine(p2, p3);
-        canvasSelection.set("lines", [selectedLine]);
-        const sharedPointError = blockSelectionGeometry().error || null;
-        const sharedCounts = { definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
-
-        resetModelState();
-        const line = addLine(addPoint(0, 0, false, "endpoint"), addPoint(60, 0, false, "endpoint"));
-        model.annotations.push({
-          id: "AN-block-ref",
-          type: "leader",
-          visible: true,
-          sketchId: activeSketchId(),
-          geometryRef: geometryRefForItem(line),
-          start: { x: 0, y: 0 },
-          end: { x: 30, y: 20 },
-          style: {},
-        });
-        canvasSelection.set("lines", [line]);
-        const annotationError = blockSelectionGeometry().error || null;
-        return {
-          sharedPointError,
-          sharedCounts,
-          annotationError,
-          annotationCounts: { definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length },
-        };
-      },
+      blockEditorState: blockEditorObservation.state,
+      commitBlockPlacementForTest: blockPlacementAction.commit,
+      constrainFirstNestedBlockLineForTest: nestedConstraintAction.constrain,
+      addBlockEditorChildGeometry: blockChildGeometryAction.add,
+      cancelBlockEditor: blockCancelAction.cancel,
+      completeBlockEditor: blockCompleteAction.complete,
+      setFirstBlockInstanceSketches: blockEnabledSketchAction.set,
+      blockCreationRejectionCases: blockRejectionFixture.cases,
       sidebarHighlightIds() {
         const ids = new Set();
         for (const point of canvasSelection.points) ids.add(point.id);

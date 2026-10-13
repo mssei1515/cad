@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Block editor状態の観測、配置／nested拘束／子Sketch Geometry追加／取消／確定／enabled Sketch変更、作成拒否fixtureを既存BlockTestDriverへ役割別に分離。既存editor／session chain・scope、配置／拘束生成／求解・cache／履歴・UI／draw、取消／確定・Sketch変更／Selection検査へ委譲し、操作後の現在状態・保存値と拒否理由を観測する。固定入力・同一Instance／投影参照・数値fallback／nullと更新／照会順を保持し、元の八つの処理本体との一致を依存port置換後に確認。app.jsは6,076→6,004行（72行減、今回の再開から合計1,730行減）。構文483ファイル・単体1,298件・関連E2E60件が成功（すべてexit 0、E2E48.1秒）。全利用箇所のblocks／phase0-characterizationを実行。新規テストはなく、既存editor／nested拘束・子Sketch／確定／取消／enabled Sketch・拒否ケースとvisual回帰を確認した。ログはcad-block-editor-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自下書き／Definition／採番・namespace／履歴・拒否規則は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Block作成UI／空fixture・回転lock／投影端点／hoverの観測をBlockTestDriver.createCreationFixture／createEmptyFixture／createRotationObservation／createEndpointObservation／createHoverObservationへ分離。既存reset／Geometry・拘束生成／Selection・fit→UI→draw、現在scope／Definition数・Solver変数／drag session・投影／座標変換・Hoverへ役割別に接続し、固定入力・同一Instance参照・null／boolean・変数filter／sortと呼出し順を維持する。元の五つの処理本体との一致を依存port置換後に確認。app.jsは6,127→6,076行（51行減、今回の再開から合計1,658行減）。構文483ファイル・単体1,298件・関連E2E172件が成功（すべてexit 0、E2E2.3分）。全利用箇所のblocks／choice-dialog／fixed-command／phase0-characterization／unified-uiを実行。新規テストはなく、既存作成／空作成・固定／回転lock・投影操作とscript読込を確認した。classic script・構文一覧・E2E読込期待を同期。ログはcad-block-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Definition／採番／下書き・Solver／lock／hoverルール／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
