@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+寸法previewの表示情報構成と描画呼出を新しいsrc/rendering/dimension_preview.jsのDimensionPreview.createへ分離。現在pendingのread-only getter、既存配置／式評価／表示形式／角度照会と寸法／fillet描画の13portに接続する。fillet仮半径、距離の配置／入力、axis target copy、angle／interval、invalid／selecting／hidden、元の評価catchと短絡／順序・dimension／target参照を維持。入力確定・求解・履歴・session変更は既存commandに残す。app.jsは5,185→5,131行（54行減、今回の再開から合計2,603行減）。構文499ファイル・単体1,345件・関連E2E171件が成功（すべてexit 0、E2E2.3分）。新しいunit3件で現在pending／fillet失敗短絡、半径anchorと参照、負のinterval／境界／評価失敗、既存dimension同一性／axis copyとdefault／angle／label順を確認。元bodyとの一致と13portの初期化順をaudit。unified-ui／dimension-prefix／blocks／annotation-display-size／phase0-characterizationを実行。index.html、構文／unit実行リスト、file URLのscript読込期待値を同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-dimension-preview-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Canvasのframe準備と描画段階の進行を既存CanvasSurface.createFrameRendererへ分離。bitmap準備→DPR／PNG transform→viewport→共通content→出力／対話stage→stroke reset／restoreの順序とPNG短絡を維持する。10個の限定portに既存surface・現在frame・zoom／描画計測・三つの描画入口を接続し、read cache／入力同期／profilingと各preview内容は従来の所有者へ残す。hoisted drawCanvas入口とcallback参照時点、例外伝播と既存の復元範囲を維持。app.jsは5,202→5,185行（17行減、今回の再開から合計2,549行減）。構文497ファイル・単体1,342件・関連E2E199件が成功（すべてexit 0、E2E2.6分）。既存CanvasSurface unitへ2件追加し、DPR／viewportの最新値、normal／PNG段階とtransform／stroke順、stage失敗時の例外／restore挙動を検証。対話stage本体の一致と10portの初期化順を確認。png-export／unified-ui／hatching／reference-images／blocks／annotation-display-size／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-canvas-frame-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

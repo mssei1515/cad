@@ -2777,66 +2777,12 @@
   });
   const { begin: beginAnnotationDrag, update: updateAnnotationDrag } = annotationDrag;
 
-  function drawDimensionPreview() {
-    if (pendingCommandSession.current?.type === "fillet-radius-place") {
-      const geometry = pendingCommandSession.current.preview;
-      if (!geometry.ok) return;
-      const primitive = {
-        id: "R",
-        center: geometry.center,
-        radius: () => geometry.radius,
-      };
-      const target = { kind: "radius", primitive, value: geometry.radius };
-      const anchor = pendingCommandSession.current.pointer || {
-        x: geometry.center.x + Math.cos((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius,
-        y: geometry.center.y + Math.sin((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius,
-      };
-      drawFilletPreviewArc(geometry);
-      drawDimension(target, dimensionFromAnchor(target, anchor), `R${formatDisplayNumber(geometry.radius)}`, true, false, {
-        selecting: true,
-        invalid: false,
-        hidden: true,
-      });
-      return;
-    }
-    if (!pendingCommandSession.current?.type?.startsWith("distance")) return;
-    const dimension =
-      pendingCommandSession.current.type === "distance-place"
-        ? pendingCommandSession.current.dimension || applyDefaultCircleDimensionLabelOffset(pendingCommandSession.current.target, pendingCommandSession.current.pointer ? dimensionFromAnchor(pendingCommandSession.current.target, pendingCommandSession.current.pointer) : defaultDimensionForTarget(pendingCommandSession.current.target))
-        : pendingCommandSession.current.dimension;
-    if (pendingCommandSession.current.type === "distance-value") {
-      let value = NaN;
-      let invalid = false;
-      try {
-        value = evaluateDimensionExpressionDraft(pendingCommandSession.current.constraint || null, pendingCommandSession.current.buffer, undefined, { signedAngle: pendingCommandSession.current.target.interval === true });
-        invalid = pendingCommandSession.current.target.interval ? value === 0 || Math.abs(value) >= 360
-          : value <= 0 || (pendingCommandSession.current.target.kind === "angle" && value >= 180);
-      } catch (_error) {
-        invalid = true;
-      }
-      const suffix = pendingCommandSession.current.target.kind === "angle" ? "°" : "";
-      drawDimension(pendingCommandSession.current.target, dimension, `${Number.isFinite(value) ? formatDisplayNumber(value) : "_"}${suffix}|`, true, false, {
-        selecting: !pendingCommandSession.current.editing,
-        invalid,
-        hidden: true,
-      });
-      return;
-    }
-    const previewTarget =
-      pendingCommandSession.current.target.kind === "point-point" && (dimension.axis === "x" || dimension.axis === "y")
-        ? { ...pendingCommandSession.current.target, dimensionAxis: dimension.axis }
-        : pendingCommandSession.current.target;
-    const previewValue =
-      previewTarget.kind === "point-point" && previewTarget.dimensionAxis === "x"
-        ? Math.abs(previewTarget.p2.x - previewTarget.p1.x)
-        : previewTarget.kind === "point-point" && previewTarget.dimensionAxis === "y"
-          ? Math.abs(previewTarget.p2.y - previewTarget.p1.y)
-          : previewTarget.kind === "angle"
-            ? angleDegrees(angleDimensionAngles(previewTarget, pendingCommandSession.current.pointer || dimensionAnchor(previewTarget, dimension), dimension).signed)
-          : previewTarget.value;
-    const label = previewTarget.kind === "angle" ? formatDimensionLabel(previewValue, "°") : formatDimensionLabel(previewValue);
-    drawDimension(previewTarget, dimensionWithLabelAt(previewTarget, dimension, pendingCommandSession.current.pointer), label, true);
-  }
+  const dimensionPreview = window.DimensionPreview.create({
+    readPending: () => pendingCommandSession.current, drawDimension, drawFilletPreviewArc, dimensionFromAnchor,
+    applyDefaultCircleDimensionLabelOffset, defaultDimensionForTarget, evaluateDimensionExpressionDraft,
+    formatDisplayNumber, angleDegrees, angleDimensionAngles, dimensionAnchor, formatDimensionLabel, dimensionWithLabelAt,
+  });
+  function drawDimensionPreview() { return dimensionPreview.draw(); }
 
 
 

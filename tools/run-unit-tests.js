@@ -84,7 +84,7 @@ const files = [
   "tests/unit/dimension-read-only-query.test.js",
   "tests/unit/interaction-overlay-renderer.test.js",
   "tests/unit/placement-preview-renderer.test.js",
-  "tests/unit/authoring-preview-renderer.test.js",
+  "tests/unit/authoring-preview-renderer.test.js", "tests/unit/dimension-preview.test.js",
   "tests/unit/geometry-renderer.test.js",
   "tests/unit/drawing-stack.test.js",
   "tests/unit/reference-image-renderer.test.js",
