@@ -776,3 +776,6 @@ OffsetTestDriver（src/testing/offset_test_driver.js）は単独Offsetの生成�
 
 
 OffsetTestDriverはOffset chain支援をcreateChainFixture（Geometry／UI準備）、createChainObservation（Selection／pending・接続／保存値の観測）、createChainReload（既存保存→読込→現在scope照会）、createChainTargetEdit（既存target／expression更新→precondition→計測／join観測）、createChainReselection（既存Selection reset→二つの結果追加→観測→reset／clear）で役割別に生成する。固定入力・同一参照・null／空配列fallbackと元の更新／照会順を保持する。対象検索・Offset計算／拘束更新・選択／保存は既存所有者へ接続し、独自chainモデル・Selection／pending・保存互換性／履歴を持たない。appはtest query時だけ生成して既存五API名へ直接接続する。
+
+
+DocumentTestDriver.createSketchDeletionFixtureは固定の親子／兄弟Sketch・Geometry／参照付き注記を既存reset／生成で準備し、既存deleteSketchへ確認なしの削除を委譲して現在scopeのSketch ID／active／Geometry・注記数を観測する。remove入口も既存deleteSketchへ同じ引数で直接委譲する。固定入力・色・Geometry参照・active Sketch切替と削除／照会順を保持し、cleanup／namespace／履歴・削除実装は持たない。appはtest query時だけ生成し、既存resetForSketchDeletion／deleteSketchForTestへ接続する。

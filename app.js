@@ -5028,6 +5028,7 @@
     const canvasDashIsolation = window.CanvasRenderTestDriver.createDashIsolation({
       resetModelState, viewport, drawingPreview, selectionRectangle, setMode: setTestDrawingMode, ctx, drawSelectionRect, draftCases: draftDashCases, blockCases: blockDashCases, drawAnnotationLeader, addLine, addPoint, draw,
     });
+    const sketchDeletionFixture = window.DocumentTestDriver.createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5472,31 +5473,7 @@
       roundTripOffsetChainForTest: offsetChainReload.reload,
       updateOffsetChainTargetForTest: offsetChainTargetEdit.update,
       canReselectOffsetResultChainForTest: offsetChainReselection.reselect,
-      resetForSketchDeletion() {
-        resetModelState();
-        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
-        model.sketches.push({ id: "S3", name: "Sketch-2-1", parentSketchId: "S2", kind: "sketch" });
-        model.sketches.push({ id: "S4", name: "Sketch-3", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
-        model.activeSketchId = "S2";
-        const p1 = addPoint(0, 0, false, "endpoint");
-        const p2 = addPoint(80, 0, false, "endpoint");
-        const line = addLine(p1, p2);
-        model.activeSketchId = "S3";
-        const center = addPoint(30, 30, false, "center");
-        const circle = addCircle(center, 20);
-        line.appearance = { color: "#ef4444" };
-        circle.appearance = { color: "#22c55e" };
-        model.annotations.push({ id: "AN-test", type: "leader", visible: true, sketchId: "S2", geometryRef: geometryRefForItem(line), start: { x: 0, y: 0 }, end: { x: 30, y: 20 }, style: {} });
-        model.activeSketchId = "S3";
-        const deleted = deleteSketch("S2", false);
-        return {
-          deleted,
-          sketchIds: model.sketches.map((sketch) => sketch.id),
-          activeSketchId: model.activeSketchId,
-          geometry: { points: model.points.length, lines: model.lines.length, circles: model.circles.length, arcs: model.arcs.length },
-          annotationCount: model.annotations.length,
-        };
-      },
+      resetForSketchDeletion: sketchDeletionFixture.reset,
       resetForSiblingVisibility() {
         resetModelState();
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
@@ -5788,9 +5765,7 @@
           line: { p1: { x: line.p1.x, y: line.p1.y }, p2: { x: line.p2.x, y: line.p2.y } },
         };
       },
-      deleteSketchForTest(sketchId) {
-        return deleteSketch(sketchId, false);
-      },
+      deleteSketchForTest: sketchDeletionFixture.remove,
       referenceDependencyOrderCase() {
         resetModelState();
         const parentSketchId = "S10";

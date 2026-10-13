@@ -1,4 +1,4 @@
-/* Browser document fixtures delegate file import and model application to their existing owners. */
+/* Browser document fixtures delegate import, model application and Sketch deletion to product owners. */
 (() => {
   "use strict";
   function createImport({ performance, File, importFileData, readDocumentName, effectiveDocumentName, serializeModel, document }) {
@@ -32,5 +32,36 @@
     }
     return Object.freeze({ load });
   }
-  window.DocumentTestDriver = Object.freeze({ createImport, createLoad });
+  function createSketchDeletionFixture({ resetModelState, currentScope, rootSketchId, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch }) {
+    function reset() {
+      resetModelState();
+      currentScope().sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: rootSketchId, kind: "sketch" });
+      currentScope().sketches.push({ id: "S3", name: "Sketch-2-1", parentSketchId: "S2", kind: "sketch" });
+      currentScope().sketches.push({ id: "S4", name: "Sketch-3", parentSketchId: rootSketchId, kind: "sketch" });
+      currentScope().activeSketchId = "S2";
+      const p1 = addPoint(0, 0, false, "endpoint");
+      const p2 = addPoint(80, 0, false, "endpoint");
+      const line = addLine(p1, p2);
+      currentScope().activeSketchId = "S3";
+      const center = addPoint(30, 30, false, "center");
+      const circle = addCircle(center, 20);
+      line.appearance = { color: "#ef4444" };
+      circle.appearance = { color: "#22c55e" };
+      currentScope().annotations.push({ id: "AN-test", type: "leader", visible: true, sketchId: "S2", geometryRef: geometryRefForItem(line), start: { x: 0, y: 0 }, end: { x: 30, y: 20 }, style: {} });
+      currentScope().activeSketchId = "S3";
+      const deleted = deleteSketch("S2", false);
+      return {
+        deleted,
+        sketchIds: currentScope().sketches.map((sketch) => sketch.id),
+        activeSketchId: currentScope().activeSketchId,
+        geometry: { points: currentScope().points.length, lines: currentScope().lines.length, circles: currentScope().circles.length, arcs: currentScope().arcs.length },
+        annotationCount: currentScope().annotations.length,
+      };
+    }
+    function remove(sketchId) {
+      return deleteSketch(sketchId, false);
+    }
+    return Object.freeze({ reset, remove });
+  }
+  window.DocumentTestDriver = Object.freeze({ createImport, createLoad, createSketchDeletionFixture });
 })();

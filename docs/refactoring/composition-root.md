@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Sketch削除のfixtureと既存削除への実行入口をDocumentTestDriver.createSketchDeletionFixtureへ分離。固定の親子／兄弟Sketch・Geometry／参照付き注記の準備を既存reset／生成へ、削除を既存deleteSketchへ委譲し、現在scopeのSketch ID／active・Geometry／注記数を観測する。固定入力・色・同一Geometry参照・active切替・確認なしの削除引数と照会順を保持し、元の二つの処理本体との一致を依存port置換後に確認。app.jsは6,568→6,543行（25行減、今回の再開から合計1,191行減）。構文480ファイル・単体1,297件・関連E2E124件が成功（すべてexit 0、E2E1.5分）。全利用箇所のphase0-characterization／unified-uiを実行。新規テストはなく、既存子孫cleanup／Geometry・拘束／注記削除とUndo・周辺UIを確認した。ログはcad-sketch-deletion-fixture-{check,unit,e2e}.log。全E2Eはこの単位では未実行。削除／cleanup／namespace／履歴の製品処理は変更していない。全体目標は未完了。
+
+### 前回の区切り
+
 Offset chainのUI準備／状態観測／保存再読込／target編集／再選択を既存OffsetTestDriver.createChainFixture／createChainObservation／createChainReload／createChainTargetEdit／createChainReselectionへ役割別に分離。既存Geometry生成・fit／履歴・Selection／pending・保存／読込・precondition／計測へ接続し、固定入力・同一参照・null／空配列fallbackと元の更新／照会順を保持する。元の五つの処理本体との一致をscope port置換後に確認。app.jsは6,648→6,568行（80行減、今回の再開から合計1,166行減）。構文480ファイル・単体1,297件・関連E2E103件が成功（すべてexit 0、E2E1.3分）。全利用箇所のunified-uiを実行。新規テストはなく、既存chain選択／target更新／join・結果再選択／保存再読込を確認した。ログはcad-offset-chain-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自chainモデル・Selection／pending・拘束更新／保存互換性／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
