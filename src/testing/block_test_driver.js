@@ -202,5 +202,102 @@
     return Object.freeze({ cases });
   }
 
-  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture });
+  function createStateObservation({ blockProjectionBundles, readDefinitions, currentScope, canvasSelection, readMode, serializeModel }) {
+    function state() {
+      const bundles = blockProjectionBundles();
+      return {
+        definitions: readDefinitions().map((definition) => ({
+          id: definition.id,
+          name: definition.name,
+          parentDefinitionId: definition.parentDefinitionId || null,
+          points: definition.points.length,
+          lines: definition.lines.length,
+          constraints: definition.constraints.length,
+          blockInstances: (definition.blockInstances || []).map((instance) => ({
+            id: instance.id,
+            definitionId: instance.definitionId,
+            sketchId: instance.sketchId,
+            x: instance.x,
+            y: instance.y,
+            rotation: instance.rotation,
+            fixed: Boolean(instance.fixed),
+            rotationLocked: Boolean(instance.rotationLocked),
+            enabledSketchIds: instance.enabledSketchIds.slice(),
+          })),
+          sketches: definition.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId, kind: sketch.kind })),
+          activeSketchId: definition.activeSketchId,
+          origin: { ...definition.origin },
+        })),
+        instances: currentScope().blockInstances.map((instance) => ({
+          id: instance.id,
+          definitionId: instance.definitionId,
+          sketchId: instance.sketchId,
+          x: instance.x,
+          y: instance.y,
+          rotation: instance.rotation,
+          fixed: instance.fixed,
+          rotationLocked: Boolean(instance.rotationLocked),
+          enabledSketchIds: instance.enabledSketchIds.slice(),
+        })),
+        projectionLineIds: bundles.flatMap((bundle) => bundle.lines.map((line) => line.id)),
+        selectedInstanceIds: canvasSelection.blockInstances.map((instance) => instance.id),
+        mode: readMode(),
+        serialized: serializeModel(),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions, currentScope, allGeometryLines }) {
+    function reload() {
+      const data = serializeModel();
+      loadModelData(data);
+      updateUI();
+      draw();
+      return {
+        definitions: readDefinitions().length,
+        instances: currentScope().blockInstances.length,
+        projectionLines: allGeometryLines().filter((line) => line.blockProjection).length,
+        serializedVersion: serializeModel().version,
+      };
+    }
+    return Object.freeze({ reload });
+  }
+
+  function createLegacyReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions, currentScope, blockProjectionBundle }) {
+    function reload() {
+      const data = JSON.parse(JSON.stringify(serializeModel()));
+      data.version = 7;
+      for (const definition of data.blockDefinitions || []) {
+        delete definition.origin;
+        delete definition.sketches;
+        delete definition.activeSketchId;
+        for (const item of [...(definition.points || []), ...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || []), ...(definition.splines || []), ...(definition.constraints || [])]) {
+          delete item.sketchId;
+        }
+        for (const instance of definition.blockInstances || []) delete instance.rotationLocked;
+      }
+      for (const instance of data.blockInstances || []) {
+        delete instance.enabledSketchIds;
+        delete instance.rotationLocked;
+      }
+      loadModelData(data);
+      updateUI();
+      draw();
+      const definition = readDefinitions()[0];
+      const instance = currentScope().blockInstances[0];
+      return {
+        version: serializeModel().version,
+        sketches: definition?.sketches.map((sketch) => ({ id: sketch.id, parentSketchId: sketch.parentSketchId, kind: sketch.kind })) || [],
+        origin: definition ? { ...definition.origin } : null,
+        elementSketchIds: definition ? [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((item) => item.sketchId) : [],
+        enabledSketchIds: instance?.enabledSketchIds.slice() || [],
+        rotationLocked: Boolean(instance?.rotationLocked),
+        projectionLineIds: instance ? blockProjectionBundle(instance).lines.map((line) => line.id) : [],
+      };
+    }
+    return Object.freeze({ reload });
+  }
+
+  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload });
 })();

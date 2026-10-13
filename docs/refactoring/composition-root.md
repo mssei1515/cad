@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Block状態観測と通常／旧versionの保存再読込を既存BlockTestDriver.createStateObservation／createReload／createLegacyReloadへ分離。既存投影bundle・呼出し時のDocument Definition／scope／Selection／mode・serialize／load・UI→drawへ接続し、配列コピー・boolean／fallback・同一参照と照会順を維持する。旧版は保存値のJSON cloneだけをversion 7相当に加工し、製品migrationは持たない。元の三つの処理本体との一致を依存port置換後に確認。app.jsは6,004→5,925行（79行減、今回の再開から合計1,809行減）。構文483ファイル・単体1,298件・関連E2E142件が成功（すべてexit 0、E2E1.9分）。全利用箇所のblocks／unified-uiを実行。新規テストはなく、既存Block状態／通常保存再読込・旧versionの階層／origin／所属・enabled Sketch／rotation lock・投影と周辺操作を確認した。ログはcad-block-reload-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Document／Definition／cache／保存規則／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Block editor状態の観測、配置／nested拘束／子Sketch Geometry追加／取消／確定／enabled Sketch変更、作成拒否fixtureを既存BlockTestDriverへ役割別に分離。既存editor／session chain・scope、配置／拘束生成／求解・cache／履歴・UI／draw、取消／確定・Sketch変更／Selection検査へ委譲し、操作後の現在状態・保存値と拒否理由を観測する。固定入力・同一Instance／投影参照・数値fallback／nullと更新／照会順を保持し、元の八つの処理本体との一致を依存port置換後に確認。app.jsは6,076→6,004行（72行減、今回の再開から合計1,730行減）。構文483ファイル・単体1,298件・関連E2E60件が成功（すべてexit 0、E2E48.1秒）。全利用箇所のblocks／phase0-characterizationを実行。新規テストはなく、既存editor／nested拘束・子Sketch／確定／取消／enabled Sketch・拒否ケースとvisual回帰を確認した。ログはcad-block-editor-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自下書き／Definition／採番・namespace／履歴・拒否規則は追加していない。全体目標は未完了。
 
 ### 前回の区切り

@@ -5071,6 +5071,9 @@
     const blockCompleteAction = window.BlockTestDriver.createCompleteAction({ completeBlockDefinitionEdit, blockEditor, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current });
     const blockEnabledSketchAction = window.BlockTestDriver.createEnabledSketchAction({ currentScope: workspace.current, setBlockInstanceEnabledSketchIds });
     const blockRejectionFixture = window.BlockTestDriver.createRejectionFixture({ resetModelState, addPoint, addLine, canvasSelection, blockSelectionGeometry, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current, activeSketchId, geometryRefForItem });
+    const blockStateObservation = window.BlockTestDriver.createStateObservation({ blockProjectionBundles, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, canvasSelection, readMode: () => mode, serializeModel });
+    const blockReload = window.BlockTestDriver.createReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, allGeometryLines });
+    const legacyBlockReload = window.BlockTestDriver.createLegacyReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockProjectionBundle });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5717,48 +5720,7 @@
           dragging: dimensionDrag.active,
         };
       },
-      blockState() {
-        const bundles = blockProjectionBundles();
-        return {
-          definitions: documentModel.blockDefinitions.map((definition) => ({
-            id: definition.id,
-            name: definition.name,
-            parentDefinitionId: definition.parentDefinitionId || null,
-            points: definition.points.length,
-            lines: definition.lines.length,
-            constraints: definition.constraints.length,
-            blockInstances: (definition.blockInstances || []).map((instance) => ({
-              id: instance.id,
-              definitionId: instance.definitionId,
-              sketchId: instance.sketchId,
-              x: instance.x,
-              y: instance.y,
-              rotation: instance.rotation,
-              fixed: Boolean(instance.fixed),
-              rotationLocked: Boolean(instance.rotationLocked),
-              enabledSketchIds: instance.enabledSketchIds.slice(),
-            })),
-            sketches: definition.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId, kind: sketch.kind })),
-            activeSketchId: definition.activeSketchId,
-            origin: { ...definition.origin },
-          })),
-          instances: model.blockInstances.map((instance) => ({
-            id: instance.id,
-            definitionId: instance.definitionId,
-            sketchId: instance.sketchId,
-            x: instance.x,
-            y: instance.y,
-            rotation: instance.rotation,
-            fixed: instance.fixed,
-            rotationLocked: Boolean(instance.rotationLocked),
-            enabledSketchIds: instance.enabledSketchIds.slice(),
-          })),
-          projectionLineIds: bundles.flatMap((bundle) => bundle.lines.map((line) => line.id)),
-          selectedInstanceIds: canvasSelection.blockInstances.map((instance) => instance.id),
-          mode,
-          serialized: serializeModel(),
-        };
-      },
+      blockState: blockStateObservation.state,
       blockInteractionPoints(instanceId = null) {
         const instance = instanceId ? blockInstanceById(instanceId) : model.blockInstances[0];
         if (!instance) return null;
@@ -5863,49 +5825,8 @@
           instance: { x: instance.x, y: instance.y, rotation: instance.rotation },
         };
       },
-      reloadBlockState() {
-        const data = serializeModel();
-        loadModelData(data);
-        updateUI();
-        draw();
-        return {
-          definitions: documentModel.blockDefinitions.length,
-          instances: model.blockInstances.length,
-          projectionLines: allGeometryLines().filter((line) => line.blockProjection).length,
-          serializedVersion: serializeModel().version,
-        };
-      },
-      reloadLegacyBlockState() {
-        const data = JSON.parse(JSON.stringify(serializeModel()));
-        data.version = 7;
-        for (const definition of data.blockDefinitions || []) {
-          delete definition.origin;
-          delete definition.sketches;
-          delete definition.activeSketchId;
-          for (const item of [...(definition.points || []), ...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || []), ...(definition.splines || []), ...(definition.constraints || [])]) {
-            delete item.sketchId;
-          }
-          for (const instance of definition.blockInstances || []) delete instance.rotationLocked;
-        }
-        for (const instance of data.blockInstances || []) {
-          delete instance.enabledSketchIds;
-          delete instance.rotationLocked;
-        }
-        loadModelData(data);
-        updateUI();
-        draw();
-        const definition = documentModel.blockDefinitions[0];
-        const instance = model.blockInstances[0];
-        return {
-          version: serializeModel().version,
-          sketches: definition?.sketches.map((sketch) => ({ id: sketch.id, parentSketchId: sketch.parentSketchId, kind: sketch.kind })) || [],
-          origin: definition ? { ...definition.origin } : null,
-          elementSketchIds: definition ? [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((item) => item.sketchId) : [],
-          enabledSketchIds: instance?.enabledSketchIds.slice() || [],
-          rotationLocked: Boolean(instance?.rotationLocked),
-          projectionLineIds: instance ? blockProjectionBundle(instance).lines.map((line) => line.id) : [],
-        };
-      },
+      reloadBlockState: blockReload.reload,
+      reloadLegacyBlockState: legacyBlockReload.reload,
       blockEditorState: blockEditorObservation.state,
       commitBlockPlacementForTest: blockPlacementAction.commit,
       constrainFirstNestedBlockLineForTest: nestedConstraintAction.constrain,
