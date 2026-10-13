@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Pointドラッグの単発／連続テスト手順と結果観測をGeometryDragTestDriver.createPointDriverへ分離。現在scopeの同一Pointと既存session生成・local solve context・preview更新・最終求解・円弧正規化・所属Sketchの拘束誤差へ明示的に接続し、初期位置からの移動量、preview座標のコピー、計測・失敗結果／例外・対象なしのnullと実行順を保持する。元の二つの処理本体との一致を依存port置換後に確認。app.jsは7,694→7,615行（79行減、今回の再開から合計119行減）。構文475ファイル・単体1,291件・関連E2E149件が成功（すべてexit 0、E2E3.0分）。全利用箇所のblocks／drag-smoothness／unified-uiを実行し、単体3件でsession同一性・call-time scope・preview／final分離・計測・移動基準と早期終了を確認した。classic script読込／構文一覧・単体一覧・file URL読込期待も同期。ログはcad-point-drag-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。製品のSolver／ドラッグ状態／履歴は変更していない。全体目標は未完了。
+
+### 前回の区切り
+
 選択可能な線のclient位置照会を既存CanvasTestDriver.createSelectableLinePositionへ分離。現在scopeの線配列順と0.37／0.63／0.5位置、Point→同一参照Line→寸法のhit短絡、Canvas矩形の包含と画面の重なり判定を保持し、候補なしはnullを返す。元の処理本体との一致を依存port置換後に確認。app.jsは7,709→7,694行（15行減、今回の再開から合計40行減）。構文473ファイル・単体1,288件・関連E2E14件が成功（すべてexit 0、E2E1.8分）。既存利用箇所のadversarial-authoring-performance／adversarial-drag-fixtureを実行し、単体1件でcall-time scope／Canvas矩形・競合hitの同一参照／短絡・画面外／UI重なり／境界包含を確認した。ログはcad-selectable-position-{check,unit,e2e}.log。全E2Eはこの単位では未実行。選択／hitルールや独自モデルは追加していない。全体目標は未完了。
 
 ### 前回の区切り
