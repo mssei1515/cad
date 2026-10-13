@@ -4972,6 +4972,15 @@
       currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
       computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), targetConstraintCount: geometryDragSolver.targetConstraintCount, now: () => performance.now(),
     });
+    const annotationDimensionObservation = window.AnnotationTestDriver.createDimensionObservation({ annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint });
+    const annotationAppearanceObservation = window.AnnotationTestDriver.createAppearanceObservation({
+      currentScope: workspace.current, viewport, clampZoom, effectiveAnnotationStyle, draw, annotationTextMetrics, annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextWorldHeight,
+      screenPxPerMm: ANNOTATION_SCREEN_PX_PER_MM, annotationDisplayFactor: window.Appearance.annotationDisplayFactor, annotationLeaderAnchor, displayText: window.AnnotationRenderer.displayText, formatDisplayNumber, serializeAnnotation,
+    });
+    const annotationOwnershipObservation = window.AnnotationTestDriver.createOwnershipObservation({
+      canvas, worldToCanvasScreen, annotationTextLayout, annotationLeaderDisplayGeometry, currentScope: workspace.current, serializeAnnotation, allAnnotations,
+      displayText: window.AnnotationRenderer.displayText, formatDisplayNumber, effectiveAnnotationStyle, annotationLeaderAnchor, canvasSelection, allGeometryBounds,
+    });
     const annotationSnapshotObservation = window.AnnotationTestDriver.createSnapshot({ currentScope: workspace.current, annotationLeaderDisplayGeometry, canvas, worldToCanvasScreen });
     const annotationDragFixture = window.AnnotationTestDriver.createDragFixture({
       resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas, readSnapshot: annotationSnapshotObservation.snapshot,
@@ -5694,64 +5703,9 @@
         };
       },
       annotationSnapshot: annotationSnapshotObservation.snapshot,
-      annotationDimensionStateForTest() {
-        return annotationDimensions.entries().map(constraint => {
-          const target = targetFromConstraint(constraint), dimension = constraint.dimension;
-          const layout = dimensionLayout(target, dimension, effectiveDimensionAppearance(dimension, constraint.sketchId));
-          return { annotationId: constraint.annotationOwner.id, type: constraint.annotationRelation.type, value: constraint.target,
-            dimension: JSON.parse(JSON.stringify(dimension)), label: dimensionLabelForConstraint(constraint, target, dimension),
-            text: layout?.text, hit: layout && { a: layout.hitA, b: layout.hitB } };
-        });
-      },
-      annotationAppearanceStateForTest(type = "text", scale = null) {
-        const annotation = model.annotations.find((element) => element.type === type) || null;
-        if (scale != null) viewport.update({ scale: clampZoom(Number(scale) || 1) });
-        if (!annotation) return null;
-        const style = effectiveAnnotationStyle(annotation);
-        draw();
-        return {
-          style: structuredClone(style),
-          rotation: annotation.appearanceInheritance ? style.rotation || 0 : Number(annotation.rotation) || 0,
-          textMetrics: annotationTextMetrics(annotation, annotationTextLayout(annotation) || (annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : annotation)),
-          screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
-          screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(style, viewport.scale),
-          textLayout: annotationTextLayout(annotation),
-          displayGeometry: annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null,
-          resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
-          displayedText: window.AnnotationRenderer.displayText(annotation, formatDisplayNumber),
-          serialized: serializeAnnotation(annotation),
-        };
-      },
-      annotationOwnershipStateForTest() {
-        const rect = canvas.getBoundingClientRect();
-        const clientPoint = (annotation) => {
-          const screen = worldToCanvasScreen(annotationTextLayout(annotation) || (annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null) || annotation);
-          return { x: rect.left + screen.x, y: rect.top + screen.y };
-        };
-        return {
-          direct: model.annotations.map((annotation) => ({ ...serializeAnnotation(annotation) })),
-          projected: allAnnotations().filter((annotation) => annotation.blockProjection).map((annotation) => ({
-            id: annotation.id,
-            sketchId: annotation.sketchId,
-            type: annotation.type,
-            text: annotation.text,
-            displayedText: window.AnnotationRenderer.displayText(annotation, formatDisplayNumber),
-            x: annotation.x,
-            y: annotation.y,
-            rotation: Number(annotation.rotation) || 0,
-            visible: annotation.visible !== false,
-            style: { ...(annotation.style || {}) },
-            client: clientPoint(annotation),
-            effectiveStyle: effectiveAnnotationStyle(annotation),
-            textLayout: annotationTextLayout(annotation),
-            displayGeometry: annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null,
-            resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
-            ownerId: annotation.blockInstance?.id || null,
-          })),
-          selectedIds: canvasSelection.annotations.map((annotation) => annotation.id),
-          bounds: allGeometryBounds(),
-        };
-      },
+      annotationDimensionStateForTest: annotationDimensionObservation.state,
+      annotationAppearanceStateForTest: annotationAppearanceObservation.state,
+      annotationOwnershipStateForTest: annotationOwnershipObservation.state,
       fitAllGeometryForTest(padding = 120) {
         const fitted = fitAllGeometryToViewport(Number(padding) || 120);
         draw();

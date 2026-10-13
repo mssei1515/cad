@@ -66,5 +66,75 @@
     return Object.freeze({ hit });
   }
 
-  window.AnnotationTestDriver = Object.freeze({ createDragFixture, createSnapshot, createHitObservation });
+  function createDimensionObservation({ annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint }) {
+    function state() {
+      return annotationDimensions.entries().map(constraint => {
+        const target = targetFromConstraint(constraint), dimension = constraint.dimension;
+        const layout = dimensionLayout(target, dimension, effectiveDimensionAppearance(dimension, constraint.sketchId));
+        return { annotationId: constraint.annotationOwner.id, type: constraint.annotationRelation.type, value: constraint.target,
+          dimension: JSON.parse(JSON.stringify(dimension)), label: dimensionLabelForConstraint(constraint, target, dimension),
+          text: layout?.text, hit: layout && { a: layout.hitA, b: layout.hitB } };
+      });
+    }
+    return Object.freeze({ state });
+  }
+
+  function createAppearanceObservation({ currentScope, viewport, clampZoom, effectiveAnnotationStyle, draw, annotationTextMetrics, annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextWorldHeight, screenPxPerMm, annotationDisplayFactor, annotationLeaderAnchor, displayText, formatDisplayNumber, serializeAnnotation }) {
+    function state(type = "text", scale = null) {
+      const annotation = currentScope().annotations.find((element) => element.type === type) || null;
+      if (scale != null) viewport.update({ scale: clampZoom(Number(scale) || 1) });
+      if (!annotation) return null;
+      const style = effectiveAnnotationStyle(annotation);
+      draw();
+      return {
+        style: structuredClone(style),
+        rotation: annotation.appearanceInheritance ? style.rotation || 0 : Number(annotation.rotation) || 0,
+        textMetrics: annotationTextMetrics(annotation, annotationTextLayout(annotation) || (annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : annotation)),
+        screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
+        screenTerminatorSize: style.terminatorSize * screenPxPerMm * annotationDisplayFactor(style, viewport.scale),
+        textLayout: annotationTextLayout(annotation),
+        displayGeometry: annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null,
+        resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
+        displayedText: displayText(annotation, formatDisplayNumber),
+        serialized: serializeAnnotation(annotation),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createOwnershipObservation({ canvas, worldToCanvasScreen, annotationTextLayout, annotationLeaderDisplayGeometry, currentScope, serializeAnnotation, allAnnotations, displayText, formatDisplayNumber, effectiveAnnotationStyle, annotationLeaderAnchor, canvasSelection, allGeometryBounds }) {
+    function state() {
+      const rect = canvas.getBoundingClientRect();
+      const clientPoint = (annotation) => {
+        const screen = worldToCanvasScreen(annotationTextLayout(annotation) || (annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null) || annotation);
+        return { x: rect.left + screen.x, y: rect.top + screen.y };
+      };
+      return {
+        direct: currentScope().annotations.map((annotation) => ({ ...serializeAnnotation(annotation) })),
+        projected: allAnnotations().filter((annotation) => annotation.blockProjection).map((annotation) => ({
+          id: annotation.id,
+          sketchId: annotation.sketchId,
+          type: annotation.type,
+          text: annotation.text,
+          displayedText: displayText(annotation, formatDisplayNumber),
+          x: annotation.x,
+          y: annotation.y,
+          rotation: Number(annotation.rotation) || 0,
+          visible: annotation.visible !== false,
+          style: { ...(annotation.style || {}) },
+          client: clientPoint(annotation),
+          effectiveStyle: effectiveAnnotationStyle(annotation),
+          textLayout: annotationTextLayout(annotation),
+          displayGeometry: annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null,
+          resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
+          ownerId: annotation.blockInstance?.id || null,
+        })),
+        selectedIds: canvasSelection.annotations.map((annotation) => annotation.id),
+        bounds: allGeometryBounds(),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.AnnotationTestDriver = Object.freeze({ createDragFixture, createSnapshot, createHitObservation, createDimensionObservation, createAppearanceObservation, createOwnershipObservation });
 })();
