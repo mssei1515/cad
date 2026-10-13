@@ -85,3 +85,28 @@ test('selected endpoint preserves mixed drag only for the same arc reference and
   const end={arc,endpoint:'end'};f.begin({hitArcEnd:end});assert.equal(f.plan[0],'arc-endpoint');assert.equal(f.plan[1],end);
   assert.equal(f.selection.arcEndpoint.endpoint,'end');assert.equal(f.selection.arcs[0],arc);
 });
+
+function identityFixture() {
+  const calls = [], state = { sketchId: null };
+  const selection = { set(field, items) { assert.equal(this, selection); calls.push(['set', field, items]); }, toggleById(field, item) { assert.equal(this, selection); calls.push(['toggle', field, item]); } };
+  const api = sandbox.window.CanvasSelectionInteraction.createIdentitySelection({ canvasSelection: selection,
+    selectionSketchId: () => { calls.push(['sketch']); return state.sketchId; }, clearSelection: () => calls.push(['clear']), updateGeometrySelectionUI: () => calls.push(['ui']), draw: () => calls.push(['draw']) });
+  return { api, calls, state };
+}
+test('identity selection retains field mappings, Block-before-derived owner priority and update/draw order without rewriting identity', () => {
+  const h = identityFixture();
+  for (const [kind, field] of [['point', 'points'], ['line', 'lines'], ['circle', 'circles'], ['arc', 'arcs'], ['spline', 'splines'], ['block', 'blockInstances'], ['instance', 'geometryInstances'], ['geometry-instance', 'geometryInstances'], ['dimension', 'dimensionConstraints'], ['annotation', 'annotations'], ['hatch', 'hatches'], ['image', 'referenceImages']]) {
+    h.calls.length = 0; const item = {}, identity = { kind, item, sketchId: 'S' }; assert.equal(h.api.selectIdentity(identity), true);
+    assert.deepEqual(h.calls.map(c => c[0]), ['clear', 'set', 'ui', 'draw']); assert.equal(h.calls[1][1], field); assert.equal(h.calls[1][2][0], item); assert.equal(identity.item, item); assert.equal(identity.kind, kind);
+  }
+  const block = {}, derived = {}, projected = { blockInstance: block, derivedInstance: derived }; h.calls.length = 0;
+  assert.equal(h.api.selectIdentity({ kind: 'line', item: projected, sketchId: 'S' }), true); assert.equal(h.calls[1][1], 'blockInstances'); assert.equal(h.calls[1][2][0], block);
+  h.calls.length = 0; assert.equal(h.api.selectIdentity({ kind: 'point', item: { derivedInstance: derived }, sketchId: 'S' }), true); assert.equal(h.calls[1][1], 'geometryInstances'); assert.equal(h.calls[1][2][0], derived);
+});
+test('identity additive selection preserves Sketch refusal, ID-toggle receiver and clear-before-unknown-kind behavior', () => {
+  const h = identityFixture(), item = {}, identity = { kind: 'line', item, sketchId: 'S' }; h.state.sketchId = 'other';
+  assert.equal(h.api.selectIdentity(identity, true), false); assert.deepEqual(h.calls.map(c => c[0]), ['sketch', 'sketch']);
+  h.calls.length = 0; h.state.sketchId = 'S'; assert.equal(h.api.selectIdentity(identity, true), true); assert.deepEqual(h.calls.map(c => c[0]), ['sketch', 'sketch', 'toggle', 'ui', 'draw']); assert.equal(h.calls[2][2], item);
+  h.calls.length = 0; assert.equal(h.api.selectIdentity({ kind: 'unknown', item, sketchId: 'S' }), false); assert.deepEqual(h.calls.map(c => c[0]), ['clear']);
+  h.calls.length = 0; h.state.sketchId = null; assert.equal(h.api.selectIdentity(identity, true), true); assert.deepEqual(h.calls.map(c => c[0]), ['sketch', 'toggle', 'ui', 'draw']);
+});

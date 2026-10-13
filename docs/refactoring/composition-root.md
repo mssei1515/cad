@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+selectionItems／selectionSketchIdを既存CanvasSelection.createScopeQueryへ、identity選択更新をCanvasSelectionInteraction.createIdentitySelectionへ分離。照会2port・更新5portに限定し、category順／重複／元参照と先頭itemのSketch→inspection→null、Block→derived owner優先、additive Sketch拒否／ID toggleとnon-additive clear→kind判定→set、UI→draw／結果とidentity無変更を維持する。appは早期callback用hoisted入口と生成接続を持つ。app.jsは4,854→4,840行（14行減、今回の再開から合計2,894行減）。構文506ファイル・単体1,391件・関連E2E199件が成功（すべてexit 0、E2E2.6分）。既存Selection／CanvasSelectionInteraction unitへ3件追加し、一覧順／重複／refとSketch fallback、全kind更新とowner優先／UI順、additive拒否／toggle receiver・unknown-kind時の元clear順を確認。元3body一致と2／5portの初期化順・既存callback登録をaudit。unified-ui／blocks／derived-selection-copy／sketch-permissions／sketch-projection／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-selection-identity-entry-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 選択対象からInstance sourceを構成する照会を既存InstanceProjection.createSourceSelectionへ集約。現在model／選択Geometry・CanvasSelection／Block・派生bundle／Sketch ID・active／refの8照会入口に接続し、選択Geometry→model内Hatch→Block→派生bundleの順、Block local kind explicit／派生Point source explicit、Object同一性のSet重複除去とactive／ref filterを維持する。元model aliasと現在selectionをcall時に読み、新cache／ID重複規則やSelection／session更新を持たず、早期Instance command用hoisted入口を維持。app.jsは4,863→4,854行（9行減、今回の再開から合計2,880行減）。構文506ファイル・単体1,388件・関連E2E204件が成功（すべてexit 0、E2E2.7分）。既存InstanceProjection unitへ2件追加し、収集順／元参照／identity dedup／同ID別object保持とexplicit種別、現在model／selection／activeとref短絡・無変更を確認。元body一致と8portの初期化順・early command登録をaudit。unified-ui／blocks／derived-selection-copy／hatching／sketch-projection／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-instance-source-selection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

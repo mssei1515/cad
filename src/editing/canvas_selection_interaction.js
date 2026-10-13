@@ -198,5 +198,21 @@
     }
     return Object.freeze({ begin });
   }
-  window.CanvasSelectionInteraction = Object.freeze({ create });
+  function createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw }) {
+    function selectIdentity(identity, additive = false) {
+      let item = identity.item, kind = identity.kind;
+      if (item.blockInstance) { item = item.blockInstance; kind = "block"; }
+      else if (item.derivedInstance) { item = item.derivedInstance; kind = "instance"; }
+      if (additive && selectionSketchId() && selectionSketchId() !== identity.sketchId) return false;
+      if (!additive) clearSelection();
+      const field = { point: "points", line: "lines", circle: "circles", arc: "arcs", spline: "splines",
+        block: "blockInstances", instance: "geometryInstances", "geometry-instance": "geometryInstances",
+        dimension: "dimensionConstraints", annotation: "annotations", hatch: "hatches", image: "referenceImages" }[kind];
+      if (!field) return false;
+      if (additive) canvasSelection.toggleById(field, item); else canvasSelection.set(field, [item]);
+      updateGeometrySelectionUI(); draw(); return true;
+    }
+    return Object.freeze({ selectIdentity });
+  }
+  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection });
 })();

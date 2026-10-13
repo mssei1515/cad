@@ -272,6 +272,8 @@
     trimConstraintSelection, geometryItemSelectedInCanvas,
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
+  const selectionScopeQuery = window.CanvasSelection.createScopeQuery({ canvasSelection, selectedGeometryItems });
+  const identitySelection = window.CanvasSelectionInteraction.createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw });
   const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isSplineOnlyFitPoint, isEditableSplineFitPoint, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isPrimitiveCenterPoint, isStandalonePoint, isSelectableEndpointPoint } = window.PointUsage.create({
     currentScope: workspace.current, constraintReferencesPoint,
     allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
@@ -1310,27 +1312,11 @@
     return true;
   }
 
-  function selectionItems() {
-    return [...selectedGeometryItems(), ...canvasSelection.blockInstances, ...canvasSelection.geometryInstances,
-      ...canvasSelection.annotations, ...canvasSelection.hatches, ...canvasSelection.referenceImages,
-      ...canvasSelection.dimensionConstraints, canvasSelection.constraint, canvasSelection.arcEndpoint?.arc].filter(Boolean);
-  }
+  function selectionItems(...args) { return selectionScopeQuery.selectionItems(...args); }
 
-  function selectIdentity(identity, additive = false) {
-    let item = identity.item, kind = identity.kind;
-    if (item.blockInstance) { item = item.blockInstance; kind = "block"; }
-    else if (item.derivedInstance) { item = item.derivedInstance; kind = "instance"; }
-    if (additive && selectionSketchId() && selectionSketchId() !== identity.sketchId) return false;
-    if (!additive) clearSelection();
-    const field = { point: "points", line: "lines", circle: "circles", arc: "arcs", spline: "splines",
-      block: "blockInstances", instance: "geometryInstances", "geometry-instance": "geometryInstances",
-      dimension: "dimensionConstraints", annotation: "annotations", hatch: "hatches", image: "referenceImages" }[kind];
-    if (!field) return false;
-    if (additive) canvasSelection.toggleById(field, item); else canvasSelection.set(field, [item]);
-    updateGeometrySelectionUI(); draw(); return true;
-  }
+  function selectIdentity(...args) { return identitySelection.selectIdentity(...args); }
 
-  function selectionSketchId() { return selectionItems()[0]?.sketchId || canvasSelection.inspection?.sketchId || null; }
+  function selectionSketchId(...args) { return selectionScopeQuery.selectionSketchId(...args); }
 
   function guardSketchEdit(sketchId = activeSketchId(), operation = "edit") {
     if (canEditSketch(sketchId, operation)) return true;

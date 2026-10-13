@@ -385,5 +385,15 @@
     for (const field of [...fields, "dimensionConstraint"]) Object.defineProperty(api, field, { get: () => state[field], enumerable: true });
     return Object.freeze(api);
   }
-  window.CanvasSelection = Object.freeze({ create });
+  function createScopeQuery({ canvasSelection, selectedGeometryItems }) {
+    function selectionItems() {
+      return [...selectedGeometryItems(), ...canvasSelection.blockInstances, ...canvasSelection.geometryInstances,
+        ...canvasSelection.annotations, ...canvasSelection.hatches, ...canvasSelection.referenceImages,
+        ...canvasSelection.dimensionConstraints, canvasSelection.constraint, canvasSelection.arcEndpoint?.arc].filter(Boolean);
+    }
+
+    function selectionSketchId() { return selectionItems()[0]?.sketchId || canvasSelection.inspection?.sketchId || null; }
+    return Object.freeze({ selectionItems, selectionSketchId });
+  }
+  window.CanvasSelection = Object.freeze({ create, createScopeQuery });
 })();
