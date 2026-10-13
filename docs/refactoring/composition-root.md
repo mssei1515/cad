@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Document入出力のUI接続をsrc/ui/document_file_controls.jsのDocumentFileControls.createDocument／createDxfへ分離。Document保存／別名保存／読込・input／linkとDXFの依存／登録寿命を別factoryにし、既存commandの非同期void委譲・input handler／receiver・必須／任意要素、DXFのflush→busy／編集可否短絡→hint／picker、File取得→input解除→同じFile参照でimportの順を保持する。任意input不在でhandler照会も省き、Fileなしのundefinedを維持。各bindingは二重登録防止・登録listener解除／再bindだけを所有する。PNG／Reference Image／Sketchとstartup／beforeunloadは既存経路へ留める。app.jsは5,314→5,303行（11行減、今回の再開から合計2,431行減）。構文494ファイル・単体1,326件・関連E2E156件が成功（すべてexit 0、E2E2.0分）。新単体3件でDocument非同期委譲／元handler／receiver／登録寿命、任意要素／handler照会短絡と必須要素、DXFのlive busy／編集可否／flush／input解除・File／undefinedを確認。unified-ui／file-safety／document-bookmarks／dxf-import／png-export／phase0-characterizationを実行し、native保存／再読込・link・importと周辺操作を確認。新scriptはindex／構文・単体一覧／読込期待値を同期。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-document-file-controls-{check,unit,e2e}.log。全E2Eはこの単位では未実行。ファイルsession・保存形式／互換性・リンク処理・import／モデル／履歴は新設していない。全体目標は未完了。
+
+### 前回の区切り
+
 拘束／固定入力の判断をsrc/commands/constraint_control_command.jsのConstraintControlCommandへ、拘束／menu／Fix buttonのイベント接続を既存ConstraintControlsView.createBindingへ分離。再click取消／Annotationの経路別優先順、Symmetry／距離／通常拘束・固定の分岐と既存pending／command／UI／拘束追加順を維持する。menuは既存button click→details終了、datasetは操作時照会とし、bindingだけが二重登録防止・listener解除／再bindを所有する。状態表示createとは独立した依存で生成。元の三つのhandler本体を維持。app.jsは5,349→5,314行（35行減、今回の再開から合計2,420行減）。構文492ファイル・単体1,323件・関連E2E237件が成功（すべてexit 0、E2E3.3分）。新単体4件で経路別取消／Annotation優先、Symmetry／距離、通常拘束更新順、固定のmode／Selection分岐を確認。既存View unitへ1件追加し、dataset更新・menu経路／閉じ順・未知menu・二重登録／解除／再bindを確認。unified-ui／annotation-anchors／blocks／fixed-command／block-geometry-fixed／sketch-permissions／phase0-characterizationを実行。新scriptはindex／構文・単体一覧／読込期待値を同期。仕様の状態表示担当はcreateへ限定して入力担当を追記。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-constraint-controls-input-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自mode／pending／Selection／拘束・求解／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
