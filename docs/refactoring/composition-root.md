@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Canvas context actionの編集guard・既存操作への振分けと操作後の更新をsrc/commands/canvas_context_actions.jsのCanvasContextActionsへ分離。Selection／対象Sketchの編集guard→対象またはSelection／active Sketchの構造guardという順・短絡と、既存command／履歴／clipboard／button・Properties／Block／寸法／Sketch／Hatch／Drawing Order／Spline／fitの入口を維持する。寸法整列成功時のUI→draw→履歴→hint、fit結果別hint→draw・hit／target／pointer／Spline参照・method receiver・void paste／未定義returnと例外伝播を保持し、元の処理本体との一致を確認。menuが早く生成される初期化順はappの薄い委譲関数で維持。app.jsは5,482→5,448行（34行減、今回の再開から合計2,286行減）。構文488ファイル・単体1,309件・関連E2E178件が成功（すべてexit 0、E2E2.3分）。新単体4件で編集guard失敗／構造guard先のfallback、寸法整列成功／失敗時の更新順、非編集actionのguard非依存／receiver／returnとfit結果、hit／Spline／pointer参照を確認。unified-ui／blocks／fixed-command／sketch-permissions／phase0-characterizationを実行し、menu・Fix／Undo・権限／Block／基本操作とfile URL読込を確認した。新scriptはindex／構文・単体一覧／読込期待値を同期。仕様の旧action担当も更新。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-context-actions-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Selection／command／model・履歴／求解規則・menu sessionは追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Canvas context menu項目構成を既存CanvasContextPresentation.createItemsへ分離。候補ラベルのcreateとは独立したfactory／依存で生成し、既存状態／可否・Undo／Redo button表示とmode getterからcommand／空白／対象別のaction ID・ラベル／shortcut・disabled／danger・group／separatorを構成する。command／空白と編集中fit pointの短絡、Block error・生成可否の短絡と照会順を保持し、元の処理本体との一致をmode getter置換後に確認。action実行・履歴／状態更新・menu session／DOM描画は持たない。app.jsは5,556→5,482行（74行減、今回の再開から合計2,252行減）。構文486ファイル・単体1,305件・関連E2E157件が成功（すべてexit 0、E2E2.1分）。新単体4件でcommandのtarget非依存／projection count更新、空白の権限／button不在／bounds照会順、編集中fit pointのFix／clipboard抑制と最小点数、Block error短絡／回転label更新・Drawing Order groupを確認。unified-ui／blocks／fixed-command／sketch-permissionsを実行し、menu／重複候補・Fix／Undo・権限／Blockとfile URL読込を確認した。既存scriptを拡張し、追加unitは構文／単体一覧へ同期。仕様の旧担当表記も現在のcreate／createItemsへ更新。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-context-menu-items-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
