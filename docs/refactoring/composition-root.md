@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Canvas context menu項目構成を既存CanvasContextPresentation.createItemsへ分離。候補ラベルのcreateとは独立したfactory／依存で生成し、既存状態／可否・Undo／Redo button表示とmode getterからcommand／空白／対象別のaction ID・ラベル／shortcut・disabled／danger・group／separatorを構成する。command／空白と編集中fit pointの短絡、Block error・生成可否の短絡と照会順を保持し、元の処理本体との一致をmode getter置換後に確認。action実行・履歴／状態更新・menu session／DOM描画は持たない。app.jsは5,556→5,482行（74行減、今回の再開から合計2,252行減）。構文486ファイル・単体1,305件・関連E2E157件が成功（すべてexit 0、E2E2.1分）。新単体4件でcommandのtarget非依存／projection count更新、空白の権限／button不在／bounds照会順、編集中fit pointのFix／clipboard抑制と最小点数、Block error短絡／回転label更新・Drawing Order groupを確認。unified-ui／blocks／fixed-command／sketch-permissionsを実行し、menu／重複候補・Fix／Undo・権限／Blockとfile URL読込を確認した。既存scriptを拡張し、追加unitは構文／単体一覧へ同期。仕様の旧担当表記も現在のcreate／createItemsへ更新。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-context-menu-items-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Canvas context targetの選択照会／選択更新・拘束hit構成とFix状態照会をsrc/editing/canvas_context_target.jsのCanvasContextTarget.createSelection／createFixObservationへ分離。既存CanvasSelection・端点照合／計算・clearとbatch／固定拘束／Geometry照会へ四port／六portで接続し、同一参照・既選択集合保持／明示置換・既存hit優先／fallback・batch優先・null／booleanと短絡順を保持する。元の四つの処理本体との一致を確認。候補収集／順位・menu表示は既存所有者、項目構成／action調整はappへ留める。app.jsは5,612→5,556行（56行減、今回の再開から合計2,178行減）。構文485ファイル・単体1,301件・関連E2E157件が成功（すべてexit 0、E2E2.1分）。新単体3件で実際のCanvasSelectionを使い、集合保持／置換・IDが同じ別参照・Arc端点／複数寸法・hit参照／計算fallback・live batch／固定拘束・Fix可否の非破壊観測を確認。unified-ui／blocks／fixed-command／sketch-permissionsを実行し、context menu／重複候補選択・Fix／Undo・権限／Blockとfile URL読込を確認した。新scriptはindex／構文・単体一覧／読込期待値を同期。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-context-target-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Selection／拘束・履歴・DOM／描画・menu表示／action実行は追加していない。全体目標は未完了。
 
 ### 前回の区切り
