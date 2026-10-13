@@ -5058,6 +5058,11 @@
     const siblingPointLineFixture = window.ConstraintTestDriver.createSiblingPointLineFixture({ resetModelState, addPoint, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addLine, defaultSketchId: DEFAULT_SKETCH_ID, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
     const siblingReferenceMove = window.ConstraintTestDriver.createSiblingReferenceMove({ currentScope: workspace.current, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId: DEFAULT_SKETCH_ID, isExplicitPoint, wouldCreateReferenceCycle });
     const pointLineObservation = window.ConstraintTestDriver.createPointLineObservation({ currentScope: workspace.current, PointOnLineConstraint, signedPointLineDistance, constraintSketchId });
+    const blockCreationFixture = window.BlockTestDriver.createCreationFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, VerticalConstraint, canvasSelection, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const emptyBlockFixture = window.BlockTestDriver.createEmptyFixture({ resetModelState, updateUI, draw, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current });
+    const blockRotationObservation = window.BlockTestDriver.createRotationObservation({ blockInstanceById, currentScope: workspace.current, blockInstanceDisplayCenter, readSolverVariables: () => solver.getVariables(), buildDragSession });
+    const blockEndpointObservation = window.BlockTestDriver.createEndpointObservation({ currentScope: workspace.current, blockProjectionBundle, worldToCanvasScreen, canvas });
+    const blockHoverObservation = window.BlockTestDriver.createHoverObservation({ constraintTargetSession, canvasHover });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5539,31 +5544,8 @@
       resetForSiblingPointLineReference: siblingPointLineFixture.reset,
       moveSiblingReferenceLine: siblingReferenceMove.move,
       referencePointLineState: pointLineObservation.state,
-      resetForBlockCreationUi() {
-        resetModelState();
-        const p1 = addPoint(-60, -30, false, "endpoint");
-        const p2 = addPoint(60, -30, false, "endpoint");
-        const p3 = addPoint(60, 30, false, "endpoint");
-        const p4 = addPoint(-60, 30, false, "endpoint");
-        const lines = [addLine(p1, p2), addLine(p2, p3), addLine(p3, p4), addLine(p4, p1)];
-        pushModelConstraint(new HorizontalConstraint(lines[0]));
-        pushModelConstraint(new VerticalConstraint(lines[1]));
-        pushModelConstraint(new HorizontalConstraint(lines[2]));
-        pushModelConstraint(new VerticalConstraint(lines[3]));
-        canvasSelection.set("lines", lines.slice());
-        fitAllGeometryToViewport(220);
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const origin = worldToCanvasScreen({ x: 0, y: 0 });
-        return { origin: { x: rect.left + origin.x, y: rect.top + origin.y } };
-      },
-      resetForEmptyBlockCreation() {
-        resetModelState();
-        updateUI();
-        draw();
-        return { definitions: documentModel.blockDefinitions.length, lines: model.lines.length };
-      },
+      resetForBlockCreationUi: blockCreationFixture.reset,
+      resetForEmptyBlockCreation: emptyBlockFixture.reset,
       resetForDimensionCommandLineDrag() {
         resetModelState();
         const p1 = addPoint(-70, -35, false, "endpoint");
@@ -5786,42 +5768,9 @@
           scale: viewport.scale,
         };
       },
-      blockRotationLockStateForTest(instanceId = null) {
-        const instance = instanceId ? blockInstanceById(instanceId) : model.blockInstances[0];
-        if (!instance) return null;
-        const center = blockInstanceDisplayCenter(instance);
-        const variables = solver.getVariables().filter((variable) => variable.object === instance).map((variable) => variable.prop).sort();
-        return {
-          id: instance.id,
-          x: instance.x,
-          y: instance.y,
-          rotation: instance.rotation,
-          fixed: Boolean(instance.fixed),
-          rotationLocked: Boolean(instance.rotationLocked),
-          displayCenter: { x: center.x, y: center.y },
-          solverVariables: variables,
-          translationSessionAvailable: Boolean(buildDragSession("block", instance, center)),
-          rotationSessionAvailable: Boolean(buildDragSession("block-rotation", instance, center)),
-        };
-      },
-      blockProjectionEndpointForTest() {
-        const instance = model.blockInstances[0];
-        const point = instance ? blockProjectionBundle(instance).lines[0]?.p1 : null;
-        if (!point) return null;
-        const screen = worldToCanvasScreen(point);
-        const rect = canvas.getBoundingClientRect();
-        return { x: rect.left + screen.x, y: rect.top + screen.y, id: point.id };
-      },
-      blockProjectionHoverState() {
-        return {
-          command: constraintTargetSession.command?.type || null,
-          blockInstanceId: canvasHover.current.block?.id || null,
-          pointId: canvasHover.current.point?.id || null,
-          pointIsBlockProjection: Boolean(canvasHover.current.point?.blockProjection),
-          lineId: canvasHover.current.line?.id || null,
-          arcEndpointId: canvasHover.current.arcEndpoint ? `${canvasHover.current.arcEndpoint.arc.id}.${canvasHover.current.arcEndpoint.endpoint}` : null,
-        };
-      },
+      blockRotationLockStateForTest: blockRotationObservation.state,
+      blockProjectionEndpointForTest: blockEndpointObservation.position,
+      blockProjectionHoverState: blockHoverObservation.state,
       drawnGeometryIdLabelsForTest: canvasRenderProbe.geometryIdLabels,
       constraintStatusEndpointMarkerCountForTest: canvasRenderProbe.constraintEndpointMarkerCount,
       drawnPointMarkerCountForTest: canvasRenderProbe.pointMarkerCount,

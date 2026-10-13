@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Block作成UI／空fixture・回転lock／投影端点／hoverの観測をBlockTestDriver.createCreationFixture／createEmptyFixture／createRotationObservation／createEndpointObservation／createHoverObservationへ分離。既存reset／Geometry・拘束生成／Selection・fit→UI→draw、現在scope／Definition数・Solver変数／drag session・投影／座標変換・Hoverへ役割別に接続し、固定入力・同一Instance参照・null／boolean・変数filter／sortと呼出し順を維持する。元の五つの処理本体との一致を依存port置換後に確認。app.jsは6,127→6,076行（51行減、今回の再開から合計1,658行減）。構文483ファイル・単体1,298件・関連E2E172件が成功（すべてexit 0、E2E2.3分）。全利用箇所のblocks／choice-dialog／fixed-command／phase0-characterization／unified-uiを実行。新規テストはなく、既存作成／空作成・固定／回転lock・投影操作とscript読込を確認した。classic script・構文一覧・E2E読込期待を同期。ログはcad-block-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Definition／採番／下書き・Solver／lock／hoverルール／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 親子／SiblingのPoint-Line参照fixture・Sibling参照元移動・参照状態の観測を既存ConstraintTestDriver.createParentPointLineFixture／createSiblingPointLineFixture／createSiblingReferenceMove／createPointLineObservationへ分離。既存reset／Geometry・所属／active切替・fit／UI／draw／client変換、依存求解／解析・cycle判定・signed distance／Sketch照会へ役割別に接続する。固定入力・同一参照・対象なしnullと更新／照会順を維持し、元の四つの処理本体との一致を依存port置換後に確認。app.jsは6,198→6,127行（71行減、今回の再開から合計1,607行減）。構文482ファイル・単体1,298件・関連E2E103件が成功（すべてexit 0、E2E1.4分）。全利用箇所のunified-uiを実行。新規テストはなく、既存親子／Sibling参照・参照元移動と逆参照cycle判定・周辺操作を確認した。ログはcad-point-line-reference-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自点線関係／参照・cycle規則／求解／scope／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

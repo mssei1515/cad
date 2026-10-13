@@ -794,3 +794,6 @@ DocumentTestDriver.createCyclicReferenceFixtureは固定の相互参照Point拘�
 
 
 ConstraintTestDriver.createParentPointLineFixture／createSiblingPointLineFixtureは固定の親子／Sibling SketchとPoint／Lineを既存reset／生成で準備し、元の所属／active切替・fit→UI→draw→client位置を観測する。createSiblingReferenceMoveは既存参照元Lineの移動→依存求解→解析→UI→draw後に現在Point／Lineと逆参照cycle判定を観測する。createPointLineObservationは現在scopeの既存参照PointOnLine拘束を絞り、既存signed distanceと参照／所属Sketch IDを返す。固定入力・同一参照・対象なしnullと更新／照会順を保持し、独自点線関係／参照・cycle規則／求解／scope／履歴を持たない。appはtest query時だけ役割別に生成して既存四API名へ接続する。
+
+
+BlockTestDriver（src/testing/block_test_driver.js）は作成UI fixture（createCreationFixture）、空作成fixture（createEmptyFixture）、回転lock／drag可否（createRotationObservation）、投影端点のclient位置（createEndpointObservation）、投影hover（createHoverObservation）を役割別に生成する。準備は既存reset／Geometry・拘束生成／Selection・fit→UI→drawへ、観測は現在scope／Definition数・既存Solver変数／drag session・投影／座標変換・Hoverへ委譲する。固定入力・同一Instance参照・null／boolean、変数filter／sortと呼出し順を保持し、空fixtureにGeometry生成・観測に作成／履歴依存を渡さない。独自Definition／採番／下書き・Solver／lock／hoverルール／履歴を持たず、appはtest query時だけ生成して既存五API名へ接続する。
