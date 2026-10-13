@@ -350,5 +350,111 @@
     return Object.freeze({ angles });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases });
+  function createAngleLabelFixture({ resetModelState, addPoint, addLine, dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, hypot2, serializeDimension }) {
+    function followCase() {
+      resetModelState();
+      const p1 = addPoint(-80, 0, false, "endpoint");
+      const p2 = addPoint(80, 0, false, "endpoint");
+      const p3 = addPoint(0, -80, false, "endpoint");
+      const p4 = addPoint(0, 80, false, "endpoint");
+      const line1 = addLine(p1, p2);
+      const line2 = addLine(p3, p4);
+      const target = { kind: "angle", line1, line2, value: 90 };
+      const initial = dimensionFromAnchor(target, { x: 45, y: 45 });
+      const initialBasis = angleDimensionLabelBasis(target, initial);
+      initial.labelX = initialBasis.arcPoint.x + initialBasis.radial.x * 11 + initialBasis.tangent.x * 7;
+      initial.labelY = initialBasis.arcPoint.y + initialBasis.radial.y * 11 + initialBasis.tangent.y * 7;
+
+      const corruptedRelativePlacement = {
+        ...dimensionFromAnchor(target, { x: 45, y: 45 }),
+        angleLabelOffsetR: 27.337291652719134,
+        angleLabelOffsetT: -6.399630529188789,
+      };
+      angleDimensionLayout(target, corruptedRelativePlacement);
+      const recoveredCorruptedOffsets = angleDimensionLabelOffsets(target, corruptedRelativePlacement);
+
+      const before = angleDimensionLayout(target, initial);
+      const beforeBasis = angleDimensionLabelBasis(target, initial);
+      const translation = { x: 34, y: -19 };
+      for (const point of [p1, p2, p3, p4]) {
+        point.x += translation.x;
+        point.y += translation.y;
+      }
+      const afterTranslation = angleDimensionLayout(target, initial);
+      const afterTranslationBasis = angleDimensionLabelBasis(target, initial);
+      const labelTranslationError = hypot2(
+        afterTranslation.text.x - before.text.x - translation.x,
+        afterTranslation.text.y - before.text.y - translation.y,
+      );
+      const arcTranslationError = hypot2(
+        afterTranslationBasis.arcPoint.x - beforeBasis.arcPoint.x - translation.x,
+        afterTranslationBasis.arcPoint.y - beforeBasis.arcPoint.y - translation.y,
+      );
+
+      const storedOffsets = angleDimensionLabelOffsets(target, initial);
+      const movedAnchor = {
+        x: afterTranslationBasis.arcPoint.x + afterTranslationBasis.radial.x * 26,
+        y: afterTranslationBasis.arcPoint.y + afterTranslationBasis.radial.y * 26,
+      };
+      const movedDimension = dimensionFromAnchor(target, movedAnchor, { allowPointAxis: false });
+      setAngleDimensionLabelOffsets(movedDimension, storedOffsets);
+      const afterRadiusMove = angleDimensionLayout(target, movedDimension);
+      const afterRadiusMoveBasis = angleDimensionLabelBasis(target, movedDimension);
+      const labelRadiusDelta = {
+        x: afterRadiusMove.text.x - afterTranslation.text.x,
+        y: afterRadiusMove.text.y - afterTranslation.text.y,
+      };
+      const arcRadiusDelta = {
+        x: afterRadiusMoveBasis.arcPoint.x - afterTranslationBasis.arcPoint.x,
+        y: afterRadiusMoveBasis.arcPoint.y - afterTranslationBasis.arcPoint.y,
+      };
+      let repeatedlyDraggedDimension = movedDimension;
+      const dragOffsets = angleDimensionLabelOffsets(target, repeatedlyDraggedDimension);
+      let repeatedDragOffsetError = 0;
+      let repeatedDragRadialPointerError = 0;
+      for (let index = 0; index < 8; index++) {
+        const currentLayout = angleDimensionLayout(target, repeatedlyDraggedDimension);
+        const pointer = {
+          x: currentLayout.text.x + (index % 2 === 0 ? 13 : -9),
+          y: currentLayout.text.y + (index % 3 === 0 ? 8 : -6),
+        };
+        repeatedlyDraggedDimension = angleDimensionFromLabelPoint(
+          target,
+          pointer,
+          angleDimensionLabelOffsets(target, repeatedlyDraggedDimension),
+        );
+        const nextOffsets = angleDimensionLabelOffsets(target, repeatedlyDraggedDimension);
+        const nextLayout = angleDimensionLayout(target, repeatedlyDraggedDimension);
+        const nextBasis = angleDimensionLabelBasis(target, repeatedlyDraggedDimension);
+        repeatedDragOffsetError = Math.max(
+          repeatedDragOffsetError,
+          hypot2(nextOffsets.radial - dragOffsets.radial, nextOffsets.tangent - dragOffsets.tangent),
+        );
+        repeatedDragRadialPointerError = Math.max(
+          repeatedDragRadialPointerError,
+          Math.abs(
+            (nextLayout.text.x - pointer.x) * nextBasis.radial.x +
+            (nextLayout.text.y - pointer.y) * nextBasis.radial.y,
+          ),
+        );
+      }
+      const serialized = serializeDimension(repeatedlyDraggedDimension, target);
+      return {
+        migratedLegacyCoordinates: !Object.hasOwn(initial, "labelX") && !Object.hasOwn(initial, "labelY"),
+        recoveredCorruptedOffsets,
+        storedOffsets,
+        labelTranslationError,
+        arcTranslationError,
+        radiusFollowError: hypot2(labelRadiusDelta.x - arcRadiusDelta.x, labelRadiusDelta.y - arcRadiusDelta.y),
+        repeatedDragOffsetError,
+        repeatedDragRadialPointerError,
+        serializedRelativeOffsets: Number.isFinite(serialized.angleLabelOffsetR) && Number.isFinite(serialized.angleLabelOffsetT),
+        serializedPlacementVersion: serialized.angleLabelPlacementVersion,
+        serializedLegacyCoordinates: Object.hasOwn(serialized, "labelX") || Object.hasOwn(serialized, "labelY"),
+      };
+    }
+    return Object.freeze({ followCase });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture });
 })();
