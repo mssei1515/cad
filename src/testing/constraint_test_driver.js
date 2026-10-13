@@ -273,5 +273,100 @@
     return Object.freeze({ reset });
   }
 
-  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture });
+  function createParentPointLineFixture({ resetModelState, addPoint, addLine, activeSketchId, currentScope, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen }) {
+    function reset() {
+      resetModelState();
+      const parentPoint = addPoint(-45, 0, false, "explicit");
+      const parentLineP1 = addPoint(20, -20, false, "endpoint");
+      const parentLineP2 = addPoint(80, -20, false, "endpoint");
+      const parentLine = addLine(parentLineP1, parentLineP2);
+      const childSketchId = "S2";
+      const parentSketchId = activeSketchId();
+      currentScope().sketches.push({ id: childSketchId, name: "Sketch-1-1", parentSketchId, kind: "sketch" });
+      currentScope().activeSketchId = childSketchId;
+      const childLineP1 = addPoint(-80, 35, false, "endpoint");
+      const childLineP2 = addPoint(-10, 35, false, "endpoint");
+      const childLine = addLine(childLineP1, childLineP2);
+      const childPoint = addPoint(50, 30, false, "explicit");
+      fitAllGeometryToViewport(190);
+      updateUI();
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      const screenPoint = (point) => {
+        const screen = worldToCanvasScreen(point);
+        return { x: rect.left + screen.x, y: rect.top + screen.y };
+      };
+      return {
+        parentPoint: screenPoint(parentPoint),
+        parentLine: screenPoint({ x: 50, y: -20 }),
+        childLine: screenPoint({ x: -45, y: 35 }),
+        childPoint: screenPoint(childPoint),
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createSiblingPointLineFixture({ resetModelState, addPoint, currentScope, rootSketchId, addLine, defaultSketchId, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen }) {
+    function reset() {
+      resetModelState();
+      const activePoint = addPoint(50, 35, false, "explicit");
+      const siblingSketchId = "S2";
+      currentScope().sketches.push({ id: siblingSketchId, name: "Sketch-2", parentSketchId: rootSketchId, kind: "sketch" });
+      currentScope().activeSketchId = siblingSketchId;
+      const lineP1 = addPoint(10, 0, true, "endpoint");
+      const lineP2 = addPoint(90, 0, true, "endpoint");
+      const siblingLine = addLine(lineP1, lineP2);
+      currentScope().activeSketchId = defaultSketchId;
+      fitAllGeometryToViewport(190);
+      updateUI();
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      const screenPoint = (point) => {
+        const screen = worldToCanvasScreen(point);
+        return { x: rect.left + screen.x, y: rect.top + screen.y };
+      };
+      return {
+        activePoint: screenPoint(activePoint),
+        siblingLine: screenPoint({ x: 50, y: 0 }),
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createSiblingReferenceMove({ currentScope, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId, isExplicitPoint, wouldCreateReferenceCycle }) {
+    function move(dy) {
+      const siblingLine = currentScope().lines.find((line) => elementSketchId(line) === "S2");
+      if (!siblingLine) return null;
+      siblingLine.p1.y += dy;
+      siblingLine.p2.y += dy;
+      const result = solveReferenceDependentSketches("S2");
+      refreshConstraintAnalysis();
+      updateUI();
+      draw();
+      const activePoint = currentScope().points.find((point) => elementSketchId(point) === defaultSketchId && isExplicitPoint(point));
+      return {
+        success: result.success,
+        dependentSketchIds: result.results.map((entry) => entry.sketchId),
+        activePoint: activePoint ? { x: activePoint.x, y: activePoint.y } : null,
+        siblingLine: { p1: { x: siblingLine.p1.x, y: siblingLine.p1.y }, p2: { x: siblingLine.p2.x, y: siblingLine.p2.y } },
+        reverseWouldCycle: wouldCreateReferenceCycle("S2", defaultSketchId),
+      };
+    }
+    return Object.freeze({ move });
+  }
+
+  function createPointLineObservation({ currentScope, PointOnLineConstraint, signedPointLineDistance, constraintSketchId }) {
+    function state() {
+      const constraints = currentScope().constraints.filter((constraint) => constraint instanceof PointOnLineConstraint && constraint.reference);
+      return {
+        count: constraints.length,
+        errors: constraints.map((constraint) => Math.abs(signedPointLineDistance(constraint.point, constraint.line))),
+        referenceSketchIds: constraints.map((constraint) => constraint.referenceSketchId),
+        sketchIds: constraints.map((constraint) => constraintSketchId(constraint)),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture, createParentPointLineFixture, createSiblingPointLineFixture, createSiblingReferenceMove, createPointLineObservation });
 })();

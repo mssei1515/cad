@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+親子／SiblingのPoint-Line参照fixture・Sibling参照元移動・参照状態の観測を既存ConstraintTestDriver.createParentPointLineFixture／createSiblingPointLineFixture／createSiblingReferenceMove／createPointLineObservationへ分離。既存reset／Geometry・所属／active切替・fit／UI／draw／client変換、依存求解／解析・cycle判定・signed distance／Sketch照会へ役割別に接続する。固定入力・同一参照・対象なしnullと更新／照会順を維持し、元の四つの処理本体との一致を依存port置換後に確認。app.jsは6,198→6,127行（71行減、今回の再開から合計1,607行減）。構文482ファイル・単体1,298件・関連E2E103件が成功（すべてexit 0、E2E1.4分）。全利用箇所のunified-uiを実行。新規テストはなく、既存親子／Sibling参照・参照元移動と逆参照cycle判定・周辺操作を確認した。ログはcad-point-line-reference-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自点線関係／参照・cycle規則／求解／scope／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 循環参照の読込fixtureを既存DocumentTestDriver.createCyclicReferenceFixtureへ、拘束寸法Selectionのfixture／観測と支持状態fixtureを既存ConstraintTestDriver.createDimensionSelectionFixture／createDimensionSelectionObservation／createSupportStatusFixtureへ分離。既存生成／参照mark・serialize／load・解析／UI、Selection／command・fit／draw・求解／status／色へ役割別に接続し、reference error／summaryは明示した既存照会入口を使う。固定入力・同一参照・更新／照会順とbooleanを維持し、元の四つの処理本体との一致を依存port置換後に確認。app.jsは6,256→6,198行（58行減、今回の再開から合計1,536行減）。構文482ファイル・単体1,298件・関連E2E124件が成功（すべてexit 0、unified-ui103件1.4分、phase0-characterization21件15.7秒）。全利用箇所の二ファイルを実行。新規テストはなく、既存cycle読込・寸法Selection解除／command・支持status／色とvisual回帰を確認した。ログはcad-reference-selection-fixtures-{check,unit,e2e,phase0}.log。全E2Eはこの単位では未実行。独自cycle判定／参照・Selection／command／拘束状態／求解／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
