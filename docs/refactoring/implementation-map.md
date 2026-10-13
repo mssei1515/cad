@@ -770,3 +770,6 @@ CanvasRenderTestDriver（src/testing/canvas_render_test_driver.js）はdash isol
 
 
 PropertiesTestDriver.createInspectionFixtureは固定Geometry／reference・read-only拘束を既存生成型／編集へ委譲して準備し、UI→fit→draw→現在Canvas位置／IDを観測する。SketchTreeTestDriver（src/testing/sketch_tree_test_driver.js）はRoot／子孫Sketchのhover用Geometry／Block（createRootHoverFixture）とBlockの線／explicit Pointのhover fixture（createBlockHoverFixture）を役割別に生成する。現在scope・既存生成型／cache・UI／fit／draw／投影へ接続し、Definition追加／Instance採番はappのcallbackに留め、Block位置は既存CanvasTestDriverの変換を使う。固定座標／ID・所属／active Sketchの切替・constraintのreference／read-only設定と呼出し順を保持する。独自scope／採番／定義・Selection／hoverルール／履歴を持たず、appはtest query時だけ生成して既存三API名へ接続する。
+
+
+OffsetTestDriver（src/testing/offset_test_driver.js）は単独Offsetの生成／保存再読込fixture（createPrimitiveFixture）、UI準備（createUiFixture）、状態観測（createUiObservation）、方向fixture（createDirectionFixture）を役割別に生成する。既存Geometry／Offset生成・拘束precondition／求解・保存／読込とviewport／DOMへ委譲し、固定入力・同一参照・target／expression更新→求解→計測→保存／reload→現在scope照会とUI／方向の呼出し順を保持する。UI観測に生成／reset・保存依存を渡さず、独自Offset計算／拘束・scope／履歴を持たない。CanvasTestDriver.createFixedPointFixtureは既存固定explicit Point準備・UI→fit→draw→位置照会を維持し、既存clientPositionを明示的に受け取る。appはtest query時だけ生成して既存五API名へ接続する。

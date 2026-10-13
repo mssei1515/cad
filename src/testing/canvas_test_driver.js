@@ -217,5 +217,23 @@
     return Object.freeze({ fit });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation });
+  function createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition }) {
+    function reset() {
+      resetModelState();
+      viewport.update({ scale: 1 });
+      const point = addPoint(0, 0, true, "explicit");
+      updateUI();
+      fitAllGeometryToViewport(220);
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      return {
+        pointId: point.id,
+        point: clientPosition(point),
+        blank: { x: rect.left + rect.width - 30, y: rect.top + rect.height - 30 },
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture });
 })();
