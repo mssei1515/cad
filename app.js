@@ -2661,16 +2661,16 @@
 
 
 
-  function drawLines(items = null) {
-    geometryRenderer.drawLines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryLines()));
+  function drawLines(items = null, options = {}) {
+    geometryRenderer.drawLines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryLines()), options);
   }
 
-  function drawCircles(items = null) {
-    geometryRenderer.drawCircles(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryCircles()));
+  function drawCircles(items = null, options = {}) {
+    geometryRenderer.drawCircles(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryCircles()), options);
   }
 
-  function drawArcs(items = null) {
-    geometryRenderer.drawArcs(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryArcs()));
+  function drawArcs(items = null, options = {}) {
+    geometryRenderer.drawArcs(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryArcs()), options);
   }
 
   function drawSplines(items = null) {

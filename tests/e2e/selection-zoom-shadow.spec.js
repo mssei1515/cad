@@ -65,3 +65,46 @@ for (const dpr of [1, 2]) test.describe(`selection glow at DPR ${dpr}`, () => {
     expect(await model()).toEqual(before);
   });
 });
+
+test('multiple retained hatch boundaries do not darken a selected line', async ({ page }) => {
+  await openTestDocument(page);
+  await page.evaluate(() => {
+    const stroke = CanvasRenderingContext2D.prototype.stroke;
+    const clear = CanvasRenderingContext2D.prototype.clearRect;
+    CanvasRenderingContext2D.prototype.clearRect = function (...args) {
+      window.selectionGlowCount = 0;
+      return clear.apply(this, args);
+    };
+    CanvasRenderingContext2D.prototype.stroke = function (...args) {
+      if (this.shadowBlur > 0) window.selectionGlowCount++;
+      return stroke.apply(this, args);
+    };
+  });
+  const pixels = [];
+  for (const count of [0, 12]) {
+    const hatches = Array.from({ length: count }, (_, i) => ({
+      id: `H${i + 1}`, sketchId: 'S2', drawingOrder: i, seed: { x: 0, y: 0 },
+      boundaryLoops: [{ role: 'outer', spans: ['L22', 'missing'].map(id => ({
+        source: { kind: 'line', path: [id] }, start: { type: 'endpoint', name: 'p1' },
+        end: { type: 'endpoint', name: 'p2' }, reversed: false, fullCircle: false, fullLoop: false,
+      })) }], appearance: { visible: true, patternType: 'solid', angle: 45, spacing: 3, color: '#374151', lineWidth: 1, opacity: 0.5 },
+    }));
+    const loaded = await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data),
+      { ...fixture, hatches, nextHatchIndex: count + 1 });
+    expect(loaded.success, loaded.error).toBe(true);
+    await page.evaluate(center => window.__jot2dTest.focusWorldForTest(center, 0.02), center);
+    const p = await page.evaluate(center => window.__jot2dTest.worldClientPositionForTest(center), center);
+    await page.mouse.click(p.x, p.y);
+    await page.mouse.move(10, 10);
+    await page.evaluate(center => window.__jot2dTest.focusWorldForTest(center, 0.02), center);
+    const rendered = await page.evaluate(center => {
+      const canvas = document.querySelector('#canvas'), rect = canvas.getBoundingClientRect();
+      const p = window.__jot2dTest.worldClientPositionForTest(center);
+      return { count: window.selectionGlowCount, pixels: [...canvas.getContext('2d').getImageData(
+        Math.round(p.x - rect.left + 3), Math.round(p.y - rect.top + 80), 12, 1).data] };
+    }, center);
+    expect(rendered.count).toBe(1);
+    pixels.push(rendered.pixels);
+  }
+  expect(pixels[1]).toEqual(pixels[0]);
+});

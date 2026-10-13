@@ -36,6 +36,17 @@ test("line rendering consumes prepared visual state and preserves drawing order"
   assert.equal(calls.filter(c => c[0] === "fillText")[0][1], "L1");
   assert.equal(calls[0][0], "save"); assert.equal(calls.at(-1)[0], "restore");
 });
+
+test('boundary repaint retains selected strokes but omits repeated glow', () => {
+  const { renderer, ctx } = create({ sel: true });
+  const strokes = [];
+  ctx.stroke = () => strokes.push({ blur: ctx.shadowBlur, color: ctx.strokeStyle, width: ctx.lineWidth });
+  const options = { selectionGlow: false };
+  renderer.drawLines([{ p1: { x: 0, y: 0 }, p2: { x: 0, y: 10 } }], options);
+  renderer.drawCircles([{ center: { x: 0, y: 0 }, radius: () => 10 }], options);
+  renderer.drawArcs([{ center: { x: 0, y: 0 }, radius: () => 10, startAngle: 0, endAngle: 1 }], options);
+  assert.deepEqual(strokes, Array(3).fill({ blur: 0, color: 'red', width: 2 }));
+});
 test("construction endpoint markers use source endpoints and scale", () => {
   const { renderer, calls } = create({ construction: true });
   renderer.drawLines([{ p1: { x: 1, y: 2 }, p2: { x: 3, y: 4 } }]);

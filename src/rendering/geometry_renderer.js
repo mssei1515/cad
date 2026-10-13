@@ -5,7 +5,7 @@
   function create({ ctx, viewport, readPixelRatio = () => 1, paintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel, appearanceLineDash, lineDisplaySegment, canvasThemeColor }) {
     // Canvas shadowBlur ignores the transform and is measured in bitmap pixels.
     const selectionShadowBlur = () => 8 * readPixelRatio();
-    function drawLines(items) {
+    function drawLines(items, { selectionGlow = true } = {}) {
       ctx.save();
       const lines = items;
       for (const l of lines) {
@@ -18,7 +18,7 @@
         ctx.lineJoin = "round";
         ctx.setLineDash(appearanceLineDash(appearance.lineType));
         ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-        ctx.shadowBlur = sel || auxiliaryHighlighted ? selectionShadowBlur() : 0;
+        ctx.shadowBlur = selectionGlow && (sel || auxiliaryHighlighted) ? selectionShadowBlur() : 0;
         const drawSegment = lineDisplaySegment(l, appearance);
         ctx.beginPath();
         ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
@@ -48,7 +48,7 @@
       ctx.restore();
     }
 
-    function drawCircles(items) {
+    function drawCircles(items, { selectionGlow = true } = {}) {
       ctx.save();
       ctx.lineCap = "round";
       const circles = items;
@@ -59,7 +59,7 @@
         ctx.lineWidth = strokeWidth / viewport.scale;
         ctx.setLineDash(appearanceLineDash(appearance.lineType));
         ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-        ctx.shadowBlur = sel || auxiliaryHighlighted ? selectionShadowBlur() : 0;
+        ctx.shadowBlur = selectionGlow && (sel || auxiliaryHighlighted) ? selectionShadowBlur() : 0;
         ctx.beginPath();
         ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
         ctx.stroke();
@@ -74,7 +74,7 @@
       ctx.restore();
     }
 
-    function drawArcs(items) {
+    function drawArcs(items, { selectionGlow = true } = {}) {
       ctx.save();
       ctx.lineCap = "round";
       const arcs = items;
@@ -85,7 +85,7 @@
         ctx.lineWidth = strokeWidth / viewport.scale;
         ctx.setLineDash(appearanceLineDash(appearance.lineType));
         ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-        ctx.shadowBlur = sel || auxiliaryHighlighted ? selectionShadowBlur() : 0;
+        ctx.shadowBlur = selectionGlow && (sel || auxiliaryHighlighted) ? selectionShadowBlur() : 0;
         ctx.beginPath();
         ctx.arc(a.center.x, a.center.y, a.radius(), a.startAngle, a.endAngle, a.endAngle < a.startAngle);
         ctx.stroke();

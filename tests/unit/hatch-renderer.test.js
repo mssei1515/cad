@@ -71,7 +71,7 @@ function layerHarness() {
   const layer = sandbox.window.HatchRenderer.createLayer({
     ctx, drawResolvedHatchContent: (...args) => calls.push(["content", ...args]),
     hatchBoundaryGeometryItems: () => boundaryItems,
-    boundaryPainters: [Line, Circle, Arc, Spline].map(type => ({ type, draw: items => calls.push([type.name, ...items]) })),
+    boundaryPainters: [Line, Circle, Arc, Spline].map(type => ({ type, draw: (items, options) => calls.push([type.name, ...items, options]) })),
     allHatches: () => state.all, isVisibleSketchId: id => id !== "hidden",
     hatchAppearanceForDisplay: item => item.appearance, isConstraintOperandSelected: item => Boolean(item.operand),
     canvasSelection: selection, activeSketchId: () => "active", readHover: () => state.hover,
@@ -87,6 +87,7 @@ test("hatch layer paints content before ordered boundary overlays and omits over
   assert.deepEqual(h.calls.map(call => call[0]), ["content", "Line", "Circle", "Arc", "Spline"]);
   assert.equal(h.calls[0][1], h.ctx);
   assert.equal(h.calls[1][1], h.boundaryItems[2]);
+  assert.ok(h.calls.slice(1).every(call => call.at(-1).selectionGlow === false));
   h.calls.length = 0; h.layer.drawResolvedHatch(resolved, {}, undefined, { hatch: h.hatch, preview: true });
   assert.deepEqual(h.calls.map(call => call[0]), ["content"]);
 });
