@@ -2469,29 +2469,27 @@
     return c1 * c2 < 0 && c3 * c4 < 0;
   }
 
+  const dimensionSelectionBounds = window.DimensionPresentation.createSelectionBounds({
+    isActiveSketchConstraint, isVisibleSketchId, constraintSketchId, targetFromConstraint, defaultDimensionForTarget,
+    effectiveDimensionAppearance, isVisibleValue, dimensionLayout, dimensionTextDrawingMetrics,
+    dimensionLabelForConstraint, dimensionTextWidth, dimensionUsesExpression,
+  });
+  const dimensionLayer = window.DimensionPresentation.createLayer({
+    ctx, currentScope: dimensionPresentationScope, isActiveSketchConstraint, isVisibleSketchId, constraintSketchId,
+    targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, isVisibleValue, canvasSelection,
+    readHoverDimension: () => canvasHover.current.dimension, readDraggedDimension: () => dimensionDrag.constraint,
+    readPending: () => pendingCommandSession.current, readExportFrame: () => pngRendering.frame,
+    readConstraintStatus: () => viewState.constraintStatus, inactiveColor: INACTIVE_CONSTRAINT_STATUS_COLOR,
+    dimensionLabelForConstraint, drawDimension, dimensionUsesExpression,
+  });
+
   const rectangleSelectionQuery = window.RectangleSelectionQuery.create({
     currentScope: dimensionPresentationScope, selectableSketchElement, isExplicitPoint, isReferencePoint, pointInRect,
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
     arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId: id => id === activeSketchId(), isVisibleSketchId, blockProjectionBundle, geometryInstanceBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
     hatchAppearanceForDisplay, referenceImageBounds, isVisibleValue,
-    dimensionSelectionBounds: constraint => {
-      if (!isActiveSketchConstraint(constraint) || !isVisibleSketchId(constraintSketchId(constraint))) return null;
-      const target = targetFromConstraint(constraint);
-      if (!target) return null;
-      const dimension = constraint.dimension || defaultDimensionForTarget(target);
-      const appearance = effectiveDimensionAppearance(dimension, constraintSketchId(constraint));
-      if (!isVisibleValue(appearance.visible)) return null;
-      const layout = dimensionLayout(target, dimension, appearance);
-      if (!layout) return null;
-      const metrics = dimensionTextDrawingMetrics(appearance);
-      const label = dimensionLabelForConstraint(constraint, target, dimension);
-      const width = dimensionTextWidth(label, appearance, dimensionUsesExpression(constraint));
-      const top = -metrics.gap - metrics.height * (1 + (String(label).split(/\r\n|\r|\n/).length - 1) * 1.2);
-      const angle = Number(layout.textAngle) || 0;
-      const points = [layout.hitA, layout.hitB, ...[-width / 2, width / 2].flatMap(x => [top, -metrics.gap].map(y => ({ x: layout.text.x + x * Math.cos(angle) - y * Math.sin(angle), y: layout.text.y + x * Math.sin(angle) + y * Math.cos(angle) })))].filter(Boolean);
-      return { x1: Math.min(...points.map(p => p.x)), y1: Math.min(...points.map(p => p.y)), x2: Math.max(...points.map(p => p.x)), y2: Math.max(...points.map(p => p.y)) };
-    },
+    dimensionSelectionBounds: dimensionSelectionBounds.read,
   });
   function selectByRect(rect, crossing, additive = false) {
     if (additive && selectionSketchId() && selectionSketchId() !== activeSketchId()) return;
@@ -2702,23 +2700,7 @@
 
 
 
-  function drawDimensions() {
-    for (const c of dimensionPresentationScope().constraints.sort((a, b) => Number(isActiveSketchConstraint(a)) - Number(isActiveSketchConstraint(b)))) {
-      if (!isVisibleSketchId(constraintSketchId(c))) continue;
-      const target = targetFromConstraint(c);
-      if (!target) continue;
-      const dimension = c.dimension || defaultDimensionForTarget(target);
-      const sketchId = constraintSketchId(c);
-      if (!isVisibleValue(effectiveDimensionAppearance(dimension, sketchId).visible)) continue;
-      const highlighted = canvasSelection.inspectionContains(c) || c === canvasHover.current.dimension || canvasSelection.constraintSelectedInCanvas(c) || c === dimensionDrag.constraint;
-      const label = dimensionLabelForConstraint(c, target, dimension);
-      const editing = pendingCommandSession.current?.type === "distance-value" && pendingCommandSession.current.constraint === c;
-      const colorOverride = !pngRendering.frame && viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
-      ctx.save();
-      drawDimension(target, dimension, label, false, !pngRendering.frame && (highlighted || editing), !pngRendering.frame && editing ? { hidden: true } : null, colorOverride, sketchId, !pngRendering.frame && dimensionUsesExpression(c));
-      ctx.restore();
-    }
-  }
+  function drawDimensions() { return dimensionLayer.draw(); }
 
   function drawAnnotations() {
     for (const element of allAnnotations()) {

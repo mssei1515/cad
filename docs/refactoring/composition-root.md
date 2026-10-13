@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+通常寸法の表示情報取得と矩形選択用boundsを新しいsrc/rendering/dimension_presentation.jsへ分離。createLayerは19portで現在表示scope・可視性／外観／配置／ラベル、Selectionとhover／drag／pending／PNG／statusのread入口と既存rendererへ接続し、createSelectionBoundsは12portで現在配置・Text metricsから回転／複数行／式記号を含むboundsを返す。元body・短絡／順序・target／dimension参照とsave／restore・例外伝播を維持し、採否とSelection変更は既存RectangleSelectionQuery／CanvasSelectionに残す。app.jsは5,131→5,113行（18行減、今回の再開から合計2,621行減）。構文501ファイル・単体1,348件・関連E2E181件が成功（すべてexit 0、E2E2.5分）。新しいunit3件で回転複数行ラベルとshaft bounds、visibility／target／layout短絡とdefault、live scope／interaction／PNGの情報と順序を確認。元body一致と各port初期化順をauditし、後に生成されるdimensionDragはgetterで描画時に読む。unified-ui／dimension-prefix／png-export／blocks／annotation-display-size／phase0-characterizationを実行。index.html、構文／unit実行リスト、file URLのscript期待値を同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-dimension-presentation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 寸法previewの表示情報構成と描画呼出を新しいsrc/rendering/dimension_preview.jsのDimensionPreview.createへ分離。現在pendingのread-only getter、既存配置／式評価／表示形式／角度照会と寸法／fillet描画の13portに接続する。fillet仮半径、距離の配置／入力、axis target copy、angle／interval、invalid／selecting／hidden、元の評価catchと短絡／順序・dimension／target参照を維持。入力確定・求解・履歴・session変更は既存commandに残す。app.jsは5,185→5,131行（54行減、今回の再開から合計2,603行減）。構文499ファイル・単体1,345件・関連E2E171件が成功（すべてexit 0、E2E2.3分）。新しいunit3件で現在pending／fillet失敗短絡、半径anchorと参照、負のinterval／境界／評価失敗、既存dimension同一性／axis copyとdefault／angle／label順を確認。元bodyとの一致と13portの初期化順をaudit。unified-ui／dimension-prefix／blocks／annotation-display-size／phase0-characterizationを実行。index.html、構文／unit実行リスト、file URLのscript読込期待値を同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-dimension-preview-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
