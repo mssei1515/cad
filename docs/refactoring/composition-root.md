@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Sidebar inspectionを既存PropertiesTestDriver.createInspectionFixtureへ、Root／Block hoverをSketchTreeTestDriver.createRootHoverFixture／createBlockHoverFixtureへ分離。固定Geometry／reference・read-only拘束とSketch／Blockを既存生成・編集へ委譲し、UI→fit→draw→位置／ID観測の順を保持する。Definition追加とInstance採番はappのcallbackに留め、Block位置は既存CanvasTestDriverのclient変換へ接続する。固定入力・同一参照・所属／active切替・cache無効化と各照会順を維持し、元の三つの処理本体との一致を依存port置換後に確認。app.jsは6,865→6,743行（122行減、今回の再開から合計991行減）。構文479ファイル・単体1,297件・関連E2E125件が成功（すべてexit 0、E2E1.7分）。全利用箇所のsketch-tree-visibility／unified-uiを実行。新規テストはなく、既存inspection／Root・子孫Sketch・Block hover／explicit Point表示と周辺可視性・script読込を確認した。classic script・構文一覧・E2E読込期待を同期。ログはcad-sidebar-tree-fixtures-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自scope／採番／定義・Selection／hoverルール／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Canvas dash isolationの支援をCanvasRenderTestDriverの作図preview準備／Block準備／観測手順の三つに分離。既存command／preview・生成型／Definition追加／scopeとappのmode入口へ役割別に接続し、reset→viewport→preview／Selection reset→mode→setup→dash設定→draw→dash照会と12case順を保持する。組み直した処理が元のcase順／本体と一致することを依存port置換後に確認。app.jsは6,956→6,865行（91行減、今回の再開から合計869行減）。構文478ファイル・単体1,297件・関連E2E103件が成功（すべてexit 0、最終E2E1.5分）。初回E2Eは102件成功／dash1件失敗で、drawSelectionRectの依存受渡し忘れによる未定義参照を修正し、同じunified-ui全体を再実行して成功を確認した。新規テストはなく、既存12種のdash分離とscript読込を確認。classic script・構文一覧・E2E読込期待を同期。ログはcad-canvas-dash-driver-{check,unit,e2e,e2e-final}.log。全E2Eはこの単位では未実行。独自mode／command状態・Block定義／seq・renderer／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

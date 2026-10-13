@@ -119,5 +119,43 @@
     return Object.freeze({ state });
   }
 
-  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation });
+  function createInspectionFixture({ resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, assignConstraintSketchId, activeSketchId, currentScope, updateUI, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen }) {
+    function reset() {
+      resetModelState();
+      const p1 = addPoint(-80, 0, true, "endpoint");
+      const p2 = addPoint(20, 0, false, "endpoint");
+      const line = addLine(p1, p2);
+      const circleCenter = addPoint(80, 0, false, "endpoint");
+      const circle = addCircle(circleCenter, 28);
+      const arcCenter = addPoint(0, 80, false, "endpoint");
+      const arc = addArc(arcCenter, 32, Math.PI, Math.PI * 1.75);
+      const horizontal = pushModelConstraint(new HorizontalConstraint(line));
+      horizontal.reference = true;
+      const readOnly = new DistanceConstraint(p1, p2, line.length());
+      readOnly.dimension = dimensionFromAnchor({ kind: "line-length", line, p1, p2, value: line.length() }, { x: -30, y: -28 });
+      readOnly.readOnlyDimension = true;
+      readOnly.enabled = false;
+      assignConstraintSketchId(readOnly, activeSketchId());
+      currentScope().constraints.push(readOnly);
+      updateUI();
+      fitAllGeometryToViewport(140);
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      const lineMid = worldToCanvasScreen({ x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 });
+      return {
+        line: line.id,
+        lineEndpoints: [p1.id, p2.id],
+        fixedPoint: p1.id,
+        circle: circle.id,
+        circleCenter: circleCenter.id,
+        arc: arc.id,
+        arcCenter: arcCenter.id,
+        lineMid: { x: rect.left + lineMid.x, y: rect.top + lineMid.y },
+        blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 },
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture });
 })();
