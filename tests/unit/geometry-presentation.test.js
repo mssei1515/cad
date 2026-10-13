@@ -154,3 +154,21 @@ test('spline handle state follows current scope identity and point selection', (
   assert.equal(state.closed, true); assert.equal(state.points[0].point, a);
   assert.equal(state.points[0].selected, false); assert.equal(state.points[1].selected, true);
 });
+
+test('construction line display preserves endpoint refs when disabled and computes zoom-dependent extensions without editing geometry', () => {
+  const viewport = { scale: 2 }, p1 = { x: 0, y: 0 }, p2 = { x: 6, y: 8 }, line = { p1, p2, construction: true, length: () => 10, dx: () => 6, dy: () => 8 };
+  let appearance = {}, reads = 0;
+  const display = sandbox.window.GeometryPresentation.createLineDisplay({ viewport, constructionExtensionScreenPx: 12,
+    effectiveAppearanceForElement: item => { assert.equal(item, line); reads++; return appearance; } });
+  let segment = display.lineDisplaySegment(line); assert.ok(Math.abs(segment.p1.x + 3.6) < 1e-10); assert.ok(Math.abs(segment.p1.y + 4.8) < 1e-10); assert.ok(Math.abs(segment.p2.x - 9.6) < 1e-10); assert.equal(reads, 1);
+  assert.equal(line.p1, p1); assert.equal(line.p2, p2); assert.equal(p1.x, 0); assert.equal(p2.x, 6);
+  viewport.scale = 4; segment = display.lineDisplaySegment(line); assert.ok(Math.abs(segment.p1.x + 1.8) < 1e-10);
+  appearance = { endpointOverhang: false }; segment = display.lineDisplaySegment(line); assert.equal(segment.p1, p1); assert.equal(segment.p2, p2);
+  const before = reads; line.construction = false; segment = display.lineDisplaySegment(line, {}); assert.equal(reads, before); assert.equal(segment.p1, p1);
+});
+test('construction extension guard returns original refs for zero length and nonpositive/nonfinite world extensions', () => {
+  const viewport = { scale: 1 }, line = { p1: {}, p2: {}, construction: true, length: () => 0, dx: () => { throw Error('must not evaluate direction'); }, dy: () => { throw Error('must not evaluate direction'); } };
+  const display = sandbox.window.GeometryPresentation.createLineDisplay({ viewport, constructionExtensionScreenPx: 12, effectiveAppearanceForElement: () => ({}) });
+  assert.equal(display.lineDisplaySegment(line).p1, line.p1); line.length = () => 10;
+  for (const scale of [0, -1, NaN, Infinity]) { viewport.scale = scale; const segment = display.lineDisplaySegment(line); assert.equal(segment.p1, line.p1); assert.equal(segment.p2, line.p2); }
+});

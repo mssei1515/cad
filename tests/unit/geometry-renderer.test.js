@@ -82,3 +82,22 @@ test('editing handles consume prepared endpoints and spline selection with scale
   assert.deepEqual(calls.find(c => c[0] === 'arc').slice(1, 4), [2, 4, 2.25]);
   assert.equal(ctx.fillStyle, '#ef4444'); assert.equal(ctx.lineWidth, 0.75);
 });
+
+test('geometry layer filters explicit items but reads and orders current default lists, preserving options and painter receiver', () => {
+  const calls = [], visible = { visible: true }, hidden = { visible: false };
+  let items = [hidden, visible];
+  const renderer = {};
+  for (const name of ['drawLines', 'drawCircles', 'drawArcs', 'drawSplines']) renderer[name] = function (...args) { assert.equal(this, renderer); calls.push([name, ...args]); return 'ignored original return'; };
+  const query = type => () => { calls.push(['query', type]); return items; };
+  const layer = sandbox.window.GeometryRenderer.createLayer({ renderer, isVisibleSketchElement: item => item.visible,
+    drawOrderBySketch: list => { assert.equal(list, items); calls.push(['order']); return list.filter(item => item.visible).reverse(); },
+    allGeometryLines: query('lines'), allGeometryCircles: query('circles'), allGeometryArcs: query('arcs'), allGeometrySplines: query('splines') });
+  for (const [name, type] of [['drawLines', 'lines'], ['drawCircles', 'circles'], ['drawArcs', 'arcs'], ['drawSplines', 'splines']]) {
+    calls.length = 0; const options = { selectionGlow: false }; assert.equal(layer[name]([visible, hidden], options), undefined);
+    assert.equal(calls.length, 1); assert.equal(calls[0][1][0], visible); assert.equal(calls[0][1].length, 1); assert.equal(calls[0].length, name === 'drawSplines' ? 2 : 3);
+    if (name !== 'drawSplines') assert.equal(calls[0][2], options);
+    calls.length = 0; layer[name]([]); assert.equal(calls.length, 1); assert.equal(calls[0][1].length, 0);
+    calls.length = 0; layer[name](); assert.deepEqual(calls.map(c => c[0]), ['query', 'order', name]); assert.equal(calls[0][1], type);
+  }
+  const fresh = { visible: true }; items = [fresh]; calls.length = 0; layer.drawLines(null, null); assert.equal(calls.at(-1)[1][0], fresh); assert.equal(calls.at(-1)[2], null);
+});

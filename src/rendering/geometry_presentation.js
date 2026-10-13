@@ -139,5 +139,24 @@
     }
     return Object.freeze({ arcEndpointPaintState, splineHandleState, pointPaintState, geometryDisplayColor, geometryStrokeWidth, ownerInstanceSelected, ownerInstanceHovered, geometryPaintState });
   }
-  window.GeometryPresentation = Object.freeze({ create });
+  function createLineDisplay({ viewport, effectiveAppearanceForElement, constructionExtensionScreenPx }) {
+    function extendedLineSegment(line, extension) {
+      const len = line.length();
+      if (len < 1e-12 || !Number.isFinite(extension) || extension <= 0) return { p1: line.p1, p2: line.p2 };
+      const ux = line.dx() / len;
+      const uy = line.dy() / len;
+      return {
+        p1: { x: line.p1.x - ux * extension, y: line.p1.y - uy * extension },
+        p2: { x: line.p2.x + ux * extension, y: line.p2.y + uy * extension },
+      };
+    }
+
+    function lineDisplaySegment(line, appearance = effectiveAppearanceForElement(line)) {
+      return line.construction && appearance.endpointOverhang !== false
+        ? extendedLineSegment(line, constructionExtensionScreenPx / viewport.scale)
+        : { p1: line.p1, p2: line.p2 };
+    }
+    return Object.freeze({ lineDisplaySegment });
+  }
+  window.GeometryPresentation = Object.freeze({ create, createLineDisplay });
 })();

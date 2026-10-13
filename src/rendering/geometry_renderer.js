@@ -207,5 +207,23 @@
     }
     return Object.freeze({ drawArcEndpointHandles, drawSplineEditHandles, drawPoints, drawLines, drawCircles, drawArcs, drawSplines, traceSplinePath });
   }
-  window.GeometryRenderer = Object.freeze({ create });
+  function createLayer({ renderer, isVisibleSketchElement, drawOrderBySketch, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines }) {
+    function drawLines(items = null, options = {}) {
+      renderer.drawLines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryLines()), options);
+    }
+
+    function drawCircles(items = null, options = {}) {
+      renderer.drawCircles(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryCircles()), options);
+    }
+
+    function drawArcs(items = null, options = {}) {
+      renderer.drawArcs(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryArcs()), options);
+    }
+
+    function drawSplines(items = null) {
+      renderer.drawSplines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometrySplines()));
+    }
+    return Object.freeze({ drawLines, drawCircles, drawArcs, drawSplines });
+  }
+  window.GeometryRenderer = Object.freeze({ create, createLayer });
 })();

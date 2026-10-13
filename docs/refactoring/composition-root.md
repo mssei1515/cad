@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Construction線分の表示延長を既存GeometryPresentation.createLineDisplayへ、描画対象のfilter／現在一覧／Sketch順とpainter呼出をGeometryRenderer.createLayerへ分離。表示線分3port、描画対象7portで既存viewport／外観／現在Geometry一覧とrendererへ接続する。短小線・非正／非有限延長量・overhang無効時の元point参照、倍率、explicit外観、空array／null／undefinedとoptions・painter receiver／元の戻り値を維持し、モデル端点は変更しない。renderer生成前のcallback登録に必要なhoisted入口をappへ残す。app.jsは5,088→5,064行（24行減、今回の再開から合計2,670行減）。構文501ファイル・単体1,355件・関連E2E198件が成功（すべてexit 0、E2E2.6分）。既存2unitへ3件追加し、live倍率／延長と無変更・参照、degenerate／非有限短絡、explicit／既定／空itemsと現在一覧・順序／options／receiverを確認。元body一致と3／7portの初期化順をaudit。unified-ui／hatching／selection-zoom-shadow／spline／blocks／png-export／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-geometry-display-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Annotationの実効外観を既存GeometryAppearanceQuery.createAnnotationへ、表示色をAnnotationRenderer.createColorへ、描画対象巡回をcreateLayerへ分離。外観照会2port・色決定5port・巡回5portに限定し、現在Document／Sketch一覧、Block definition／localElement、継承／precision／affix・順序付きBlock override、PNG→選択／inspection→Hover→通常色、可視性短絡と元の対象参照／描画順を維持する。状態複製・保存styleへの代入・求解／履歴を持たない。appのhoisted入口は先に登録されたcallbackの参照時点を維持。app.jsは5,113→5,088行（25行減、今回の再開から合計2,646行減）。構文501ファイル・単体1,352件・関連E2E216件が成功（すべてexit 0、E2E3.1分）。既存2unitへ4件追加し、plain Textの短絡とlive Document／Sketch、投影local参照とoverride／無変更、explicit styleと色優先／PNG短絡、live対象／visibility／描画順と参照を検証。元body一致と全portの初期化順をaudit。unified-ui／unified-annotations／leader-appearance／annotation-display-size／blocks／png-export／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-annotation-presentation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

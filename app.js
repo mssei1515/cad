@@ -646,8 +646,10 @@
       isAnyLineEndpoint, isEndpointPoint, pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
       isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point) },
   });
+  const lineDisplay = window.GeometryPresentation.createLineDisplay({ viewport, effectiveAppearanceForElement, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX });
   const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, readPixelRatio: () => canvasSurface.dpr, paintState: geometryPaintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
+  const geometryLayer = window.GeometryRenderer.createLayer({ renderer: geometryRenderer, isVisibleSketchElement, drawOrderBySketch, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines });
   const interactionOverlay = window.InteractionOverlayRenderer.create({ ctx, viewport,
     elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName });
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
@@ -2623,22 +2625,7 @@
     });
   }
 
-  function extendedLineSegment(line, extension) {
-    const len = line.length();
-    if (len < 1e-12 || !Number.isFinite(extension) || extension <= 0) return { p1: line.p1, p2: line.p2 };
-    const ux = line.dx() / len;
-    const uy = line.dy() / len;
-    return {
-      p1: { x: line.p1.x - ux * extension, y: line.p1.y - uy * extension },
-      p2: { x: line.p2.x + ux * extension, y: line.p2.y + uy * extension },
-    };
-  }
-
-  function lineDisplaySegment(line, appearance = effectiveAppearanceForElement(line)) {
-    return line.construction && appearance.endpointOverhang !== false
-      ? extendedLineSegment(line, CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale)
-      : { p1: line.p1, p2: line.p2 };
-  }
+  function lineDisplaySegment(...args) { return lineDisplay.lineDisplaySegment(...args); }
 
 
 
@@ -2647,21 +2634,10 @@
 
 
 
-  function drawLines(items = null, options = {}) {
-    geometryRenderer.drawLines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryLines()), options);
-  }
-
-  function drawCircles(items = null, options = {}) {
-    geometryRenderer.drawCircles(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryCircles()), options);
-  }
-
-  function drawArcs(items = null, options = {}) {
-    geometryRenderer.drawArcs(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryArcs()), options);
-  }
-
-  function drawSplines(items = null) {
-    geometryRenderer.drawSplines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometrySplines()));
-  }
+  function drawLines(...args) { return geometryLayer.drawLines(...args); }
+  function drawCircles(...args) { return geometryLayer.drawCircles(...args); }
+  function drawArcs(...args) { return geometryLayer.drawArcs(...args); }
+  function drawSplines(...args) { return geometryLayer.drawSplines(...args); }
 
   function drawSplinePreview() { if (mode === "spline") authoringPreview.drawSpline(splineDraft.points, drawingPreview.pointer); }
 
