@@ -5030,6 +5030,11 @@
     });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
+    const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
+    const offsetChainObservation = window.OffsetTestDriver.createChainObservation({ currentScope: workspace.current, OffsetChainConstraint, serializeModel, offsetSelection, pendingCommandSession, Line });
+    const offsetChainReload = window.OffsetTestDriver.createChainReload({ serializeModel, loadModelData, currentScope: workspace.current, OffsetChainConstraint });
+    const offsetChainTargetEdit = window.OffsetTestDriver.createChainTargetEdit({ currentScope: workspace.current, OffsetChainConstraint, preconditionNewConstraint, targetFromConstraint, measuredConstraintTargetValue, Line });
+    const offsetChainReselection = window.OffsetTestDriver.createChainReselection({ currentScope: workspace.current, OffsetChainConstraint, offsetSelection, addOffsetChainGeometry, clearSelection });
     const offsetPrimitiveFixture = window.OffsetTestDriver.createPrimitiveFixture({
       resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, RadiusConstraint, createOffsetGeometry, currentScope: workspace.current, OffsetConstraint, preconditionNewConstraint,
       solveSketchAndDependents, activeSketchId, snapshotModelState, measuredConstraintTargetValue, serializeModel, loadModelData, fitAllGeometryToViewport, draw,
@@ -5462,96 +5467,11 @@
       resetForOffsetUi: offsetUiFixture.reset,
       offsetUiState: offsetUiObservation.state,
       resetForOffsetDirection: offsetDirectionFixture.reset,
-      resetForOffsetChainUi() {
-        resetModelState();
-        const p1 = addPoint(-80, -45, false, "endpoint");
-        const corner = addPoint(20, -45, false, "endpoint");
-        const p3 = addPoint(20, 55, false, "endpoint");
-        const line1 = addLine(p1, corner);
-        const line2 = addLine(corner, p3);
-        const disconnected = addLine(addPoint(75, -45, false, "endpoint"), addPoint(75, 35, false, "endpoint"));
-        fitAllGeometryToViewport(220);
-        resetHistory("offset chain test");
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const screenPoint = (point) => {
-          const screen = worldToCanvasScreen(point);
-          return { x: rect.left + screen.x, y: rect.top + screen.y };
-        };
-        return {
-          first: screenPoint({ x: -30, y: -45 }),
-          second: screenPoint({ x: 20, y: 5 }),
-          disconnected: screenPoint({ x: 75, y: -5 }),
-          side: screenPoint({ x: -30, y: -15 }),
-          sourceIds: [line1.id, line2.id],
-        };
-      },
-      offsetChainUiState() {
-        const constraints = model.constraints.filter((constraint) => constraint instanceof OffsetChainConstraint);
-        const serialized = serializeModel();
-        return {
-          selectedCount: offsetSelection.entries.length,
-          selectionCommitted: offsetSelection.committed,
-          pendingType: pendingCommandSession.current?.type || null,
-          lineCount: model.lines.length,
-          constraintCount: constraints.length,
-          target: constraints[0]?.target ?? null,
-          parameterName: constraints[0]?.parameterName || null,
-          parameterNames: constraints.map((item) => item.parameterName || null),
-          sourceIds: constraints[0]?.sources.map((item) => item.id) || [],
-          offsetIds: constraints[0]?.offsets.map((item) => item.id) || [],
-          resultJoins: constraints[0]
-            ? constraints[0].offsets.slice(0, -1).map((item, index) => ({
-              end: item instanceof Line ? { x: item.p2.x, y: item.p2.y } : item.endPoint(),
-              start: constraints[0].offsets[index + 1] instanceof Line
-                ? { x: constraints[0].offsets[index + 1].p1.x, y: constraints[0].offsets[index + 1].p1.y }
-                : constraints[0].offsets[index + 1].startPoint(),
-            }))
-            : [],
-          jsonVersion: serialized.version,
-          serializedTypes: serialized.constraints.filter((item) => item.type === "offsetChainDimension").length,
-          serialized,
-        };
-      },
-      roundTripOffsetChainForTest() {
-        const saved = serializeModel();
-        const loaded = loadModelData(saved);
-        const constraint = model.constraints.find((item) => item instanceof OffsetChainConstraint);
-        return {
-          loaded,
-          count: model.constraints.filter((item) => item instanceof OffsetChainConstraint).length,
-          target: constraint?.target ?? null,
-          sourceCount: constraint?.sources.length ?? 0,
-          offsetCount: constraint?.offsets.length ?? 0,
-          reversed: constraint?.sourceReversed || [],
-        };
-      },
-      updateOffsetChainTargetForTest(value) {
-        const constraint = model.constraints.find((item) => item instanceof OffsetChainConstraint);
-        if (!constraint) return null;
-        constraint.target = Number(value);
-        constraint.expression = String(value);
-        preconditionNewConstraint(constraint);
-        const target = targetFromConstraint(constraint);
-        return {
-          measured: measuredConstraintTargetValue(constraint, target, constraint.dimension),
-          join: {
-            first: constraint.offsets[0] instanceof Line ? { x: constraint.offsets[0].p2.x, y: constraint.offsets[0].p2.y } : constraint.offsets[0].endPoint(),
-            second: constraint.offsets[1] instanceof Line ? { x: constraint.offsets[1].p1.x, y: constraint.offsets[1].p1.y } : constraint.offsets[1].startPoint(),
-          },
-        };
-      },
-      canReselectOffsetResultChainForTest() {
-        const constraint = model.constraints.find((item) => item instanceof OffsetChainConstraint);
-        if (!constraint) return null;
-        offsetSelection.reset();
-        const first = addOffsetChainGeometry(constraint.offsets[0]);
-        const second = addOffsetChainGeometry(constraint.offsets[1]);
-        const result = { first: first.ok, second: second.ok, selectedCount: offsetSelection.entries.length };
-        offsetSelection.reset();
-        clearSelection();
-        return result;
-      },
+      resetForOffsetChainUi: offsetChainFixture.reset,
+      offsetChainUiState: offsetChainObservation.state,
+      roundTripOffsetChainForTest: offsetChainReload.reload,
+      updateOffsetChainTargetForTest: offsetChainTargetEdit.update,
+      canReselectOffsetResultChainForTest: offsetChainReselection.reselect,
       resetForSketchDeletion() {
         resetModelState();
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });

@@ -111,5 +111,115 @@
     return Object.freeze({ reset });
   }
 
-  window.OffsetTestDriver = Object.freeze({ createPrimitiveFixture, createUiFixture, createUiObservation, createDirectionFixture });
+  function createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen }) {
+    function reset() {
+      resetModelState();
+      const p1 = addPoint(-80, -45, false, "endpoint");
+      const corner = addPoint(20, -45, false, "endpoint");
+      const p3 = addPoint(20, 55, false, "endpoint");
+      const line1 = addLine(p1, corner);
+      const line2 = addLine(corner, p3);
+      const disconnected = addLine(addPoint(75, -45, false, "endpoint"), addPoint(75, 35, false, "endpoint"));
+      fitAllGeometryToViewport(220);
+      resetHistory("offset chain test");
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      const screenPoint = (point) => {
+        const screen = worldToCanvasScreen(point);
+        return { x: rect.left + screen.x, y: rect.top + screen.y };
+      };
+      return {
+        first: screenPoint({ x: -30, y: -45 }),
+        second: screenPoint({ x: 20, y: 5 }),
+        disconnected: screenPoint({ x: 75, y: -5 }),
+        side: screenPoint({ x: -30, y: -15 }),
+        sourceIds: [line1.id, line2.id],
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createChainObservation({ currentScope, OffsetChainConstraint, serializeModel, offsetSelection, pendingCommandSession, Line }) {
+    function state() {
+      const constraints = currentScope().constraints.filter((constraint) => constraint instanceof OffsetChainConstraint);
+      const serialized = serializeModel();
+      return {
+        selectedCount: offsetSelection.entries.length,
+        selectionCommitted: offsetSelection.committed,
+        pendingType: pendingCommandSession.current?.type || null,
+        lineCount: currentScope().lines.length,
+        constraintCount: constraints.length,
+        target: constraints[0]?.target ?? null,
+        parameterName: constraints[0]?.parameterName || null,
+        parameterNames: constraints.map((item) => item.parameterName || null),
+        sourceIds: constraints[0]?.sources.map((item) => item.id) || [],
+        offsetIds: constraints[0]?.offsets.map((item) => item.id) || [],
+        resultJoins: constraints[0]
+          ? constraints[0].offsets.slice(0, -1).map((item, index) => ({
+            end: item instanceof Line ? { x: item.p2.x, y: item.p2.y } : item.endPoint(),
+            start: constraints[0].offsets[index + 1] instanceof Line
+              ? { x: constraints[0].offsets[index + 1].p1.x, y: constraints[0].offsets[index + 1].p1.y }
+              : constraints[0].offsets[index + 1].startPoint(),
+          }))
+          : [],
+        jsonVersion: serialized.version,
+        serializedTypes: serialized.constraints.filter((item) => item.type === "offsetChainDimension").length,
+        serialized,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createChainReload({ serializeModel, loadModelData, currentScope, OffsetChainConstraint }) {
+    function reload() {
+      const saved = serializeModel();
+      const loaded = loadModelData(saved);
+      const constraint = currentScope().constraints.find((item) => item instanceof OffsetChainConstraint);
+      return {
+        loaded,
+        count: currentScope().constraints.filter((item) => item instanceof OffsetChainConstraint).length,
+        target: constraint?.target ?? null,
+        sourceCount: constraint?.sources.length ?? 0,
+        offsetCount: constraint?.offsets.length ?? 0,
+        reversed: constraint?.sourceReversed || [],
+      };
+    }
+    return Object.freeze({ reload });
+  }
+
+  function createChainTargetEdit({ currentScope, OffsetChainConstraint, preconditionNewConstraint, targetFromConstraint, measuredConstraintTargetValue, Line }) {
+    function update(value) {
+      const constraint = currentScope().constraints.find((item) => item instanceof OffsetChainConstraint);
+      if (!constraint) return null;
+      constraint.target = Number(value);
+      constraint.expression = String(value);
+      preconditionNewConstraint(constraint);
+      const target = targetFromConstraint(constraint);
+      return {
+        measured: measuredConstraintTargetValue(constraint, target, constraint.dimension),
+        join: {
+          first: constraint.offsets[0] instanceof Line ? { x: constraint.offsets[0].p2.x, y: constraint.offsets[0].p2.y } : constraint.offsets[0].endPoint(),
+          second: constraint.offsets[1] instanceof Line ? { x: constraint.offsets[1].p1.x, y: constraint.offsets[1].p1.y } : constraint.offsets[1].startPoint(),
+        },
+      };
+    }
+    return Object.freeze({ update });
+  }
+
+  function createChainReselection({ currentScope, OffsetChainConstraint, offsetSelection, addOffsetChainGeometry, clearSelection }) {
+    function reselect() {
+      const constraint = currentScope().constraints.find((item) => item instanceof OffsetChainConstraint);
+      if (!constraint) return null;
+      offsetSelection.reset();
+      const first = addOffsetChainGeometry(constraint.offsets[0]);
+      const second = addOffsetChainGeometry(constraint.offsets[1]);
+      const result = { first: first.ok, second: second.ok, selectedCount: offsetSelection.entries.length };
+      offsetSelection.reset();
+      clearSelection();
+      return result;
+    }
+    return Object.freeze({ reselect });
+  }
+
+  window.OffsetTestDriver = Object.freeze({ createPrimitiveFixture, createUiFixture, createUiObservation, createDirectionFixture, createChainFixture, createChainObservation, createChainReload, createChainTargetEdit, createChainReselection });
 })();

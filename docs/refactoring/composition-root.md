@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Offset chainのUI準備／状態観測／保存再読込／target編集／再選択を既存OffsetTestDriver.createChainFixture／createChainObservation／createChainReload／createChainTargetEdit／createChainReselectionへ役割別に分離。既存Geometry生成・fit／履歴・Selection／pending・保存／読込・precondition／計測へ接続し、固定入力・同一参照・null／空配列fallbackと元の更新／照会順を保持する。元の五つの処理本体との一致をscope port置換後に確認。app.jsは6,648→6,568行（80行減、今回の再開から合計1,166行減）。構文480ファイル・単体1,297件・関連E2E103件が成功（すべてexit 0、E2E1.3分）。全利用箇所のunified-uiを実行。新規テストはなく、既存chain選択／target更新／join・結果再選択／保存再読込を確認した。ログはcad-offset-chain-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自chainモデル・Selection／pending・拘束更新／保存互換性／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 単独Offsetの生成／保存再読込・UI／方向fixtureと状態観測をOffsetTestDriver.createPrimitiveFixture／createUiFixture／createUiObservation／createDirectionFixtureへ分離。固定Point表示は既存CanvasTestDriver.createFixedPointFixtureへ接続し、公開hookの座標変換参照を既存clientPositionへ置換する。固定入力・同一Geometry／拘束参照、target／expression更新→求解→計測→保存／reload→現在scope照会、UI／方向とPoint表示の呼出し順を保持する。元の五つの処理本体との一致を依存port置換後に確認。app.jsは6,743→6,648行（95行減、今回の再開から合計1,086行減）。構文480ファイル・単体1,297件・関連E2E103件が成功（すべてexit 0、E2E1.3分）。全利用箇所のunified-uiを実行。新規テストはなく、既存固定Pointの表示・Offset生成／UI／方向／保存再読込とscript読込を確認した。classic script・構文一覧・E2E読込期待を同期。ログはcad-offset-primitive-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Offset計算／拘束・scope／入力状態／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
