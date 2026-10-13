@@ -4404,37 +4404,17 @@
     document, readDefault: key => documentModel[key], normalizeAppearance, normalizeConstructionAppearance,
     appearancePropertyRows, localizeApplicationUI, openAppearanceColorPalette, commands: documentGeometryAppearanceCommand,
   });
+  const documentDimensionAppearanceCommand = window.DocumentDefaultAppearanceCommand.createDimension({
+    readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
+    applyDimensionAppearanceValue, normalizeDimensionDefaults: value => window.Appearance.dimensionDefaults(value), recordHistory, draw,
+  });
+  const documentDimensionAppearanceSettings = window.DocumentAppearanceSettings.createDimension({
+    document, readDefault: key => documentModel[key], normalizeDimensionAppearance, dimensionAppearancePropertyRows,
+    prepareAffixInputs, localizeApplicationUI, updateDimensionTerminatorAngleVisibility, updateUI, openAppearanceColorPalette, commands: documentDimensionAppearanceCommand,
+  });
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
     documentGeometryAppearanceSettings.prepare();
-    const dimensionFields = document.getElementById("documentDimensionAppearanceFields");
-    if (dimensionFields) {
-      const appearance = normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false });
-      dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentDimension", terminals: false });
-      prepareAffixInputs(dimensionFields);
-      localizeApplicationUI(dimensionFields);
-      updateDimensionTerminatorAngleVisibility(dimensionFields);
-      const applyDimensionInput = (input, { history = true } = {}) => {
-        if (!input.dataset.dimensionDisplay) return;
-        const key = input.dataset.dimensionDisplay;
-        const rawValue = ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
-        applyDimensionAppearanceValue(documentModel.defaultDimensionAppearance, key, rawValue, { allowInheritance: false });
-        documentModel.defaultDimensionAppearance = window.Appearance.dimensionDefaults(documentModel.defaultDimensionAppearance);
-        if (history) recordHistory("Document Default Dimension Appearance変更");
-        draw();
-      };
-      dimensionFields.oninput = (event) => {
-        if (["prefix", "suffix"].includes(event.target.dataset.dimensionDisplay)) applyDimensionInput(event.target, { history: false });
-      };
-      dimensionFields.onchange = (event) => {
-        applyDimensionInput(event.target);
-        updateDimensionTerminatorAngleVisibility(dimensionFields);
-        updateUI();
-      };
-      dimensionFields.onclick = (event) => {
-        const button = event.target.closest("[data-appearance-palette-open]");
-        if (button) openAppearanceColorPalette(button, "document-dimension");
-      };
-    }
+    documentDimensionAppearanceSettings.prepare();
     const terminalFields = document.getElementById("documentTerminatorAppearanceFields");
     const leaderFields = document.getElementById("documentLeaderAppearanceFields");
     const renderSharedDefaults = () => {

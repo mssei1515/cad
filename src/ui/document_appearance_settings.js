@@ -37,5 +37,36 @@
     }
     return Object.freeze({ prepare });
   }
-  window.DocumentAppearanceSettings = Object.freeze({ createGeometry });
+  function createDimension({ document, readDefault, normalizeDimensionAppearance, dimensionAppearancePropertyRows, prepareAffixInputs, localizeApplicationUI, updateDimensionTerminatorAngleVisibility, updateUI, openAppearanceColorPalette, commands }) {
+    function prepare() {
+      const dimensionFields = document.getElementById("documentDimensionAppearanceFields");
+      if (dimensionFields) {
+        const appearance = normalizeDimensionAppearance({ ...readDefault("defaultDimensionAppearance"), ...readDefault("defaultTerminatorAppearance") }, { partial: false });
+        dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentDimension", terminals: false });
+        prepareAffixInputs(dimensionFields);
+        localizeApplicationUI(dimensionFields);
+        updateDimensionTerminatorAngleVisibility(dimensionFields);
+        const applyDimensionInput = (input, { history = true } = {}) => {
+          if (!input.dataset.dimensionDisplay) return;
+          const key = input.dataset.dimensionDisplay;
+          const rawValue = ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
+          commands.apply(key, rawValue, { history });
+        };
+        dimensionFields.oninput = (event) => {
+          if (["prefix", "suffix"].includes(event.target.dataset.dimensionDisplay)) applyDimensionInput(event.target, { history: false });
+        };
+        dimensionFields.onchange = (event) => {
+          applyDimensionInput(event.target);
+          updateDimensionTerminatorAngleVisibility(dimensionFields);
+          updateUI();
+        };
+        dimensionFields.onclick = (event) => {
+          const button = event.target.closest("[data-appearance-palette-open]");
+          if (button) openAppearanceColorPalette(button, "document-dimension");
+        };
+      }
+    }
+    return Object.freeze({ prepare });
+  }
+  window.DocumentAppearanceSettings = Object.freeze({ createGeometry, createDimension });
 })();

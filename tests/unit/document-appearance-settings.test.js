@@ -69,3 +69,52 @@ test('missing Geometry fields skip normalization, markup and handler setup', () 
   const f = viewFixture(); f.fields = {}; f.view.prepare();
   assert.equal(f.calls.length, 0); assert.equal(f.rows.length, 0);
 });
+
+test('Dimension defaults apply live values without inheritance and distinguish preview from committed history', () => {
+  let defaults = {}, calls = [];
+  const command = sandbox.window.DocumentDefaultAppearanceCommand.createDimension({
+    readDefault: key => { assert.equal(key, 'defaultDimensionAppearance'); return defaults; },
+    writeDefault: (key, value) => { assert.equal(key, 'defaultDimensionAppearance'); calls.push('write'); defaults = value; },
+    applyDimensionAppearanceValue: (target, key, raw, options) => { assert.equal(target, defaults); assert.equal(options.allowInheritance, false); calls.push('apply'); target[key] = raw; },
+    normalizeDimensionDefaults: value => { assert.equal(value, defaults); calls.push('normalize'); return { ...value }; },
+    recordHistory: label => { assert.equal(label, 'Document Default Dimension Appearance変更'); calls.push('history'); }, draw: () => calls.push('draw'),
+  });
+  const prefix = '  first\nsecond  ';
+  command.apply('prefix', prefix, { history: false });
+  assert.equal(defaults.prefix, prefix); assert.deepEqual(calls, ['apply', 'normalize', 'write', 'draw']);
+  calls = []; defaults = { suffix: 'new document' }; command.apply('suffix', '  tail  ');
+  assert.equal(defaults.suffix, '  tail  '); assert.deepEqual(calls, ['apply', 'normalize', 'write', 'history', 'draw']);
+});
+
+function dimensionViewFixture() {
+  const f = { field: {}, calls: [], defaults: { defaultDimensionAppearance: { color: 'dimension' }, defaultTerminatorAppearance: { color: 'terminal' } } };
+  f.view = sandbox.window.DocumentAppearanceSettings.createDimension({
+    document: { getElementById: () => f.field }, readDefault: key => f.defaults[key],
+    normalizeDimensionAppearance: (value, options) => { assert.equal(options.partial, false); f.normalized = value; return value; },
+    dimensionAppearancePropertyRows: (direct, effective, options) => { assert.equal(direct, effective); assert.equal(options.terminals, false); assert.equal(options.allowInheritance, false); f.calls.push('rows'); return 'rows'; },
+    prepareAffixInputs: () => f.calls.push('affix'), localizeApplicationUI: () => f.calls.push('localize'),
+    updateDimensionTerminatorAngleVisibility: () => f.calls.push('angle'), updateUI: () => f.calls.push('ui'),
+    openAppearanceColorPalette: (button, target) => f.calls.push(['palette', button, target]),
+    commands: { apply: (key, raw, options) => f.calls.push(['apply', key, raw, options.history]) },
+  });
+  return f;
+}
+test('Dimension input preserves multiline affixes and separates live input from change/update order', () => {
+  const f = dimensionViewFixture(); f.view.prepare();
+  assert.equal(f.normalized.color, 'terminal'); assert.deepEqual(f.calls, ['rows', 'affix', 'localize', 'angle']);
+  const prefix = '  text\nnext  '; f.calls.length = 0;
+  f.field.oninput({ target: { dataset: { dimensionDisplay: 'prefix' }, value: prefix } });
+  assert.deepEqual(f.calls, [['apply', 'prefix', prefix, false]]);
+  f.calls.length = 0; f.field.oninput({ target: { dataset: { dimensionDisplay: 'textHeight' }, value: ' 3 ' } });
+  assert.equal(f.calls.length, 0);
+  f.field.onchange({ target: { dataset: { dimensionDisplay: 'textHeight' }, value: ' 3 ' } });
+  assert.deepEqual(f.calls, [['apply', 'textHeight', '3', true], 'angle', 'ui']);
+  f.calls.length = 0;
+  f.field.onchange({ target: { dataset: {}, get value() { throw new Error('invalid key must skip value'); } } });
+  assert.deepEqual(f.calls, ['angle', 'ui']);
+  const button = {}; f.field.onclick({ target: { closest: () => button } });
+  assert.deepEqual(f.calls.at(-1), ['palette', button, 'document-dimension']);
+});
+test('missing Dimension field skips rendering and preparation dependencies', () => {
+  const f = dimensionViewFixture(); f.field = null; f.view.prepare(); assert.equal(f.calls.length, 0);
+});
