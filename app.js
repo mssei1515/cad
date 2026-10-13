@@ -4986,6 +4986,14 @@
       resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas, readSnapshot: annotationSnapshotObservation.snapshot,
     });
     const annotationHitObservation = window.AnnotationTestDriver.createHitObservation({ canvas, screenToWorld, hitAnnotationElement });
+    const readOnlyDuplicateFixture = window.DimensionTestDriver.createReadOnlyDuplicateFixture({
+      resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope: workspace.current,
+      isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
+    });
+    const readOnlyPlacementFixture = window.DimensionTestDriver.createReadOnlyPlacementFixture({
+      resetModelState, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, pendingCommandSession,
+      startDistanceValueInput, dimensionValueInput, currentScope: workspace.current, isReadOnlyDimension, isDimensionConstraint,
+    });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const sketchProjectionTestObservation = window.SketchProjectionTestDriver.createObservation({
       types: { Point, Line, Circle, Arc }, currentScope: workspace.current, readMode: () => mode,
@@ -5369,57 +5377,8 @@
       blockConstraintStatusForTest: blockConstraintObservation.state,
       addBlockPointOnLineConstraintForTest: blockConstraintInsertion.add,
       resetForAnnotationDrag: annotationDragFixture.reset,
-      resetForReadOnlyDuplicateDimension() {
-        resetModelState();
-        const p1 = addPoint(-50, 0, false, "endpoint");
-        const p2 = addPoint(50, 0, false, "endpoint");
-        const line = addLine(p1, p2);
-        const target = { kind: "line-length", line, p1, p2, value: line.length() };
-        const firstDimension = dimensionFromAnchor(target, { x: 0, y: -28 });
-        const first = addDistanceConstraintFromTarget(target, line.length(), firstDimension, { sketchId: activeSketchId() });
-        const second = addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -54 }), { sketchId: activeSketchId() });
-        const dimensionConstraints = model.constraints.filter(isDimensionConstraint);
-        const layout = dimensionLayout(target, firstDimension);
-        const extensionAlignmentErrors = layout.points.map((point) => {
-          const vx = point.extensionEnd.x - point.extensionStart.x;
-          const vy = point.extensionEnd.y - point.extensionStart.y;
-          const wx = point.source.x - point.extensionStart.x;
-          const wy = point.source.y - point.extensionStart.y;
-          return Math.abs(vx * wy - vy * wx) / Math.max(hypot2(vx, vy), 1e-12);
-        });
-        return {
-          first,
-          second,
-          count: dimensionConstraints.length,
-          enabledCount: dimensionConstraints.filter((constraint) => constraint.enabled !== false).length,
-          readOnlyCount: dimensionConstraints.filter(isReadOnlyDimension).length,
-          labels: dimensionConstraints.map((constraint) => dimensionLabelForConstraint(constraint, targetFromConstraint(constraint), constraint.dimension || defaultDimensionForTarget(targetFromConstraint(constraint)))),
-          serializedReadOnlyCount: serializeModel().constraints.filter((constraint) => constraint.readOnlyDimension).length,
-          extensionAlignmentErrors,
-        };
-      },
-      resetForReadOnlyDimensionPlacement() {
-        resetModelState();
-        const p1 = addPoint(-50, 0, false, "endpoint");
-        const p2 = addPoint(50, 0, false, "endpoint");
-        const line = addLine(p1, p2);
-        const target = { kind: "line-length", line, p1, p2, value: line.length() };
-        addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -28 }), { sketchId: activeSketchId() });
-        constraintTargetSession.replaceCommand({ type: "distance" });
-        pendingCommandSession.replace({
-          type: "distance-place",
-          target,
-          pointer: { x: 0, y: -54 },
-          sketchId: activeSketchId(),
-        });
-        startDistanceValueInput({ x: 0, y: -54 });
-        return {
-          pendingType: pendingCommandSession.current?.type || null,
-          inputHidden: dimensionValueInput.hidden,
-          readOnlyCount: model.constraints.filter(isReadOnlyDimension).length,
-          dimensionCount: model.constraints.filter(isDimensionConstraint).length,
-        };
-      },
+      resetForReadOnlyDuplicateDimension: readOnlyDuplicateFixture.reset,
+      resetForReadOnlyDimensionPlacement: readOnlyPlacementFixture.reset,
       pointPointRectangleDimensionExtensionVisibilityCases() {
         resetModelState();
         const p1 = addPoint(160, 160, true, "endpoint");

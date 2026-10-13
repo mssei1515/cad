@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+読み取り専用寸法の重複fixture／配置fixtureを既存DimensionTestDriver.createReadOnlyDuplicateFixture／createReadOnlyPlacementFixtureへ分離。既存reset・Geometry／寸法生成・layout／label／保存値へ委譲し、重複寸法数と引出線整列誤差を観測する。配置はconstraintTargetSession→pendingCommandSession→寸法入力開始の順と現在scopeの寸法／入力状態照会を維持する。固定座標・同一target参照・所属Sketch・filter／fallbackと照会順を保持し、元の二つの処理本体との一致をscope port置換後に確認。app.jsは7,354→7,313行（41行減、今回の再開から合計421行減）。構文476ファイル・単体1,296件・関連E2E219件が成功（すべてexit 0、E2E3.4分）。全利用箇所のannotation-display-size／annotation-anchors／leader-appearance／sketch-tree-visibility／unified-annotations／unified-uiを実行。新規テストはなく、既存の重複／read-only・入力・寸法表示／注記・履歴／保存を確認した。ログはcad-readonly-dimension-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自寸法計算／session／入力状態／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 注記の寸法・外観・所属／投影の観測を既存AnnotationTestDriver.createDimensionObservation／createAppearanceObservation／createOwnershipObservationへ分離。既存寸法表示・AnnotationRenderer／Appearance・Document／Selectionへ役割別に接続し、layout・保存値・表示metrics・client位置を観測する。外観だけが既存の対象探索→倍率更新→対象なしnull→style→draw→表示／保存照会を持ち、他の観測へ倍率更新／drawを渡さない。コピー／参照・継承rotation・投影のfallbackと照会順を保持し、元の三つの処理本体との一致を依存port置換後に確認。app.jsは7,400→7,354行（46行減、今回の再開から合計380行減）。構文476ファイル・単体1,296件・関連E2E208件が成功（すべてexit 0、E2E3.3分）。全利用箇所のannotation-anchors／annotation-display-size／free-text-input-drag／leader-appearance／unified-annotations／unified-uiを実行。新規テストはなく、既存の注記寸法・倍率・Parameter／外観・Block所属／投影・保存／再読込を確認した。ログはcad-annotation-state-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。注記の製品状態／保存形式／表示ルールは変更していない。全体目標は未完了。
 
 ### 前回の区切り
