@@ -1,6 +1,14 @@
 /* Resolve geometry paint policy without drawing or changing interaction state. */
 (() => {
   "use strict";
+  const CONSTRAINT_STATUS_COLORS = {
+    full: "#111827",
+    support: "#0f766e",
+    under: "#f59e0b",
+    conflict: "#dc2626",
+  };
+  const INACTIVE_CONSTRAINT_STATUS_COLOR = "#cbd5e1";
+  const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   function create({ Point, canvasSelection, canvasHover, viewState,
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
@@ -189,5 +197,36 @@
     }
     return Object.freeze({ isConstraintOperandSelected, isReferenceHoverElement, isPendingReferenceTarget });
   }
-  window.GeometryPresentation = Object.freeze({ create, createLineDisplay, createCommandTargets });
+  function createSketchStyle({ sketchHasSolveError, elementSketchId, sketchRelationOfElement, constraintStatusOf, isVisibleSketchElement, isActiveSketchElement }) {
+    function constraintStatusColor(item, selected = false, hovered = false) {
+      if (selected) return "#1d4ed8";
+      if (hovered) return "#3b82f6";
+      if (sketchHasSolveError(elementSketchId(item))) return SKETCH_SOLVE_ERROR_COLOR;
+      const relation = sketchRelationOfElement(item);
+      if (relation !== "active") return INACTIVE_CONSTRAINT_STATUS_COLOR;
+      const status = constraintStatusOf(item);
+      if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
+      return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
+    }
+
+    function sketchStrokeWidth(item) {
+      const relation = sketchRelationOfElement(item);
+      if (relation === "active") return 2;
+      if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1.2;
+      return 0;
+    }
+
+    function drawOrderBySketch(items) {
+      return items.filter(isVisibleSketchElement).sort((a, b) => Number(isActiveSketchElement(a)) - Number(isActiveSketchElement(b)));
+    }
+
+    function sketchAlpha(item) {
+      const relation = sketchRelationOfElement(item);
+      if (relation === "active") return 1;
+      if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1;
+      return 0;
+    }
+    return Object.freeze({ constraintStatusColor, sketchStrokeWidth, drawOrderBySketch, sketchAlpha });
+  }
+  window.GeometryPresentation = Object.freeze({ create, createLineDisplay, createCommandTargets, createSketchStyle, INACTIVE_CONSTRAINT_STATUS_COLOR });
 })();

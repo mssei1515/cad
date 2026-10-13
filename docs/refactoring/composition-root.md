@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Sketch関係に応じたconstraintStatusColor／strokeWidth／alpha／描画順を既存GeometryPresentation.createSketchStyleへ分離。solve error／Sketch ID・関係／拘束status／可視性／activeの6照会portに接続する。選択→Hover→solve error→非active→statusの色優先、各関係の線幅／alpha、visible filter→stable inactive／active順と元item参照・入力array無変更を維持。表示色定義もGeometryPresentationへ集約し、寸法が共有する非active色を同モジュールの定義から参照する。Solver／Sketch／Selectionを変更せず、appは既存callback用hoisted入口と接続を持つ。app.jsは4,994→4,969行（25行減、今回の再開から合計2,765行減）。構文503ファイル・単体1,373件・関連E2E180件が成功（すべてexit 0、E2E2.4分）。既存GeometryPresentation unitへ3件追加し、色優先と照会短絡／status fallback、各関係の幅／alphaと最新値、visibility／active変更とstable順／参照／array無変更を確認。元4bodyと色定義の一致・6portの初期化順をaudit。unified-ui／blocks／view-visibility／sketch-permissions／selection-zoom-shadow／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-sketch-display-policy-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 拘束operand／command対象／pending referenceの表示強調照会を既存GeometryPresentation.createCommandTargetsへ分離。panel snapshot／現在mode／Instance・Sketch投影・pattern command、Geometry ref／同一性、現在operand／拘束command／pendingと参照Sketch照会の15portに接続。panel最優先とfalse短絡、Instance／投影／pattern→arc endpoint／operand、command referenceTarget→pendingの優先・kind／Object同一性、reference hover短絡を維持する。状態複製・Selection／session更新・Canvas命令を持たず、appのhoisted入口は先に登録されたpaint callbackの参照時点を保持する。app.jsは5,010→4,994行（16行減、今回の再開から合計2,740行減）。構文503ファイル・単体1,370件・関連E2E188件が成功（すべてexit 0、E2E2.5分）。既存GeometryPresentation unitへ3件追加し、panel優先／false短絡と現在Instance／投影／pattern、operand同一性とarc endpoint優先、reference hover・command／pending優先と各kind・nullを確認。元3body一致と15portの初期化順をaudit。unified-ui／blocks／sketch-projection／derived-selection-copy／constraint-fixed／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-command-target-presentation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

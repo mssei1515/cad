@@ -646,6 +646,9 @@
     geometryInstanceCommand, geometryRefsEqual, geometryRefForItem, readOperands: () => constraintTargetSession.operands, sameArcEndpoint, operandElement,
     readConstraintCommand: () => constraintTargetSession.command, isActiveSketchElement, isReferenceSourceSketchId, elementSketchId, readPending: () => pendingCommandSession.current,
   });
+  const sketchPresentation = window.GeometryPresentation.createSketchStyle({
+    sketchHasSolveError, elementSketchId, sketchRelationOfElement, constraintStatusOf, isVisibleSketchElement, isActiveSketchElement,
+  });
   const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
     Point, canvasSelection, canvasHover, viewState,
     isExporting: () => Boolean(pngRendering.frame),
@@ -1053,14 +1056,7 @@
     const snapped = snapForDrawing(point);
     slotCommand.click(snapped, drawingSnap.active);
   }
-  const CONSTRAINT_STATUS_COLORS = {
-    full: "#111827",
-    support: "#0f766e",
-    under: "#f59e0b",
-    conflict: "#dc2626",
-  };
-  const INACTIVE_CONSTRAINT_STATUS_COLOR = "#cbd5e1";
-  const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
+  const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;
   const runtimeVersionView = window.RuntimeVersionView.create({ document, applicationText });
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
@@ -1450,23 +1446,9 @@
 
   function refreshConstraintAnalysis(options = {}) { return constraintAnalysis.refresh(options); }
 
-  function constraintStatusColor(item, selected = false, hovered = false) {
-    if (selected) return "#1d4ed8";
-    if (hovered) return "#3b82f6";
-    if (sketchHasSolveError(elementSketchId(item))) return SKETCH_SOLVE_ERROR_COLOR;
-    const relation = sketchRelationOfElement(item);
-    if (relation !== "active") return INACTIVE_CONSTRAINT_STATUS_COLOR;
-    const status = constraintStatusOf(item);
-    if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
-    return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
-  }
+  function constraintStatusColor(...args) { return sketchPresentation.constraintStatusColor(...args); }
 
-  function sketchStrokeWidth(item) {
-    const relation = sketchRelationOfElement(item);
-    if (relation === "active") return 2;
-    if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1.2;
-    return 0;
-  }
+  function sketchStrokeWidth(...args) { return sketchPresentation.sketchStrokeWidth(...args); }
 
   function canvasThemeColor(value) {
     return window.CanvasThemeColors.color(value, applicationSettings.theme);
@@ -1476,16 +1458,9 @@
 
   function isPendingReferenceTarget(...args) { return commandTargetPresentation.isPendingReferenceTarget(...args); }
 
-  function drawOrderBySketch(items) {
-    return items.filter(isVisibleSketchElement).sort((a, b) => Number(isActiveSketchElement(a)) - Number(isActiveSketchElement(b)));
-  }
+  function drawOrderBySketch(...args) { return sketchPresentation.drawOrderBySketch(...args); }
 
-  function sketchAlpha(item) {
-    const relation = sketchRelationOfElement(item);
-    if (relation === "active") return 1;
-    if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1;
-    return 0;
-  }
+  function sketchAlpha(...args) { return sketchPresentation.sketchAlpha(...args); }
 
   function sketchProjectionSourceKey(item) {
     return geometryElementKey(item);

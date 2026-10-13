@@ -215,3 +215,33 @@ test('reference hover and pending target reads keep command priority, short circ
   h.state.command = { referenceTarget: { kind: 'unknown' } }; h.state.pending = { referenceTarget: { kind: 'point', point: h.item } }; h.calls.length = 0; assert.equal(h.api.isPendingReferenceTarget(h.item), false); assert.equal(h.calls.length, 0);
   h.state.command = null; assert.equal(h.api.isPendingReferenceTarget(h.item), true); h.state.pending = null; assert.equal(h.api.isPendingReferenceTarget(h.item), false);
 });
+
+function sketchStyleFixture() {
+  const calls = [], state = { error: false, relation: 'active', status: 'under' };
+  const api = sandbox.window.GeometryPresentation.createSketchStyle({ sketchHasSolveError: id => { calls.push(['error', id]); return state.error; }, elementSketchId: item => { calls.push(['sketch', item]); return item.sketchId; },
+    sketchRelationOfElement: item => { calls.push(['relation', item]); return item.relation ?? state.relation; }, constraintStatusOf: item => { calls.push(['status', item]); return state.status; },
+    isVisibleSketchElement: item => item.visible, isActiveSketchElement: item => item.active,
+  });
+  return { api, state, calls, item: { sketchId: 'S' } };
+}
+test('Sketch status color preserves selected/hover/error/inactive/status priority and only reads required current state', () => {
+  const h = sketchStyleFixture(); h.state.error = true;
+  assert.equal(h.api.constraintStatusColor(h.item, true, true), '#1d4ed8'); assert.equal(h.calls.length, 0);
+  assert.equal(h.api.constraintStatusColor(h.item, false, true), '#3b82f6'); assert.equal(h.calls.length, 0);
+  assert.equal(h.api.constraintStatusColor(h.item), '#dc2626'); assert.deepEqual(h.calls.map(c => c[0]), ['sketch', 'error']);
+  h.calls.length = 0; h.state.error = false; h.state.relation = 'reference'; assert.equal(h.api.constraintStatusColor(h.item), sandbox.window.GeometryPresentation.INACTIVE_CONSTRAINT_STATUS_COLOR);
+  assert.deepEqual(h.calls.map(c => c[0]), ['sketch', 'error', 'relation']);
+  h.state.relation = 'active'; for (const [status, color] of [['conflict', '#dc2626'], ['under', '#f59e0b'], ['support', '#0f766e'], ['full', '#111827'], ['unknown', '#111827']]) { h.state.status = status; assert.equal(h.api.constraintStatusColor(h.item), color); }
+});
+test('Sketch width and alpha read current relation and retain each supported/unknown relation rule', () => {
+  const h = sketchStyleFixture();
+  for (const [relation, width, alpha] of [['active', 2, 1], ['reference', 1.2, 1], ['descendant', 1.2, 1], ['inactive', 1.2, 1], ['other', 0, 0], [null, 0, 0]]) {
+    h.state.relation = relation; assert.equal(h.api.sketchStrokeWidth(h.item), width); assert.equal(h.api.sketchAlpha(h.item), alpha);
+  }
+});
+test('Sketch draw ordering filters visibility, retains item identity/stable order and never reorders the supplied array', () => {
+  const h = sketchStyleFixture(), active1 = { visible: true, active: true }, active2 = { visible: true, active: true }, inactive1 = { visible: true, active: false }, inactive2 = { visible: true, active: false }, hidden = { visible: false, active: false };
+  const items = [active1, inactive1, hidden, active2, inactive2], before = [...items]; let result = h.api.drawOrderBySketch(items);
+  assert.deepEqual(Array.from(result), [inactive1, inactive2, active1, active2]); assert.deepEqual(items, before);
+  inactive1.visible = false; inactive2.active = true; result = h.api.drawOrderBySketch(items); assert.deepEqual(Array.from(result), [active1, active2, inactive2]); assert.deepEqual(items, before);
+});
