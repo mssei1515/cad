@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Block操作位置照会をBlockTestDriver.createInteractionObservationへ、寸法位置照会・式編集開始・Properties選択／Selection観測をDimensionTestDriver.createPositionObservation／createExpressionAction／createSelectionDriverへ分離。既存Instance／投影・Canvas変換・現在scopeの拘束／target／layout・式編集／Selection・UI→drawへ役割別に接続し、同一参照・null／false・fallbackと呼出し順を保持する。寸法位置照会は別test APIのthis依存を既存CanvasTestDriver.clientPositionの明示した入口へ置換。元の五つの処理本体との一致を依存port置換後に確認。app.jsは5,846→5,816行（30行減、今回の再開から合計1,918行減）。構文483ファイル・単体1,298件・関連E2E213件が成功（すべてexit 0、E2E3.8分）。全利用箇所のblocks／unified-ui／annotation-display-size／adversarial-authoring-performance／bolt-diameter／dimension-prefix／free-text-input-drag／multiple-dimensions／slot-dimensionを実行。新規テストはなく、既存Block操作・寸法位置／式入力／Properties／複数選択と周辺操作を確認した。ログはcad-block-dimension-interaction-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自投影／layout・式編集／Selection・scope／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Block Definition更新・read-only寸法・外部拘束のfixtureを既存BlockTestDriver.createDefinitionUpdateFixture／createReadOnlyDimensionFixture／createExternalConstraintFixtureへ分離。呼出し時のDefinition／scope、既存下書き編集／確定・投影・寸法生成／追加・拘束生成／求解・cache更新へ役割別に接続し、固定入力・同一Definition／投影参照・nullと操作／観測順を保持する。元の三つの処理本体との一致を依存port置換後に確認。app.jsは5,890→5,846行（44行減、今回の再開から合計1,888行減）。構文483ファイル・単体1,298件・関連E2E39件が成功（すべてexit 0、E2E32.0秒）。全利用箇所のblocksを実行。新規テストはなく、既存Definition編集／全Instance投影更新・固有寸法・外部拘束によるInstance移動と周辺操作を確認した。ログはcad-block-definition-fixtures-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自下書き／Definition・投影／寸法／求解・cache／保存規則／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

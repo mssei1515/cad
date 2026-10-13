@@ -511,5 +511,39 @@
     return Object.freeze({ reset });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture });
+  function createPositionObservation({ currentScope, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition }) {
+    function position(index = 0) {
+      const constraint = currentScope().constraints.filter(isDimensionConstraint)[index] || null;
+      const target = targetFromConstraint(constraint);
+      const layout = constraint && target ? dimensionLayout(target, constraint.dimension) : null;
+      return layout?.text ? clientPosition(layout.text) : null;
+    }
+    return Object.freeze({ position });
+  }
+
+  function createExpressionAction({ currentScope, isDimensionConstraint, startDimensionEditInput }) {
+    function start(index = 0) {
+      const constraint = currentScope().constraints.filter(isDimensionConstraint)[index] || null;
+      return constraint ? startDimensionEditInput({ constraint, dimension: constraint.dimension }) : false;
+    }
+    return Object.freeze({ start });
+  }
+
+  function createSelectionDriver({ currentScope, isDimensionConstraint, clearSelection, canvasSelection, updateUI, draw }) {
+    function select(index = 0) {
+      const constraint = currentScope().constraints.filter(isDimensionConstraint)[index] || null;
+      if (!constraint) return false;
+      clearSelection();
+      canvasSelection.set("dimensionConstraint", constraint);
+      updateUI({ refreshAnalysis: false });
+      draw();
+      return true;
+    }
+    function state() {
+      return { dimensions: canvasSelection.dimensionConstraints.map(c => currentScope().constraints.indexOf(c)), lines: canvasSelection.lines.map(l => l.id), single: Boolean(canvasSelection.dimensionConstraint) };
+    }
+    return Object.freeze({ select, state });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver });
 })();

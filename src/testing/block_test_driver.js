@@ -361,5 +361,26 @@
     return Object.freeze({ run });
   }
 
-  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture });
+  function createInteractionObservation({ blockInstanceById, currentScope, canvas, blockProjectionBundle, worldToCanvasScreen, blockInstanceDisplayCenter, viewport }) {
+    function points(instanceId = null) {
+      const instance = instanceId ? blockInstanceById(instanceId) : currentScope().blockInstances[0];
+      if (!instance) return null;
+      const rect = canvas.getBoundingClientRect();
+      const firstLine = blockProjectionBundle(instance).lines[0];
+      const hitPoint = firstLine
+        ? { x: (firstLine.p1.x + firstLine.p2.x) / 2, y: (firstLine.p1.y + firstLine.p2.y) / 2 }
+        : { x: instance.x, y: instance.y };
+      const center = worldToCanvasScreen(hitPoint);
+      const pivot = worldToCanvasScreen(blockInstanceDisplayCenter(instance));
+      return {
+        center: { x: rect.left + center.x, y: rect.top + center.y },
+        pivot: { x: rect.left + pivot.x, y: rect.top + pivot.y },
+        handle: null,
+        scale: viewport.scale,
+      };
+    }
+    return Object.freeze({ points });
+  }
+
+  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
 })();

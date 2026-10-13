@@ -5080,6 +5080,10 @@
     const blockDimensionFixture = window.BlockTestDriver.createReadOnlyDimensionFixture({ currentScope: workspace.current, blockProjectionBundle, defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint });
     const blockExternalFixture = window.BlockTestDriver.createExternalConstraintFixture({ currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
+    const blockInteractionObservation = window.BlockTestDriver.createInteractionObservation({ blockInstanceById, currentScope: workspace.current, canvas, blockProjectionBundle, worldToCanvasScreen, blockInstanceDisplayCenter, viewport });
+    const dimensionPositionObservation = window.DimensionTestDriver.createPositionObservation({ currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition: canvasTestDriver.clientPosition });
+    const dimensionExpressionAction = window.DimensionTestDriver.createExpressionAction({ currentScope: workspace.current, isDimensionConstraint, startDimensionEditInput });
+    const dimensionSelectionDriver = window.DimensionTestDriver.createSelectionDriver({ currentScope: workspace.current, isDimensionConstraint, clearSelection, canvasSelection, updateUI, draw });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
     const offsetChainObservation = window.OffsetTestDriver.createChainObservation({ currentScope: workspace.current, OffsetChainConstraint, serializeModel, offsetSelection, pendingCommandSession, Line });
@@ -5726,23 +5730,7 @@
         };
       },
       blockState: blockStateObservation.state,
-      blockInteractionPoints(instanceId = null) {
-        const instance = instanceId ? blockInstanceById(instanceId) : model.blockInstances[0];
-        if (!instance) return null;
-        const rect = canvas.getBoundingClientRect();
-        const firstLine = blockProjectionBundle(instance).lines[0];
-        const hitPoint = firstLine
-          ? { x: (firstLine.p1.x + firstLine.p2.x) / 2, y: (firstLine.p1.y + firstLine.p2.y) / 2 }
-          : { x: instance.x, y: instance.y };
-        const center = worldToCanvasScreen(hitPoint);
-        const pivot = worldToCanvasScreen(blockInstanceDisplayCenter(instance));
-        return {
-          center: { x: rect.left + center.x, y: rect.top + center.y },
-          pivot: { x: rect.left + pivot.x, y: rect.top + pivot.y },
-          handle: null,
-          scale: viewport.scale,
-        };
-      },
+      blockInteractionPoints: blockInteractionObservation.points,
       blockRotationLockStateForTest: blockRotationObservation.state,
       blockProjectionEndpointForTest: blockEndpointObservation.position,
       blockProjectionHoverState: blockHoverObservation.state,
@@ -5753,28 +5741,10 @@
       pointDisplayStateForTest: canvasRenderProbe.pointDisplayState,
       drawnDimensionLabelsForTest: canvasRenderProbe.dimensionLabels,
       drawnDimensionExpressionMarksForTest: canvasRenderProbe.dimensionExpressionMarks,
-      dimensionClientPositionForTest(index = 0) {
-        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
-        const target = targetFromConstraint(constraint);
-        const layout = constraint && target ? dimensionLayout(target, constraint.dimension) : null;
-        return layout?.text ? this.worldClientPositionForTest(layout.text) : null;
-      },
-      startDimensionExpressionEditForTest(index = 0) {
-        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
-        return constraint ? startDimensionEditInput({ constraint, dimension: constraint.dimension }) : false;
-      },
-      selectDimensionForPropertiesForTest(index = 0) {
-        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
-        if (!constraint) return false;
-        clearSelection();
-        canvasSelection.set("dimensionConstraint", constraint);
-        updateUI({ refreshAnalysis: false });
-        draw();
-        return true;
-      },
-      multipleDimensionSelectionForTest() {
-        return { dimensions: canvasSelection.dimensionConstraints.map(c => model.constraints.indexOf(c)), lines: canvasSelection.lines.map(l => l.id), single: Boolean(canvasSelection.dimensionConstraint) };
-      },
+      dimensionClientPositionForTest: dimensionPositionObservation.position,
+      startDimensionExpressionEditForTest: dimensionExpressionAction.start,
+      selectDimensionForPropertiesForTest: dimensionSelectionDriver.select,
+      multipleDimensionSelectionForTest: dimensionSelectionDriver.state,
       fitForMultipleDimensionsForTest() {
         viewport.update({ scale: 2, x: 350, y: 250 });
         updateUI();
