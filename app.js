@@ -5084,6 +5084,13 @@
     const dimensionPositionObservation = window.DimensionTestDriver.createPositionObservation({ currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition: canvasTestDriver.clientPosition });
     const dimensionExpressionAction = window.DimensionTestDriver.createExpressionAction({ currentScope: workspace.current, isDimensionConstraint, startDimensionEditInput });
     const dimensionSelectionDriver = window.DimensionTestDriver.createSelectionDriver({ currentScope: workspace.current, isDimensionConstraint, clearSelection, canvasSelection, updateUI, draw });
+    const commandLineDragFixture = window.DimensionTestDriver.createCommandLineDragFixture({ resetModelState, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, canvasSelection, fitAllGeometryToViewport, startDistanceCommand, currentScope: workspace.current, isDimensionConstraint, constraintGraphNodes, targetFromConstraint, dimensionLayout, worldToCanvasScreen, canvas, viewport, dimensionAnchor });
+    const clickPlacementFixture = window.DimensionTestDriver.createClickPlacementFixture({ resetModelState, addLine, addPoint, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const lineCircleFixture = window.DimensionTestDriver.createLineCircleFixture({ resetModelState, addLine, addPoint, addCircle, addArc, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const lineCircleObservation = window.DimensionTestDriver.createLineCircleObservation({ serializeModel, currentScope: workspace.current, LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, constraintTargetSession, signedPointLineDistance, vectorNorm, hypot2 });
+    const radiusDifferenceRecovery = window.DimensionTestDriver.createRadiusDifferenceRecovery({ currentScope: workspace.current, ConcentricRadiusDifferenceConstraint, hypot2, solveSketchAndDependents, activeSketchId, snapshotModelState, refreshConstraintAnalysis, updateUI, draw, vectorNorm });
+    const clickPlacementObservation = window.DimensionTestDriver.createClickPlacementObservation({ currentScope: workspace.current, isDimensionConstraint, dimensionValueInput, pendingCommandSession });
+    const commandLineDragObservation = window.DimensionTestDriver.createCommandLineDragObservation({ currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionAnchor, constraintTargetSession, pendingCommandSession, canvasSelection, dimensionDrag });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
     const offsetChainObservation = window.OffsetTestDriver.createChainObservation({ currentScope: workspace.current, OffsetChainConstraint, serializeModel, offsetSelection, pendingCommandSession, Line });
@@ -5566,169 +5573,13 @@
       referencePointLineState: pointLineObservation.state,
       resetForBlockCreationUi: blockCreationFixture.reset,
       resetForEmptyBlockCreation: emptyBlockFixture.reset,
-      resetForDimensionCommandLineDrag() {
-        resetModelState();
-        const p1 = addPoint(-70, -35, false, "endpoint");
-        const p2 = addPoint(70, -35, false, "endpoint");
-        const dimensionedLine = addLine(p1, p2);
-        const dimensionedTarget = { kind: "line-length", line: dimensionedLine, p1, p2, value: dimensionedLine.length() };
-        addDistanceConstraintFromTarget(
-          dimensionedTarget,
-          dimensionedLine.length(),
-          dimensionFromAnchor(dimensionedTarget, { x: 0, y: -75 }),
-          { sketchId: activeSketchId() },
-        );
-        const p3 = addPoint(-55, 55, false, "endpoint");
-        const p4 = addPoint(55, 55, false, "endpoint");
-        const commandLine = addLine(p3, p4);
-        constraintTargetSession.clearOperands();
-        canvasSelection.set("points", []);
-        canvasSelection.set("lines", [commandLine]);
-        canvasSelection.set("circles", []);
-        canvasSelection.set("arcs", []);
-        fitAllGeometryToViewport(190);
-        startDistanceCommand();
-        const constraint = model.constraints.find((item) => isDimensionConstraint(item) && constraintGraphNodes(item).includes(p1) && constraintGraphNodes(item).includes(p2));
-        const target = targetFromConstraint(constraint);
-        const layout = dimensionLayout(target, constraint.dimension);
-        const world = {
-          x: layout.a.x * 0.75 + layout.b.x * 0.25,
-          y: layout.a.y * 0.75 + layout.b.y * 0.25,
-        };
-        const screen = worldToCanvasScreen(world);
-        const rect = canvas.getBoundingClientRect();
-        return {
-          point: { x: rect.left + screen.x, y: rect.top + screen.y },
-          scale: viewport.scale,
-          anchor: dimensionAnchor(target, constraint.dimension),
-        };
-      },
-      resetForLineLengthClickPlacement() {
-        resetModelState();
-        const line = addLine(addPoint(-80, 0, false, "endpoint"), addPoint(80, 0, false, "endpoint"));
-        fitAllGeometryToViewport(190);
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const clientPoint = (point) => {
-          const screen = worldToCanvasScreen(point);
-          return { x: rect.left + screen.x, y: rect.top + screen.y };
-        };
-        return {
-          line: clientPoint({ x: 0, y: 0 }),
-          placement: clientPoint({ x: 0, y: -50 }),
-          lineId: line.id,
-        };
-      },
-      resetForLineCircleAndRadiusDifferenceDimensions() {
-        resetModelState();
-        const line = addLine(addPoint(-130, 150, true, "endpoint"), addPoint(130, 150, true, "endpoint"));
-        const circle1 = addCircle(addPoint(0, 0, false, "center"), 30);
-        const circle2 = addCircle(addPoint(0, 0, false, "center"), 55);
-        const arc1 = addArc(addPoint(0, 0, false, "center"), 80, -Math.PI / 3, Math.PI / 3);
-        const arc2 = addArc(addPoint(0, 0, false, "center"), 105, -Math.PI / 3, Math.PI / 3);
-        fitAllGeometryToViewport(230);
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const clientPoint = (point) => {
-          const screen = worldToCanvasScreen(point);
-          return { x: rect.left + screen.x, y: rect.top + screen.y };
-        };
-        return {
-          line: clientPoint({ x: 0, y: 150 }),
-          circle1: clientPoint({ x: -30, y: 0 }),
-          circle2: clientPoint({ x: -55, y: 0 }),
-          arc1: clientPoint({ x: 80, y: 0 }),
-          arc2: clientPoint({ x: 105, y: 0 }),
-          lineCirclePlacement: clientPoint({ x: 60, y: 75 }),
-          radiusDifferencePlacement: clientPoint({ x: 70, y: -75 }),
-          ids: {
-            line: line.id,
-            circle1: circle1.id,
-            circle2: circle2.id,
-            arc1: arc1.id,
-            arc2: arc2.id,
-          },
-        };
-      },
-      lineCircleAndRadiusDifferenceState() {
-        const serialized = serializeModel();
-        const constraints = model.constraints.filter((constraint) =>
-          constraint instanceof LineCircleDistanceConstraint || constraint instanceof ConcentricRadiusDifferenceConstraint);
-        return {
-          pendingCommandType: pendingCommandSession.current?.type || null,
-          previewTargetKind: pendingCommandSession.current?.target?.kind || null,
-          operandKinds: constraintTargetSession.operands.map((operand) => operand.kind),
-          constraints: serialized.constraints.filter((constraint) =>
-            constraint.type === "lineCircleDistance" || constraint.type === "concentricRadiusDifferenceDimension"),
-          geometry: constraints.map((constraint) => {
-            if (constraint instanceof LineCircleDistanceConstraint) {
-              return {
-                type: "lineCircleDistance",
-                centerDistance: Math.abs(signedPointLineDistance(constraint.circle.center, constraint.line)),
-                target: constraint.target,
-                error: vectorNorm([constraint.rawError()].flat()),
-              };
-            }
-            return {
-              type: "concentricRadiusDifferenceDimension",
-              centerDistance: hypot2(constraint.a.center.x - constraint.b.center.x, constraint.a.center.y - constraint.b.center.y),
-              radiusDifference: Math.abs(constraint.b.radius() - constraint.a.radius()),
-              target: constraint.target,
-              error: vectorNorm(constraint.rawError()),
-            };
-          }),
-          serialized,
-        };
-      },
-      perturbRadiusDifferenceDimensionForTest() {
-        const constraint = model.constraints.find((item) => item instanceof ConcentricRadiusDifferenceConstraint);
-        if (!constraint) return null;
-        constraint.b.center.x += 17;
-        constraint.b.center.y -= 11;
-        constraint.b.radiusValue += 9;
-        const before = {
-          centerDistance: hypot2(constraint.a.center.x - constraint.b.center.x, constraint.a.center.y - constraint.b.center.y),
-          radiusDifference: Math.abs(constraint.b.radius() - constraint.a.radius()),
-        };
-        const result = solveSketchAndDependents(activeSketchId(), snapshotModelState());
-        refreshConstraintAnalysis();
-        updateUI();
-        draw();
-        return {
-          success: result.success,
-          before,
-          after: {
-            centerDistance: hypot2(constraint.a.center.x - constraint.b.center.x, constraint.a.center.y - constraint.b.center.y),
-            radiusDifference: Math.abs(constraint.b.radius() - constraint.a.radius()),
-            error: vectorNorm(constraint.rawError()),
-          },
-        };
-      },
-      lineLengthClickPlacementState() {
-        const constraints = model.constraints.filter(isDimensionConstraint);
-        const constraint = constraints.at(-1) || null;
-        return {
-          dimensionCount: constraints.length,
-          target: constraint?.target ?? null,
-          inputHidden: Boolean(dimensionValueInput?.hidden),
-          pendingCommandType: pendingCommandSession.current?.type || null,
-          previewTargetKind: pendingCommandSession.current?.target?.kind || null,
-          previewPointer: pendingCommandSession.current?.pointer ? { ...pendingCommandSession.current.pointer } : null,
-        };
-      },
-      dimensionCommandLineDragState() {
-        const constraint = model.constraints.find(isDimensionConstraint);
-        const target = targetFromConstraint(constraint);
-        return {
-          anchor: constraint && target ? dimensionAnchor(target, constraint.dimension) : null,
-          pendingConstraintType: constraintTargetSession.command?.type || null,
-          pendingCommandType: pendingCommandSession.current?.type || null,
-          selectedLineIds: canvasSelection.lines.map((line) => line.id),
-          dragging: dimensionDrag.active,
-        };
-      },
+      resetForDimensionCommandLineDrag: commandLineDragFixture.reset,
+      resetForLineLengthClickPlacement: clickPlacementFixture.reset,
+      resetForLineCircleAndRadiusDifferenceDimensions: lineCircleFixture.reset,
+      lineCircleAndRadiusDifferenceState: lineCircleObservation.state,
+      perturbRadiusDifferenceDimensionForTest: radiusDifferenceRecovery.perturb,
+      lineLengthClickPlacementState: clickPlacementObservation.state,
+      dimensionCommandLineDragState: commandLineDragObservation.state,
       blockState: blockStateObservation.state,
       blockInteractionPoints: blockInteractionObservation.points,
       blockRotationLockStateForTest: blockRotationObservation.state,
