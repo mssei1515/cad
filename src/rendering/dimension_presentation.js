@@ -46,5 +46,30 @@
     }
     return Object.freeze({ draw });
   }
-  window.DimensionPresentation = Object.freeze({ createSelectionBounds, createLayer });
+  function createPainter({ renderer, layouts, metrics, dimensionLayout, effectiveDimensionAppearance, activeSketchId, outsideShaftLengthFactor }) {
+    const { linearDimensionRenderPlan, arcRadiusDimensionExtensionSegment, angleDimensionLayout, angleDimensionExtensionSegments } = layouts;
+    const { shouldPlaceDimensionTerminatorsOutside, dimensionMillimetersToWorld } = metrics;
+    function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false) {
+      if (!target || !dimension) return;
+      if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId, expressionMark);
+      const appearance = effectiveDimensionAppearance(dimension, sketchId);
+      const layout = dimensionLayout(target, dimension, appearance);
+      if (!layout) return;
+      const renderPlan = linearDimensionRenderPlan(target, layout, label, appearance, dimension, expressionMark);
+      const arcExtension = arcRadiusDimensionExtensionSegment(target, layout, appearance);
+      renderer.drawLinear({ layout, renderPlan, arcExtension, appearance, label, preview, highlighted, editState, colorOverride, expressionMark });
+    }
+
+    function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false) {
+      const layout = angleDimensionLayout(target, dimension);
+      if (!layout) return;
+      const appearance = effectiveDimensionAppearance(dimension, sketchId);
+      const extensions = angleDimensionExtensionSegments(layout, appearance);
+      const outside = shouldPlaceDimensionTerminatorsOutside(Math.abs(layout.signed) * layout.radius, label, appearance, dimension, expressionMark);
+      const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize * outsideShaftLengthFactor, appearance) / Math.max(layout.radius, 1e-12) : 0;
+      renderer.drawAngle({ layout, extensions, outside, arcExtension, appearance, label, preview, highlighted, editState, colorOverride, expressionMark });
+    }
+    return Object.freeze({ drawDimension, drawAngleDimension });
+  }
+  window.DimensionPresentation = Object.freeze({ createSelectionBounds, createLayer, createPainter });
 })();

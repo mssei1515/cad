@@ -612,11 +612,11 @@
     input: dimensionValueInput, shell: dimensionValueInputShell, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
     syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
   });
-  const { dimensionMillimetersToWorld, dimensionTextDrawingMetrics, dimensionTextWidth, shouldPlaceDimensionTerminatorsOutside, linearDimensionTerminatorDirections, dimensionStrokeWidth, dimensionArrowheadPoints, dimensionOpenArrowJoinProjection, dimensionOpenArrowheadRenderPoints } = dimensionMetrics;
+  const { dimensionTextDrawingMetrics, dimensionTextWidth, linearDimensionTerminatorDirections, dimensionStrokeWidth, dimensionArrowheadPoints, dimensionOpenArrowJoinProjection, dimensionOpenArrowheadRenderPoints } = dimensionMetrics;
   const dimensionPlacement = window.DimensionPlacement.create({ viewport });
   const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
   const dimensionLayouts = window.DimensionLayout.create({ viewport, placement: dimensionPlacement, metrics: dimensionMetrics, currentLines: () => workspace.current().lines, minLineLength: MIN_LINE_LENGTH });
-  const { linearDimensionRenderPlan, jisDimensionTextAngle, dimensionTextOffset, arcRadiusDimensionExtensionSegment, angleDimensionLayout, angleDimensionExtensionSegments } = dimensionLayouts;
+  const { jisDimensionTextAngle, dimensionTextOffset, angleDimensionLayout } = dimensionLayouts;
   const dimensionInputController = window.DimensionInputController.create({
     displayFactor: appearance => window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
     view: dimensionInputView, enabled: Boolean(dimensionValueInput), getPending: pendingCommandSession.read,
@@ -632,6 +632,10 @@
   const dimensionRenderer = window.DimensionRenderer.create({
     ctx, viewport, metrics: dimensionMetrics, canvasThemeColor,
     onExpressionMark: canvasRenderProbe.captureExpressionMark,
+  });
+  const dimensionPainter = window.DimensionPresentation.createPainter({
+    renderer: dimensionRenderer, layouts: dimensionLayouts, metrics: dimensionMetrics, dimensionLayout,
+    effectiveDimensionAppearance, activeSketchId, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
   });
   const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
     Point, canvasSelection, canvasHover, viewState,
@@ -2634,26 +2638,8 @@
 
 
 
-  function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false) {
-    if (!target || !dimension) return;
-    if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId, expressionMark);
-    const appearance = effectiveDimensionAppearance(dimension, sketchId);
-    const layout = dimensionLayout(target, dimension, appearance);
-    if (!layout) return;
-    const renderPlan = linearDimensionRenderPlan(target, layout, label, appearance, dimension, expressionMark);
-    const arcExtension = arcRadiusDimensionExtensionSegment(target, layout, appearance);
-    dimensionRenderer.drawLinear({ layout, renderPlan, arcExtension, appearance, label, preview, highlighted, editState, colorOverride, expressionMark });
-  }
-
-  function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false) {
-    const layout = angleDimensionLayout(target, dimension);
-    if (!layout) return;
-    const appearance = effectiveDimensionAppearance(dimension, sketchId);
-    const extensions = angleDimensionExtensionSegments(layout, appearance);
-    const outside = shouldPlaceDimensionTerminatorsOutside(Math.abs(layout.signed) * layout.radius, label, appearance, dimension, expressionMark);
-    const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, appearance) / Math.max(layout.radius, 1e-12) : 0;
-    dimensionRenderer.drawAngle({ layout, extensions, outside, arcExtension, appearance, label, preview, highlighted, editState, colorOverride, expressionMark });
-  }
+  function drawDimension(...args) { return dimensionPainter.drawDimension(...args); }
+  function drawAngleDimension(...args) { return dimensionPainter.drawAngleDimension(...args); }
 
 
 

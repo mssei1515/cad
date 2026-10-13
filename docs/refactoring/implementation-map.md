@@ -875,3 +875,6 @@ GeometryPresentation.createLineDisplayはviewport／実効外観／画面単位�
 
 
 InteractionOverlayRenderer.drawSelectionRectはSelectionRectangleが返すpreviewだけを受取り、crossing／enclosingの色・倍率に応じた線幅／破線・fill→strokeを描画する。preview不在の短絡と既存withCanvasStateによるCanvas状態の隔離を維持する。session進行・矩形範囲の生成／採否・Selection変更・pointer lifecycleは既存SelectionRectangleへ残し、rendererはsessionを参照／変更しない。
+
+
+DimensionPresentation.createPainterは既存Layout／Metrics／Rendererと外観・現在Sketch・dimensionLayout入口・shaft係数の7portを接続し、直線／角度寸法の表示planを構成する。target／dimensionとlayoutの短絡、外観既定値の入口と評価順、RenderPlan／円弧延長／角度span・外側terminatorとshaftの変換・radius下限、既存rendererへ渡す参照／flags／呼出順を維持する。配置／計測の独自実装・モデルやsessionの変更は持たず、appは生成接続と既存callback用のhoisted描画入口を持つ。

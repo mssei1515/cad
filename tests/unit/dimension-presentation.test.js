@@ -55,3 +55,42 @@ test('dimension layer observes live scope/interaction/export state, keeps order 
   calls.length = 0; frame = null; pending = null; hover = null; drag = a; status = false; scope = { constraints: [a] }; api.draw();
   assert.equal(calls.filter(c => c[0] === 'draw').length, 1); assert.equal(calls.find(c => c[0] === 'draw')[5], true);
 });
+
+function painterFixture() {
+  const calls = [], layout = { signed: -Math.PI / 2, radius: 2 }, appearance = { terminatorSize: 4 }, plan = {}, arc = {}, extensions = [];
+  const state = { active: 'A', layout, angleLayout: layout, outside: true };
+  const renderer = { drawLinear(payload) { assert.equal(this, renderer); calls.push(['linear', payload]); return 'ignored'; }, drawAngle(payload) { assert.equal(this, renderer); calls.push(['angle-draw', payload]); return 'ignored'; } };
+  const painter = sandbox.window.DimensionPresentation.createPainter({ renderer, activeSketchId: () => { calls.push(['active']); return state.active; }, outsideShaftLengthFactor: 1.5,
+    effectiveDimensionAppearance: (...args) => { calls.push(['appearance', ...args]); return appearance; },
+    dimensionLayout: (...args) => { calls.push(['layout', ...args]); return state.layout; },
+    layouts: { linearDimensionRenderPlan: (...args) => { calls.push(['plan', ...args]); return plan; }, arcRadiusDimensionExtensionSegment: (...args) => { calls.push(['arc', ...args]); return arc; },
+      angleDimensionLayout: (...args) => { calls.push(['angle-layout', ...args]); return state.angleLayout; }, angleDimensionExtensionSegments: (...args) => { calls.push(['extensions', ...args]); return extensions; } },
+    metrics: { shouldPlaceDimensionTerminatorsOutside: (...args) => { calls.push(['outside', ...args]); return state.outside; }, dimensionMillimetersToWorld: (...args) => { calls.push(['world', ...args]); return 12; } },
+  });
+  return { painter, calls, state, layout, appearance, plan, arc, extensions };
+}
+test('dimension painter preserves missing target/layout short circuits and live default Sketch evaluation', () => {
+  const h = painterFixture(); assert.equal(h.painter.drawDimension(null, {}), undefined); assert.deepEqual(h.calls.map(c => c[0]), ['active']);
+  h.calls.length = 0; h.state.layout = null; const target = { kind: 'radius' }, dimension = {};
+  h.painter.drawDimension(target, dimension, 'R'); assert.deepEqual(h.calls.map(c => c[0]), ['active', 'appearance', 'layout']); assert.equal(h.calls[1][2], 'A');
+  h.calls.length = 0; h.state.angleLayout = null; h.painter.drawDimension({ kind: 'angle' }, dimension, 'a'); assert.deepEqual(h.calls.map(c => c[0]), ['active', 'angle-layout']);
+  h.calls.length = 0; h.state.active = 'B'; h.painter.drawAngleDimension(target, dimension, 'a'); assert.deepEqual(h.calls.map(c => c[0]), ['active', 'angle-layout']);
+});
+test('linear dimension painter passes unchanged layout/plan/extension/flags to its renderer in the original order', () => {
+  const h = painterFixture(), target = { kind: 'radius' }, dimension = {}, editState = { hidden: true };
+  assert.equal(h.painter.drawDimension(target, dimension, 'R5', true, true, editState, 'color', 'explicit', true), undefined);
+  assert.deepEqual(h.calls.map(c => c[0]), ['appearance', 'layout', 'plan', 'arc', 'linear']);
+  assert.equal(h.calls[0][1], dimension); assert.equal(h.calls[0][2], 'explicit'); assert.equal(h.calls[1][1], target); assert.equal(h.calls[1][3], h.appearance);
+  assert.equal(h.calls[2][5], dimension); assert.equal(h.calls[2][6], true);
+  const payload = h.calls.at(-1)[1]; assert.equal(payload.layout, h.layout); assert.equal(payload.renderPlan, h.plan); assert.equal(payload.arcExtension, h.arc); assert.equal(payload.appearance, h.appearance); assert.equal(payload.editState, editState);
+  assert.equal(payload.label, 'R5'); assert.equal(payload.preview, true); assert.equal(payload.highlighted, true); assert.equal(payload.colorOverride, 'color'); assert.equal(payload.expressionMark, true);
+});
+test('angle painter keeps span sign handling, outside shaft conversion/radius clamp and inside conversion short circuit', () => {
+  const h = painterFixture(), target = { kind: 'angle' }, dimension = {};
+  h.painter.drawDimension(target, dimension, '90°', false, false, null, null, null, true);
+  assert.deepEqual(h.calls.map(c => c[0]), ['angle-layout', 'appearance', 'extensions', 'outside', 'world', 'angle-draw']);
+  assert.equal(h.calls[1][2], null); assert.equal(h.calls[3][1], Math.PI); assert.equal(h.calls[3][5], true); assert.equal(h.calls[4][1], 6); assert.equal(h.calls[4][2], h.appearance);
+  let payload = h.calls.at(-1)[1]; assert.equal(payload.layout, h.layout); assert.equal(payload.extensions, h.extensions); assert.equal(payload.outside, true); assert.equal(payload.arcExtension, 6); assert.equal(payload.expressionMark, true);
+  h.calls.length = 0; h.layout.radius = 0; h.painter.drawAngleDimension(target, dimension, 'a'); assert.equal(h.calls.at(-1)[1].arcExtension, 12 / 1e-12);
+  h.calls.length = 0; h.state.outside = false; h.painter.drawAngleDimension(target, dimension, 'a'); payload = h.calls.at(-1)[1]; assert.equal(payload.arcExtension, 0); assert.equal(h.calls.some(c => c[0] === 'world'), false);
+});

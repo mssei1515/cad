@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+直線／角度寸法の描画plan組立てを既存DimensionPresentation.createPainterへ分離。既存Layout／Metrics／Renderer、dimensionLayout入口、外観／現在Sketch／shaft係数の7portに接続する。target／dimensionとlayout短絡、外観既定値と評価順、plan／円弧延長／angle span・外側terminatorとshaft変換／radius下限、rendererへ渡す参照／flags・receiver／呼出順と元の戻り値を維持する。appは生成接続とhoisted入口へ縮小し、不要になった5個のLayout／Metrics関数参照を除去。app.jsは5,052→5,038行（14行減、今回の再開から合計2,696行減）。構文501ファイル・単体1,359件・関連E2E154件が成功（すべてexit 0、E2E2.1分）。既存DimensionPresentation unitへ3件追加し、default Sketch／short circuitと評価順、直線payload／参照／flags、負の角度span・shaft変換／radius下限／inside短絡を確認。元body一致と7portの初期化順をaudit。unified-ui／dimension-prefix／annotation-display-size／multiple-dimensions／slot-dimension／png-export／phase0-characterizationを実行。関数参照整理後も構文／全unitを再実行し、E2Eは整理済みコードで実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-dimension-painter-{check-final,unit-final,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 選択矩形の表示を既存InteractionOverlayRenderer.drawSelectionRectへ分離。appはSelectionRectangle.previewの取得と描画呼出だけを持ち、rendererはpreview不在の短絡・crossing／enclosingの色・現在倍率に応じた線幅／破線・fill→strokeを扱う。既存withCanvasStateを接続し、session／Selection変更・pointer lifecycleへ依存しない。元body一致とwithCanvasStateの初期化位置・preview参照時点をaudit。app.jsは5,064→5,052行（12行減、今回の再開から合計2,682行減）。構文501ファイル・単体1,356件・関連E2E188件が成功（すべてexit 0、E2E2.5分）。既存overlay unitへ1件追加し、preview不在短絡・crossing／enclosingと倍率・描画順／Canvas隔離入口・preview無変更を確認。unified-ui／blocks／sketch-projection／png-export／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-selection-overlay-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
