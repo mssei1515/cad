@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Block／Instance配置とOffsetのpreview情報取得・描画接続を既存PlacementPreviewRenderer.createLayer／OffsetPreviewRenderer.createLayerへ分離。配置はrenderer／mode・pointer read／Block・Instance command／Block projectionの6port、Offsetはrenderer／mode・pointer read／commandの4portを持つ。Blockのmode→definition→pointer→preview短絡とbundle生成・描画、Instanceのmodeに依存しないpreview、Offsetのmode短絡後の現在plan取得とreceiver・元参照／null／順序を維持する。モデル／session更新を持たず、appは通常描画と生成後の診断APIを直接接続して中継を除去。app.jsは5,022→5,017行（5行減、今回の再開から合計2,717行減）。構文501ファイル・単体1,364件・関連E2E189件が成功（すべてexit 0、E2E2.5分）。既存PlacementPreview／Offset unitへ3件追加し、全guard／projection／painter順・参照、modeに依存しないInstance、Offset plan短絡と現在pointer／null・receiverを確認。元3body一致と6／4portの初期化順・診断登録順をaudit。配置layerはrenderer生成後に置く。unified-ui／blocks／derived-selection-copy／hatching／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-placement-offset-preview-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 作図previewのmode判定と現在command情報取得・描画接続を既存AuthoringPreviewRenderer.createLayerへ分離。renderer／mode・pointer・trimのread入口、Line／Rectangle／Slot／Circular／Spline／Centerlineの既存一時値、Centerline投影／Canvas寸法の12portで接続する。Line→Centerline→Rectangle→Slot→Circle→Arc→ThreePointArc→Splineの判定／描画順、現在値／元参照、support短絡とpointer不在時の投影省略を維持し、TrimはBlock／Instance／Offsetの後の入口へ残す。モデル／session変更を持たない。診断登録はfactory生成後と確認し、新入口へ直接接続して旧preview guard／中継関数を除去。app.jsは5,038→5,022行（16行減、今回の再開から合計2,712行減）。構文501ファイル・単体1,361件・関連E2E153件が成功（すべてexit 0、E2E2.0分）。既存AuthoringPreview unitへ2件追加し、各modeと現在command参照／painter receiver、描画中mode変化の判定順、Centerline support／pointer／投影とCanvas sizeの短絡／順序を確認。全9body一致と12portの初期化順・診断登録順をaudit。unified-ui／spline／slot-dimension／tool-flyouts／hatching／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-authoring-preview-layer-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

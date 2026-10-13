@@ -776,6 +776,10 @@
   const { drawFilletArc: drawFilletPreviewArc } = authoringPreview;
   const placementPreview = window.PlacementPreviewRenderer.create({ ctx, viewport, withCanvasState, traceSplinePath,
     drawResolvedHatch, resolvedHatchBoundary, hatchAppearanceForDisplay, hatchPatternOrigin, drawAnnotationLeader, drawAnnotationText });
+  const placementPreviewLayer = window.PlacementPreviewRenderer.createLayer({
+    renderer: placementPreview, readMode: () => mode, readPointer: () => drawingPreview.pointer,
+    blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle,
+  });
   const geometryCreation = window.GeometryCreation.create({
     currentScope: workspace.current, ids: geometryIds, assignSketchId, currentConstruction: () => constructionCommand.enabled,
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
@@ -852,6 +856,7 @@
   const offsetPreviewRenderer = window.OffsetPreviewRenderer.create({
     ctx, viewport, withCanvasState, Line, Circle, drawDimension, formatDimensionLabel,
   });
+  const offsetPreviewLayer = window.OffsetPreviewRenderer.createLayer({ renderer: offsetPreviewRenderer, readMode: () => mode, readPointer: () => drawingPreview.pointer, command: offsetCommand });
   const filletPlans = window.FilletGeometry.create({ minLineLength: MIN_LINE_LENGTH });
   const { filletGeometryBasis, filletGeometryFromPointer } = filletPlans;
   const { createFillet } = window.FilletConstruction.create({
@@ -2537,16 +2542,9 @@
 
   function drawHatches(...args) { return hatchLayer.drawHatches(...args); }
 
-  function drawBlockPlacementPreview() {
-    if (mode !== "block-place" || !blockPlacementCommand.definitionId || !drawingPreview.pointer) return;
-    const preview = blockPlacementCommand.preview(drawingPreview.pointer);
-    if (!preview) return;
-    placementPreview.drawBlock(createBlockProjectionBundle(preview.instance, preview.definition));
-  }
 
-  function drawFreeInstancePreview() {
-    placementPreview.drawFreeInstance(geometryInstanceCommand.preview(drawingPreview.pointer));
-  }
+
+
 
   function draw() {
     if (pngExportCommand?.active && !pngExportCommand.busy && (pendingCommandSession.current?.type !== "png-export" || mode !== "png-export")) pngExportCommand.cancel();
@@ -2581,9 +2579,9 @@
     if (annotationPreview?.type === "leader") drawAnnotationLeader(annotationPreview, true);
     else if (annotationPreview) drawAnnotationText(annotationPreview, "#2563eb");
     authoringPreviewLayer.draw();
-    drawBlockPlacementPreview();
-    drawFreeInstancePreview();
-    drawOffsetPreview();
+    placementPreviewLayer.drawBlockPlacementPreview();
+    placementPreviewLayer.drawFreeInstancePreview();
+    offsetPreviewLayer.draw();
     authoringPreviewLayer.drawTrimPreview();
     drawSnapMarker();
     drawArcEndpointHandles();
@@ -2696,10 +2694,7 @@
 
 
 
-  function drawOffsetPreview() {
-    if (mode !== "offset") return;
-    offsetPreviewRenderer.draw(offsetCommand.preview(drawingPreview.pointer));
-  }
+
 
 
   function drawSnapMarker() { interactionOverlay.drawSnapMarker(drawingSnap.active); }
@@ -4411,11 +4406,11 @@
     const setTestDrawingMode = value => { mode = value; };
     const draftDashCases = window.CanvasRenderTestDriver.createDraftDashCases({
       setMode: setTestDrawingMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
-      drawTemporaryLine: authoringPreviewLayer.drawTemporaryLine, drawRectanglePreview: authoringPreviewLayer.drawRectanglePreview, drawSlotPreview: authoringPreviewLayer.drawSlotPreview, drawCirclePreview: authoringPreviewLayer.drawCirclePreview, drawArcPreview: authoringPreviewLayer.drawArcPreview, drawOffsetPreview, drawTrimPreview: authoringPreviewLayer.drawTrimPreview,
+      drawTemporaryLine: authoringPreviewLayer.drawTemporaryLine, drawRectanglePreview: authoringPreviewLayer.drawRectanglePreview, drawSlotPreview: authoringPreviewLayer.drawSlotPreview, drawCirclePreview: authoringPreviewLayer.drawCirclePreview, drawArcPreview: authoringPreviewLayer.drawArcPreview, drawOffsetPreview: offsetPreviewLayer.draw, drawTrimPreview: authoringPreviewLayer.drawTrimPreview,
     });
     const blockDashCases = window.CanvasRenderTestDriver.createBlockDashCases({
       createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition),
-      setMode: setTestDrawingMode, blockPlacementCommand, drawingPreview, activeSketchId, currentScope: workspace.current, canvasSelection, drawBlockPlacementPreview, drawBlockInstanceHandles,
+      setMode: setTestDrawingMode, blockPlacementCommand, drawingPreview, activeSketchId, currentScope: workspace.current, canvasSelection, drawBlockPlacementPreview: placementPreviewLayer.drawBlockPlacementPreview, drawBlockInstanceHandles,
     });
     const canvasDashIsolation = window.CanvasRenderTestDriver.createDashIsolation({
       resetModelState, viewport, drawingPreview, selectionRectangle, setMode: setTestDrawingMode, ctx, drawSelectionRect, draftCases: draftDashCases, blockCases: blockDashCases, drawAnnotationLeader, addLine, addPoint, draw,

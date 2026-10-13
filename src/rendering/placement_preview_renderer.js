@@ -47,5 +47,18 @@
     }
     return Object.freeze({ drawBlock, drawFreeInstance });
   }
-  window.PlacementPreviewRenderer = Object.freeze({ create });
+  function createLayer({ renderer, readMode, readPointer, blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle }) {
+    function drawBlockPlacementPreview() {
+      if (readMode() !== "block-place" || !blockPlacementCommand.definitionId || !readPointer()) return;
+      const preview = blockPlacementCommand.preview(readPointer());
+      if (!preview) return;
+      renderer.drawBlock(createBlockProjectionBundle(preview.instance, preview.definition));
+    }
+
+    function drawFreeInstancePreview() {
+      renderer.drawFreeInstance(geometryInstanceCommand.preview(readPointer()));
+    }
+    return Object.freeze({ drawBlockPlacementPreview, drawFreeInstancePreview });
+  }
+  window.PlacementPreviewRenderer = Object.freeze({ create, createLayer });
 })();

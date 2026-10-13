@@ -43,3 +43,26 @@ test('missing previews do not enter Canvas state and drawing failure still leave
   const b=bundle();b.circles=[{center:{x:0,y:0},radius:()=>{throw Error('failed');}}];
   assert.throws(()=>f.renderer.drawFreeInstance(b),/failed/);assert.equal(f.calls.at(-1)[0],'exit');
 });
+
+function placementLayerFixture() {
+  const calls = [], pointer = { x: 1, y: 2 }, instance = {}, definition = {}, bundle = {}, free = {};
+  const state = { mode: 'select', pointer, definitionId: 'D', preview: { instance, definition }, free };
+  const blockCommand = { get definitionId() { calls.push(['definition']); return state.definitionId; }, preview(p) { assert.equal(this, blockCommand); calls.push(['block-preview', p]); return state.preview; } };
+  const instanceCommand = { preview(p) { assert.equal(this, instanceCommand); calls.push(['instance-preview', p]); return state.free; } };
+  const renderer = { drawBlock(value) { assert.equal(this, renderer); calls.push(['block', value]); }, drawFreeInstance(value) { assert.equal(this, renderer); calls.push(['free', value]); } };
+  const layer = sandbox.window.PlacementPreviewRenderer.createLayer({ renderer, readMode: () => state.mode, readPointer: () => { calls.push(['pointer']); return state.pointer; },
+    blockPlacementCommand: blockCommand, geometryInstanceCommand: instanceCommand, createBlockProjectionBundle: (i, d) => { calls.push(['bundle', i, d]); return bundle; } });
+  return { layer, state, calls, pointer, instance, definition, bundle, free };
+}
+test('Block preview preserves mode/definition/pointer/plan guards and projection/painter reference order', () => {
+  const h = placementLayerFixture(); h.layer.drawBlockPlacementPreview(); assert.equal(h.calls.length, 0);
+  h.state.mode = 'block-place'; h.state.definitionId = null; h.layer.drawBlockPlacementPreview(); assert.deepEqual(h.calls.map(c => c[0]), ['definition']);
+  h.calls.length = 0; h.state.definitionId = 'D'; h.state.pointer = null; h.layer.drawBlockPlacementPreview(); assert.deepEqual(h.calls.map(c => c[0]), ['definition', 'pointer']);
+  h.calls.length = 0; h.state.pointer = h.pointer; h.state.preview = null; h.layer.drawBlockPlacementPreview(); assert.deepEqual(h.calls.map(c => c[0]), ['definition', 'pointer', 'pointer', 'block-preview']);
+  h.calls.length = 0; h.state.preview = { instance: h.instance, definition: h.definition }; h.layer.drawBlockPlacementPreview(); assert.deepEqual(h.calls.map(c => c[0]), ['definition', 'pointer', 'pointer', 'block-preview', 'bundle', 'block']);
+  assert.equal(h.calls[3][1], h.pointer); assert.equal(h.calls[4][1], h.instance); assert.equal(h.calls[4][2], h.definition); assert.equal(h.calls[5][1], h.bundle);
+});
+test('Instance preview remains independent of mode and passes current pointer/plan including null through existing owners', () => {
+  const h = placementLayerFixture(); h.layer.drawFreeInstancePreview(); assert.deepEqual(h.calls.map(c => c[0]), ['pointer', 'instance-preview', 'free']); assert.equal(h.calls[1][1], h.pointer); assert.equal(h.calls[2][1], h.free);
+  h.calls.length = 0; h.state.pointer = null; h.state.free = null; h.layer.drawFreeInstancePreview(); assert.equal(h.calls[1][1], null); assert.equal(h.calls[2][1], null);
+});
