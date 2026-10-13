@@ -4954,6 +4954,20 @@
         blockInstances: canvasSelection.blockInstances.map((instance) => instance.id),
       };
     }
+    function readTestConstraintStatuses() {
+      const state = refreshConstraintAnalysis();
+      return {
+        stable: state.analysis.stable,
+        errorNorm: state.analysis.errorNorm,
+        freeDof: state.analysis.freeVariableCount,
+        items: [...state.statuses].filter(([item]) => elementSketchId(item) === activeSketchId())
+          .map(([item, status]) => ({ id: item.id, status })),
+      };
+    }
+    const geometryDragTestDriver = window.GeometryDragTestDriver.createGeometryDriver({
+      currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints, arcEndpointPoint,
+      computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
+    });
     const pointDragTestDriver = window.GeometryDragTestDriver.createPointDriver({
       currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
       computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), targetConstraintCount: geometryDragSolver.targetConstraintCount, now: () => performance.now(),
@@ -5335,130 +5349,8 @@
       selectableLineClientPositionForTest: selectableLinePosition.position,
       guidedPointDragForTest: pointDragTestDriver.drag,
       guidedPointDragPathForTest: pointDragTestDriver.path,
-      geometryDragPathForTest(descriptor, deltas) {
-        const kind = descriptor?.kind;
-        const id = descriptor?.id;
-        const endpoint = descriptor?.endpoint === "end" ? "end" : "start";
-        const fraction = Number.isFinite(descriptor?.fraction) ? Math.max(0, Math.min(1, descriptor.fraction)) : 0.5;
-        let item = null;
-        let sessionItem = null;
-        let startPointer = null;
-        if (kind === "point") {
-          item = model.points.find((candidate) => candidate.id === id);
-          sessionItem = item;
-          if (item) startPointer = { x: item.x, y: item.y };
-        } else if (kind === "line") {
-          item = model.lines.find((candidate) => candidate.id === id);
-          sessionItem = item;
-          if (item) startPointer = { x: item.p1.x + fraction * (item.p2.x - item.p1.x), y: item.p1.y + fraction * (item.p2.y - item.p1.y) };
-        } else if (kind === "circle") {
-          item = model.circles.find((candidate) => candidate.id === id);
-          sessionItem = item;
-          if (item) startPointer = { x: item.center.x + item.radius(), y: item.center.y };
-        } else if (kind === "arc") {
-          item = model.arcs.find((candidate) => candidate.id === id);
-          sessionItem = item;
-          if (item) {
-            const angle = item.startAngle + fraction * (item.endAngle - item.startAngle);
-            startPointer = { x: item.center.x + item.radius() * Math.cos(angle), y: item.center.y + item.radius() * Math.sin(angle) };
-          }
-        } else if (kind === "arc-endpoint") {
-          item = model.arcs.find((candidate) => candidate.id === id);
-          sessionItem = item ? { arc: item, endpoint } : null;
-          if (item) startPointer = arcEndpointPoint(item, endpoint);
-        }
-        if (!item || !startPointer) return null;
-
-        const snapshot = () => {
-          if (kind === "point") return { x: item.x, y: item.y };
-          if (kind === "line") {
-            return {
-              p1: { x: item.p1.x, y: item.p1.y },
-              p2: { x: item.p2.x, y: item.p2.y },
-              midpoint: { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 },
-              length: item.length(),
-            };
-          }
-          if (kind === "circle") return { center: { x: item.center.x, y: item.center.y }, radius: item.radius() };
-          const start = arcEndpointPoint(item, "start");
-          const end = arcEndpointPoint(item, "end");
-          return {
-            center: { x: item.center.x, y: item.center.y },
-            radius: item.radius(),
-            start,
-            end,
-            draggedEndpoint: kind === "arc-endpoint" ? (endpoint === "start" ? start : end) : null,
-          };
-        };
-
-        const session = buildDragSession(kind, sessionItem, startPointer);
-        const startState = snapshot();
-        if (!session) return { sessionAvailable: false, startPointer, startState, previews: [], final: null };
-        attachLocalSolveContext(session);
-        const previews = [];
-        for (const [dx, dy] of deltas) {
-          const target = { x: startPointer.x + dx, y: startPointer.y + dy };
-          const startedAt = performance.now();
-          const result = dragResultForSession(session, target);
-          previews.push({
-            success: result.success,
-            blocked: result.blocked,
-            errorNorm: result.errorNorm,
-            acceptError: result.acceptError,
-            iterations: result.iterations,
-            elapsedMs: performance.now() - startedAt,
-            target,
-            targetNorm: result.targetNorm,
-            targetStepNorm: result.targetStepNorm,
-            projectedNorm: result.projectedNorm,
-            projectedErrorNorm: result.projectedErrorNorm,
-            targetErrorNorm: result.targetErrorNorm,
-            freeDof: result.freeDof,
-            variableCount: result.variableCount,
-            constraintCount: result.constraintCount,
-            guidedRetryCount: result.guidedRetryCount,
-            pinnedLineTargets: Boolean(result.pinnedLineTargets),
-            radialObjective: Boolean(result.radialObjective),
-            exactSparseLine: Boolean(result.exactSparseLine),
-            guidedSubstepCount: result.guidedSubstepCount || 0,
-            reason: result.reason,
-            local: result.local,
-            guided: result.guided,
-            fallback: result.fallback,
-            localErrorNorm: result.localErrorNorm,
-            state: snapshot(),
-            constraintState: descriptor.inspectConstraints ? this.constraintStatusesForTest() : undefined,
-          });
-        }
-        const finalResult = solveFinalDragSession(session);
-        normalizeArcSweeps();
-        const baseErrorNorm = vectorNorm(solver.computeErrorVectorForConstraints(sketchSolveConstraints(session.sketchId)));
-        return {
-          sessionAvailable: true,
-          representativePointId: session.lineDragPoint?.point.id || null,
-          startPointer,
-          startState,
-          previews,
-          final: {
-            success: finalResult.success,
-            errorNorm: finalResult.errorNorm,
-            baseErrorNorm,
-            iterations: finalResult.iterations,
-            reason: finalResult.reason,
-            state: snapshot(),
-          },
-        };
-      },
-      constraintStatusesForTest() {
-        const state = refreshConstraintAnalysis();
-        return {
-          stable: state.analysis.stable,
-          errorNorm: state.analysis.errorNorm,
-          freeDof: state.analysis.freeVariableCount,
-          items: [...state.statuses].filter(([item]) => elementSketchId(item) === activeSketchId())
-            .map(([item, status]) => ({ id: item.id, status })),
-        };
-      },
+      geometryDragPathForTest: geometryDragTestDriver.path,
+      constraintStatusesForTest: readTestConstraintStatuses,
       constraintAnalysisForTest() {
         const sketchId = activeSketchId();
         const variables = sketchSolveVariables(sketchId);

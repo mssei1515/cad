@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Geometryドラッグのテスト手順と観測を既存GeometryDragTestDriver.createGeometryDriverへ分離。Point／Line／Circle／Arc／Arc端点の開始位置とsnapshot、fractionのfinite判定／clamp、sessionなしの初期状態・対象なしのnull、初期位置基準・計測・結果fallbackと既存sessionの実行順を保持する。拘束状態はapp内の従来本体をreadTestConstraintStatusesとして共有し、inspectConstraints時だけ明示した入口で照会する。元のGeometryドラッグ／拘束状態本体との一致を依存port置換後に確認。app.jsは7,615→7,507行（108行減、今回の再開から合計227行減）。構文475ファイル・単体1,293件・関連E2E162件が成功（すべてexit 0、E2E20.6分）。全利用箇所のadversarial-drag-fixture／blocks／constraint-drag-regressions／geometry-drag-smoothness／unified-uiを同じ実行で正常終了まで追跡し、単体2件で同一Line／Arc端点wrapper・fraction・初期位置基準・snapshot／計測・拘束観測とsessionなしの早期終了を確認した。ログはcad-geometry-drag-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Solver／ドラッグ状態／拘束状態／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Pointドラッグの単発／連続テスト手順と結果観測をGeometryDragTestDriver.createPointDriverへ分離。現在scopeの同一Pointと既存session生成・local solve context・preview更新・最終求解・円弧正規化・所属Sketchの拘束誤差へ明示的に接続し、初期位置からの移動量、preview座標のコピー、計測・失敗結果／例外・対象なしのnullと実行順を保持する。元の二つの処理本体との一致を依存port置換後に確認。app.jsは7,694→7,615行（79行減、今回の再開から合計119行減）。構文475ファイル・単体1,291件・関連E2E149件が成功（すべてexit 0、E2E3.0分）。全利用箇所のblocks／drag-smoothness／unified-uiを実行し、単体3件でsession同一性・call-time scope・preview／final分離・計測・移動基準と早期終了を確認した。classic script読込／構文一覧・単体一覧・file URL読込期待も同期。ログはcad-point-drag-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。製品のSolver／ドラッグ状態／履歴は変更していない。全体目標は未完了。
 
 ### 前回の区切り
