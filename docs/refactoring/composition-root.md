@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Canvas context menu開始の進行を既存CanvasContextMenu.createEntryへ、候補確定の進行をCanvasContextTarget.createCandidateActionへ分離。menu／modeの短絡→native event抑制→menu終了→pointer更新→command／候補照会→単一対象選択／UI→draw→項目構成／session開始と、拘束command時のhit→operand／通常時の対象置換→UI→drawを維持する。pointerはappのsetterへ接続し、同一参照・原点fallbackと元の二つの本体との一致を確認。早いcallback登録は薄いapp委譲関数で維持。app.jsは5,448→5,429行（19行減、今回の再開から合計2,305行減）。構文488ファイル・単体1,313件・関連E2E178件が成功（最終すべてexit 0、E2E2.3分）。既存unitへ4件追加し、menu不在／mode拒否、単一対象／pointer／UI／menu順、通常／拘束command／重複候補と候補確定時の最新command／operand／Selection分岐を確認。初回E2EはcloseAppMenusの早いconst参照による起動ReferenceErrorを確認して中断（exit 1）。runner終了後に操作時callbackへ修正し、他portの初期化位置を監査、構文／全単体／同じ5ファイルE2Eを再実行して成功。再開手順にもportの参照時点監査を明記。unified-ui／blocks／fixed-command／sketch-permissions／phase0-characterizationを実行。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-context-entry-{check,unit,e2e,check-final,unit-final,e2e-final}.log。全E2Eはこの単位では未実行。独自表示session／Selection／command状態は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Canvas context actionの編集guard・既存操作への振分けと操作後の更新をsrc/commands/canvas_context_actions.jsのCanvasContextActionsへ分離。Selection／対象Sketchの編集guard→対象またはSelection／active Sketchの構造guardという順・短絡と、既存command／履歴／clipboard／button・Properties／Block／寸法／Sketch／Hatch／Drawing Order／Spline／fitの入口を維持する。寸法整列成功時のUI→draw→履歴→hint、fit結果別hint→draw・hit／target／pointer／Spline参照・method receiver・void paste／未定義returnと例外伝播を保持し、元の処理本体との一致を確認。menuが早く生成される初期化順はappの薄い委譲関数で維持。app.jsは5,482→5,448行（34行減、今回の再開から合計2,286行減）。構文488ファイル・単体1,309件・関連E2E178件が成功（すべてexit 0、E2E2.3分）。新単体4件で編集guard失敗／構造guard先のfallback、寸法整列成功／失敗時の更新順、非編集actionのguard非依存／receiver／returnとfit結果、hit／Spline／pointer参照を確認。unified-ui／blocks／fixed-command／sketch-permissions／phase0-characterizationを実行し、menu・Fix／Undo・権限／Block／基本操作とfile URL読込を確認した。新scriptはindex／構文・単体一覧／読込期待値を同期。仕様の旧action担当も更新。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-context-actions-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Selection／command／model・履歴／求解規則・menu sessionは追加していない。全体目標は未完了。
 
 ### 前回の区切り

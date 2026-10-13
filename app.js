@@ -4115,38 +4115,19 @@
 
 
 
-  function selectCanvasContextCandidate(target, pointer) {
-    const commandType = constraintTargetSession.command?.type;
-    if (commandType) {
-      handleConstraintOperandClick(pointer || { x: 0, y: 0 }, commandType, constraintHitsFromCanvasContextTarget(target));
-      return;
-    }
-    selectCanvasContextTarget(target, { preserveSelectedSet: false });
-    updateUI({ refreshAnalysis: false });
-    draw();
-  }
+  const canvasContextCandidateAction = window.CanvasContextTarget.createCandidateAction({
+    constraintTargetSession, handleConstraintOperandClick, constraintHitsFromCanvasContextTarget, selectCanvasContextTarget, updateUI, draw,
+  });
+  function selectCanvasContextCandidate(target, pointer) { return canvasContextCandidateAction.select(target, pointer); }
 
 
 
-  function openCanvasContextMenu(event) {
-    if (!canvasContextMenu || !isGeometryMode()) return;
-    event.preventDefault();
-    closeAppMenus();
-    const pointer = canvasPoint(event);
-    lastPointerWorld = pointer;
-    const commandActive = hasCancellableCanvasCommand();
-    const constraintCommandActive = Boolean(constraintTargetSession.command);
-    const candidates = commandActive && !constraintCommandActive ? [] : canvasContextCandidatesAt(pointer);
-    const multipleCandidates = candidates.length > 1;
-    const showCandidates = constraintCommandActive ? candidates.length > 0 : multipleCandidates;
-    const target = commandActive || multipleCandidates ? { kind: "blank", item: null } : candidates[0] || { kind: "blank", item: null };
-    if (!commandActive && !multipleCandidates && target.kind !== "blank") {
-      selectCanvasContextTarget(target);
-      updateUI({ refreshAnalysis: false });
-      draw();
-    }
-    canvasContextController.open({ event, pointer, target, candidates, showCandidates, items: showCandidates ? [] : canvasContextMenuItems(target, commandActive) });
-  }
+  const canvasContextEntry = window.CanvasContextMenu.createEntry({
+    canvasContextMenu, isGeometryMode, closeAppMenus: () => closeAppMenus(), canvasPoint, setLastPointer: pointer => { lastPointerWorld = pointer; },
+    hasCancellableCanvasCommand, constraintTargetSession, canvasContextCandidatesAt, selectCanvasContextTarget,
+    updateUI, draw, canvasContextController, canvasContextMenuItems,
+  });
+  function openCanvasContextMenu(event) { return canvasContextEntry.open(event); }
 
   function showSelectedObjectProperties() {
     setPropertiesPanelCollapsed(false);

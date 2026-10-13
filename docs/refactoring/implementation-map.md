@@ -830,3 +830,6 @@ CanvasContextPresentation.createItemsはcommand／空白／対象別のmenu項�
 
 
 CanvasContextActions（src/commands/canvas_context_actions.js）はCanvas context actionの編集guardと既存操作への振分けを所有する。Selection／対象Sketchの編集guard→対象またはSelection／active Sketchの構造guardという順と短絡を維持し、command取消／実行・履歴・clipboard／既存button click・Properties・Block／寸法／Sketch／Hatch／Drawing Order／Spline／viewport操作を明示した既存入口へ委譲する。寸法整列が成功した場合だけUI→draw→履歴→hintを行い、fit結果ごとのhint後にdrawする。既存hit／target／pointer／Spline参照・必要引数の判定・method receiver・void paste／未定義returnと例外伝播を保持する。新しいSelection／command／model・履歴／求解規則・menu sessionは持たない。appは所有者を接続し、早いmenu生成時のcallback参照を保つ薄い委譲関数を残す。項目構成はCanvasContextPresentation、targetとFix照会はCanvasContextTarget、menu表示／sessionはCanvasContextMenuが所有する。
+
+
+CanvasContextMenu.createEntryはCanvas context menu開始時の進行を所有する。menu有無／Geometry mode→native event抑制→既存menu終了→Canvas座標／last pointer更新→command照会→候補取得／表示分岐→単一対象選択／UI→draw→項目構成／既存sessionのopenという順と短絡を維持する。通常commandでは候補照会を省略し、拘束commandと重複候補では候補表示を優先する。pointer更新はappのsetterへ、候補／Selection・command・項目・表示sessionは既存所有者へ委譲し、新しいsession／操作状態を持たない。CanvasContextTarget.createCandidateActionは現在拘束commandがあれば既存hit構成→operand処理へ、それ以外は明示的な対象置換→UI→drawへ進める。pointerなしの原点fallback・同一target／pointer参照・未定義returnと例外伝播を保持する。appは両factoryを生成・接続し、早いmenu callback登録を保つ薄い委譲関数を残す。後で初期化されるmenu終了入口は操作時のcallbackで照会する。

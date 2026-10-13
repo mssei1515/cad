@@ -76,5 +76,19 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasContextTarget = Object.freeze({ createSelection, createFixObservation });
+  function createCandidateAction({ constraintTargetSession, handleConstraintOperandClick, constraintHitsFromCanvasContextTarget, selectCanvasContextTarget, updateUI, draw }) {
+    function select(target, pointer) {
+      const commandType = constraintTargetSession.command?.type;
+      if (commandType) {
+        handleConstraintOperandClick(pointer || { x: 0, y: 0 }, commandType, constraintHitsFromCanvasContextTarget(target));
+        return;
+      }
+      selectCanvasContextTarget(target, { preserveSelectedSet: false });
+      updateUI({ refreshAnalysis: false });
+      draw();
+    }
+    return Object.freeze({ select });
+  }
+
+  window.CanvasContextTarget = Object.freeze({ createSelection, createFixObservation, createCandidateAction });
 })();

@@ -70,3 +70,69 @@ test('Escape restores hover and keyboard confirmation selects the focused candid
   assert.ok(f.calls.some(call => call[0] === 'restore'));
   f.open(); f.menu.fire('keydown', event('Enter')); assert.deepEqual(f.calls.at(-1), ['select', f.target, f.pointer, true]);
 });
+
+function entryFixture({ menu = {} } = {}) {
+  const f = { calls: [], geometry: true, command: false, constraint: {}, candidates: [], pointer: { x: 1, y: 2 } };
+  const controller = { open(options) { assert.equal(this, controller); f.options = options; f.calls.push(['open']); } };
+  f.event = { preventDefault() { f.calls.push(['prevent']); } };
+  f.entry = sandbox.window.CanvasContextMenu.createEntry({
+    canvasContextMenu: menu, isGeometryMode: () => { f.calls.push(['geometry']); return f.geometry; },
+    closeAppMenus: () => f.calls.push(['close']),
+    canvasPoint: event => { assert.equal(event, f.event); f.calls.push(['point']); return f.pointer; },
+    setLastPointer: pointer => { assert.equal(pointer, f.pointer); f.calls.push(['pointer']); },
+    hasCancellableCanvasCommand: () => { f.calls.push(['command']); return f.command; },
+    constraintTargetSession: f.constraint,
+    canvasContextCandidatesAt: pointer => { assert.equal(pointer, f.pointer); f.calls.push(['candidates']); return f.candidates; },
+    selectCanvasContextTarget: (target, options) => f.calls.push(['select', target, options]),
+    updateUI: options => f.calls.push(['ui', options.refreshAnalysis]), draw: () => f.calls.push(['draw']),
+    canvasContextController: controller,
+    canvasContextMenuItems: (target, active) => { f.calls.push(['items', target, active]); return f.items; },
+  });
+  f.items = [{ action: 'copy' }];
+  return f;
+}
+
+test('entry rejects missing menu or non-geometry mode before suppressing the native event', () => {
+  const absent = entryFixture({ menu: null }); absent.entry.open(absent.event);
+  assert.equal(absent.calls.length, 0);
+  const f = entryFixture(); f.geometry = false; f.entry.open(f.event);
+  assert.deepEqual(f.calls, [['geometry']]);
+  f.calls.length = 0; f.geometry = true; f.entry.open(f.event);
+  assert.equal(f.calls[1][0], 'prevent');
+  assert.equal(f.options.target.kind, 'blank');
+  assert.equal(f.calls.some(call => call[0] === 'select'), false);
+});
+
+test('entry preserves single-target selection and pointer/UI/menu ordering', () => {
+  const f = entryFixture(), target = { kind: 'line', item: {} };
+  f.candidates.push(target); f.entry.open(f.event);
+  assert.deepEqual(f.calls.map(call => call[0]), ['geometry', 'prevent', 'close', 'point', 'pointer', 'command', 'candidates', 'select', 'ui', 'draw', 'items', 'open']);
+  assert.equal(f.options.target, target);
+  assert.equal(f.options.pointer, f.pointer);
+  assert.equal(f.options.event, f.event);
+  assert.equal(f.options.candidates, f.candidates);
+  assert.equal(f.options.items, f.items);
+  assert.equal(f.options.showCandidates, false);
+  assert.equal(f.calls.find(call => call[0] === 'select')[2], undefined);
+  assert.deepEqual(f.calls.find(call => call[0] === 'ui'), ['ui', false]);
+});
+
+test('entry distinguishes ordinary command, constraint operands and overlapping candidates without selecting', () => {
+  const f = entryFixture(); f.candidates.push({ kind: 'line', item: {} }); f.command = true;
+  f.entry.open(f.event);
+  assert.equal(f.calls.some(call => call[0] === 'candidates'), false);
+  assert.equal(f.options.candidates.length, 0);
+  assert.equal(f.options.showCandidates, false);
+  assert.equal(f.options.target.kind, 'blank');
+  f.calls.length = 0; f.constraint.command = { type: 'horizontal' };
+  f.entry.open(f.event);
+  assert.equal(f.calls.some(call => call[0] === 'candidates'), true);
+  assert.equal(f.calls.some(call => call[0] === 'items' || call[0] === 'select' || call[0] === 'ui'), false);
+  assert.equal(f.options.showCandidates, true);
+  assert.equal(f.options.items.length, 0);
+  f.calls.length = 0; f.constraint.command = null; f.command = false; f.candidates.push({ kind: 'line', item: {} });
+  f.entry.open(f.event);
+  assert.equal(f.options.showCandidates, true);
+  assert.equal(f.options.target.kind, 'blank');
+  assert.equal(f.calls.some(call => call[0] === 'select'), false);
+});

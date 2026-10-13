@@ -98,3 +98,21 @@ test('Fix observation reads live batch and constraint owners without mutating se
   assert.equal(selection.blockInstances[0], block);
   assert.equal(observation.state({ kind: 'circle', item: {} }), null);
 });
+
+test('candidate confirmation reads current constraint command and preserves operand versus selection branches', () => {
+  const session = {}, calls = [], target = { kind: 'line', item: {} }, hits = {}, pointer = { x: 4, y: 5 };
+  const action = CanvasContextTarget.createCandidateAction({
+    constraintTargetSession: session,
+    constraintHitsFromCanvasContextTarget: value => { assert.equal(value, target); calls.push(['hits']); return hits; },
+    handleConstraintOperandClick: (point, type, value) => { assert.equal(value, hits); calls.push(['operand', point, type]); },
+    selectCanvasContextTarget: (value, options) => { assert.equal(value, target); calls.push(['select', options.preserveSelectedSet]); },
+    updateUI: options => calls.push(['ui', options.refreshAnalysis]), draw: () => calls.push(['draw']),
+  });
+  session.command = { type: 'horizontal' };
+  action.select(target, pointer);
+  assert.deepEqual(calls, [['hits'], ['operand', pointer, 'horizontal']]);
+  calls.length = 0; session.command.type = 'vertical'; action.select(target);
+  assert.equal(calls[1][1].x, 0); assert.equal(calls[1][1].y, 0); assert.equal(calls[1][2], 'vertical');
+  calls.length = 0; session.command = null; action.select(target, pointer);
+  assert.deepEqual(calls, [['select', false], ['ui', false], ['draw']]);
+});
