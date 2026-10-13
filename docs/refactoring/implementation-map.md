@@ -779,3 +779,6 @@ OffsetTestDriverはOffset chain支援をcreateChainFixture（Geometry／UI準備
 
 
 DocumentTestDriver.createSketchDeletionFixtureは固定の親子／兄弟Sketch・Geometry／参照付き注記を既存reset／生成で準備し、既存deleteSketchへ確認なしの削除を委譲して現在scopeのSketch ID／active／Geometry・注記数を観測する。remove入口も既存deleteSketchへ同じ引数で直接委譲する。固定入力・色・Geometry参照・active Sketch切替と削除／照会順を保持し、cleanup／namespace／履歴・削除実装は持たない。appはtest query時だけ生成し、既存resetForSketchDeletion／deleteSketchForTestへ接続する。
+
+
+SketchTreeTestDriver.createSiblingVisibilityFixtureは固定Sibling Sketch／線を準備して、既存可視性・active関係／線幅・拘束色・Tree行の表示を観測する。createInactiveHoverFixtureはsource Sketchの寸法／Blockとactive子Sketchを既存生成・編集へ委譲して用意し、cache→fit→viewport移動→UI→draw→layout／client位置と所属関係を照会する。Definition追加／採番はappの既存入口、client位置はCanvasTestDriverへ接続する。createIdentityObservationは呼出し時のCanvas Hoverと既存Sketch関係のlabelを観測し、元のfallback／nullを保持する。固定入力・同一参照・所属／active切替・更新／照会順を維持し、独自可視性／編集先・hoverルール／scope・採番／履歴を持たない。appはtest query時だけ役割別に生成して既存三API名へ接続する。

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Sibling可視性fixture・inactive寸法／Block hover fixture・hover identity観測を既存SketchTreeTestDriver.createSiblingVisibilityFixture／createInactiveHoverFixture／createIdentityObservationへ分離。Geometry／寸法／Sketch／Block準備は既存生成・編集へ、Definition追加／採番はapp callbackへ、client位置はCanvasTestDriverへ接続する。固定入力・同一参照・所属／active切替とcache→fit→viewport移動→UI→draw→layout／位置照会、表示／identityのfallbackとnullを保持する。元の三つの処理本体との一致を依存port置換後に確認。app.jsは6,543→6,465行（78行減、今回の再開から合計1,269行減）。構文480ファイル・単体1,297件・関連E2E103件が成功（すべてexit 0、E2E1.3分）。全利用箇所のunified-uiを実行。新規テストはなく、既存Sibling表示・inactive Geometry／寸法／Blockのidentityと編集先を変えない選択、周辺可視性を確認した。ログはcad-inactive-sketch-hover-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自可視性／編集先・hoverルール／scope／採番／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch削除のfixtureと既存削除への実行入口をDocumentTestDriver.createSketchDeletionFixtureへ分離。固定の親子／兄弟Sketch・Geometry／参照付き注記の準備を既存reset／生成へ、削除を既存deleteSketchへ委譲し、現在scopeのSketch ID／active・Geometry／注記数を観測する。固定入力・色・同一Geometry参照・active切替・確認なしの削除引数と照会順を保持し、元の二つの処理本体との一致を依存port置換後に確認。app.jsは6,568→6,543行（25行減、今回の再開から合計1,191行減）。構文480ファイル・単体1,297件・関連E2E124件が成功（すべてexit 0、E2E1.5分）。全利用箇所のphase0-characterization／unified-uiを実行。新規テストはなく、既存子孫cleanup／Geometry・拘束／注記削除とUndo・周辺UIを確認した。ログはcad-sketch-deletion-fixture-{check,unit,e2e}.log。全E2Eはこの単位では未実行。削除／cleanup／namespace／履歴の製品処理は変更していない。全体目標は未完了。
 
 ### 前回の区切り

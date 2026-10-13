@@ -5043,6 +5043,13 @@
     const offsetUiFixture = window.OffsetTestDriver.createUiFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen });
     const offsetUiObservation = window.OffsetTestDriver.createUiObservation({ currentScope: workspace.current, OffsetConstraint, offsetSelection, drawingPreview, offsetDistanceFromPointer, pendingCommandSession, document, Line });
     const offsetDirectionFixture = window.OffsetTestDriver.createDirectionFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, VerticalConstraint, solveAndRefresh, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen });
+    const siblingVisibilityFixture = window.SketchTreeTestDriver.createSiblingVisibilityFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, addPoint, addLine, updateUI, draw, isVisibleSketchId, sketchRelationToActive, sketchStrokeWidth, constraintStatusColor, document });
+    const inactiveHoverFixture = window.SketchTreeTestDriver.createInactiveHoverFixture({
+      resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope: workspace.current, isDimensionConstraint, createEmptyBlockDefinition, Point, Line,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`, invalidateBlockProjectionCache, fitAllGeometryToViewport, viewport, updateUI, draw,
+      dimensionLayout, targetFromConstraint, clientPosition: canvasTestDriver.clientPosition, blockInstanceDisplayCenter, sketchIdentityRelationLabel,
+    });
+    const hoverIdentityObservation = window.SketchTreeTestDriver.createIdentityObservation({ canvasHover, sketchIdentityRelationLabel });
     const sidebarInspectionFixture = window.PropertiesTestDriver.createInspectionFixture({
       resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, assignConstraintSketchId, activeSketchId, currentScope: workspace.current, updateUI, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen,
     });
@@ -5474,94 +5481,9 @@
       updateOffsetChainTargetForTest: offsetChainTargetEdit.update,
       canReselectOffsetResultChainForTest: offsetChainReselection.reselect,
       resetForSketchDeletion: sketchDeletionFixture.reset,
-      resetForSiblingVisibility() {
-        resetModelState();
-        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
-        model.activeSketchId = "S2";
-        const p1 = addPoint(-40, 0, false, "endpoint");
-        const p2 = addPoint(40, 0, false, "endpoint");
-        const line = addLine(p1, p2);
-        model.activeSketchId = DEFAULT_SKETCH_ID;
-        updateUI();
-        draw();
-        return {
-          visible: isVisibleSketchId("S2"),
-          relation: sketchRelationToActive("S2"),
-          strokeWidth: sketchStrokeWidth(line),
-          color: constraintStatusColor(line),
-          rowHasVisibleClass: document.querySelector('.sketch-item[data-id="S2"]')?.classList.contains("visible") || false,
-        };
-      },
-      resetForInactiveDimensionAndBlockHover() {
-        resetModelState();
-        const sourceSketchId = activeSketchId();
-        const p1 = addPoint(-120, -55, false, "endpoint");
-        const p2 = addPoint(-20, -55, false, "endpoint");
-        const line = addLine(p1, p2);
-        const target = { kind: "line-length", line, p1, p2, value: line.length() };
-        addDistanceConstraintFromTarget(
-          target,
-          line.length(),
-          dimensionFromAnchor(target, { x: -70, y: -95 }),
-          { sketchId: sourceSketchId },
-        );
-        const dimensionConstraint = model.constraints.find((constraint) => isDimensionConstraint(constraint));
-
-        const definition = createEmptyBlockDefinition("Hover Block");
-        const bp1 = new Point("BP1", -30, 0, false, "endpoint");
-        const bp2 = new Point("BP2", 30, 0, false, "endpoint");
-        bp1.sketchId = sourceSketchId;
-        bp2.sketchId = sourceSketchId;
-        const blockLine = new Line("BL1", bp1, bp2);
-        blockLine.sketchId = sourceSketchId;
-        definition.points.push(bp1, bp2);
-        definition.lines.push(blockLine);
-        documentModel.blockDefinitions.push(definition);
-        const instance = {
-          id: `BI${blockInstanceSeq++}`,
-          definitionId: definition.id,
-          sketchId: sourceSketchId,
-          x: 95,
-          y: 65,
-          rotation: 0,
-          fixed: false,
-          rotationLocked: false,
-          enabledSketchIds: [sourceSketchId],
-          appearanceOverride: {},
-        };
-        model.blockInstances.push(instance);
-        invalidateBlockProjectionCache();
-
-        const activeChildId = "S2";
-        model.sketches.push({ id: activeChildId, name: "Sketch-2", parentSketchId: sourceSketchId, kind: "sketch", visible: true, appearance: {} });
-        model.activeSketchId = activeChildId;
-        fitAllGeometryToViewport(180);
-        viewport.update({ x: viewport.x + (80) });
-        updateUI();
-        draw();
-        const layout = dimensionLayout(targetFromConstraint(dimensionConstraint), dimensionConstraint.dimension);
-        return {
-          dimension: this.worldClientPositionForTest(layout.text),
-          line: this.worldClientPositionForTest({ x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 }),
-          block: this.worldClientPositionForTest(blockInstanceDisplayCenter(instance)),
-          dimensionId: dimensionConstraint.name || "寸法",
-          lineId: line.id,
-          blockId: instance.id,
-          sourceSketchId,
-          activeSketchId: activeChildId,
-          relation: sketchIdentityRelationLabel(sourceSketchId),
-        };
-      },
-      hoverIdentityStateForTest() {
-        return canvasHover.current.sketchIdentity ? {
-          kind: canvasHover.current.sketchIdentity.kind || null,
-          id: canvasHover.current.sketchIdentity.id,
-          sketchId: canvasHover.current.sketchIdentity.sketchId,
-          relation: sketchIdentityRelationLabel(canvasHover.current.sketchIdentity.sketchId),
-          hoveredDimension: canvasHover.current.dimension ? canvasHover.current.dimension.name || "寸法" : null,
-          hoveredBlock: canvasHover.current.block?.id || null,
-        } : null;
-      },
+      resetForSiblingVisibility: siblingVisibilityFixture.reset,
+      resetForInactiveDimensionAndBlockHover: inactiveHoverFixture.reset,
+      hoverIdentityStateForTest: hoverIdentityObservation.state,
       geometryStrokeStyleCasesForTest() {
         resetModelState();
         const activeNormal = addLine(addPoint(-80, -25, false, "endpoint"), addPoint(80, -25, false, "endpoint"));
