@@ -211,5 +211,67 @@
     return Object.freeze({ orderCase });
   }
 
-  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture });
+  function createDimensionSelectionFixture({ resetModelState, addPoint, addLine, DistanceConstraint, dimensionFromAnchor, pushModelConstraint, canvasSelection, constraintTargetSession, updateUI, fitAllGeometryToViewport, draw, canvas }) {
+    function reset() {
+      resetModelState();
+      const p1 = addPoint(-50, 0, false, "endpoint");
+      const p2 = addPoint(50, 0, false, "endpoint");
+      const line = addLine(p1, p2);
+      const target = { kind: "line-length", line, p1, p2, value: line.length() };
+      const constraint = new DistanceConstraint(p1, p2, line.length());
+      constraint.dimension = dimensionFromAnchor(target, { x: 0, y: -30 });
+      pushModelConstraint(constraint);
+      canvasSelection.set("dimensionConstraint", constraint);
+      constraintTargetSession.replaceCommand({ type: "parallel" });
+      updateUI();
+      fitAllGeometryToViewport(180);
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      return { blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 } };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createDimensionSelectionObservation({ canvasSelection, constraintTargetSession }) {
+    function state() {
+      return {
+        selected: Boolean(canvasSelection.dimensionConstraint),
+        command: constraintTargetSession.command?.type || null,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createSupportStatusFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, PointOnLineConstraint, addArc, RadiusConstraint, solveSketchAndDependents, activeSketchId, snapshotModelState, refreshConstraintAnalysis, fitAllGeometryToViewport, draw, constraintStatusOf, constraintStatusColor, readSummary }) {
+    function reset() {
+      resetModelState();
+
+      const anchor = addPoint(-60, -40, true, "explicit");
+      const supportLine = addLine(addPoint(-100, -40, false, "endpoint"), addPoint(-20, -40, false, "endpoint"));
+      pushModelConstraint(new HorizontalConstraint(supportLine));
+      pushModelConstraint(new PointOnLineConstraint(anchor, supportLine));
+
+      const underLine = addLine(addPoint(20, 0, false, "endpoint"), addPoint(100, 0, false, "endpoint"));
+      pushModelConstraint(new HorizontalConstraint(underLine));
+
+      const fullLine = addLine(addPoint(-100, 50, true, "endpoint"), addPoint(-20, 50, true, "endpoint"));
+      const supportArc = addArc(addPoint(65, 60, true, "center"), 30, Math.PI, Math.PI * 1.5);
+      pushModelConstraint(new RadiusConstraint(supportArc, 30));
+
+      solveSketchAndDependents(activeSketchId(), snapshotModelState());
+      refreshConstraintAnalysis();
+      fitAllGeometryToViewport(150);
+      draw();
+      return {
+        supportLine: { status: constraintStatusOf(supportLine), color: constraintStatusColor(supportLine) },
+        underLine: { status: constraintStatusOf(underLine), color: constraintStatusColor(underLine) },
+        fullLine: { status: constraintStatusOf(fullLine), color: constraintStatusColor(fullLine) },
+        supportArc: { status: constraintStatusOf(supportArc), color: constraintStatusColor(supportArc) },
+        summary: readSummary(),
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture });
 })();

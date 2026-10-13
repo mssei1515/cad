@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+循環参照の読込fixtureを既存DocumentTestDriver.createCyclicReferenceFixtureへ、拘束寸法Selectionのfixture／観測と支持状態fixtureを既存ConstraintTestDriver.createDimensionSelectionFixture／createDimensionSelectionObservation／createSupportStatusFixtureへ分離。既存生成／参照mark・serialize／load・解析／UI、Selection／command・fit／draw・求解／status／色へ役割別に接続し、reference error／summaryは明示した既存照会入口を使う。固定入力・同一参照・更新／照会順とbooleanを維持し、元の四つの処理本体との一致を依存port置換後に確認。app.jsは6,256→6,198行（58行減、今回の再開から合計1,536行減）。構文482ファイル・単体1,298件・関連E2E124件が成功（すべてexit 0、unified-ui103件1.4分、phase0-characterization21件15.7秒）。全利用箇所の二ファイルを実行。新規テストはなく、既存cycle読込・寸法Selection解除／command・支持status／色とvisual回帰を確認した。ログはcad-reference-selection-fixtures-{check,unit,e2e,phase0}.log。全E2Eはこの単位では未実行。独自cycle判定／参照・Selection／command／拘束状態／求解／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Sibling subtreeの参照fixture／可視性観測を既存SketchTreeTestDriver.createSubtreeReferenceFixture／createSubtreeVisibilityObservationへ、参照元Line移動／依存求解順fixtureを既存ConstraintTestDriver.createReferenceLineMove／createDependencyOrderFixtureへ分離。既存Sketch／Geometry生成・参照有効性・関係label／色／可視性／DOM、参照拘束・依存求解／解析・UI／drawへ役割別に接続する。固定入力・同一参照・所属／active切替と更新／照会順を保持し、元の四つの処理本体との一致を依存port置換後に確認。app.jsは6,352→6,256行（96行減、今回の再開から合計1,478行減）。構文482ファイル・単体1,298件・関連E2E103件が成功（すべてexit 0、E2E1.4分）。全利用箇所のunified-uiを実行。新規テストはなく、既存subtree参照／可視性・参照元の移動／依存求解順と周辺操作を確認した。ログはcad-subtree-reference-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自参照規則／求解順・namespace／scope／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

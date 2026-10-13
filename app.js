@@ -5044,6 +5044,16 @@
     const dependencyOrderFixture = window.ConstraintTestDriver.createDependencyOrderFixture({
       resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addLine, addPoint, markReferenceConstraint, PointOnLineConstraint, CoincidentConstraint, refreshReferenceConstraintValidity, solveReferenceDependentSketches,
     });
+    const cyclicReferenceFixture = window.DocumentTestDriver.createCyclicReferenceFixture({
+      resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, addPoint, markReferenceConstraint, CoincidentConstraint, serializeModel, loadModelData,
+      refreshConstraintAnalysis, updateUI, constraintIsOperational, readReferenceErrors: () => referenceConstraintState.errorReasons(), document,
+    });
+    const dimensionSelectionFixture = window.ConstraintTestDriver.createDimensionSelectionFixture({ resetModelState, addPoint, addLine, DistanceConstraint, dimensionFromAnchor, pushModelConstraint, canvasSelection, constraintTargetSession, updateUI, fitAllGeometryToViewport, draw, canvas });
+    const dimensionSelectionObservation = window.ConstraintTestDriver.createDimensionSelectionObservation({ canvasSelection, constraintTargetSession });
+    const supportStatusFixture = window.ConstraintTestDriver.createSupportStatusFixture({
+      resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, PointOnLineConstraint, addArc, RadiusConstraint, solveSketchAndDependents, activeSketchId, snapshotModelState,
+      refreshConstraintAnalysis, fitAllGeometryToViewport, draw, constraintStatusOf, constraintStatusColor, readSummary: () => constraintAnalysis.summary(),
+    });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5507,28 +5517,7 @@
       moveSiblingSubtreeReferenceLine: referenceLineMove.move,
       deleteSketchForTest: sketchDeletionFixture.remove,
       referenceDependencyOrderCase: dependencyOrderFixture.orderCase,
-      cyclicReferenceLoadCase() {
-        resetModelState();
-        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
-        model.activeSketchId = DEFAULT_SKETCH_ID;
-        const p1 = addPoint(0, 0, false, "explicit");
-        model.activeSketchId = "S2";
-        const p2 = addPoint(20, 0, false, "explicit");
-        const forward = markReferenceConstraint(new CoincidentConstraint(p1, p2), "S2", DEFAULT_SKETCH_ID);
-        const reverse = markReferenceConstraint(new CoincidentConstraint(p2, p1), DEFAULT_SKETCH_ID, "S2");
-        model.constraints.push(forward, reverse);
-        const serialized = serializeModel();
-        serialized.activeSketchId = DEFAULT_SKETCH_ID;
-        loadModelData(serialized);
-        refreshConstraintAnalysis();
-        updateUI();
-        return {
-          total: model.constraints.length,
-          operational: model.constraints.filter(constraintIsOperational).length,
-          invalid: referenceConstraintState.errorReasons(),
-          badges: document.querySelectorAll(".sketch-reference-error-badge, .constraint-reference-error-badge").length,
-        };
-      },
+      cyclicReferenceLoadCase: cyclicReferenceFixture.loadCase,
       sketchVisibilityState(sketchId) {
         const sketch = sketchById(sketchId);
         const serialized = serializeModel().sketches.find((item) => item.id === sketchId);
@@ -5539,56 +5528,9 @@
           buttonPressed: document.querySelector(`.sketchVisibilityBtn[data-id="${sketchId}"]`)?.getAttribute("aria-pressed") || null,
         };
       },
-      resetForConstraintDimensionSelection() {
-        resetModelState();
-        const p1 = addPoint(-50, 0, false, "endpoint");
-        const p2 = addPoint(50, 0, false, "endpoint");
-        const line = addLine(p1, p2);
-        const target = { kind: "line-length", line, p1, p2, value: line.length() };
-        const constraint = new DistanceConstraint(p1, p2, line.length());
-        constraint.dimension = dimensionFromAnchor(target, { x: 0, y: -30 });
-        pushModelConstraint(constraint);
-        canvasSelection.set("dimensionConstraint", constraint);
-        constraintTargetSession.replaceCommand({ type: "parallel" });
-        updateUI();
-        fitAllGeometryToViewport(180);
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        return { blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 } };
-      },
-      constraintDimensionSelectionState() {
-        return {
-          selected: Boolean(canvasSelection.dimensionConstraint),
-          command: constraintTargetSession.command?.type || null,
-        };
-      },
-      resetForSupportConstraintStatus() {
-        resetModelState();
-
-        const anchor = addPoint(-60, -40, true, "explicit");
-        const supportLine = addLine(addPoint(-100, -40, false, "endpoint"), addPoint(-20, -40, false, "endpoint"));
-        pushModelConstraint(new HorizontalConstraint(supportLine));
-        pushModelConstraint(new PointOnLineConstraint(anchor, supportLine));
-
-        const underLine = addLine(addPoint(20, 0, false, "endpoint"), addPoint(100, 0, false, "endpoint"));
-        pushModelConstraint(new HorizontalConstraint(underLine));
-
-        const fullLine = addLine(addPoint(-100, 50, true, "endpoint"), addPoint(-20, 50, true, "endpoint"));
-        const supportArc = addArc(addPoint(65, 60, true, "center"), 30, Math.PI, Math.PI * 1.5);
-        pushModelConstraint(new RadiusConstraint(supportArc, 30));
-
-        solveSketchAndDependents(activeSketchId(), snapshotModelState());
-        refreshConstraintAnalysis();
-        fitAllGeometryToViewport(150);
-        draw();
-        return {
-          supportLine: { status: constraintStatusOf(supportLine), color: constraintStatusColor(supportLine) },
-          underLine: { status: constraintStatusOf(underLine), color: constraintStatusColor(underLine) },
-          fullLine: { status: constraintStatusOf(fullLine), color: constraintStatusColor(fullLine) },
-          supportArc: { status: constraintStatusOf(supportArc), color: constraintStatusColor(supportArc) },
-          summary: constraintAnalysis.summary(),
-        };
-      },
+      resetForConstraintDimensionSelection: dimensionSelectionFixture.reset,
+      constraintDimensionSelectionState: dimensionSelectionObservation.state,
+      resetForSupportConstraintStatus: supportStatusFixture.reset,
       resetForReferencePointLineCoincidence() {
         resetModelState();
         const parentPoint = addPoint(-45, 0, false, "explicit");

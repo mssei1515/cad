@@ -63,5 +63,31 @@
     }
     return Object.freeze({ reset, remove });
   }
-  window.DocumentTestDriver = Object.freeze({ createImport, createLoad, createSketchDeletionFixture });
+  function createCyclicReferenceFixture({ resetModelState, currentScope, rootSketchId, defaultSketchId, addPoint, markReferenceConstraint, CoincidentConstraint, serializeModel, loadModelData, refreshConstraintAnalysis, updateUI, constraintIsOperational, readReferenceErrors, document }) {
+    function loadCase() {
+      resetModelState();
+      currentScope().sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: rootSketchId, kind: "sketch", visible: true });
+      currentScope().activeSketchId = defaultSketchId;
+      const p1 = addPoint(0, 0, false, "explicit");
+      currentScope().activeSketchId = "S2";
+      const p2 = addPoint(20, 0, false, "explicit");
+      const forward = markReferenceConstraint(new CoincidentConstraint(p1, p2), "S2", defaultSketchId);
+      const reverse = markReferenceConstraint(new CoincidentConstraint(p2, p1), defaultSketchId, "S2");
+      currentScope().constraints.push(forward, reverse);
+      const serialized = serializeModel();
+      serialized.activeSketchId = defaultSketchId;
+      loadModelData(serialized);
+      refreshConstraintAnalysis();
+      updateUI();
+      return {
+        total: currentScope().constraints.length,
+        operational: currentScope().constraints.filter(constraintIsOperational).length,
+        invalid: readReferenceErrors(),
+        badges: document.querySelectorAll(".sketch-reference-error-badge, .constraint-reference-error-badge").length,
+      };
+    }
+    return Object.freeze({ loadCase });
+  }
+
+  window.DocumentTestDriver = Object.freeze({ createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture });
 })();
