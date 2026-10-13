@@ -908,6 +908,9 @@
     nonConvergenceReason: () => applicationText("Parameter計算が収束しません", "Parameter calculation did not converge"),
     profile: work => interactionProfiler.active ? profileInteractionWork("parameters", work) : work(),
   });
+  const solveRefreshCommand = window.SolveRefreshCommand.create({
+    activeSketchId, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
+  });
   const filletCommand = window.FilletCommand.create({
     cancelConstraintTargetCommand, selectedLines: () => canvasSelection.lines, getPointer: () => lastPointerWorld,
     prepareStart: () => drawOperationLifecycle.prepare("fillet"), clearSnap, updateToolbar,
@@ -1420,16 +1423,7 @@
 
 
 
-  function solveAndRefresh(label = "自動solve", sketchId = activeSketchId()) {
-    const solved = stabilizeActiveParameterNamespace(sketchId);
-    const result = solved.result;
-    const analysis = refreshConstraintAnalysis();
-    setSolveResultHint(label, solved, analysis, solved.dependent);
-    updateUI({ refreshAnalysis: false });
-    draw();
-    if (solved.success && !historyController.restoring) recordHistory(label);
-    return result;
-  }
+  function solveAndRefresh(...args) { return solveRefreshCommand.run(...args); }
 
   function stabilizeActiveParameterNamespace(...args) { return parameterStabilization.stabilize(...args); }
 

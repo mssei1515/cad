@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+求解後の操作調整を新しいSolveRefreshCommandへ分離。active Sketch／ParameterStabilization・ConstraintAnalysis／hint／UI／draw／Historyと履歴記録の8入口へ接続する。求解→分析→hint→UI(refreshAnalysis:false)→描画→成功かつ現在restoringでない場合だけhistory確定の順、raw result／solved／analysis参照、default Sketch評価、失敗でも表示する流れと各段階の例外伝播／後続省略を維持。新求解／snapshot／回復規則や状態を持たず、モデル回復は既存ownerへ残す。app.jsは4,869→4,863行（6行減、今回の再開から合計2,871行減）。構文506ファイル・単体1,386件・関連E2E191件が成功（すべてexit 0）。新unit3件でdefault／explicit Sketchとresult参照・進行順、失敗／restoring時のhistory条件と描画後の現在値、各段階例外を確認。元body一致と8portの初期化順・早期command登録をaudit。unified-ui／blocks／file-safety／derived-selection-copy／constraint-fixed／phase0-characterizationの184件（2.4分）とconstraint-drag-regressionsのnative pointer reversals and undo限定7件（25.6秒）を実行。後者の全fileや全E2Eは未実行。index.html、構文／unit実行リスト、file URLのscript期待値を同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-solve-refresh-command-{check,unit,e2e,native-e2e}.log。全体目標は未完了。
+
+### 前回の区切り
+
 モデル寸法の既定値適用を既存DocumentState.normalizeDimensionStateへ集約。明示scopeの拘束を既存target解決／DimensionPlacement正規化の2入口で順に処理し、targetなし短絡・constraint／array参照・dimension代入順と失敗時の部分反映／例外伝播を維持。app adapterはcall時の元modelとplacement receiverを維持し、独自配置／Solver規則を持たない。定義以外の呼出／公開がない旧sketchSolveErrorTitle／dependentErrorSummaryを除去し、結果表示は既存ConstraintFeedbackへ残す。app.jsは4,886→4,869行（17行減、今回の再開から合計2,865行減）。構文504ファイル・単体1,383件・関連E2E186件が成功（すべてexit 0、E2E2.5分）。既存DocumentState unitへ2件追加し、順序／constraintとarray参照・targetなし短絡・raw／undefined寸法、失敗時の部分代入／後続省略を確認。元loop一致とadapter receiver・Document適用の登録順、unused helper全呼出関係をaudit。unified-ui／file-safety／blocks／dimension-prefix／multiple-dimensions／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-dimension-state-normalization-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
