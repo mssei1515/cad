@@ -1029,6 +1029,11 @@
     construction: slotConstruction, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
     setPointerPreview: point => { drawingPreview.setPointer(point); }, clearSnap, clearSelection, setHint, updateUI, draw,
   });
+  const authoringPreviewLayer = window.AuthoringPreviewRenderer.createLayer({
+    renderer: authoringPreview, readMode: () => mode, readPointer: () => drawingPreview.pointer, readTrim: () => drawingPreview.trim,
+    lineCommand, rectangleCommand, slotCommand, circularCommands, splineDraft, centerlineCommand, projectPointToCenterlineSupport,
+    readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
+  });
   const { reset: resetSlotCommandState } = slotCommand;
   function handleSlotClick(point) {
     const snapped = snapForDrawing(point);
@@ -2575,18 +2580,11 @@
     const annotationPreview = annotationCommand.preview();
     if (annotationPreview?.type === "leader") drawAnnotationLeader(annotationPreview, true);
     else if (annotationPreview) drawAnnotationText(annotationPreview, "#2563eb");
-    drawTemporaryLine();
-    drawCenterlinePreview();
-    drawRectanglePreview();
-    drawSlotPreview();
-    drawCirclePreview();
-    drawArcPreview();
-    drawThreePointArcPreview();
-    drawSplinePreview();
+    authoringPreviewLayer.draw();
     drawBlockPlacementPreview();
     drawFreeInstancePreview();
     drawOffsetPreview();
-    drawTrimPreview();
+    authoringPreviewLayer.drawTrimPreview();
     drawSnapMarker();
     drawArcEndpointHandles();
     drawSplineEditHandles();
@@ -2631,7 +2629,6 @@
   function drawArcs(...args) { return geometryLayer.drawArcs(...args); }
   function drawSplines(...args) { return geometryLayer.drawSplines(...args); }
 
-  function drawSplinePreview() { if (mode === "spline") authoringPreview.drawSpline(splineDraft.points, drawingPreview.pointer); }
 
   function drawSplineEditHandles() { geometryRenderer.drawSplineEditHandles(splineHandleState()); }
 
@@ -2693,36 +2690,23 @@
 
 
 
-  function drawTemporaryLine() { if (mode === "line") authoringPreview.drawLine(lineCommand.startPoint, drawingPreview.pointer); }
 
-  function drawRectanglePreview() { if (mode === "rectangle") authoringPreview.drawRectangle(rectangleCommand.startPoint, drawingPreview.pointer); }
 
-  function drawSlotPreview() { if (mode === "slot") authoringPreview.drawSlot(slotCommand.firstCenter, slotCommand.secondCenter, drawingPreview.pointer); }
 
-  function drawCirclePreview() { if (mode === "circle") authoringPreview.drawCircle(circularCommands.circleCenterPoint, drawingPreview.pointer); }
 
-  function drawArcPreview() { if (mode === "arc") authoringPreview.drawArc(circularCommands.arcCenterPoint, circularCommands.arcStartPoint, drawingPreview.pointer); }
 
-  function drawThreePointArcPreview() { if (mode === "three-point-arc") authoringPreview.drawThreePointArc(circularCommands.threePointArcStart, circularCommands.threePointArcEnd, drawingPreview.pointer); }
 
   function drawOffsetPreview() {
     if (mode !== "offset") return;
     offsetPreviewRenderer.draw(offsetCommand.preview(drawingPreview.pointer));
   }
 
-  function drawTrimPreview() { if (mode === "trim") authoringPreview.drawTrim(drawingPreview.trim); }
 
   function drawSnapMarker() { interactionOverlay.drawSnapMarker(drawingSnap.active); }
   function drawSketchIdentityLabel() {
     interactionOverlay.drawSketchIdentityLabel({ hoveredIdentity: canvasHover.current.sketchIdentity, selection: canvasSelection, pointer: lastPointerWorld });
   }
 
-  function drawCenterlinePreview() {
-    if (mode !== "centerline" || !centerlineCommand.support?.ok) return;
-    authoringPreview.drawCenterline(centerlineCommand.support, centerlineCommand.firstPoint,
-      drawingPreview.pointer ? projectPointToCenterlineSupport(drawingPreview.pointer) : null,
-      { width: canvas.clientWidth, height: canvas.clientHeight });
-  }
 
   function drawArcEndpointHandles() { geometryRenderer.drawArcEndpointHandles(allGeometryArcs().filter(isVisibleSketchElement)); }
 
@@ -4427,7 +4411,7 @@
     const setTestDrawingMode = value => { mode = value; };
     const draftDashCases = window.CanvasRenderTestDriver.createDraftDashCases({
       setMode: setTestDrawingMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
-      drawTemporaryLine, drawRectanglePreview, drawSlotPreview, drawCirclePreview, drawArcPreview, drawOffsetPreview, drawTrimPreview,
+      drawTemporaryLine: authoringPreviewLayer.drawTemporaryLine, drawRectanglePreview: authoringPreviewLayer.drawRectanglePreview, drawSlotPreview: authoringPreviewLayer.drawSlotPreview, drawCirclePreview: authoringPreviewLayer.drawCirclePreview, drawArcPreview: authoringPreviewLayer.drawArcPreview, drawOffsetPreview, drawTrimPreview: authoringPreviewLayer.drawTrimPreview,
     });
     const blockDashCases = window.CanvasRenderTestDriver.createBlockDashCases({
       createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition),

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+作図previewのmode判定と現在command情報取得・描画接続を既存AuthoringPreviewRenderer.createLayerへ分離。renderer／mode・pointer・trimのread入口、Line／Rectangle／Slot／Circular／Spline／Centerlineの既存一時値、Centerline投影／Canvas寸法の12portで接続する。Line→Centerline→Rectangle→Slot→Circle→Arc→ThreePointArc→Splineの判定／描画順、現在値／元参照、support短絡とpointer不在時の投影省略を維持し、TrimはBlock／Instance／Offsetの後の入口へ残す。モデル／session変更を持たない。診断登録はfactory生成後と確認し、新入口へ直接接続して旧preview guard／中継関数を除去。app.jsは5,038→5,022行（16行減、今回の再開から合計2,712行減）。構文501ファイル・単体1,361件・関連E2E153件が成功（すべてexit 0、E2E2.0分）。既存AuthoringPreview unitへ2件追加し、各modeと現在command参照／painter receiver、描画中mode変化の判定順、Centerline support／pointer／投影とCanvas sizeの短絡／順序を確認。全9body一致と12portの初期化順・診断登録順をaudit。unified-ui／spline／slot-dimension／tool-flyouts／hatching／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-authoring-preview-layer-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 直線／角度寸法の描画plan組立てを既存DimensionPresentation.createPainterへ分離。既存Layout／Metrics／Renderer、dimensionLayout入口、外観／現在Sketch／shaft係数の7portに接続する。target／dimensionとlayout短絡、外観既定値と評価順、plan／円弧延長／angle span・外側terminatorとshaft変換／radius下限、rendererへ渡す参照／flags・receiver／呼出順と元の戻り値を維持する。appは生成接続とhoisted入口へ縮小し、不要になった5個のLayout／Metrics関数参照を除去。app.jsは5,052→5,038行（14行減、今回の再開から合計2,696行減）。構文501ファイル・単体1,359件・関連E2E154件が成功（すべてexit 0、E2E2.1分）。既存DimensionPresentation unitへ3件追加し、default Sketch／short circuitと評価順、直線payload／参照／flags、負の角度span・shaft変換／radius下限／inside短絡を確認。元body一致と7portの初期化順をaudit。unified-ui／dimension-prefix／annotation-display-size／multiple-dimensions／slot-dimension／png-export／phase0-characterizationを実行。関数参照整理後も構文／全unitを再実行し、E2Eは整理済みコードで実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-dimension-painter-{check-final,unit-final,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
