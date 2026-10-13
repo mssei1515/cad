@@ -67,5 +67,96 @@
     return Object.freeze({ resolve });
   }
 
-  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution });
+  function createAnalysisObservation({ activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, analyzeConstraintState, acceptError, vectorNorm, currentScope, elementSketchId }) {
+    function analysis() {
+      const sketchId = activeSketchId();
+      const variables = sketchSolveVariables(sketchId);
+      const constraints = sketchSolveConstraints(sketchId);
+      const analysis = analyzeConstraintState({
+        variables,
+        constraints,
+        lines: sketchSolveLines(sketchId),
+        errorTolerance: acceptError,
+      });
+      const largestConstraintErrors = constraints
+        .map((constraint, index) => {
+          const error = constraint.error();
+          const values = Array.isArray(error) ? error : [error];
+          return {
+            index,
+            name: constraint.name,
+            type: constraint.constructor.name,
+            errorNorm: vectorNorm(values),
+          };
+        })
+        .filter((entry) => entry.errorNorm > 1e-8)
+        .sort((a, b) => b.errorNorm - a.errorNorm)
+        .slice(0, 12);
+      return {
+        stable: analysis.stable,
+        errorNorm: analysis.errorNorm,
+        rank: analysis.rank,
+        variableCount: analysis.variableCount,
+        freeVariableCount: analysis.freeVariableCount,
+        constraintCount: constraints.length,
+        pointCount: currentScope().points.filter((point) => elementSketchId(point) === sketchId).length,
+        lineCount: currentScope().lines.filter((line) => elementSketchId(line) === sketchId).length,
+        circleCount: currentScope().circles.filter((circle) => elementSketchId(circle) === sketchId).length,
+        arcCount: currentScope().arcs.filter((arc) => elementSketchId(arc) === sketchId).length,
+        splineCount: currentScope().splines.filter((spline) => elementSketchId(spline) === sketchId).length,
+        largestConstraintErrors,
+      };
+    }
+    return Object.freeze({ analysis });
+  }
+
+  function createBlockObservation({ refreshConstraintAnalysis, blockProjectionBundles }) {
+    function state(instanceId = null) {
+      const state = refreshConstraintAnalysis();
+      const bundles = blockProjectionBundles().filter((bundle) => !instanceId || bundle.instance.id === instanceId);
+      return {
+        stable: state.analysis.stable,
+        summary: { ...state.summary },
+        projections: bundles.flatMap((bundle) => [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])].map((item) => ({
+          id: item.id,
+          status: state.statuses.get(item) || null,
+        }))),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createBlockConstraintInsertion({ blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, readAnalysis, readBlockState, serializeModel }) {
+    function add(pointInstanceId, pointLocalId, lineInstanceId, lineLocalId) {
+      const pointInstance = blockInstanceById(pointInstanceId);
+      const lineInstance = blockInstanceById(lineInstanceId);
+      const point = pointInstance ? blockProjectionBundle(pointInstance).points.find((item) => item.localElement?.id === pointLocalId) : null;
+      const line = lineInstance ? blockProjectionBundle(lineInstance).lines.find((item) => item.localElement?.id === lineLocalId) : null;
+      if (!point || !line) return { committed: false, reason: "projection-not-found" };
+      const committed = commitNewConstraint("coincident", new PointOnLineConstraint(point, line)) === true;
+      return {
+        committed,
+        analysis: readAnalysis(),
+        status: readBlockState(pointInstanceId),
+        serialized: serializeModel(),
+      };
+    }
+    return Object.freeze({ add });
+  }
+
+  function createStatusObservation({ refreshConstraintAnalysis, elementSketchId, activeSketchId }) {
+    function state() {
+      const state = refreshConstraintAnalysis();
+      return {
+        stable: state.analysis.stable,
+        errorNorm: state.analysis.errorNorm,
+        freeDof: state.analysis.freeVariableCount,
+        items: [...state.statuses].filter(([item]) => elementSketchId(item) === activeSketchId())
+          .map(([item, status]) => ({ id: item.id, status })),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation });
 })();

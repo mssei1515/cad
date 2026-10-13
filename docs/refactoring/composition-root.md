@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+拘束診断とBlock投影支援を既存ConstraintTestDriverのcreateStatusObservation／createAnalysisObservation／createBlockObservation／createBlockConstraintInsertionへ分離。既存refresh・Solver解析・scope／投影／commitへ役割別の依存を渡し、所属Sketch・同一参照status照会、誤差閾値／降順／上位12件、summaryコピー、対象なしの理由とliteral true判定、解析→Block状態→保存値の観測順を保持する。Geometryドラッグにも同じstatus観測を渡し、公開hook同士のthis依存を解消。元の四つの処理本体との一致を依存port置換後に確認。app.jsは7,507→7,445行（62行減、今回の再開から合計289行減）。構文475ファイル・単体1,296件・関連E2E239件が成功（すべてexit 0、E2E5.0分）。診断・Block支援の利用9ファイルとunified-uiの計10ファイルを実行し、単体3件でcall-time scope・誤差順位／件数・投影参照・summaryコピーと拒否後の観測順を確認した。ログはcad-constraint-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Solver／拘束状態／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Geometryドラッグのテスト手順と観測を既存GeometryDragTestDriver.createGeometryDriverへ分離。Point／Line／Circle／Arc／Arc端点の開始位置とsnapshot、fractionのfinite判定／clamp、sessionなしの初期状態・対象なしのnull、初期位置基準・計測・結果fallbackと既存sessionの実行順を保持する。拘束状態はapp内の従来本体をreadTestConstraintStatusesとして共有し、inspectConstraints時だけ明示した入口で照会する。元のGeometryドラッグ／拘束状態本体との一致を依存port置換後に確認。app.jsは7,615→7,507行（108行減、今回の再開から合計227行減）。構文475ファイル・単体1,293件・関連E2E162件が成功（すべてexit 0、E2E20.6分）。全利用箇所のadversarial-drag-fixture／blocks／constraint-drag-regressions／geometry-drag-smoothness／unified-uiを同じ実行で正常終了まで追跡し、単体2件で同一Line／Arc端点wrapper・fraction・初期位置基準・snapshot／計測・拘束観測とsessionなしの早期終了を確認した。ログはcad-geometry-drag-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Solver／ドラッグ状態／拘束状態／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

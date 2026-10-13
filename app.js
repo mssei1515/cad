@@ -4954,16 +4954,16 @@
         blockInstances: canvasSelection.blockInstances.map((instance) => instance.id),
       };
     }
-    function readTestConstraintStatuses() {
-      const state = refreshConstraintAnalysis();
-      return {
-        stable: state.analysis.stable,
-        errorNorm: state.analysis.errorNorm,
-        freeDof: state.analysis.freeVariableCount,
-        items: [...state.statuses].filter(([item]) => elementSketchId(item) === activeSketchId())
-          .map(([item, status]) => ({ id: item.id, status })),
-      };
-    }
+    const constraintStatusObservation = window.ConstraintTestDriver.createStatusObservation({ refreshConstraintAnalysis, elementSketchId, activeSketchId });
+    const readTestConstraintStatuses = constraintStatusObservation.state;
+    const constraintAnalysisObservation = window.ConstraintTestDriver.createAnalysisObservation({
+      activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, analyzeConstraintState: options => solver.analyzeConstraintState(options),
+      acceptError: CONSTRAINT_ACCEPT_ERROR, vectorNorm, currentScope: workspace.current, elementSketchId,
+    });
+    const blockConstraintObservation = window.ConstraintTestDriver.createBlockObservation({ refreshConstraintAnalysis, blockProjectionBundles });
+    const blockConstraintInsertion = window.ConstraintTestDriver.createBlockConstraintInsertion({
+      blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, readAnalysis: constraintAnalysisObservation.analysis, readBlockState: blockConstraintObservation.state, serializeModel,
+    });
     const geometryDragTestDriver = window.GeometryDragTestDriver.createGeometryDriver({
       currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints, arcEndpointPoint,
       computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
@@ -5351,71 +5351,9 @@
       guidedPointDragPathForTest: pointDragTestDriver.path,
       geometryDragPathForTest: geometryDragTestDriver.path,
       constraintStatusesForTest: readTestConstraintStatuses,
-      constraintAnalysisForTest() {
-        const sketchId = activeSketchId();
-        const variables = sketchSolveVariables(sketchId);
-        const constraints = sketchSolveConstraints(sketchId);
-        const analysis = solver.analyzeConstraintState({
-          variables,
-          constraints,
-          lines: sketchSolveLines(sketchId),
-          errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-        });
-        const largestConstraintErrors = constraints
-          .map((constraint, index) => {
-            const error = constraint.error();
-            const values = Array.isArray(error) ? error : [error];
-            return {
-              index,
-              name: constraint.name,
-              type: constraint.constructor.name,
-              errorNorm: vectorNorm(values),
-            };
-          })
-          .filter((entry) => entry.errorNorm > 1e-8)
-          .sort((a, b) => b.errorNorm - a.errorNorm)
-          .slice(0, 12);
-        return {
-          stable: analysis.stable,
-          errorNorm: analysis.errorNorm,
-          rank: analysis.rank,
-          variableCount: analysis.variableCount,
-          freeVariableCount: analysis.freeVariableCount,
-          constraintCount: constraints.length,
-          pointCount: model.points.filter((point) => elementSketchId(point) === sketchId).length,
-          lineCount: model.lines.filter((line) => elementSketchId(line) === sketchId).length,
-          circleCount: model.circles.filter((circle) => elementSketchId(circle) === sketchId).length,
-          arcCount: model.arcs.filter((arc) => elementSketchId(arc) === sketchId).length,
-          splineCount: model.splines.filter((spline) => elementSketchId(spline) === sketchId).length,
-          largestConstraintErrors,
-        };
-      },
-      blockConstraintStatusForTest(instanceId = null) {
-        const state = refreshConstraintAnalysis();
-        const bundles = blockProjectionBundles().filter((bundle) => !instanceId || bundle.instance.id === instanceId);
-        return {
-          stable: state.analysis.stable,
-          summary: { ...state.summary },
-          projections: bundles.flatMap((bundle) => [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])].map((item) => ({
-            id: item.id,
-            status: state.statuses.get(item) || null,
-          }))),
-        };
-      },
-      addBlockPointOnLineConstraintForTest(pointInstanceId, pointLocalId, lineInstanceId, lineLocalId) {
-        const pointInstance = blockInstanceById(pointInstanceId);
-        const lineInstance = blockInstanceById(lineInstanceId);
-        const point = pointInstance ? blockProjectionBundle(pointInstance).points.find((item) => item.localElement?.id === pointLocalId) : null;
-        const line = lineInstance ? blockProjectionBundle(lineInstance).lines.find((item) => item.localElement?.id === lineLocalId) : null;
-        if (!point || !line) return { committed: false, reason: "projection-not-found" };
-        const committed = commitNewConstraint("coincident", new PointOnLineConstraint(point, line)) === true;
-        return {
-          committed,
-          analysis: this.constraintAnalysisForTest(),
-          status: this.blockConstraintStatusForTest(pointInstanceId),
-          serialized: serializeModel(),
-        };
-      },
+      constraintAnalysisForTest: constraintAnalysisObservation.analysis,
+      blockConstraintStatusForTest: blockConstraintObservation.state,
+      addBlockPointOnLineConstraintForTest: blockConstraintInsertion.add,
       resetForAnnotationDrag() {
         resetModelState();
         const p1 = addPoint(-60, -25, false, "endpoint");
