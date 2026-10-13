@@ -80,5 +80,45 @@
     return Object.freeze({ position });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition });
+  function createSnapObservation({ viewport, snapCandidates }) {
+    function labels(point) {
+      const source = { x: Number(point?.x) || 0, y: Number(point?.y) || 0 };
+      const threshold = 10 / viewport.scale;
+      return snapCandidates(source).filter((candidate) => candidate.distance <= threshold).map((candidate) => candidate.label);
+    }
+    return Object.freeze({ labels });
+  }
+
+  function createAuthoringObservation({ readMode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope, decorateSerializedConstraint, serializeConstraint, readPerformance, readSelectedGeometry }) {
+    function state() {
+      return {
+        mode: readMode(),
+        pendingConstraintType: constraintTargetSession.command?.type || null,
+        pendingCommandType: pendingCommandSession.current?.type || null,
+        pendingPlacementPoint: pendingCommandSession.current?.type === "distance-place" && pendingCommandSession.current.pointer
+          ? { x: pendingCommandSession.current.pointer.x, y: pendingCommandSession.current.pointer.y }
+          : null,
+        pendingCommandPreview: pendingCommandSession.current?.type === "fillet-radius-place"
+          ? pendingCommandSession.current.preview
+          : null,
+        activeSnapLabel: drawingSnap.active?.label || null,
+        centerlineTargetIds: centerlineCommand.targets.map((item) => item.id),
+        centerlineFirstPoint: centerlineCommand.firstPoint ? { ...centerlineCommand.firstPoint } : null,
+        pointCount: currentScope().points.length,
+        lineCount: currentScope().lines.length,
+        circleCount: currentScope().circles.length,
+        arcCount: currentScope().arcs.length,
+        splineCount: currentScope().splines.length,
+        constraintCount: currentScope().constraints.length,
+        fixedPointIds: currentScope().points.filter((point) => point.fixed).map((point) => point.id),
+        lastLine: currentScope().lines.length > 0 ? { id: currentScope().lines[currentScope().lines.length - 1].id, construction: Boolean(currentScope().lines[currentScope().lines.length - 1].construction) } : null,
+        lastConstraint: currentScope().constraints.length > 0 ? decorateSerializedConstraint(serializeConstraint(currentScope().constraints[currentScope().constraints.length - 1]), currentScope().constraints[currentScope().constraints.length - 1]) : null,
+        lastPerformance: readPerformance() ? { ...readPerformance() } : null,
+        selected: readSelectedGeometry(),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation });
 })();

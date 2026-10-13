@@ -4,7 +4,11 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-12）
+## 現在の再開地点（2026-10-13）
+
+作図状態とsnapラベルのテスト観測を既存CanvasTestDriver.createAuthoringObservation／createSnapObservationへ分離。現在のscope・mode・各session・計測・Selectionを既存所有者から照会し、距離10 CSS pxの境界、候補順・入力数値化、座標／計測値のコピー、preview／選択の参照、serialize→decorateとnull fallbackを保持する。元の二つの処理本体との一致を依存port置換後に確認。app.jsは7,734→7,709行（25行減）。構文473ファイル・単体1,287件・関連E2E211件が成功（すべてexit 0、E2E3.3分）。既存利用箇所の5ファイルを確認し、単体2件を追加して呼出し時のscope／zoomと参照・コピー境界を検証した。ログはcad-authoring-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自モデル／session／snapルールは追加していない。全体目標は未完了。
+
+### 前回の停止地点（2026-10-12）
 
 週枠残量69%を確認したため新規分離を停止。今回の76個の区切りのcommitを保持し、最終コード8e6fc2aをdevelopのcab7c6dへ統合・Pushした。app.jsは11,058→7,630行（合計3,428行減）。構文469ファイル・単体1,261件・全E2E560件が最新統合コードで成功（exit 0、全E2E24.8分）。ログはcad-refactor-oct12-final-{check,unit,e2e}.log。全テスト本体とworker終了後、実体を確認した専用サーバーの終了待ちを解消して同じ実行の正常終了を回収した。この停止記録をCommit／Pushした後、mainを最後に反映してdevelopとローカル・リモートを同期し、統合済み作業branchを削除・runtime再生成して一時停止する。全体目標は未完了。再開手順と次の責務候補はrefactoring-policy-and-resume.md section 8を参照する。
 

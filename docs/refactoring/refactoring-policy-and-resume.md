@@ -10,7 +10,7 @@
 
 ユーザーは長時間の段階的な実装を許可している。「無理に終わらせる必要はない」「今後の開発に過不足なく良い単位で分離する」が最新方針であり、残りクレジットに合わせて設計を急いだり、分離数を固定したりしない。
 
-2026-10-11の最新目標に従い、週枠の残量が70%を下回った時点で新たな分離を停止する。残量はusage toolの100−usedPercentとして確認する。検証・Commit・Push・main反映の余裕を確保する。停止時は検証・Commit・Pushを済ませ、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。
+2026-10-13の最新目標に従い、週枠の残量が60%を下回った時点で新たな分離を停止する。残量はusage toolの100−usedPercentとして確認する。検証・Commit・Push・main反映の余裕を確保する。停止時は検証・Commit・Pushを済ませ、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。
 
 ## 2. 維持するもの
 
@@ -73,7 +73,7 @@
 ## 6. 実装・検証・履歴の進め方
 
 - サブエージェントは使わない（ユーザーの明示指示）。
-- 2026-10-11の目標継続指示により停止条件は週枠残量70%未満へ変更。以前の50%／尽きる前の条件は過去の記録として扱う。停止時の最後のコミットをmainへマージする指示も受領。残量はusage toolで確認し、リリース時はdevelop先行・main最後・両ブランチ同期の手順を守る。
+- 2026-10-13の目標継続指示により停止条件は週枠残量60%未満へ変更。以前の70%／50%／尽きる前の条件は過去の記録として扱う。停止時の最後のコミットをmainへマージする指示も受領。残量はusage toolで確認し、リリース時はdevelop先行・main最後・両ブランチ同期の手順を守る。
 - 開始時にAGENTS.md、Gitのbranch／status、関連仕様・テストを確認する。既存の無関係な変更を混ぜない。
 - 責務としてまとまった単位で実装し、差分を確認し、関連仕様を更新して検証・Commit・Pushする。将来の原因調査で区切りを追える履歴を残す。
 - 構文は`npm run check`、単体は`npm run test:unit`。関連E2Eを実施し、全体完了前には全体E2Eも確認する。
@@ -81,7 +81,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`package.json`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/clipboard-placement`。停止時の統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/interaction-observation`。停止時の統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -97,7 +97,11 @@
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-10-12）
+## 8. 再開地点（2026-10-13）
+
+週枠残量94%で再開。現在develop 7a1983eを基準にcodex/interaction-observationを作成した。前回停止後の機能変更を含む開始時app.jsは7,734行。停止条件は最新指示の残量60%未満。作図状態とsnapラベルのテスト観測を既存CanvasTestDriver.createAuthoringObservation／createSnapObservationへ分離。現在のscope・mode・各session・計測・Selectionを既存所有者から照会し、距離10 CSS pxの境界、候補順・入力数値化、座標／計測値のコピー、preview／選択の参照、serialize→decorateとnull fallbackを保持する。元の二つの処理本体との一致を依存port置換後に確認。app.jsは7,734→7,709行（25行減）。構文473ファイル・単体1,287件・関連E2E211件が成功（すべてexit 0、E2E3.3分）。既存利用箇所の5ファイルを確認し、単体2件を追加して呼出し時のscope／zoomと参照・コピー境界を検証した。ログはcad-authoring-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自モデル／session／snapルールは追加していない。全体目標は未完了。 次は残るCanvas選択位置／ドラッグ支援と診断、入力・mode変更・command開始の所有境界を現物から確認する。今回の単位は作業branchへCommit／Pushし、develop／mainへの統合は停止条件到達時または最終リリース時に行う。
+
+### 前回の停止地点（2026-10-12）
 
 2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は7,630行（今回の合計3,428行減）で、全体目標は未完了。週枠残量69%を確認したため新規分離を停止。76個の区切りのcommitを保持し、コード最終commit 8e6fc2aをdevelopのcab7c6dへ統合・Pushして最新全体検証を完了した。この停止記録をCommit／Pushした後、mainへ反映し、直ちにdevelopをmainへfast-forwardして両者をPush・同期する。統合済み作業branchはローカル・リモートとも削除し、runtime再生成後に目標を一時停止する。停止条件と手順はsection 1／6に従う。
 

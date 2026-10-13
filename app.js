@@ -5017,6 +5017,11 @@
       allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle, effectiveAppearanceForElement,
       isSidebarHighlightedElement, Point, isAnyLineEndpoint, isSidebarHoveredElement, canvasHover, geometryDisplayColor, geometryStrokeWidth,
     });
+    const snapObservation = window.CanvasTestDriver.createSnapObservation({ viewport, snapCandidates });
+    const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
+      readMode: () => mode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
+      decorateSerializedConstraint, serializeConstraint, readPerformance: () => lastAuthoringPerformance, readSelectedGeometry: readTestSelectedGeometry,
+    });
     const geometryHitObservation = window.CanvasTestDriver.createHitObservation({ hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline });
     const geometryPositionObservation = window.CanvasTestDriver.createGeometryPosition({
       currentScope: workspace.current, evaluateSpline: window.SplineGeometry.evaluate, clientPosition: canvasTestDriver.clientPosition,
@@ -5318,38 +5323,8 @@
       hitGeometryAtWorldForTest: geometryHitObservation.hit,
       geometryClientPositionForTest: geometryPositionObservation.position,
       hoverDisplayStateForTest: hoverDisplayObservation.state,
-      snapLabelsAtWorldForTest(point) {
-        const source = { x: Number(point?.x) || 0, y: Number(point?.y) || 0 };
-        const threshold = 10 / viewport.scale;
-        return snapCandidates(source).filter((candidate) => candidate.distance <= threshold).map((candidate) => candidate.label);
-      },
-      authoringStateForTest() {
-        return {
-          mode,
-          pendingConstraintType: constraintTargetSession.command?.type || null,
-          pendingCommandType: pendingCommandSession.current?.type || null,
-          pendingPlacementPoint: pendingCommandSession.current?.type === "distance-place" && pendingCommandSession.current.pointer
-            ? { x: pendingCommandSession.current.pointer.x, y: pendingCommandSession.current.pointer.y }
-            : null,
-          pendingCommandPreview: pendingCommandSession.current?.type === "fillet-radius-place"
-            ? pendingCommandSession.current.preview
-            : null,
-          activeSnapLabel: drawingSnap.active?.label || null,
-          centerlineTargetIds: centerlineCommand.targets.map((item) => item.id),
-          centerlineFirstPoint: centerlineCommand.firstPoint ? { ...centerlineCommand.firstPoint } : null,
-          pointCount: model.points.length,
-          lineCount: model.lines.length,
-          circleCount: model.circles.length,
-          arcCount: model.arcs.length,
-          splineCount: model.splines.length,
-          constraintCount: model.constraints.length,
-          fixedPointIds: model.points.filter((point) => point.fixed).map((point) => point.id),
-          lastLine: model.lines.length > 0 ? { id: model.lines[model.lines.length - 1].id, construction: Boolean(model.lines[model.lines.length - 1].construction) } : null,
-          lastConstraint: model.constraints.length > 0 ? decorateSerializedConstraint(serializeConstraint(model.constraints[model.constraints.length - 1]), model.constraints[model.constraints.length - 1]) : null,
-          lastPerformance: lastAuthoringPerformance ? { ...lastAuthoringPerformance } : null,
-          selected: this.selectedGeometryIdsForTest(),
-        };
-      },
+      snapLabelsAtWorldForTest: snapObservation.labels,
+      authoringStateForTest: authoringObservation.state,
       selectableLineClientPositionForTest() {
         const rect = canvas.getBoundingClientRect();
         for (const line of model.lines) {

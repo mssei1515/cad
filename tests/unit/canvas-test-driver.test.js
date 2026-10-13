@@ -34,3 +34,49 @@ test('client position reads the current rectangle and scale, normalizes inputs a
   assert.deepEqual(f.calls, [['rect'], ['screen', { x: 3, y: 0 }]]);
   f.state.rect.left = 20; assert.equal(f.command.clientPosition(null).x, 20);
 });
+
+test('authoring observation follows current owners and preserves preview identity and copied points', () => {
+  let scope = { points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [] };
+  let mode = 'line', performance = null;
+  const pending = { current: null }, constraint = { command: null }, snap = { active: null };
+  const centerline = { targets: [], firstPoint: null }, selected = { points: ['P2'] }, calls = [];
+  const observation = sandbox.window.CanvasTestDriver.createAuthoringObservation({
+    readMode: () => mode, currentScope: () => scope, pendingCommandSession: pending,
+    constraintTargetSession: constraint, drawingSnap: snap, centerlineCommand: centerline,
+    readPerformance: () => performance, readSelectedGeometry: () => selected,
+    serializeConstraint: value => { calls.push(['serialize', value]); return { type: value.type }; },
+    decorateSerializedConstraint: (value, original) => { calls.push(['decorate', original]); return { ...value, name: original.name }; },
+  });
+  assert.equal(observation.state().pointCount, 0);
+  assert.equal(observation.state().pendingCommandPreview, null);
+  scope = { ...scope, points: [{ id: 'P2', fixed: true }], lines: [{ id: 'L2', construction: 1 }], constraints: [{ type: 'distance', name: 'd2' }] };
+  mode = 'centerline'; performance = { elapsedMs: 3 };
+  pending.current = { type: 'distance-place', pointer: { x: 4, y: 5 } };
+  constraint.command = { type: 'parallel' }; snap.active = { label: 'endpoint' };
+  centerline.targets = [scope.lines[0]]; centerline.firstPoint = { x: 1, y: 2 };
+  const result = observation.state();
+  assert.equal(result.mode, mode); assert.equal(result.pointCount, 1);
+  assert.equal(result.pendingConstraintType, 'parallel'); assert.equal(result.activeSnapLabel, 'endpoint');
+  assert.deepEqual({ ...result.lastConstraint }, { type: 'distance', name: 'd2' });
+  assert.deepEqual(calls, [['serialize', scope.constraints[0]], ['decorate', scope.constraints[0]]]);
+  assert.equal(result.selected, selected);
+  result.pendingPlacementPoint.x = 100; result.centerlineFirstPoint.x = 100; result.lastPerformance.elapsedMs = 100;
+  assert.equal(pending.current.pointer.x, 4); assert.equal(centerline.firstPoint.x, 1); assert.equal(performance.elapsedMs, 3);
+  const preview = { radius: 4 }; pending.current = { type: 'fillet-radius-place', preview };
+  assert.equal(observation.state().pendingCommandPreview, preview);
+  assert.equal(observation.state().pendingPlacementPoint, null);
+});
+
+test('snap observation uses current zoom, inclusive distance and existing candidate order', () => {
+  const viewport = { scale: 2 }, calls = [], point = { x: '3', y: 'invalid' };
+  const observation = sandbox.window.CanvasTestDriver.createSnapObservation({ viewport,
+    snapCandidates: source => { calls.push({ ...source }); return [
+      { distance: 5, label: 'edge' }, { distance: 1, label: 'near' }, { distance: 5.01, label: 'outside' },
+    ]; },
+  });
+  assert.deepEqual(Array.from(observation.labels(point)), ['edge', 'near']);
+  viewport.scale = 10;
+  assert.deepEqual(Array.from(observation.labels(null)), ['near']);
+  assert.deepEqual(calls, [{ x: 3, y: 0 }, { x: 0, y: 0 }]);
+  assert.deepEqual(point, { x: '3', y: 'invalid' });
+});
