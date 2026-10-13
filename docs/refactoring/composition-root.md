@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+モデル寸法の既定値適用を既存DocumentState.normalizeDimensionStateへ集約。明示scopeの拘束を既存target解決／DimensionPlacement正規化の2入口で順に処理し、targetなし短絡・constraint／array参照・dimension代入順と失敗時の部分反映／例外伝播を維持。app adapterはcall時の元modelとplacement receiverを維持し、独自配置／Solver規則を持たない。定義以外の呼出／公開がない旧sketchSolveErrorTitle／dependentErrorSummaryを除去し、結果表示は既存ConstraintFeedbackへ残す。app.jsは4,886→4,869行（17行減、今回の再開から合計2,865行減）。構文504ファイル・単体1,383件・関連E2E186件が成功（すべてexit 0、E2E2.5分）。既存DocumentState unitへ2件追加し、順序／constraintとarray参照・targetなし短絡・raw／undefined寸法、失敗時の部分代入／後続省略を確認。元loop一致とadapter receiver・Document適用の登録順、unused helper全呼出関係をaudit。unified-ui／file-safety／blocks／dimension-prefix／multiple-dimensions／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-dimension-state-normalization-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 矩形選択のlineIntersectsRect／segment交差を既存GeometryBoundsへ集約。bbox短絡・endpoint内判定・4辺とのcross-product／onSegmentと1e-9許容値、inclusive境界／near-corner／退化線・bbox gateを元bodyのまま維持し、既存local Bounds関数を使う。segmentsIntersectはprivateとし、新state／依存を増やさずappは静的入口へ接続。全tracked JS／HTML・仕様とtest hookで定義以外の呼出／公開がないprivate selectCreatedSketchProjectionTargetsを除去し、現在のSelection所有は変更しない。app.jsは4,924→4,886行（38行減、今回の再開から合計2,848行減）。構文504ファイル・単体1,381件・関連E2E188件が成功（すべてexit 0、E2E2.5分）。既存DrawingBounds unitへ2件追加し、inside／横縦交差／辺・角接触／共線／退化線／反転／無変更、near-corner許容値とbbox短絡を確認。元2body一致と既存local依存・unused selector呼出関係をaudit。unified-ui／sketch-projection／blocks／derived-selection-copy／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-rectangle-intersection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

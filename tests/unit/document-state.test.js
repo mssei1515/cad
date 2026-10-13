@@ -114,3 +114,18 @@ test('scope ancillary values are normalized with the first non-root sketch or th
     assert.equal(document.hatches.length, 0); assert.equal(document.referenceImages.length, 0);
   }
 });
+
+test('dimension state normalization keeps constraint order/identity and skips non-dimension targets without replacing scope arrays', () => {
+  const first = { dimension: { axis: 'x' } }, unrelated = { dimension: { retained: true } }, last = {}, constraints = [first, unrelated, last], scope = { constraints }, calls = [], target1 = {}, target2 = {};
+  const originalUnrelated = unrelated.dimension, firstOld = first.dimension, next1 = {}, next2 = {};
+  const placement = { normalizeDimension(target, dimension) { assert.equal(this, placement); calls.push(['normalize', target, dimension]); return target === target1 ? next1 : next2; } };
+  assert.equal(sandbox.window.DocumentState.normalizeDimensionState(scope, constraint => { calls.push(['target', constraint]); return constraint === first ? target1 : constraint === last ? target2 : null; },
+    (target, dimension) => placement.normalizeDimension(target, dimension)), undefined);
+  assert.equal(scope.constraints, constraints); assert.deepEqual(constraints, [first, unrelated, last]); assert.equal(first.dimension, next1); assert.equal(last.dimension, next2); assert.equal(unrelated.dimension, originalUnrelated);
+  assert.deepEqual(calls.map(c => c[0]), ['target', 'normalize', 'target', 'target', 'normalize']); assert.equal(calls[1][1], target1); assert.equal(calls[1][2], firstOld); assert.equal(calls[4][1], target2); assert.equal(calls[4][2], undefined);
+});
+test('dimension normalization failure propagates with original partial assignments and does not visit later constraints', () => {
+  const first = { dimension: {} }, failed = { dimension: {} }, last = { dimension: {} }, scope = { constraints: [first, failed, last] }, calls = [], error = new Error('normalize'), firstNext = {}, failedOld = failed.dimension, lastOld = last.dimension;
+  assert.throws(() => sandbox.window.DocumentState.normalizeDimensionState(scope, c => { calls.push(c); return c; }, (target, dimension) => { if (target === failed) throw error; return firstNext; }), caught => caught === error);
+  assert.equal(first.dimension, firstNext); assert.equal(failed.dimension, failedOld); assert.equal(last.dimension, lastOld); assert.deepEqual(calls, [first, failed]);
+});

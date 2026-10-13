@@ -1418,19 +1418,7 @@
     return sketchSolveState(sketchId)?.status === "error";
   }
 
-  function sketchSolveErrorTitle(sketchId) {
-    const state = sketchSolveState(sketchId);
-    if (state?.status !== "error") return "";
-    const errorText = Number.isFinite(state.errorNorm) ? state.errorNorm.toExponential(3) : "unknown";
-    return `子スケッチ破綻: error=${errorText}, reason=${state.reason}`;
-  }
 
-  function dependentErrorSummary(dependent) {
-    const failures = dependent?.results?.filter((entry) => entry.status === "error") || [];
-    if (failures.length === 0) return "";
-    const first = failures[0];
-    return ` / 参照スケッチ破綻: ${sketchName(first.sketchId)} (error=${first.result.errorNorm.toExponential(3)})`;
-  }
 
   function solveAndRefresh(label = "自動solve", sketchId = activeSketchId()) {
     const solved = stabilizeActiveParameterNamespace(sketchId);
@@ -2363,12 +2351,7 @@
   });
   function pasteGeometryClipboard() { return clipboardCommand.paste(); }
 
-  function ensureDimensionDefaults() {
-    for (const constraint of model.constraints) {
-      const target = targetFromConstraint(constraint);
-      if (target) constraint.dimension = dimensionPlacement.normalizeDimension(target, constraint.dimension);
-    }
-  }
+  function ensureDimensionDefaults() { return window.DocumentState.normalizeDimensionState(model, targetFromConstraint, (target, dimension) => dimensionPlacement.normalizeDimension(target, dimension)); }
 
   const dimensionSelectionBounds = window.DimensionPresentation.createSelectionBounds({
     isActiveSketchConstraint, isVisibleSketchId, constraintSketchId, targetFromConstraint, defaultDimensionForTarget,
