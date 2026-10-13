@@ -758,3 +758,6 @@ DimensionTestDriver.createAngleLabelFixtureは固定の直交線Geometryから�
 
 
 TrimTestDriver（src/testing/trim_test_driver.js）はcreateLineTransferFixture（線Trim後の左右拘束参照）、createConstructionBoundaryFixture（線／円弧／円のconstruction境界とpreview区間）、createDiameterTransferFixture（円Trim後の直径拘束・寸法保存値）を役割別に生成する。固定Geometry・拘束の準備は既存reset／生成へ、境界とpreview・Trim実行・拘束移送は既存query／editingへ委譲する。固定入力・boundaryCount数値化／下限・呼出し順と同一Geometry／拘束参照、fallbackと返却値を保持する。独自交点／区間計算・拘束移送・モデル／履歴を持たず、appはtest query時だけ生成して既存三API名へ接続する。
+
+
+CanvasTestDriverはcreateAllGeometryFitFixture（遠距離Geometry／Sketchを準備して既存fitの結果を照会）、createMiddleButtonFitFixture（visible／hidden Sketchを準備して操作位置を返却）、createFitObservation（現在Canvas／viewportと既存visible bounds）、createFitOperation（既存fit後にdraw）を役割別に生成する。固定座標・所属Sketch／active切替と復元、viewport更新の順、padding数値化／fallback・fit→drawの順と返却値を保持する。Geometry準備は既存reset／生成と現在scopeへ、fit／可視性／座標変換は既存所有者へ委譲する。観測とfit実行へGeometry生成／reset依存を渡さず、独自scope／viewport／fit・可視性ルール／履歴を持たない。appはtest query時だけ生成して既存四API名へ接続する。

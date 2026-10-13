@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Canvas fitの全図形fixture／中ボタンfixture・表示範囲観測・fit実行を既存CanvasTestDriver.createAllGeometryFitFixture／createMiddleButtonFitFixture／createFitObservation／createFitOperationへ分離。固定Geometry／Sketch準備は既存reset／生成と現在scopeへ、viewport・fit／可視性／座標変換は既存所有者へ委譲する。固定座標・所属／active Sketch切替と復元、viewport更新順、paddingの数値化／fallback、fit→drawと各照会順を保持し、元の四つの処理本体との一致を依存port置換後に確認。app.jsは7,050→7,002行（48行減、今回の再開から合計732行減）。構文477ファイル・単体1,296件・関連E2E139件が成功（すべてexit 0、E2E1.8分）。全利用箇所のannotation-display-size／canvas-zoom-input／hatching／sketch-permissions／unified-uiを実行。新規テストはなく、既存の全図形fit／中ボタン／visible bounds・倍率・領域／権限と周辺操作を確認した。ログはcad-canvas-fit-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自scope／viewport／fit・可視性ルール／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Trimの拘束移送・construction境界・直径寸法移送のfixtureをTrimTestDriver.createLineTransferFixture／createConstructionBoundaryFixture／createDiameterTransferFixtureへ分離。固定Geometry／拘束準備は既存reset／生成へ、境界・preview／Trim・拘束移送は既存query／editingへ役割別に委譲する。固定入力とboundaryCountの数値化／下限、呼出し順・同一Geometry／拘束参照・fallbackと返却値を保持する。元の三つの処理本体との一致をscope port置換後に確認。app.jsは7,144→7,050行（94行減、今回の再開から合計684行減）。構文477ファイル・単体1,296件・関連E2E103件が成功（すべてexit 0、E2E1.3分）。全利用箇所のunified-uiを実行。新規テストはなく、既存の線拘束移送／construction除外／円の直径寸法保持とscript読込を確認した。classic script・構文一覧・E2E読込期待を同期。ログはcad-trim-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自交点／区間計算・拘束移送・モデル／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

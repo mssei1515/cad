@@ -5006,6 +5006,12 @@
       resetModelState, addPoint, addLine, addCircle, addArc, lineTrimBoundaries, trimPreviewForLine, arcTrimBoundaries, trimPreviewForArc, circlePointAtAngle, circleTrimBoundaries, trimPreviewForCircle,
     });
     const trimDiameterFixture = window.TrimTestDriver.createDiameterTransferFixture({ resetModelState, addCircle, addPoint, pushModelConstraint, DiameterConstraint, angleAtCircleParam, circlePointAtAngle, executeCircleTrim, currentScope: workspace.current });
+    const allGeometryFitFixture = window.CanvasTestDriver.createAllGeometryFitFixture({
+      resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, fitAllGeometryToViewport, allGeometryBounds, screenBoxForBounds, canvas,
+    });
+    const middleButtonFitFixture = window.CanvasTestDriver.createMiddleButtonFitFixture({ resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, updateUI, draw, canvas });
+    const fitObservation = window.CanvasTestDriver.createFitObservation({ canvas, viewport, screenBoxForBounds, visibleGeometryBounds, isVisibleSketchId });
+    const testFitOperation = window.CanvasTestDriver.createFitOperation({ fitAllGeometryToViewport, draw });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const sketchProjectionTestObservation = window.SketchProjectionTestDriver.createObservation({
       types: { Point, Line, Circle, Arc }, currentScope: workspace.current, readMode: () => mode,
@@ -5402,11 +5408,7 @@
       annotationDimensionStateForTest: annotationDimensionObservation.state,
       annotationAppearanceStateForTest: annotationAppearanceObservation.state,
       annotationOwnershipStateForTest: annotationOwnershipObservation.state,
-      fitAllGeometryForTest(padding = 120) {
-        const fitted = fitAllGeometryToViewport(Number(padding) || 120);
-        draw();
-        return fitted;
-      },
+      fitAllGeometryForTest: testFitOperation.fit,
       annotationHitAt: annotationHitObservation.hit,
       annotationDragActive() {
         return annotationDrag.inspect();
@@ -5463,59 +5465,9 @@
           labelsAfterHidingSecondSketch,
         };
       },
-      resetForAllGeometryFit() {
-        resetModelState();
-        const p1 = addPoint(-50000, -25000, false, "endpoint");
-        const p2 = addPoint(-40000, -25000, false, "endpoint");
-        addLine(p1, p2);
-        const secondSketchId = "S2";
-        model.sketches.push({ id: secondSketchId, name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
-        model.activeSketchId = secondSketchId;
-        const p3 = addPoint(45000, 30000, false, "endpoint");
-        const p4 = addPoint(50000, 30000, false, "endpoint");
-        addLine(p3, p4);
-        viewport.update({ scale: 10 });
-        viewport.update({ x: -100000 });
-        viewport.update({ y: 50000 });
-        fitAllGeometryToViewport();
-        const bounds = allGeometryBounds();
-        const screen = screenBoxForBounds(bounds);
-        const rect = canvas.getBoundingClientRect();
-        return {
-          screen,
-          canvas: { width: rect.width, height: rect.height },
-          scale: viewport.scale,
-        };
-      },
-      resetForMiddleButtonFit() {
-        resetModelState();
-        const nearLine = addLine(addPoint(0, 0, true, "endpoint"), addPoint(100, 0, true, "endpoint"));
-        const hiddenSketchId = "S2";
-        model.sketches.push({ id: hiddenSketchId, name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: false });
-        const previousActive = model.activeSketchId;
-        model.activeSketchId = hiddenSketchId;
-        addLine(addPoint(10000, 0, true, "endpoint"), addPoint(10100, 0, true, "endpoint"));
-        model.activeSketchId = previousActive;
-        viewport.update({ scale: 0.02 });
-        viewport.update({ x: 10 });
-        viewport.update({ y: 10 });
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        return {
-          click: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
-          nearLineId: nearLine.id,
-        };
-      },
-      middleButtonFitState() {
-        const rect = canvas.getBoundingClientRect();
-        return {
-          scale: viewport.scale,
-          visibleScreen: screenBoxForBounds(visibleGeometryBounds()),
-          canvas: { width: rect.width, height: rect.height },
-          hiddenVisible: isVisibleSketchId("S2"),
-        };
-      },
+      resetForAllGeometryFit: allGeometryFitFixture.reset,
+      resetForMiddleButtonFit: middleButtonFitFixture.reset,
+      middleButtonFitState: fitObservation.state,
       canvasDashIsolationCases() {
         const results = {};
         const resetForCase = () => {

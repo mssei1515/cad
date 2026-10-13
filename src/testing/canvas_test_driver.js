@@ -143,5 +143,79 @@
     return Object.freeze({ position });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition });
+  function createAllGeometryFitFixture({ resetModelState, addPoint, addLine, currentScope, rootSketchId, viewport, fitAllGeometryToViewport, allGeometryBounds, screenBoxForBounds, canvas }) {
+    function reset() {
+      resetModelState();
+      const p1 = addPoint(-50000, -25000, false, "endpoint");
+      const p2 = addPoint(-40000, -25000, false, "endpoint");
+      addLine(p1, p2);
+      const secondSketchId = "S2";
+      currentScope().sketches.push({ id: secondSketchId, name: "Sketch-2", parentSketchId: rootSketchId, kind: "sketch" });
+      currentScope().activeSketchId = secondSketchId;
+      const p3 = addPoint(45000, 30000, false, "endpoint");
+      const p4 = addPoint(50000, 30000, false, "endpoint");
+      addLine(p3, p4);
+      viewport.update({ scale: 10 });
+      viewport.update({ x: -100000 });
+      viewport.update({ y: 50000 });
+      fitAllGeometryToViewport();
+      const bounds = allGeometryBounds();
+      const screen = screenBoxForBounds(bounds);
+      const rect = canvas.getBoundingClientRect();
+      return {
+        screen,
+        canvas: { width: rect.width, height: rect.height },
+        scale: viewport.scale,
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createMiddleButtonFitFixture({ resetModelState, addPoint, addLine, currentScope, rootSketchId, viewport, updateUI, draw, canvas }) {
+    function reset() {
+      resetModelState();
+      const nearLine = addLine(addPoint(0, 0, true, "endpoint"), addPoint(100, 0, true, "endpoint"));
+      const hiddenSketchId = "S2";
+      currentScope().sketches.push({ id: hiddenSketchId, name: "Sketch-2", parentSketchId: rootSketchId, kind: "sketch", visible: false });
+      const previousActive = currentScope().activeSketchId;
+      currentScope().activeSketchId = hiddenSketchId;
+      addLine(addPoint(10000, 0, true, "endpoint"), addPoint(10100, 0, true, "endpoint"));
+      currentScope().activeSketchId = previousActive;
+      viewport.update({ scale: 0.02 });
+      viewport.update({ x: 10 });
+      viewport.update({ y: 10 });
+      updateUI();
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      return {
+        click: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        nearLineId: nearLine.id,
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createFitObservation({ canvas, viewport, screenBoxForBounds, visibleGeometryBounds, isVisibleSketchId }) {
+    function state() {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        scale: viewport.scale,
+        visibleScreen: screenBoxForBounds(visibleGeometryBounds()),
+        canvas: { width: rect.width, height: rect.height },
+        hiddenVisible: isVisibleSketchId("S2"),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createFitOperation({ fitAllGeometryToViewport, draw }) {
+    function fit(padding = 120) {
+      const fitted = fitAllGeometryToViewport(Number(padding) || 120);
+      draw();
+      return fitted;
+    }
+    return Object.freeze({ fit });
+  }
+
+  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation });
 })();
