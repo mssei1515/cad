@@ -4396,46 +4396,16 @@
     setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));
   });
   parameterDialogController.start();
+  const documentGeometryAppearanceCommand = window.DocumentDefaultAppearanceCommand.createGeometry({
+    readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
+    applyAppearanceInput, normalizeAppearance, normalizeConstructionAppearance, recordHistory, updateUI, draw,
+  });
+  const documentGeometryAppearanceSettings = window.DocumentAppearanceSettings.createGeometry({
+    document, readDefault: key => documentModel[key], normalizeAppearance, normalizeConstructionAppearance,
+    appearancePropertyRows, localizeApplicationUI, openAppearanceColorPalette, commands: documentGeometryAppearanceCommand,
+  });
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
-    const fields = document.getElementById("documentAppearanceFields");
-    if (fields) {
-      const appearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
-      fields.innerHTML = appearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentProperty" });
-      localizeApplicationUI(fields);
-      fields.onchange = (event) => {
-        const input = event.target;
-        if (!input.dataset.appearanceKey) return;
-        applyAppearanceInput(documentModel.defaultAppearance, input.dataset.appearanceKey, input.value.trim());
-        documentModel.defaultAppearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
-        recordHistory("Document Default Appearance変更");
-        updateUI();
-        draw();
-      };
-      fields.onclick = (event) => {
-        const button = event.target.closest("[data-appearance-palette-open]");
-        if (button) openAppearanceColorPalette(button, "document");
-      };
-    }
-    const constructionFields = document.getElementById("documentConstructionAppearanceFields");
-    if (constructionFields) {
-      const appearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
-      const effective = { ...normalizeAppearance(documentModel.defaultAppearance, { partial: false }), ...appearance };
-      constructionFields.innerHTML = appearancePropertyRows(appearance, effective, { allowInheritance: false, constructionEndpoints: true, idPrefix: "documentConstructionProperty" });
-      localizeApplicationUI(constructionFields);
-      constructionFields.onchange = (event) => {
-        const input = event.target;
-        if (!input.dataset.appearanceKey) return;
-        applyAppearanceInput(documentModel.defaultConstructionAppearance, input.dataset.appearanceKey, input.value.trim());
-        documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
-        recordHistory("Document Default Construction Appearance変更");
-        updateUI();
-        draw();
-      };
-      constructionFields.onclick = (event) => {
-        const button = event.target.closest("[data-appearance-palette-open]");
-        if (button) openAppearanceColorPalette(button, "document-construction");
-      };
-    }
+    documentGeometryAppearanceSettings.prepare();
     const dimensionFields = document.getElementById("documentDimensionAppearanceFields");
     if (dimensionFields) {
       const appearance = normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false });
