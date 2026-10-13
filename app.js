@@ -4503,31 +4503,11 @@
   applicationSettings.start();
   blockView.bind();
 
-  document.getElementById("toolSelect").addEventListener("click", () => drawOperationLifecycle.start("select"));
-  document.getElementById("toolPoint").addEventListener("click", () => drawOperationLifecycle.start("point"));
-  document.getElementById("toolLine").addEventListener("click", () => drawOperationLifecycle.start("line"));
-  document.getElementById("toolCenterline")?.addEventListener("click", startCenterlineCommand);
-  document.getElementById("toolCircleCenterCross")?.addEventListener("click", startCircleCenterCrossCommand);
-  document.getElementById("toolSketchProjection")?.addEventListener("click", startSketchProjectionCommand);
-  document.getElementById("toolMirror")?.addEventListener("click", () => startGeometryInstanceCommand("mirror"));
-  document.getElementById("toolCircularPattern")?.addEventListener("click", () => startGeometryInstanceCommand("circularPattern"));
-  document.getElementById("toolPattern")?.addEventListener("click", () => startGeometryInstanceCommand("pattern"));
-
-  document.getElementById("toolConstructionLine")?.addEventListener("click", constructionCommand.toggle);
-
-  document.getElementById("toolRectangle")?.addEventListener("click", () => drawOperationLifecycle.start("rectangle"));
-  document.getElementById("toolSlot")?.addEventListener("click", () => drawOperationLifecycle.start("slot"));
-  document.getElementById("toolFillet")?.addEventListener("click", filletCommand.begin);
-
-  document.getElementById("toolTrim")?.addEventListener("click", () => drawOperationLifecycle.start("trim"));
-  document.getElementById("toolCreateBlock")?.addEventListener("click", startBlockCreation);
-
-  document.getElementById("toolOffset")?.addEventListener("click", offsetCommand.begin);
-
-  document.getElementById("toolCircle").addEventListener("click", () => drawOperationLifecycle.start("circle"));
-  document.getElementById("toolArc").addEventListener("click", () => drawOperationLifecycle.start("arc"));
-  document.getElementById("toolThreePointArc")?.addEventListener("click", () => drawOperationLifecycle.start("three-point-arc"));
-  document.getElementById("toolSpline")?.addEventListener("click", beginSplineCreation);
+  const drawingToolBinding = window.ToolbarView.createBinding({
+    document, drawOperationLifecycle, startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand,
+    startGeometryInstanceCommand, constructionCommand, filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation,
+  });
+  drawingToolBinding.bind();
 
   const documentFileControls = window.DocumentFileControls.createDocument({
     document, saveJot2DFile, saveJot2DFileAs, openJot2DFile, documentFileCommand,
@@ -4614,7 +4594,7 @@
   });
   constraintControlBinding.bind();
 
-  document.getElementById("toolHatch")?.addEventListener("click", startHatchCreation);
+
 
   window.addEventListener("resize", () => {
     closeCanvasContextMenu();

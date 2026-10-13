@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+作図／派生／Block／Hatch等21個のToolbar入力接続を既存ToolbarView.createBindingへ分離。各既存commandへ同じ引数／生handlerで委譲し、必須／任意要素と任意要素不在のhandler照会短絡、DOM receiverとLifecycleの操作時method照会を保持する。bindingは二重登録防止・登録listener解除／再bindだけを所有し、状態表示createとは独立した依存で生成する。開始／取消／guardと作図状態は既存所有者へ留める。app.jsは5,303→5,283行（20行減、今回の再開から合計2,451行減）。構文494ファイル・単体1,328件・関連E2E215件が成功（すべてexit 0、E2E3.4分）。既存Toolbar unitへ2件追加し、live Lifecycle／raw handler／receiver、登録寿命・二重登録／解除／再bind、任意tool不在でprovider照会しない短絡と必須controlを確認。unified-ui／adversarial-authoring-performance／toolbar-layout／tool-flyouts／hatching／sketch-projection／blocks／phase0-characterizationを実行し、作図性能・各開始入口・tool表示と周辺操作を確認。新script／unitファイルは追加していない。仕様の表示担当はcreateへ限定し、binding担当を追記。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-toolbar-input-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自mode／作図状態・開始／取消／guardルール・モデル／Solver／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Document入出力のUI接続をsrc/ui/document_file_controls.jsのDocumentFileControls.createDocument／createDxfへ分離。Document保存／別名保存／読込・input／linkとDXFの依存／登録寿命を別factoryにし、既存commandの非同期void委譲・input handler／receiver・必須／任意要素、DXFのflush→busy／編集可否短絡→hint／picker、File取得→input解除→同じFile参照でimportの順を保持する。任意input不在でhandler照会も省き、Fileなしのundefinedを維持。各bindingは二重登録防止・登録listener解除／再bindだけを所有する。PNG／Reference Image／Sketchとstartup／beforeunloadは既存経路へ留める。app.jsは5,314→5,303行（11行減、今回の再開から合計2,431行減）。構文494ファイル・単体1,326件・関連E2E156件が成功（すべてexit 0、E2E2.0分）。新単体3件でDocument非同期委譲／元handler／receiver／登録寿命、任意要素／handler照会短絡と必須要素、DXFのlive busy／編集可否／flush／input解除・File／undefinedを確認。unified-ui／file-safety／document-bookmarks／dxf-import／png-export／phase0-characterizationを実行し、native保存／再読込・link・importと周辺操作を確認。新scriptはindex／構文・単体一覧／読込期待値を同期。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-document-file-controls-{check,unit,e2e}.log。全E2Eはこの単位では未実行。ファイルsession・保存形式／互換性・リンク処理・import／モデル／履歴は新設していない。全体目標は未完了。
 
 ### 前回の区切り
