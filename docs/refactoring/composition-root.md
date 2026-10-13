@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+矩形選択のlineIntersectsRect／segment交差を既存GeometryBoundsへ集約。bbox短絡・endpoint内判定・4辺とのcross-product／onSegmentと1e-9許容値、inclusive境界／near-corner／退化線・bbox gateを元bodyのまま維持し、既存local Bounds関数を使う。segmentsIntersectはprivateとし、新state／依存を増やさずappは静的入口へ接続。全tracked JS／HTML・仕様とtest hookで定義以外の呼出／公開がないprivate selectCreatedSketchProjectionTargetsを除去し、現在のSelection所有は変更しない。app.jsは4,924→4,886行（38行減、今回の再開から合計2,848行減）。構文504ファイル・単体1,381件・関連E2E188件が成功（すべてexit 0、E2E2.5分）。既存DrawingBounds unitへ2件追加し、inside／横縦交差／辺・角接触／共線／退化線／反転／無変更、near-corner許容値とbbox短絡を確認。元2body一致と既存local依存・unused selector呼出関係をaudit。unified-ui／sketch-projection／blocks／derived-selection-copy／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-rectangle-intersection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 旧投影target生成の呼出元を調査し、現在はcompatibility／source-editing fixtureだけで使われると確認したため、製品編集ownerではなく既存SketchProjectionTestDriver.createLegacyTargetConstructionへ集約。test query有効時だけ5個のGeometryCreation入口へ接続する。Point／Line／Circle／Arc／Splineの座標・target Sketch／point kind・construction／closed・radius／angle、point生成→geometry生成順、独立参照とsource無変更、例外時の既存部分割当を維持し、ID／モデル編集の所有は動かさない。app.jsは4,948→4,924行（24行減、今回の再開から合計2,810行減）。構文504ファイル・単体1,379件・関連E2E188件が成功（すべてexit 0、E2E2.5分）。既存SketchProjectionTestDriver unitへ2件追加し、全種類の作成順／point・geometry参照・Sketch／flags／source無変更、unsupported kind無割当とradius失敗時の伝播／部分割当を確認。元2body一致と5port／全呼出元・test登録時点をaudit。sketch-projection／unified-ui／blocks／derived-selection-copy／phase0-characterizationを実行。新script／unitファイルは追加していない。製品投影commandや保存形式の新しい動作を追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-projection-target-construction-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

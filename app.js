@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   const { validReferenceImageDataUrl, serializeReferenceImage } = window.ReferenceImageData;
-  const { pointInExpandedBox, rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
+  const { lineIntersectsRect, pointInExpandedBox, rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners, referenceImageBounds } = window.ReferenceImageGeometry;
   const { validSerializedHatch, validSerializedHatchList, serializeHatch } = window.HatchData;
   const { serializeAnnotation } = window.AnnotationData;
@@ -1483,14 +1483,6 @@
     }, sketchProjectionEntryFromItem);
   }
 
-  function selectCreatedSketchProjectionTargets(targets) {
-    clearSelection();
-    canvasSelection.set("points", targets.filter((item) => item instanceof Point));
-    canvasSelection.set("lines", targets.filter((item) => item instanceof Line));
-    canvasSelection.set("circles", targets.filter((item) => item instanceof Circle));
-    canvasSelection.set("arcs", targets.filter((item) => item instanceof Arc));
-    canvasSelection.set("splines", targets.filter((item) => item instanceof Spline));
-  }
 
   function selectedItemsForGeometryInstance() {
     const items = [...selectedGeometryItems(), ...canvasSelection.hatches.filter(hatch => model.hatches.includes(hatch))];
@@ -2376,36 +2368,6 @@
       const target = targetFromConstraint(constraint);
       if (target) constraint.dimension = dimensionPlacement.normalizeDimension(target, constraint.dimension);
     }
-  }
-
-  function lineIntersectsRect(line, rect) {
-    if (!bboxIntersectsRect(lineBBox(line), rect)) return false;
-    if (pointInRect(line.p1, rect) || pointInRect(line.p2, rect)) return true;
-    const edges = [
-      [{ x: rect.x1, y: rect.y1 }, { x: rect.x2, y: rect.y1 }],
-      [{ x: rect.x2, y: rect.y1 }, { x: rect.x2, y: rect.y2 }],
-      [{ x: rect.x2, y: rect.y2 }, { x: rect.x1, y: rect.y2 }],
-      [{ x: rect.x1, y: rect.y2 }, { x: rect.x1, y: rect.y1 }],
-    ];
-    return edges.some(([a, b]) => segmentsIntersect(line.p1, line.p2, a, b));
-  }
-
-  function segmentsIntersect(a, b, c, d) {
-    const cross = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
-    const onSegment = (p, q, r) =>
-      Math.min(p.x, q.x) - 1e-9 <= r.x &&
-      r.x <= Math.max(p.x, q.x) + 1e-9 &&
-      Math.min(p.y, q.y) - 1e-9 <= r.y &&
-      r.y <= Math.max(p.y, q.y) + 1e-9;
-    const c1 = cross(a, b, c);
-    const c2 = cross(a, b, d);
-    const c3 = cross(c, d, a);
-    const c4 = cross(c, d, b);
-    if (Math.abs(c1) < 1e-9 && onSegment(a, b, c)) return true;
-    if (Math.abs(c2) < 1e-9 && onSegment(a, b, d)) return true;
-    if (Math.abs(c3) < 1e-9 && onSegment(c, d, a)) return true;
-    if (Math.abs(c4) < 1e-9 && onSegment(c, d, b)) return true;
-    return c1 * c2 < 0 && c3 * c4 < 0;
   }
 
   const dimensionSelectionBounds = window.DimensionPresentation.createSelectionBounds({
