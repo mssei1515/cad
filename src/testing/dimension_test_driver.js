@@ -260,5 +260,95 @@
     return Object.freeze({ reset });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture });
+  function createExtensionVisibilityFixture({ resetModelState, addPoint, addLine, hypot2, dimensionLayout, dimensionWithLabelAt, dimensionFromAnchor }) {
+    function cases() {
+      resetModelState();
+      const p1 = addPoint(160, 160, true, "endpoint");
+      const p2 = addPoint(297.73401510731196, 185.0866714097212, false, "endpoint");
+      const p3 = addPoint(279.8149641009543, 283.468110772277, false, "endpoint");
+      const p4 = addPoint(142.08094899119854, 258.38143937826186, false, "endpoint");
+      addLine(p1, p2);
+      const sideLine = addLine(p2, p3);
+      addLine(p3, p4);
+      addLine(p4, p1);
+      const topTarget = { kind: "point-point", p1, p2, value: hypot2(p2.x - p1.x, p2.y - p1.y) };
+      const sideTarget = { kind: "point-point", p1: p2, p2: p3, value: hypot2(p3.x - p2.x, p3.y - p2.y) };
+      const sideLineTarget = { kind: "line-length", line: sideLine, p1: p2, p2: p3, value: sideLine.length() };
+      const visibleFlags = (target, dimension) => {
+        const layout = dimensionLayout(target, dimension);
+        return layout.points.map((point) => point.showExtension !== false);
+      };
+      const previewFlags = (target, pointer) => {
+        const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer), pointer);
+        return visibleFlags(target, dimension);
+      };
+      const leftPointer = { x: 109.1051908103851, y: 208.70539753179494 };
+      return {
+        top: visibleFlags(topTarget, {
+          x: 275.2991240975706,
+          y: 146.73754454625083,
+          offsetU: 41.05643170185708,
+          offsetN: -33.70830342779351,
+          labelOffsetU: 42.71350462481912,
+          axis: null,
+        }),
+        left: visibleFlags(sideTarget, {
+          x: 109.1051908103851,
+          y: 208.70539753179494,
+          offsetU: 7.036937956365918,
+          offsetN: 181.34350081496538,
+          labelOffsetU: 5.954777756734029,
+          axis: null,
+        }),
+        pointPointPreviewLeft: previewFlags(sideTarget, leftPointer),
+        lineLengthPreviewLeft: previewFlags(sideLineTarget, leftPointer),
+      };
+    }
+    return Object.freeze({ cases });
+  }
+
+  function createDisplayCases({ formatDimensionLabel, formatMeasuredDimensionLabel }) {
+    function precision() {
+      return {
+        integerTrailingZero: formatDimensionLabel(140),
+        integerHundred: formatDimensionLabel(100),
+        positiveNoise: formatDimensionLabel(15.0000000058),
+        negativeNoise: formatDimensionLabel(824.9999999982),
+        precisionBoundaryNoise: formatDimensionLabel(1844.999999),
+        measuredAccumulatedNoise: formatMeasuredDimensionLabel(1844.9999986000548),
+        minimumResolution: formatDimensionLabel(0.000001),
+        measuredMinimumResolution: formatMeasuredDimensionLabel(0.000001),
+        roundedFraction: formatDimensionLabel(1.2345674),
+      };
+    }
+    return Object.freeze({ precision });
+  }
+
+  function createTextAngleCases({ jisDimensionTextAngle, dimensionTextOffset }) {
+    function angles() {
+      const resultForDrawingAngle = (degrees) => {
+        const radians = (degrees * Math.PI) / 180;
+        const direction = { x: Math.cos(radians), y: -Math.sin(radians) };
+        const angle = jisDimensionTextAngle(direction);
+        return {
+          angle: (angle * 180) / Math.PI,
+          offset: dimensionTextOffset(angle, 1),
+        };
+      };
+      return {
+        zero: resultForDrawingAngle(0),
+        quadrant1: resultForDrawingAngle(30),
+        vertical90: resultForDrawingAngle(90),
+        quadrant2: resultForDrawingAngle(150),
+        straight180: resultForDrawingAngle(180),
+        quadrant3: resultForDrawingAngle(210),
+        vertical270: resultForDrawingAngle(270),
+        quadrant4: resultForDrawingAngle(330),
+        quadrant4NearVertical: resultForDrawingAngle(273),
+      };
+    }
+    return Object.freeze({ angles });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases });
 })();

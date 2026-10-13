@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+寸法の引出線表示fixture・表示精度・文字角度のケースを既存DimensionTestDriver.createExtensionVisibilityFixture／createDisplayCases／createTextAngleCasesへ分離。固定矩形の準備は既存reset／Geometry生成へ、表示は既存layout／formatter／JIS角度・offsetへ委譲する。固定入力・計算順とshowExtensionのfalse判定を保持し、Geometry準備のない二つのケースへreset／モデル依存を渡さない。元の三つの処理本体との一致を確認。app.jsは7,313→7,241行（72行減、今回の再開から合計493行減）。構文476ファイル・単体1,296件・関連E2E103件が成功（すべてexit 0、E2E1.3分）。全利用箇所のunified-uiを実行。新規テストはなく、既存の表示precision・JIS文字角度・Point間／線長の引出線previewと周辺の寸法編集／保存を確認した。ログはcad-dimension-display-cases-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自寸法計算／表示ルール／モデル／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 読み取り専用寸法の重複fixture／配置fixtureを既存DimensionTestDriver.createReadOnlyDuplicateFixture／createReadOnlyPlacementFixtureへ分離。既存reset・Geometry／寸法生成・layout／label／保存値へ委譲し、重複寸法数と引出線整列誤差を観測する。配置はconstraintTargetSession→pendingCommandSession→寸法入力開始の順と現在scopeの寸法／入力状態照会を維持する。固定座標・同一target参照・所属Sketch・filter／fallbackと照会順を保持し、元の二つの処理本体との一致をscope port置換後に確認。app.jsは7,354→7,313行（41行減、今回の再開から合計421行減）。構文476ファイル・単体1,296件・関連E2E219件が成功（すべてexit 0、E2E3.4分）。全利用箇所のannotation-display-size／annotation-anchors／leader-appearance／sketch-tree-visibility／unified-annotations／unified-uiを実行。新規テストはなく、既存の重複／read-only・入力・寸法表示／注記・履歴／保存を確認した。ログはcad-readonly-dimension-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自寸法計算／session／入力状態／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
