@@ -2,8 +2,10 @@
 (function () {
   "use strict";
   const { arcSweep } = window.GeometryKernel;
-  function create({ ctx, viewport, paintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel, appearanceLineDash, lineDisplaySegment, canvasThemeColor }) {
-    function drawLines(items) {
+  function create({ ctx, viewport, readPixelRatio = () => 1, paintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel, appearanceLineDash, lineDisplaySegment, canvasThemeColor }) {
+    // Canvas shadowBlur ignores the transform and is measured in bitmap pixels.
+    const selectionShadowBlur = () => 8 * readPixelRatio();
+    function drawLines(items, { selectionGlow = true } = {}) {
       ctx.save();
       const lines = items;
       for (const l of lines) {
@@ -16,7 +18,7 @@
         ctx.lineJoin = "round";
         ctx.setLineDash(appearanceLineDash(appearance.lineType));
         ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-        ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
+        ctx.shadowBlur = selectionGlow && (sel || auxiliaryHighlighted) ? selectionShadowBlur() : 0;
         const drawSegment = lineDisplaySegment(l, appearance);
         ctx.beginPath();
         ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
@@ -46,7 +48,7 @@
       ctx.restore();
     }
 
-    function drawCircles(items) {
+    function drawCircles(items, { selectionGlow = true } = {}) {
       ctx.save();
       ctx.lineCap = "round";
       const circles = items;
@@ -57,7 +59,7 @@
         ctx.lineWidth = strokeWidth / viewport.scale;
         ctx.setLineDash(appearanceLineDash(appearance.lineType));
         ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-        ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
+        ctx.shadowBlur = selectionGlow && (sel || auxiliaryHighlighted) ? selectionShadowBlur() : 0;
         ctx.beginPath();
         ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
         ctx.stroke();
@@ -72,7 +74,7 @@
       ctx.restore();
     }
 
-    function drawArcs(items) {
+    function drawArcs(items, { selectionGlow = true } = {}) {
       ctx.save();
       ctx.lineCap = "round";
       const arcs = items;
@@ -83,7 +85,7 @@
         ctx.lineWidth = strokeWidth / viewport.scale;
         ctx.setLineDash(appearanceLineDash(appearance.lineType));
         ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-        ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
+        ctx.shadowBlur = selectionGlow && (sel || auxiliaryHighlighted) ? selectionShadowBlur() : 0;
         ctx.beginPath();
         ctx.arc(a.center.x, a.center.y, a.radius(), a.startAngle, a.endAngle, a.endAngle < a.startAngle);
         ctx.stroke();
@@ -147,7 +149,7 @@
         ctx.strokeStyle = state.color;
         ctx.lineWidth = state.strokeWidth / viewport.scale;
         ctx.shadowColor = state.emphasized ? "rgba(14, 165, 233, 0.45)" : "transparent";
-        ctx.shadowBlur = state.emphasized ? 8 / viewport.scale : 0;
+        ctx.shadowBlur = state.emphasized ? selectionShadowBlur() : 0;
         ctx.stroke();
         ctx.shadowBlur = 0;
         ctx.setLineDash([]);
@@ -205,5 +207,23 @@
     }
     return Object.freeze({ drawArcEndpointHandles, drawSplineEditHandles, drawPoints, drawLines, drawCircles, drawArcs, drawSplines, traceSplinePath });
   }
-  window.GeometryRenderer = Object.freeze({ create });
+  function createLayer({ renderer, isVisibleSketchElement, drawOrderBySketch, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines }) {
+    function drawLines(items = null, options = {}) {
+      renderer.drawLines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryLines()), options);
+    }
+
+    function drawCircles(items = null, options = {}) {
+      renderer.drawCircles(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryCircles()), options);
+    }
+
+    function drawArcs(items = null, options = {}) {
+      renderer.drawArcs(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryArcs()), options);
+    }
+
+    function drawSplines(items = null) {
+      renderer.drawSplines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometrySplines()));
+    }
+    return Object.freeze({ drawLines, drawCircles, drawArcs, drawSplines });
+  }
+  window.GeometryRenderer = Object.freeze({ create, createLayer });
 })();

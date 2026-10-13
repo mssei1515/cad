@@ -65,14 +65,14 @@ test('Block translation moves fixed targets, placement origins and auxiliary geo
   const endpoint = new ArcEndpointFixedConstraint(target.arcs[0], 'start', 6, 4);
   fixed.dimension = { x: '2', y: 3, labelX: 4, labelY: 5, offset: 8 };
   target.constraints = [fixed, lineFixed, endpoint];
-  target.geometryInstances = [{ type: 'free', x: 1, y: 2, origin: { x: 3, y: 4 } }, { type: 'mirror', x: 1, y: 2 }];
+  target.geometryInstances = [{ type: 'pattern', placement: { kind: 'linear' }, x: 1, y: 2, anchor: { fallbackPosition: { x: 3, y: 4 } } }, { type: 'mirror', x: 1, y: 2 }];
   target.annotations = [{ x: 1, y: 2, start: { x: 3, y: 4 }, end: { x: 5, y: 6 } }];
   target.hatches = [{ seed: { x: 1, y: 2 } }]; target.referenceImages = [{ x: 1, y: 2 }];
   editing.translate(target, 10, -5);
   assert.deepEqual([target.points[0].x, target.points[0].y, fixed.x, fixed.y], [11, -3, 11, -3]);
   assert.deepEqual([lineFixed.p2x, lineFixed.p2y, endpoint.x, endpoint.y], [13, -1, 16, -1]);
   assert.deepEqual([fixed.dimension.x, fixed.dimension.y, fixed.dimension.labelX, fixed.dimension.labelY, fixed.dimension.offset], [12, -2, 14, 0, 8]);
-  assert.deepEqual([target.geometryInstances[0].origin.x, target.geometryInstances[0].origin.y], [13, -1]);
+  assert.deepEqual([target.geometryInstances[0].anchor.fallbackPosition.x, target.geometryInstances[0].anchor.fallbackPosition.y], [13, -1]);
   assert.equal(target.geometryInstances[1].x, 1);
   assert.deepEqual([target.annotations[0].start.x, target.annotations[0].start.y], [13, -1]);
   assert.equal(target.hatches[0].seed.x, 11); assert.equal(target.referenceImages[0].y, -3);

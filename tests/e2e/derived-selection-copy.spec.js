@@ -12,10 +12,10 @@ async function fixture(page,type) {
   await openTestDocument(page); await page.evaluate(() => window.__jot2dTest.resetForGeometryInstanceCommandTest());
   const data=(await state(page)).serialized, sketchId=data.activeSketchId;
   data.constraints=[];
-  const item={id:'I1',type,sketchId,sources:[{kind:'line',path:[data.lines[0].id]}],appearanceOverride:{color:'#cc3344'}};
+  const item={id:'I1',type:type==='linear'?'pattern':type,sketchId,sources:[{kind:'line',path:[data.lines[0].id]}],appearanceOverride:{color:'#cc3344'}};
   if(type==='mirror') item.axis={kind:'line',path:[data.lines[1].id]};
   if(type==='pattern') Object.assign(item,{direction:{kind:'line',path:[data.lines[2].id]},spacing:80,copies:2,reversed:false});
-  if(type==='free') Object.assign(item,{x:40,y:0,origin:{x:-55,y:15},rotation:0,mirrorX:false,mirrorY:false});
+  if(type==='linear') Object.assign(item,{count:2,occurrences:[''],placementPointDefined:true,placement:{kind:'linear'},anchor:{relation:null,fallbackPosition:{x:-55,y:15}},x:40,y:0,rotation:0,reflected:false,rotationLocked:false});
   if(type==='sketchProjection') {
     data.sketches.push({...data.sketches.find(s=>s.id===sketchId),id:'S2',name:'Child',parentSketchId:sketchId});
     data.activeSketchId='S2';item.sketchId='S2';
@@ -25,7 +25,7 @@ async function fixture(page,type) {
   await page.evaluate(()=>window.__jot2dTest.focusWorldForTest({x:30,y:0},2));
   return data;
 }
-for(const type of ['mirror','pattern','free','sketchProjection']) test(type+' rectangle selection, copy/paste, history and reload retain references',async({page})=>{
+for(const type of ['mirror','pattern','linear','sketchProjection']) test(type+' rectangle selection, copy/paste, history and reload retain references',async({page})=>{
   await fixture(page,type);
   const instance=(await state(page)).instances[0],points=instance.points;
   const a={x:Math.min(...points.map(p=>p.x))-4,y:Math.min(...points.map(p=>p.y))-4};
@@ -51,7 +51,7 @@ test('rectangle selection copies sources, axes and chained instances to new refe
   const current=await state(page);expect(current.instances).toHaveLength(4);expect(current.instances.every(i=>i.valid)).toBe(true);
   const copies=current.serialized.geometryInstances.filter(i=>!['I1','I2'].includes(i.id));
   expect(copies[0].sources[0].path[0]).not.toBe(data.lines[0].id);
-  expect(copies[0].axis.path[0]).not.toBe(data.lines[1].id);
+  expect(copies[0].placement.axis.path[0]).not.toBe(data.lines[1].id);
   expect(copies[1].sources[0].path[0]).toBe(copies[0].id);
   await rectangle(page,{x:140,y:70},{x:150,y:80});expect((await state(page)).selectedIds).toEqual([]);
 });
@@ -73,7 +73,7 @@ test('invalid cross-sketch paste rolls back; copying source and axis permits a r
 });
 
 test('copying a rotated free instance with its sources translates output only once',async({page})=>{
-  const data=await fixture(page,'free');data.geometryInstances[0].rotation=Math.PI/3;data.geometryInstances[0].mirrorX=true;
+  const data=await fixture(page,'linear');data.geometryInstances[0].rotation=Math.PI/3;data.geometryInstances[0].rotationLocked=false;
   expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d,'rotated.jot2d',{resetLoadedHistory:true}),data)).toMatchObject({success:true});
   const before=(await state(page)).instances[0];
   await rectangle(page,{x:-65,y:-65},{x:90,y:65});await page.keyboard.press('Control+c');await page.keyboard.press('Control+v');
@@ -115,11 +115,11 @@ test('Block Editor copies local derived instances without modifying document ins
 
 test('a free instance copied with a projection keeps its independent paste displacement',async({page})=>{
   const data=await fixture(page,'sketchProjection');
-  data.geometryInstances.push({id:'FI1',type:'free',sketchId:'S2',sources:[{kind:'line',path:['I1',data.lines[0].id]}],origin:{x:-55,y:15},x:30,y:0,rotation:0,mirrorX:false,mirrorY:false,appearanceOverride:{}});
+  data.geometryInstances.push({id:'FI1',type:'pattern',count:2,occurrences:[''],placementPointDefined:true,placement:{kind:'linear'},anchor:{relation:null,fallbackPosition:{x:-55,y:15}},reflected:false,rotationLocked:false,sketchId:'S2',sources:[{kind:'line',path:['I1',data.lines[0].id]}],origin:{x:-55,y:15},x:30,y:0,rotation:0,mirrorX:false,mirrorY:false,appearanceOverride:{}});
   expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d,'projected-free.jot2d',{resetLoadedHistory:true}),data)).toMatchObject({success:true});
   const before=(await state(page)).instances.find(i=>i.id==='FI1');
   await rectangle(page,{x:-65,y:-10},{x:65,y:40});await page.keyboard.press('Control+c');await page.keyboard.press('Control+v');
-  const current=await state(page),copy=current.instances.find(i=>i.type==='free'&&i.id!=='FI1');expect(current.instances).toHaveLength(4);
+  const current=await state(page),copy=current.instances.find(i=>i.type==='pattern'&&i.id!=='FI1');expect(current.instances).toHaveLength(4);
   expect(copy.points[0].x-before.points[0].x).toBeGreaterThan(0);
   expect(copy.points[0].y-before.points[0].y).toBeCloseTo(copy.points[0].x-before.points[0].x,8);
 });

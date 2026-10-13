@@ -4,10 +4,54 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ["src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/document_files.js", "src/persistence/png_file.js"]) {
+for (const file of ["src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/commands/png_export_command.js", "src/persistence/document_files.js", "src/persistence/png_file.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const region = sandbox.window.ExportRegion;
+
+test('export renderer owns crop state and capture clears it before bitmap/display restoration on success or failure', () => {
+  for (const failure of [null, 'render', 'copy', 'sync']) {
+    const calls = [], canvas = { width: 80, height: 60 }, viewport = { x: 10, y: 20, scale: 2 };
+    let renderer;
+    const drawCanvas = () => {
+      calls.push('render');
+      assert.equal(JSON.stringify(renderer.frame), JSON.stringify({ region: { x: 20, y: 32 }, ratio: { x: 1.5, y: 1.5 }, worldBounds: { x1: 5, y1: 6, x2: 9, y2: 9 } }));
+      if (failure === 'render') throw new Error('render');
+    };
+    renderer = sandbox.window.CanvasExport.createRenderer({ viewport, drawCanvas,
+      withGeometryReadCache: callback => { assert.equal(callback, drawCanvas); calls.push('cache'); callback(); },
+      syncCanvasBitmapSize: () => { assert.equal(renderer.frame, null); assert.equal(canvas.width, 80); assert.equal(canvas.height, 60); calls.push('sync'); if (failure === 'sync') throw new Error('sync'); },
+      draw: () => { assert.equal(renderer.frame, null); calls.push('display'); },
+    });
+    assert.equal(renderer.frame, null);
+    const capture = sandbox.window.CanvasExport.create({ canvas, text: (ja, en) => en,
+      render: renderer.render, restore: renderer.restore,
+      createCanvas: () => ({ getContext: () => ({ drawImage(value) { assert.equal(value, canvas); assert.ok(renderer.frame); calls.push('copy'); if (failure === 'copy') throw new Error('copy'); } }) }),
+    });
+    if (failure) assert.throws(() => capture.capture({ x: 5, y: 6, width: 4, height: 3 }, 3), new RegExp(failure));
+    else capture.capture({ x: 5, y: 6, width: 4, height: 3 }, 3);
+    assert.equal(renderer.frame, null); assert.equal(canvas.width, 80); assert.equal(canvas.height, 60);
+    assert.equal(calls.includes('display'), failure !== 'sync');
+    assert.equal(calls.at(-1), failure === 'sync' ? 'sync' : 'display');
+  }
+});
+
+test('PNG mode session restores its prior mode after clearing its pending operation and preserves foreign state', () => {
+  let mode = 'line'; const calls = [];
+  const pending = {
+    current: null,
+    replace(value) { assert.equal(this, pending); calls.push('replace'); pending.current = value; },
+    clear() { assert.equal(this, pending); calls.push('clear'); pending.current = null; },
+  };
+  const session = sandbox.window.PngExportCommand.createModeSession({ readMode: () => mode,
+    setMode: value => { calls.push(['mode', value]); mode = value; }, pendingCommandSession: pending });
+  session.begin(); assert.equal(mode, 'png-export'); assert.equal(pending.current.type, 'png-export');
+  assert.deepEqual(calls, [['mode', 'png-export'], 'replace']);
+  calls.length = 0; session.end(); assert.deepEqual(calls, ['clear', ['mode', 'line']]); assert.equal(pending.current, null);
+  session.begin(); const foreign = { type: 'distance' }; pending.current = foreign; mode = 'select'; calls.length = 0;
+  session.end(); assert.equal(mode, 'select'); assert.equal(pending.current, foreign); assert.equal(calls.length, 0);
+  mode = 'png-export'; session.end(); assert.equal(mode, null);
+});
 test("drag normalizes all directions; pixel limits reject huge allocations", () => {
   assert.equal(JSON.stringify(region.fromPoints({ x: 30, y: 40 }, { x: 10, y: 20 })), '{"x":10,"y":20,"width":20,"height":20}');
   assert.equal(region.fromPoints({ x: 0, y: 0 }, { x: 0, y: 10 }), null);

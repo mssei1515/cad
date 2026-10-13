@@ -173,7 +173,7 @@
       let hasFreePlacement = false;
       while (current?.derivedProjection && current.sourceElement && !visited.has(current)) {
         visited.add(current);
-        if (current.derivedInstance?.type === "free") hasFreePlacement = true;
+        if (window.PatternInstanceModel.placed(current.derivedInstance)) hasFreePlacement = true;
         current = current.sourceElement;
       }
       if (hasFreePlacement) {

@@ -20,7 +20,7 @@
   }
 
   function addGeometryBundleToMaps(bundle, pointById, lineById, primitiveById) {
-    for (const point of bundle.points) pointById.set(point.id, point);
+    for (const point of [...bundle.points, ...(bundle.controlPoints || [])]) pointById.set(point.id, point);
     for (const line of bundle.lines) lineById.set(line.id, line);
     for (const primitive of [...bundle.circles, ...bundle.arcs]) primitiveById.set(primitive.id, primitive);
     for (const spline of bundle.splines || []) primitiveById.set(spline.id, spline);

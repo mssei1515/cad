@@ -18,7 +18,7 @@ async function fixture(page, copies = 2) {
   data.points = [[-70, -20], [-30, -20], [-30, 20], [-70, 20]].map(([x, y], i) => ({ id: `P${i + 1}`, x, y, fixed: false, kind: "endpoint", sketchId }));
   data.lines = [0, 1, 2, 3].map((i) => ({ id: `L${i + 1}`, p1: `P${i + 1}`, p2: `P${(i + 1) % 4 + 1}`, construction: false, sketchId }));
   data.constraints = data.lines.map((line, i) => ({ type: i % 2 ? "vertical" : "horizontal", line: line.id, enabled: true, sketchId }));
-  data.geometryInstances = Array.from({ length: copies }, (_, i) => ({ id: `FI${i + 1}`, type: "free", sketchId, sources: data.lines.map((line) => ({ kind: "line", path: [line.id] })), origin: { x: -70, y: -20 }, x: i * 65, y: -20, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {}, drawingOrder: i + 10 }));
+  data.geometryInstances = Array.from({ length: copies }, (_, i) => ({ id: `FI${i + 1}`, type: "pattern", count: 2, occurrences: [""], placementPointDefined: true, placement: { kind: "linear" }, anchor: { relation: null, fallbackPosition: { x: -70, y: -20 } }, rotationLocked: false, reflected: false, sketchId, sources: data.lines.map((line) => ({ kind: "line", path: [line.id] })), origin: { x: -70, y: -20 }, x: i * 65, y: -20, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {}, drawingOrder: i + 10 }));
   expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "free.jot2d", { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 10, y: 0 }, 2.3));
   return data;
@@ -43,7 +43,7 @@ test("Document and Block instances with identical IDs remain independent through
     await page.click("#openBlockDefinitionsBtn");
     await page.click('.block-item[data-id="B1"] .blockEditBtn');
     await selectTree(page, "FI1", data.activeSketchId);
-    const rotation = page.locator('[data-free-instance-property="rotation"]');
+    const rotation = page.locator('[data-pattern-property="rotation"]');
     await rotation.fill("25"); await rotation.press("Tab");
     if (cancel) await page.click("#cancelBlockEditBtn");
     else await completeBlockEdit(page);
@@ -128,7 +128,7 @@ test("source editing rejects empty instances and broken downstream references", 
   await page.keyboard.press("Escape");
 });
 
-test("removing a source cleans its output constraints and retains shared-point constraints", async ({ page }) => {
+test("removing a referenced source is rejected and retains all output constraints", async ({ page }) => {
   const data = await fixture(page, 1);
   data.points.push({ id: "P5", x: 0, y: -20, fixed: true, kind: "explicit", sketchId: data.activeSketchId });
   data.constraints.push(
@@ -142,8 +142,8 @@ test("removing a source cleans its output constraints and retains shared-point c
   await clickWorld(page, { x: 20, y: -20 });
   await page.keyboard.press("Enter");
   const after = (await state(page)).serialized;
-  expect(after.geometryInstances[0].sources).toHaveLength(3);
-  expect(after.constraints).toHaveLength(5);
+  expect(after.geometryInstances[0].sources).toHaveLength(4);
+  expect(after.constraints).toHaveLength(data.constraints.length);
   expect(after.constraints.at(-1).type).toBe("coincident");
   expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "references.jot2d"), after)).toMatchObject({ success: true });
 });
@@ -256,31 +256,31 @@ test("whole selection survives subsequent drags until an explicit internal click
 
 test("synchronized instance command previews rotation and reflection, cancels and round trips", async ({ page }) => {
   await fixture(page, 0);
-  await expect(page.locator("#toolFreeInstance")).toHaveAttribute("aria-label", "同期インスタンス");
-  await expect(page.locator('[data-menu-tool="toolFreeInstance"]')).toHaveText("同期インスタンス");
+  await expect(page.locator("#toolPattern")).toHaveAttribute("aria-label", "直線パターン");
+  await expect(page.locator('[data-menu-tool="toolPattern"]')).toHaveText("直線パターン");
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1", "L2", "L3", "L4"] }));
-  await page.click("#toolFreeInstance");
+  await page.click("#toolPattern");
   await clickWorld(page, { x: -70, y: -20 });
-  const rotation = page.locator('[data-free-instance-property="rotation"]');
+  const rotation = page.locator('[data-pattern-property="rotation"]');
   await rotation.fill("-30"); await rotation.press("Tab");
   await expect(rotation).toHaveValue("-30");
   await rotation.fill("90"); await rotation.press("Tab");
-  await page.locator('[data-free-instance-property="mirrorX"]').check();
+  await expect(page.locator('[data-pattern-property="reflected"]')).toHaveCount(0);
   await page.locator('#commandPanel [role="listbox"][data-input="destination"]').click();
   await clickWorld(page, { x: 20, y: 30 });
   await page.locator('#commandPanel [data-action="finish"]').click();
   let current = await state(page);
-  expect(current.serialized.geometryInstances[0]).toMatchObject({ type: "free", rotation: Math.PI / 2, mirrorX: true, mirrorY: false });
+  expect(current.serialized.geometryInstances[0]).toMatchObject({ type: "pattern", rotation: Math.PI / 2, reflected: false });
   expect(current.instances[0].valid).toBe(true);
   expect(current.instances[0].lines[0].p2.x).toBeCloseTo(20, 0);
-  expect(current.instances[0].lines[0].p2.y).toBeCloseTo(-10, 0);
+  expect(current.instances[0].lines[0].p2.y).toBeCloseTo(70, 0);
   await page.click("#undoBtn"); expect((await state(page)).instances).toHaveLength(0);
   await page.click("#redoBtn"); expect((await state(page)).instances).toHaveLength(1);
   current = await state(page);
   const restored = await page.evaluate((d) => window.__jot2dTest.loadModelForDerivedInstanceTest(d), current.serialized);
   expect(restored.instances).toEqual(current.instances);
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
-  await page.click("#toolFreeInstance"); await page.keyboard.press("Escape");
+  await page.click("#toolPattern"); await page.keyboard.press("Escape");
   expect((await state(page)).instances).toHaveLength(1);
 });
 
@@ -365,14 +365,12 @@ test("placement constraints stop whole-instance dragging and reject incompatible
   await drag(page, { x: 40, y: 0 }, { x: 50, y: 8 }, true);
   expect((await state(page)).serialized.points).toEqual(before.points);
   expect((await state(page)).serialized.geometryInstances).toEqual(before.geometryInstances);
-  const rotation = page.locator('[data-free-instance-property="rotation"]');
+  const rotation = page.locator('[data-pattern-property="rotation"]');
   await rotation.fill("30"); await rotation.press("Tab");
   expect((await state(page)).serialized.geometryInstances).toEqual(before.geometryInstances);
   await expect(page.locator("#hint")).toContainText("変更を戻しました");
-  await page.locator('[data-free-instance-property="mirrorX"]').check();
-  expect((await state(page)).serialized.geometryInstances[0].mirrorX).toBe(true);
-  await page.click("#undoBtn");
-  expect((await state(page)).serialized.geometryInstances[0].mirrorX).toBe(false);
+  await expect(page.locator('[data-pattern-property="reflected"]')).toHaveCount(0);
+  expect((await state(page)).serialized.geometryInstances[0].reflected).toBe(false);
 });
 
 test("rotated mirrored circles and arcs share editable radius and endpoint geometry", async ({ page }) => {
@@ -381,7 +379,8 @@ test("rotated mirrored circles and arcs share editable radius and endpoint geome
   data.lines = []; data.constraints = [];
   data.circles = [{ id: "C1", center: "P1", radius: 12, construction: false, sketchId: data.activeSketchId }];
   data.arcs = [{ id: "A1", center: "P1", radius: 20, startAngle: 0, endAngle: 1.2, construction: false, sketchId: data.activeSketchId }];
-  Object.assign(data.geometryInstances[0], { sources: [{ kind: "circle", path: ["C1"] }, { kind: "arc", path: ["A1"] }], origin: { x: -50, y: 0 }, x: 30, y: 0, rotation: Math.PI / 2, mirrorX: true });
+  Object.assign(data.geometryInstances[0], { sources: [{ kind: "circle", path: ["C1"] }, { kind: "arc", path: ["A1"] }], origin: { x: -50, y: 0 }, x: 30, y: 0, rotation: Math.PI / 2, reflected: true, anchor: { relation: { kind: "point", target: { kind: "point", path: ["P1"] } }, fallbackPosition: { x: -50, y: 0 } } });
+  data.geometryInstances[0].sources.push({ kind: "point", path: ["P1"] });
   await page.evaluate((d) => window.__jot2dTest.loadModelForDerivedInstanceTest(d), data);
   let current = await state(page);
   expect(current.instances[0].arcs[0].sweep).toBeCloseTo(-1.2, 8);
@@ -392,7 +391,7 @@ test("rotated mirrored circles and arcs share editable radius and endpoint geome
   await drag(page, { x: 30, y: -20 }, { x: 30 + 20 * Math.cos(-1), y: 20 * Math.sin(-1) });
   current = await state(page);
   expect(current.serialized.arcs[0].startAngle).not.toBeCloseTo(0, 2);
-  expect(current.serialized.geometryInstances[0]).toMatchObject({ x: 30, y: 0, rotation: Math.PI / 2, mirrorX: true });
+  expect(current.serialized.geometryInstances[0]).toMatchObject({ x: 30, y: 0, rotation: Math.PI / 2, reflected: true });
   const restored = await page.evaluate((d) => window.__jot2dTest.loadModelForDerivedInstanceTest(d), current.serialized);
   expect(restored.instances).toEqual(current.instances);
 });
@@ -400,7 +399,7 @@ test("rotated mirrored circles and arcs share editable radius and endpoint geome
 test("invalid free transforms and cross-sketch sources are rejected transactionally", async ({ page }) => {
   await fixture(page, 1);
   const baseline = (await state(page)).serialized;
-  for (const mutation of ["rotation", "origin", "mirrorX", "scope", "cycle"]) {
+  for (const mutation of ["rotation", "anchor", "reflected", "scope", "cycle"]) {
     const malformed = structuredClone(baseline);
     if (mutation === "scope") {
       malformed.sketches.push({ ...malformed.sketches.find((s) => s.id === malformed.activeSketchId), id: "S99", name: "Other" });
@@ -444,7 +443,7 @@ test("free instances in a block definition retain edits and local undo through r
   await page.click("#openBlockDefinitionsBtn");
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   await selectTree(page, "FI1", data.activeSketchId);
-  const rotation = page.locator('[data-free-instance-property="rotation"]');
+  const rotation = page.locator('[data-pattern-property="rotation"]');
   await rotation.fill("-25"); await rotation.press("Tab");
   expect((await state(page)).serialized.geometryInstances[0].rotation).toBeCloseTo(-25 * Math.PI / 180, 8);
   await page.click("#undoBtn");

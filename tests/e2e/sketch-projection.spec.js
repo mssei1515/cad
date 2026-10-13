@@ -38,7 +38,7 @@ test("mirror inherits each source appearance, follows edits and preserves sparse
   expect(await appearance("line", "MI2@MI1@L1")).toMatchObject({ color: "#cc3344", lineType: "dotted", lineWidth: 6 });
 });
 
-for (const type of ["sketchProjection", "pattern", "free"]) {
+for (const type of ["sketchProjection", "pattern", "circularPattern"]) {
   test(`${type} inherits individual source appearances through edits, overrides and reload`, async ({ page }) => {
     const data = await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest().serialized);
     data.sketches.find((sketch) => sketch.id === "S2").appearance = { color: "#112233", lineWidth: 2 };
@@ -51,7 +51,7 @@ for (const type of ["sketchProjection", "pattern", "free"]) {
       sources: [{ kind: "line", path: ["MI1", "L1"] }, { kind: "arc", path: [data.arcs[0].id] }, { kind: "line", path: ["L3"] }],
       appearanceOverride: { lineWidth: 5 },
       ...(type === "pattern" ? { direction: { kind: "line", path: ["L3"] }, spacing: 30, copies: 2, reversed: false } : {}),
-      ...(type === "free" ? { origin: { x: 0, y: 0 }, x: 100, y: 0, rotation: 0, mirrorX: false, mirrorY: false } : {}),
+      ...(type === "circularPattern" ? { count: 2, occurrences: [""], placementPointDefined: false, anchor: { relation: null, fallbackPosition: { x: 0, y: 0 } }, placement: { kind: "circular", angleStep: .5, angleSign: 1, angleMode: "numeric" }, x: 0, y: 0, rotation: 0, reflected: false, rotationLocked: true } : {}),
     });
     expect(await page.evaluate((value) => window.__jot2dTest.loadDocumentFixtureForDragTest(value, "derived-appearance.jot2d", { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
     const prefixes = type === "pattern" ? [`${id}@1`, `${id}@2`] : [id];
@@ -82,18 +82,18 @@ test("projection, mirror, and linear pattern are persisted as derived instances"
   await page.locator('.sketch-group-row[data-sketch-id="S2"][data-category="instance"]').click();
   const state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
 
-  expect(state.serialized.version).toBe(25);
+  expect(state.serialized.version).toBe(26);
   expect(state.serialized.geometryInstances.map((item) => item.type)).toEqual(["sketchProjection", "mirror", "pattern"]);
   expect(state.serialized.constraints.some((item) => item.type === "sketchProjection")).toBe(false);
-  expect(state.serialized.geometryInstances[2]).toMatchObject({ spacing: 15, copies: 3, reversed: false });
+  expect(state.serialized.geometryInstances[2]).toMatchObject({ count: 4, placement: { kind: "directionLinear", spacing: 15, reversed: false } });
   expect(state.instances.every((item) => item.valid)).toBe(true);
-  expect(state.instances.find((item) => item.type === "pattern").lines).toHaveLength(3);
-  expect(state.instances.find((item) => item.type === "mirror").lines[0].p1.x).toBe(40);
+  expect(state.instances.find((item) => item.id === "PI1").lines).toHaveLength(3);
+  expect(state.instances.find((item) => item.id === "MI1").lines[0].p1.x).toBe(40);
   const projectionInstance = state.instances.find((item) => item.type === "sketchProjection");
   const editableInstances = state.instances.filter((item) => item.type !== "sketchProjection");
   expect([...projectionInstance.lines, ...projectionInstance.circles, ...projectionInstance.arcs].every((item) => item.color === "#111827")).toBe(true);
   expect(editableInstances.flatMap((item) => [...item.lines, ...item.circles, ...item.arcs]).every((item) => item.color === "#f59e0b")).toBe(true);
-  expect(state.instances.find((item) => item.type === "mirror").arcs[0].sweep).toBeCloseTo(-0.5, 8);
+  expect(state.instances.find((item) => item.id === "MI1").arcs[0].sweep).toBeCloseTo(-0.5, 8);
   expect(state.hatchValidity).toEqual([true]);
   expect(state.treeCount).toBe(3);
 
@@ -236,7 +236,7 @@ test("same-sketch mirror and pattern geometry inverse-update their original sour
   expect(state.instances.find((item) => item.id === "MI1").arcs[0].startAngle).toBeCloseTo(0.5, 6);
 });
 
-test("projection, mirror, and pattern toolbar commands create grouped instances", async ({ page }) => {
+test("projection and unified toolbar commands create grouped instances", async ({ page }) => {
   const projectionFixture = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionTest());
   await page.click("#toolSketchProjection");
   await page.mouse.click(projectionFixture.clients.line1.x, projectionFixture.clients.line1.y);
@@ -248,21 +248,23 @@ test("projection, mirror, and pattern toolbar commands create grouped instances"
 
   const copyFixture = await page.evaluate(() => window.__jot2dTest.resetForGeometryInstanceCommandTest());
   await page.evaluate((sourceId) => window.__jot2dTest.selectGeometryIdsForTest({ lines: [sourceId] }), copyFixture.sourceId);
-  await page.click("#toolMirror");
-  await page.mouse.click(copyFixture.axis.x, copyFixture.axis.y);
-  await page.keyboard.press("Enter");
-
-  await page.evaluate((sourceId) => window.__jot2dTest.selectGeometryIdsForTest({ lines: [sourceId] }), copyFixture.sourceId);
-  await page.click("#toolPattern");
-  await page.locator('#commandPanel [data-setting="spacing"]').fill("12.5");
-  await page.locator('#commandPanel [data-setting="copies"]').fill("4");
-  await page.mouse.click(copyFixture.direction.x, copyFixture.direction.y);
-  await page.locator('#commandPanel [data-action="finish"]').click();
-
+  for (const count of [2, 5]) {
+    await page.evaluate(sourceId => window.__jot2dTest.selectGeometryIdsForTest({ lines: [sourceId] }), copyFixture.sourceId);
+    await page.click("#toolPattern");
+    const anchor = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: -55, y: 15 }));
+    await page.mouse.click(anchor.x, anchor.y);
+    await page.locator('#commandPanel [data-setting="count"]').fill(String(count));
+    await expect(page.locator('#commandPanel [data-setting="reflected"]')).toHaveCount(0);
+    await page.locator('#commandPanel ul[data-input="destination"]').click();
+    const destination = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: -42.5, y: 15 }));
+    await page.mouse.click(destination.x, destination.y);
+    await page.locator('#commandPanel [data-action="finish"]').click();
+  }
   state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
-  expect(state.serialized.geometryInstances.map((item) => item.type)).toEqual(["mirror", "pattern"]);
-  expect(state.serialized.geometryInstances[1]).toMatchObject({ spacing: 12.5, copies: 4, reversed: false });
+  expect(state.serialized.geometryInstances.map(item => item.type)).toEqual(["pattern", "pattern"]);
+  expect(state.serialized.geometryInstances[1]).toMatchObject({ count: 5, placement: { kind: "linear" } });
   expect(state.instances[1].lines).toHaveLength(4);
+
 });
 
 test("derived instance chains reload with stable references and topology", async ({ page }) => {
@@ -338,7 +340,7 @@ test("v20 sketch projection constraints migrate one-to-one to current instances"
     constraints: [{ type: "sketchProjection", kind: "line", source: "L1", target: "L2", enabled: true, reference: true, referenceSketchId: "S1", sketchId: "S2" }],
   };
   const state = await page.evaluate((data) => window.__jot2dTest.loadModelForDerivedInstanceTest(data), legacy);
-  expect(state.serialized.version).toBe(25);
+  expect(state.serialized.version).toBe(26);
   expect(state.serialized.constraints).toHaveLength(0);
   expect(state.serialized.lines.map((line) => line.id)).toEqual(["L1"]);
   expect(state.serialized.geometryInstances).toHaveLength(1);
@@ -353,7 +355,7 @@ test("pattern properties are editable and no independentize action is exposed", 
   await page.locator('.sketch-item[data-id="S2"] .sketchExpandBtn').click();
   await page.locator('.sketch-group-row[data-sketch-id="S2"][data-category="instance"]').click();
   await page.locator('.sketch-object-row[data-object-kind="instance"][data-id="PI1"]').click();
-  await expect(page.locator('#propertiesPanel [data-geometry-instance-property="spacing"]')).toHaveValue("15");
+  await expect(page.locator('#propertiesPanel [data-pattern-property="spacing"]')).toHaveValue("15");
   await expect(page.locator('#propertiesPanel')).not.toContainText("独立化");
   await expect(page.locator('#propertiesPanel')).not.toContainText("Make independent");
 });

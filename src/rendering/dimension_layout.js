@@ -232,7 +232,7 @@
 
     function angleDimensionLayout(target, dimension) {
       migrateAngleDimensionLabelPlacement(target, dimension);
-      const vertex = lineIntersection(target.line1, target.line2);
+      const vertex = (target.intervalCenter || lineIntersection(target.line1, target.line2));
       if (!vertex) return null;
       const anchor = dimensionAnchor(target, dimension);
       const radius = Math.max(14 / viewport.scale, hypot2(anchor.x - vertex.x, anchor.y - vertex.y));

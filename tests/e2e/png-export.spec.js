@@ -7,6 +7,15 @@ async function openExport(page) {
   await expect(page.locator('#commandPanel[data-command="png-export"]')).toBeVisible();
   await expect(page.locator('[data-setting="dpi"]')).toHaveValue("300");
 }
+
+test('blank double click exits PNG crop without changing the document', async ({ page }) => {
+  const before = await state(page);
+  await openExport(page);
+  const blank = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: -40, y: -20 }));
+  await page.mouse.dblclick(blank.x, blank.y);
+  await expect(page.locator('#commandPanel')).toBeHidden();
+  expect((await state(page)).doc).toEqual(before.doc);
+});
 async function clickWorld(page, x, y) {
   const point = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), { x, y });
   await page.mouse.click(point.x, point.y);

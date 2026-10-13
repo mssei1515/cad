@@ -4,7 +4,7 @@
   function create({ isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline,
     constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
     geometryElementKey, annotationReferencesRemovedGeometry,
-    geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes }) {
+    geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes, removeAnnotationConstraint = () => {} }) {
     function plan(model, { points = [], lines = [], circles = [], arcs = [], splines = [], constraints = [] } = {}) {
       const pointSet = new Set(points);
       const lineSet = new Set(lines);
@@ -67,6 +67,7 @@
       return { pointSet, lineSet, circleSet, arcSet, splineSet, constraintSet };
     }
     function apply(model, { pointSet, lineSet, circleSet, arcSet, splineSet, constraintSet }) {
+      for (const constraint of constraintSet) if (constraint.annotationOwner) removeAnnotationConstraint(constraint);
       model.constraints = model.constraints.filter((c) => !constraintSet.has(c));
       model.lines = model.lines.filter((l) => !lineSet.has(l));
       model.circles = model.circles.filter((c) => !circleSet.has(c));
@@ -82,7 +83,7 @@
       const block = field === "blockInstances";
       const projectionItems = instances.flatMap(instance => {
         const bundle = block ? blockAllProjectionBundle(instance) : geometryInstanceBundle(instance);
-        return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(block ? bundle.splines || [] : bundle.splines)];
+        return [...bundle.points, ...(bundle.controlPoints || []), ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(block ? bundle.splines || [] : bundle.splines)];
       });
       const removedIds = new Set(projectionItems.map(item => item.id));
       const keys = projectionItems.map(geometryElementKey);

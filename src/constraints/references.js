@@ -18,6 +18,9 @@
 
   function create({ resolveGeometryRef }) {
     function constraintReferencesPoint(c, point) {
+      if (c instanceof window.GeometrySolver.LineMidpointCoincidentConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
+      if (c instanceof window.GeometrySolver.InstanceAxisOffsetConstraint) return c.p1 === point || c.p2 === point;
+      if (c instanceof window.GeometrySolver.InstanceAngleIntervalConstraint) return c.point === point;
       if (c instanceof GeometryFixedConstraint) return c.geometry === point || c.geometry.center === point;
       if (c instanceof SketchProjectionConstraint) return constraintGraphNodes(c).includes(point);
       if (c instanceof PointOnSplineConstraint) return c.point === point || c.spline.fitPoints.includes(point);
@@ -66,6 +69,7 @@
     }
 
     function constraintReferencesLine(c, line) {
+      if (c instanceof window.GeometrySolver.LineMidpointCoincidentConstraint) return c.line === line;
       if (c instanceof SketchProjectionConstraint) return c.source === line || c.target === line;
       if (c instanceof SplineLineTangentConstraint) return c.line === line;
       if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) {
@@ -117,6 +121,9 @@
 
     function constraintGraphNodes(c, options = {}) {
       const nodes = new Set();
+      if (c instanceof window.GeometrySolver.LineMidpointCoincidentConstraint) { addNode(nodes, c.point); addNode(nodes, c.line); addNode(nodes, c.line.p1); addNode(nodes, c.line.p2); }
+      if (c instanceof window.GeometrySolver.InstanceAxisOffsetConstraint) { addNode(nodes, c.p1); addNode(nodes, c.p2); }
+      if (c instanceof window.GeometrySolver.InstanceAngleIntervalConstraint) addNode(nodes, c.point);
       if (c instanceof GeometryFixedConstraint) {
         addNode(nodes, c.geometry);
         if (c.geometry.center) addNode(nodes, c.geometry.center);
@@ -302,7 +309,7 @@
     }
 
     function geometryInstanceDependencyRefs(instance) {
-      return [...(instance?.sources || []), instance?.axis, instance?.direction].filter(Boolean);
+      return window.PatternInstanceModel.dependencies(instance);
     }
 
     function addNode(nodes, value) {

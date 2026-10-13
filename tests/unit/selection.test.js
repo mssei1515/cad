@@ -232,3 +232,13 @@ test('constraint target reflection owns geometry selection and clears only the e
  assert.equal(selection.arcEndpoint,endpoint);assert.equal(selection.arcEndpointPair,pair);assert.equal(selection.annotations[0],annotation);
  assert.equal(selection.blockInstances.length,0);assert.equal(selection.geometryInstances.length,0);assert.equal(selection.instanceGeometry,null);assert.equal(selection.sketchId,null);
 });
+
+test('selection scope query keeps category order/duplicates/refs and first-item versus inspection Sketch precedence', () => {
+  const selection = create(), geometry = { id: 'g', sketchId: 'geometry' }, block = { id: 'b', sketchId: 'block' }, instance = { id: 'i' }, annotation = {}, hatch = {}, image = {}, constraint = {}, arc = {};
+  selection.set('blockInstances', [block]); selection.set('geometryInstances', [instance]); selection.set('annotations', [annotation]); selection.set('hatches', [hatch]); selection.set('referenceImages', [image]); selection.set('dimensionConstraints', [constraint]); selection.set('constraint', constraint); selection.set('arcEndpoint', { arc });
+  let items = [geometry]; const query = sandbox.window.CanvasSelection.createScopeQuery({ canvasSelection: selection, selectedGeometryItems: () => items });
+  assert.deepEqual(Array.from(query.selectionItems()), [geometry, block, instance, annotation, hatch, image, constraint, constraint, arc]); assert.equal(query.selectionSketchId(), 'geometry');
+  items = []; assert.equal(query.selectionSketchId(), 'block'); selection.set('inspection', { sketchId: 'inspection', targets: [] });
+  items = [{ id: 'unassigned' }]; assert.equal(query.selectionSketchId(), 'inspection');
+  selection.clear(); items = []; assert.equal(query.selectionSketchId(), null); assert.equal(query.selectionItems().length, 0);
+});

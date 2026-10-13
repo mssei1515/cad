@@ -7,6 +7,42 @@ const sandbox = { window: {} };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/testing/dimension_test_driver.js'), 'utf8'), sandbox);
 
+test('Sketch visibility fixture restores fillText on either capture failure without widening rollback', () => {
+  for (const failAt of [0, 1, 2]) {
+    const original = () => { throw Error('original fillText should be intercepted'); };
+    const ctx = { fillText: original }, failure = new Error('draw failed');
+    let scope, count = 0;
+    const sketchById = id => {
+      const sketch = scope.sketches.find(value => value.id === id);
+      sketch.appearance ||= {};
+      return sketch;
+    };
+    const fixture = sandbox.window.DimensionTestDriver.createSketchVisibilityFixture({
+      resetModelState: () => { scope = { activeSketchId: 'S1', sketches: [{ id: 'S1' }], constraints: [] }; },
+      currentScope: () => scope, activeSketchId: () => scope.activeSketchId, rootSketchId: 'ROOT',
+      addPoint: (x, y) => ({ x, y }), addLine: (p1, p2) => ({ p1, p2, length: () => p2.x - p1.x }),
+      dimensionFromAnchor: (target, point) => ({ ...point }),
+      addDistanceConstraintFromTarget: (target, value, dimension, options) => scope.constraints.push({ sketchId: options.sketchId, dimension }),
+      ctx, sketchById, isDimensionConstraint: () => true, constraintSketchId: value => value.sketchId,
+      isVisibleSketchId: id => sketchById(id).appearance.visible !== false,
+      drawDimensions: () => {
+        assert.equal(scope.activeSketchId, 'S1');
+        count++; ctx.fillText('label' + count);
+        if (count === failAt) throw failure;
+      },
+    });
+    if (failAt) assert.throws(() => fixture.reset(), error => error === failure);
+    else {
+      const result = fixture.reset();
+      assert.deepEqual(Array.from(result.drawnDimensionLabels), ['label1']);
+      assert.deepEqual(Array.from(result.labelsAfterHidingSecondSketch), ['label2']);
+      assert.deepEqual(Array.from(result.dimensionSketchIds), ['S1', 'S2']);
+    }
+    assert.equal(ctx.fillText, original);
+    assert.equal(sketchById('S2').appearance.visible, failAt === 2 ? false : failAt === 1 ? undefined : true);
+  }
+});
+
 test('arrow observation restores the current viewport scale and propagates appearance or rendering failure', () => {
   for (const failureAt of ['appearance', 'stroke', 'points', 'projection']) {
     const failure = new Error(failureAt), updates = [];

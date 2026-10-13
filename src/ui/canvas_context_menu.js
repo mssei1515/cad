@@ -174,5 +174,28 @@
     return Object.freeze({ open, close: closeCanvasContextMenu, start, dispose, candidates: () => canvasContextCandidates.slice() });
 
   }
-  window.CanvasContextMenu = Object.freeze({ create });
+  function createEntry({ canvasContextMenu, isGeometryMode, closeAppMenus, canvasPoint, setLastPointer, hasCancellableCanvasCommand, constraintTargetSession, canvasContextCandidatesAt, selectCanvasContextTarget, updateUI, draw, canvasContextController, canvasContextMenuItems }) {
+    function open(event) {
+      if (!canvasContextMenu || !isGeometryMode()) return;
+      event.preventDefault();
+      closeAppMenus();
+      const pointer = canvasPoint(event);
+      setLastPointer(pointer);
+      const commandActive = hasCancellableCanvasCommand();
+      const constraintCommandActive = Boolean(constraintTargetSession.command);
+      const candidates = commandActive && !constraintCommandActive ? [] : canvasContextCandidatesAt(pointer);
+      const multipleCandidates = candidates.length > 1;
+      const showCandidates = constraintCommandActive ? candidates.length > 0 : multipleCandidates;
+      const target = commandActive || multipleCandidates ? { kind: "blank", item: null } : candidates[0] || { kind: "blank", item: null };
+      if (!commandActive && !multipleCandidates && target.kind !== "blank") {
+        selectCanvasContextTarget(target);
+        updateUI({ refreshAnalysis: false });
+        draw();
+      }
+      canvasContextController.open({ event, pointer, target, candidates, showCandidates, items: showCandidates ? [] : canvasContextMenuItems(target, commandActive) });
+    }
+    return Object.freeze({ open });
+  }
+
+  window.CanvasContextMenu = Object.freeze({ create, createEntry });
 })();

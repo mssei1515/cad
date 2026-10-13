@@ -1,7 +1,7 @@
 /* Shared command presentation. Commands retain ownership of drafts and validation. */
 (() => {
   "use strict";
-  function create({ document, host, readState, onAction, onSetting, onSelect, onRemove }) {
+  function create({ document, host, readState, onAction, onSetting, onSelect, onRemove, getTime = Date.now }) {
     const panel = document.createElement("section");
     panel.id = "commandPanel";
     panel.className = "command-panel";
@@ -11,6 +11,30 @@
     let signature = "";
     let structure = "";
     let view = null;
+    let canvasClick = null;
+    function cancelFromCanvas() {
+      const state = readState();
+      const action = state?.actions?.find(action => action.id === "cancel");
+      if (!state || action?.disabled) return false;
+      canvasClick = null;
+      onAction("cancel");
+      return true;
+    }
+    function canvasPress(screen, blank) {
+      const state = readState();
+      if (!state) { canvasClick = null; return false; }
+      const now = getTime();
+      // The first placement click may create an annotation at this position.
+      // Recognize the gesture from where it began, before command input changed the scene.
+      const repeated = canvasClick?.id === state.id && now - canvasClick.time <= 450
+        && Math.hypot(screen.x - canvasClick.x, screen.y - canvasClick.y) <= 6;
+      canvasClick = blank ? { ...screen, time: now, id: state.id } : null;
+      return repeated ? cancelFromCanvas() : false;
+    }
+    function canvasDoubleClick(blank) { return blank && cancelFromCanvas(); }
+    function canvasMove(screen) {
+      if (canvasClick && Math.hypot(screen.x - canvasClick.x, screen.y - canvasClick.y) > 6) canvasClick = null;
+    }
     function node(tag, text, className) {
       const element = document.createElement(tag);
       if (text != null) element.textContent = text;
@@ -20,6 +44,7 @@
     function update() {
       const state = readState();
       if (!state) {
+        canvasClick = null;
         panel.hidden = true;
         signature = "";
         structure = "";
@@ -145,19 +170,23 @@
       });
     }
     panel.addEventListener("click", event => {
+      canvasClick = null;
       const row = event.target.closest("[data-input]");
       if (row) { onSelect?.(row.dataset.input, row.dataset.inputItem == null ? null : Number(row.dataset.inputItem)); return; }
       const button = event.target.closest("button[data-action]");
       if (button && !button.disabled) onAction(button.dataset.action);
     });
     panel.addEventListener("input", event => {
+      canvasClick = null;
       if ((event.target.tagName === "TEXTAREA" || event.target.dataset.live === "true") && event.target.dataset.setting) onSetting(event.target.dataset.setting, event.target.value);
     });
     panel.addEventListener("change", event => {
+      canvasClick = null;
       const input = event.target;
       if (input.dataset.setting) onSetting(input.dataset.setting, input.type === "checkbox" ? input.checked : input.value);
     });
     panel.addEventListener("keydown", event => {
+      canvasClick = null;
       const row = event.target.closest("[data-input]");
       const list = event.target.closest('[role="listbox"]');
       if (list && ["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
@@ -204,7 +233,7 @@
         if (finish && !finish.disabled) onAction("finish");
       }
     });
-    return Object.freeze({ update });
+    return Object.freeze({ update, canvasPress, canvasMove, canvasDoubleClick, get active() { return Boolean(readState()); } });
   }
   window.CommandPanel = Object.freeze({ create });
 })();

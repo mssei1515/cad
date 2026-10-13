@@ -253,5 +253,24 @@
     }
     return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
   }
-  window.AnnotationRenderer = Object.freeze({ create, displayText, resizeHandles });
+  function createColor({ effectiveAnnotationStyle, readExportFrame, canvasSelection, readHoveredAnnotation, canvasThemeColor }) {
+    function annotationDisplayColor(element, style = effectiveAnnotationStyle(element)) {
+      if (readExportFrame()) return canvasThemeColor(style.color);
+      if (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasSelection.inspectionContains(element.blockInstance)) return canvasThemeColor("#2563eb");
+      if (element === readHoveredAnnotation()) return canvasThemeColor("#0ea5e9");
+      return canvasThemeColor(style.color);
+    }
+    return Object.freeze({ annotationDisplayColor });
+  }
+  function createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText }) {
+    function draw() {
+      for (const element of allAnnotations()) {
+        if (!isVisibleValue(element.visible) || !isVisibleSketchId(element.sketchId)) continue;
+        if (element.type === "leader") drawAnnotationLeader(element);
+        else if (element.type === "text") drawAnnotationText(element);
+      }
+    }
+    return Object.freeze({ draw });
+  }
+  window.AnnotationRenderer = Object.freeze({ create, createColor, createLayer, displayText, resizeHandles });
 })();

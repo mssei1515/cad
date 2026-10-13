@@ -23,6 +23,20 @@ async function selectNote(page) {
   if (await group.getAttribute('aria-expanded') !== 'true') await group.click();
   await page.locator('.sketch-object-row[data-object-kind="annotation"]').first().click();
 }
+
+for (const withLeader of [false, true]) test(`blank double click exits annotation command, leader ${withLeader}`, async ({ page }) => {
+  await setup(page);
+  await page.locator('#annotationTextBtn').click();
+  await page.locator('#commandPanel [data-setting=withLeader]').setChecked(withLeader);
+  await page.locator('#commandPanel [data-setting=text]').fill('Kept note');
+  if (withLeader) { await clickWorld(page, { x: 0, y: 0 }); await clickWorld(page, { x: 40, y: 30 }); await clickWorld(page, { x: 70, y: 30 }); }
+  else await clickWorld(page, { x: 40, y: -30 });
+  expect((await data(page)).annotations).toHaveLength(1);
+  const blank = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 40, y: 50 }));
+  await page.mouse.dblclick(blank.x, blank.y);
+  await expect(page.locator('#commandPanel')).toBeHidden();
+  expect((await data(page)).annotations).toHaveLength(withLeader ? 1 : 2);
+});
 test('single annotation entry places repeatedly, preserves multiline draft and remembers leader mode', async ({ page }) => {
   await setup(page);
   await expect(page.locator('#annotationLeaderBtn')).toHaveCount(0);

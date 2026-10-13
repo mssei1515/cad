@@ -4,7 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 const root = path.resolve(__dirname, "../..");
-const sandbox = { window: {} };
+const sandbox = { structuredClone, window: {} };
 vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync(path.join(root, "index.html"), "utf8").match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(source => source.startsWith("src/"))) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), sandbox, { filename: file });
@@ -59,7 +59,7 @@ test('block definitions project hatch-only derived instances using their own geo
   const face = engine.findFaceInIndex(engine.createRegionIndex([{ kind: 'circle', id: 'C1', center, radius: 2 }]), center);
   local.hatches.push({ id: 'H1', sketchId: 'S1', seed: { x: 2, y: 3 }, boundaryLoops: face.boundaryLoops,
     appearance: { patternType: 'parallel', angle: 45, spacing: 4, lineWidth: 1, color: '#123456', visible: true, opacity: 0.5 } });
-  local.geometryInstances.push({ id: 'MI1', type: 'mirror', sketchId: 'S1', sources: [{ kind: 'hatch', path: ['H1'] }], axis: { kind: 'line', path: ['L1'] } });
+  local.geometryInstances.push(sandbox.window.PatternInstanceModel.normalize({ id: 'MI1', type: 'mirror', sketchId: 'S1', sources: [{ kind: 'hatch', path: ['H1'] }], axis: { kind: 'line', path: ['L1'] } }));
   const { projection } = services(() => [local]);
   const bundle = projection.createBlockProjectionBundle(instance('outer', local.id), local);
   const mirrored = bundle.hatches.find(hatch => hatch.id === 'outer/MI1@H1');
@@ -73,8 +73,8 @@ test("rigid projection Jacobians match dense evaluation through nested and deriv
   const child = definition("child"), parent = definition("parent");
   parent.points = []; parent.lines = [];
   parent.blockInstances = [instance("nested", "child", { x: 3, y: 4, rotation: 0.2 })];
-  parent.geometryInstances = [{ id: "MI1", type: "mirror", sketchId: "S1",
-    sources: [{ kind: "line", path: ["nested", "L1"] }], axis: { kind: "line", path: ["nested", "L1"] } }];
+  parent.geometryInstances = [sandbox.window.PatternInstanceModel.normalize({ id: "MI1", type: "mirror", sketchId: "S1",
+    sources: [{ kind: "line", path: ["nested", "L1"] }], axis: { kind: "line", path: ["nested", "L1"] } })];
   const { projection } = services(() => [parent, child]);
   const outer = instance("outer", "parent", { rotation: 0.4 });
   const free = point("free", 12, 25), unrelated = point("unrelated", 100, 200);
@@ -224,7 +224,7 @@ test("temporary loader resolvers and derived instances use the supplied definiti
   stored.points[0].x = 100;
   parent.points = []; parent.lines = [];
   parent.blockInstances = [instance("nested", "child", { x: 0, y: 0 })];
-  parent.geometryInstances = [{ id: "FI1", type: "free", sketchId: "S1", sources: [sandbox.window.GeometryRef.parseId("line", "nested@L1")], x: 5, y: 0, rotation: 0, origin: { x: 0, y: 0 }, mirrorX: false, mirrorY: false }];
+  parent.geometryInstances = [sandbox.window.PatternInstanceModel.normalize({ id: "FI1", type: "pattern", count: 2, occurrences: [""], placementPointDefined: true, placement: { kind: "linear" }, anchor: { relation: null, fallbackPosition: { x: 0, y: 0 } }, reflected: false, rotationLocked: false, sketchId: "S1", sources: [sandbox.window.GeometryRef.parseId("line", "nested@L1")], x: 5, y: 0, rotation: 0, origin: { x: 0, y: 0 }, mirrorX: false, mirrorY: false })];
   const { projection } = services(() => [parent, stored]);
   const bundle = projection.createBlockProjectionBundle(instance("outer", "parent", { x: 0, y: 0 }), parent, null, { definitionResolver: id => id === "child" ? loaded : parent });
   const direct = bundle.lines.find(line => line.id === "outer@nested@L1");

@@ -98,3 +98,17 @@ test('show hidden includes hidden sketch, annotation, hatch and image extents wi
   assert.deepEqual(plain(f.scope), before);
   f.showHidden(false); assert.equal(f.api.visibleGeometryBounds(), null);
 });
+
+test('line/rectangle crossing preserves inclusive endpoints, sides/corners, collinear and degenerate geometry', () => {
+  const rect = box(0, 0, 10, 10), line = (x1, y1, x2, y2) => ({ p1: { x: x1, y: y1 }, p2: { x: x2, y: y2 } });
+  const cases = [[line(2, 3, 7, 8), true], [line(-2, 5, 12, 5), true], [line(5, -2, 5, 12), true], [line(-1, 9, 1, 11), true],
+    [line(-2, 10, 12, 10), true], [line(-2, -2, -1, -1), false], [line(-1, 9.5, 1, 11.5), false], [line(4, 4, 4, 4), true], [line(20, 4, 20, 4), false]];
+  for (const [value, expected] of cases) { const before = JSON.stringify(value); assert.equal(bounds.lineIntersectsRect(value, rect), expected); assert.equal(JSON.stringify(value), before);
+    assert.equal(bounds.lineIntersectsRect({ p1: value.p2, p2: value.p1 }, rect), expected); }
+  assert.equal(bounds.lineIntersectsRect(line(-1, 5, 11, 5), box(5, 5, 5, 5)), true);
+});
+test('line/rectangle intersection keeps legacy near-corner cross-product tolerance without widening the bbox gate', () => {
+  const rect = box(0, 0, 10, 10), nearCorner = epsilon => ({ p1: { x: -1, y: 9 + epsilon }, p2: { x: 1, y: 11 + epsilon } });
+  assert.equal(bounds.lineIntersectsRect(nearCorner(1e-10), rect), true); assert.equal(bounds.lineIntersectsRect(nearCorner(1e-8), rect), false);
+  assert.equal(bounds.lineIntersectsRect({ p1: { x: -1e-10, y: 1 }, p2: { x: -1e-10, y: 9 } }, rect), false);
+});

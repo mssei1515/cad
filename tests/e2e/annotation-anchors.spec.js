@@ -82,7 +82,7 @@ test('nine anchor choices preserve placement independently of multiline alignmen
   await page.locator('#annotationFrameLineType').selectOption('dashed');
   await page.locator('#annotationFrameColor').fill('#ff0000'); await page.locator('#annotationFrameColor').press('Tab');
   await page.screenshot({ path: require('node:path').join(require('node:os').tmpdir(), 'jot2d-annotation-anchor-preview.png') });
-  const saved = await data(page); expect(saved.version).toBe(25);
+  const saved = await data(page); expect(saved.version).toBe(26);
   expect(saved.annotations[0].style).toMatchObject({ textAlign: 'center', frameVisible: true, frameLineType: 'dashed', frameColor: '#ff0000' });
   expect((await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).success).toBe(true);
   const loaded = await state(page); expect(loaded.textLayout.anchorX).toBeCloseTo(anchor.x, 8); expect(loaded.textLayout.anchorY).toBeCloseTo(anchor.y, 8);
@@ -97,7 +97,7 @@ for (const leader of [false, true]) test(`command-first coincidence picks the ${
   await clickWorld(page, { x: 100, y: 50 });
   await page.locator('[data-constraint=coincident]').click();
   await clickWorld(page, anchor);
-  await expect(page.locator('#commandPanel')).toHaveAttribute('data-command', 'annotation-anchor-constraint');
+  await expect(page.locator('#commandPanel')).toBeHidden();
   expect((await data(page)).annotations[0].anchorConstraints).toBeUndefined();
   await page.keyboard.press('Escape');
   expect((await data(page)).annotations).toEqual(before.annotations);
@@ -137,13 +137,11 @@ test('horizontal and vertical distance constraints control separate axes and rej
   await page.locator('[data-constraint=horizontal]').click(); await clickWorld(page, target);
   expect((await state(page)).textLayout.anchorY).toBeCloseTo(0, 8);
   await page.locator('[data-constraint=distance]').click(); await clickWorld(page, target);
-  await page.locator('#commandPanel [data-setting=axis]').selectOption('x');
-  await page.locator('#commandPanel [data-setting=value]').fill('25'); await page.locator('#commandPanel [data-setting=value]').press('Tab');
-  await page.locator('#commandPanel [data-action=finish]').click();
+  await enterAnnotationDistance(page, { x: (target.x + (await state(page)).textLayout.anchorX) / 2, y: -40 }, '25');
   expect((await state(page)).textLayout.anchorX).toBeCloseTo(target.x + 25, 8);
   await page.locator('[data-constraint=vertical]').click(); await clickWorld(page, target);
   expect((await data(page)).annotations[0].anchorConstraints).toHaveLength(2);
-  await expect(page.locator('#commandPanel')).toBeVisible(); await page.locator('#commandPanel [data-action=cancel]').click();
+  await expect(page.locator('#commandPanel')).toBeHidden(); await page.keyboard.press('Escape');
 });
 test('fixed anchor stays fixed through text edits and both text and leader anchors survive save', async ({ page }) => {
   await setup(page); await create(page, true);
@@ -243,8 +241,7 @@ test('line coincidence, line distance and point symmetry use the ordinary constr
   expect((await state(page)).textLayout.anchorY).toBeCloseTo(0, 6);
   await page.locator('[data-property-action=annotation-anchor-clear]').click();
   await page.locator('[data-constraint=distance]').click(); await clickWorld(page, middle);
-  await page.locator('#commandPanel [data-setting=value]').fill('10'); await page.locator('#commandPanel [data-setting=value]').press('Tab');
-  await page.locator('#commandPanel [data-action=finish]').click();
+  await enterAnnotationDistance(page, { x: middle.x, y: -20 }, '10');
   expect((await data(page)).annotations[0].anchorConstraints[0].type).toBe('distance-line');
   expect(Math.abs((await state(page)).textLayout.anchorY)).toBeCloseTo(10, 6);
   await page.locator('[data-property-action=annotation-anchor-clear]').click();
@@ -352,4 +349,90 @@ for (const type of ['horizontal', 'vertical', 'distance-x', 'distance-y', 'dista
   expect(Math.hypot(after.textLayout.anchorX - first.textLayout.anchorX, after.textLayout.anchorY - first.textLayout.anchorY)).toBeGreaterThan(1);
   expect(after.serialized.anchorConstraints).toEqual(before.annotations[0].anchorConstraints);
   await page.locator('#undoBtn').click(); expect((await data(page)).annotations).toEqual(before.annotations);
+});
+
+async function enterAnnotationDistance(page, point, value) {
+  await expect(page.locator('#commandPanel')).toBeHidden();
+  await clickWorld(page, point);
+  await expect(page.locator('#dimensionValueInput')).toBeVisible();
+  await page.locator('#dimensionValueInput').fill(value);
+  await page.locator('#dimensionValueInput').press('Enter');
+  await expect(page.locator('#dimensionValueInput')).toBeHidden();
+}
+for (const leader of [false, true]) for (const axis of ['x', 'y', 'length']) test('annotation distance uses ordinary canvas placement and inline input for ' + axis + (leader ? ' leader' : ' text'), async ({page}) => {
+  await setup(page); await create(page, leader);
+  const before = await data(page), target = before.points.find(p => p.id === before.lines[0].p2), first = await state(page, leader ? 'leader' : 'text');
+  await page.locator('[data-constraint=distance]').click();
+  await expect(page.locator('#commandPanel')).toBeHidden(); await clickWorld(page, target);
+  await expect(page.locator('#commandPanel')).toBeHidden();
+  const base = { x: (target.x + first.textLayout.anchorX) / 2, y: (target.y + first.textLayout.anchorY) / 2 };
+  const position = axis === 'x' ? { x: base.x, y: base.y - 50 } : axis === 'y' ? { x: base.x - 50, y: base.y } : base;
+  await enterAnnotationDistance(page, position, '12');
+  const after = await data(page); expect(after.annotations[0].anchorConstraints[0].type).toBe(axis === 'length' ? 'distance' : 'distance-' + axis);
+  expect(after.points).toEqual(before.points);
+  await page.locator('#undoBtn').click(); expect((await data(page)).annotations).toEqual(before.annotations);
+});
+test('annotation distance inline cancellation and toolbar toggle discard provisional input without a palette', async ({page}) => {
+  await setup(page); await create(page);
+  const before = await data(page), target = before.points.find(p => p.id === before.lines[0].p2);
+  await page.locator('[data-constraint=distance]').click(); await clickWorld(page, target);
+  await clickWorld(page, { x: 20, y: -45 });
+  await expect(page.locator('#dimensionValueInput')).toBeVisible();
+  await page.locator('#dimensionValueInput').fill('99'); await page.keyboard.press('Escape');
+  await expect(page.locator('#dimensionValueInput')).toBeHidden(); await expect(page.locator('#commandPanel')).toBeHidden();
+  expect((await data(page)).annotations).toEqual(before.annotations);
+  await page.locator('[data-constraint=coincident]').click(); await expect(page.locator('#commandPanel')).toBeHidden();
+  await page.locator('[data-constraint=coincident]').click(); await clickWorld(page, target);
+  expect((await data(page)).annotations).toEqual(before.annotations);
+});
+
+test('distance command picks a line before the annotation anchor without opening a palette', async ({page}) => {
+  await setup(page); await create(page);
+  const first = await state(page), before = await data(page), line = before.lines[0];
+  const a = before.points.find(p => p.id === line.p1), b = before.points.find(p => p.id === line.p2);
+  await clickWorld(page, { x: 100, y: 50 });
+  await page.locator('[data-constraint=distance]').click();
+  await clickWorld(page, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  await clickWorld(page, { x: first.textLayout.anchorX, y: first.textLayout.anchorY });
+  await enterAnnotationDistance(page, { x: 20, y: -45 }, '15');
+  expect((await data(page)).annotations[0].anchorConstraints[0].type).toBe('distance-line');
+  expect((await data(page)).lines).toEqual(before.lines);
+});
+
+const noteDimensions = page => page.evaluate(() => window.__jot2dTest.annotationDimensionStateForTest());
+async function openNoteDimensionTree(page, sketchId = 'S1') {
+  const sketch = page.locator('.sketch-item[data-id="' + sketchId + '"]');
+  if (await sketch.getAttribute('aria-expanded') !== 'true') await sketch.locator('.sketchExpandBtn').click();
+  const group = page.locator('.sketch-group-row[data-sketch-id="' + sketchId + '"][data-category="dimension"]');
+  if (await group.getAttribute('aria-expanded') !== 'true') await group.click();
+  return page.locator('.sketch-object-row[data-sketch-id="' + sketchId + '"][data-object-kind="constraint"]').filter({hasText:'AN1 /'});
+}
+for (const leader of [false, true]) test('annotation distance persists its dimension and tree entry for ' + (leader ? 'leader' : 'text'), async ({page}) => {
+  await setup(page); await create(page, leader);
+  const source = await data(page), target=source.points.find(p=>p.id===source.lines[0].p2), before=await state(page,leader?'leader':'text');
+  await page.locator('[data-constraint=distance]').click(); await clickWorld(page,target);
+  await enterAnnotationDistance(page,{x:(target.x+before.textLayout.anchorX)/2,y:-50},'25');
+  const initial=(await noteDimensions(page))[0]; expect(initial).toMatchObject({annotationId:'AN1',type:'distance-x',value:25});
+  const client=await page.evaluate(p=>window.__jot2dTest.worldClientPositionForTest(p),initial.text);
+  await page.mouse.dblclick(client.x,client.y); await expect(page.locator('#dimensionValueInput')).toBeVisible();
+  await page.locator('#dimensionValueInput').fill('26'); await page.locator('#dimensionValueInput').press('Enter');
+  expect((await noteDimensions(page))[0].value).toBe(26);
+  const row=await openNoteDimensionTree(page); await expect(row).toHaveCount(1); await row.click();
+  await expect(page.locator('[data-property=constraint-expression]')).toBeVisible();
+  await page.locator('[data-property=constraint-expression]').fill('0'); await page.locator('[data-property=constraint-expression]').press('Tab');
+  expect((await noteDimensions(page))[0].value).toBe(26);
+  await page.locator('[data-property=constraint-expression]').fill('30'); await page.locator('[data-property=constraint-expression]').press('Tab');
+  expect((await noteDimensions(page))[0].value).toBe(30);
+  const start=(await noteDimensions(page))[0].text;
+  await dragWorld(page,start,{x:start.x+10,y:start.y-15});
+  const moved=(await noteDimensions(page))[0], saved=await data(page);
+  expect(saved.annotations[0].anchorConstraints[0].dimension).toBeDefined();
+  expect(moved.dimension).not.toEqual(initial.dimension);
+  await page.locator('#undoBtn').click(); expect((await noteDimensions(page))[0].dimension).not.toEqual(moved.dimension);
+  await page.locator('#redoBtn').click(); expect((await noteDimensions(page))[0].dimension).toEqual(moved.dimension);
+  expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d),saved)).toMatchObject({success:true});
+  expect((await noteDimensions(page))[0].dimension).toEqual(moved.dimension);
+  const reloaded=await openNoteDimensionTree(page); await reloaded.locator('.removeConstraintBtn').click();
+  expect(await noteDimensions(page)).toHaveLength(0); expect((await data(page)).annotations).toHaveLength(1);
+  await page.locator('#undoBtn').click(); expect(await noteDimensions(page)).toHaveLength(1);
 });

@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const root = path.resolve(__dirname, '../..');
-const sandbox = { window: {} };
+const sandbox = { structuredClone, window: {} };
 vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync(path.join(root, 'index.html'), 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(source => source.startsWith('src/'))) vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), sandbox);
@@ -82,7 +82,7 @@ test('derived geometry inside a definition contributes through the projection se
   const d = definition('D');
   d.lines.push(line('L', 0, 2, 10, 4), line('axis', 0, 0, 10, 0));
   d.points.push(...d.lines.flatMap(l => [l.p1, l.p2]));
-  d.geometryInstances.push({ id: 'MI1', type: 'mirror', sketchId: 'S1', sources: [{ kind: 'line', path: ['L'] }], axis: { kind: 'line', path: ['axis'] } });
+  d.geometryInstances.push(sandbox.window.PatternInstanceModel.normalize({ id: 'MI1', type: 'mirror', sketchId: 'S1', sources: [{ kind: 'line', path: ['L'] }], axis: { kind: 'line', path: ['axis'] } }));
   const { layout } = fixture([d]);
   const bounds = layout.blockLocalGeometryBounds(d);
   near(bounds.minY, -4); near(bounds.maxY, 4); near(bounds.maxX, 10);

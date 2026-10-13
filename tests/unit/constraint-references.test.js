@@ -3,9 +3,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
-const sandbox = { window: {} };
+const sandbox = { structuredClone, window: {} };
 vm.createContext(sandbox);
-for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/constraints/references.js"]) {
+for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/geometry/pattern_instance_model.js", "src/constraints/references.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const { Point, Line, Arc, Spline, DistanceConstraint, ArcEndpointCoincidentConstraint, PointOnSplineConstraint, SketchProjectionConstraint, OffsetChainConstraint } = sandbox.window.GeometrySolver;
@@ -44,7 +44,7 @@ test("intrinsic instance references use the supplied scope and can be excluded w
   const a = new Point("P1", 1, 0), b = new Point("P1", 2, 0);
   const ref = { kind: "point", id: "P1" };
   const axis = { kind: "line", id: "L1" }, direction = { kind: "line", id: "L2" };
-  const block = { id: "BI1" }, instance = { id: "FI1", sources: [ref], axis, direction };
+  const block = { id: "BI1" }, instance = { id: "FI1", sources: [ref], placement: { axis, direction } };
   source.derivedInstance = instance;
   source.blockInstance = block;
   const c = new SketchProjectionConstraint("point", source, target);

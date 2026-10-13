@@ -25,5 +25,12 @@
     }
     return Object.freeze({ draw });
   }
-  window.OffsetPreviewRenderer = Object.freeze({ create });
+  function createLayer({ renderer, readMode, readPointer, command }) {
+    function drawOffsetPreview() {
+      if (readMode() !== "offset") return;
+      renderer.draw(command.preview(readPointer()));
+    }
+    return Object.freeze({ draw: drawOffsetPreview });
+  }
+  window.OffsetPreviewRenderer = Object.freeze({ create, createLayer });
 })();

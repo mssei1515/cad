@@ -5,10 +5,11 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/commands/dimension_value_command.js'), 'utf8'), sandbox);
-function fixture({ existing = false, success = true, value = 25, added = true } = {}) {
+function fixture({ existing = false, success = true, value = 25, added = true, special = null } = {}) {
   const constraint = { expression: '10' }, calls = [];
   let pending = { type: 'distance-value', target: {}, buffer: '25', dimension: {}, constraint: existing ? constraint : null };
   const command = sandbox.window.DimensionValueCommand.create({
+    ...(special === null ? {} : { submitSpecialDistance: () => { calls.push('special'); return special; } }),
     getPending: () => pending, setPending: p => { pending = p; calls.push('clear'); },
     expressionFromUserInput: value => value, evaluateDimensionExpressionDraft: () => { if (value instanceof Error) throw value; return value; },
     applicationText: (_ja, en) => en, parameterErrorText: error => error.message,
@@ -114,4 +115,12 @@ test('dimension edit falls back from saved placement to hit placement or default
   assert.equal(f.state.pending.buffer,'formatted:12.5');assert.equal(f.events.includes('default'),!withHit);assert.ok(f.events.includes('numeric'));
   assert.deepEqual(f.events.slice(-4),['selection-and-drag','hint','draw','focus']);
  }
+});
+
+test('annotation distance submission reuses evaluation and input lifecycle without scaling geometry or adding a geometry dimension', () => {
+  for (const accepted of [true, false]) {
+    const f = fixture({special: accepted}); f.command.submit();
+    assert.deepEqual(f.calls, accepted ? ['special', 'clear', 'hide', 'ui', 'draw'] : ['special', 'ui', 'draw']);
+    assert.equal(f.pending() === null, accepted);
+  }
 });

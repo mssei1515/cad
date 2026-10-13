@@ -109,12 +109,12 @@ test('constraint drafting is atomic, rejects another relation on the same axis a
     recordHistory: () => { records++; }, updateUI: () => {}, draw: () => {}, setHint: () => {}, cancelCommands: () => { pending = null; }, applicationText: (ja, en) => en });
   const original = JSON.stringify(item);
   assert.equal(command.start('horizontal'), true); assert.equal(JSON.stringify(item), original);
-  command.onAction('cancel'); assert.equal(JSON.stringify(item), original); assert.equal(records, 0);
+  command.cancel(); assert.equal(JSON.stringify(item), original); assert.equal(records, 0);
   command.start('horizontal'); command.click(target); assert.equal(records, 1); assert.equal(pending, null);
   const constrained = JSON.stringify(item);
-  command.start('coincident'); command.click(target); assert.equal(command.onAction('finish'), false); assert.equal(JSON.stringify(item), constrained); assert.equal(records, 1);
-  command.onAction('cancel'); command.start('distance'); command.click(target); command.onSetting('axis', 'x'); command.onSetting('value', -5); command.onAction('finish');
-  assert.equal(records, 2); const resolved = A.resolve(item, item, () => target); near(resolved.x, -5); near(resolved.y, 0); assert.deepEqual(target, { id: 'P1', sketchId: 'S1', x: 0, y: 0 });
+  command.start('coincident'); command.click(target); assert.equal(command.complete(), false); assert.equal(JSON.stringify(item), constrained); assert.equal(records, 1);
+  command.cancel(); command.start('distance'); command.click(target); command.submitDistance(5, 'x');
+  assert.equal(records, 2); const resolved = A.resolve(item, item, () => target); near(resolved.x, 5); near(resolved.y, 0); assert.deepEqual(target, { id: 'P1', sketchId: 'S1', x: 0, y: 0 });
 });
 
 test('curve, concentric, symmetry and length constraints solve only the annotation point', () => {
@@ -159,4 +159,19 @@ test('only the hovered enabled resize corner is filled in the interaction color'
     assert.equal(fills.filter(call => call[1] === 'blue').length, enabled ? 1 : 0);
     assert.equal(fills.filter(call => call[1] === '#ffffff').length, enabled ? 2 : 0);
   }
+});
+
+test('annotation dimensions retain layout, use live anchors, expose stable identities and remove only their relation', () => {
+  const target = { id: 'P1', sketchId: 'S1', x: 0, y: 0 }, item = note({ anchorConstraints: [{type:'distance-x',geometryRef:{kind:'point',path:['P1']},value:10,dimension:{x:20,y:-30,axis:'x',display:{color:'#112233'}}}] });
+  let position = {x:10,y:20};
+  const dimensions = A.createDimensions({annotations:()=>[item],anchor:()=>position,resolveRef:()=>target,
+    defaultDimension:()=>({x:0,y:0}),normalizeDimension:(t,d)=>d,capturePosition:()=>position,evaluateValue:Number});
+  const first = dimensions.entries()[0]; assert.equal(dimensions.entries()[0], first);
+  assert.equal(first.p1.x,10); position={x:30,y:40}; assert.equal(first.p1.x,30);
+  first.dimension={x:50,y:60,axis:'x',display:{visible:false}};
+  const saved=D.serializeAnnotation(item); assert.equal(saved.anchorConstraints[0].dimension.x,50);
+  saved.anchorConstraints[0].dimension.display.visible=true; assert.equal(item.anchorConstraints[0].dimension.display.visible,false);
+  assert.equal(dimensions.setValue(first,12),true); assert.equal(item.anchorConstraints[0].value,12);
+  assert.equal(dimensions.remove(first),true); assert.equal(item.anchorConstraints.length,0); assert.equal(item.x,30); assert.equal(item.y,40);
+  assert.equal(dimensions.entries().length,0);
 });

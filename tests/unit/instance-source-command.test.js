@@ -6,7 +6,7 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/commands/instance_source_command.js'), 'utf8'), sandbox);
 function fixture({ allowDeletion = true } = {}) {
-  const calls = [], instance = { id: 'I1', type: 'free', sketchId: 'S1', sources: [{ id: 'A' }, { id: 'B' }], legacyOutput: 'legacy' };
+  const calls = [], instance = { id: 'I1', type: 'pattern', placement: { kind: 'linear' }, sketchId: 'S1', sources: [{ id: 'A' }, { id: 'B' }], legacyOutput: 'legacy' };
   const model = { geometryInstances: [instance], constraints: [{ id: 'CA', node: { id: 'A' } }, { id: 'CB', node: { id: 'B' } }], annotations: [{ id: 'NA', source: 'A' }] };
   let mode = 'select';
   const bundle = item => ({ instance: item, valid: true, points: [], lines: item.sources.map(ref => ({ id: ref.id })), circles: [], arcs: [], splines: [] });
@@ -45,13 +45,11 @@ test('source edits keep retained order and legacy output identity even after rem
   assert.equal(f.calls.filter(call => call === 'history').length, 1);
 });
 
-test('committing a removed source drops only its output constraints and annotations', () => {
+test('removing a referenced unified source is rejected without dropping constraints or annotations', () => {
   const f = fixture(); f.command.toggle({ derivedInstance: f.instance, sourceElement: { id: 'A' } });
-  assert.equal(f.command.finish(true), true);
-  assert.deepEqual(Array.from(f.instance.sources, ref => ref.id), ['B']);
-  assert.equal(Object.hasOwn(f.instance, 'legacyOutput'), false);
-  assert.deepEqual(f.model.constraints.map(item => item.id), ['CB']); assert.deepEqual(f.model.annotations, []);
-  assert.ok(f.calls.indexOf('clearSolve') < f.calls.indexOf('history'));
+  assert.equal(f.command.finish(true), false);
+  assert.deepEqual(Array.from(f.instance.sources, ref => ref.id), ['A', 'B']);
+  assert.equal(f.model.constraints.length, 2); assert.equal(f.model.annotations.length, 1); assert.equal(f.calls.includes('history'), false);
 });
 
 test('symbol deletion refusal retains the edit session and cancellation leaves document data intact', () => {

@@ -5,13 +5,29 @@ const vm = require("node:vm");
 const test = require("node:test");
 const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/rendering/geometry_renderer.js"]) vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
-function create(state = {}) {
+function create(state = {}, { scale = 2, dpr = 1 } = {}) {
   const calls = [];
   const ctx = {};
   for (const name of ["save", "restore", "beginPath", "closePath", "moveTo", "lineTo", "stroke", "fill", "arc", "fillText", "setLineDash"]) ctx[name] = (...args) => calls.push([name, ...args]);
-  const renderer = sandbox.window.GeometryRenderer.create({ ctx, viewport: { scale: 2 }, withCanvasState: fn => { calls.push(["state-enter"]); try { fn(); } finally { calls.push(["state-exit"]); } }, arcEndpointPaintState: (arc, endpoint) => arc[endpoint] || null, pointPaintState: p => p.hidden ? null : state, fixedPointLabel: () => "Fixed", paintState: () => ({ appearance: { lineType: "solid" }, alpha: 0.7, color: "red", strokeWidth: 4, ...state }), appearanceLineDash: () => [], lineDisplaySegment: line => line, canvasThemeColor: color => color });
+  const renderer = sandbox.window.GeometryRenderer.create({ ctx, viewport: { scale }, readPixelRatio: () => dpr, withCanvasState: fn => { calls.push(["state-enter"]); try { fn(); } finally { calls.push(["state-exit"]); } }, arcEndpointPaintState: (arc, endpoint) => arc[endpoint] || null, pointPaintState: p => p.hidden ? null : state, fixedPointLabel: () => "Fixed", paintState: () => ({ appearance: { lineType: "solid" }, alpha: 0.7, color: "red", strokeWidth: 4, ...state }), appearanceLineDash: () => [], lineDisplaySegment: line => line, canvasThemeColor: color => color });
   return { renderer, calls, ctx };
 }
+
+test('selection and related geometry glow keeps its screen size across zoom and pixel ratios', () => {
+  for (const scale of [0.003779527559, 0.02, 1, 100]) for (const dpr of [1, 2]) {
+    for (const state of [{ sel: true, emphasized: true }, { auxiliaryHighlighted: true, emphasized: true }, {}]) {
+      const { renderer, ctx } = create(state, { scale, dpr });
+      const blurs = [];
+      ctx.stroke = () => blurs.push(ctx.shadowBlur);
+      renderer.drawLines([{ p1: { x: 0, y: 0 }, p2: { x: 0, y: 29131 } }]);
+      renderer.drawCircles([{ center: { x: 0, y: 0 }, radius: () => 10 }]);
+      renderer.drawArcs([{ center: { x: 0, y: 0 }, radius: () => 10, startAngle: 0, endAngle: 1 }]);
+      renderer.drawPoints([{ x: 0, y: 0 }]);
+      assert.deepEqual(blurs, Array(4).fill(state.emphasized ? 8 * dpr : 0));
+      assert.equal(ctx.shadowBlur, 0);
+    }
+  }
+});
 test("line rendering consumes prepared visual state and preserves drawing order", () => {
   const { renderer, calls, ctx } = create({ showId: true });
   renderer.drawLines([{ id: "L1", p1: { x: 1, y: 2 }, p2: { x: 3, y: 4 } }]);
@@ -19,6 +35,17 @@ test("line rendering consumes prepared visual state and preserves drawing order"
   assert.equal(ctx.strokeStyle, "red"); assert.equal(ctx.lineWidth, 2); assert.equal(ctx.globalAlpha, 0.7);
   assert.equal(calls.filter(c => c[0] === "fillText")[0][1], "L1");
   assert.equal(calls[0][0], "save"); assert.equal(calls.at(-1)[0], "restore");
+});
+
+test('boundary repaint retains selected strokes but omits repeated glow', () => {
+  const { renderer, ctx } = create({ sel: true });
+  const strokes = [];
+  ctx.stroke = () => strokes.push({ blur: ctx.shadowBlur, color: ctx.strokeStyle, width: ctx.lineWidth });
+  const options = { selectionGlow: false };
+  renderer.drawLines([{ p1: { x: 0, y: 0 }, p2: { x: 0, y: 10 } }], options);
+  renderer.drawCircles([{ center: { x: 0, y: 0 }, radius: () => 10 }], options);
+  renderer.drawArcs([{ center: { x: 0, y: 0 }, radius: () => 10, startAngle: 0, endAngle: 1 }], options);
+  assert.deepEqual(strokes, Array(3).fill({ blur: 0, color: 'red', width: 2 }));
 });
 test("construction endpoint markers use source endpoints and scale", () => {
   const { renderer, calls } = create({ construction: true });
@@ -54,4 +81,23 @@ test('editing handles consume prepared endpoints and spline selection with scale
   assert.ok(calls.some(c => c[0] === 'closePath'));
   assert.deepEqual(calls.find(c => c[0] === 'arc').slice(1, 4), [2, 4, 2.25]);
   assert.equal(ctx.fillStyle, '#ef4444'); assert.equal(ctx.lineWidth, 0.75);
+});
+
+test('geometry layer filters explicit items but reads and orders current default lists, preserving options and painter receiver', () => {
+  const calls = [], visible = { visible: true }, hidden = { visible: false };
+  let items = [hidden, visible];
+  const renderer = {};
+  for (const name of ['drawLines', 'drawCircles', 'drawArcs', 'drawSplines']) renderer[name] = function (...args) { assert.equal(this, renderer); calls.push([name, ...args]); return 'ignored original return'; };
+  const query = type => () => { calls.push(['query', type]); return items; };
+  const layer = sandbox.window.GeometryRenderer.createLayer({ renderer, isVisibleSketchElement: item => item.visible,
+    drawOrderBySketch: list => { assert.equal(list, items); calls.push(['order']); return list.filter(item => item.visible).reverse(); },
+    allGeometryLines: query('lines'), allGeometryCircles: query('circles'), allGeometryArcs: query('arcs'), allGeometrySplines: query('splines') });
+  for (const [name, type] of [['drawLines', 'lines'], ['drawCircles', 'circles'], ['drawArcs', 'arcs'], ['drawSplines', 'splines']]) {
+    calls.length = 0; const options = { selectionGlow: false }; assert.equal(layer[name]([visible, hidden], options), undefined);
+    assert.equal(calls.length, 1); assert.equal(calls[0][1][0], visible); assert.equal(calls[0][1].length, 1); assert.equal(calls[0].length, name === 'drawSplines' ? 2 : 3);
+    if (name !== 'drawSplines') assert.equal(calls[0][2], options);
+    calls.length = 0; layer[name]([]); assert.equal(calls.length, 1); assert.equal(calls[0][1].length, 0);
+    calls.length = 0; layer[name](); assert.deepEqual(calls.map(c => c[0]), ['query', 'order', name]); assert.equal(calls[0][1], type);
+  }
+  const fresh = { visible: true }; items = [fresh]; calls.length = 0; layer.drawLines(null, null); assert.equal(calls.at(-1)[1][0], fresh); assert.equal(calls.at(-1)[2], null);
 });

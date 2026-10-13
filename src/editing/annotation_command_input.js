@@ -26,7 +26,9 @@
     }
     function select(e, p, { blankAnnotationHit, directGeometryHit, hitD }) {
       const constraint = getPendingConstraint();
-      if (blankAnnotationHit && (!directGeometryHit || blankAnnotationHit.part === "anchor") && (!hitD || blankAnnotationHit.part === "anchor") && getMode() === "select" && !getPending()
+      const pending = getPending();
+      const canPickAnchor = !pending || constraint?.type === "distance" && pending.type === "distance-place" && pending.target?.kind === "line-length";
+      if (blankAnnotationHit && (!directGeometryHit || blankAnnotationHit.part === "anchor") && (!hitD || blankAnnotationHit.part === "anchor") && getMode() === "select" && canPickAnchor
         && constraint && !constraint.annotationAnchor && ["coincident", "pointOnCircle", "concentric", "horizontal", "vertical", "distance", "symmetry", "fixed"].includes(constraint.type)
         && startAnchorConstraint(constraint.type, blankAnnotationHit.element)) {
         e.preventDefault();

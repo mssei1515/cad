@@ -7,7 +7,7 @@
     withTemporarySolveStepNorm, solveStepNormForConstraint, stabilizeActiveParameterNamespace,
     constraintSketchId, acceptError, hideDimensionValueInput, recordHistory, updateUI,
     scaleSketchForFirstDimension, addDistanceConstraintFromTarget, restoreSketchScreenFootprint, targetFromConstraint, isReadOnlyDimension,
-    selectEditedConstraint, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput }) {
+    selectEditedConstraint, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput, submitSpecialDistance = () => null, commitSpecialProperty = () => null }) {
     function startEdit(hit) {
       if (hit?.constraint && !canEdit(constraintSketchId(hit.constraint))) return true;
       if (!hit?.constraint) return false;
@@ -42,7 +42,7 @@
       let value;
       try {
         expression = expressionFromUserInput(pendingCommand.buffer);
-        value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expression);
+        value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expression, undefined, { signedAngle: pendingCommand.target?.interval === true });
       } catch (error) {
         setHint(`${applicationText("寸法の値 / 数式を評価できません", "Could not evaluate the dimension Value / Expression")}: ${parameterErrorText(error)}`, "error");
         syncDimensionValueInput();
@@ -50,10 +50,15 @@
         return;
       }
       const maxAngle = pendingCommand.target?.kind === "angle" ? 180 : Infinity;
-      if (!Number.isFinite(value) || value <= 0 || value >= maxAngle) {
+      if (!Number.isFinite(value) || (pendingCommand.target?.interval ? value === 0 || Math.abs(value) >= 360 : value <= 0 || value >= maxAngle)) {
         setHint(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"), "error");
         draw();
         return;
+      }
+      const specialResult = submitSpecialDistance(pendingCommand, value);
+      if (specialResult !== null) {
+        if (specialResult) { setPending(null); hideDimensionValueInput(); }
+        updateUI(); draw(); return;
       }
       const { target, dimension, constraint, referenceSketchId, sketchId } = pendingCommand;
       const targetSketchId = sketchId || activeSketchId();
@@ -91,6 +96,8 @@
     }
     function commitProperty(constraint, property, value) {
       if (!canEdit(constraintSketchId(constraint), "edit")) return false;
+      const specialResult = commitSpecialProperty(constraint, property, value);
+      if (specialResult !== null) return specialResult;
       const snapshot = snapshotModelState();
       try {
         if (property === "constraint-parameter-name") renameDimension(constraint, value);

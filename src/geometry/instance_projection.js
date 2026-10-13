@@ -20,53 +20,33 @@
     }
 
     function createGeometryInstanceBundle(instance, resolvedSources, axis, direction, resolveSourceHatch = resolveHatch) {
-      const occurrences = instance.type === "pattern"
-        ? Array.from({ length: Math.max(0, instance.copies) }, (_, index) => index + 1)
-        : [0];
-      const transform = (point, occurrence) => {
-        if (instance.type === "free") {
-          const x = (point.x - instance.origin.x) * (instance.mirrorX ? -1 : 1);
-          const y = (point.y - instance.origin.y) * (instance.mirrorY ? -1 : 1);
-          const c = Math.cos(instance.rotation), s = Math.sin(instance.rotation);
-          return { x: instance.x + c * x - s * y, y: instance.y + s * x + c * y };
-        }
-        if (instance.type === "mirror") {
-          const dx = axis.p2.x - axis.p1.x;
-          const dy = axis.p2.y - axis.p1.y;
-          const length2 = dx * dx + dy * dy;
-          if (length2 < MIN_ORIENTATION_LENGTH * MIN_ORIENTATION_LENGTH) return { x: point.x, y: point.y };
-          const t = ((point.x - axis.p1.x) * dx + (point.y - axis.p1.y) * dy) / length2;
-          return { x: 2 * (axis.p1.x + t * dx) - point.x, y: 2 * (axis.p1.y + t * dy) - point.y };
-        }
-        if (instance.type === "pattern") {
-          const directionLength = direction?.length?.() || 0;
-          if (directionLength < MIN_ORIENTATION_LENGTH) return { x: point.x, y: point.y };
-          const sign = instance.reversed ? -1 : 1;
-          const scale = sign * instance.spacing * occurrence / directionLength;
-          return { x: point.x + direction.dx() * scale, y: point.y + direction.dy() * scale };
-        }
-        return { x: point.x, y: point.y };
+      const sourceByRef = new Map(resolvedSources.map(({ ref, item }) => [ref.kind + ":" + ref.path.join("@"), item]));
+      const sourcePoints = new Map(resolvedSources.flatMap(({ item }) => geometryInstanceSourcePoints(item)).map(point => [point.id, point]));
+      const resolve = ref => {
+        if (!ref) return null;
+        if (ref === instance.placement?.axis) return axis;
+        if (ref === instance.placement?.direction) return direction;
+        const id = ref.path.join("@");
+        return sourceByRef.get(ref.kind + ":" + id) || (ref.kind === "point" ? sourcePoints.get(id) : null);
       };
-      const inverseTransform = (point, occurrence) => {
-        if (instance.type === "free") {
-          const x = point.x - instance.x, y = point.y - instance.y;
-          const c = Math.cos(instance.rotation), s = Math.sin(instance.rotation);
-          return { x: instance.origin.x + (c * x + s * y) * (instance.mirrorX ? -1 : 1),
-            y: instance.origin.y + (-s * x + c * y) * (instance.mirrorY ? -1 : 1) };
-        }
-        if (instance.type === "mirror") return transform(point, occurrence);
-        if (instance.type === "pattern") {
-          const directionLength = direction?.length?.() || 0;
-          if (directionLength < MIN_ORIENTATION_LENGTH) return { x: point.x, y: point.y };
-          const sign = instance.reversed ? -1 : 1;
-          const scale = sign * instance.spacing * occurrence / directionLength;
-          return { x: point.x - direction.dx() * scale, y: point.y - direction.dy() * scale };
-        }
-        return { x: point.x, y: point.y };
-      };
+      const occurrences = Boolean(instance.placement) ? instance.occurrences.map((key, i) => ({ key, index: i + 1 })) : [{ key: "", index: 0 }];
+      const transform = (point, occurrence) => Boolean(instance.placement) ? window.PatternInstanceModel.transform(instance, point, occurrence.index, resolve) : { x: point.x, y: point.y };
+      const inverseTransform = (point, occurrence) => Boolean(instance.placement) ? window.PatternInstanceModel.transform(instance, point, occurrence.index, resolve, true) : { x: point.x, y: point.y };
       const sourceRefByItem = new Map(resolvedSources.map(({ ref, item }) => [item, ref]));
       const pointRef = (point) => geometryRefForItem(point) || parseGeometryRefId("point", point.id);
       const outputs = { instance, valid: true, reason: "", points: [], lines: [], circles: [], arcs: [], splines: [], hatches: [] };
+      outputs.controlPoints = [];
+      if (window.PatternInstanceModel.placed(instance)) {
+        for (const role of ["anchor", ...(instance.placement.kind === "linear" ? ["placement"] : [])]) {
+          const point = new Point(`${instance.id}@${role}`, 0, 0, role === "anchor", "instance-control");
+          point.sketchId = instance.sketchId; point.derivedInstance = instance; point.instanceControl = role; point.derivedProjection = true;
+          Object.defineProperties(point, {
+            x: { get: () => role === "anchor" ? window.PatternInstanceModel.anchorPoint(instance, resolve).x : instance.x, set: value => { if (role === "placement") instance.x = value; } },
+            y: { get: () => role === "anchor" ? window.PatternInstanceModel.anchorPoint(instance, resolve).y : instance.y, set: value => { if (role === "placement") instance.y = value; } },
+          });
+          outputs.controlPoints.push(point);
+        }
+      }
       const legacy = instance.legacyOutput && occurrences.length === 1 ? instance.legacyOutput : null;
       for (const occurrence of occurrences) {
         const mappedPoints = new Map();
@@ -75,7 +55,7 @@
         for (let pointIndex = 0; pointIndex < allSourcePoints.length; pointIndex += 1) {
           const sourcePoint = allSourcePoints[pointIndex];
           const ref = pointRef(sourcePoint);
-          const id = legacy?.pointIds?.[pointIndex] || [instance.id, ...(instance.type === "pattern" ? [String(occurrence)] : []), ...(ref?.path || [sourcePoint.id])].join("@");
+          const id = legacy?.pointIds?.[pointIndex] || [instance.id, ...(occurrence.key ? [occurrence.key] : []), ...(ref?.path || [sourcePoint.id])].join("@");
           const point = new Point(id, 0, 0, true, "endpoint");
           Object.defineProperties(point, {
             x: { configurable: true, enumerable: true, get: () => transform(sourcePoint, occurrence).x },
@@ -85,13 +65,14 @@
           point.derivedProjection = true;
           point.derivedInstance = instance;
           point.sourceElement = sourcePoint;
-          point.occurrenceIndex = occurrence;
+          point.occurrenceIndex = occurrence.index;
+          point.occurrenceKey = occurrence.key;
           point.derivedInversePoint = (value) => inverseTransform(value, occurrence);
           mappedPoints.set(sourcePoint, point);
           outputs.points.push(point);
         }
         for (const { ref, item } of resolvedSources) {
-          const outputId = (item === resolvedSources[0]?.item && legacy?.id) || [instance.id, ...(instance.type === "pattern" ? [String(occurrence)] : []), ...ref.path].join("@");
+          const outputId = (item === resolvedSources[0]?.item && legacy?.id) || [instance.id, ...(occurrence.key ? [occurrence.key] : []), ...ref.path].join("@");
           let output = null;
           if (item instanceof Point) output = mappedPoints.get(item);
           else if (item instanceof Line) output = new Line(outputId, mappedPoints.get(item.p1), mappedPoints.get(item.p2), item.construction);
@@ -107,7 +88,7 @@
             };
             Object.defineProperties(output, {
               startAngle: { configurable: true, enumerable: true, get: transformedStartAngle },
-              endAngle: { configurable: true, enumerable: true, get: () => transformedStartAngle() + (instance.type === "mirror" || (instance.type === "free" && instance.mirrorX !== instance.mirrorY) ? -1 : 1) * arcSweep(item) },
+              endAngle: { configurable: true, enumerable: true, get: () => transformedStartAngle() + (instance.placement?.kind === "axisReflection" || instance.reflected ? -1 : 1) * arcSweep(item) },
             });
           } else if (item instanceof Spline) output = new Spline(outputId, item.fitPoints.map((point) => mappedPoints.get(point)), item.closed, item.construction);
           else if (ref.kind === "hatch") {
@@ -138,7 +119,8 @@
           output.derivedInstance = instance;
           output.sourceElement = item;
           output.sourceRef = sourceRefByItem.get(item);
-          output.occurrenceIndex = occurrence;
+          output.occurrenceIndex = occurrence.index;
+          output.occurrenceKey = occurrence.key;
           output.derivedInversePoint = (value) => inverseTransform(value, occurrence);
           const kind = geometryKindForItem(output);
           if (kind && kind !== "point") outputs[kind === "hatch" ? "hatches" : `${kind}s`].push(output);
@@ -179,15 +161,12 @@
             continue;
           }
           const resolvedSources = instance.sources.map((ref) => ({ ref, item: resolve(ref) }));
-          const axis = instance.type === "mirror" ? resolve(instance.axis) : null;
-          const direction = instance.type === "pattern" ? resolve(instance.direction) : null;
-          if (resolvedSources.some(({ item }) => !item) || (instance.type === "mirror" && !(axis instanceof Line)) || (instance.type === "pattern" && !(direction instanceof Line))) continue;
-          const localReferences = instance.type === "mirror"
-            ? [...resolvedSources.map(({ item }) => item), axis]
-            : instance.type === "pattern"
-            ? [...resolvedSources.map(({ item }) => item), direction]
-            : instance.type === "free" ? resolvedSources.map(({ item }) => item)
-            : [];
+          const axis = instance.placement?.kind === "axisReflection" ? resolve(instance.placement.axis) : null;
+          const direction = instance.placement?.kind === "directionLinear" ? resolve(instance.placement.direction) : null;
+          if (resolvedSources.some(({ item }) => !item) || (instance.placement?.kind === "axisReflection" && !(axis instanceof Line)) || (instance.placement?.kind === "directionLinear" && !(direction instanceof Line))) continue;
+          const localReferences = Boolean(instance.placement) ? window.PatternInstanceModel.dependencies(instance).map(resolve).filter(Boolean) : [];
+          const placementError = window.PatternInstanceModel.error(instance, resolve);
+          if (placementError) { results.push(emptyGeometryInstanceBundle(instance, placementError)); pending.splice(index, 1); progressed = true; continue; }
           if (localReferences.some((item) => elementSketchId(item) !== instance.sketchId)) {
             results.push(emptyGeometryInstanceBundle(instance, applicationText("参照先Sketchが一致しません", "Referenced geometry belongs to another sketch")));
             pending.splice(index, 1);
@@ -200,10 +179,10 @@
             progressed = true;
             continue;
           }
-          if (instance.type === "mirror" && axis.length() < MIN_ORIENTATION_LENGTH) {
+          if (instance.placement?.kind === "axisReflection" && axis.length() < MIN_ORIENTATION_LENGTH) {
             results.push(emptyGeometryInstanceBundle(instance, applicationText("ミラー軸が短すぎます", "Mirror axis is too short")));
-          } else if (instance.type === "pattern" && (!(instance.spacing > 0) || !(instance.copies > 0) || instance.copies > 1000 || direction.length() < MIN_ORIENTATION_LENGTH)) {
-            results.push(emptyGeometryInstanceBundle(instance, applicationText("パターン設定が正しくありません", "Invalid pattern settings")));
+          } else if (instance.placement?.kind === "directionLinear" && direction.length() < MIN_ORIENTATION_LENGTH) {
+            results.push(emptyGeometryInstanceBundle(instance, applicationText("方向線が短すぎます", "Direction line is too short")));
           } else {
             const bundle = createGeometryInstanceBundle(instance, resolvedSources, axis, direction,
               hatch => hatch.derivedProjection || hatch.blockProjection ? hatch.resolvedBoundary
@@ -222,5 +201,22 @@
 
     return Object.freeze({ emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope });
   }
-  window.InstanceProjection = Object.freeze({ create });
+  function createSourceSelection({ currentScope, selectedGeometryItems, canvasSelection, blockProjectionBundle,
+    geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem }) {
+    function read() {
+      const items = [...selectedGeometryItems(), ...canvasSelection.hatches.filter(hatch => currentScope().hatches.includes(hatch))];
+      for (const instance of canvasSelection.blockInstances) {
+        const bundle = blockProjectionBundle(instance);
+        items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...(bundle.hatches || []), ...bundle.points.filter((point) => point.localElement?.kind === "explicit"));
+      }
+      for (const instance of canvasSelection.geometryInstances) {
+        const bundle = geometryInstanceBundle(instance);
+        items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...(bundle.hatches || []));
+        for (const point of bundle.points) if (point.sourceElement instanceof Point && point.sourceElement.kind === "explicit") items.push(point);
+      }
+      return [...new Set(items)].filter((item) => elementSketchId(item) === activeSketchId() && geometryRefForItem(item));
+    }
+    return Object.freeze({ read });
+  }
+  window.InstanceProjection = Object.freeze({ create, createSourceSelection });
 })();

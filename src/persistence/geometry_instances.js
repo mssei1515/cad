@@ -14,8 +14,10 @@
     }
 
     function normalizeGeometryInstance(raw, normalizeSketch, index = 0) {
-      const type = ["mirror", "pattern", "free"].includes(raw?.type) ? raw.type : "sketchProjection";
-      const prefix = type === "free" ? "FI" : type === "mirror" ? "MI" : type === "pattern" ? "PI" : "SPI";
+      if (raw?.type === "free") throw new Error("同期インスタンスは未対応です");
+      const type = ["mirror", "pattern", "circularPattern"].includes(raw?.type) ? raw.type : "sketchProjection";
+      const prefix = type === "mirror" ? "MI" : ["pattern", "circularPattern"].includes(type) ? "PI" : "SPI";
+      if (raw?.placement) return { ...window.PatternInstanceModel.normalize(raw), sketchId: normalizeSketch(raw.sketchId), appearanceOverride: normalizeAppearance(raw.appearanceOverride) };
       const sources = (Array.isArray(raw?.sources) ? raw.sources : [])
         .map((entry) => normalizeGeometryInstanceRef(entry))
         .filter(Boolean);
@@ -27,11 +29,6 @@
         sources,
         appearanceOverride: normalizeAppearance(raw?.appearanceOverride),
       };
-      if (type === "free") Object.assign(instance, {
-        x: Number(raw?.x ?? 0), y: Number(raw?.y ?? 0), rotation: Number(raw?.rotation ?? 0),
-        origin: { x: Number(raw?.origin?.x ?? 0), y: Number(raw?.origin?.y ?? 0) },
-        mirrorX: Boolean(raw?.mirrorX), mirrorY: Boolean(raw?.mirrorY),
-      });
       if (type === "mirror") instance.axis = normalizeGeometryInstanceRef(raw?.axis, "line");
       if (type === "pattern") {
         instance.direction = normalizeGeometryInstanceRef(raw?.direction, "line");
@@ -46,7 +43,7 @@
           pointIds: Array.isArray(raw.legacyOutput.pointIds) ? raw.legacyOutput.pointIds.map(String) : [],
         };
       }
-      return instance;
+      return window.PatternInstanceModel.normalize(instance);
     }
 
     function migrateLegacySketchProjectionNamespace(namespace, sourceVersion) {
@@ -96,7 +93,7 @@
     function serializedGeometryInstanceListError(instances) {
       if (!Array.isArray(instances)) return applicationText("配列ではありません", "is not an array");
       const ids = new Set();
-      const supportedTypes = new Set(["sketchProjection", "mirror", "pattern", "free"]);
+      const supportedTypes = new Set(["sketchProjection", "mirror", "pattern", "circularPattern"]);
       for (const raw of instances) {
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) return applicationText("要素の形式が正しくありません", "contains an invalid entry");
         const id = typeof raw.id === "string" ? raw.id.trim() : "";
@@ -104,12 +101,13 @@
         if (ids.has(id)) return applicationText(`ID ${id} が重複しています`, `contains duplicate ID ${id}`);
         ids.add(id);
         if (!supportedTypes.has(raw.type)) return applicationText(`種類 ${String(raw.type || "")} は未対応です`, `contains unsupported type ${String(raw.type || "")}`);
-        if (raw.type === "free" && (![raw.x, raw.y, raw.rotation, raw.origin?.x, raw.origin?.y].every((v) => typeof v === "number" && Number.isFinite(v)) || typeof raw.mirrorX !== "boolean" || typeof raw.mirrorY !== "boolean")) return applicationText(`${id} の配置設定が正しくありません`, `${id} has invalid placement settings`);
+        if (raw.type === "circularPattern" && !raw.placement) return applicationText(`${id} の配置設定が正しくありません`, `${id} has invalid placement settings`);
+        if (raw.placement) { const error = window.PatternInstanceModel.error(window.PatternInstanceModel.normalize(raw)); if (error) return `${id}: ${error}`; }
         if (!Array.isArray(raw.sources) || raw.sources.length === 0 || raw.sources.some((ref) => !normalizeGeometryInstanceRef(ref))) {
           return applicationText(`${id} の複写元が正しくありません`, `${id} has invalid source geometry`);
         }
-        if (raw.type === "mirror" && !normalizeGeometryInstanceRef(raw.axis, "line")) return applicationText(`${id} のミラー軸が正しくありません`, `${id} has an invalid mirror axis`);
-        if (raw.type === "pattern") {
+        if (!raw.placement && raw.type === "mirror" && !normalizeGeometryInstanceRef(raw.axis, "line")) return applicationText(`${id} のミラー軸が正しくありません`, `${id} has an invalid mirror axis`);
+        if (!raw.placement && raw.type === "pattern") {
           if (!normalizeGeometryInstanceRef(raw.direction, "line")) return applicationText(`${id} のパターン方向が正しくありません`, `${id} has an invalid pattern direction`);
           if (!(Number(raw.spacing) > 0) || !Number.isInteger(Number(raw.copies)) || !(Number(raw.copies) > 0) || Number(raw.copies) > 1000) {
             return applicationText(`${id} のパターン設定が正しくありません`, `${id} has invalid pattern settings`);

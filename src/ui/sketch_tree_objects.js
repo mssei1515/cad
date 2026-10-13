@@ -103,9 +103,9 @@
         if (entry.fixed) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
         data += ` data-id="${escapeHtml(entry.id)}"`;
       } else if (category === "instance") {
-        icon = toolbarSvgMarkup(entry.type === "free" ? "#toolFreeInstance" : entry.type === "mirror" ? "#toolMirror" : entry.type === "pattern" ? "#toolPattern" : "#toolSketchProjection");
+        icon = toolbarSvgMarkup(entry.type === "mirror" ? "#toolMirror" : entry.type === "circularPattern" ? "#toolCircularPattern" : Boolean(entry.placement) ? "#toolPattern" : "#toolSketchProjection");
         primary = entry.id;
-        secondary = entry.type === "pattern" ? applicationText(`直線パターン ${entry.copies}個`, `Linear Pattern ${entry.copies} copies`) : geometryInstanceTypeLabel(entry.type);
+        secondary = geometryInstanceTypeLabel(entry.type) + (Boolean(entry.placement) ? ` (${entry.count})` : "");
         const bundle = geometryInstanceBundle(entry);
         if (!bundle.valid) badges += `<span class="badge constraint-reference-error-badge">${applicationText("参照エラー", "Reference error")}</span>`;
         data += ` data-id="${escapeHtml(entry.id)}"`;
@@ -132,7 +132,7 @@
         icon = constraintToolbarIcon(constraint);
         primary = constraint instanceof SketchProjectionConstraint
           ? applicationText("スケッチ投影", "Sketch Projection")
-          : isDimensionConstraint(constraint) ? constraint.parameterName || "—" : localizedConstraintName(constraint.name);
+          : isDimensionConstraint(constraint) ? constraint.annotationOwner ? constraint.annotationOwner.id + " / " + applicationText("距離", "Distance") : constraint.parameterName || "—" : localizedConstraintName(constraint.name);
         secondary = constraint instanceof SketchProjectionConstraint
           ? `${constraintGeometryId(constraint.source) || "—"} → ${constraintGeometryId(constraint.target) || "—"}`
           : isDimensionConstraint(constraint) ? localizedConstraintName(constraint.name) : "";

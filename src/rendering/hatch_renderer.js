@@ -86,7 +86,8 @@
 
     function drawHatchBoundaryOverlay(hatch) {
       const items = hatchBoundaryGeometryItems(hatch);
-      for (const { type, draw } of boundaryPainters) draw(items.filter(item => item instanceof type));
+      // Boundary strokes preserve fill visibility, but their glow belongs to the geometry pass.
+      for (const { type, draw } of boundaryPainters) draw(items.filter(item => item instanceof type), { selectionGlow: false });
     }
 
     function drawHatches(items = null, { includePreview = true } = {}) {

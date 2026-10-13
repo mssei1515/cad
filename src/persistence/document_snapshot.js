@@ -16,16 +16,12 @@
       sources: instance.sources.map((ref) => ({ kind: ref.kind, path: [...ref.path] })),
       appearanceOverride: normalizeAppearance(instance.appearanceOverride),
     };
-    if (instance.type === "free") Object.assign(data, {
-      x: instance.x, y: instance.y, rotation: instance.rotation, origin: { ...instance.origin },
-      mirrorX: instance.mirrorX, mirrorY: instance.mirrorY,
-    });
-    if (instance.type === "mirror") data.axis = instance.axis ? { kind: "line", path: [...instance.axis.path] } : null;
-    if (instance.type === "pattern") {
-      data.direction = instance.direction ? { kind: "line", path: [...instance.direction.path] } : null;
-      data.spacing = instance.spacing;
-      data.copies = instance.copies;
-      data.reversed = Boolean(instance.reversed);
+    if (instance.placement) {
+      const placement = structuredClone(instance.placement);
+      if (placement.kind === "circular") delete placement.angleMode;
+      return { ...data, count: instance.count, anchor: structuredClone(instance.anchor), placement,
+      x: instance.x, y: instance.y, placementPointDefined: instance.placementPointDefined, reflected: instance.reflected, ...(placement.kind !== "circular" ? { rotation: instance.rotation, rotationLocked: instance.rotationLocked } : {}), occurrences: [...instance.occurrences],
+      ...(instance.legacyOutput ? { legacyOutput: structuredClone(instance.legacyOutput) } : {}) };
     }
     if (instance.legacyOutput) data.legacyOutput = { ...instance.legacyOutput, pointIds: [...(instance.legacyOutput.pointIds || [])] };
     return data;

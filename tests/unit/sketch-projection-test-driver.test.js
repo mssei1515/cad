@@ -117,3 +117,30 @@ test('block transfer preserves selection references and returns validation error
   assert.equal(result.projectionConstraintCount, 1); assert.equal(result.externalProjectionCount, 1);
   assert.deepEqual(calls, ['create']);
 });
+
+test('legacy target construction creates independent Sketch-owned points before geometry and preserves source values/flags', () => {
+  const calls = [], points = [], geometry = []; let seq = 0;
+  const create = type => (...args) => { const target = { id: type + ++seq, type, args }; calls.push(type); geometry.push(target); return target; };
+  const api = sandbox.window.SketchProjectionTestDriver.createLegacyTargetConstruction({
+    addPointToSketch: (x, y, sketchId, kind) => { const p = { id: 'P' + ++seq, x, y, sketchId, kind }; calls.push('point'); points.push(p); return p; },
+    addLine: create('line'), addCircle: create('circle'), addArc: create('arc'), addSpline: create('spline'),
+  });
+  const p1 = { x: 1, y: 2, kind: 'center' }, p2 = { x: 3, y: 4 }, source = { p1, p2, center: p1, fitPoints: [p1, p2], construction: true, closed: true, startAngle: 2, endAngle: -1, radius() { calls.push('radius'); return 12; } };
+  const before = JSON.stringify(source);
+  let result = api.createSketchProjectionTarget({ kind: 'point', item: p1 }, 'target'); assert.notEqual(result, p1); assert.equal(result.kind, 'center'); assert.equal(result.sketchId, 'target');
+  calls.length = 0; result = api.createSketchProjectionTarget({ kind: 'line', item: source }, 'target'); assert.deepEqual(calls, ['point', 'point', 'line']);
+  assert.equal(result.args[0], points.at(-2)); assert.equal(result.args[1], points.at(-1)); assert.notEqual(result.args[0], p1); assert.notEqual(result.args[1], p2); assert.equal(result.args[1].kind, 'endpoint'); assert.equal(result.args[2], true);
+  calls.length = 0; result = api.createSketchProjectionTarget({ kind: 'circle', item: source }, 'circle-target'); assert.deepEqual(calls, ['point', 'radius', 'circle']); assert.equal(result.args[0], points.at(-1)); assert.equal(result.args[0].sketchId, 'circle-target'); assert.equal(result.args[1], 12); assert.equal(result.args[2], true);
+  calls.length = 0; result = api.createSketchProjectionTarget({ kind: 'arc', item: source }, 'target'); assert.deepEqual(calls, ['point', 'radius', 'arc']); assert.equal(result.args[2], 2); assert.equal(result.args[3], -1); assert.equal(result.args[4], true);
+  calls.length = 0; result = api.createSketchProjectionTarget({ kind: 'spline', item: source }, 'spline-target'); assert.deepEqual(calls, ['point', 'point', 'spline']); assert.equal(result.args[0][0], points.at(-2)); assert.equal(result.args[0][1], points.at(-1)); assert.equal(result.args[1], true); assert.equal(result.args[2], true);
+  assert.equal(new Set(points.map(p => p.id)).size, points.length); assert.equal(points.every(p => p !== p1 && p !== p2), true); assert.equal(JSON.stringify(source), before);
+});
+test('legacy target construction preserves unsupported-kind no-allocation and original creation failure propagation', () => {
+  const calls = [], error = new Error('radius'), api = sandbox.window.SketchProjectionTestDriver.createLegacyTargetConstruction({
+    addPointToSketch: (...args) => { calls.push(args); return {}; }, addLine: () => {}, addCircle: () => { throw Error('must not construct circle'); }, addArc: () => {}, addSpline: () => {},
+  });
+  assert.equal(api.createSketchProjectionTarget({ kind: 'hatch', item: {} }, 'target'), null); assert.equal(calls.length, 0);
+  const source = { center: { x: 2, y: 3 }, radius: () => { throw error; } };
+  assert.throws(() => api.createSketchProjectionTarget({ kind: 'circle', item: source }, 'target'), caught => caught === error);
+  assert.deepEqual(calls, [[2, 3, 'target', 'endpoint']]);
+});

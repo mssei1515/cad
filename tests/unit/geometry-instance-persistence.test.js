@@ -3,22 +3,31 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_ref.js', 'src/document/appearance.js', 'src/document/drawing_order.js', 'src/persistence/geometry_instances.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
+const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
+for (const file of ['src/geometry/geometry_ref.js', 'src/document/appearance.js', 'src/document/drawing_order.js', 'src/geometry/pattern_instance_model.js', 'src/persistence/geometry_instances.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
 const codec = sandbox.window.GeometryInstancePersistence.create({ applicationText: (_ja, en) => en });
 const ref = { kind: 'line', path: ['L1'] };
 const projection = () => ({ id: 'SPI1', type: 'sketchProjection', sources: [ref] });
 test('normalization uses explicit sketch resolver and creates typed instance data', () => {
   const instance = codec.normalize({ type: 'pattern', sources: [ref, {}], direction: 'L2', spacing: '5', copies: 3.9, reversed: 1 }, () => 'S2', 2);
   assert.equal(instance.id, 'PI3'); assert.equal(instance.sketchId, 'S2'); assert.equal(instance.sources.length, 1);
-  assert.equal(instance.direction.path[0], 'L2'); assert.equal(instance.spacing, 5); assert.equal(instance.copies, 3); assert.equal(instance.reversed, true);
+  assert.equal(instance.placement.direction.path[0], 'L2'); assert.equal(instance.placement.spacing, 5); assert.equal(instance.count, 4); assert.equal(instance.placement.reversed, true);
 });
-test('free instance validation requires finite numeric placement and boolean mirrors', () => {
+test('old synchronized instances are rejected instead of converted', () => {
   const data = { ...projection(), type: 'free', x: 0, y: 0, rotation: 0, origin: { x: 0, y: 0 }, mirrorX: false, mirrorY: false };
-  assert.equal(codec.listError([data]), '');
-  assert.match(codec.listError([{ ...data, x: '0' }]), /invalid placement/);
-  assert.match(codec.listError([{ ...data, mirrorX: 0 }]), /invalid placement/);
+  assert.match(codec.listError([data]), /unsupported type free/);
+  assert.throws(() => codec.normalize(data, () => 'S1'), /同期インスタンス/);
 });
+test('canonical pattern kinds validate consistently without browser global aliases', () => {
+  for (const type of ['pattern', 'circularPattern', 'mirror']) {
+    const data = sandbox.window.PatternInstanceModel.createDraft({ ...projection(), type });
+    if (type === 'mirror') data.placement.axis = ref;
+    assert.equal(codec.listError([data]), '');
+    assert.match(codec.listError([{ ...data, type: 'free' }]), /unsupported type free/);
+  }
+  assert.match(codec.listError([{ ...projection(), type: 'circularPattern' }]), /invalid placement/);
+});
+
 test('instance lists reject duplicate ids, invalid sources, axes and pattern limits', () => {
   assert.match(codec.listError([projection(), projection()]), /duplicate ID/);
   assert.match(codec.listError([{ ...projection(), sources: [] }]), /invalid source/);
