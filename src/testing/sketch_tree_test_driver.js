@@ -211,5 +211,77 @@
     return Object.freeze({ state });
   }
 
-  window.SketchTreeTestDriver = Object.freeze({ createRootHoverFixture, createBlockHoverFixture, createSiblingVisibilityFixture, createInactiveHoverFixture, createIdentityObservation });
+  function createSubtreeReferenceFixture({ resetModelState, sketchById, defaultSketchId, currentScope, rootSketchId, addPoint, addLine, refreshReferenceConstraintValidity, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive, sketchIdentityRelationLabel, sketchIdentityRelationColor, document, getComputedStyle, isVisibleSketchId }) {
+    function reset() {
+      resetModelState();
+      const parentSketchId = "S10";
+      const siblingSketchId = "S2";
+      const siblingChildId = "S3";
+      const siblingGrandchildId = "S4";
+      const unrelatedSketchId = "S9";
+      const activeChildSketchId = "S11";
+      const active = sketchById(defaultSketchId);
+      active.parentSketchId = parentSketchId;
+      currentScope().sketches.push({ id: parentSketchId, name: "Sketch-P", parentSketchId: rootSketchId, kind: "sketch", visible: true });
+      currentScope().sketches.push({ id: siblingSketchId, name: "Sketch-S", parentSketchId, kind: "sketch", visible: true });
+      currentScope().sketches.push({ id: siblingChildId, name: "Sketch-S-1", parentSketchId: siblingSketchId, kind: "sketch", visible: true });
+      currentScope().sketches.push({ id: siblingGrandchildId, name: "Sketch-S-1-1", parentSketchId: siblingChildId, kind: "sketch", visible: true });
+      currentScope().sketches.push({ id: unrelatedSketchId, name: "Sketch-U", parentSketchId: rootSketchId, kind: "sketch", visible: true });
+      currentScope().sketches.push({ id: activeChildSketchId, name: "Sketch-1-1", parentSketchId: defaultSketchId, kind: "sketch", visible: true });
+
+      currentScope().activeSketchId = defaultSketchId;
+      const activePoint = addPoint(45, 70, false, "explicit");
+      currentScope().activeSketchId = activeChildSketchId;
+      const childLine = addLine(addPoint(-80, 80, true, "endpoint"), addPoint(80, 80, true, "endpoint"));
+      currentScope().activeSketchId = siblingSketchId;
+      addLine(addPoint(-80, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint"));
+      currentScope().activeSketchId = siblingChildId;
+      addLine(addPoint(-80, 20, true, "endpoint"), addPoint(80, 20, true, "endpoint"));
+      currentScope().activeSketchId = siblingGrandchildId;
+      const referenceLine = addLine(addPoint(-80, 40, true, "endpoint"), addPoint(80, 40, true, "endpoint"));
+      currentScope().activeSketchId = unrelatedSketchId;
+      const unrelatedLine = addLine(addPoint(-80, -40, true, "endpoint"), addPoint(80, -40, true, "endpoint"));
+      currentScope().activeSketchId = defaultSketchId;
+      refreshReferenceConstraintValidity();
+      fitAllGeometryToViewport(190);
+      updateUI();
+      draw();
+      const rect = canvas.getBoundingClientRect();
+      const screenPoint = (point) => {
+        const screen = worldToCanvasScreen(point);
+        return { x: rect.left + screen.x, y: rect.top + screen.y };
+      };
+      return {
+        activePoint: screenPoint(activePoint),
+        referenceLine: screenPoint({ x: 45, y: 40 }),
+        unrelatedLine: screenPoint({ x: 45, y: -40 }),
+        childLine: screenPoint({ x: 45, y: 80 }),
+        relations: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchRelationToActive(id)])),
+        relationLabels: Object.fromEntries([unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchIdentityRelationLabel(id)])),
+        relationColors: Object.fromEntries([unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchIdentityRelationColor(id)])),
+        rowBackgrounds: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => {
+          const row = document.querySelector(`.sketch-item[data-id="${id}"]`);
+          return [id, row ? getComputedStyle(row).backgroundColor : ""];
+        })),
+        visible: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, isVisibleSketchId(id)])),
+        rowClasses: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, document.querySelector(`.sketch-item[data-id="${id}"]`)?.classList.contains("visible") || false])),
+        referenceLineId: referenceLine.id,
+        unrelatedLineId: unrelatedLine.id,
+        childLineId: childLine.id,
+      };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createSubtreeVisibilityObservation({ sketchById, isVisibleSketchId }) {
+    function state() {
+      return Object.fromEntries(["S2", "S3", "S4"].map((id) => [id, {
+        preferenceVisible: sketchById(id)?.visible !== false,
+        effectiveVisible: isVisibleSketchId(id),
+      }]));
+    }
+    return Object.freeze({ state });
+  }
+
+  window.SketchTreeTestDriver = Object.freeze({ createRootHoverFixture, createBlockHoverFixture, createSiblingVisibilityFixture, createInactiveHoverFixture, createIdentityObservation, createSubtreeReferenceFixture, createSubtreeVisibilityObservation });
 })();

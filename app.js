@@ -5035,6 +5035,15 @@
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), currentScope: workspace.current, invalidateBlockProjectionCache, blockProjectionBundle,
     });
     const constructionLineObservation = window.CanvasRenderTestDriver.createConstructionLineObservation({ allGeometryLines, ctx, drawLines, viewport, effectiveAppearanceForElement });
+    const subtreeReferenceFixture = window.SketchTreeTestDriver.createSubtreeReferenceFixture({
+      resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, refreshReferenceConstraintValidity,
+      fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive, sketchIdentityRelationLabel, sketchIdentityRelationColor, document, getComputedStyle: element => getComputedStyle(element), isVisibleSketchId,
+    });
+    const subtreeVisibilityObservation = window.SketchTreeTestDriver.createSubtreeVisibilityObservation({ sketchById, isVisibleSketchId });
+    const referenceLineMove = window.ConstraintTestDriver.createReferenceLineMove({ currentScope: workspace.current, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId: DEFAULT_SKETCH_ID, isExplicitPoint });
+    const dependencyOrderFixture = window.ConstraintTestDriver.createDependencyOrderFixture({
+      resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addLine, addPoint, markReferenceConstraint, PointOnLineConstraint, CoincidentConstraint, refreshReferenceConstraintValidity, solveReferenceDependentSketches,
+    });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetChainFixture = window.OffsetTestDriver.createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
@@ -5493,116 +5502,11 @@
       geometryStrokeStyleCasesForTest: strokeStyleCases.cases,
       constructionLineHoverDisplayCasesForTest: constructionHoverFixture.cases,
       constructionLineRenderingForTest: constructionLineObservation.state,
-      resetForSiblingSubtreeReference() {
-        resetModelState();
-        const parentSketchId = "S10";
-        const siblingSketchId = "S2";
-        const siblingChildId = "S3";
-        const siblingGrandchildId = "S4";
-        const unrelatedSketchId = "S9";
-        const activeChildSketchId = "S11";
-        const active = sketchById(DEFAULT_SKETCH_ID);
-        active.parentSketchId = parentSketchId;
-        model.sketches.push({ id: parentSketchId, name: "Sketch-P", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
-        model.sketches.push({ id: siblingSketchId, name: "Sketch-S", parentSketchId, kind: "sketch", visible: true });
-        model.sketches.push({ id: siblingChildId, name: "Sketch-S-1", parentSketchId: siblingSketchId, kind: "sketch", visible: true });
-        model.sketches.push({ id: siblingGrandchildId, name: "Sketch-S-1-1", parentSketchId: siblingChildId, kind: "sketch", visible: true });
-        model.sketches.push({ id: unrelatedSketchId, name: "Sketch-U", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
-        model.sketches.push({ id: activeChildSketchId, name: "Sketch-1-1", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", visible: true });
-
-        model.activeSketchId = DEFAULT_SKETCH_ID;
-        const activePoint = addPoint(45, 70, false, "explicit");
-        model.activeSketchId = activeChildSketchId;
-        const childLine = addLine(addPoint(-80, 80, true, "endpoint"), addPoint(80, 80, true, "endpoint"));
-        model.activeSketchId = siblingSketchId;
-        addLine(addPoint(-80, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint"));
-        model.activeSketchId = siblingChildId;
-        addLine(addPoint(-80, 20, true, "endpoint"), addPoint(80, 20, true, "endpoint"));
-        model.activeSketchId = siblingGrandchildId;
-        const referenceLine = addLine(addPoint(-80, 40, true, "endpoint"), addPoint(80, 40, true, "endpoint"));
-        model.activeSketchId = unrelatedSketchId;
-        const unrelatedLine = addLine(addPoint(-80, -40, true, "endpoint"), addPoint(80, -40, true, "endpoint"));
-        model.activeSketchId = DEFAULT_SKETCH_ID;
-        refreshReferenceConstraintValidity();
-        fitAllGeometryToViewport(190);
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const screenPoint = (point) => {
-          const screen = worldToCanvasScreen(point);
-          return { x: rect.left + screen.x, y: rect.top + screen.y };
-        };
-        return {
-          activePoint: screenPoint(activePoint),
-          referenceLine: screenPoint({ x: 45, y: 40 }),
-          unrelatedLine: screenPoint({ x: 45, y: -40 }),
-          childLine: screenPoint({ x: 45, y: 80 }),
-          relations: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchRelationToActive(id)])),
-          relationLabels: Object.fromEntries([unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchIdentityRelationLabel(id)])),
-          relationColors: Object.fromEntries([unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchIdentityRelationColor(id)])),
-          rowBackgrounds: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => {
-            const row = document.querySelector(`.sketch-item[data-id="${id}"]`);
-            return [id, row ? getComputedStyle(row).backgroundColor : ""];
-          })),
-          visible: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, isVisibleSketchId(id)])),
-          rowClasses: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, document.querySelector(`.sketch-item[data-id="${id}"]`)?.classList.contains("visible") || false])),
-          referenceLineId: referenceLine.id,
-          unrelatedLineId: unrelatedLine.id,
-          childLineId: childLine.id,
-        };
-      },
-      siblingSubtreeVisibilityState() {
-        return Object.fromEntries(["S2", "S3", "S4"].map((id) => [id, {
-          preferenceVisible: sketchById(id)?.visible !== false,
-          effectiveVisible: isVisibleSketchId(id),
-        }]));
-      },
-      moveSiblingSubtreeReferenceLine(dy) {
-        const line = model.lines.find((item) => elementSketchId(item) === "S4");
-        if (!line) return null;
-        line.p1.y += dy;
-        line.p2.y += dy;
-        const result = solveReferenceDependentSketches("S4");
-        refreshConstraintAnalysis();
-        updateUI();
-        draw();
-        const point = model.points.find((item) => elementSketchId(item) === DEFAULT_SKETCH_ID && isExplicitPoint(item));
-        return {
-          success: result.success,
-          dependentSketchIds: result.results.map((entry) => entry.sketchId),
-          point: point ? { x: point.x, y: point.y } : null,
-          line: { p1: { x: line.p1.x, y: line.p1.y }, p2: { x: line.p2.x, y: line.p2.y } },
-        };
-      },
+      resetForSiblingSubtreeReference: subtreeReferenceFixture.reset,
+      siblingSubtreeVisibilityState: subtreeVisibilityObservation.state,
+      moveSiblingSubtreeReferenceLine: referenceLineMove.move,
       deleteSketchForTest: sketchDeletionFixture.remove,
-      referenceDependencyOrderCase() {
-        resetModelState();
-        const parentSketchId = "S10";
-        const childSketchId = "S5";
-        sketchById(DEFAULT_SKETCH_ID).parentSketchId = parentSketchId;
-        model.sketches.push({ id: parentSketchId, name: "Sketch-P", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
-        model.sketches.push({ id: childSketchId, name: "Sketch-1-1", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", visible: true });
-        model.activeSketchId = parentSketchId;
-        const sourceLine = addLine(addPoint(-50, 0, true, "endpoint"), addPoint(50, 0, true, "endpoint"));
-        model.activeSketchId = DEFAULT_SKETCH_ID;
-        const activePoint = addPoint(0, 15, false, "explicit");
-        const first = markReferenceConstraint(new PointOnLineConstraint(activePoint, sourceLine), parentSketchId, DEFAULT_SKETCH_ID);
-        model.constraints.push(first);
-        model.activeSketchId = childSketchId;
-        const childPoint = addPoint(0, 30, false, "explicit");
-        const second = markReferenceConstraint(new CoincidentConstraint(childPoint, activePoint), DEFAULT_SKETCH_ID, childSketchId);
-        model.constraints.push(second);
-        model.activeSketchId = DEFAULT_SKETCH_ID;
-        refreshReferenceConstraintValidity();
-        sourceLine.p1.y = 25;
-        sourceLine.p2.y = 25;
-        const result = solveReferenceDependentSketches(parentSketchId);
-        return {
-          order: result.results.map((entry) => entry.sketchId),
-          activePointY: activePoint.y,
-          childPointY: childPoint.y,
-        };
-      },
+      referenceDependencyOrderCase: dependencyOrderFixture.orderCase,
       cyclicReferenceLoadCase() {
         resetModelState();
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });

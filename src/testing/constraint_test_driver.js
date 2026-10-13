@@ -158,5 +158,58 @@
     return Object.freeze({ state });
   }
 
-  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation });
+  function createReferenceLineMove({ currentScope, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId, isExplicitPoint }) {
+    function move(dy) {
+      const line = currentScope().lines.find((item) => elementSketchId(item) === "S4");
+      if (!line) return null;
+      line.p1.y += dy;
+      line.p2.y += dy;
+      const result = solveReferenceDependentSketches("S4");
+      refreshConstraintAnalysis();
+      updateUI();
+      draw();
+      const point = currentScope().points.find((item) => elementSketchId(item) === defaultSketchId && isExplicitPoint(item));
+      return {
+        success: result.success,
+        dependentSketchIds: result.results.map((entry) => entry.sketchId),
+        point: point ? { x: point.x, y: point.y } : null,
+        line: { p1: { x: line.p1.x, y: line.p1.y }, p2: { x: line.p2.x, y: line.p2.y } },
+      };
+    }
+    return Object.freeze({ move });
+  }
+
+  function createDependencyOrderFixture({ resetModelState, sketchById, defaultSketchId, currentScope, rootSketchId, addLine, addPoint, markReferenceConstraint, PointOnLineConstraint, CoincidentConstraint, refreshReferenceConstraintValidity, solveReferenceDependentSketches }) {
+    function orderCase() {
+      resetModelState();
+      const parentSketchId = "S10";
+      const childSketchId = "S5";
+      sketchById(defaultSketchId).parentSketchId = parentSketchId;
+      currentScope().sketches.push({ id: parentSketchId, name: "Sketch-P", parentSketchId: rootSketchId, kind: "sketch", visible: true });
+      currentScope().sketches.push({ id: childSketchId, name: "Sketch-1-1", parentSketchId: defaultSketchId, kind: "sketch", visible: true });
+      currentScope().activeSketchId = parentSketchId;
+      const sourceLine = addLine(addPoint(-50, 0, true, "endpoint"), addPoint(50, 0, true, "endpoint"));
+      currentScope().activeSketchId = defaultSketchId;
+      const activePoint = addPoint(0, 15, false, "explicit");
+      const first = markReferenceConstraint(new PointOnLineConstraint(activePoint, sourceLine), parentSketchId, defaultSketchId);
+      currentScope().constraints.push(first);
+      currentScope().activeSketchId = childSketchId;
+      const childPoint = addPoint(0, 30, false, "explicit");
+      const second = markReferenceConstraint(new CoincidentConstraint(childPoint, activePoint), defaultSketchId, childSketchId);
+      currentScope().constraints.push(second);
+      currentScope().activeSketchId = defaultSketchId;
+      refreshReferenceConstraintValidity();
+      sourceLine.p1.y = 25;
+      sourceLine.p2.y = 25;
+      const result = solveReferenceDependentSketches(parentSketchId);
+      return {
+        order: result.results.map((entry) => entry.sketchId),
+        activePointY: activePoint.y,
+        childPointY: childPoint.y,
+      };
+    }
+    return Object.freeze({ orderCase });
+  }
+
+  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture });
 })();

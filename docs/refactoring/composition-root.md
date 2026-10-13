@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Sibling subtreeの参照fixture／可視性観測を既存SketchTreeTestDriver.createSubtreeReferenceFixture／createSubtreeVisibilityObservationへ、参照元Line移動／依存求解順fixtureを既存ConstraintTestDriver.createReferenceLineMove／createDependencyOrderFixtureへ分離。既存Sketch／Geometry生成・参照有効性・関係label／色／可視性／DOM、参照拘束・依存求解／解析・UI／drawへ役割別に接続する。固定入力・同一参照・所属／active切替と更新／照会順を保持し、元の四つの処理本体との一致を依存port置換後に確認。app.jsは6,352→6,256行（96行減、今回の再開から合計1,478行減）。構文482ファイル・単体1,298件・関連E2E103件が成功（すべてexit 0、E2E1.4分）。全利用箇所のunified-uiを実行。新規テストはなく、既存subtree参照／可視性・参照元の移動／依存求解順と周辺操作を確認した。ログはcad-subtree-reference-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自参照規則／求解順・namespace／scope／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Geometry stroke styleのケースをPropertiesTestDriver.createStrokeStyleCasesへ、construction hover fixture／線描画観測をCanvasRenderTestDriver.createConstructionHoverFixture／createConstructionLineObservationへ分離。既存生成／scope・Definition追加・Hover／drawLines／外観へ接続し、固定入力・同一参照・描画／照会順・null／丸めとCanvas methodのtry／finally復元、元arcへのctxを保った転送を維持する。元の三つの処理本体との一致を依存port置換後に確認。app.jsは6,465→6,352行（113行減、今回の再開から合計1,382行減）。構文482ファイル・単体1,298件・関連E2E103件が成功（すべてexit 0、E2E1.3分）。全利用箇所のunified-uiを実行。単体1件で描画／外観例外時のCanvas復元・対象なしnull・arc転送のcontext／引数と表示結果を確認した。新規unit追加でWindowsシェルの起動長制限に当たり全unit起動がexit 1となったため、既存206ファイルの順序と追加1ファイルの明示一覧をtools/run-unit-tests.jsへ保持し、Nodeを直接spawnする起動へ変更して全unitを再実行・成功確認。npm run test:unitの入口は維持する。ログはcad-geometry-stroke-observation-{check,unit,unit-final,e2e}.log。全E2Eはこの単位では未実行。独自線幅／外観・hover／renderer／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り
