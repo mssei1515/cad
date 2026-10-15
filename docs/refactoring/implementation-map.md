@@ -914,3 +914,5 @@ InstanceProjection.createSourceSelectionは現在model／選択Geometry・Canvas
 
 
 CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入口からcategory順・重複／元参照を維持したselectionItemsと、先頭itemのSketch→inspection→nullのselectionSketchIdを返す。CanvasSelectionInteraction.createIdentitySelectionはSelection／Sketch照会／clear／UI／drawの5入口でidentity選択を行う。Block→derived ownerの優先、additive時のSketch拒否／ID toggle、non-additive clear→kind判定→set、UI→drawと結果を維持し、identityを変更しない。照会と状態更新を分け、appは早期callback用のhoisted入口と生成接続を持つ。
+
+- src/commands/sketch_command.js: createEditAccessは既存SketchContextの編集可否に基づく拒否通知、選択所属のguard、作図拒否のpreview cleanupを担当。権限規則とSelection／preview状態の所有は各既存moduleに残し、appは生成・接続を担当する。

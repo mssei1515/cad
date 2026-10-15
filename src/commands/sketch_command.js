@@ -94,5 +94,35 @@
 
     return Object.freeze({ createSketch, activate: setActiveSketch, rename: renameSketch, toggleVisibility: toggleSketchVisibility });
   }
-  window.SketchCommand = Object.freeze({ create });
+  // Editing permission stays in SketchContext; this boundary handles refusal feedback and cleanup.
+  function createEditAccess({ activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId,
+    isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview, draw }) {
+    function guardSketchEdit(sketchId = activeSketchId(), operation = "edit") {
+      if (canEditSketch(sketchId, operation)) return true;
+      setHint(sketchById(sketchId)?.locked
+        ? applicationText("スケッチはロック中です。ロック解除または作図先変更が必要です", "Sketch is locked. Unlock it or change the drawing sketch.")
+        : applicationText("この操作には所属スケッチを作図先に指定してください", "Set the owning sketch as the drawing sketch for this operation."), "error");
+      return false;
+    }
+
+    function guardSelectionEdit(operation = "edit") {
+      return [...new Set(selectionItems().map(elementSketchId))].every(id => guardSketchEdit(id, operation));
+    }
+
+    function canCreateInActiveSketch() {
+      return isGeometryMode() && canEditSketch(activeSketchId(), "create");
+    }
+
+    function rejectRootSketchCreation() {
+      if (canCreateInActiveSketch()) return false;
+      guardSketchEdit(activeSketchId(), "create");
+      clearSnap();
+      clearPointerPreview();
+      draw();
+      return true;
+    }
+
+    return Object.freeze({ guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation });
+  }
+  window.SketchCommand = Object.freeze({ create, createEditAccess });
 })();

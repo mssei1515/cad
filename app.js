@@ -217,6 +217,11 @@
     sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
     sketchRelationOfElement,
   } = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
+  const sketchEditAccess = window.SketchCommand.createEditAccess({
+    activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId, isGeometryMode,
+    setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), draw,
+  });
+
   const { geometryKindForItem, geometryRefForItem, addGeometryBundleToMaps } = window.GeometryObjects;
   const instanceProjections = window.InstanceProjection.create({ elementSketchId, applicationText,
     resolveHatch: (hatch, elements) => resolvedHatchBoundary(hatch, elements),
@@ -1318,17 +1323,9 @@
 
   function selectionSketchId(...args) { return selectionScopeQuery.selectionSketchId(...args); }
 
-  function guardSketchEdit(sketchId = activeSketchId(), operation = "edit") {
-    if (canEditSketch(sketchId, operation)) return true;
-    setHint(sketchById(sketchId)?.locked
-      ? applicationText("スケッチはロック中です。ロック解除または作図先変更が必要です", "Sketch is locked. Unlock it or change the drawing sketch.")
-      : applicationText("この操作には所属スケッチを作図先に指定してください", "Set the owning sketch as the drawing sketch for this operation."), "error");
-    return false;
-  }
+  function guardSketchEdit(...args) { return sketchEditAccess.guardSketchEdit(...args); }
 
-  function guardSelectionEdit(operation = "edit") {
-    return [...new Set(selectionItems().map(elementSketchId))].every(id => guardSketchEdit(id, operation));
-  }
+  function guardSelectionEdit(...args) { return sketchEditAccess.guardSelectionEdit(...args); }
 
   function ordinarySelectionMode() { return mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command; }
   function hitSketchAllowed(id) {
@@ -1345,18 +1342,9 @@
     return true;
   }
 
-  function canCreateInActiveSketch() {
-    return isGeometryMode() && canEditSketch(activeSketchId(), "create");
-  }
+  function canCreateInActiveSketch(...args) { return sketchEditAccess.canCreateInActiveSketch(...args); }
 
-  function rejectRootSketchCreation() {
-    if (canCreateInActiveSketch()) return false;
-    guardSketchEdit(activeSketchId(), "create");
-    clearSnap();
-    drawingPreview.setPointer(null);
-    draw();
-    return true;
-  }
+  function rejectRootSketchCreation(...args) { return sketchEditAccess.rejectRootSketchCreation(...args); }
 
   function parentSketchOf(sketch) {
     ensureSketchState();

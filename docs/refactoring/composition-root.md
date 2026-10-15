@@ -4,7 +4,17 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-14）
+## 現在の再開地点（2026-10-16）
+
+develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
+
+### Sketch編集のguardと拒否処理
+
+guardSketchEdit／guardSelectionEdit／canCreateInActiveSketch／rejectRootSketchCreationを既存SketchCommand.createEditAccessへ分離。権限規則はSketchContext、Selection／preview／snap状態は既存ownerに残す。11個の限定した照会・通知・解除portで接続し、実行時の作図先、default operation、null／undefinedの扱い、選択所属の重複排除と最初の拒否での短絡、hint→snap→pointer→draw順を保持。appではSketchContext直後に生成し、後で初期化されるclearSnap／drawingPreviewはcallbackで遅延参照する。4関数の本体一致を確認し、既存SketchCommand unitに境界検証4件を追加。新script／unit fileなし。
+
+app.jsは4,840→4,828行（12行減）。構文506ファイル・単体1,395件・関連E2E171件が成功（すべてexit 0、E2E3.3分）。sketch-permissions／sketch-edit／sketch-projection／blocks／unified-uiを実行。初回E2Eで検出したclearSnap初期化前参照を修正し、同じ対象を再実行して成功。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収した。ログは一時ディレクトリのcad-sketch-edit-access-{check,unit,e2e}.log。全E2Eはこの単位では未実行。次は共通hit方針と操作調整・機能の生成接続を整理する。
+
+### 前回の停止地点（2026-10-14）
 
 週枠残量59%で停止条件に達したため新規分離を停止。2026-10-14の再開はdevelop 7a1983eを基準とし、63個の区切りのcommitを保持してcodex/interaction-observationで進めた。app.jsは7,734→4,840行（2,894行減）。コード最終commitは7dc83dc、develop統合commitは883e7ef。描画／PNG一時状態、Canvas表示更新のsnapshot、寸法／Annotation／Geometry表示、command対象／Sketch表示方針、Selection照会／identity更新、投影source／legacy fixture、Instance source、メニュー／toolbar／Document設定と入力、固定／拘束操作、テスト支援を責務ごとに整理した。各ownerと依存はimplementation-map.mdと正式なモジュール構成を参照し、区切りは本書とGit履歴に残す。
 
