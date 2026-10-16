@@ -267,6 +267,10 @@
   const dimensionAppearance = window.GeometryAppearanceQuery.createDimension({
     document: documentModel, currentSketches: () => model.sketches, activeSketchId, isRootSketch,
   });
+  const dimensionLabels = window.DimensionPresentation.createLabel({
+    isReadOnlyDimension, measuredDimensionValue, angleDegrees, dimensionDisplayState, constraintSketchId,
+    formatDimensionLabel, formatMeasuredDimensionLabel,
+  });
   const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document: documentModel, currentSketches: () => model.sketches });
   const { hitAnnotationTarget, annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
     isReferenceSourceSketchId,
@@ -1804,19 +1808,7 @@
     return target.kind === "angle" ? (measured * Math.PI) / 180 : measured;
   }
 
-  function dimensionLabelForConstraint(constraint, target, dimension) {
-    const readOnly = isReadOnlyDimension(constraint);
-    const value = readOnly ? measuredDimensionValue(target, dimension) : target.interval ? constraint.target * 180 / Math.PI : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
-    const formatLabel = readOnly ? formatMeasuredDimensionLabel : formatDimensionLabel;
-    const display = dimensionDisplayState(dimension, constraintSketchId(constraint));
-    const number = display.precision == null ? formatLabel(value) : Number(value).toFixed(display.precision);
-    const unit = target.kind === "angle" ? "°" : "";
-    const tolerance = display.toleranceUpper !== "" || display.toleranceLower !== ""
-      ? ` +${display.toleranceUpper === "" ? "0" : display.toleranceUpper}/-${display.toleranceLower === "" ? "0" : Math.abs(Number(display.toleranceLower))}`
-      : "";
-    const label = `${display.prefix}${number}${unit}${display.suffix}${tolerance}`;
-    return readOnly ? `(${label})` : label;
-  }
+  function dimensionLabelForConstraint(...args) { return dimensionLabels.label(...args); }
 
   function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
 

@@ -1036,3 +1036,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/geometry/appearance_query.js: GeometryAppearanceQuery.createDimensionがeffectiveDimensionAppearance／effectiveDimensionAppearanceForSketch／dimensionDisplayStateを所有する。Document既定と終端既定の合成、現在または明示Sketchの外観、個別displayの優先順とRoot除外を維持する。appはUI・label・テスト支援へのhoisted入口を接続し、初期化時に現在scopeを読み出さない。
+
+
+- src/rendering/dimension_presentation.js: DimensionPresentation.createLabelが寸法labelの文字列構成を所有する。数値formatはNumberDisplay、外観はGeometryAppearanceQuery、測定／readonlyと角度値はDimensionQueriesの既存APIへ委譲。appは既存hoisted入口を描画・hit・観測へ接続し、参照寸法／角度interval／桁数／公差の規則を重複実装しない。

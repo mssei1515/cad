@@ -5,6 +5,57 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '../../src/rendering/dimension_presentation.js'), 'utf8'), sandbox);
+vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui/number_display.js'), 'utf8'), sandbox);
+function labelFixture() {
+  const calls = [], state = { readOnly: false, measured: 30.000005,
+    display: { precision: null, prefix: '', suffix: '', toleranceUpper: '', toleranceLower: '' } };
+  const api = sandbox.window.DimensionPresentation.createLabel({
+    isReadOnlyDimension: constraint => { calls.push(['readonly', constraint]); return state.readOnly; },
+    measuredDimensionValue: (target, dimension) => { calls.push(['measured', target, dimension]); return state.measured; },
+    angleDegrees: radians => { calls.push(['angle', radians]); return Math.abs(radians * 180 / Math.PI); },
+    constraintSketchId: constraint => { calls.push(['sketch', constraint]); return constraint.sketchId; },
+    dimensionDisplayState: (dimension, sketchId) => { calls.push(['display', dimension, sketchId]); return state.display; },
+    formatDimensionLabel: value => { calls.push(['format', value]); return sandbox.window.NumberDisplay.formatDimensionLabel(value); },
+    formatMeasuredDimensionLabel: value => { calls.push(['measured-format', value]); return sandbox.window.NumberDisplay.formatMeasuredDimensionLabel(value); },
+  });
+  return { api, calls, state };
+}
+
+test('reference labels use the current measurement and measured rounding without reading the stored target', () => {
+  const f = labelFixture(), target = { kind: 'angle', interval: true }, dimension = {};
+  const constraint = { sketchId: 'owner', get target() { throw Error('reference label must not read target'); } };
+  f.state.readOnly = true;
+  assert.deepEqual(f.calls, []); assert.equal(f.api.label(constraint, target, dimension), '(30°)');
+  assert.deepEqual(f.calls, [['readonly', constraint], ['measured', target, dimension], ['sketch', constraint], ['display', dimension, 'owner'], ['measured-format', 30.000005]]);
+  f.calls.length = 0; f.state.measured = 42.125; f.state.display.precision = 2;
+  assert.equal(f.api.label(constraint, target, dimension), '(42.13°)');
+  assert.equal(f.calls.some(call => call[0].includes('format') || call[0] === 'angle'), false);
+});
+
+test('ordinary angle labels use absolute degrees while interval labels preserve signed degrees and lengths keep their value', () => {
+  const f = labelFixture(), constraint = { target: -Math.PI / 2, sketchId: 'S1' }, dimension = {};
+  assert.equal(f.api.label(constraint, { kind: 'angle' }, dimension), '90°');
+  assert.equal(f.calls.filter(call => call[0] === 'angle').length, 1);
+  f.calls.length = 0;
+  assert.equal(f.api.label(constraint, { kind: 'angle', interval: true }, dimension), '-90°');
+  assert.equal(f.calls.some(call => call[0] === 'angle' || call[0] === 'measured'), false);
+  constraint.target = -30.000005;
+  assert.equal(f.api.label(constraint, { kind: 'distance' }, dimension), '-30.000005');
+  f.state.display.precision = 3;
+  assert.equal(f.api.label(constraint, { kind: 'distance' }, dimension), '-30.000');
+});
+
+test('dimension labels preserve multiline affixes, one-sided tolerance and reference parentheses without changing display values', () => {
+  const f = labelFixture(), constraint = { target: 5, sketchId: 'S2' }, target = { kind: 'distance' }, dimension = {};
+  Object.assign(f.state.display, { prefix: 'A\n', suffix: 'mm', toleranceLower: '-0.2' });
+  const before = JSON.stringify(f.state.display);
+  assert.equal(f.api.label(constraint, target, dimension), 'A\n5mm +0/-0.2');
+  assert.equal(JSON.stringify(f.state.display), before);
+  f.state.display.toleranceUpper = '0.1'; f.state.display.toleranceLower = '';
+  assert.equal(f.api.label(constraint, target, dimension), 'A\n5mm +0.1/-0');
+  f.state.readOnly = true; f.state.measured = 5;
+  assert.equal(f.api.label(constraint, target, dimension), '(A\n5mm +0.1/-0)');
+});
 function boundsFixture() {
   const calls = [], target = {}, dimension = {}, appearance = { visible: true }, layout = { text: { x: 10, y: 20 }, textAngle: Math.PI / 2, hitA: { x: -7, y: 0 } };
   const state = { active: true, visible: true, target, dimension, appearance, layout, label: 'one\ntwo\r\nthree', expression: true };

@@ -71,5 +71,22 @@
     }
     return Object.freeze({ drawDimension, drawAngleDimension });
   }
-  window.DimensionPresentation = Object.freeze({ createSelectionBounds, createLayer, createPainter });
+  function createLabel({ isReadOnlyDimension, measuredDimensionValue, angleDegrees, dimensionDisplayState, constraintSketchId,
+    formatDimensionLabel, formatMeasuredDimensionLabel }) {
+    function dimensionLabelForConstraint(constraint, target, dimension) {
+      const readOnly = isReadOnlyDimension(constraint);
+      const value = readOnly ? measuredDimensionValue(target, dimension) : target.interval ? constraint.target * 180 / Math.PI : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
+      const formatLabel = readOnly ? formatMeasuredDimensionLabel : formatDimensionLabel;
+      const display = dimensionDisplayState(dimension, constraintSketchId(constraint));
+      const number = display.precision == null ? formatLabel(value) : Number(value).toFixed(display.precision);
+      const unit = target.kind === "angle" ? "°" : "";
+      const tolerance = display.toleranceUpper !== "" || display.toleranceLower !== ""
+        ? ` +${display.toleranceUpper === "" ? "0" : display.toleranceUpper}/-${display.toleranceLower === "" ? "0" : Math.abs(Number(display.toleranceLower))}`
+        : "";
+      const label = `${display.prefix}${number}${unit}${display.suffix}${tolerance}`;
+      return readOnly ? `(${label})` : label;
+    }
+    return Object.freeze({ label: dimensionLabelForConstraint });
+  }
+  window.DimensionPresentation = Object.freeze({ createSelectionBounds, createLayer, createPainter, createLabel });
 })();

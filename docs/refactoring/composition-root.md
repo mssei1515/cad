@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 寸法label文字列の構成
+
+dimensionLabelForConstraintを既存DimensionPresentation.createLabelへ集約した。readonly／測定値／角度変換／外観／拘束Sketch／通常と測定用のformatを限定した依存として受ける。参照寸法は現在の測定値と測定用丸め、通常寸法はtarget値、angle intervalは符号付きdegree、通常angleは既存angleDegreesを使用する。precision指定時のtoFixed、接頭辞・接尾辞・改行・片側公差の0補完・角度単位・参照括弧を維持する。NumberDisplayは数値format、DimensionQueriesは値の照会、GeometryAppearanceQueryは外観の所有を維持し、appは既存hoisted入口を接続する。元の本体を同じ順序で移し、生成時に寸法や現在scopeを読まない。
+
+app.jsは3,800→3,792行（8行減、今回再開から157行減）。既存dimension-presentation unitへ3件を追加し、参照値のtarget非参照と測定用丸め、precision時のformatter短絡、通常／interval角度と距離、現在の外観・公差・非破壊性を確認。構文546ファイル・単体1,551件・関連E2E119件成功（すべてexit 0、E2E1.7分）。unified-ui／dimension-prefix／derived-patternsの全3file。ログは一時ディレクトリのcad-dimension-label-owner-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### 寸法外観の解決と表示値構成
 
 effectiveDimensionAppearance／effectiveDimensionAppearanceForSketch／dimensionDisplayStateを既存GeometryAppearanceQuery.createDimensionへ集約。document・currentSketches・activeSketchId・isRootSketchの4依存で、操作時の現在Sketchとscope、明示されたBlock DefinitionのSketch一覧、Document寸法既定→終端既定→Root以外のSketch→個別displayの優先順を維持する。表示値のprecision制限、色fallback、接頭辞／接尾辞／公差の文字列化、終端・文字寸法の取出しを同ownerが担う。保存値を変更せず独自state／cache・UI更新を持たない。appは既存hoisted入口で利用者へ接続し、scopeを生成時に読まない。移動した3本体は明示したscope portの置換以外が元と一致することを確認。

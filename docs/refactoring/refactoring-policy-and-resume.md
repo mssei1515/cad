@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用35%／残量65%。fc3190aで未使用関数16個、354dacdで未使用静的alias58個、140e15aでOffset選択反映を整理。今回は寸法外観の解決・Sketch外観・表示値構成をGeometryAppearanceQuery.createDimensionへ集約した。現在scope／明示Sketch一覧、Root除外、継承順と表示変換を維持し、appは既存hoisted入口を接続する。app.jsは3,949→3,885→3,836→3,823→3,800行（合計149行減、直近23行減）。構文546ファイル・単体1,548件・関連E2E144件成功（exit 0、3file、2.0分）。ログはcad-dimension-appearance-query-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用35%／残量65%。fc3190aの未使用関数整理、354dacdの静的alias整理、140e15aのOffset選択反映、99cedb1の寸法外観照会に続き、今回は寸法label文字列の構成をDimensionPresentation.createLabelへ集約した。参照測定値／通常target、角度interval／通常角度、formatとprecision・公差・括弧の規則を維持。app.jsは3,949→3,885→3,836→3,823→3,800→3,792行（合計157行減、直近8行減）。構文546ファイル・単体1,551件・関連E2E119件成功（exit 0、3file、1.7分）。ログはcad-dimension-label-owner-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-次はdimensionLabelForConstraintの寸法label構成を既存DimensionPresentation／NumberDisplayの責務と照らして確認する。readonlyの測定値と通常target、角度／intervalの単位変換、precision指定、接頭辞・接尾辞・公差と括弧を維持し、数値計算や保存規則は変更しない。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。異なるreset対象の統一や巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
+次はmaterializeAnnotationAnchorとannotationPlacementAnchorの責務を確認する。AnnotationAnchorConstraintsが使用する既存anchor位置の取得／materializeを、描画済み座標照会と編集状態の変更に分けて集約できるか検討する。leaderのshelfScaleと参照anchor fallback、capture時だけの読取り、既存anchorPositionの有無で異なるx／y・textPlacement更新を維持する。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。異なるreset対象の統一や巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
 
 ### 直前のリリース（4859400）
 
