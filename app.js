@@ -1279,16 +1279,7 @@
   }
 
   function effectiveAppearanceForElement(...args) { return geometryAppearance.effectiveAppearanceForElement(...args); }
-  function setAppearanceForSelection(patch) {
-    const target = appearanceSelectionTarget();
-    if (!target) return false;
-    target.item[target.key] = normalizeAppearance({ ...target.item[target.key], ...patch });
-    if (target.kind === "blockInstance") invalidateBlockProjectionCache(target.item.id);
-    updatePropertiesUI();
-    draw();
-    recordHistory("Appearance変更");
-    return true;
-  }
+
 
   function selectionItems(...args) { return selectionScopeQuery.selectionItems(...args); }
 
@@ -3697,6 +3688,9 @@
       resetModelState, viewport, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       currentScope: workspace.current, invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw, blockProjectionBundle, clientPosition: canvasTestDriver.clientPosition,
     });
+    const appearanceTestAction = window.PropertiesTestDriver.createAppearanceAction({
+      appearanceSelectionTarget, normalizeAppearance, invalidateBlockProjectionCache, updatePropertiesUI, draw, recordHistory,
+    });
     const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createSupport({
       types: { Point, Line, Circle, Arc, Spline }, currentScope: workspace.current, readMode: () => mode, readStagedCount: () => sketchProjectionCommand.count, readConstraints: sketchProjectionConstraints,
       constraintGeometryId, constraintSketchId, effectiveAppearanceForElement, geometryDisplayColor,
@@ -3706,7 +3700,7 @@
       markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata, solveSketchAndDependents, loadModelData,
       createEmptyBlockDefinition, openBlockDefinitionEditor, resetBlockEditorHistory, completeBlockDefinitionEdit, isEditingBlock: () => Boolean(blockEditor.current),
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, blockProjectionBundle, clearSelection, canvasSelection,
-      deleteCurrentSelection, setAppearanceForSelection, deleteElements, deleteSketch, elementSketchId, sketchProjectionSourceKey,
+      deleteCurrentSelection, setAppearanceForSelection: appearanceTestAction.set, deleteElements, deleteSketch, elementSketchId, sketchProjectionSourceKey,
       CURRENT_JSON_VERSION, sketchProjectionEntryFromOperand, copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter
     });

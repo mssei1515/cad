@@ -180,7 +180,7 @@ const files = [
   "tests/unit/appearance-property-command.test.js",
   "tests/unit/selection-visibility-command.test.js",
   "tests/unit/annotation-parameter-command.test.js",
-  "tests/unit/properties-controller.test.js",
+  "tests/unit/properties-controller.test.js", "tests/unit/properties-test-driver.test.js",
   "tests/unit/property-presentation.test.js",
   "tests/unit/block-placement-command.test.js",
   "tests/unit/instance-source-command.test.js",

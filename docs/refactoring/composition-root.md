@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 投影テスト専用の選択外観変更
+
+appのsetAppearanceForSelectionの利用先を調査し、SketchProjectionTestDriverのテスト操作だけが使用することを確認。既存PropertiesTestDriver.createAppearanceActionへ六つの明示依存で移し、test query guard内で生成して同じsetter portへ接続する。現在の対象／key、patch merge→normalize→field置換、Blockだけcache無効化、Properties→draw→履歴、対象なしfalseを保持。処理bodyは関数名・indent以外一致。製品用commandにテスト操作を混ぜず、通常起動の生成をなくした。
+
+app.jsは4,074→4,068行（6行減、b120651から合計75行減）。新scriptなし。単体3件で生成時無照会・対象なし、live対象／keyとnormalize結果、元値／patchの保持、Block cacheと通知順、normalize例外時無変更を確認。単体fileを構文／unit一覧へ追加。既存互換性driver E2Eに投影リンク維持・外観反映・Undo一段の検証を追加し、単独1件成功。構文543ファイル・単体1,505件・関連E2E126件成功（すべてexit 0、E2E1.7分）。sketch-projection／sketch-projection-compatibility-driver／unified-uiの全3fileを実行。ログは一時ディレクトリのcad-test-appearance-action-{check,unit,focused,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は保存済みBlock定義のParameter安定化で行う編集scope一時切替と復帰、Hatch採番の保存を調べる。
+
 ### Block drag開始入口の所有
 
 GeometryDrag.createBlockEntryへBlockの選択・plan生成・開始拒否・hint／表示更新を集約。七つの明示依存で既存plan／GeometryDragへ接続し、同じInstance／pointer／event／plan参照、移動と回転、選択後の拒否、回転lock別通知、成功時だけ解析なしUI更新→drawを保持する。planなしも既存beginへ委譲する。旧開始bodyと名前・indent以外一致。session／Solver／履歴は既存ownerのままで、独自状態や権限規則を追加しない。

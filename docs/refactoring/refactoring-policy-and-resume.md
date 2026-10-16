@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。参照画像入力、Canvas表示設定、編集Toolbar、Keyboard入力、拘束付き注記dragに続き、Block drag開始のSelection・plan・拒否通知／表示更新をGeometryDrag.createBlockEntryへ集約。app.jsは4,143→4,074行（合計69行減、直近10行減）。構文542ファイル・単体1,502件・関連E2E146件成功。今回は全E2E未実行。最新週枠使用23%／残量77%。全体目標は未完了。次はappに残る直接モデル更新の利用先と責務を調べる。特にsetAppearanceForSelectionはテストfixtureからの利用であり、製品commandへ無理に混ぜずPropertiesTestDriverとの境界を確認する。各機能の依存を明示し、巨大contextや単なる別の巨大appへの移動を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。入力機能・拘束注記／Block dragの整理に続き、Sketch投影テスト専用の選択外観変更をPropertiesTestDriver.createAppearanceActionへ分離し、test query内だけで生成接続する。app.jsは4,143→4,068行（合計75行減、直近6行減）。構文543ファイル・単体1,505件・関連E2E126件成功。今回は全E2E未実行。最新週枠使用24%／残量76%。全体目標は未完了。次は保存済みBlock定義のParameter安定化で行う編集scope一時切替と復帰、Hatch採番の保存を調べる。withStoredDefinitionAsModel／stabilizeStoredBlockDefinitionの利用と既存workspace／Parameter ownerへの依存を確認し、finallyの復帰順・参照同一性・エラー伝播・採番保持を変えずに整理する。巨大contextや単なる別の巨大appへの移動を避ける。
 
 ### 直前のリリース（2026-10-16）
 

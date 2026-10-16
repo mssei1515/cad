@@ -65,3 +65,21 @@ for (const reloadSharedVersion19 of [false, true]) {
     expect(state.constraints.every(link => link.sketchId === 'S3')).toBe(true);
   });
 }
+
+
+test('projection appearance test action preserves its link and changes one undo step', async ({ page }) => {
+  const before = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionSharedKindsTest());
+  const initial = before.constraints.find(link => link.kind === 'line');
+  const result = await page.evaluate(() => window.__jot2dTest.setSketchProjectionAppearanceForTest('line'));
+  expect(result.changed).toBe(true);
+  const changed = result.state.constraints.find(link => link.kind === 'line');
+  expect(changed.sourceId).toBe(initial.sourceId);
+  expect(changed.targetId).toBe(initial.targetId);
+  expect(changed.appearanceColor.toLowerCase()).toBe('#8b5cf6');
+  expect(result.state.constraints).toHaveLength(before.constraints.length);
+  expect(result.state.history.undoCount).toBe(before.history.undoCount + 1);
+  await page.keyboard.press('Control+z');
+  const restored = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(restored.constraints.find(link => link.kind === 'line').appearanceColor).toBe(initial.appearanceColor);
+  expect(restored.history.undoCount).toBe(before.history.undoCount);
+});

@@ -242,5 +242,19 @@
     return Object.freeze({ state });
   }
 
-  window.PropertiesTestDriver = Object.freeze({ createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
+  function createAppearanceAction({ appearanceSelectionTarget, normalizeAppearance, invalidateBlockProjectionCache, updatePropertiesUI, draw, recordHistory }) {
+    function set(patch) {
+      const target = appearanceSelectionTarget();
+      if (!target) return false;
+      target.item[target.key] = normalizeAppearance({ ...target.item[target.key], ...patch });
+      if (target.kind === "blockInstance") invalidateBlockProjectionCache(target.item.id);
+      updatePropertiesUI();
+      draw();
+      recordHistory("Appearance変更");
+      return true;
+    }
+    return Object.freeze({ set });
+  }
+
+  window.PropertiesTestDriver = Object.freeze({ createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
 })();
