@@ -100,9 +100,11 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用41%／残量59%。各責務の整理、通常Canvas描画、Offset組立て（9f0a9fb）に続き、今回はFilletの計算／生成／commandの組立てをsrc/application/fillet_feature.jsへ集約した。既存commandをそのまま返し、選択／pending／checkpoint／採番、端点の復元と失敗段階で異なる選択保持を維持。app.jsは開始3,949→現在3,658行（合計291行減、直近3,665→3,658で7行減）。構文550ファイル・単体1,583件・読込E2E1件・関連E2E107件成功（exit 0、関連106件1.4分＋性能1件4.4秒）。ログはcad-fillet-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開した。今回の16単位で旧入口／未使用alias、Selection／表示照会、Annotation、拘束確定、Toolbar、Tree hover、Canvas描画、Offset／Fillet／Trimの機能組立てを整理した。app.jsは3,949→3,652行（297行減、直近Trimは3,658→3,652で6行減）。全体の数百行への目標は未完了。
 
-次はTrimQuery／TrimEditing／TrimCommandの共有依存と利用先を分析する。computeTrimPreviewは早期のDrawingPreviewへhoisted入口として渡され、query／editingの一部APIは後続test fixtureでも使う。初期化順とcallbackの参照時点、7/viewport.scaleのhit幅、projection guard、checkpoint／求解と寸法・Point拘束転送、失敗復元を維持して機能組立てへまとめられるか検討する。Offset／FilletFeatureのUI callbackの多さを大きな可変contextで隠さず、共有Geometry／snapを無理に取り込まない。全体の数百行への目標と検証範囲を縮小しない。
+TrimはTrimFeatureへquery／editing／commandの組立てを集約し、テストfixtureの接続はTrimTestDriver.createFeatureへ分離した。現在scope／倍率と7／倍率のhit幅、Point／寸法拘束の転送、checkpointと失敗段階の復元、既存hookを維持する。構文552ファイル・単体1,587件・読込E2E1件・関連E2E143件成功（142件1.9分＋性能1件4.5秒）。ログはcad-trim-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。
+
+ユーザーのorigin/main反映指示により、この区切りをCommit／Pushしてdevelopへ統合し、最新コードの全体検証後にmainへ最後に反映する。main反映後はdevelopをfast-forwardしてlocal／originの両branchを同期し、統合済み作業branchを削除、runtimeを再生成する。全体検証結果と最終commitは完了時に追記する。次回は最新developから新しい作業branchを作成し、状態所有と依存を明示できる機能単位を選ぶ。巨大mutable contextや別の巨大appへの移動、行数だけの薄いdelegate分割を避ける。
 
 ### 直前のリリース（4859400）
 

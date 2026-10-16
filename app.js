@@ -797,14 +797,7 @@
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, createGeometry: createOffsetGeometry, chainDraft: offsetChainDraft } = offsetFeature;
   const { offsetDistanceFromPointer } = offsetFeature.plans;
   const { submit: submitOffsetValue } = offsetCommand;
-  const trimQuery = window.TrimQuery.create({ currentScope: workspace.current, isActiveSketchElement, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH });
-  const { angleAtCircleParam, lineTrimBoundaries, arcTrimBoundaries, circleTrimBoundaries, trimPreviewForLine, trimPreviewForArc, trimPreviewForCircle } = trimQuery;
-  function computeTrimPreview(pointer) { return trimQuery.computeTrimPreview(pointer, 7 / viewport.scale); }
-  const trimEditing = window.TrimEditing.create({
-    currentScope: workspace.current, geometry: geometryCreation, references: constraintReferences, query: trimQuery,
-    pushModelConstraint, elementSketchId, isPointUsedByPrimitive, isReferencePoint, minArcLength: MIN_ARC_LENGTH,
-  });
-  const { executeLineTrim, executeCircleTrim } = trimEditing;
+  function computeTrimPreview(pointer) { return trimFeature.computePreview(pointer); }
   const editingCheckpoint = window.EditingCheckpoint.create({
     currentScope: workspace.current, ids: geometryIds, invalidateProjection: invalidateBlockProjectionCache,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
@@ -2757,13 +2750,16 @@
 
 
 
-  const { execute: executeTrimAt } = window.TrimCommand.create({
-    hitSketchIdentityElement, guardSketchEdit, activeSketchId, computeTrimPreview, setHint, draw, guardSketchProjectionShapeEdit, applicationText,
-    clearTrimPreview: () => drawingPreview.setTrim(null), editing: trimEditing,
-    checkpoint: { capture: snapshotGeometryMutationState, restore: restoreGeometryMutationState },
+  const trimFeature = window.TrimFeature.create({
+    currentScope: workspace.current, geometry: geometryCreation, references: constraintReferences,
+    isActiveSketchElement, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
+    pushModelConstraint, elementSketchId, isPointUsedByPrimitive, isReferencePoint, viewportScale: () => viewport.scale,
+    preview: drawingPreview, checkpoint: editingCheckpoint,
+    hitSketchIdentityElement, guardSketchEdit, activeSketchId, setHint, draw, guardSketchProjectionShapeEdit, applicationText,
     clearSelection, stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
     invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis, updateUI, recordHistory,
   });
+  const { execute: executeTrimAt } = trimFeature;
 
   const { candidatesAt: canvasContextCandidatesAt } = window.CanvasContextQuery.create({
     selectionScope: { sketch: isVisibleSketchId, element: isVisibleSketchElement },
@@ -3162,11 +3158,9 @@
       angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, serializeDimension,
       rootSketchId: ROOT_SKETCH_ID, ctx, drawDimensions, sketchById, constraintSketchId, isVisibleSketchId
     });
-    const trimLineTransferFixture = window.TrimTestDriver.createLineTransferFixture({ resetModelState, addPoint, addLine, pushModelConstraint, PointOnLineConstraint, executeLineTrim, currentScope: workspace.current });
-    const trimConstructionFixture = window.TrimTestDriver.createConstructionBoundaryFixture({
-      resetModelState, addPoint, addLine, addCircle, addArc, lineTrimBoundaries, trimPreviewForLine, arcTrimBoundaries, trimPreviewForArc, circlePointAtAngle, circleTrimBoundaries, trimPreviewForCircle,
+    const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
+      feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint, currentScope: workspace.current,
     });
-    const trimDiameterFixture = window.TrimTestDriver.createDiameterTransferFixture({ resetModelState, addCircle, addPoint, pushModelConstraint, DiameterConstraint, angleAtCircleParam, circlePointAtAngle, executeCircleTrim, currentScope: workspace.current });
     const allGeometryFitFixture = window.CanvasTestDriver.createAllGeometryFitFixture({
       resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, fitAllGeometryToViewport, allGeometryBounds, screenBoxForBounds, canvas,
     });

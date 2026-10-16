@@ -8,6 +8,10 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Trim機能とテスト支援の生成・接続
+
+TrimQuery／TrimEditing／TrimCommandをTrimFeatureへ集約し、同じquery／editingをTrimTestDriverのfixture組立てにも接続した。scopeと倍率は操作時に読み、既存のcheckpoint、拘束転送、失敗時の復元と選択解除順を維持する。appの早期プレビューcallbackはhoisted入口を残し、初期化時のモデル読取りを増やさない。app.jsは3,658→3,652行（6行減）。構文552ファイル、単体1,587件、読込E2E1件、関連E2E143件（unified-ui／blocks142件＋操作性能1件）が成功。全E2Eはこの単位では未実行。
+
 ### Fillet機能の生成・接続
 
 FilletGeometry／FilletConstruction／FilletCommandは他機能から直接利用されていないことを確認し、新しいFilletFeatureへ生成と接続を集約した。同じcommand objectを返し、firstLine／半径入力／reset／snapshotと安定化失敗時の復元は既存FilletCommandへ維持する。Geometry／選択／pending／値入力／checkpointは既存ownerを共有し、選択線・pointer・開始準備と安定化は操作時に読む。計算と生成factoryは副作用を持たないためcheckpoint生成後のcommand生成位置へ集め、Trimの生成と役割は変更しない。入力状態や履歴の独立コピーを増やさず、現在未使用のstart aliasも外した。注入するUI通知は依然多く、app全体の可変contextへ隠さない。
