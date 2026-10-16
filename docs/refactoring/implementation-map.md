@@ -1071,3 +1071,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/application/fillet_feature.js: Filletの計算／生成／transactional commandの組立て。Geometry、選択、pending、値入力、checkpointは既存ownerを共有し、実FilletCommandをそのまま返す。appはcheckpoint生成後に同featureを作り、更新／確定／click／resetを既存利用者へ接続する。
 
 - src/application/trim_feature.js: Trimの照会・編集・commandの組立て。現在scope／倍率、共有Geometry／preview／checkpointと既存の権限・求解・UI通知を接続し、computePreview／executeを公開する。src/testing/trim_test_driver.jsのcreateFeatureが同じquery／editingから既存fixtureを組み立て、appから内部API列挙を取り除く。
+
+- src/testing/constraint_test_driver.js: createStatusObservationは解析更新後の現在Sketchを照会ごとに一度取得し、同じSketchで全statusを絞り込む。照会間の状態交換を維持し、返却用itemsは独立させる。

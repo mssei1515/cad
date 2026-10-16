@@ -147,11 +147,12 @@
   function createStatusObservation({ refreshConstraintAnalysis, elementSketchId, activeSketchId }) {
     function state() {
       const state = refreshConstraintAnalysis();
+      const sketchId = activeSketchId();
       return {
         stable: state.analysis.stable,
         errorNorm: state.analysis.errorNorm,
         freeDof: state.analysis.freeVariableCount,
-        items: [...state.statuses].filter(([item]) => elementSketchId(item) === activeSketchId())
+        items: [...state.statuses].filter(([item]) => elementSketchId(item) === sketchId)
           .map(([item, status]) => ({ id: item.id, status })),
       };
     }

@@ -82,7 +82,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/composition-entry-audit`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/constraint-status-observation`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -119,6 +119,10 @@ TrimはTrimFeatureへquery／editing／commandの組立てを集約し、テス�
 航空機はA2／A3のfraction 0.2、x方向0.5のslow反転経路（各30preview）を同じhookで比較した。elapsedMsのみを除いた全result（全previewの形状・求解結果・拘束状態と最終形状）がJSONで完全一致し、初期拘束状態も完全一致、両版とも失敗previewは0。短い2経路の一致を全96経路の検証に代用しない。最新側の各dragは9,824／9,909ms、前回版は7,978／7,693msで、今回側が遅い計測も得られた。一方、独立した初期拘束状態照会3回は最新436／340／324ms、前回388／408／367msであり、一つの処理の一律な回帰とは特定できていない。航空機全ケースのtimeout原因は未解決。閾値・コード・テスト期待値を変更していない。app.jsの行数は3,652→3,652（0行変化）。
 
 追加ログはcad-{baseline,current}-selection-repeat.log、cad-{baseline,current}-refactor-profile.log、cad-{baseline,current}-aircraft-sample.log（いずれも一時ディレクトリ）。診断scriptも一時ディレクトリのcad-refactor-profile.cjsとcad-refactor-aircraft-sample.cjsで、repositoryには含めていない。全診断processは終了を回収済み、checkoutは最新developへ戻してruntimeを再生成済み。
+
+追加調査から、codex/constraint-status-observationでConstraintTestDriver.createStatusObservationの現在Sketch取得を解析更新後の一度へ整理した。従来はstatus要素ごとのfilterでactiveSketchIdを呼び、SketchHierarchy.ensureによる全Sketch正規化を繰り返していた。同じ同期照会内では対象Sketchは変わらないため、照会ごとに取得し次の照会では更新し直す。通常UI／Solver／保存処理・全返却status・テストの期待値と10分制限は維持する。app.jsは3,652→3,652行（0行変化）。構文552ファイル・単体1,588件・同じ照会を使う対称拘束／短円弧再読込E2E3件成功（4.2秒、exit 0）。照会更新後のSketch取得、照会間の解析／Sketch交換、返却値の独立性を単体で追加確認した。
+
+同じ航空機2経路は修正前の9,824／9,909msから7,194／6,746msとなり、計測時間を除いた全resultは完全一致した。ただし元の航空機全96経路を再実行すると、今回も600000ms timeout（10.1分、exit 1）。停止時点はgeometryDragPathForTestのpage.evaluate中。この変更はcodex/constraint-status-observationへ保存し、develop／mainへは未統合として保持する。局所的な重複取得整理だけでは全ケースの時間超過を解消できなかった。全成功や原因解決とは扱わない。ログはcad-status-observation-{check,unit,related-e2e,aircraft-e2e}.logとcad-status-observation-aircraft-sample.log。全runner終了を回収済み。前回までの比較結果と失敗記録も保持する。
 
 ユーザーへ、原因調査のためmainを保留するか、今回の不合格結果を記録して反映するかの判断を質問済みで回答待ち。回答がないままmainへ反映しない。今回のCommit／develop Pushとmain反映の成否を区別する。調査継続時は新たな責務分離を始めず、selection操作の描画／UI時間と航空機の拘束状態照会を現物比較して原因を絞る。閾値を上げるだけの対応や、繰り返し成功するまで実行して失敗を隠す対応をしない。必要な修正はdevelopから作業branchを作成し、既存の区切りの履歴を保持する。mainへリリースできた後はdevelopをmainへfast-forwardして両者をPush・同期し、統合済み作業branchを削除、runtimeを再生成する。
 
