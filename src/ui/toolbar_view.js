@@ -107,5 +107,39 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.ToolbarView = Object.freeze({ create, createBinding });
+  // Bind editing controls independently of drawing-tool registration.
+  function createEditingBinding({ document, undo, redo, toggleVisibility, isGeometryMode, deleteSelection, updateUI, draw, annotation }) {
+    let bound = false;
+    const removers = [];
+    function bind() {
+      if (bound) return;
+      bound = true;
+      const handlers = [
+        ["undoBtn", undo],
+        ["redoBtn", redo],
+        ["selectionVisibilityBtn", toggleVisibility],
+        ["deleteSelectionBtn", () => {
+          if (!isGeometryMode()) return;
+          if (deleteSelection()) {
+            updateUI();
+            draw();
+          }
+        }],
+        ["annotationTextBtn", () => annotation.start()],
+      ];
+      for (const [id, handler] of handlers) {
+        const button = document.getElementById(id);
+        if (!button) continue;
+        button.addEventListener("click", handler);
+        removers.push(() => button.removeEventListener("click", handler));
+      }
+    }
+    function dispose() {
+      for (const remove of removers.splice(0)) remove();
+      bound = false;
+    }
+    return Object.freeze({ bind, dispose });
+  }
+
+  window.ToolbarView = Object.freeze({ create, createBinding, createEditingBinding });
 })();

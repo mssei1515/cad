@@ -3454,17 +3454,11 @@
   window.addEventListener("keydown", keyboardInteraction.keydown);
   canvasViewControls.bindWindow();
 
-  document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
-  document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
-  document.getElementById("selectionVisibilityBtn")?.addEventListener("click", toggleSelectedVisibility);
-  document.getElementById("deleteSelectionBtn")?.addEventListener("click", () => {
-    if (!isGeometryMode()) return;
-    if (deleteCurrentSelection()) {
-      updateUI();
-      draw();
-    }
+  const editingToolBinding = window.ToolbarView.createEditingBinding({
+    document, undo: undoHistory, redo: redoHistory, toggleVisibility: toggleSelectedVisibility,
+    isGeometryMode, deleteSelection: deleteCurrentSelection, updateUI, draw, annotation: annotationCommand,
   });
-  document.getElementById("annotationTextBtn")?.addEventListener("click", () => annotationCommand.start());
+  editingToolBinding.bind();
   canvasViewControls.bindControls();
 
   function withStoredDefinitionAsModel(definition, callback) {

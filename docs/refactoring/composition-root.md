@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 編集Toolbar入力の登録寿命
+
+既存ToolbarView.createEditingBindingへUndo／Redo・選択可視性・削除・Annotation開始の五つのclick登録を集約。作図controlとは依存と登録時期を分け、元の生handler／DOM receiver、Annotationメソッドの操作時照会、削除のGeometry mode短絡→remove→成功時だけUI→drawの順を保持する。bindの二重登録を防止し、disposeは自己listenerだけを解除、再bindも可能。履歴・可視性・Selectionの処理本体や取消・復元は既存ownerのまま。
+
+app.jsは4,112→4,106行（6行減、b120651から合計37行減）。新scriptなし。既存toolbar unitへ3件追加し、handler receiver／現在メソッド・モード拒否／削除失敗での表示無変更・成功順序・任意DOMと登録寿命を確認。構文540ファイル・単体1,491件・関連E2E280件成功（すべてexit 0、E2E4.2分）。annotation-anchors／blocks／leader-appearance／phase0-characterization／sketch-tree-visibility／toolbar-layout／unified-annotations／view-visibility／unified-uiの全9fileを実行。ログは一時ディレクトリのcad-toolbar-editing-binding-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はKeyboardの取消優先順位と入力受付の生成接続を調べ、各commandの取消・復元責務を維持しながら組立て境界を整理する。
+
 ### Canvas表示設定の状態所有とUI接続
 
 CanvasViewControlsへconstraintStatus／geometryIds／showHiddenElementsの値と表示control／window keyup・blurのlistener寿命を集約。read-only getterのlive stateを描画・照会へ渡し、外部からの直接更新をなくした。既存ConstraintStatusViewのmouse latch／Space保持・hint・再描画の判定は変更せず、KeyboardInteractionControllerのkeydown優先順とtext入力判定も維持。bindWindowとbindControlsを元の位置で接続し、二重登録防止・dispose／再bindは自分のlistenerだけを対象とする。保存や履歴には組み込まない。

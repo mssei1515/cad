@@ -83,3 +83,44 @@ test('missing toolbar elements are skipped while history and cursor remain synch
  const f=fixture();f.buttons.clear();f.state.targets=[{kind:'geometry'}];assert.doesNotThrow(()=>f.view.update());
  assert.deepEqual(f.events,['geometry','construction','interaction','history','targets','flyouts','interaction','cursor']);
 });
+
+
+test('editing controls retain native handler receivers and current annotation command', () => {
+ const f=bindingSurface(['undoBtn','redoBtn','selectionVisibilityBtn','deleteSelectionBtn','annotationTextBtn']),events=[];
+ function undo(){assert.equal(this,f.nodes.get('undoBtn'));events.push('undo');}
+ function redo(){assert.equal(this,f.nodes.get('redoBtn'));events.push('redo');}
+ function toggleVisibility(){assert.equal(this,f.nodes.get('selectionVisibilityBtn'));events.push('visibility');}
+ const annotation={start(){assert.equal(this,annotation);events.push('annotation');}};
+ const binding=sandbox.window.ToolbarView.createEditingBinding({document:f.document,undo,redo,toggleVisibility,annotation,
+  isGeometryMode:()=>true,deleteSelection:()=>false,updateUI:()=>events.push('ui'),draw:()=>events.push('draw')});
+ assert.deepEqual(events,[]);binding.bind();binding.bind();
+ f.nodes.get('undoBtn').click();f.nodes.get('redoBtn').click();f.nodes.get('selectionVisibilityBtn').click();f.nodes.get('annotationTextBtn').click();
+ assert.deepEqual(events,['undo','redo','visibility','annotation']);
+ annotation.start=function(){assert.equal(this,annotation);events.push('updated annotation');};f.nodes.get('annotationTextBtn').click();
+ assert.equal(events.at(-1),'updated annotation');
+ assert.equal([...f.nodes.get('undoBtn').listeners][0],undo);
+ binding.dispose();for(const node of f.nodes.values())assert.equal(node.listeners.size,0);
+ binding.bind();f.nodes.get('undoBtn').click();assert.equal(events.at(-1),'undo');binding.dispose();
+});
+
+test('toolbar delete preserves mode short circuit and refreshes only after successful deletion in order', () => {
+ const f=bindingSurface(['deleteSelectionBtn']),events=[],state={geometry:false,removed:false};
+ const binding=sandbox.window.ToolbarView.createEditingBinding({document:f.document,
+  isGeometryMode:()=>{events.push('mode');return state.geometry;},
+  deleteSelection:()=>{events.push('remove');return state.removed;},
+  updateUI:()=>events.push('ui'),draw:()=>events.push('draw')});binding.bind();
+ f.nodes.get('deleteSelectionBtn').click();assert.deepEqual(events,['mode']);
+ events.length=0;state.geometry=true;f.nodes.get('deleteSelectionBtn').click();assert.deepEqual(events,['mode','remove']);
+ events.length=0;state.removed=true;f.nodes.get('deleteSelectionBtn').click();assert.deepEqual(events,['mode','remove','ui','draw']);
+ binding.dispose();
+});
+
+test('editing bindings permit absent controls and remove only their own listeners', () => {
+ const f=bindingSurface(['undoBtn']),events=[];const external=()=>events.push('external');
+ f.nodes.get('undoBtn').addEventListener('click',external);
+ const binding=sandbox.window.ToolbarView.createEditingBinding({document:f.document,undo:()=>events.push('undo')});
+ binding.bind();binding.bind();f.nodes.get('undoBtn').click();assert.deepEqual(events,['external','undo']);
+ binding.dispose();events.length=0;f.nodes.get('undoBtn').click();assert.deepEqual(events,['external']);
+ binding.bind();assert.equal(f.nodes.get('undoBtn').listeners.size,2);binding.dispose();
+ sandbox.window.ToolbarView.createEditingBinding({document:{getElementById:()=>null}}).bind();
+});
