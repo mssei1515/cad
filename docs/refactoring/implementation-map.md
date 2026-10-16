@@ -1030,3 +1030,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - app.js: 静的namespaceから受け取る未使用alias58個を撤去。Hatch領域engineへの直接destructureも廃止した。各既存ownerの依存・公開API・script読込順・factory生成は維持し、appの静的依存一覧を実際の利用へ合わせる。
+
+
+- src/editing/selection.js: CanvasSelection.applyOffsetSelectionがOffset source／entriesの選択反映と限定した選択解除を所有する。OffsetSelectionはチェーン状態と通知、OffsetCommandは操作進行を所有し、appのsyncOffsetChainSelectionは既存二経路を同APIへ接続する。Geometryの参照・未解除の選択・空反映時のTree規則を維持する。

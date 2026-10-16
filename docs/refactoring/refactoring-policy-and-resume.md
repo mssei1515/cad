@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。週枠使用34%／残量66%。前の区切りfc3190aで未使用関数16個を撤去し、今回は静的namespaceの未使用alias58個を整理した。公開元の通常値property・動的参照なしを確認し、factoryやイベント登録を維持。構文木比較で対象alias以外が一致することを確認。app.jsは3,949→3,885→3,836行（合計113行減、直近49行減）。構文546ファイル・単体1,542件・関連E2E142件成功（exit 0、4file）。ログはcad-static-alias-{check,unit,e2e}.logとcad-static-alias-hatching-e2e.log。今回は全E2E未実行。全体目標は未完了。新規module／テストなし。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新確認は週枠使用34%／残量66%。fc3190aで未使用関数16個、354dacdで未使用の静的alias58個を整理し、今回はOffset入力状態のCanvas選択への反映をCanvasSelection.applyOffsetSelectionへ集約した。OffsetSelectionのチェーン状態・通知、OffsetCommandの進行は維持し、appは既存二経路の接続を担う。app.jsは3,949→3,885→3,836→3,823行（合計126行減、直近13行減）。構文546ファイル・単体1,545件・関連E2E106件成功（exit 0、2file、1.5分）。ログはcad-offset-selection-reflection-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-未参照bindingは残り66件で、factoryが返すAPIや動的値の別名は未監査。副作用／getter／listener登録を確認せず削除しない。次は実際の責務分離へ戻り、syncOffsetChainSelectionとOffsetSelection／OffsetCommandの選択反映の境界を調べる。既存のsource／entries更新・取消・選択解除の対象と時機を確認し、Selectionの現役ownerへ選択反映を集約できるか検討する。異なるreset対象を統合したり、巨大contextを移したりしない。残る生成・接続は依存の方向と初期化順を確かめて機能単位で整理する。
+次はdimensionDisplayStateの表示値構成を確認し、外観の既存ownerへ集約できるか検討する。通常UI／寸法label／Block Definitionのテスト観測で共用しているため、現在Sketch／scopeのdefault引数・明示Sketch一覧・precision上限／文字列変換／fallback色を維持する。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。異なるreset対象の統一や巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
 
 ### 直前のリリース（4859400）
 

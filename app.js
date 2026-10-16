@@ -1403,20 +1403,7 @@
   });
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
 
-  function syncOffsetChainSelection() {
-    canvasSelection.set("points", []);
-    canvasSelection.set("circles", offsetSelection.source instanceof Circle ? [offsetSelection.source] : []);
-    canvasSelection.set("lines", offsetSelection.entries.map((entry) => entry.geometry).filter((item) => item instanceof Line));
-    canvasSelection.set("arcs", offsetSelection.entries.map((entry) => entry.geometry).filter((item) => item instanceof Arc));
-    canvasSelection.set("blockInstances", []);
-    canvasSelection.set("annotations", []);
-    canvasSelection.set("hatches", []);
-    canvasSelection.set("referenceImages", []);
-    canvasSelection.set("arcEndpoint", null);
-    canvasSelection.set("arcEndpointPair", null);
-    canvasSelection.set("dimensionConstraint", null);
-    canvasSelection.set("constraint", null);
-  }
+  function syncOffsetChainSelection() { return canvasSelection.applyOffsetSelection(offsetSelection); }
 
   function resetModelState() {
     sketchMoveCommand?.reset();

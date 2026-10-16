@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Offset入力状態のCanvas選択への反映
+
+syncOffsetChainSelectionの選択更新本体を既存CanvasSelection.applyOffsetSelectionへ集約した。OffsetSelectionはsource／entries／確定状態・接続判定・通知を継続所有し、OffsetCommandは操作の進行を維持する。appはチェーン追加通知と円選択後の二経路を同APIへ接続する。sourceのCircle、entriesのLine／Arcを同じObjectで選択し、既存12項目のset順と選択解除対象を維持する。Spline／geometryInstances／instanceGeometryは変更せず、空反映時はTree／inspectionを一律解除しない。描画・UI・履歴・Offset resetを選択APIへ追加していない。
+
+app.jsは3,836→3,823行（13行減、今回再開から126行減）。既存selection unitへ3件を追加し、同一参照／解除・保持対象、空反映のTree規則、実OffsetSelectionの追加・拒否・reset・円sourceの通知境界を確認。構文546ファイル・単体1,545件・関連E2E106件成功（すべてexit 0、E2E1.5分）。unified-ui／command-panelの全2fileで、線／円／円弧Offset・反転線・連結チェーン・既存取消を確認。ログは一時ディレクトリのcad-offset-selection-reflection-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### 静的namespaceの未使用依存名を整理
 
 app IIFEで未参照の静的alias58個を撤去した。ReferenceImageData／HatchData／Appearance／DrawingOrder／DocumentFiles／GeometryKernel／GeometryRef／HatchRegionEngine／ParameterEngine／GeometrySolver／DimensionQueriesに限定し、公開元が通常の値propertyでgetterや生成時の処理を持たないことを確認した。全aliasが不要だったHatchRegionEngineの直接destructureとcirclePointAtPointer宣言も削除したが、元namespaceの公開APIとscript読込を維持する。factory／sessionの生成、副作用の可能性があるその他の変数宣言には手を加えない。変更前の構文木から対象aliasだけを除いた構文木が変更後と一致することを検証した。
