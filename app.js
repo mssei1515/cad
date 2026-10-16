@@ -200,7 +200,7 @@
     applicationText, language: () => applicationSettings.language,
     formatting: { escapeHtml, formatDisplayNumber, formatParameterReference, parameterErrorText, defaultSketchId: DEFAULT_SKETCH_ID },
     localizeApplicationUI, applyDraft: (...args) => parameterApplication.apply(...args),
-    recordHistory, setHint, updateUI, draw, pickDimension: pickParameterDialogDimension,
+    recordHistory, setHint, updateUI, draw, pickDimension: event => expressionInputController.pickCanvas(event),
   });
   const { draft: parameterDraft, setParameterDialogError, insertIdentifierIntoExpressionInput,
     syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
@@ -2708,11 +2708,13 @@
     blockView.render();
   }
 
-  const { context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter, insertAnnotation: insertClickedAnnotationParameter } = window.ExpressionInputController.create({
+  const expressionInputController = window.ExpressionInputController.create({
     document, types: { InputElement: HTMLInputElement, TextAreaElement: HTMLTextAreaElement }, currentNamespace: () => model, dimensionValueInput,
     pendingCommandSession, parameterDraft, ensureDimensionParameter, setParameterDialogError,
     setHint, applicationText, language: () => applicationSettings.language, insertIdentifierIntoExpressionInput,
+    canvas, canvasPoint, hitDimension, hitAnnotationElement,
   });
+  const { context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter, insertAnnotation: insertClickedAnnotationParameter } = expressionInputController;
 
 
   function effectiveConstructionAppearanceForSketch(...args) { return geometryAppearance.effectiveConstructionAppearanceForSketch(...args); }
@@ -3432,14 +3434,7 @@
   }
 
 
-  function pickParameterDialogDimension(event) {
-    const rect = canvas.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
-    const point = canvasPoint(event);
-    const hit = hitDimension(point.x, point.y, { activeOnly: false });
-    if (hit) insertClickedDimensionParameter(event, hit);
-    else insertClickedAnnotationParameter(event, hitAnnotationElement(point.x, point.y, { activeOnly: false }));
-  }
+
 
   const applicationMenus = window.ApplicationMenus.create({ document, window, activateTool: id => document.getElementById(id)?.click() });
   const { close: closeAppMenus } = applicationMenus;

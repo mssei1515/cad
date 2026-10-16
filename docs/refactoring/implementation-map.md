@@ -945,7 +945,7 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 - src/ui/expression_input_view.js: createInsertionは識別子の挿入とinput／blur-change・focus／caretのDOM操作を2依存で担当する。native changeの重複と切断inputへの補完を避ける既存挙動を保持し、Parameterの名前解決・評価・適用は担当しない。
 
-- src/ui/expression_input_controller.js: フォーカス式field／namespace照会とCanvasの寸法・注記からの参照入力を12依存で担当する。名前補完とDOM挿入は既存service／viewへ委譲し、namespaceの同一参照・拒否条件と異なるevent／通知順を保持する。
+- src/ui/expression_input_controller.js: フォーカス式field／namespace照会とCanvasの寸法・注記からの参照入力を16依存で担当する。pickCanvasはCanvas範囲判定・座標変換・寸法優先のhit照会から既存挿入処理へ接続し、ParameterEditorは遅延callbackで利用する。名前補完とDOM挿入は既存service／viewへ委譲し、namespaceの同一参照・拒否条件と異なるevent／通知順を保持する。
 
 - src/ui/constraint_feedback.js: localizedConstraintNameは拘束名の言語／typeOnly表示を担当。2つの言語／文言read portを使い、正規表現の優先順と未知名・固定端点のfallback、Modelのname／保存値を維持する。
 

@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Canvasからの式参照入力
+
+appのpickParameterDialogDimensionを既存ExpressionInputController.pickCanvasへ集約。Canvas／座標変換／寸法hit／注記hitの四つのportを加え、現在の入力先・namespace判定と挿入は同じowner内の既存処理を使う。Canvas範囲外での短絡と境界包含、activeOnly:false、寸法hit優先（挿入拒否時も注記へ進まない）、同じeventとworld座標、undefined返値を維持。早く生成するParameterEditorは遅延callbackで後のControllerへ接続する。新しいinput状態・Geometry／hit規則は持たない。
+
+app.jsは4,059→4,054行（5行減、b120651から合計89行減）。新scriptなし。既存expression-input-controller unitへ3件追加し、範囲外の無照会、境界・寸法優先と拒否時短絡、注記fallbackと同じevent／座標／optionsを確認。構文543ファイル・単体1,511件・関連E2E115件成功（すべてexit 0、E2E1.7分）。parameter-dialog-controller／free-text-input-drag／unified-uiの全3fileを実行。ログは一時ディレクトリのcad-expression-canvas-picker-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は作図command群（Line／Rectangle／Slot／Circular等）の生成接続をまとまりとして確認し、既存commandが持つdraft・確定／取消とgeometry／snap／描画の依存を整理できる境界を選ぶ。巨大contextへまとめたり、行数だけの一括移動はしない。
+
 ### 保存済みBlock定義のParameter評価scope
 
 ParameterStabilization.createStoredDefinitionへ保存済み定義の評価とscope復帰を集約。appのwithStoredDefinitionAsModel／stabilizeStoredBlockDefinitionを撤去し、Parameter適用とBlock依存伝播は同じstabilize入口を使う。五つの明示依存で現在scopeの同一参照、定義切替後のactive Sketch／描画Sketch照会、finallyでHatch採番最大値を保存してから前scope復帰、結果・例外の透過、入れ子評価の直前scope復帰を保持。新しいscopeスタック・採番・回復規則は追加しない。既存activateEditingScopeのmenu・Solver・cache更新を利用する。
