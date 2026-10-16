@@ -3429,29 +3429,24 @@
   canvasInputBinding.bind();
   dimensionInputController.bindInput(dimensionValueInput);
 
-  const cancelKeyboardOperation = window.KeyboardInteractionController.createCancellation({
-    getMode: () => mode, instances: geometryInstanceCommand, projection: sketchProjectionCommand,
-    referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
-    annotationDrag: { active: () => annotationDrag.resizing || annotationDrag.handlesActive, cancel: () => { annotationDrag.reset(); updateUI(); draw(); } },
-    pending: { active: () => Boolean(pendingCommandSession.current), cancel: cancelPendingCommand },
-    constraint: { active: () => Boolean(constraintTargetSession.command), cancel: cancelConstraintTargetCommand },
-    drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
-    selection: { active: hasSelection, clear: () => { clearSelection(); setHint("選択を解除しました"); updateUI(); draw(); } },
-  });
-  const keyboardInteraction = window.KeyboardInteractionController.create({
-    menus: { closeSketch: () => sketchContextController.close(),
+  const keyboardInput = window.KeyboardInput.create({
+    window, menus: { closeSketch: () => sketchContextController.close(),
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
-    operations: { getMode: () => mode, isGeometryMode, finishSources: finishInstanceSourceEdit,
-      annotation: annotationCommand, finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
-      finishInstance: () => geometryInstanceCommand.finish(), removeSplinePoint: removeLastSplineInputPoint,
-      offset: offsetCommand, getPointer: () => lastPointerWorld, deleteSelection: deleteCurrentSelection,
-      completeLineLength: completePendingDimensionLineLength, cancel: cancelKeyboardOperation },
+    readMode: () => mode, isGeometryMode, instances: geometryInstanceCommand, projection: sketchProjectionCommand,
+    referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand, annotationDrag,
+    pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand,
+    drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
+    hasSelection, clearSelection, annotation: annotationCommand, finishSources: finishInstanceSourceEdit,
+    finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
+    removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand, readPointer: () => lastPointerWorld,
+    deleteSelection: deleteCurrentSelection, completeLineLength: completePendingDimensionLineLength,
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
+    setHint, updateUI, draw,
   });
-  window.addEventListener("keydown", keyboardInteraction.keydown);
+  keyboardInput.start();
   canvasViewControls.bindWindow();
 
   const editingToolBinding = window.ToolbarView.createEditingBinding({

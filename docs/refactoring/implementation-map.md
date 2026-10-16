@@ -436,7 +436,8 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - CanvasViewControls: Canvas表示設定の値とread-only live state、表示checkbox／button・window keyup／blurのlistener寿命を所有。bindWindowとbindControlsで起動順を保持。
 - ConstraintStatusView: 拘束状態表示の固定／Space保持状態、blur解除、表示同期。CanvasViewControlsの内部値へ投影し、keydownの受付と編集対象判定はKeyboardInteractionControllerへ残す。
 
-- KeyboardInteractionController: キーボード受付順と操作APIへの委譲。取消時の共通状態更新はapp側に残り、次の整理対象。
+- KeyboardInteractionController: キーボード受付順と操作APIへの委譲。KeyboardInputが取消方針と生成接続し、注記ハンドルと選択解除の表示adapterを担当する。
+- src/application/keyboard_input.js: mode／pending／各commandを現在値で照会する取消とkeydownの組立て、自己listenerのstart／dispose。状態や取消規則は既存ownerに残し、appは明示portを渡す。keyup／blurの表示解除はCanvasViewControlsが所有。
 
 - GeometryInstanceCommand.cancel／BlockPlacementCommand.finishOrCancel: Esc時の配置状態更新とUI復元を既存の状態所有者へ集約。追加の依存注入は不要。
 

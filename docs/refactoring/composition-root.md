@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Keyboard入力の機能組立て
+
+KeyboardInputへ既存KeyboardInteractionController.createCancellation／createの生成接続、注記ハンドルresetと選択解除の表示adapter、keydown登録寿命を集約。各controllerの本体と取消／受付優先順位は変更せず、mode・pending・拘束・handle・Selectionを操作時に既存ownerから読む。Instance.finishのmethod receiver、現在pointer、native Clipboardと非同期保存を保持。startの二重登録防止、disposeは自己listenerだけを解除し再start可能。keyup／blurはCanvasViewControlsに残す。操作種類が多いため依存数自体は残るが、巨大mutable contextで隠さず明示portで接続する。
+
+app.jsは4,106→4,101行（5行減、b120651から合計42行減）。classic script／構文／unit／E2E読込一覧を同期。新単体4件で生成時無照会、listener所有、live状態による取消優先・reset／表示順、現在mode／pointerでの確定、寸法入力／native Clipboardの優先を確認。構文542ファイル・単体1,495件・loader1件・関連E2E277件成功（すべてexit 0、E2E4.0分）。unified-ui／blocks／spline／hatching／derived-patterns／free-instance／reference-images／command-panel／sketch-move／file-safety／annotation-anchorsの全11fileを実行。ログは一時ディレクトリのcad-keyboard-input-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は拘束付き注記dragの一時stateとSolver scope／追加変数への接続を調べる。開始・拒否・終了・復元とObject同一性を維持して所有者を整理する。
+
 ### 編集Toolbar入力の登録寿命
 
 既存ToolbarView.createEditingBindingへUndo／Redo・選択可視性・削除・Annotation開始の五つのclick登録を集約。作図controlとは依存と登録時期を分け、元の生handler／DOM receiver、Annotationメソッドの操作時照会、削除のGeometry mode短絡→remove→成功時だけUI→drawの順を保持する。bindの二重登録を防止し、disposeは自己listenerだけを解除、再bindも可能。履歴・可視性・Selectionの処理本体や取消・復元は既存ownerのまま。
