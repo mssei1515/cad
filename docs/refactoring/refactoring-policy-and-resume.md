@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。入力・drag・定義評価の整理に続き、Line／Rectangle／Circular／Slotの生成接続とsnap入力をBasicDrawingToolsへ集約。app.jsは4,143→4,025行（合計118行減、直近29行減）。構文545ファイル・単体1,514件・loader1件・関連E2E168件成功。今回は全E2E未実行。最新週枠使用25%／残量75%。全体目標は未完了。次はSpline／Centerlineの開始・取消とDrawOperationLifecycleへの接続を比較し、状態所有と依存を整理できる機能単位を選ぶ。各draftのresetとGeometry／snap／preview／checkpointの参照同一性、生成順とlate constの参照時点を維持する。異なる操作を単一の巨大builderへ押し込まない。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。基本作図command群に続き、SplineDraft／SplineCommandの生成接続と投影／preview／Selection・mode adapterをBasicDrawingTools.createSplineへ集約。app.jsは4,143→4,020行（合計123行減、直近5行減）。構文545ファイル・単体1,517件・関連E2E133件成功。今回は全E2E未実行。最新週枠使用26%／残量74%。全体目標は未完了。次はCenterlineのGeometry plan／construction／command生成とpreselection・開始・取消の依存を確認し、既存ownerを保った組立て境界を整理する。各draftのresetとcancelを統一せず、scope／Geometry／snap／preview／checkpointの参照と生成順・late constの操作時参照を維持する。異なる操作を単一の巨大builderへ押し込まない。
 
 ### 直前のリリース（2026-10-16）
 

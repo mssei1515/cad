@@ -596,9 +596,6 @@
       return applied;
     },
   });
-  const splineDraft = window.SplineDraft.create({
-    currentScope: workspace.current, ids: geometryIds, endpointAt, samePosition, isPointUsedByPrimitive,
-  });
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
@@ -820,15 +817,13 @@
   const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
   const { circlePointAtPointer } = window.GeometryKernel;
   function snapForDrawing(point) { return drawingSnap.resolve(point, 10 / viewport.scale); }
-  const splineCommand = window.SplineCommand.create({
-    draft: splineDraft, addSpline, snapForDrawing, scale: () => viewport.scale,
+  const { draft: splineDraft, command: splineCommand } = window.BasicDrawingTools.createSpline({
+    currentScope: workspace.current, ids: geometryIds, endpointAt, samePosition, isPointUsedByPrimitive,
+    addSpline, snapForDrawing, scale: () => viewport.scale,
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     setMode: value => { mode = value; }, resetEditing: () => splineEditing.reset(),
     resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar,
-    clearProjectionSources: () => { sketchProjectionCommand.reset(); },
-    setPointerPreview: value => { drawingPreview.setPointer(value); },
-    clearSnap, clearSelection,
-    selectCreatedSpline: spline => { canvasSelection.set("splines", [spline]); mode = "select"; },
+    projection: sketchProjectionCommand, preview: drawingPreview, snap: drawingSnap, clearSelection, selection: canvasSelection,
     solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw,
   });
   const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;

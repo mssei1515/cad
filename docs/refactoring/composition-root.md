@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Spline下書きと作図commandの組立て
+
+SplineとCenterlineの開始・取消を比較し、まず共有draftを持つSplineの生成接続を既存BasicDrawingTools.createSplineへ集約。SplineDraftの生成をcommand生成位置へ移し、同じdraft／commandを描画・取消・入力へ公開する。投影reset、preview更新、作成Spline選択→mode selectのadapterを内部接続し、後続のSpline編集／blank gestureのresetは遅延callbackで維持。既存draftとcommandの処理本体は変更せず、reset・cancelとrollback、guard・確定・履歴を各ownerへ残す。Centerlineやprimitive toolsと単一の状態機械には統合しない。
+
+app.jsは4,025→4,020行（5行減、b120651から合計123行減）。新scriptなし。既存basic-drawing-tools unitへ実際のSplineDraft／SplineCommandを使う3件を追加し、生成時無照会・開始拒否、点の参照共有・確定時copyと選択→mode→solve／履歴順、取消時の一時点／採番復元を確認。構文545ファイル・単体1,517件・関連E2E133件成功（すべてexit 0、E2E1.8分）。spline／command-panel／phase0-characterization／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-spline-drawing-tools-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はCenterlineのGeometry plan／construction／command生成とpreselection・開始・取消の依存を確認し、既存ownerを保った組立て境界を整理する。
+
 ### 基本作図command群の機能組立て
 
 BasicDrawingToolsへLine／Rectangle／Circular／Slotの六つのfactory生成接続と六つのclick入力を集約。GeometryCreation・採番・現在scope・DrawingSnap・SnapConstraints・Selection・preview・checkpointを明示接続し、共通preview callbackとsnap入力adapterを内部で共有する。四つのcommandは同じ参照、Line.clickは元の関数で公開し、残る入力はsnap解決→現在active snap→元commandメソッドの順を保持。各下書き・reset／取消・確定・求解／履歴を統一しない。Circular／Slotの生成を早めるが、既存factoryは生成時にモデルを触らず、後で初期化されるmutation checkpointには遅延callbackで接続する。巨大contextや独自状態は追加しない。

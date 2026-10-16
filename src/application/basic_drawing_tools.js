@@ -43,5 +43,22 @@
     });
     return Object.freeze({ line, rectangle, circular, slot, input });
   }
-  window.BasicDrawingTools = Object.freeze({ create });
+  // Spline shares its draft with rendering and cancellation, independently of primitive tools.
+  function createSpline({ currentScope, ids, endpointAt, samePosition, isPointUsedByPrimitive,
+    addSpline, snapForDrawing, scale, cancelConstraintTargetCommand, cancelPendingCommand,
+    canCreateInActiveSketch, rejectRootSketchCreation, setMode, resetEditing, resetBlankCandidate, updateToolbar,
+    projection, preview, snap, clearSelection, selection, solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw }) {
+    const draft = window.SplineDraft.create({ currentScope, ids, endpointAt, samePosition, isPointUsedByPrimitive });
+    const command = window.SplineCommand.create({
+      draft, addSpline, snapForDrawing, scale, cancelConstraintTargetCommand, cancelPendingCommand,
+      canCreateInActiveSketch, rejectRootSketchCreation, setMode, resetEditing, resetBlankCandidate, updateToolbar,
+      clearProjectionSources: () => { projection.reset(); }, setPointerPreview: value => { preview.setPointer(value); },
+      clearSnap: snap.clear, clearSelection,
+      selectCreatedSpline: spline => { selection.set("splines", [spline]); setMode("select"); },
+      solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw,
+    });
+    return Object.freeze({ draft, command });
+  }
+
+  window.BasicDrawingTools = Object.freeze({ create, createSpline });
 })();
