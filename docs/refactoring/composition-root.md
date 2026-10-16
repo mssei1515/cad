@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 表示数値の整形
+
+formatDisplayNumber／formatDimensionLabel／formatMeasuredDimensionLabelと通常1e-6・実測1e-5の許容差をNumberDisplayへ分離。UI／Canvas共通の純粋な表示文字列として状態やDOM／viewport・Documentに依存しない。appは起動冒頭で3関数を取得してProperties／Parameter／Annotation／座標・寸法へ接続する。3bodyと定数は元コードをそのまま維持し、既存の浮動小数補正・小さい値・末尾ゼロ・負のゼロ・非有限数・suffixと引数defaultを保持。モデル計算値、保存形式、寸法外観の固定桁表示は変更しない。
+
+app.jsは4,781→4,751行（30行減、今回の再開から合計89行減）。新module／unit fileを追加しindex.html・check-syntax・明示unit一覧・unified-uiのscript期待を同期。unit3件で丸め境界と微小値、通常／実測の許容差、suffix、桁数制限、有限数変換と負のゼロを確認。構文510ファイル・単体1,406件・先行file URL読込1件・関連E2E50件が成功（すべてexit 0、関連E2E1.1分）。unified-ui／dimension-prefix／parameter-dialog-controller／annotation-display-sizeから寸法・Parameter・数値入力／Properties・注記の関連ケースを抽出。全worker終了後に各専用port8784サーバーだけを確認・終了してrunnerの正常終了を回収。ログはcad-number-display-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はSketch操作に残る更新責務とmode／command操作調整、機能ごとの生成接続を整理する。
+
 ### Canvasメニューのコピー可否照会
 
 hasCopyableCanvasSelectionの照会を既存ClipboardPayload.canOfferCopyへ分離し、appは現在model／Selectionを渡す入口だけを持つ。新port／script／unit fileは増やさず、既存factory内のGeometryRefとHatch境界参照照会を使う。model内のObject同一参照、対象型の順と短絡、全選択Hatchの境界GeometryRef選択を維持し、元bodyとの一致を確認。これはメニュー専用の既存判定であり、派生Instanceだけの場合を含むbuildの条件とは統一していない。UIやコピー可否の仕様変更は行わない。

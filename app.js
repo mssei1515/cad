@@ -1,6 +1,7 @@
 /* Application composition, editing commands, Canvas UI and event handling. */
 (function () {
   "use strict";
+  const { formatDisplayNumber, formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
   const { validReferenceImageDataUrl, serializeReferenceImage } = window.ReferenceImageData;
   const { lineIntersectsRect, pointInExpandedBox, rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners, referenceImageBounds } = window.ReferenceImageGeometry;
@@ -540,8 +541,6 @@
   const ANNOTATION_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const { DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR } = window.DimensionLayout;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
-  const DIMENSION_DISPLAY_PRECISION = 1e-6;
-  const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const constraintCandidates = window.ConstraintCandidates.create({
     sameSketchElements, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
@@ -1946,36 +1945,7 @@
   function resizeCanvas(...args) { return canvasWorkspaceLayout.resizeCanvas(...args); }
   function setPropertiesPanelCollapsed(...args) { return canvasWorkspaceLayout.setPropertiesPanelCollapsed(...args); }
 
-  function formatDisplayNumber(value, maxFractionDigits = 10, snapTolerance = DIMENSION_DISPLAY_PRECISION) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return "";
-    const displayDigits = Math.max(0, Math.min(10, maxFractionDigits));
-    const floatingPointSlack = Number.EPSILON * Math.max(1, Math.abs(n)) * 8;
-    const effectiveSnapTolerance = Math.max(0, snapTolerance) + floatingPointSlack;
-    let rounded = Number(n.toFixed(displayDigits));
-    let roundedDigits = displayDigits;
-    for (let digits = 0; digits <= displayDigits; digits += 1) {
-      const candidate = Number(n.toFixed(digits));
-      if (candidate === 0 && n !== 0) continue;
-      if (Math.abs(n - candidate) <= effectiveSnapTolerance) {
-        rounded = candidate;
-        roundedDigits = digits;
-        break;
-      }
-    }
-    if (Object.is(rounded, -0)) return "0";
-    const formatted = rounded.toFixed(roundedDigits);
-    if (!formatted.includes(".")) return formatted;
-    return formatted.replace(/0+$/, "").replace(/\.$/, "");
-  }
 
-  function formatDimensionLabel(value, suffix = "") {
-    return `${formatDisplayNumber(value)}${suffix}`;
-  }
-
-  function formatMeasuredDimensionLabel(value, suffix = "") {
-    return `${formatDisplayNumber(value, 10, MEASURED_DIMENSION_SNAP_TOLERANCE)}${suffix}`;
-  }
 
 
 

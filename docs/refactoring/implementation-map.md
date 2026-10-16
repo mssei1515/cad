@@ -922,3 +922,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/commands/drawing_order_command.js: Selectionからの重なり順候補／操作可否／最前面owner照会と、権限guard・順序変更・表示／履歴完了を担当。現在modelを含む11個の限定portを接続し、owner解決・順序補完・並べ替えはsrc/document/drawing_order.jsへ委譲する。
 
 - src/editing/clipboard_payload.js: canOfferCopyはCanvasメニューで使うコピー／切り取り可否をmodelとSelectionから照会する。既存のObject同一参照とHatch境界選択の条件を維持し、payload生成・clipboard session・UI更新を行わない。
+
+- src/ui/number_display.js: NumberDisplayはUI／Canvas共通の自動数値表示、通常／実測寸法labelとsuffix整形を担当する。丸め許容差と3つの純粋関数を所有し、モデル計算値・UI状態・寸法の固定桁外観を更新しない。
