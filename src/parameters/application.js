@@ -37,5 +37,19 @@
     }
     return Object.freeze({ apply });
   }
-  window.ParameterApplication = Object.freeze({ create });
+  // Guard symbol removal shared by Geometry, Sketch, Block and annotation edits.
+  function createDeletionGuard({ currentNamespace, symbolDeletionDependents, readLanguage, setHint, log }) {
+    function guard(constraints, namespace = currentNamespace()) {
+      const { removedNames, dependents } = symbolDeletionDependents(constraints, namespace);
+      if (dependents.length === 0) return true;
+      const message = readLanguage() === "en"
+        ? `Cannot delete ${removedNames.join(", ")}; referenced by ${dependents.join(", ")}`
+        : `${removedNames.join("、")} は ${dependents.join("、")} から参照されているため削除できません`;
+      setHint(message, "error");
+      log(message);
+      return false;
+    }
+    return Object.freeze({ guard });
+  }
+  window.ParameterApplication = Object.freeze({ create, createDeletionGuard });
 })();

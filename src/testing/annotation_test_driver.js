@@ -136,5 +136,43 @@
     return Object.freeze({ state });
   }
 
-  window.AnnotationTestDriver = Object.freeze({ createDragFixture, createSnapshot, createHitObservation, createDimensionObservation, createAppearanceObservation, createOwnershipObservation });
+  // Compose Annotation-only fixtures and observations; publication stays with the caller.
+  function createSupport({
+    annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint,
+    currentScope, viewport, clampZoom, effectiveAnnotationStyle, draw, annotationTextMetrics, annotationTextLayout,
+    annotationLeaderDisplayGeometry, annotationTextWorldHeight, screenPxPerMm, annotationDisplayFactor, annotationLeaderAnchor,
+    displayText, formatDisplayNumber, serializeAnnotation, canvas, worldToCanvasScreen, allAnnotations, canvasSelection, allGeometryBounds,
+    resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle, resizeCanvas,
+    screenToWorld, hitAnnotationElement, readDragState
+  }) {
+    const annotationDimensionObservation = createDimensionObservation({ annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint });
+    const annotationAppearanceObservation = createAppearanceObservation({
+      currentScope, viewport, clampZoom, effectiveAnnotationStyle, draw, annotationTextMetrics, annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextWorldHeight,
+      screenPxPerMm, annotationDisplayFactor, annotationLeaderAnchor, displayText, formatDisplayNumber, serializeAnnotation,
+    });
+    const annotationOwnershipObservation = createOwnershipObservation({
+      canvas, worldToCanvasScreen, annotationTextLayout, annotationLeaderDisplayGeometry, currentScope, serializeAnnotation, allAnnotations,
+      displayText, formatDisplayNumber, effectiveAnnotationStyle, annotationLeaderAnchor, canvasSelection, allGeometryBounds,
+    });
+    const annotationSnapshotObservation = createSnapshot({ currentScope, annotationLeaderDisplayGeometry, canvas, worldToCanvasScreen });
+    const annotationDragFixture = createDragFixture({
+      resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle, resizeCanvas, readSnapshot: annotationSnapshotObservation.snapshot,
+    });
+    const annotationHitObservation = createHitObservation({ canvas, screenToWorld, hitAnnotationElement });
+    return Object.freeze({
+      fixtures: Object.freeze({ resetForAnnotationDrag: annotationDragFixture.reset }),
+      observations: Object.freeze({
+        annotationSnapshot: annotationSnapshotObservation.snapshot,
+        annotationDimensionStateForTest: annotationDimensionObservation.state,
+        annotationAppearanceStateForTest: annotationAppearanceObservation.state,
+        annotationOwnershipStateForTest: annotationOwnershipObservation.state,
+      }),
+      interaction: Object.freeze({
+        annotationHitAt: annotationHitObservation.hit,
+        annotationDragActive() { return readDragState(); },
+      }),
+    });
+  }
+
+  window.AnnotationTestDriver = Object.freeze({ createSupport, createDragFixture, createSnapshot, createHitObservation, createDimensionObservation, createAppearanceObservation, createOwnershipObservation });
 })();

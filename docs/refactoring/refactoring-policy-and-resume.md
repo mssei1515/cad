@@ -36,6 +36,7 @@
 | `src/parameters/` | Parameter名前空間、評価、依存と適用 | 任意のUI／アプリglobal |
 | `src/diagnostics/` | 診断・計測と描画の観測 | 通常機能を代わりに所有する実装 |
 | `src/testing/` | ブラウザテストの準備・状態照会・シナリオ支援 | 通常機能の所有、アプリ全体の可変context |
+| `src/application/` | 機能単位の生成・接続と狭い公開API | 巨大なapp context、モデル編集やDOM表示の再実装 |
 | `app.js` | 構築・接続・起動。移行中は未分離の責務も残る | 最終形での機能実装の集中 |
 
 この表は、既存フォルダを生かす基本方針である。新しい上位の機能組立てモジュールが必要なら、実際の依存を見て導入する。最初から固定の階層を押しつけず、`app.js`をそのまま移した別の巨大な組立てモジュールも作らない。
@@ -99,11 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-最新develop／mainとoriginの両branchが007288bで同期した状態からcodex/sketch-edit-accessで再開。app.jsは4,840→4,459行（381行減）。Sketch編集guard、hit方針、重なり順、コピー可否、表示数値、CommandPanel振分け、Selection解除、派生ドラッグと参照元照会、トリム操作、式入力、拘束名とHatch／Offset診断表示を責務ごとに分離した。詳細はcomposition-root.mdとimplementation-map.mdを参照。最新の区切りは構文518ファイル・単体1,437件・読込1件・関連E2E24件成功。全体目標は未完了。
+前回のリリースは07024cb。local／originのmainとdevelopが同じcommit、作業treeがcleanであることを確認。週枠使用10%／残量90%で、最新developからcodex/parameter-edit-guardを作成して継続した。現在はこの作業branchで進める。停止条件はsection 6どおり残量50%未満であり、各抽出ごとにmainへは統合しない。
 
-ユーザーからorigin/mainへのマージ指示を受領し、新規分離を停止。コード最終commitはaccde5d、develop統合commitはa83bedd。統合済みa83beddで構文518ファイル・単体1,437件・全E2E583件が成功（すべてexit 0、全E2E24.5分）。拘束ドラッグ回帰の全file（12.5分）、file URL起動、保存互換性、Block／Sketch／派生Geometry、式入力とUIを含む。ログは一時ディレクトリのcad-oct16-release-{check,unit,e2e}.log。runnerのexit 0を回収済みで、専用serverの残留もない。最終検証後の変更はこのリリース記録だけとし、developへCommit／Push後、mainを最後にマージ・Pushし、直ちにdevelopを同じcommitへ同期する。
-
-全体の数百行への目標は未完了。今回の作業branchは統合確認後に削除し、次回は最新developから新しく作成する。次は寸法symbol削除guardの適切な所有者、mode／command操作調整と機能ごとの生成接続を確認する。小さなhelper単位の分割を目的にせず、既存ownerの責務と依存を優先する。
+Parameter削除guard、Document下書き／Canvas reset、採番状態、Parameter／外観／PNG／Documentファイルの機能組立て、Offset・Sketch投影・Annotation・Dimension・Blockのテスト支援生成と公開API対応を整理した。app.jsは4,459→4,143行（合計316行減、直近4行減）。構文536ファイル・単体1,480件・関連E2E142件成功。全体の数百行への目標は未完了。ユーザーからmainとoriginへの反映指示を受領したため、この区切りをCommit／Push後、developへ統合し全体検証、main最後のリリースと両branch同期を行う。再開時は残るBlock fixtureとUIイベント登録・mode／command接続を再評価し、意味のある責務単位を選ぶ。
 
 ### 前回の停止地点（2026-10-14）
 

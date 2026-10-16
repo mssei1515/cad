@@ -87,6 +87,26 @@
       draw();
     }
 
+    // Discard drafts when replacing the document; do not cancel or roll back geometry.
+    function resetForDocument() {
+      line.reset();
+      centerline.reset();
+      transient.clearPoint();
+      transient.clearLineCompletion();
+      rectangle.reset();
+      slot.reset();
+      fillet.reset();
+      circular.resetCircle();
+      circular.resetArcs();
+      spline.reset();
+      projection.reset();
+      instances.clearSources();
+      instanceSources.reset();
+      splineEditing.reset();
+      preview.setPointer(null);
+      offset.reset();
+    }
+
     function hasActiveDrawOperation() {
       return Boolean(line.startPoint || centerline.targets.length || centerline.firstPoint || rectangle.startPoint || slot.firstCenter || slot.secondCenter || fillet.firstLine || circular.circleCenterPoint || circular.arcCenterPoint || circular.arcStartPoint || circular.threePointArcStart || circular.threePointArcEnd || spline.points.length || offset.source || offset.entries.length);
     }
@@ -117,7 +137,7 @@
     }
 
 
-    return Object.freeze({ start, prepare, resetInputs, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
+    return Object.freeze({ start, prepare, resetInputs, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
   window.DrawOperationLifecycle = Object.freeze({ create });
 })();
