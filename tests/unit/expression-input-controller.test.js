@@ -15,7 +15,7 @@ class Element {
 }
 class Input extends Element {}
 class TextArea extends Element {}
-function fixture() {
+function fixture(pickerPorts = {}) {
   const input = new Input([commandSelector]), document = { activeElement: input }, dimensionInput = new Input();
   const pending = { current: null }, draft = { current: null }, events = [];
   const state = { namespace: { id: 'same', annotations: [] }, language: 'en', allocate: 'd1', reads: 0 };
@@ -27,6 +27,7 @@ function fixture() {
     setParameterDialogError: message => events.push(['error', message]), setHint: (...args) => events.push(['hint', ...args]),
     applicationText: (_ja, en) => en, language: () => state.language,
     insertIdentifierIntoExpressionInput: (input, id) => events.push(['insert', input, id]),
+    ...pickerPorts,
   });
   return { controller, state, input, document, dimensionInput, pending, draft, events, event };
 }
@@ -79,4 +80,37 @@ test('annotation references require current-scope identity and read current lang
   assert.deepEqual(f.events, [['prevent'], ['stop'], ['insert', f.input, 'n1'], ['error', ''], ['hint', 'n1 を挿入しました']]);
   f.events.length = 0; note.parameterEnabled = false;
   assert.equal(f.controller.insertAnnotation(f.event, { element: note }), false); assert.deepEqual(f.events, []);
+});
+
+
+test('Canvas reference picker excludes points outside the current rect before coordinate, hit or input queries',()=>{
+ for(const [clientX,clientY] of [[9,30],[111,30],[30,19],[30,121]]){
+  const calls=[],f=fixture({canvas:{getBoundingClientRect:()=>({left:10,right:110,top:20,bottom:120})},
+   canvasPoint:()=>{throw Error('outside canvas');},hitDimension:()=>calls.push('dimension'),hitAnnotationElement:()=>calls.push('annotation')});
+  Object.assign(f.event,{clientX,clientY});assert.equal(f.controller.pickCanvas(f.event),undefined);
+  assert.deepEqual(calls,[]);assert.deepEqual(f.events,[]);assert.equal(f.state.reads,0);
+ }
+});
+
+test('Canvas reference picker accepts exact edges and prioritizes dimension hit even when insertion is declined',()=>{
+ const calls=[],state={hit:{constraint:{annotationOwner:{}}}},point={x:3,y:4};
+ const f=fixture({canvas:{getBoundingClientRect:()=>({left:10,right:110,top:20,bottom:120})},
+  canvasPoint:event=>{assert.equal(event,f.event);calls.push('point');return point;},
+  hitDimension:(x,y,options)=>{assert.equal(x,3);assert.equal(y,4);assert.equal(options.activeOnly,false);calls.push('dimension');return state.hit;},
+  hitAnnotationElement:()=>{throw Error('a dimension hit must not fall back to annotation');}});
+ Object.assign(f.event,{clientX:10,clientY:120});f.controller.pickCanvas(f.event);
+ assert.deepEqual(calls,['point','dimension']);assert.deepEqual(f.events,[]);
+ state.hit={constraint:{parameterName:'d9'}};f.controller.pickCanvas(f.event);
+ assert.equal(f.events.find(e=>e[0]==='insert')[2],'d9');
+});
+
+test('Canvas reference picker falls back to annotation only for absent dimensions using the same event and world point',()=>{
+ const calls=[],annotation={parameterEnabled:true,parameterName:'note1'};
+ const f=fixture({canvas:{getBoundingClientRect:()=>({left:0,right:100,top:0,bottom:100})},
+  canvasPoint:event=>{assert.equal(event,f.event);return {x:8,y:9};},
+  hitDimension:(x,y,options)=>{assert.deepEqual([x,y,options.activeOnly],[8,9,false]);calls.push('dimension');return null;},
+  hitAnnotationElement:(x,y,options)=>{assert.deepEqual([x,y,options.activeOnly],[8,9,false]);calls.push('annotation');return {element:annotation};}});
+ f.state.namespace.annotations.push(annotation);Object.assign(f.event,{clientX:50,clientY:50});
+ assert.equal(f.controller.pickCanvas(f.event),undefined);assert.deepEqual(calls,['dimension','annotation']);
+ assert.deepEqual(f.events.slice(0,2),[['prevent'],['stop']]);assert.equal(f.events.find(e=>e[0]==='insert')[2],'note1');
 });

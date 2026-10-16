@@ -82,7 +82,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回のリリース対象は`codex/parameter-edit-guard`。統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/reference-image-feature`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -99,6 +99,10 @@
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-16）
+
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。端点解決とendpoint生成をGeometryCreation.createEndpointResolverへ集約し、未使用pointAt／hitAnyPoint aliasを監査後に撤去。app.jsは4,143→3,949行（合計194行減、直近7行減）。構文546ファイル・単体1,542件・関連E2E154件成功。今回は全E2E未実行。最新週枠使用32%／残量68%。全体目標は未完了。次は分離後に残った未参照の旧入口を監査する。node_modules/playwright/lib/transform/babelBundleのbabelParse(code,filename,false)とtraverseでapp IIFE scopeを調べ、未参照140binding中FunctionDeclaration候補16件を確認済み。変数initializerの副作用と区別し、自動一括削除せず関数／依存を現物で検証する。局所scopeと公開hook／コールバック、動的参照の有無を確認し、現役ownerを再分離するだけの変更を避ける。巨大contextや異なる操作の単一stateへの統合を避ける。
+
+### 直前のリリース（2026-10-16）
 
 ユーザーのmain／origin反映指示により、この区切りをリリースする。07024cbを基準にcodex/parameter-edit-guardで16個の責務単位を整理し、コード最終commitはdde227e、develop統合commitは91d532c。app.jsは4,459→4,143行（316行減）。Parameter削除guard、Document下書き／Canvas reset、採番状態、Parameter／外観／PNG／Documentファイルの機能組立て、Offset・Sketch投影・Annotation・Dimension・Blockのテスト支援生成と公開API対応を整理した。
 

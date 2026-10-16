@@ -59,3 +59,35 @@ test('angle line offsets survive dragging and reset discards the session without
   f.command.reset(); assert.equal(f.command.active, false); assert.equal(f.command.constraint, undefined); assert.equal(f.command.finish({ pointerId: 3 }), false);
   assert.equal(f.events.some(e => e[0] === 'history'), false);
 });
+
+
+function angleSyncFixture(){
+ const calls=[],state={readOnly:false,signed:-2,onAngles:null,fail:null};
+ class LineAngleConstraint{constructor(){this.values={startFlip:4,endFlip:5,target:6};for(const key of ['startFlip','endFlip','target'])Object.defineProperty(this,key,{get:()=>this.values[key],set:value=>{this.values[key]=value;calls.push([key,value]);}});}}
+ const constraint=new LineAngleConstraint(),target={kind:'angle'},dimension={angleStartFlip:false,angleEndFlip:true};
+ const service=sandbox.window.DimensionDrag.createAngleSynchronization({LineAngleConstraint,
+  isReadOnlyDimension:value=>{assert.equal(value,constraint);calls.push('readOnly');return state.readOnly;},
+  angleDimensionAngles:(value,pointer,placement)=>{assert.equal(value,target);assert.equal(pointer,null);assert.equal(placement,dimension);calls.push('angles');if(state.fail)throw state.fail;state.onAngles?.();return{signed:state.signed};},
+ });return{service,constraint,target,dimension,calls,state};
+}
+
+test('angle synchronization rejects other constraint types, target kinds and absent placements before any model query',()=>{
+ const f=angleSyncFixture();assert.deepEqual(f.calls,[]);
+ assert.equal(f.service.sync({}, {get kind(){throw Error('wrong type must short circuit');}}, {}),undefined);
+ assert.equal(f.service.sync(f.constraint,{kind:'distance'},f.dimension),undefined);
+ assert.equal(f.service.sync(f.constraint,f.target,null),undefined);assert.deepEqual(f.calls,[]);
+});
+
+test('readonly angle placement does not calculate or overwrite flip and target values',()=>{
+ const f=angleSyncFixture();f.state.readOnly=true;f.service.sync(f.constraint,f.target,f.dimension);
+ assert.deepEqual(f.calls,['readOnly']);assert.deepEqual(f.constraint.values,{startFlip:4,endFlip:5,target:6});
+});
+
+test('angle synchronization calculates first then uses current flip flags and absolute angle while calculation errors preserve values',()=>{
+ const f=angleSyncFixture();f.state.onAngles=()=>{f.dimension.angleStartFlip='true';};
+ assert.equal(f.service.sync(f.constraint,f.target,f.dimension),undefined);
+ assert.deepEqual(f.calls,['readOnly','angles',['startFlip',1],['endFlip',1],['target',2]]);
+ f.calls.length=0;f.state.fail=new Error('angles failed');const prior={...f.constraint.values};
+ assert.throws(()=>f.service.sync(f.constraint,f.target,f.dimension),value=>value===f.state.fail);
+ assert.deepEqual(f.calls,['readOnly','angles']);assert.deepEqual(f.constraint.values,prior);
+});

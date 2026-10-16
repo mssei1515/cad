@@ -102,3 +102,38 @@ test('arc endpoint unavailable session preserves endpoint wrapper and initial sn
   assert.equal(result.startState.draggedEndpoint, result.startState.end); assert.equal(result.final, null);
   assert.deepEqual(calls, [['endpoint', 'end'], ['build'], ['endpoint', 'start'], ['endpoint', 'end']]);
 });
+
+
+function responsiveFixture() {
+ const events=[],state={scope:null,fail:false,result:{points:'serialized'}};
+ class DistanceConstraint {constructor(a,b,value){Object.assign(this,{type:'distance',a,b,value});}}
+ class ParallelConstraint {constructor(a,b){Object.assign(this,{type:'parallel',a,b});}}
+ class PerpendicularConstraint {constructor(a,b){Object.assign(this,{type:'perpendicular',a,b});}}
+ const driver=sandbox.window.GeometryDragTestDriver.createResponsiveFixture({
+  resetModelState:()=>{events.push('reset');state.scope={points:[],lines:[],constraints:[]};},
+  addPoint:(x,y,fixed,role)=>{const point={id:'P'+(state.scope.points.length+1),x,y,fixed,role};state.scope.points.push(point);return point;},
+  addLine:(p1,p2)=>{const line={id:'L'+(state.scope.lines.length+1),p1,p2};state.scope.lines.push(line);return line;},
+  pushModelConstraint:constraint=>state.scope.constraints.push(constraint),DistanceConstraint,ParallelConstraint,PerpendicularConstraint,
+  ensureDimensionDefaults:()=>events.push('defaults'),solveAndRefresh:label=>{events.push(['solve',label]);if(state.fail)throw state.fail;},
+  log:message=>events.push(['log',message]),fitAllGeometryToViewport:padding=>events.push(['fit',padding]),draw:()=>events.push('draw'),
+  resetHistory:label=>events.push(['history',label]),serializeModel:()=>{events.push('serialize');return state.result;},
+ });return {driver,state,events};
+}
+
+test('responsive drag fixture owns its sample and preserves shared point/line references and solve-to-history order',()=>{
+ const f=responsiveFixture();assert.deepEqual(f.events,[]);assert.equal(f.driver.reset(),f.state.result);
+ const {points,lines,constraints}=f.state.scope;assert.equal(points.length,4);assert.equal(lines.length,4);assert.equal(constraints.length,5);
+ assert.deepEqual(points.map(p=>[p.x,p.y,p.fixed,p.role]),[[160,160,true,'endpoint'],[300,180,false,'endpoint'],[280,290,false,'endpoint'],[140,270,false,'endpoint']]);
+ assert.equal(lines[0].p1,points[0]);assert.equal(lines[0].p2,points[1]);assert.equal(lines[3].p2,points[0]);
+ assert.equal(constraints[0].a,points[0]);assert.equal(constraints[0].b,points[1]);assert.equal(constraints[0].value,140);assert.equal(constraints[1].value,100);
+ assert.equal(constraints[2].a,lines[0]);assert.equal(constraints[2].b,lines[2]);assert.equal(constraints[3].a,lines[1]);assert.equal(constraints[3].b,lines[3]);
+ assert.equal(constraints[4].type,'perpendicular');assert.equal(constraints[4].a,lines[0]);assert.equal(constraints[4].b,lines[1]);
+ assert.deepEqual(f.events,['reset','defaults',['solve','サンプル復元'],['log','サンプルを復元しました'],['fit',160],'draw',['history','responsive line drag test'],'serialize']);
+ const prior=f.state.scope;f.events.length=0;f.driver.reset();assert.notEqual(f.state.scope,prior);assert.equal(f.state.scope.points[0].id,'P1');assert.notEqual(f.state.scope.points[0],points[0]);
+});
+
+test('responsive sample solve errors propagate without fitting, resetting history or serializing a partial fixture',()=>{
+ const f=responsiveFixture(),error=new Error('solve failed');f.state.fail=error;
+ assert.throws(()=>f.driver.reset(),value=>value===error);assert.deepEqual(f.events,['reset','defaults',['solve','サンプル復元']]);
+ assert.equal(f.state.scope.constraints.length,5);
+});

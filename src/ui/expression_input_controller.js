@@ -3,7 +3,7 @@
   "use strict";
   function create({ document, types: { InputElement, TextAreaElement }, currentNamespace, dimensionValueInput,
     pendingCommandSession, parameterDraft, ensureDimensionParameter, setParameterDialogError,
-    setHint, applicationText, language, insertIdentifierIntoExpressionInput }) {
+    setHint, applicationText, language, insertIdentifierIntoExpressionInput, canvas, canvasPoint, hitDimension, hitAnnotationElement }) {
     function focusedExpressionInputContext() {
       const input = document.activeElement;
       if (!(input instanceof InputElement || input instanceof TextAreaElement) || input.readOnly || input.disabled) return null;
@@ -57,7 +57,16 @@
       setHint(language() === "en" ? `Inserted ${item.parameterName}.` : `${item.parameterName} を挿入しました`);
       return true;
     }
-    return Object.freeze({ context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter, insertAnnotation: insertClickedAnnotationParameter });
+    function pickCanvasReference(event) {
+      const rect = canvas.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+      const point = canvasPoint(event);
+      const hit = hitDimension(point.x, point.y, { activeOnly: false });
+      if (hit) insertClickedDimensionParameter(event, hit);
+      else insertClickedAnnotationParameter(event, hitAnnotationElement(point.x, point.y, { activeOnly: false }));
+    }
+    return Object.freeze({ context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter,
+      insertAnnotation: insertClickedAnnotationParameter, pickCanvas: pickCanvasReference });
   }
   window.ExpressionInputController = Object.freeze({ create });
 })();

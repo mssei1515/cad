@@ -124,5 +124,20 @@
 
     return Object.freeze({ stabilize: stabilizeActiveParameterNamespace });
   }
-  window.ParameterStabilization = Object.freeze({ create });
+  // Evaluate a stored definition through the existing temporary editing-scope binding.
+  function createStoredDefinition({ currentScope, activateScope, nextHatchIndex, drawableSketchIds, stabilizeNamespace }) {
+    function stabilize(definition) {
+      const previousScope = currentScope();
+      activateScope(definition);
+      try {
+        return stabilizeNamespace(definition.activeSketchId, { allSketches: drawableSketchIds(definition) });
+      } finally {
+        definition.nextHatchIndex = Math.max(nextHatchIndex(), Number(definition.nextHatchIndex) || 1);
+        activateScope(previousScope);
+      }
+    }
+    return Object.freeze({ stabilize });
+  }
+
+  window.ParameterStabilization = Object.freeze({ create, createStoredDefinition });
 })();

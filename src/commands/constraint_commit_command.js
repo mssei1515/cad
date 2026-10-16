@@ -8,7 +8,7 @@
     targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
     clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
     recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
-    sketchName, now, recordPerformance }) {
+    sketchName, now, recordPerformance, resolveSelection, canvasSelection }) {
     function commitNewConstraint(type, constraint) {
       if (!guardSketchEdit(activeSketchId(), "constraint")) return false;
       if (!constraintTargetsAreActive(constraint)) {
@@ -185,7 +185,20 @@
       });
     }
 
-    return Object.freeze({ readOnly: addReadOnlyDimensionConstraint, resolution: commitConstraintResolution, dimension: addDistanceConstraintFromTarget,
+    function applySelection(type) {
+      const resolution = resolveSelection(type);
+      if (!resolution || resolution.error) {
+        if (resolution?.error) setHint(resolution.error, "error");
+        return;
+      }
+      if (resolution.action === "place-dimension" || resolution.target) return startDistanceResolution(resolution, null);
+      if (resolution?.constraint) {
+        canvasSelection.set("arcEndpointPair", null);
+        commitConstraintResolution(resolution);
+      }
+    }
+
+    return Object.freeze({ fromSelection: applySelection, readOnly: addReadOnlyDimensionConstraint, resolution: commitConstraintResolution, dimension: addDistanceConstraintFromTarget,
       ordinary: commitNewConstraint, reference: commitReferenceConstraint, markReference: markReferenceConstraint });
   }
   window.ConstraintCommitCommand = Object.freeze({ create });

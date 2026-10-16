@@ -87,6 +87,17 @@
       draw();
     }
 
+    // Sketch switching clears only this subset; other interaction owners reset around it.
+    function resetInputsForSketchChange() {
+      line.reset();
+      rectangle.reset();
+      fillet.reset();
+      circular.resetCircle();
+      circular.resetArcs();
+      preview.reset();
+      offset.reset();
+    }
+
     // Discard drafts when replacing the document; do not cancel or roll back geometry.
     function resetForDocument() {
       line.reset();
@@ -137,7 +148,7 @@
     }
 
 
-    return Object.freeze({ start, prepare, resetInputs, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
+    return Object.freeze({ start, prepare, resetInputs, resetInputsForSketchChange, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
   window.DrawOperationLifecycle = Object.freeze({ create });
 })();
