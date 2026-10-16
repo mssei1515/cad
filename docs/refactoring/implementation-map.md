@@ -1057,3 +1057,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/editing/selection.js: sketchTreeObjectSelectedがinspectionのcategory／Object／ID照合と、通常のカテゴリ別選択照会を所有する。固定Point・Constraint・Geometryは同ownerの既存判定を使用。app内の選択配列読取りを撤去し、SketchTreeObjectsへ同メソッドを接続する。hoverは引き続き別所有者。
+
+
+- src/ui/sketch_tree_objects.js: Tree行のhover判定を同module内へ集約。readCanvasHover／readSidebarHoverの限定APIで現在値を読み、カテゴリ別のObject同一性と固定Point／Constraint解決を維持する。CanvasHover／SelectionHighlightの状態所有と既存hovered公開APIは維持し、appの照会本体を撤去。

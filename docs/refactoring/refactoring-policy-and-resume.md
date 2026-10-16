@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用38%／残量62%。未使用入口／alias整理、Offset選択、寸法外観・label、Annotationアンカー、円弧端点角度、暗黙拘束、操作名、Toolbarアイコン（2a93f20）に続き、今回はTree選択照会をCanvasSelection.sketchTreeObjectSelectedへ集約。inspectionのcategory／Object／IDと、通常選択の同一参照、固定Point／Constraint／Geometryの既存規則を維持した。app.jsは開始3,949→現在3,712行（合計237行減、直近3,724→3,712で12行減）。構文546ファイル・単体1,570件・関連E2E135件成功（exit 0、3file、1.9分）。ログはcad-tree-selection-query-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用39%／残量61%。未使用入口／alias、Offset選択、寸法外観・label、Annotationアンカー、円弧端点角度、暗黙拘束、操作名／Toolbarアイコン、Tree選択（5c49b62）に続き、今回はTreeのhover照会を既存SketchTreeObjects内へ集約。CanvasHoverとSelectionHighlightの状態所有は維持し、2つの読取りでカテゴリ別Object照合と固定Point／Constraint解決を行う。app.jsは開始3,949→現在3,704行（合計245行減、直近3,712→3,704で8行減）。構文546ファイル・単体1,573件・関連E2E158件成功（exit 0、3file、2.2分）。ログはcad-tree-hover-query-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-次はsketchTreeObjectHoveredをTree表示側の照会として整理できるか確認する。CanvasHoverとSelectionHighlightの状態所有を維持し、限定した読取りAPIでカテゴリ別の同一参照判定と固定Point／Constraintの解決を行う。hoverへID一致を追加せず、関係ないhoverの読取りや新たなstate同期を増やさない。updateUIUnprofiledの更新順・refreshAnalysis指定も別に扱う。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
+次はdrawInteractiveCanvasとCanvasSurface.createFrameRendererの描画段階の責務を確認する。通常CanvasとPNG出力の違い、Annotation previewの現在値／leaderとtextの分岐、作図／配置／Offset／trim／snap／handle／Point／画像overlay／Sketch identity／矩形選択／PNG overlayの順序を維持する。単なる巨大なcallback一覧や可変contextへ移すのでなく、描画器とpreview ownerの既存公開APIで段階をまとめられるか検討する。updateUIUnprofiledの更新順・refreshAnalysis指定は別に扱う。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。
 
 ### 直前のリリース（4859400）
 

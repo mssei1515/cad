@@ -2320,15 +2320,6 @@
   });
 
 
-  function sketchTreeObjectHovered(category, entry) {
-    if (category === "hatch") return canvasHover.current.hatch === entry;
-    if (category === "image") return canvasHover.current.referenceImage === entry;
-    if (category === "block") return canvasHover.current.block === entry;
-    if (category === "instance") return canvasHover.current.geometryInstance === entry;
-    if (category === "annotation") return canvasHover.current.annotation === entry;
-    const item = category === "constraint" ? (entry.kind === "fixed-point" ? entry.point : entry.constraint) : entry;
-    return selectionHighlight.current?.item === item;
-  }
 
   const sketchTreeObjects = window.SketchTreeObjects.create({
     sidebarGeometryItem, activeSketchId,
@@ -2345,7 +2336,8 @@
     findLineFixedConstraint, blockDefinitionById, geometryInstanceTypeLabel, geometryInstanceBundle,
     resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
     isDimensionConstraint, localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
-    constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected, sketchTreeObjectHovered,
+    constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected,
+    readCanvasHover: () => canvasHover.current, readSidebarHover: () => selectionHighlight.current,
     constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements,
   });
   const sketchTreeView = window.SketchTreeView.create({

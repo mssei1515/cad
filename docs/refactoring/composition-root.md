@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Treeのhover状態の照会
+
+sketchTreeObjectHoveredを既存SketchTreeObjects.createの内部へ集約し、従来の外部predicate注入をreadCanvasHover／readSidebarHoverの2読取りへ置換した。Hatch／画像／Block／派生Instance／AnnotationはCanvasHoverの対応field、それ以外はSelectionHighlightの現在itemを同一参照で照合する。固定PointとConstraintのentry解決、dimensionからconstraintへの既存変換、関係ない側のhoverを読まない短絡を維持する。同IDの別Objectを一致にせず、状態複製・同期・書込みを加えない。Tree行と既存hovered公開APIは同じ内部判定を利用し、appは状態所有者からの読取りだけを接続する。新factoryは増やしていない。
+
+app.jsは3,712→3,704行（8行減、今回再開から245行減）。既存sketch-tree-presentation unitへ3件追加し、カテゴリ別の参照元・現在値・Object同一性、固定Point／Constraint／dimension解決、Tree行の強調と非破壊性を確認。構文546ファイル・単体1,573件・関連E2E158件成功（すべてexit 0、E2E2.2分）。unified-ui／blocks／hatchingの全3file。ログは一時ディレクトリのcad-tree-hover-query-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### Treeの選択状態の照会
 
 sketchTreeObjectSelectedを既存CanvasSelectionへ集約し、appは同メソッドを既存SketchTreeObjectsへ接続する。inspectionのcategory＋同一Object／truthyな同一ID照合、通常のHatch／画像／Block／派生Instance／Annotationの同一参照包含、固定Pointと通常Constraintの違いを維持した。Geometry／Constraintは同ownerの既存照会を使用し、Arcの未選択時に既存照会が返すundefinedもBoolean化しない。モデルや選択stateを変更せず、DOM・hover・求解・履歴・追加callback依存を持たない。appの未使用になったgeometryItemSelectedInCanvas aliasも同じ区切りで外したが、元APIは維持する。
