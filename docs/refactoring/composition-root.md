@@ -6,7 +6,7 @@
 
 ## 現在の再開地点（2026-10-16）
 
-現在のコードはdevelop／origin/developの77e4e19（作業最終80771ff）。app.jsは3,652行で、数百行への全体目標は未完了。main／origin/mainへの反映は全E2Eの性能超過・航空機ケースtimeoutの2件により保留している。構文552ファイル・単体1,587件成功、全E2Eは582／584件成功。前回版との比較結果と回答待ちの判断はrefactoring-policy-and-resume.mdのsection 8を参照する。
+現在の統合済みコードはdevelop／origin/developの2fa864b（作業最終d66a231）。app.jsは3,652行で、数百行への全体目標は未完了。構文552ファイル・単体1,590件成功。全E2Eは583／584件成功（24.0分）し、航空機の全96経路は成功した。middle-button-panの性能超過1件は再確認でも失敗しており、main／origin/mainへの反映は保留。最新の再開地点と検証記録はrefactoring-policy-and-resume.mdのsection 8を参照する。
 
 ### Sketch所属の正規化と照会
 

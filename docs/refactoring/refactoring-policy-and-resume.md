@@ -104,6 +104,18 @@ local／originのmainとdevelopが4859400で同期・cleanであることを確�
 
 TrimはTrimFeatureへquery／editing／commandの組立てを集約し、テストfixtureの接続はTrimTestDriver.createFeatureへ分離した。現在scope／倍率と7／倍率のhit幅、Point／寸法拘束の転送、checkpointと失敗段階の復元、既存hookを維持する。構文552ファイル・単体1,587件・読込E2E1件・関連E2E143件成功（142件1.9分＋性能1件4.5秒）。ログはcad-trim-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。
 
+### 最新developの全体検証結果（2fa864b）
+
+コード最終d66a231をdevelopの2fa864bへ統合・Push済み。main／origin/mainは4859400のまま。最新developで構文552ファイル・単体1,590件成功（exit 0）。全E2E584件は583成功・1失敗（24.0分、exit 1）。航空機は全96経路・1,872previewを7.2分で成功（最大260ms、失敗0）。以前の航空機timeoutは最新全体実行で再現していない。失敗はadversarial-authoring-performance.spec.jsのmiddle-button-panが176ms（175ms未満が基準）だった1件。
+
+コード・基準を変えず、同じ性能file全12件を一度再確認すると11成功・1失敗（49.5秒、exit 1）。同じmiddle-button-panが181msで失敗した。直前のd66a231で同file全12件が成功したことと混同せず、最新の全体実行と再確認は不合格として記録する。d66a231と2fa864bのapp／src／tests／index／tools／specに差分がないことも確認済み。ここから成功するまで同じテストを繰り返さない。全検証成功やmain反映完了とは扱わない。
+
+ログはcad-release-membership-final-{check,unit,e2e}.logとcad-release-membership-performance-rerun.log。各runnerの終了を回収済み。週枠使用49%／残量51%。app.jsは3,652→3,652行（0行変化）。コードの未コミット変更なし。今回の追加変更はこの検証記録のみ。
+
+短いパンのCPU診断5回は127／90／111／123／113msで、各回4回のpreview描画を観測した。2回目以降の描画合計は約43〜44ms。主なCPU処理は寸法外観の正規化とSketchHierarchy.ensure。元のE2Eの選択／削除／Undo／Redo／Tree展開後とは直前状態が異なるため、この診断の成功をE2Eの合格に代用しない。scriptは一時ディレクトリのcad-pan-cpu-profile.cjs、ログはcad-release-membership-pan-profile.log。
+
+次はDimensionPresentation.createLayer.drawのsort comparatorが同じisActiveSketchConstraintを何度も呼び、その先でSketch全体の正規化を繰り返す箇所を分析する。候補は描画ごとに必要なActive判定を一度取得してsort／色判定で共有し、次のdrawで再評価する方法。まだ実装していない。既存constraints配列へのin-place sort、非active→activeの安定した描画順、非表示の短絡、export時のflags、Canvasのsave／restoreと例外時の挙動を維持し、描画中にSketchが切り替わらない前提も確認する。mainは失敗を残した反映への判断待ちとして保留する。
+
 ### 最新の修正と検証（codex/constraint-status-observation）
 
 所属照会の重複取得整理93124c8に続き、SketchContext.membershipQueryでscopeの正規化と要素ごとの所属読取りを分離した。元のelementSketchIdと共通resolverを使い、直接ID／端点／中心／Spline fitPoint／現在Sketchへのfallbackの優先順を維持する。Queryは現在Sketchのfallbackを同期照会単位で捕捉し、次の解析・状態照会では新しく取得する。ConstraintAnalysisは参照有効性の更新後、ConstraintTestDriverは解析更新後に取得し、appはreadSketchMembershipとして接続する。通常のelementSketchIdの正規化順やSolverの数値計算・保存形式は変更しない。app.jsは3,652→3,652行（0行変化）。
