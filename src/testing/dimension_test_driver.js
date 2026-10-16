@@ -824,5 +824,41 @@
     });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
+  // Assemble default Dimension scenarios, preserving each fixture's existing setup and observation.
+  function createFixtureSupport({
+    resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope,
+    isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
+    constraintTargetSession, pendingCommandSession, startDistanceValueInput, dimensionValueInput, dimensionWithLabelAt,
+    angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, serializeDimension,
+    rootSketchId, ctx, drawDimensions, sketchById, constraintSketchId, isVisibleSketchId
+  }) {
+    const readOnlyDuplicateFixture = createReadOnlyDuplicateFixture({
+      resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope,
+      isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
+    });
+    const readOnlyPlacementFixture = createReadOnlyPlacementFixture({
+      resetModelState, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, pendingCommandSession,
+      startDistanceValueInput, dimensionValueInput, currentScope, isReadOnlyDimension, isDimensionConstraint,
+    });
+    const extensionVisibilityFixture = createExtensionVisibilityFixture({ resetModelState, addPoint, addLine, hypot2, dimensionLayout, dimensionWithLabelAt, dimensionFromAnchor });
+    const angleLabelFixture = createAngleLabelFixture({
+      resetModelState, addPoint, addLine, dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets,
+      setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, hypot2, serializeDimension,
+    });
+    const sketchVisibilityFixture = createSketchVisibilityFixture({
+      resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope, rootSketchId,
+      ctx, drawDimensions, sketchById, isDimensionConstraint, constraintSketchId, isVisibleSketchId,
+    });
+    return Object.freeze({
+      readOnly: Object.freeze({
+        resetForReadOnlyDuplicateDimension: readOnlyDuplicateFixture.reset,
+        resetForReadOnlyDimensionPlacement: readOnlyPlacementFixture.reset,
+        pointPointRectangleDimensionExtensionVisibilityCases: extensionVisibilityFixture.cases,
+      }),
+      angleDimensionLabelFollowCase: angleLabelFixture.followCase,
+      resetForActiveSketchDimensionVisibility: sketchVisibilityFixture.reset,
+    });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
 })();

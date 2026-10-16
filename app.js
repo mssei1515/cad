@@ -3646,18 +3646,12 @@
       resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas,
       screenToWorld, hitAnnotationElement, readDragState: () => annotationDrag.inspect()
     });
-    const readOnlyDuplicateFixture = window.DimensionTestDriver.createReadOnlyDuplicateFixture({
+    const dimensionFixtureSupport = window.DimensionTestDriver.createFixtureSupport({
       resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope: workspace.current,
       isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
-    });
-    const readOnlyPlacementFixture = window.DimensionTestDriver.createReadOnlyPlacementFixture({
-      resetModelState, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, pendingCommandSession,
-      startDistanceValueInput, dimensionValueInput, currentScope: workspace.current, isReadOnlyDimension, isDimensionConstraint,
-    });
-    const extensionVisibilityFixture = window.DimensionTestDriver.createExtensionVisibilityFixture({ resetModelState, addPoint, addLine, hypot2, dimensionLayout, dimensionWithLabelAt, dimensionFromAnchor });
-    const angleLabelFixture = window.DimensionTestDriver.createAngleLabelFixture({
-      resetModelState, addPoint, addLine, dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets,
-      setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, hypot2, serializeDimension,
+      constraintTargetSession, pendingCommandSession, startDistanceValueInput, dimensionValueInput, dimensionWithLabelAt,
+      angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, serializeDimension,
+      rootSketchId: ROOT_SKETCH_ID, ctx, drawDimensions, sketchById, constraintSketchId, isVisibleSketchId
     });
     const trimLineTransferFixture = window.TrimTestDriver.createLineTransferFixture({ resetModelState, addPoint, addLine, pushModelConstraint, PointOnLineConstraint, executeLineTrim, currentScope: workspace.current });
     const trimConstructionFixture = window.TrimTestDriver.createConstructionBoundaryFixture({
@@ -3670,10 +3664,6 @@
     const middleButtonFitFixture = window.CanvasTestDriver.createMiddleButtonFitFixture({ resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, updateUI, draw, canvas });
     const fitObservation = window.CanvasTestDriver.createFitObservation({ canvas, viewport, screenBoxForBounds, visibleGeometryBounds, isVisibleSketchId });
     const testFitOperation = window.CanvasTestDriver.createFitOperation({ fitAllGeometryToViewport, draw });
-    const sketchVisibilityFixture = window.DimensionTestDriver.createSketchVisibilityFixture({
-      resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID,
-      ctx, drawDimensions, sketchById, isDimensionConstraint, constraintSketchId, isVisibleSketchId,
-    });
     const setTestDrawingMode = value => { mode = value; };
     const draftDashCases = window.CanvasRenderTestDriver.createDraftDashCases({
       setMode: setTestDrawingMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
@@ -4050,11 +4040,9 @@
       blockConstraintStatusForTest: blockConstraintObservation.state,
       addBlockPointOnLineConstraintForTest: blockConstraintInsertion.add,
       ...annotationTestSupport.fixtures,
-      resetForReadOnlyDuplicateDimension: readOnlyDuplicateFixture.reset,
-      resetForReadOnlyDimensionPlacement: readOnlyPlacementFixture.reset,
-      pointPointRectangleDimensionExtensionVisibilityCases: extensionVisibilityFixture.cases,
+      ...dimensionFixtureSupport.readOnly,
       ...dimensionDisplaySupport.cases,
-      angleDimensionLabelFollowCase: angleLabelFixture.followCase,
+      angleDimensionLabelFollowCase: dimensionFixtureSupport.angleDimensionLabelFollowCase,
       resetForTrimConstraintTransfer: trimLineTransferFixture.reset,
       trimConstructionBoundaryCase: trimConstructionFixture.boundaryCase,
       trimCircleDiameterDimensionCase: trimDiameterFixture.diameterCase,
@@ -4062,7 +4050,7 @@
       fitAllGeometryForTest: testFitOperation.fit,
       ...annotationTestSupport.interaction,
       historyState: readTestHistory,
-      resetForActiveSketchDimensionVisibility: sketchVisibilityFixture.reset,
+      resetForActiveSketchDimensionVisibility: dimensionFixtureSupport.resetForActiveSketchDimensionVisibility,
       resetForAllGeometryFit: allGeometryFitFixture.reset,
       resetForMiddleButtonFit: middleButtonFitFixture.reset,
       middleButtonFitState: fitObservation.state,

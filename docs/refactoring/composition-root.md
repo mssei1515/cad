@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Dimension既定fixtureの機能組立て
+
+DimensionTestDriver.createFixtureSupportへ読み取り専用寸法の重複／配置、補助線表示、角度ラベル追従、Sketch表示の5factoryを集約。5公開APIはreadOnly群と角度／Sketch表示の入口で返し、appは元の位置へ接続する。公開名・順序を維持し、全個別factoryの本体は完全一致、生成接続もcurrentScope／rootSketchIdのport置換とindent以外一致する。Sketch表示fixtureのfactory生成は同支援へ移るが、生成時に状態照会・準備を実行しない。準備と検証時のGeometry／寸法／session／描画は既存ownerへ委譲し、独自製品状態や汎用app contextを持たない。これでDimensionの22個の個別factory生成はappからなくなり、fixture／interaction／displayの三つの支援入口へ整理された。
+
+app.jsは4,171→4,159行（12行減、07024cbから合計300行減）。新scriptなし。新unit fileを構文／unit一覧へ一回だけ追加。単体2件で5公開APIと生成時無処理、読み取り専用配置のGeometry／寸法Object・session receiver・操作順、既存入力操作の結果反映を確認。構文534ファイル・単体1,474件・関連E2E232件が成功（すべてexit 0、E2E3.6分）。5 APIを使うannotation-display-size／annotation-anchors／multiple-dimensions／leader-appearance／sketch-tree-visibility／view-visibility／unified-ui／unified-annotationsの全8fileを実行。全runnerは正常終了。ログは一時ディレクトリのcad-dimension-fixture-test-support-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はBlock定義編集・階層操作のfixture／操作支援の生成接続と公開APIを調べる。
+
 ### Dimension操作テスト支援の機能組立て
 
 DimensionTestDriver.createInteractionSupportへ位置照会／式編集／Selection、command中drag／click配置／Line-Circle・半径差／復元・操作観測の10factoryと複数寸法用fitを集約。placementとselectionの二群で12 APIを返し、appは元の位置へ展開して公開名・順序を維持する。各個別factoryの本体は変更前と完全一致し、生成接続はcurrentScope／clientPositionのport置換とindent以外一致。fit操作のbodyもViewport→UI→drawの同じ値・順を維持する。製品のGeometry・寸法・求解／復元方針は変更せず、既存model／Selection／pending／drag／Viewportのownerへ委譲する。生成時に状態照会やモデル変更を実行しないことと、通常起動で生成しないtest query guardを保持。巨大なapp contextや独自状態を作らない。
