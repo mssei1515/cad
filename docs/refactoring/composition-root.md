@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 派生Geometryのドラッグ開始
+
+84行のbeginDerivedGeometryDragを既存GeometryDrag.createDerivedEntryへ集約。型、編集guard、Selectionと解除、参照元／source points照会、通常session生成、GeometryDrag lifecycleとhint／UI／drawの14依存を明示する。Instance全体と参照元操作の分岐、開始plan、選択更新、拒否通知を担当し、resolveとsession生成／solve／履歴は既存ownerに残す。元84行の本体はguardの注入名以外一致。全体移動のclick metadata、線上の初期比率に追従するlive anchorと開始snapshot、source／rotationのvariableAllowed、Block ownerとarc端点の対象変換、pointerMap／元参照と配置Instance除外を維持する。anchor control／権限拒否、未解決／投影chain／固定source、anchorなしの各終了範囲とUI順も保持。factory生成はquery／lifecycleの初期化後、入力consumer登録前に置き、独自modelやdrag状態を増やさない。
+
+app.jsは4,729→4,650行（79行減、今回の再開から合計190行減）。新script／unit fileなし。既存GeometryDrag unitに6件追加し、実際のPatternInstanceModel.placedと型portで全体／sourceの境界、live座標、制限・拒否、Block／arc端点と変数除外、参照・引数・UI順を確認。構文511ファイル・単体1,419件・関連E2E192件が成功（すべてexit 0、E2E2.7分）。derived-patterns／derived-selection-copy／sketch-projection／sketch-permissions／blocks／unified-uiを実行。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-derived-drag-entry-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はappに残るresolveDerivedDragSourceとgeometryInstanceSourceObjectsの読み取り責務をInstanceProjectionへ集約できるか確認する。逆変換chain／巡回拒否とsource objectの参照・順・短絡を維持し、UI／Selectionやdrag lifecycleを照会側へ持ち込まない。
+
 ### Selection解除の調整
 
 作図開始／取消・mode遷移を確認し、それ自体は既存DrawOperationLifecycleの所有であるため再分割しなかった。appに残るclearSelectionの4 owner更新をCanvasSelectionInteraction.createClearingへ集約。Selection→拘束operand→Sketch／Block／派生hover→強調reset→Annotation／Hatch／画像／Spline hoverの二段更新を元のまま維持。拘束command本体、point／line／circle／arc／寸法などの別hover参照、snap、UI・履歴は解除しない。4 APIのみで接続し、独自model／session状態を持たず、全owner生成後の早期接続とhoisted入口を残す。元bodyの一致を確認した。

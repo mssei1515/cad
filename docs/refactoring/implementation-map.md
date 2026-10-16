@@ -930,3 +930,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/ui/command_panel.js: createRoutingはPNG／注記／Hatch／派生の表示先選択とイベント振分けを6依存で担当する。row選択・削除のoptional性とPNGを経由しない経路、receiver・引数・結果を維持し、appは個別panelとviewを接続する。
 
 - src/editing/canvas_selection_interaction.js: createClearingはSelection・拘束operand・hoverの限定した参照・強調表示の解除を4 ownerのAPIで調整する。拘束command本体や他のhover参照・snapを保ち、UI／履歴／model更新は担当しない。
+
+- src/commands/geometry_drag.js: createDerivedEntryは派生Instance全体と参照元Geometryのdrag plan／開始調整を14依存で担当する。参照元照会と通常session生成、既存GeometryDrag lifecycleを接続し、Selection／拒否通知・live anchor・pointer map／variableAllowedの既存境界を保持する。

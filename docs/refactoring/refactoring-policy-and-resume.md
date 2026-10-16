@@ -99,7 +99,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-週枠残量100%で再開。最新develop／mainとoriginの両branchが007288bで同期し、未コミット変更と他worktreeがないことを確認してcodex/sketch-edit-accessを作成した。開始時app.jsは4,840行。Sketch編集guard／拒否処理、共通hit方針、重なり順操作、Canvasメニューのコピー可否照会、表示数値の整形、Sketchのロック更新と名前変更guard、CommandPanelの表示先選択／振分け、Selection解除の調整を責務ごとに分離し、現在は4,729行（今回合計111行減）。最新検証は構文511ファイル・単体1,413件・関連E2E181件成功。各単位の範囲・行数・検証と以前の全体検証はcomposition-root.mdを参照する。全E2Eは今回未実行。全体目標は未完了。作図開始・取消は既存DrawOperationLifecycleに分離済みと確認。次は84行のbeginDerivedGeometryDragに残る派生Instance全体／参照元のdrag planと開始調整を既存drag機能へ集約できるか確認し、mode／command操作調整・機能ごとの生成接続も続ける。
+週枠残量100%で再開。最新develop／mainとoriginの両branchが007288bで同期し、未コミット変更と他worktreeがないことを確認してcodex/sketch-edit-accessを作成した。開始時app.jsは4,840行。Sketch編集guard／拒否処理、共通hit方針、重なり順操作、Canvasメニューのコピー可否照会、表示数値の整形、Sketchのロック更新と名前変更guard、CommandPanelの表示先選択／振分け、Selection解除の調整、派生Geometryのドラッグ開始を責務ごとに分離し、現在は4,650行（今回合計190行減）。最新検証は構文511ファイル・単体1,419件・関連E2E192件成功。各単位の範囲・行数・検証と以前の全体検証はcomposition-root.mdを参照する。全E2Eは今回未実行。全体目標は未完了。作図開始・取消は既存DrawOperationLifecycleに分離済みと確認。beginDerivedGeometryDragはGeometryDrag.createDerivedEntryへ分離済み。次はresolveDerivedDragSourceとgeometryInstanceSourceObjectsの読み取り責務をInstanceProjectionへ集約できるか確認し、mode／command操作調整・機能ごとの生成接続も続ける。
 
 ### 前回の停止地点（2026-10-14）
 
