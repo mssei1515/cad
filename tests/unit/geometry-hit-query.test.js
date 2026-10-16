@@ -230,3 +230,62 @@ test('Reference Image hits use reverse array order, transformed inclusive bounds
   assert.deepEqual(f.state.referenceImages, [first, last]);
   f.state.referenceImages = []; assert.equal(f.query.hitReferenceImageAt(0, 0), null);
 });
+
+function scopePolicyFixture() {
+  const state = { mode: 'select', pending: null, constraint: null, active: 'S1', locked: new Set(['S2']) }, reads = [];
+  const policy = sandbox.window.GeometryHitQuery.createScopePolicy({
+    readMode: () => { reads.push('mode'); return state.mode; },
+    readPendingCommand: () => { reads.push('pending'); return state.pending; },
+    readConstraintCommand: () => { reads.push('constraint'); return state.constraint; },
+    activeSketchId: () => { reads.push('active'); return state.active; },
+    isEditableSketchId: id => { reads.push(['editable', id]); return !state.locked.has(id); },
+    isVisibleSketchId: id => { reads.push(['visibleSketch', id]); return id !== 'hidden'; },
+    isVisibleSketchElement: item => { reads.push(['visibleElement', item]); return item.visible !== false; },
+    elementSketchId: item => { reads.push(['owner', item]); return item.sketchId; },
+  });
+  return { state, reads, policy };
+}
+
+test('scope hit policy permits inspection across visible locked Sketches and follows command and destination changes', () => {
+  const { state, reads, policy } = scopePolicyFixture();
+  assert.deepEqual(reads, []); // Creating a query must not capture the initial interaction state.
+  const item = { sketchId: 'S2' };
+  assert.equal(policy.hitElementAllowed(item), true);
+  assert.equal(policy.hitSketchAllowed('hidden'), false);
+  for (const command of ['pending', 'constraint']) {
+    state[command] = {};
+    assert.equal(policy.hitElementAllowed(item), false);
+    state.active = 'S2';
+    assert.equal(policy.hitElementAllowed(item), false);
+    state.locked.clear();
+    assert.equal(policy.hitElementAllowed(item), true);
+    state[command] = null; state.active = 'S1'; state.locked.add('S2');
+  }
+  state.mode = 'line';
+  assert.equal(policy.hitElementAllowed(item), false);
+  state.mode = 'select';
+  assert.equal(policy.hitElementAllowed(item), true);
+  item.visible = false;
+  assert.equal(policy.hitElementAllowed(item), false);
+  assert.deepEqual(Object.keys(item), ['sketchId', 'visible']);
+  assert.equal(state.active, 'S1');
+});
+
+test('scope hit policy preserves short circuits before command, owner and permission reads', () => {
+  const { state, reads, policy } = scopePolicyFixture();
+  state.mode = 'line';
+  assert.equal(policy.ordinarySelectionMode(), false); assert.deepEqual(reads, ['mode']);
+  reads.length = 0; state.mode = 'select'; state.pending = {};
+  assert.equal(policy.ordinarySelectionMode(), false); assert.deepEqual(reads, ['mode', 'pending']);
+  reads.length = 0;
+  assert.equal(policy.hitSketchAllowed('hidden'), false); assert.deepEqual(reads, [['visibleSketch', 'hidden']]);
+  reads.length = 0;
+  const hidden = { sketchId: 'S1', visible: false };
+  assert.equal(policy.hitElementAllowed(hidden), false); assert.deepEqual(reads, [['visibleElement', hidden]]);
+  reads.length = 0;
+  assert.equal(policy.hitSketchAllowed('S2'), false);
+  assert.deepEqual(reads, [['visibleSketch', 'S2'], 'mode', 'pending', 'active']);
+  reads.length = 0; state.pending = null;
+  assert.equal(policy.hitSketchAllowed('S2'), true);
+  assert.deepEqual(reads, [['visibleSketch', 'S2'], 'mode', 'pending', 'constraint']);
+});

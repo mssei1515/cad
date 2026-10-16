@@ -147,3 +147,102 @@ test('annotation solve input is released on completion, failure and cancellation
     if (mode === 'finish') assert.equal(synced, 3);
   }
 });
+
+vm.runInNewContext(fs.readFileSync('src/geometry/pattern_instance_model.js', 'utf8'), sandbox);
+class EntryPoint { constructor(x, y) { this.x = x; this.y = y; } }
+class EntryLine { constructor(p1, p2) { this.id = 'I1/L1'; this.p1 = p1; this.p2 = p2; } }
+function derivedEntryFixture() {
+  const calls = [], source = {}, instance = { id: 'I1', type: 'pattern', sketchId: 'S1', x: 4, y: 5, placement: { kind: 'linear' } };
+  const item = new EntryLine(new EntryPoint(0, 0), new EntryPoint(10, 0));
+  const hit = { instance, item, kind: 'line', endpoint: 'end' }, pointer = { x: 4, y: 3 };
+  const selection = { geometryInstances: [], instanceGeometry: null, set(key, value) { this[key] = value; calls.push(['set', key]); } };
+  const state = { allowed: true, sources: new Set([source]), sourcePoints: [], plan: {}, resolved: { item: source, pointer: { x: 2, y: 1 }, mapPointer: p => p } };
+  const drag = { label: 'Dragging', begin(e, plan) { assert.equal(this, drag); state.started = { e, plan }; calls.push(['begin']); }, reset() { calls.push(['reset']); } };
+  const entry = sandbox.window.GeometryDrag.createDerivedEntry({ types: { Point: EntryPoint, Line: EntryLine },
+    canEdit: id => { calls.push(['guard', id]); return state.allowed; }, canvasSelection: selection,
+    geometryInstanceSourceObjects: () => { calls.push(['sources']); return state.sources; },
+    clearSelection: () => { calls.push(['clear']); selection.geometryInstances = []; selection.instanceGeometry = null; },
+    geometryInstanceSourcePoints: () => state.sourcePoints,
+    resolveDerivedDragSource: () => { calls.push(['resolve']); return state.resolved; },
+    buildDragSession: (kind, item, pointer) => { state.built = { kind, item, pointer }; return state.plan; }, geometryDrag: drag,
+    setHint: (...args) => calls.push(['hint', ...args]), applicationText: (_ja, en) => en,
+    updateGeometrySelectionUI: () => calls.push(['selectionUI']), updateUI: options => calls.push(['ui', options.refreshAnalysis]), draw: () => calls.push(['draw']),
+  });
+  return { entry, calls, state, source, instance, item, hit, pointer, selection };
+}
+
+test('derived drag entry rejects anchor controls and denied owners before changing selection', () => {
+  const f = derivedEntryFixture();
+  f.entry.begin(event, { item: { instanceControl: 'anchor' } }, f.pointer); assert.deepEqual(f.calls, []);
+  f.state.allowed = false; const selected = f.selection.geometryInstances;
+  f.entry.begin(event, f.hit, f.pointer);
+  assert.deepEqual(f.calls, [['guard', 'S1']]); assert.equal(f.selection.geometryInstances, selected); assert.equal(f.state.started, undefined);
+});
+
+test('whole placed instance drag retains click-selection metadata, source exclusions and completion order', () => {
+  const f = derivedEntryFixture(); f.selection.geometryInstances = [f.instance];
+  f.entry.begin(event, f.hit, f.pointer);
+  const { plan, e } = f.state.started;
+  assert.equal(e, event); assert.equal(plan.item, f.instance); assert.equal(plan.startPointer, f.pointer);
+  assert.equal(plan.kind, 'free-instance'); assert.equal(plan.startX, 4); assert.equal(plan.startY, 5);
+  assert.equal(plan.clickGeometrySelection.id, f.item.id);
+  assert.equal(plan.variableAllowed({ object: f.source, prop: 'x' }), false);
+  assert.equal(plan.variableAllowed({ object: f.instance, prop: 'rotation' }), false);
+  assert.equal(plan.variableAllowed({ object: f.instance, prop: 'x' }), true);
+  assert.deepEqual(f.calls.map(call => call[0]), ['guard', 'sources', 'clear', 'set', 'begin', 'hint', 'selectionUI', 'draw']);
+});
+
+test('unplaced and circular placements keep a live line anchor and a separate starting snapshot', () => {
+  for (const placement of [undefined, { kind: 'circular' }]) {
+    const f = derivedEntryFixture(); f.instance.placement = placement;
+    f.entry.begin(event, f.hit, f.pointer);
+    const plan = f.state.started.plan;
+    assert.equal(plan.kind, 'derived-instance'); assert.equal(plan.mode, 'derived-placement');
+    assert.equal(plan.anchor.x, 4); assert.equal(plan.anchor.y, 0);
+    f.item.p1.y = 10; f.item.p2.y = 20;
+    assert.equal(plan.anchor.y, 14); assert.equal(plan.startAnchor.y, 0);
+    assert.equal(plan.clickGeometrySelection, null);
+  }
+});
+
+test('source drag keeps Block or arc-endpoint operands, pointer mapping and placed-instance variable exclusions', () => {
+  for (const kind of ['block', 'arc-endpoint']) {
+    const f = derivedEntryFixture(); f.selection.geometryInstances = [f.instance]; f.selection.instanceGeometry = { instanceId: 'I1' };
+    const owner = {}, source = kind === 'block' ? { blockProjection: true, blockInstance: owner } : {};
+    f.state.resolved.item = source; f.hit.kind = 'arc-endpoint';
+    f.hit.item.derivedProjection = true; f.hit.item.derivedInstance = f.instance;
+    f.state.plan.variableAllowed = () => false;
+    f.entry.begin(event, f.hit, f.pointer);
+    assert.equal(f.state.built.kind, kind);
+    if (kind === 'block') assert.equal(f.state.built.item, owner);
+    else { assert.equal(f.state.built.item.arc, source); assert.equal(f.state.built.item.endpoint, 'end'); }
+    assert.equal(f.state.built.pointer, f.state.resolved.pointer);
+    const plan = f.state.started.plan;
+    assert.equal(plan, f.state.plan); assert.equal(plan.derivedSource, source); assert.equal(plan.derivedInstance, f.instance);
+    assert.equal(plan.pointerMap, f.state.resolved.mapPointer); assert.equal(plan.displayStartPointer, f.pointer);
+    assert.equal(plan.variableAllowed({ object: f.instance }), false); assert.equal(plan.variableAllowed({ object: source }), true);
+    assert.deepEqual(f.calls.at(-2), ['ui', false]); assert.deepEqual(f.calls.at(-1), ['draw']);
+  }
+});
+
+test('unresolved, projected and fixed sources preserve selection feedback and never start a drag', () => {
+  for (const reason of ['unresolved', 'projection', 'fixed']) {
+    const f = derivedEntryFixture(); f.selection.geometryInstances = [f.instance]; f.selection.instanceGeometry = { instanceId: 'I1' };
+    if (reason === 'unresolved') f.state.resolved = null;
+    if (reason === 'projection') { f.instance.type = 'sketchProjection'; f.state.resolved.crossesSketchProjection = true; }
+    if (reason === 'fixed') f.state.plan = null;
+    f.entry.begin(event, f.hit, f.pointer);
+    assert.equal(f.state.started, undefined); assert.equal(f.selection.geometryInstances[0], f.instance);
+    assert.equal(f.calls.find(call => call[0] === 'hint')[2], 'error');
+    assert.equal(f.calls.some(call => call[0] === 'reset'), reason === 'fixed');
+    if (reason === 'projection') assert.equal(f.selection.instanceGeometry, null);
+    assert.deepEqual(f.calls.slice(-2), [['selectionUI'], ['draw']]);
+  }
+});
+
+test('missing whole-instance anchor stops after selecting the instance without starting or refreshing', () => {
+  const f = derivedEntryFixture(); f.instance.placement = undefined; f.hit.item = {};
+  f.entry.begin(event, f.hit, f.pointer);
+  assert.equal(f.selection.geometryInstances[0], f.instance); assert.equal(f.state.started, undefined);
+  assert.deepEqual(f.calls.map(call => call[0]), ['guard', 'sources', 'clear', 'set']);
+});

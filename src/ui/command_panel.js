@@ -235,5 +235,16 @@
     });
     return Object.freeze({ update, canvasPress, canvasMove, canvasDoubleClick, get active() { return Boolean(readState()); } });
   }
-  window.CommandPanel = Object.freeze({ create });
+  // Route presentation events; each command continues to own its draft and cancellation.
+  function createRouting({ readMode, isAnnotationActive, derivedPanel, hatchPanel, annotationPanel, pngExportCommand }) {
+    const currentPanel = () => isAnnotationActive() ? annotationPanel : ["hatch", "hatch-repair"].includes(readMode()) ? hatchPanel : derivedPanel;
+    return Object.freeze({ ...derivedPanel,
+      readState: () => pngExportCommand.active ? pngExportCommand.readState() : currentPanel().readState(),
+      onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : currentPanel().onAction(action),
+      onSelect: (key, index) => currentPanel().onSelect?.(key, index),
+      onRemove: (key, index) => currentPanel().onRemove?.(key, index),
+      onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : currentPanel().onSetting(key, value),
+    });
+  }
+  window.CommandPanel = Object.freeze({ create, createRouting });
 })();

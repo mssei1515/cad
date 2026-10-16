@@ -214,5 +214,21 @@
     }
     return Object.freeze({ selectIdentity });
   }
-  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection });
+  // Clear selection-related presentation through its existing owners, without canceling a command.
+  function createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight }) {
+    function clear() {
+      canvasSelection.clear();
+      constraintTargetSession.clearOperands();
+      canvasHover.update({
+        sketchIdentity: null, block: null, geometryInstance: null,
+      });
+      selectionHighlight.reset();
+      canvasHover.update({
+        annotation: null, hatch: null, referenceImage: null,
+        spline: null,
+      });
+    }
+    return Object.freeze({ clear });
+  }
+  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection, createClearing });
 })();

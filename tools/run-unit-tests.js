@@ -2,10 +2,12 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "tests/unit/expression-input-view.test.js", "tests/unit/expression-input-controller.test.js",
+  "tests/unit/command-panel.test.js",
   "tests/unit/derived-patterns.test.js",
   "tests/unit/annotation-anchor-constraints.test.js",
   "tests/unit/clipboard-transfer.test.js",
-  "tests/unit/clipboard-command.test.js", "tests/unit/solve-refresh-command.test.js",
+  "tests/unit/clipboard-command.test.js", "tests/unit/solve-refresh-command.test.js", "tests/unit/trim-command.test.js", "tests/unit/drawing-order-command.test.js",
   "tests/unit/clipboard-graph.test.js",
   "tests/unit/clipboard-session.test.js",
   "tests/unit/clipboard-paste-checkpoint.test.js",
@@ -53,7 +55,7 @@ const files = [
   "tests/unit/block-selection-query.test.js",
   "tests/unit/block-definition-editing.test.js",
   "tests/unit/selection.test.js",
-  "tests/unit/application-settings.test.js",
+  "tests/unit/number-display.test.js", "tests/unit/application-settings.test.js",
   "tests/unit/constraint-references.test.js",
   "tests/unit/sketch-context.test.js",
   "tests/unit/module-loading.test.js",
@@ -77,7 +79,7 @@ const files = [
   "tests/unit/runtime-version-view.test.js",
   "tests/unit/keyboard-interaction-controller.test.js",
   "tests/unit/constraint-status-view.test.js",
-  "tests/unit/constraint-feedback.test.js",
+  "tests/unit/constraint-feedback.test.js", "tests/unit/authoring-feedback.test.js",
   "tests/unit/viewport.test.js",
   "tests/unit/dimension-metrics.test.js",
   "tests/unit/dimension-constraint-factory.test.js",
