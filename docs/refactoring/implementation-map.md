@@ -920,3 +920,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/editing/geometry_hit_query.js: createScopePolicyは通常select／commandの状態とSketchの表示・所属・編集可否から共通hit対象範囲を照会する。8個のread portのみで接続し、Geometry／Instance／寸法／Hatch／画像／Annotationで使う判定をappが接続する。
 
 - src/commands/drawing_order_command.js: Selectionからの重なり順候補／操作可否／最前面owner照会と、権限guard・順序変更・表示／履歴完了を担当。現在modelを含む11個の限定portを接続し、owner解決・順序補完・並べ替えはsrc/document/drawing_order.jsへ委譲する。
+
+- src/editing/clipboard_payload.js: canOfferCopyはCanvasメニューで使うコピー／切り取り可否をmodelとSelectionから照会する。既存のObject同一参照とHatch境界選択の条件を維持し、payload生成・clipboard session・UI更新を行わない。

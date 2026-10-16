@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Canvasメニューのコピー可否照会
+
+hasCopyableCanvasSelectionの照会を既存ClipboardPayload.canOfferCopyへ分離し、appは現在model／Selectionを渡す入口だけを持つ。新port／script／unit fileは増やさず、既存factory内のGeometryRefとHatch境界参照照会を使う。model内のObject同一参照、対象型の順と短絡、全選択Hatchの境界GeometryRef選択を維持し、元bodyとの一致を確認。これはメニュー専用の既存判定であり、派生Instanceだけの場合を含むbuildの条件とは統一していない。UIやコピー可否の仕様変更は行わない。
+
+app.jsは4,800→4,781行（19行減、今回の再開から合計59行減）。既存ClipboardPayload unitに2件追加し、現在scopeの同一参照、既存対象型、Hatch外周／穴の境界選択と無変更を確認。構文508ファイル・単体1,403件・関連E2E20件が成功（すべてexit 0、E2E56.3秒）。unified-ui／derived-selection-copy／hatching／reference-imagesからcopy／paste／clipboard／context／cutの関連ケースを抽出し、メニュー、Hatch境界、Geometry／派生Instance／画像のコピー・貼付けを確認。npm経由のWindows引数引用で正規表現のpipeが展開されたため、Playwright CLIを直接呼び出して実行した。全20件とworker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-copy-menu-query-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は表示数値の整形と、残るmode／command操作調整・機能ごとの生成接続を整理する。
+
 ### 重なり順の操作調整
 
 選択候補生成／最前面owner照会／menu状態／順序変更完了をDrawingOrderCommandへ分離。11個の限定した現在model・Selection／通常選択・権限照会とUI／draw／history／hint portで接続する。owner解決・順序補完・並べ替え計算は既存DrawingOrderを利用する。appは現在modelの取得と生成接続を持ち、Document／Block・一時model切替後のscopeを保持しない。元4bodyと一致し、作図先優先→通常選択時だけSketch配列逆順、選択Sketch→作図先fallback、guard→reorder→UI（analysis再計算なし）→draw→history→hint順と結果を維持する。

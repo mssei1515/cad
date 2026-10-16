@@ -3673,26 +3673,7 @@
   function hasCancellableCanvasCommand() { return canvasCommandCancellation.hasCancellable(); }
   function cancelCanvasCommandFromContextMenu() { return canvasCommandCancellation.cancel(); }
 
-  function hasCopyableCanvasSelection() {
-    const hasSelectionItems = canvasSelection.points.some((item) => model.points.includes(item)) ||
-      canvasSelection.lines.some((item) => model.lines.includes(item)) ||
-      canvasSelection.circles.some((item) => model.circles.includes(item)) ||
-      canvasSelection.arcs.some((item) => model.arcs.includes(item)) ||
-      canvasSelection.splines.some((item) => model.splines.includes(item)) ||
-      canvasSelection.blockInstances.some((item) => model.blockInstances.includes(item)) ||
-      canvasSelection.annotations.some((item) => model.annotations.includes(item)) ||
-      canvasSelection.hatches.some((item) => model.hatches.includes(item)) ||
-      canvasSelection.referenceImages.some(item => model.referenceImages.includes(item));
-    if (!hasSelectionItems) return false;
-    const selectedGeometryRefs = new Set([
-      ...canvasSelection.lines.map((item) => `line:${item.id}`),
-      ...canvasSelection.circles.map((item) => `circle:${item.id}`),
-      ...canvasSelection.arcs.map((item) => `arc:${item.id}`),
-      ...canvasSelection.splines.map((item) => `spline:${item.id}`),
-    ]);
-    if (!canvasSelection.hatches.every((hatch) => hatchBoundaryGeometryRefs(hatch.boundaryLoops).every((ref) => selectedGeometryRefs.has(`${ref.kind}:${geometryRefId(ref)}`)))) return false;
-    return true;
-  }
+  function hasCopyableCanvasSelection() { return clipboardPayload.canOfferCopy(model, canvasSelection); }
 
   const { topmostOwner: topmostDrawingOrderOwner, state: drawingOrderCommandState, reorder: reorderSelectedDrawingObjects } = window.DrawingOrderCommand.create({
     currentScope: () => model, canvasSelection, activeSketchId, selectionSketchId, ordinarySelectionMode,

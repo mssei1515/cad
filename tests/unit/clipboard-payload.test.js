@@ -14,7 +14,7 @@ function fixture() {
   const builder = sandbox.window.ClipboardPayload.create({ geometryInstanceBundle: () => bundle, serializeGeometryInstance: sandbox.window.DocumentSnapshot.serializeGeometryInstance, blockProjectionBundle: () => bundle, blockProjectionLocalId: item => item.localId,
     resolveGeometryRef: () => state.target, constraintGraphNodes: c => c.nodes,
     serializeConstraint: c => { state.serialized.push(c); return { tag: c.tag }; }, applicationText: (_ja, en) => en });
-  return { model, selection, state, bundle, build: scope => builder.build(model, selection, scope) };
+  return { model, selection, state, bundle, canOfferCopy: builder.canOfferCopy, build: scope => builder.build(model, selection, scope) };
 }
 
 test('payload retains model point order and collects dependent endpoints while copying only contained constraints', () => {
@@ -78,4 +78,33 @@ test('annotation-only copy drops fixed and geometry anchor constraints without m
   assert.equal(JSON.stringify(notes), before);
   f.model.points = [target]; f.selection.points = [target];
   assert.equal(f.build().payload.annotations[0].anchorConstraints[0].geometryRef.path[0], 'P1');
+});
+
+test('copy menu query requires current-scope object identity and preserves its existing eligible types', () => {
+  const f = fixture();
+  assert.equal(f.canOfferCopy(f.model, f.selection), false);
+  for (const key of arrays.filter(key => !['geometryInstances', 'hatches'].includes(key))) {
+    const item = { id: 'same-id' }; f.model[key] = [item]; f.selection[key] = [item];
+    const before = JSON.stringify({ model: f.model, selection: f.selection });
+    assert.equal(f.canOfferCopy(f.model, f.selection), true, key);
+    assert.equal(JSON.stringify({ model: f.model, selection: f.selection }), before);
+    f.selection[key] = [{ ...item }];
+    assert.equal(f.canOfferCopy(f.model, f.selection), false, key + ' requires identity');
+    f.selection[key] = []; f.model[key] = [];
+  }
+  const derived = { id: 'I1' }; f.model.geometryInstances = [derived]; f.selection.geometryInstances = [derived];
+  assert.equal(f.canOfferCopy(f.model, f.selection), false); // Keep the menu's existing condition separate from build().
+});
+
+test('copy menu query requires every selected Hatch boundary reference and leaves the source untouched', () => {
+  const f = fixture(), outer = { id: 'C1' }, inner = { id: 'C2' };
+  const hatch = { id: 'H1', boundaryLoops: [outer, inner].map((circle, i) => ({ role: i ? 'hole' : 'outer', spans: [{ source: { kind: 'circle', path: [circle.id] }, fullCircle: true }] })) };
+  f.model.hatches = [hatch]; f.selection.hatches = [hatch]; f.model.circles = [outer, inner];
+  assert.equal(f.canOfferCopy(f.model, f.selection), false);
+  f.selection.circles = [outer]; assert.equal(f.canOfferCopy(f.model, f.selection), false);
+  f.selection.circles.push(inner);
+  const before = JSON.stringify({ model: f.model, selection: f.selection });
+  assert.equal(f.canOfferCopy(f.model, f.selection), true);
+  assert.equal(JSON.stringify({ model: f.model, selection: f.selection }), before);
+  assert.deepEqual(f.state.serialized, []);
 });
