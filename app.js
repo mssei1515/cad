@@ -523,11 +523,8 @@
   });
   const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
   let toolFlyouts = null;
-  const viewState = { constraintStatus: false, geometryIds: false, showHiddenElements: false };
-  const constraintStatusView = window.ConstraintStatusView.create({
-    viewState, button: document.getElementById("constraintStatusViewBtn"),
-    menuInput: document.getElementById("viewConstraintStatusInput"), setHint, draw,
-  });
+  const canvasViewControls = window.CanvasViewControls.create({ document, window, setHint, draw });
+  const { state: viewState, constraintStatus: constraintStatusView } = canvasViewControls;
   const MIN_ZOOM = CSS_PX_PER_MM * 0.001;
   const MAX_ZOOM = CSS_PX_PER_MM * 10000000;
 
@@ -3455,8 +3452,7 @@
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
   window.addEventListener("keydown", keyboardInteraction.keydown);
-  window.addEventListener("keyup", constraintStatusView.release);
-  window.addEventListener("blur", constraintStatusView.blur);
+  canvasViewControls.bindWindow();
 
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
@@ -3469,20 +3465,7 @@
     }
   });
   document.getElementById("annotationTextBtn")?.addEventListener("click", () => annotationCommand.start());
-  document.getElementById("constraintStatusViewBtn")?.addEventListener("click", () => {
-    constraintStatusView.toggle();
-  });
-  document.getElementById("viewConstraintStatusInput")?.addEventListener("change", (event) => {
-    constraintStatusView.setLatched(event.target.checked);
-  });
-  document.getElementById("viewShowHiddenElementsInput")?.addEventListener("change", (event) => {
-    viewState.showHiddenElements = event.target.checked;
-    draw();
-  });
-  document.getElementById("viewGeometryIdsInput")?.addEventListener("change", (event) => {
-    viewState.geometryIds = event.target.checked;
-    draw();
-  });
+  canvasViewControls.bindControls();
 
   function withStoredDefinitionAsModel(definition, callback) {
     const previousScope = model;

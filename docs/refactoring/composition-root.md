@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Canvas表示設定の状態所有とUI接続
+
+CanvasViewControlsへconstraintStatus／geometryIds／showHiddenElementsの値と表示control／window keyup・blurのlistener寿命を集約。read-only getterのlive stateを描画・照会へ渡し、外部からの直接更新をなくした。既存ConstraintStatusViewのmouse latch／Space保持・hint・再描画の判定は変更せず、KeyboardInteractionControllerのkeydown優先順とtext入力判定も維持。bindWindowとbindControlsを元の位置で接続し、二重登録防止・dispose／再bindは自分のlistenerだけを対象とする。保存や履歴には組み込まない。
+
+app.jsは4,129→4,112行（17行減、b120651から合計31行減）。classic script／構文／unit／E2E読込一覧を同期。新単体4件で既定値とlive read-only state、値更新→毎回再描画、mouse／Space／blur、listener所有と再bind、任意DOM不在を確認。構文540ファイル・単体1,488件・loader1件・関連E2E114件成功（すべてexit 0）。view-visibility／unified-ui全106件（1.5分）、canvas-zoom-inputの表示ケース1件とconstraint-drag-regressionsのnative pointer reversals and undo全7件（計8件、26.4秒）を実行。拘束drag全fileや全E2Eの実行ではない。ログは一時ディレクトリのcad-canvas-view-controls-{check,unit,loader,e2e,pointer-e2e}.log。全体目標は未完了。次は編集Toolbar（Undo／Redo／選択削除・可視性／Annotation開始）の入力と既存操作ownerの境界を調べる。
+
 ### 参照画像入力の機能組立て
 
 ReferenceImageInputへ画像準備・配置command・Clipboardの生成接続とfile inputのlistener寿命を集約。画像変換／配置／Clipboard分岐の既存ownerは変更せず、bindClipboardとbindControlsを分けて従来の登録時期を維持する。importFileとclipboardは元のAPIを返し、menu／Canvas／診断の利用先を保つ。input値解除→非同期import、準備後の現在scope・Sketch・倍率と再権限確認を保持する。巨大contextや独自モデル状態を追加しない。Geometry Clipboardとの共有に必要なcopy／paste操作portは明示して残す。

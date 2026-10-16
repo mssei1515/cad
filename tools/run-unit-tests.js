@@ -132,7 +132,7 @@ const files = [
   "tests/unit/line-command.test.js",
   "tests/unit/fillet-command.test.js",
   "tests/unit/command-cursor.test.js",
-  "tests/unit/toolbar-view.test.js",
+  "tests/unit/toolbar-view.test.js", "tests/unit/canvas-view-controls.test.js",
   "tests/unit/constraint-controls-view.test.js",
   "tests/unit/dimension-input-view.test.js",
   "tests/unit/dimension-input-controller.test.js",

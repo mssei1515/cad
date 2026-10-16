@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。週枠使用21%／残量79%でcodex/reference-image-featureを最新developから作成した。現在は同branchで継続する。参照画像入力の生成接続とfile／Clipboard登録寿命をReferenceImageInputへ集約し、app.jsは4,143→4,129行（14行減）。構文538ファイル・単体1,484件・loader1件・関連E2E125件成功。今回は全E2E未実行。全体目標は未完了。次はToolbar／表示設定のlistenerと既存UI ownerの境界を調べ、UIがモデルを直接更新する接続やmode／command調整を責務単位で整理する。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。参照画像入力の生成接続とfile／Clipboard登録寿命に続き、Canvas表示設定の状態とUI listenerを分離。app.jsは4,143→4,129→4,112行（合計31行減、直近17行減）。構文540ファイル・単体1,488件・loader1件・関連E2E114件成功。今回は全E2E未実行。最新週枠使用22%／残量78%。全体目標は未完了。次は編集Toolbar（Undo／Redo／選択削除・可視性／Annotation開始）の入力と既存操作ownerの境界を調べる。各機能の依存を明示し、巨大contextや単なる別の巨大appへの移動を避ける。
 
 ### 直前のリリース（2026-10-16）
 
