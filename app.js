@@ -1327,11 +1327,10 @@
 
   function guardSelectionEdit(...args) { return sketchEditAccess.guardSelectionEdit(...args); }
 
-  function ordinarySelectionMode() { return mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command; }
-  function hitSketchAllowed(id) {
-    return isVisibleSketchId(id) && (ordinarySelectionMode() || id === activeSketchId() && isEditableSketchId(id));
-  }
-  function hitElementAllowed(item) { return isVisibleSketchElement(item) && hitSketchAllowed(elementSketchId(item)); }
+  const { ordinarySelectionMode, hitSketchAllowed, hitElementAllowed } = window.GeometryHitQuery.createScopePolicy({
+    readMode: () => mode, readPendingCommand: () => pendingCommandSession.current, readConstraintCommand: () => constraintTargetSession.command,
+    isVisibleSketchId, isVisibleSketchElement, elementSketchId, activeSketchId, isEditableSketchId,
+  });
 
   function toggleSketchLock(id) {
     const sketch = sketchById(id);

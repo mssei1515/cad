@@ -99,7 +99,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-週枠残量100%で再開。最新develop／mainとoriginの両branchが007288bで同期し、未コミット変更と他worktreeがないことを確認してcodex/sketch-edit-accessを作成した。開始時app.jsは4,840行。全体目標は未完了。Sketch編集guard／拒否処理を既存SketchCommand.createEditAccessへ分離し、app.jsは4,828行（12行減）。構文506・単体1,395・関連E2E171件が成功（全E2Eは今回未実行）。次の候補はordinarySelectionMode／hitSketchAllowed／hitElementAllowedのhit方針、mode／command操作調整と機能ごとの生成・接続。現在の検証・行数はcomposition-root.mdの最新記録を参照する。
+週枠残量100%で再開。最新develop／mainとoriginの両branchが007288bで同期し、未コミット変更と他worktreeがないことを確認してcodex/sketch-edit-accessを作成した。開始時app.jsは4,840行。全体目標は未完了。Sketch編集guard／拒否処理を既存SketchCommand.createEditAccessへ分離し、app.jsは4,828行（12行減）。構文506・単体1,395・関連E2E171件が成功（全E2Eは今回未実行）。共通hit方針もGeometryHitQuery.createScopePolicyへ分離し、app.jsは4,827行（今回合計13行減）。最新検証は構文506・単体1,397・関連E2E180件成功。次はSelectionと重なり順操作の調整、mode／command操作調整と機能ごとの生成・接続。現在の検証・行数はcomposition-root.mdの最新記録を参照する。
 
 ### 前回の停止地点（2026-10-14）
 

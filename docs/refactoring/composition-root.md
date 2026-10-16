@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 共通hit対象範囲
+
+ordinarySelectionMode／hitSketchAllowed／hitElementAllowedを既存GeometryHitQuery.createScopePolicyへ集約。mode／pending command／constraint commandとSketchの表示・要素表示・所属・作図先・編集可否の8個のread portで接続し、通常選択は表示中の別Sketch／ロック中も検査でき、command中は作図先の編集可能要素へ絞る既存動作を維持する。SelectionやDocument／操作sessionは所有・変更しない。3式は元のbodyと照合し、状態はcallbackで実行時に読む。元のhoisted関数からconstへの変更について、生成時に状態を読まないことと全consumerの登録／呼出し時点を確認。新script／unit fileなし。
+
+app.jsは4,828→4,827行（1行減、今回の再開から合計13行減）。単なるdelegateを追加せず、8個の依存の生成接続へ置換したため行数差は小さい。既存GeometryHitQuery unitへ2件追加し、通常選択／保留command／拘束command／mode／作図先／lockの切替と、非表示・非select・保留command時の短絡順を確認。構文506ファイル・単体1,397件・関連E2E180件が成功（すべてexit 0、E2E3.0分）。sketch-permissions／sketch-projection／blocks／unified-ui／drawing-order／derived-selection-copyを実行。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-hit-scope-policy-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はSelectionと重なり順操作の調整、mode／commandの開始と機能ごとの生成接続を整理する。
+
 ### Sketch編集のguardと拒否処理
 
 guardSketchEdit／guardSelectionEdit／canCreateInActiveSketch／rejectRootSketchCreationを既存SketchCommand.createEditAccessへ分離。権限規則はSketchContext、Selection／preview／snap状態は既存ownerに残す。11個の限定した照会・通知・解除portで接続し、実行時の作図先、default operation、null／undefinedの扱い、選択所属の重複排除と最初の拒否での短絡、hint→snap→pointer→draw順を保持。appではSketchContext直後に生成し、後で初期化されるclearSnap／drawingPreviewはcallbackで遅延参照する。4関数の本体一致を確認し、既存SketchCommand unitに境界検証4件を追加。新script／unit fileなし。
