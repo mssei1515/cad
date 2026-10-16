@@ -3016,6 +3016,9 @@
     return dimensionLineGroup.group(entries, reference);
   }
 
+  const { sync: syncAngleConstraintFromDimension } = window.DimensionDrag.createAngleSynchronization({
+    LineAngleConstraint, isReadOnlyDimension, angleDimensionAngles,
+  });
   const dimensionDrag = window.DimensionDrag.create({
     canEdit: item => guardSketchEdit(constraintSketchId(item)),
     selectedLineGroup: selectedDimensionLineGroup, translateLineGroup: dimensionLineGroup.translate,
@@ -3041,14 +3044,7 @@
     return constraintTargetSession.command?.type === "distance" && pendingCommandSession.current?.type !== "distance-value";
   }
 
-  function syncAngleConstraintFromDimension(constraint, target, dimension) {
-    if (!(constraint instanceof LineAngleConstraint) || target.kind !== "angle" || !dimension) return;
-    if (isReadOnlyDimension(constraint)) return;
-    const angles = angleDimensionAngles(target, null, dimension);
-    constraint.startFlip = dimension.angleStartFlip ? 1 : 0;
-    constraint.endFlip = dimension.angleEndFlip ? 1 : 0;
-    constraint.target = Math.abs(angles.signed);
-  }
+
 
 
 

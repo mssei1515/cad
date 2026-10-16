@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 寸法dragの角度constraint同期
+
+DimensionDragだけが使うsyncAngleConstraintFromDimensionを同moduleのcreateAngleSynchronizationへ集約。三つの明示依存で型／target kind／dimension有無→readonly→既存角度計算→現在flip flags→target絶対値の順を保持し、既存dragの同期portへ接続する。新しい寸法計算や状態、guard／求解・履歴・例外回復は追加しない。
+
+app.jsは3,960→3,956行（4行減、b120651から合計187行減）。新scriptなし。既存dimension-drag unitへ3件追加し、対象外の短絡・readonly無変更、同じtarget／dimensionとnull pointer、角度計算後のfield更新順、同一計算例外と値の保持を確認。構文546ファイル・単体1,539件・関連E2E121件成功（すべてexit 0、E2E1.7分）。multiple-dimensions／dimension-prefix／annotation-display-size／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-dimension-angle-sync-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はendpointAtの既存端点優先／explicit Pointからのendpoint生成と、GeometryCreation・hit queryの責務を確認する。未使用のpointAtも参照を監査し、生成規則・ID・参照を変えずに整理する。
+
 ### 選択解決からの拘束適用
 
 Toolbarと対象選択から使うaddConstraintの振分けを既存ConstraintCommitCommand.fromSelectionへ集約。SelectionQueryのresolutionとCanvasSelectionを明示portで受け、結果なし／errorの短絡、action／targetの寸法配置優先、同じresolution・null pointer・配置戻り値、通常constraintのarc pair解除→既存確定とundefined返値を維持する。既存guard／求解／回復・履歴は変更せず、新しい適用ルールを追加しない。appは先に生成する対象選択command用のhoisted delegateを残す。

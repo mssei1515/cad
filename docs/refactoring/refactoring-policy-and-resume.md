@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。選択resolutionから寸法配置／通常拘束確定への振分けをConstraintCommitCommand.fromSelectionへ集約。app.jsは4,143→3,960行（合計183行減、直近10行減）。構文546ファイル・単体1,536件・関連E2E146件成功。今回は全E2E未実行。最新週枠使用30%／残量70%。全体目標は未完了。次は寸法drag時の角度constraint同期（syncAngleConstraintFromDimension）の利用と既存DimensionDrag／寸法計算ownerを確認し、readonly拒否・flip／target更新の責務を整理する。既存型／対象kind・dimension有無の短絡、角度計算の引数と更新順・絶対値を維持する。巨大contextや異なる操作の単一stateへの統合を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。寸法dragの角度constraint同期をDimensionDrag.createAngleSynchronizationへ集約。app.jsは4,143→3,956行（合計187行減、直近4行減）。構文546ファイル・単体1,539件・関連E2E121件成功。今回は全E2E未実行。最新週枠使用31%／残量69%。全体目標は未完了。次はendpointAtの既存端点優先／explicit Pointからのendpoint生成と、GeometryCreation・hit queryの責務を確認する。未使用のpointAtも参照を監査し、生成規則・ID・参照を変えずに整理する。endpointAtの既存端点返却→explicit座標でendpoint作成→通常addPointの順・引数を維持し、起動順と操作時の現在scopeを保つ。巨大contextや異なる操作の単一stateへの統合を避ける。
 
 ### 直前のリリース（2026-10-16）
 

@@ -127,5 +127,17 @@
       get active() { return Boolean(dimensionDragSession); },
       get constraint() { return dimensionDragSession?.constraint; } });
   }
-  window.DimensionDrag = Object.freeze({ create });
+  function createAngleSynchronization({ LineAngleConstraint, isReadOnlyDimension, angleDimensionAngles }) {
+    function sync(constraint, target, dimension) {
+      if (!(constraint instanceof LineAngleConstraint) || target.kind !== "angle" || !dimension) return;
+      if (isReadOnlyDimension(constraint)) return;
+      const angles = angleDimensionAngles(target, null, dimension);
+      constraint.startFlip = dimension.angleStartFlip ? 1 : 0;
+      constraint.endFlip = dimension.angleEndFlip ? 1 : 0;
+      constraint.target = Math.abs(angles.signed);
+    }
+    return Object.freeze({ sync });
+  }
+
+  window.DimensionDrag = Object.freeze({ create, createAngleSynchronization });
 })();
