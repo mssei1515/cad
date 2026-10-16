@@ -58,3 +58,23 @@ test('specialized preparation resets only mode inputs and leaves selection and f
   f.calls.length = 0; f.controller.prepare('fillet');
   assert.deepEqual(f.calls, ['fillet', 'line', 'rectangle', 'fillet', 'circle', 'arcs', 'pointer']);
 });
+
+
+test('document replacement discards authoring drafts without rollback, UI work or resetting unrelated preview fields', () => {
+  const f = fixture();
+  f.deps.instances.clearSources = () => f.calls.push('clearSources');
+  f.deps.preview.trim = { retained: true };
+  f.controller.resetForDocument();
+  assert.deepEqual(f.calls, ['line', 'centerline', 'clearPoint', 'clearCompletion', 'rectangle', 'slot', 'fillet', 'circle', 'arcs', 'spline', 'projection', 'clearSources', 'instanceSources', 'splineEditing', 'pointer', 'offset']);
+  assert.equal(f.deps.preview.trim.retained, true);
+  f.calls.length = 0;
+  f.controller.resetForDocument();
+  assert.equal(f.calls.length, 16);
+});
+
+test('document reset propagates command failure and leaves later owners untouched', () => {
+  const f = fixture(), marker = new Error('reset failed');
+  f.deps.rectangle.reset = () => { throw marker; };
+  assert.throws(() => f.controller.resetForDocument(), error => error === marker);
+  assert.deepEqual(f.calls, ['line', 'centerline', 'clearPoint', 'clearCompletion']);
+});

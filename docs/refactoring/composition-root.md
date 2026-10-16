@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Document初期化時の作図下書き破棄
+
+resetModelStateの連続した16個の作図下書きresetを、既存DrawOperationLifecycle.resetForDocumentへ集約。追加依存なしでLine／Centerline、transient Point／Line completion、Rectangle／Slot／Fillet／Circle／Arc／Spline、投影／派生source、Spline編集、preview pointer、Offsetを従来順に破棄する。通常のexit／cancelはrollback・preview全体・Hatch・UI通知等の範囲が異なるため共用しない。Document内容・cache・採番、共通pending／constraint session、後段Hatch等のresetは元の初期化側に残す。factory生成はresetModelStateの実呼出しより前であり、既存factoryはreset callbackを生成時に実行しないことを確認。
+
+app.jsは4,453→4,438行（15行減、07024cbから合計21行減）。新script／依存なし。単体2件でDocument専用の破棄範囲、previewの他field保持、反復reset、失敗時の後続停止と例外伝播を確認。構文518ファイル・単体1,441件・関連E2E160件が成功（すべてexit 0、E2E2.2分）。file-safety／circular-authoring／spline／hatching／phase0-characterization／unified-uiを実行し、起動・ファイル置換・作図・保存再読込を確認。全runnerは正常終了。E2E後は新method本体のindentだけを修正し、空白除去比較で実行token不変を確認した。ログは一時ディレクトリのcad-document-draft-reset-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はDocument初期化に残るSelection／hoverの明示resetと、既存CanvasSelectionInteractionの所有範囲を確認する。順序や意図的な重複を勝手に統合しない。
+
 ### symbol削除の共通guard
 
 guardDimensionSymbolDeletionを既存ParameterApplication.createDeletionGuardへ分離。ParameterNamespaceの依存照会と、現在namespace／言語／hint／logの5依存を明示し、独立した編集前guardとして各削除commandへ接続する。名前空間のdefault引数評価、依存なしの通知省略、依存名の順と区切り、操作時の言語、hint→log順、例外伝播を維持。モデルと削除transaction・履歴は持ち込まない。appではParameterNamespace直後、最初のconsumerより前で初期化し、生成時に照会を実行しない。新scriptなし。

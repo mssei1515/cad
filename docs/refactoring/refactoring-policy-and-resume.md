@@ -101,7 +101,7 @@
 
 前回のリリースは07024cb。local／originのmainとdevelopが同じcommit、作業treeがcleanであることを確認。週枠使用10%／残量90%で、最新developからcodex/parameter-edit-guardを作成して継続した。現在はこの作業branchで進める。停止条件はsection 6どおり残量50%未満であり、各抽出ごとにmainへは統合しない。
 
-ParameterApplication.createDeletionGuardへsymbol削除の共通guardを集約。app.jsは4,459→4,453行（今回6行減）。構文518ファイル・単体1,439件・関連E2E83件が成功。詳細とログはcomposition-root.md。前回リリース07024cbのコードに対して全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次はresetModelStateの操作sessionリセット範囲と既存ownerへの委譲・初期化順を検討する。mode／command操作調整、機能ごとの生成接続、test hook公開境界も残る。小さなhelper単位の分割を目的にせず、状態の所有と依存の整理を優先する。
+ParameterApplication.createDeletionGuardへsymbol削除guard、DrawOperationLifecycle.resetForDocumentへDocument初期化時の作図下書き破棄を集約。app.jsは4,459→4,438行（今回合計21行減、直近15行減）。最新の構文518ファイル・単体1,441件・関連E2E160件が成功。詳細とログはcomposition-root.md。前回リリース07024cbのコードで全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次はDocument初期化に残るSelection／hoverの明示resetと既存CanvasSelectionInteractionの所有範囲を検討する。順序や意図的な重複を勝手に統合しない。mode／command操作調整、機能ごとの生成接続、test hook公開境界も残る。状態の所有と依存の整理を優先する。
 
 ### 前回の停止地点（2026-10-14）
 
