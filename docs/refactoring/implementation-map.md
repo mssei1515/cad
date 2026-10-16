@@ -1063,3 +1063,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/rendering/canvas_surface.js: createInteractiveRendererが通常Canvasの18段階の重ね描きを所有し、createFrameRendererのPNG分岐とは分ける。src/rendering/annotation_renderer.js: layer.drawPreviewが現在previewの取得とleader／textの描画振分けを所有。appは既存描画器と描画用callbackだけを接続し、model／操作contextやpreview stateを複製しない。
+
+
+- src/application/offset_feature.js: Offsetの計算／生成／command／previewの機能組立て。OffsetSelection・pending・選択・preview・Geometry生成と採番は既存所有者を共有し、plans／command／previewLayer／createGeometry／chainDraftを公開する。appは同featureの生成・接続を行い、早期のOffsetSelection通知入口と他機能の共有Geometry／snapを維持する。

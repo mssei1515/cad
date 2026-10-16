@@ -47,7 +47,6 @@
     equals: geometryRefsEqual,
   } = window.GeometryRef;
 
-  const { build: buildOffsetChainGeometry } = window.OffsetChainEngine;
 
   const {
     formatReference: formatParameterReference,
@@ -366,7 +365,7 @@
     ArcEndpointArcEndpointCoincidentConstraint, OffsetChainConstraint,
     onSelectionChanged: syncOffsetChainSelection,
   });
-  const { add: addOffsetChainGeometry, isClosed: offsetChainIsClosed } = offsetSelection;
+  const { add: addOffsetChainGeometry } = offsetSelection;
   const geometryIds = window.GeometryIds.create();
   const { nextSeq } = window.GeometryIds;
   const documentIds = window.DocumentIds.create();
@@ -787,39 +786,17 @@
   const { line: lineCommand, rectangle: rectangleCommand, circular: circularCommands, slot: slotCommand } = basicDrawingTools;
   const { line: handleLineClick, rectangle: handleRectangleClick, circle: handleCircleClick, arc: handleArcClick,
     threePointArc: handleThreePointArcClick, slot: handleSlotClick } = basicDrawingTools.input;
-  const offsetGeometry = window.OffsetGeometry.create({
-    types: window.GeometrySolver, kernel: window.GeometryKernel, buildOffsetChainGeometry,
+  const offsetFeature = window.OffsetFeature.create({
+    currentScope: () => model, geometry: geometryCreation, ids: geometryIds, placement: dimensionPlacement, sourceSelection: offsetSelection,
+    selection: canvasSelection, pending: pendingCommandSession, preview: drawingPreview, valueInput: dimensionInputController,
+    viewport, ctx, withCanvasState, drawDimension, readMode: () => mode, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
+    commitNewConstraint, offsetChainErrorText, applicationText, cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection,
+    prepareStart: () => drawOperationLifecycle.prepare("offset"),
+    setHint, updateUI, draw, updateToolbar, updateGeometrySelectionUI, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { offsetDistanceFromPointer, offsetChainDistanceFromPointer, offsetDraftGeometry, offsetDimensionTarget } = offsetGeometry;
-  function offsetChainDraft(entries, distance, side, closed = offsetChainIsClosed(entries)) {
-    return offsetGeometry.offsetChainDraft(entries, distance, side, closed);
-  }
-  const offsetConstruction = window.OffsetConstruction.create({
-    currentScope: () => model, geometryIds, geometry: geometryCreation, plans: offsetGeometry,
-    placement: dimensionPlacement, types: window.GeometrySolver, kernel: window.GeometryKernel,
-    commitNewConstraint, normalizeAppearance, offsetPairSign, offsetChainErrorText,
-    applicationText, setHint, updateUI, draw, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
-    minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
-  });
-  const { createOffsetGeometry, createOffsetChainGeometry } = offsetConstruction;
-  const offsetCommand = window.OffsetCommand.create({
-    cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, updateUI, Arc,
-    selectedGeometry: () => [...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs],
-    prepareStart: () => drawOperationLifecycle.prepare("offset"), addOffsetChainGeometry,
-    getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
-    plans: offsetGeometry, construction: offsetConstruction, placement: dimensionPlacement, offsetSelection,
-    viewport, Line, Circle, minOrientationLength: MIN_ORIENTATION_LENGTH, offsetPairSign,
-    offsetChainErrorText, formatDisplayNumber, formatDimensionLabel, setHint, updateToolbar,
-    syncDimensionValueInput, focusDimensionValueInput, hideDimensionValueInput, draw,
-    clearPointerPreview: () => { drawingPreview.setPointer(null); }, clearSelection,
-    setPointerPreview: value => { drawingPreview.setPointer(value); }, syncOffsetChainSelection,
-    applicationText, updateGeometrySelectionUI,
-  });
-  const { start: startOffsetDistanceInput, startChain: startOffsetChainDistanceInput, submit: submitOffsetValue } = offsetCommand;
-  const offsetPreviewRenderer = window.OffsetPreviewRenderer.create({
-    ctx, viewport, withCanvasState, Line, Circle, drawDimension, formatDimensionLabel,
-  });
-  const offsetPreviewLayer = window.OffsetPreviewRenderer.createLayer({ renderer: offsetPreviewRenderer, readMode: () => mode, readPointer: () => drawingPreview.pointer, command: offsetCommand });
+  const { command: offsetCommand, previewLayer: offsetPreviewLayer, createGeometry: createOffsetGeometry, chainDraft: offsetChainDraft } = offsetFeature;
+  const { offsetDistanceFromPointer } = offsetFeature.plans;
+  const { submit: submitOffsetValue } = offsetCommand;
   const filletPlans = window.FilletGeometry.create({ minLineLength: MIN_LINE_LENGTH });
   const { filletGeometryBasis, filletGeometryFromPointer } = filletPlans;
   const { createFillet } = window.FilletConstruction.create({

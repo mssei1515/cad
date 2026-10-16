@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Offset機能の生成・接続
+
+GeometryCreation／snapはDXF・Trim・投影等にも共有されるため、基本作図へ一括で取り込まないことを確認。まとまりの明確なOffsetの5factory（計算→生成→command→preview renderer→layer）を新しいOffsetFeatureへ集約した。Geometry計算・配列／採番復元・入力確定・描画は既存ownerへ残し、現在scope・採番・選択・pending・previewを同じ所有者で共有する。選択の順序と反映、pointer更新、値入力のadapterを内部へ集め、外部にはplans／command／previewLayer／単体生成／closedを補うchainDraftを公開。新しいmodel・cache・独立sessionやアプリ全体の可変contextは作らない。既存通知callbackは多く残るが、Offsetの公開境界を超える状態操作を追加しない。appで不要になった計算・入力aliasは撤去し、早期のOffsetSelection通知入口は維持する。
+
+app.jsは3,688→3,665行（23行減、今回再開から284行減）。実Offset計算・Geometry生成・選択・command・描画を使うunit4件を追加し、生成時のscope無読取り、source／既定chain plan、値入力と成功生成、scope差替えと拒否時の配列／採番復元、現在mode／pointerによる円previewを検証。構文548ファイル・単体1,580件・読込E2E1件・関連E2E143件成功（すべてexit 0）。関連はunified-ui／blocksの全142件（1.9分）とadversarial-authoring-performanceのOffset等編集操作1件（4.4秒）。classic scriptはindex.html／構文一覧／unit一覧／file URLの読込順期待を同期。ログは一時ディレクトリのcad-offset-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。unitの最終assert強化後も全unitを再実行・成功し、新testの構文を確認。全E2Eは今回未実行。全体目標は未完了。
+
 ### 通常Canvasの描画進行とAnnotation preview
 
 drawInteractiveCanvasの描画順を既存CanvasSurface.createInteractiveRendererへ集約し、Annotation previewの読取りとleader／text振分けは既存AnnotationRenderer.createLayer.drawPreviewへ移した。通常CanvasはBlock handleからPNG操作overlayまでの18段階を維持し、寸法／注記／作図／配置／Offsetの既存描画器と描画用入口だけを受ける。Document／操作stateの可変contextは渡さない。previewは段階到達時に1回読み、leaderはtrue、truthyな非leaderは既存色で描く。appはannotationCommandの遅延読取りとnullable PNG commandのoverlayを接続し、receiverと現在scaleの参照時点を保持。createFrameRendererの通常／PNG分岐と出力経路は変更せず、新たなcatch／finallyやcleanupも加えない。
