@@ -395,6 +395,7 @@
     setHoveredDimension: value => { canvasHover.update({ dimension: value }); }, draw,
   });
   const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
+  const selectionClearing = window.CanvasSelectionInteraction.createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight });
   const offsetSelection = window.OffsetSelection.create({
     getModel: () => model, activeSketchId, elementSketchId, constraintSketchId,
     Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
@@ -1877,18 +1878,7 @@
     return addPoint(x, y, false, "endpoint");
   }
 
-  function clearSelection() {
-    canvasSelection.clear();
-    constraintTargetSession.clearOperands();
-    canvasHover.update({
-      sketchIdentity: null, block: null, geometryInstance: null,
-    });
-    selectionHighlight.reset();
-    canvasHover.update({
-      annotation: null, hatch: null, referenceImage: null,
-      spline: null,
-    });
-  }
+  function clearSelection() { return selectionClearing.clear(); }
 
   function selectableSketchElement(item) {
     return isActiveSketchElement(item) && isVisibleSketchElement(item);

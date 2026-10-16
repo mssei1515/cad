@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Selection解除の調整
+
+作図開始／取消・mode遷移を確認し、それ自体は既存DrawOperationLifecycleの所有であるため再分割しなかった。appに残るclearSelectionの4 owner更新をCanvasSelectionInteraction.createClearingへ集約。Selection→拘束operand→Sketch／Block／派生hover→強調reset→Annotation／Hatch／画像／Spline hoverの二段更新を元のまま維持。拘束command本体、point／line／circle／arc／寸法などの別hover参照、snap、UI・履歴は解除しない。4 APIのみで接続し、独自model／session状態を持たず、全owner生成後の早期接続とhoisted入口を残す。元bodyの一致を確認した。
+
+app.jsは4,739→4,729行（10行減、今回の再開から合計111行減）。新script／unit fileなし。既存CanvasSelectionInteraction unitに2件追加し、実際のConstraintTargetSession／CanvasHoverを使ってcommand本体と別hover参照が残ること、owner receiverと二段hover更新の順を確認。構文511ファイル・単体1,413件・関連E2E181件が成功（すべてexit 0、E2E3.3分）。unified-ui／command-panel／sketch-permissions／derived-selection-copy／blocks／sketch-projectionを実行。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-selection-clearing-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。残る手続きの長さを確認したところbeginDerivedGeometryDragが84行あり、派生Instance全体／参照元のdrag planと開始調整がまとまって残る。次はその所有者と依存を確認して既存drag機能へ集約し、mode／command操作調整・機能ごとの生成接続も続ける。
+
 ### CommandPanelの表示先選択とイベント振分け
 
 共通panelの表示先選択とreadState／action／setting／row選択・削除を既存CommandPanel.createRoutingへ分離。modeと注記activeのread port、安定した派生／Hatch／注記panelとPNG commandの6依存で接続する。表示／action／settingはPNG→注記→Hatch／repair→派生の優先順位、row選択／削除は従来どおりPNGを経由しないoptional呼出しとする。5handlerの式は元のまま、selectorは操作時に状態を読む。receiver／引数／戻り値とderivedのその他公開fieldの引継ぎも保持。個別panel・commandはdraftと取消／履歴を引き続き所有し、appは生成接続を行う。panel／PNG instanceは構築後に再代入されないことと、生成時にlive状態を読まないことを確認した。

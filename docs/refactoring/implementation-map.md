@@ -928,3 +928,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/commands/sketch_command.js: renameの編集guardとtoggleLockの状態更新／UI・描画・履歴を所有する。appは権限照会と専用の取消準備callbackを接続し、Sketch切替の全体resetとは別の順序を維持する。
 
 - src/ui/command_panel.js: createRoutingはPNG／注記／Hatch／派生の表示先選択とイベント振分けを6依存で担当する。row選択・削除のoptional性とPNGを経由しない経路、receiver・引数・結果を維持し、appは個別panelとviewを接続する。
+
+- src/editing/canvas_selection_interaction.js: createClearingはSelection・拘束operand・hoverの限定した参照・強調表示の解除を4 ownerのAPIで調整する。拘束command本体や他のhover参照・snapを保ち、UI／履歴／model更新は担当しない。
