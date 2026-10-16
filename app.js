@@ -2456,12 +2456,8 @@
     refresh: refreshSketchMoveGeometry, clearSelection, updateUI, draw, setHint, recordHistory, applicationText,
   });
   // Destination mode keeps all editing input in the tree until commit or cancellation.
-  for (const eventName of ["pointerdown", "click", "dblclick", "contextmenu", "input", "change"]) {
-    document.addEventListener(eventName, event => {
-      if (!sketchMoveCommand.active || event.target.closest("#sketchList, #sketchOverlayResizeHandle")) return;
-      event.preventDefault(); event.stopImmediatePropagation();
-    }, true);
-  }
+  const sketchMoveInputBinding = window.SketchTreeController.createMoveInputBinding({ document, isMoving: () => sketchMoveCommand.active });
+  sketchMoveInputBinding.bind();
   const hatchCommand = window.HatchCommand.create({
     currentScope: workspace.current, hatchGeometryQuery, getMode: () => mode, setMode: value => { mode = value; },
     lastPointer: () => lastPointerWorld, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },

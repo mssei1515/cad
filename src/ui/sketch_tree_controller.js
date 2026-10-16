@@ -234,5 +234,26 @@
     }
     return Object.freeze({ pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut, isHighlightedElement: isSidebarHighlightedElement, clearHoverSketch, leave, click: handleSketchTreeClick, doubleClick: activateRow, keyDown, contextMenu, editSketch, activateObject: activateSketchTreeObject });
   }
-  window.SketchTreeController = Object.freeze({ create });
+  // While choosing a destination, pointer and form input remain in the Sketch Tree.
+  function createMoveInputBinding({ document, isMoving }) {
+    const events = ["pointerdown", "click", "dblclick", "contextmenu", "input", "change"];
+    function blockOutsideTree(event) {
+      if (!isMoving() || event.target.closest("#sketchList, #sketchOverlayResizeHandle")) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+    }
+    let bound = false;
+    function bind() {
+      if (bound) return;
+      bound = true;
+      for (const name of events) document.addEventListener(name, blockOutsideTree, true);
+    }
+    function dispose() {
+      if (!bound) return;
+      for (const name of events) document.removeEventListener(name, blockOutsideTree, true);
+      bound = false;
+    }
+    return Object.freeze({ bind, dispose });
+  }
+
+  window.SketchTreeController = Object.freeze({ create, createMoveInputBinding });
 })();

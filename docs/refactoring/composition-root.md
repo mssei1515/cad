@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Sketch移動中のTree外入力抑止
+
+既存SketchTreeController.createMoveInputBindingへ移動中のdocument capture受付を集約。documentとisMovingの二portだけを受け、六eventの登録順、inactive時の短絡、Tree／resize handle許可、preventDefault→stopImmediatePropagationを維持。appは元の登録位置でbindし、二重登録防止・自己listenerだけのdispose／再bindを持つ。commandのstateや選択／移動／履歴を所有せず、Keyboardの別経路は変更しない。
+
+app.jsは3,990→3,986行（4行減、b120651から合計157行減）。新scriptなし。新sketch-tree-input-binding単体fileを構文／unit一覧へ追加。3件でcapture登録と順序・生成／登録時無照会、live状態と許可領域／抑止順、外部listener保持と再bindを確認。構文546ファイル・単体1,528件・関連E2E111件成功（すべてexit 0、E2E1.6分）。sketch-move／unified-uiの全2fileを実行。ログは一時ディレクトリのcad-sketch-move-input-binding-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はclearInteractionForSketchChange内の作図下書きresetを既存DrawOperationLifecycleの所有と照合する。Document reset／通常cancelとは対象と順序が異なるため、単一resetに統一せず限定した入口を検討する。
+
 ### Properties表示とCanvas resizeのUI寿命
 
 既存CanvasWorkspaceLayoutへ選択Propertiesの表示操作とtoggle／window resizeのlistener寿命を集約。パネル展開→Properties更新→現在panelの再取得とscroll初期化→hint、context menu解除→現在world中心→既存resizeの順を保持する。bindControls／bindWindowを元の起動位置へ接続し、二重登録防止・自己listenerだけのdispose／再bindを実装。DOM不在時のパネル無変更と、Properties更新／hintを継続する元の範囲を維持する。model・Selection・履歴を別に所有しない。

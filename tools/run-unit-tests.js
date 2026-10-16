@@ -166,7 +166,7 @@ const files = [
   "tests/unit/annotation-command.test.js",
   "tests/unit/hatch-command.test.js",
   "tests/unit/offset-command.test.js",
-  "tests/unit/sketch-tree-view.test.js",
+  "tests/unit/sketch-tree-view.test.js", "tests/unit/sketch-tree-input-binding.test.js",
   "tests/unit/sketch-tree-presentation.test.js",
   "tests/unit/sidebar-controller.test.js",
   "tests/unit/canvas-theme-colors.test.js",

@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。Properties表示とパネルtoggle／window resizeのlistener寿命を既存CanvasWorkspaceLayoutへ集約。app.jsは4,143→3,990行（合計153行減、直近11行減）。構文545ファイル・単体1,525件・関連E2E149件成功。今回は全E2E未実行。最新週枠使用28%／残量72%。全体目標は未完了。次はSketch移動先選択中にTree外入力を抑止するdocument capture listenerを調べ、Sketch Tree／移動UIの所有者へ寄せる。六eventと許可領域、inactive時の短絡・stopImmediatePropagationと登録順を維持し、Keyboardの別経路と統合しない。巨大contextや異なる操作の単一stateへの統合を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。Sketch移動先選択中のTree外入力抑止をSketchTreeController.createMoveInputBindingへ集約。app.jsは4,143→3,986行（合計157行減、直近4行減）。構文546ファイル・単体1,528件・関連E2E111件成功。今回は全E2E未実行。最新週枠使用28%／残量72%。全体目標は未完了。次はclearInteractionForSketchChange内の作図下書きresetを既存DrawOperationLifecycleの所有と照合する。Line／Rectangle／Fillet／Circle・Arc／preview／Offsetの連続resetと、その前後のdrag・Selection・pending／constraint／instance stateの対象と順序を確認する。Document reset／通常cancelと単一のresetへ統一せず、既存ownerへ限定した入口を設ける。巨大contextや異なる操作の単一stateへの統合を避ける。
 
 ### 直前のリリース（2026-10-16）
 
