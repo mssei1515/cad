@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 参照元探索と逆変換の照会
+
+resolveDerivedDragSource／geometryInstanceSourceObjectsを既存InstanceProjection.createDragSourceQueryへ集約。source points・依存参照・GeometryRef解決の3 read portだけを受け取り、inverse chainと参照元ObjectのSetを返す。元2bodyはそのまま一致し、UI／Selection／drag lifecycleを持ち込まない。Setは毎回生成し、同じIDでも異なるObjectを別に扱い、共有Point・Block／派生owner・重複や巡回の探索順と短絡を維持する。inverse関数参照を外側から内側へ収集して裸の関数として呼ぶreceiver、pointer複写、Sketch投影flag、参照切れ／非変換chain／巡回のnull結果を保持。appはGeometryReadModel生成直後に接続し、既存resolve portが操作時のscopeを読む。最初のconsumerより前の初期化と、factory生成時に照会を実行しないことを確認した。
+
+app.jsは4,650→4,620行（30行減、今回の再開から合計220行減）。新script／unit fileなし。既存InstanceProjection unitに3件追加し、同一参照・探索順／再照会・無変更、inverse順・入力pointer不変／captured map、参照不正／巡回時に変換を実行しないことを確認。構文511ファイル・単体1,422件・関連E2E192件が成功（すべてexit 0、E2E2.6分）。derived-patterns／derived-selection-copy／sketch-projection／sketch-permissions／blocks／unified-uiを実行。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-drag-source-query-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はexecuteTrimAtに残る検証→変更→求解→失敗復元／成功履歴の操作調整をcommandへ分離する。実際のGeometry／拘束移管は既存TrimEditingに残し、復元範囲・UI順・閾値や例外伝播を変更しない。
+
 ### 派生Geometryのドラッグ開始
 
 84行のbeginDerivedGeometryDragを既存GeometryDrag.createDerivedEntryへ集約。型、編集guard、Selectionと解除、参照元／source points照会、通常session生成、GeometryDrag lifecycleとhint／UI／drawの14依存を明示する。Instance全体と参照元操作の分岐、開始plan、選択更新、拒否通知を担当し、resolveとsession生成／solve／履歴は既存ownerに残す。元84行の本体はguardの注入名以外一致。全体移動のclick metadata、線上の初期比率に追従するlive anchorと開始snapshot、source／rotationのvariableAllowed、Block ownerとarc端点の対象変換、pointerMap／元参照と配置Instance除外を維持する。anchor control／権限拒否、未解決／投影chain／固定source、anchorなしの各終了範囲とUI順も保持。factory生成はquery／lifecycleの初期化後、入力consumer登録前に置き、独自modelやdrag状態を増やさない。

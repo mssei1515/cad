@@ -304,6 +304,9 @@
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
+  const { resolve: resolveDerivedDragSource, sourceObjects: geometryInstanceSourceObjects } = window.InstanceProjection.createDragSourceQuery({
+    geometryInstanceSourcePoints, geometryInstanceDependencyRefs, resolveGeometryRef,
+  });
   const instanceSourceSelection = window.InstanceProjection.createSourceSelection({
     currentScope: () => model, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
   });
@@ -3322,45 +3325,12 @@
     return true;
   }
 
-  function resolveDerivedDragSource(hit, pointer) {
-    let item = hit?.item || null;
-    const inverseTransforms = [];
-    const visited = new Set();
-    let crossesSketchProjection = false;
-    while (item?.derivedProjection) {
-      if (visited.has(item) || !item.sourceElement || typeof item.derivedInversePoint !== "function") return null;
-      visited.add(item);
-      if (item.derivedInstance?.type === "sketchProjection") crossesSketchProjection = true;
-      inverseTransforms.push(item.derivedInversePoint);
-      item = item.sourceElement;
-    }
-    if (!item || inverseTransforms.length === 0) return null;
-    const mapPointer = (value) => inverseTransforms.reduce((current, inverse) => inverse(current), { x: value.x, y: value.y });
-    return { item, mapPointer, pointer: mapPointer(pointer), crossesSketchProjection };
-  }
-
   const { begin: beginDerivedGeometryDrag } = window.GeometryDrag.createDerivedEntry({
     types: { Point, Line }, canEdit: guardSketchEdit, canvasSelection, geometryInstanceSourceObjects,
     clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource, buildDragSession, geometryDrag,
     setHint, applicationText, updateGeometrySelectionUI, updateUI, draw,
   });
 
-
-  function geometryInstanceSourceObjects(instance) {
-    const seen = new Set();
-    const visit = (item) => {
-      if (!item || seen.has(item)) return;
-      seen.add(item);
-      for (const point of geometryInstanceSourcePoints(item)) if (point !== item) visit(point);
-      if (item.blockInstance) seen.add(item.blockInstance);
-      if (item.derivedInstance) {
-        seen.add(item.derivedInstance);
-        for (const ref of geometryInstanceDependencyRefs(item.derivedInstance)) visit(resolveGeometryRef(ref));
-      }
-    };
-    for (const ref of instance.sources) visit(resolveGeometryRef(ref));
-    return seen;
-  }
 
 
   function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {

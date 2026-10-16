@@ -164,3 +164,52 @@ test('Instance source selection reads current scope/selection/active target and 
   active = 'B'; scope = { hatches: [] }; items = [b]; assert.deepEqual(Array.from(query.read()), [b]);
   items = []; selection.hatches = []; assert.equal(query.read().length, 0);
 });
+
+test('drag source query collects shared geometry, Block and derived owners by identity in existing traversal order', () => {
+  const p1 = point('P1', 0, 0), p2 = point('P2', 10, 0), p3 = point('P1', 20, 0);
+  const projected = new Line('I1/L1', p1, p2), source = new Line('L1', p1, p3);
+  const block = { id: 'BI1' }, derived = { id: 'I2' };
+  projected.blockInstance = block; projected.derivedInstance = derived;
+  const a = { kind: 'line', path: ['I1/L1'] }, b = { kind: 'line', path: ['L1'] }, missing = { kind: 'line', path: ['missing'] };
+  const resolved = new Map([[a, projected], [b, source]]), calls = [];
+  const query = sandbox.window.InstanceProjection.createDragSourceQuery({ geometryInstanceSourcePoints: create().geometryInstanceSourcePoints,
+    geometryInstanceDependencyRefs: item => { assert.equal(item, derived); return [a, b]; },
+    resolveGeometryRef: value => { calls.push(value); return resolved.get(value); },
+  });
+  const before = JSON.stringify({ projected, source, block, derived });
+  const objects = query.sourceObjects({ sources: [a, missing, a] });
+  assert.deepEqual(Array.from(objects), [projected, p1, p2, block, derived, source, p3]);
+  assert.deepEqual(calls, [a, a, b, missing, a]);
+  assert.equal(JSON.stringify({ projected, source, block, derived }), before);
+  objects.clear(); resolved.set(a, source);
+  assert.deepEqual(Array.from(query.sourceObjects({ sources: [a] })), [source, p1, p3]);
+});
+
+test('drag source query applies inverse transforms in chain order, clones pointer input and retains the resolved mapping', () => {
+  const calls = [], source = {};
+  const inner = { derivedProjection: true, derivedInstance: { type: 'sketchProjection' }, sourceElement: source,
+    derivedInversePoint(p) { 'use strict'; assert.equal(this, undefined); calls.push('inner'); return { x: p.x * 2, y: p.y + 3 }; } };
+  const outer = { derivedProjection: true, derivedInstance: { type: 'pattern' }, sourceElement: inner,
+    derivedInversePoint(p) { 'use strict'; assert.equal(this, undefined); calls.push('outer'); p.x -= 10; return p; } };
+  const query = sandbox.window.InstanceProjection.createDragSourceQuery({});
+  const pointer = { x: 12, y: 4 }, hit = { item: outer };
+  const result = query.resolve(hit, pointer);
+  assert.equal(result.item, source); assert.equal(result.crossesSketchProjection, true);
+  assert.deepEqual(result.pointer, { x: 4, y: 7 }); assert.deepEqual(pointer, { x: 12, y: 4 });
+  assert.deepEqual(calls, ['outer', 'inner']);
+  outer.derivedInversePoint = () => { throw new Error('new transform must not replace the captured chain'); };
+  assert.deepEqual(result.mapPointer({ x: 15, y: 1 }), { x: 10, y: 4 });
+  assert.equal(hit.item, outer); assert.equal(outer.sourceElement, inner);
+});
+
+test('drag source query rejects absent, unprojected, broken and cyclic chains before applying transforms', () => {
+  const query = sandbox.window.InstanceProjection.createDragSourceQuery({});
+  let transforms = 0;
+  const a = { derivedProjection: true, derivedInversePoint: p => { transforms++; return p; } }, b = { ...a };
+  a.sourceElement = b; b.sourceElement = a;
+  for (const hit of [null, { item: {} }, { item: { derivedProjection: true } },
+    { item: { derivedProjection: true, sourceElement: {}, derivedInversePoint: null } }, { item: a }]) {
+    assert.equal(query.resolve(hit, { x: 1, y: 2 }), null);
+  }
+  assert.equal(transforms, 0);
+});
