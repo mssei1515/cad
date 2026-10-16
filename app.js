@@ -3551,36 +3551,15 @@
     setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));
   });
   parameterEditor.start();
-  const documentGeometryAppearanceCommand = window.DocumentDefaultAppearanceCommand.createGeometry({
-    readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
-    applyAppearanceInput, normalizeAppearance, normalizeConstructionAppearance, recordHistory, updateUI, draw,
+  const documentAppearanceEditor = window.DocumentAppearanceEditor.create({
+    document, readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
+    editing: appearanceEditing, appearanceControls,
+    rows: { geometry: appearancePropertyRows, dimension: dimensionAppearancePropertyRows },
+    prepareAffixInputs, localizeApplicationUI, updateDimensionTerminatorAngleVisibility,
+    effectiveLeaderAppearanceForSketch, readViewportScale: () => viewport.scale,
+    openAppearanceColorPalette, recordHistory, updateUI, draw,
   });
-  const documentGeometryAppearanceSettings = window.DocumentAppearanceSettings.createGeometry({
-    document, readDefault: key => documentModel[key], normalizeAppearance, normalizeConstructionAppearance,
-    appearancePropertyRows, localizeApplicationUI, openAppearanceColorPalette, commands: documentGeometryAppearanceCommand,
-  });
-  const documentDimensionAppearanceCommand = window.DocumentDefaultAppearanceCommand.createDimension({
-    readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
-    applyDimensionAppearanceValue, normalizeDimensionDefaults: value => window.Appearance.dimensionDefaults(value), recordHistory, draw,
-  });
-  const documentDimensionAppearanceSettings = window.DocumentAppearanceSettings.createDimension({
-    document, readDefault: key => documentModel[key], normalizeDimensionAppearance, dimensionAppearancePropertyRows,
-    prepareAffixInputs, localizeApplicationUI, updateDimensionTerminatorAngleVisibility, updateUI, openAppearanceColorPalette, commands: documentDimensionAppearanceCommand,
-  });
-  const documentSharedAppearanceCommand = window.DocumentDefaultAppearanceCommand.createShared({
-    readDefault: key => documentModel[key], normalizeTerminator: value => window.Appearance.normalizeTerminator(value),
-    applyLeaderAppearanceValue: (...args) => appearanceEditing.applyLeaderAppearanceValue(...args), readViewportScale: () => viewport.scale,
-    effectiveLeaderAppearanceForSketch, recordHistory, updateUI, draw,
-  });
-  const documentSharedAppearanceSettings = window.DocumentAppearanceSettings.createShared({
-    document, readDefault: key => documentModel[key], appearanceControls, effectiveLeaderAppearanceForSketch, openAppearanceColorPalette, commands: documentSharedAppearanceCommand,
-  });
-  document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
-    documentGeometryAppearanceSettings.prepare();
-    documentDimensionAppearanceSettings.prepare();
-    documentSharedAppearanceSettings.prepare();
-    document.getElementById("documentSettingsDialog")?.showModal();
-  });
+  documentAppearanceEditor.start();
   appearancePalette.bind();
   applicationSettings.start();
   blockView.bind();

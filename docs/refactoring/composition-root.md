@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Document既定外観設定の機能組立て
+
+src/application/document_appearance_editor.jsにDocumentAppearanceEditorを追加。Geometry／Dimension／Sharedの三組の既定外観command／Viewを生成・接続し、同じ順でfieldをprepareしてdialogを開く進行をfeatureへまとめる。既定値は限定したread／write、既存編集service・row表示・現在倍率・通知を受け取り、モデルや保存形式、独自外観状態を持たない。六factoryの接続bodyはport置換とindent以外一致。値変更・normalize・履歴・UI／drawの順は既存DocumentDefaultAppearanceCommand、表示と入力の解釈は既存DocumentAppearanceSettingsに残す。元と同じ位置でstartし、click listenerの二重登録抑止・dispose／再startを提供する。
+
+app.jsは4,356→4,335行（21行減、07024cbから合計124行減）。新scriptとunitをindex／構文／unit一覧／読込期待へ同期し、一回だけ含まれることを確認。実際のcommandとViewを使う単体3件で三組の準備→dialog表示順、start重複抑止・listener解除と再start、live既定値／倍率・編集serviceのreceiver、変更と履歴／再表示順、準備失敗時にdialogを開かないことを確認。構文524ファイル・単体1,453件・file URL読込1件・関連E2E142件が成功（すべてexit 0、関連E2E2.1分）。unified-ui／leader-appearance／dimension-prefix／unified-annotationsを実行。全runnerは正常終了。ログは一時ディレクトリのcad-document-appearance-editor-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はDocumentファイル操作とCanvas出力の生成・接続のまとまりを調べ、既存ownerを使った機能組立ての境界を検討する。
+
 ### Parameter編集UIの機能組立て
 
 src/application/parameter_editor.jsにParameterEditorを追加。appの複数箇所に分かれていたdraft・式入力表示／挿入・dialog View／Controller・適用結果adapterの生成接続を一つの機能へまとめる。既存ownerの実装と状態は再実装せず、相互参照するcontrollerと適用adapterを内部で接続し、appはモデル適用の遅延callbackと外部操作を提供する。scope選択肢と入力欄に応じたsymbol名の照会もこのfeatureへ集約。2つの照会bodyはread portへの置換とindent以外一致し、現在scope／Block編集中draft／保存定義・言語を操作時に読む。DOM表示・listener／dirty確認は既存View／Controller、モデルへの適用・solve・checkpoint復元は既存ParameterApplicationに残す。
