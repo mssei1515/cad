@@ -956,3 +956,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/application/parameter_editor.js: Parameter編集UIの組立て。draft、式入力表示／挿入、dialog View／Controllerと適用結果adapterを接続し、live scope選択肢と入力欄に応じたsymbol名を提供する。モデル適用・Canvas hit判定は外部portに残し、controllerと適用adapterの相互接続を内部で完結する。
 
 - src/application/document_appearance_editor.js: Document既定外観設定の三組のcommand／Viewを生成接続し、Geometry→Dimension→Shared準備とdialog表示、開始buttonのlistener寿命を担当。既定値のread／writeと既存編集service・rows・通知を受け、外観変更とfield表示は既存ownerへ委譲する。
+
+- src/application/png_export.js: PNG出力の機能組立て。CanvasExport／PngFile／PngExportCommandとmode session、開始拒否の順序、snap解決、fonts→現在画像準備、開始buttonのstart／disposeを接続する。appは既存renderer・可視画像準備・session／read portを提供し、Canvas入力／CommandPanelには同じcommand APIを渡す。Documentファイルcontrolsは独立した既存ownerに残す。

@@ -14,7 +14,7 @@ const files = [
   "tests/unit/clipboard-geometry.test.js",
   "tests/unit/clipboard-payload.test.js",
   "tests/unit/dxf-import.test.js",
-  "tests/unit/png-export.test.js",
+  "tests/unit/png-export.test.js", "tests/unit/png-export-feature.test.js",
   "tests/unit/constraint-codec-registry.test.js",
   "tests/unit/parameter-engine.test.js",
   "tests/unit/geometry-ref.test.js",

@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### PNG出力の機能組立て
+
+src/application/png_export.jsにPngExportを追加。CanvasExportのcapture、PngFile、PngExportCommandとmode session、開始buttonを生成・接続する。既存の一時描画frameはappが作るCanvasExport rendererに残し、入力とCommandPanelには同じcommand参照を接続。開始前pointer処理→file busy／作図中／pending／拘束command／Block配置modeの短絡順と拒否文言を維持する。DPIから倍率への変換、cache内の10px snap照会、font待機の後に現在の可視画像を準備する時機、描画bitmapの復元・保存・元modeへの復帰は既存ownerと同じ順を保持。Documentファイルcontrolsは既に明確な責務であるため無理にPNGと統合しない。独自Document／Viewport／履歴やアプリ全体のcontextを持たない。
+
+app.jsは4,335→4,316行（19行減、07024cbから合計143行減）。新scriptとunitをindex／構文／unit一覧／読込期待へ同期し、各pathが一回だけ存在することを確認。実際のCanvasExport／PngFile／PngExportCommand／DocumentFilesを使う単体3件で全開始拒否と短絡順、flush後の状態参照、start重複抑止とdispose／再start、snap許容幅、非同期font待機後のlive画像、保存開始時の倍率保持、capture復元・書込完了とmode／pending復帰を確認。構文526ファイル・単体1,456件・file URL読込1件・関連E2E127件が成功（すべてexit 0、関連E2E1.7分）。png-export／file-safety／command-panel／unified-uiを実行。全runnerは正常終了。ログは一時ディレクトリのcad-png-export-feature-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はDocumentファイル操作の生成・終了保護とDocument状態表示との接続を調べる。
+
 ### Document既定外観設定の機能組立て
 
 src/application/document_appearance_editor.jsにDocumentAppearanceEditorを追加。Geometry／Dimension／Sharedの三組の既定外観command／Viewを生成・接続し、同じ順でfieldをprepareしてdialogを開く進行をfeatureへまとめる。既定値は限定したread／write、既存編集service・row表示・現在倍率・通知を受け取り、モデルや保存形式、独自外観状態を持たない。六factoryの接続bodyはport置換とindent以外一致。値変更・normalize・履歴・UI／drawの順は既存DocumentDefaultAppearanceCommand、表示と入力の解釈は既存DocumentAppearanceSettingsに残す。元と同じ位置でstartし、click listenerの二重登録抑止・dispose／再startを提供する。

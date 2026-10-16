@@ -3574,35 +3574,16 @@
     document, saveJot2DFile, saveJot2DFileAs, openJot2DFile, documentFileCommand,
   });
   documentFileControls.bind();
-  const canvasExport = window.CanvasExport.create({
-    canvas, createCanvas: () => document.createElement("canvas"), text: applicationText,
-    render: pngRendering.render, restore: pngRendering.restore,
+  const pngExport = window.PngExport.create({
+    document, window, canvas, rendering: pngRendering, text: applicationText, documentName: effectiveDocumentName,
+    prepareImages: () => referenceImageRenderer.ready(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId))),
+    readViewScale: () => viewport.scale, readMode: () => mode, setMode: value => { mode = value; },
+    pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
+    withGeometryReadCache, findSnap: (point, tolerance) => drawingSnap.find(point, tolerance),
+    flushPointerMove: flushScheduledCanvasPointerMove, setHint, draw,
   });
-  const pngFile = window.PngFile.create({ window, document, capture: canvasExport.capture, documentName: effectiveDocumentName, text: applicationText,
-    prepare: async () => {
-      await document.fonts.ready;
-      await referenceImageRenderer.ready(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));
-    },
-  });
-  const pngModeSession = window.PngExportCommand.createModeSession({ readMode: () => mode, setMode: value => { mode = value; }, pendingCommandSession });
-  pngExportCommand = window.PngExportCommand.create({
-    text: applicationText, save: (region, dpi) => pngFile.save(region, dpi / 96 * viewport.scale),
-    viewScale: () => viewport.scale, setHint, refresh: draw,
-    begin: pngModeSession.begin,
-    end: pngModeSession.end,
-    resolvePoint: point => withGeometryReadCache(() => {
-      const snap = drawingSnap.find(point, 10 / viewport.scale);
-      return { point: snap ? { x: snap.x, y: snap.y } : point, snapped: Boolean(snap) };
-    }),
-  });
-  document.getElementById("pngExportBtn").addEventListener("click", () => {
-    flushScheduledCanvasPointerMove();
-    if (fileSession.busy || hasActiveDrawOperation() || pendingCommandSession.current || constraintTargetSession.command || mode === "block-place") {
-      setHint(applicationText("進行中の操作を完了またはキャンセルしてからPNG出力を開始してください", "Finish or cancel the current operation before exporting PNG"));
-      return;
-    }
-    pngExportCommand.open();
-  });
+  pngExportCommand = pngExport.command;
+  pngExport.start();
   const dxfFileControls = window.DocumentFileControls.createDxf({
     document, flushScheduledCanvasPointerMove, fileSession, canImportDxf, setHint, applicationText, dxfImportCommand,
   });
