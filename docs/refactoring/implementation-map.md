@@ -960,3 +960,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/application/png_export.js: PNG出力の機能組立て。CanvasExport／PngFile／PngExportCommandとmode session、開始拒否の順序、snap解決、fonts→現在画像準備、開始buttonのstart／disposeを接続する。appは既存renderer・可視画像準備・session／read portを提供し、Canvas入力／CommandPanelには同じcommand APIを渡す。Documentファイルcontrolsは独立した既存ownerに残す。
 
 - src/application/document_file.js: Documentの状態表示／checkpoint・bookmark・file command・control／startup／beforeunloadの機能組立て。モデル適用・solve・履歴・viewportは限定した操作portへ委譲し、statusの履歴snapshot照会とunloadの実データ照会を保持する。choice dialogと修復案内は遅延callbackで接続し、初期化時には実行しない。
+
+- src/testing/offset_test_driver.js: createSupportは単独Offset／UI／方向とchain関連の9factoryの生成接続と公開API対応を所有する。個別factoryの実装とexportは維持し、appはOffset専用の操作／型／照会portを一度接続してAPIを展開する。巨大なapp contextは受け取らず、通常起動時は呼ばれない。

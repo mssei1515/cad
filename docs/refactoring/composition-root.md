@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### OffsetテストAPIの機能組立て
+
+installTestHooksに残る単独Offset／UI／方向／chainの9factoryの生成接続と公開名の対応を、既存OffsetTestDriver.createSupportへ集約。個別factoryと既存API名・順序は維持し、通常起動では生成しない既存test query guard内でのみ接続する。35個の既存の型・操作／照会portを明示し、任意のapp fieldやモデル全体へアクセスできるcontextは渡さない。factory生成は状態照会・Geometry編集を実行せず、各APIは従来のdriver関数へ直接接続する。9factoryの接続bodyはcurrentScopeのport置換とindent以外一致し、作図・求解処理やE2E期待値は変更しない。appは公開APIの個別対応を持たず、一つのOffset用APIを元の位置に展開する。
+
+app.jsは4,293→4,281行（12行減、07024cbから合計178行減）。新scriptなし。新unit fileを構文／unit一覧へ追加。単体2件で9入口の名前・順序と生成時無処理、live scope／Selection／pending照会、reloadとUI fixtureの既存処理への接続を確認。構文529ファイル・単体1,462件・unified-uiの全103件が成功（すべてexit 0、E2E1.5分）。同fileにはOffsetの9入口を使う既存ケースとfile URL読込も含むが、全E2Eとは区別する。全runnerは正常終了。ログは一時ディレクトリのcad-offset-test-support-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。35 portは既存fixtureの依存を表す移行上の広さとして残り、行数だけのために汎用contextへまとめない。次はAnnotationやSketch投影等のtest API対応と生成接続を同様に機能単位で整理できるか検討する。
+
 ### Documentファイル操作の機能組立て
 
 src/application/document_file.jsにDocumentFileFeatureを追加。DocumentStatusView／DocumentBookmarks／DocumentFileCommandとDocument用controlを生成・接続し、checkpoint→status更新と読込成功時の適用→solve→履歴初期化→saved checkpoint→再表示→fit→draw→修復案内を機能内で調整する。保存先／排他／checkpointは既存DocumentFiles、codecとmodel反映は既存DocumentApplication、ブラウザI/Oと置換／終了保護は既存DocumentFileCommandのまま。状態表示が履歴snapshot、置換とunloadが現在実データを使う違いと、二回のstatus更新も維持する。早いstatus生成位置でfeatureを組むが、command／bookmark／controlのfactoryがI/O・描画・model操作を開始しないことを確認し、後段choiceDialogとDocumentApplicationは遅延callbackで接続。controlのbindと初期化完了後のbeforeunload／startup開始は元の時点に置く。disposeは登録listenerだけを解除し、I/O取消や新たなrollback保証は追加しない。
