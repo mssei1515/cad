@@ -28,7 +28,12 @@
     readHoverDimension, readDraggedDimension, readPending, readExportFrame, readConstraintStatus, inactiveColor,
     dimensionLabelForConstraint, drawDimension, dimensionUsesExpression }) {
     function draw() {
-      for (const c of currentScope().constraints.sort((a, b) => Number(isActiveSketchConstraint(a)) - Number(isActiveSketchConstraint(b)))) {
+      const activeByConstraint = new Map();
+      function active(constraint) {
+        if (!activeByConstraint.has(constraint)) activeByConstraint.set(constraint, isActiveSketchConstraint(constraint));
+        return activeByConstraint.get(constraint);
+      }
+      for (const c of currentScope().constraints.sort((a, b) => Number(active(a)) - Number(active(b)))) {
         if (!isVisibleSketchId(constraintSketchId(c))) continue;
         const target = targetFromConstraint(c);
         if (!target) continue;
@@ -38,7 +43,7 @@
         const highlighted = canvasSelection.inspectionContains(c) || c === readHoverDimension() || canvasSelection.constraintSelectedInCanvas(c) || c === readDraggedDimension();
         const label = dimensionLabelForConstraint(c, target, dimension);
         const editing = readPending()?.type === "distance-value" && readPending().constraint === c;
-        const colorOverride = !readExportFrame() && readConstraintStatus() && !isActiveSketchConstraint(c) ? inactiveColor : null;
+        const colorOverride = !readExportFrame() && readConstraintStatus() && !active(c) ? inactiveColor : null;
         ctx.save();
         drawDimension(target, dimension, label, false, !readExportFrame() && (highlighted || editing), !readExportFrame() && editing ? { hidden: true } : null, colorOverride, sketchId, !readExportFrame() && dimensionUsesExpression(c));
         ctx.restore();
