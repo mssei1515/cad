@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Treeの選択状態の照会
+
+sketchTreeObjectSelectedを既存CanvasSelectionへ集約し、appは同メソッドを既存SketchTreeObjectsへ接続する。inspectionのcategory＋同一Object／truthyな同一ID照合、通常のHatch／画像／Block／派生Instance／Annotationの同一参照包含、固定Pointと通常Constraintの違いを維持した。Geometry／Constraintは同ownerの既存照会を使用し、Arcの未選択時に既存照会が返すundefinedもBoolean化しない。モデルや選択stateを変更せず、DOM・hover・求解・履歴・追加callback依存を持たない。appの未使用になったgeometryItemSelectedInCanvas aliasも同じ区切りで外したが、元APIは維持する。
+
+app.jsは3,724→3,712行（12行減、今回再開から237行減）。既存selection unitへ3件追加し、inspectionのcategory／IDと状態保持、各カテゴリのObject包含、固定Point・寸法・effective constraintの優先、通常LineとArc端点選択を確認。構文546ファイル・単体1,570件・関連E2E135件成功（すべてexit 0、E2E1.9分）。unified-ui／sketch-tree-visibility／derived-selection-copyの全3file。ログは一時ディレクトリのcad-tree-selection-query-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### Tree／Canvas候補の共用Toolbarアイコン
 
 toolbarSvgMarkup／constraintToolbarIconを既存ToolbarView.createIconsへ集約。調査でSketchTreeObjectsだけでなくCanvasContextPresentationも使うことを確認し、Treeの状態に依存しない共用Toolbar表示APIとした。document・6拘束型・寸法判定だけを受け、現在DOMのSVG読取り・最初のsvgタグへの既存class付与・欠損時空文字を維持する。固定flag／固定型→投影→中心線→寸法→既存の名前patternとcoincident fallbackの優先順もそのまま。appは生成結果の同じ2APIを両利用者へ接続し、cache・DOM変更・操作／選択／hover状態を加えない。参照は全て生成後なので不要なhoisted wrapperも残していない。

@@ -1054,3 +1054,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/ui/toolbar_view.js: createIconsがtoolbarSvgMarkup／constraintToolbarIconを所有する。TreeとCanvas候補の共用表示APIとして、現在DOMのSVG取得・既存class付与・欠損fallback・型優先と名前patternを維持。appは同APIをSketchTreeObjects／CanvasContextPresentationへ接続し、操作・選択・hover状態を同factoryへ渡さない。
+
+
+- src/editing/selection.js: sketchTreeObjectSelectedがinspectionのcategory／Object／ID照合と、通常のカテゴリ別選択照会を所有する。固定Point・Constraint・Geometryは同ownerの既存判定を使用。app内の選択配列読取りを撤去し、SketchTreeObjectsへ同メソッドを接続する。hoverは引き続き別所有者。

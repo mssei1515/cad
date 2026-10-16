@@ -225,7 +225,7 @@
     hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
     togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
     toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
-    trimConstraintSelection, geometryItemSelectedInCanvas,
+    trimConstraintSelection, sketchTreeObjectSelected,
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
   const selectionScopeQuery = window.CanvasSelection.createScopeQuery({ canvasSelection, selectedGeometryItems });
@@ -2319,18 +2319,6 @@
       SketchProjectionConstraint, ParallelLinesCenterlineConstraint, PointPairCenterlineConstraint },
   });
 
-  function sketchTreeObjectSelected(category, entry) {
-    const item = category === "constraint" ? entry.point || entry.constraint : entry;
-    if (canvasSelection.inspection?.targets.some((target) => target.category === category
-      && (target.item === item || item?.id && target.item.id === item.id))) return true;
-    if (category === "hatch") return canvasSelection.hatches.includes(entry);
-    if (category === "image") return canvasSelection.referenceImages.includes(entry);
-    if (category === "block") return canvasSelection.blockInstances.includes(entry);
-    if (category === "instance") return canvasSelection.geometryInstances.includes(entry);
-    if (category === "annotation") return canvasSelection.annotations.includes(entry);
-    if (category === "constraint") return entry.kind === "fixed-point" ? canvasSelection.points.includes(entry.point) : constraintSelectedInCanvas(entry.constraint);
-    return geometryItemSelectedInCanvas(entry);
-  }
 
   function sketchTreeObjectHovered(category, entry) {
     if (category === "hatch") return canvasHover.current.hatch === entry;

@@ -11,6 +11,50 @@ for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geom
 const { Point, Line, Circle, Arc } = sandbox.window.GeometrySolver;
 const create = sandbox.window.CanvasSelection.create;
 
+test('Tree inspection selection matches category and identity or stable ID without changing inspection state', () => {
+ const selection = create(), item = { id: 'H1' }, point = { id: 'P1' }, constraint = { id: 'K1' };
+ const inspection = { targets: [{ category: 'hatch', item }, { category: 'constraint', item: point }, { category: 'constraint', item: constraint }] };
+ selection.set('sketchId', 'S1'); selection.set('inspection', inspection);
+ assert.equal(selection.sketchTreeObjectSelected('hatch', item), true);
+ assert.equal(selection.sketchTreeObjectSelected('hatch', { id: 'H1' }), true);
+ assert.equal(selection.sketchTreeObjectSelected('image', item), false);
+ assert.equal(selection.sketchTreeObjectSelected('hatch', { id: 'H2' }), false);
+ assert.equal(selection.sketchTreeObjectSelected('constraint', { kind: 'fixed-point', point: { id: 'P1' } }), true);
+ assert.equal(selection.sketchTreeObjectSelected('constraint', { constraint: { id: 'K1' } }), true);
+ assert.equal(selection.sketchId, 'S1'); assert.equal(selection.inspection, inspection);
+ assert.equal(selection.hatches.length, 0); assert.equal(selection.dimensionConstraints.length, 0);
+});
+
+test('Tree attachment and instance selection uses actual selected objects rather than matching IDs', () => {
+ const selection = create(), cases = [['hatch', 'hatches'], ['image', 'referenceImages'], ['block', 'blockInstances'],
+  ['instance', 'geometryInstances'], ['annotation', 'annotations']];
+ for (const [category, field] of cases) {
+  const item = { id: 'same' }, values = [item]; selection.set(field, values);
+  assert.equal(selection.sketchTreeObjectSelected(category, item), true);
+  assert.equal(selection.sketchTreeObjectSelected(category, { id: 'same' }), false);
+  assert.equal(selection[field], values);
+ }
+});
+
+test('Tree fixed-point, constraint and geometry queries retain endpoint selection and effective-constraint precedence', () => {
+ const selection = create(), p = new Point('P1', 0, 0), q = new Point('P2', 10, 0), line = new Line('L1', p, q);
+ const arc = new Arc('A1', p, 3, 0, 1), constraint = {};
+ selection.set('constraint', constraint);
+ assert.equal(selection.sketchTreeObjectSelected('constraint', { constraint }), true);
+ selection.set('points', [p]);
+ assert.equal(selection.sketchTreeObjectSelected('constraint', { kind: 'fixed-point', point: p }), true);
+ assert.equal(selection.sketchTreeObjectSelected('constraint', { kind: 'fixed-point', point: new Point('P1', 0, 0) }), false);
+ assert.equal(selection.sketchTreeObjectSelected('constraint', { constraint }), false);
+ selection.set('dimensionConstraints', [constraint]);
+ assert.equal(selection.sketchTreeObjectSelected('constraint', { constraint }), true);
+ selection.set('lines', [line]); assert.equal(selection.sketchTreeObjectSelected('line', line), true);
+ assert.equal(selection.sketchTreeObjectSelected('line', new Line('L1', p, q)), false);
+ selection.set('arcEndpoint', { arc, endpoint: 'start' }); assert.equal(selection.sketchTreeObjectSelected('arc', arc), true);
+ selection.set('arcEndpoint', null); selection.set('arcEndpointPair', [{ arc, endpoint: 'end' }]);
+ assert.equal(selection.sketchTreeObjectSelected('arc', arc), true);
+ selection.clear(); assert.equal(selection.sketchTreeObjectSelected('arc', arc), undefined);
+});
+
 test('offset selection preserves chain geometry identity and only replaces its existing selection fields', () => {
   const selection = create(), point = new Point('P1', 0, 0), line = new Line('L1', point, point);
   const arc = new Arc('A1', point, 3, 0, 1), circle = new Circle('C1', point, 2);

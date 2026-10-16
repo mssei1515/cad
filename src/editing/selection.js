@@ -343,6 +343,19 @@
       }
     }
 
+    function sketchTreeObjectSelected(category, entry) {
+      const item = category === "constraint" ? entry.point || entry.constraint : entry;
+      if (state.inspection?.targets.some((target) => target.category === category
+        && (target.item === item || item?.id && target.item.id === item.id))) return true;
+      if (category === "hatch") return state.hatches.includes(entry);
+      if (category === "image") return state.referenceImages.includes(entry);
+      if (category === "block") return state.blockInstances.includes(entry);
+      if (category === "instance") return state.geometryInstances.includes(entry);
+      if (category === "annotation") return state.annotations.includes(entry);
+      if (category === "constraint") return entry.kind === "fixed-point" ? state.points.includes(entry.point) : constraintSelectedInCanvas(entry.constraint);
+      return geometryItemSelectedInCanvas(entry);
+    }
+
     function geometryItemSelectedInCanvas(item) {
       if (!item) return false;
       if (item instanceof Point) return state.points.includes(item);
@@ -394,7 +407,7 @@
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
       toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
-      trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
+      trimConstraintSelection, pushPrimitiveSelection, sketchTreeObjectSelected, geometryItemSelectedInCanvas,
       constraintSelectedInCanvas, hasSelection,
     };
     for (const field of [...fields, "dimensionConstraint"]) Object.defineProperty(api, field, { get: () => state[field], enumerable: true });
