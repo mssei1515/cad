@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Sketchのロック更新と名前変更guard
+
+ロック反転とUI／draw／history完了を既存SketchCommand.toggleLockへ、名前変更前の権限guardも既存renameへ集約。appは既存guard・言語の照会とprepareLockToggleの3portを追加接続し、返された操作をTreeへ渡す。prepareはpending取消→拘束command取消→作図mode終了を元の順で実行し、Sketch変更時の全体resetとは統一しない。対象Sketchの取消前取得、Root／不在の拒否、guard拒否時にmodel／promptを読まない順序、locked更新→UI→draw→履歴を維持。SketchHierarchyとSketchContextのRoot判定が取得済みObjectに対して同じこと、元lock bodyとの差がprepare委譲だけであることを確認した。両aliasの最初のconsumerはfactory生成後に登録される。
+
+app.jsは4,751→4,742行（9行減、今回の再開から合計98行減）。新script／unit fileなし。既存SketchCommand unitに2件追加し、Root／不在の無変更と取消準備→反転→表示／履歴の順、名前変更拒否時のmodel／prompt未参照、scope切替と元Sketchの無変更を確認。構文510ファイル・単体1,408件・関連E2E45件が成功（すべてexit 0、E2E1.1分）。sketch-permissions／sketch-edit／sketch-tree-visibility／sketch-tree-deleteを実行し、ロック保存・Undo・名前変更・作図先／表示とTree更新を確認。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-sketch-update-command-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はCommandPanelの表示先選択とイベント振分け、残るmode／command操作調整と機能ごとの生成接続を整理する。
+
 ### 表示数値の整形
 
 formatDisplayNumber／formatDimensionLabel／formatMeasuredDimensionLabelと通常1e-6・実測1e-5の許容差をNumberDisplayへ分離。UI／Canvas共通の純粋な表示文字列として状態やDOM／viewport・Documentに依存しない。appは起動冒頭で3関数を取得してProperties／Parameter／Annotation／座標・寸法へ接続する。3bodyと定数は元コードをそのまま維持し、既存の浮動小数補正・小さい値・末尾ゼロ・負のゼロ・非有限数・suffixと引数defaultを保持。モデル計算値、保存形式、寸法外観の固定桁表示は変更しない。

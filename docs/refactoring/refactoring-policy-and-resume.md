@@ -99,7 +99,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-週枠残量100%で再開。最新develop／mainとoriginの両branchが007288bで同期し、未コミット変更と他worktreeがないことを確認してcodex/sketch-edit-accessを作成した。開始時app.jsは4,840行。Sketch編集guard／拒否処理、共通hit方針、重なり順操作、Canvasメニューのコピー可否照会、表示数値の整形を責務ごとに分離し、現在は4,751行（今回合計89行減）。最新検証は構文510ファイル・単体1,406件・file URL読込1件・関連E2E50件成功。各単位の範囲・行数・検証と以前の全体検証はcomposition-root.mdを参照する。全E2Eは今回未実行。全体目標は未完了。次はSketch操作に残る更新責務とmode／command操作調整、機能ごとの生成接続を整理する。
+週枠残量100%で再開。最新develop／mainとoriginの両branchが007288bで同期し、未コミット変更と他worktreeがないことを確認してcodex/sketch-edit-accessを作成した。開始時app.jsは4,840行。Sketch編集guard／拒否処理、共通hit方針、重なり順操作、Canvasメニューのコピー可否照会、表示数値の整形、Sketchのロック更新と名前変更guardを責務ごとに分離し、現在は4,742行（今回合計98行減）。最新検証は構文510ファイル・単体1,408件・関連E2E45件成功。各単位の範囲・行数・検証と以前の全体検証はcomposition-root.mdを参照する。全E2Eは今回未実行。全体目標は未完了。次はCommandPanelの表示先選択とイベント振分け、残るmode／command操作調整と機能ごとの生成接続を整理する。
 
 ### 前回の停止地点（2026-10-14）
 

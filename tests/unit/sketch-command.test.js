@@ -7,7 +7,7 @@ const sandbox = { window: { SketchHierarchy: { ROOT_SKETCH_ID: 'ROOT', isRootSke
 vm.runInNewContext(fs.readFileSync('src/commands/sketch_command.js', 'utf8'), sandbox);
 function fixture() {
   const root = { id: 'ROOT', name: 'Root', kind: 'root' }, first = { id: 'S1', name: 'Sketch-1', parentSketchId: 'ROOT', appearance: {} };
-  const state = { model: { sketches: [root, first], activeSketchId: 'S1' }, next: 2, answer: null, visible: true }, events = [];
+  const state = { model: { sketches: [root, first], activeSketchId: 'S1' }, next: 2, answer: null, visible: true, editAllowed: true, prompts: 0 }, events = [];
   const byId = id => state.model.sketches.find(sketch => sketch.id === id);
   const command = sandbox.window.SketchCommand.create({ currentScope: () => state.model, ensureSketchState: () => {},
     activeSketch: () => byId(state.model.activeSketchId), activeSketchId: () => state.model.activeSketchId,
@@ -15,8 +15,9 @@ function fixture() {
     sketchName: id => byId(id)?.name, nextSketchId: () => `S${state.next++}`,
     clearInteractionForSketchChange: () => events.push('clear'), setHint: text => events.push(['hint', text]),
     updateUI: () => events.push('ui'), draw: () => events.push('draw'), recordHistory: label => events.push(['history', label]),
-    promptName: () => state.answer, effectiveAppearanceForElement: () => ({ visible: state.visible }),
-    clearTreeHover: () => events.push('hover'), clearSnap: () => events.push('snap') });
+    promptName: () => { state.prompts++; return state.answer; }, effectiveAppearanceForElement: () => ({ visible: state.visible }),
+    clearTreeHover: () => events.push('hover'), clearSnap: () => events.push('snap'),
+    guardEdit: () => state.editAllowed, applicationText: (_ja, en) => en, prepareLockToggle: () => events.push('prepareLock') });
   return { state, events, command, first, root };
 }
 test('Sketch creation uses hierarchy names and records one completed operation', () => {
@@ -110,4 +111,30 @@ test('creation admission has no effects and keeps the geometry-mode short circui
   // Existing cleanup still occurs if mode rejects creation even while Sketch permission allows it.
   assert.equal(access.rejectRootSketchCreation(), true);
   assert.deepEqual(events, [['check', 'S1', 'create'], 'snap', 'pointer', 'draw']);
+});
+
+test('Sketch lock rejects Root and missing owners, prepares before mutation and records each toggle once', () => {
+  const f = fixture();
+  assert.equal(f.command.toggleLock('ROOT'), false); assert.equal(f.command.toggleLock('missing'), false);
+  assert.deepEqual(f.events, []);
+  let locked = false;
+  Object.defineProperty(f.first, 'locked', { get: () => locked, set: value => { locked = value; f.events.push(['lock', value]); } });
+  assert.equal(f.command.toggleLock('S1'), true);
+  assert.equal(f.first.locked, true);
+  assert.deepEqual(f.events, ['prepareLock', ['lock', true], 'ui', 'draw', ['history', 'Toggle sketch lock']]);
+  f.events.length = 0;
+  assert.equal(f.command.toggleLock('S1'), true); assert.equal(f.first.locked, false);
+  assert.deepEqual(f.events, ['prepareLock', ['lock', false], 'ui', 'draw', ['history', 'Toggle sketch lock']]);
+  assert.equal(f.state.model.activeSketchId, 'S1');
+});
+
+test('Sketch rename checks edit permission before reading the model or prompting; lock follows current scope', () => {
+  const f = fixture(), host = f.state.model;
+  f.state.editAllowed = false; f.state.model = null;
+  assert.equal(f.command.rename('S1'), undefined); assert.equal(f.state.prompts, 0); assert.deepEqual(f.events, []);
+  const blockSketch = { id: 'S1', name: 'Block Sketch', locked: false };
+  f.state.model = { sketches: [f.root, blockSketch], activeSketchId: 'ROOT' };
+  assert.equal(f.command.toggleLock('S1'), true); assert.equal(blockSketch.locked, true);
+  assert.equal(host.sketches[1].locked, undefined); assert.equal(host.activeSketchId, 'S1');
+  assert.equal(f.state.model.activeSketchId, 'ROOT');
 });

@@ -1,9 +1,9 @@
-/* Sketch creation, activation, naming and visibility operations. */
+/* Sketch creation, activation, naming, visibility and lock operations. */
 (() => {
   "use strict";
   function create({ currentScope, ensureSketchState, activeSketch, activeSketchId, sketchById, childSketchesOf,
     sketchName, nextSketchId, clearInteractionForSketchChange, setHint, updateUI, draw, recordHistory,
-    promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap }) {
+    promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, applicationText, prepareLockToggle }) {
     const { ROOT_SKETCH_ID, isRootSketch } = window.SketchHierarchy;
     const { normalizeAppearance } = window.Appearance;
     function nextRootSketchName() {
@@ -66,6 +66,7 @@
     }
 
     function renameSketch(sketchId) {
+      if (!guardEdit(sketchId)) return;
       const model = currentScope();
       const sketch = model.sketches.find((item) => item.id === sketchId);
       if (!sketch || isRootSketch(sketch)) return;
@@ -92,7 +93,16 @@
       return true;
     }
 
-    return Object.freeze({ createSketch, activate: setActiveSketch, rename: renameSketch, toggleVisibility: toggleSketchVisibility });
+    function toggleLock(id) {
+      const sketch = sketchById(id);
+      if (!sketch || isRootSketch(sketch)) return false;
+      prepareLockToggle();
+      sketch.locked = !sketch.locked;
+      updateUI(); draw(); recordHistory(applicationText("スケッチロック切替", "Toggle sketch lock"));
+      return true;
+    }
+
+    return Object.freeze({ createSketch, activate: setActiveSketch, rename: renameSketch, toggleLock, toggleVisibility: toggleSketchVisibility });
   }
   // Editing permission stays in SketchContext; this boundary handles refusal feedback and cleanup.
   function createEditAccess({ activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId,

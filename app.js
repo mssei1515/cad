@@ -1331,15 +1331,6 @@
     isVisibleSketchId, isVisibleSketchElement, elementSketchId, activeSketchId, isEditableSketchId,
   });
 
-  function toggleSketchLock(id) {
-    const sketch = sketchById(id);
-    if (!sketch || isRootSketch(sketch)) return false;
-    cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode();
-    sketch.locked = !sketch.locked;
-    updateUI(); draw(); recordHistory(applicationText("スケッチロック切替", "Toggle sketch lock"));
-    return true;
-  }
-
   function canCreateInActiveSketch(...args) { return sketchEditAccess.canCreateInActiveSketch(...args); }
 
   function rejectRootSketchCreation(...args) { return sketchEditAccess.rejectRootSketchCreation(...args); }
@@ -2652,9 +2643,9 @@
     sketchName, nextSketchId: () => `S${sketchSeq++}`, clearInteractionForSketchChange,
     setHint, updateUI, draw, recordHistory, promptName: (title, name) => window.prompt(title, name),
     effectiveAppearanceForElement, clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap,
+    guardEdit: guardSketchEdit, applicationText, prepareLockToggle: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode(); },
   });
-  const { createSketch, activate: setActiveSketch, rename: renameSketchCommand, toggleVisibility: toggleSketchVisibilityCommand } = sketchCommand;
-  function renameSketch(id) { if (guardSketchEdit(id)) return renameSketchCommand(id); }
+  const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleLock: toggleSketchLock, toggleVisibility: toggleSketchVisibilityCommand } = sketchCommand;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
   const sketchMoveQuery = window.SketchMove.create({
     currentScope: workspace.current, activeSketchId, constraintGraphNodes, constraintSketchId,
