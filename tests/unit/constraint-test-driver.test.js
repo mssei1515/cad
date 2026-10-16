@@ -123,7 +123,7 @@ test('status observation captures the current sketch after refresh and observes 
   let statuses = new Map([[first, 'full'], [second, 'under']]);
   const observation = sandbox.window.ConstraintTestDriver.createStatusObservation({
     refreshConstraintAnalysis: () => { refreshed++; active = refreshed === 1 ? 'S2' : 'S1'; return { analysis, statuses }; },
-    activeSketchId: () => { reads++; return active; }, elementSketchId: item => item.sketchId,
+    readMembership: () => { reads++; return { activeSketchId: active, elementSketchId: item => item.sketchId }; },
   });
   assert.equal(reads, 0);
   const result = observation.state();

@@ -161,7 +161,7 @@
     orderedSketches, childSketchesOf, descendantSketchIds,
     ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds,
     activeSketch, activeSketchId, assignSketchId,
-    elementSketchId, sameSketchElements, isEditableSketchId, canEditSketch,
+    elementSketchId, membershipQuery: readSketchMembership, sameSketchElements, isEditableSketchId, canEditSketch,
     sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
     constraintTargetsAreActive, constraintReferencesSketch, wouldCreateSketchCycle,
     sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
@@ -528,7 +528,7 @@
   const { redundantConstraintInfo, refreshConstraintRedundancy, constraintRedundancyInfo,
     constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
   const constraintAnalysis = window.ConstraintAnalysis.create({
-    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, activeSketchId, descendantSketchIds, elementSketchId,
+    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, readMembership: readSketchMembership, descendantSketchIds, elementSketchId,
     geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
     refreshReferenceConstraintValidity, refreshConstraintRedundancy, sketchHasSolveError,
     isEditableSketchElement, isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -3125,7 +3125,7 @@
     const readTestHistory = historyObservation.state;
     const selectedGeometryObservation = window.CanvasSelectionTestDriver.createIdObservation({ canvasSelection });
     const readTestSelectedGeometry = selectedGeometryObservation.state;
-    const constraintStatusObservation = window.ConstraintTestDriver.createStatusObservation({ refreshConstraintAnalysis, elementSketchId, activeSketchId });
+    const constraintStatusObservation = window.ConstraintTestDriver.createStatusObservation({ refreshConstraintAnalysis, readMembership: readSketchMembership });
     const readTestConstraintStatuses = constraintStatusObservation.state;
     const constraintAnalysisObservation = window.ConstraintTestDriver.createAnalysisObservation({
       activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, analyzeConstraintState: options => solver.analyzeConstraintState(options),

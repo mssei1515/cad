@@ -144,10 +144,10 @@
     return Object.freeze({ add });
   }
 
-  function createStatusObservation({ refreshConstraintAnalysis, elementSketchId, activeSketchId }) {
+  function createStatusObservation({ refreshConstraintAnalysis, readMembership }) {
     function state() {
       const state = refreshConstraintAnalysis();
-      const sketchId = activeSketchId();
+      const { activeSketchId: sketchId, elementSketchId } = readMembership();
       return {
         stable: state.analysis.stable,
         errorNorm: state.analysis.errorNorm,
