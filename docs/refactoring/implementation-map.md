@@ -942,3 +942,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/ui/expression_input_controller.js: フォーカス式field／namespace照会とCanvasの寸法・注記からの参照入力を12依存で担当する。名前補完とDOM挿入は既存service／viewへ委譲し、namespaceの同一参照・拒否条件と異なるevent／通知順を保持する。
 
 - src/ui/constraint_feedback.js: localizedConstraintNameは拘束名の言語／typeOnly表示を担当。2つの言語／文言read portを使い、正規表現の優先順と未知名・固定端点のfallback、Modelのname／保存値を維持する。
+
+- src/ui/authoring_feedback.js: Hatch／Offsetの診断codeからUI文言への変換を1つの文言read portで担当する。未知code／reasonの既存fallbackと言語の実行時反映を保ち、Geometry判定・model編集・DOM更新は持たない。

@@ -79,7 +79,7 @@ const files = [
   "tests/unit/runtime-version-view.test.js",
   "tests/unit/keyboard-interaction-controller.test.js",
   "tests/unit/constraint-status-view.test.js",
-  "tests/unit/constraint-feedback.test.js",
+  "tests/unit/constraint-feedback.test.js", "tests/unit/authoring-feedback.test.js",
   "tests/unit/viewport.test.js",
   "tests/unit/dimension-metrics.test.js",
   "tests/unit/dimension-constraint-factory.test.js",

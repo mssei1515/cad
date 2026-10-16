@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Hatch／Offsetの診断表示
+
+hatchRegionErrorText／offsetChainErrorTextをsrc/ui/authoring_feedback.jsのAuthoringFeedbackへ分離。依存はapplicationTextだけとし、Geometry判定・model編集・DOM更新は持たない。既存2関数の本体を維持し、未知codeでHatchはreasonを英語fallbackとして使い、Offsetは汎用文言を使う違いと、操作時の言語参照を保持する。appはApplicationSettingsの生成直後、最初のconsumerより前で接続する。
+
+app.jsは4,488→4,459行（29行減、今回の再開から合計381行減）。script読込・構文・unit一覧と読込期待を同期。単体2件で既知code／未知code、言語切替と入力不変を確認。構文518ファイル・単体1,437件・file URL読込1件・関連E2E24件が成功（すべてexit 0、関連E2E1.0分）。ログは一時ディレクトリのcad-authoring-feedback-{check,unit,loader,e2e}.log。全workerとrunnerは終了し、実体確認済みの専用serverだけを終了した。この区切りでは全E2Eは未実行。全体目標は未完了。ユーザーのorigin/mainへのマージ指示により新規分離を止め、develop統合後の全体検証とmainへのリリースを進める。
+
 ### 拘束名の表示
 
 localizedConstraintNameを既存ConstraintFeedbackへ集約。既存applicationTextと新たなreadLanguageの2 portで通常名／typeOnly表示を返す。元bodyはlive言語read portの置換以外一致し、具体名を優先する正規表現の順・suffix・未知名と空名fallback・Arc endpoint fixedの特例を保持する。Modelのnameや保存値は変更しない。appは既存Feedback instanceから関数を取得し、Block選択照会／Tree／Properties／Canvasメニューへ接続する。最初のconsumerより前に生成済みであり、getterは呼出し時だけ使う。既存summary等の明示language引数とはreadLanguageを別名にして役割を区別する。

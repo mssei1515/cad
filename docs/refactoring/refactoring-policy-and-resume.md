@@ -99,7 +99,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-週枠残量100%で再開。最新develop／mainとoriginの両branchが007288bで同期し、未コミット変更と他worktreeがないことを確認してcodex/sketch-edit-accessを作成した。開始時app.jsは4,840行。Sketch編集guard／拒否処理、共通hit方針、重なり順操作、Canvasメニューのコピー可否照会、表示数値の整形、Sketchのロック更新と名前変更guard、CommandPanelの表示先選択／振分け、Selection解除の調整、派生Geometryのドラッグ開始、参照元探索／inverse照会、トリム操作の進行、識別子のDOM挿入、Canvas参照入力の照会／操作調整、拘束名の表示を責務ごとに分離し、現在は4,488行（今回合計352行減）。最新検証は構文516ファイル・単体1,435件・関連E2E45件成功。各単位の範囲・行数・検証と以前の全体検証はcomposition-root.mdを参照する。全E2Eは今回未実行。全体目標は未完了。作図開始・取消は既存DrawOperationLifecycleに分離済みと確認。beginDerivedGeometryDragはGeometryDrag.createDerivedEntryへ分離済み。参照元探索と逆変換の照会はInstanceProjection.createDragSourceQueryへ分離済み。executeTrimAtの操作調整はTrimCommandへ分離済み。識別子のDOM挿入はExpressionInputView.createInsertionへ分離済み。Canvas参照入力の照会／操作調整はExpressionInputControllerへ分離済み。拘束名の表示は既存ConstraintFeedbackへ分離済み。次はhatchRegionErrorText／offsetChainErrorTextの診断結果からUI文言への変換を整理し、Geometry判定やmodel編集を持ち込まず、文言と未知code／reason fallbackを維持する。mode／command操作調整・機能ごとの生成接続も続ける。
+最新develop／mainとoriginの両branchが007288bで同期した状態からcodex/sketch-edit-accessで再開。app.jsは4,840→4,459行（381行減）。Sketch編集guard、hit方針、重なり順、コピー可否、表示数値、CommandPanel振分け、Selection解除、派生ドラッグと参照元照会、トリム操作、式入力、拘束名とHatch／Offset診断表示を責務ごとに分離した。詳細はcomposition-root.mdとimplementation-map.mdを参照。最新の区切りは構文518ファイル・単体1,437件・読込1件・関連E2E24件成功。全体目標は未完了。
+
+ユーザーからorigin/mainへのマージ指示を受領。新規分離を止め、未コミットのAuthoringFeedbackを記録・Commit・Pushし、developへ統合して全体検証後、mainを最後にマージ・Pushし、直ちにdevelopを同じcommitへ同期する。完了後に統合先と検証結果をこの節へ追記する。次回は最新developから作業branchを作り、寸法symbol削除guardの適切な所有者、mode／command操作調整と機能ごとの生成接続を確認する。小さなhelper単位の分割を目的にせず、既存ownerの責務と依存を優先する。
 
 ### 前回の停止地点（2026-10-14）
 
