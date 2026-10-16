@@ -6,7 +6,7 @@ const files = [
   "tests/unit/derived-patterns.test.js",
   "tests/unit/annotation-anchor-constraints.test.js",
   "tests/unit/clipboard-transfer.test.js",
-  "tests/unit/clipboard-command.test.js", "tests/unit/solve-refresh-command.test.js", "tests/unit/drawing-order-command.test.js",
+  "tests/unit/clipboard-command.test.js", "tests/unit/solve-refresh-command.test.js", "tests/unit/trim-command.test.js", "tests/unit/drawing-order-command.test.js",
   "tests/unit/clipboard-graph.test.js",
   "tests/unit/clipboard-session.test.js",
   "tests/unit/clipboard-paste-checkpoint.test.js",

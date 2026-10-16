@@ -1641,7 +1641,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
   );
   const expectedPaths = [
     "src/geometry/pattern_instance_model.js", "src/commands/derived_instance_editing.js",
-    "src/editing/image_clipboard.js", "src/editing/clipboard_transfer.js", "src/editing/clipboard_payload.js", "src/editing/clipboard_geometry.js", "src/editing/clipboard_paste_checkpoint.js", "src/editing/clipboard_session.js", "src/editing/clipboard_graph.js", "src/commands/clipboard_command.js", "src/commands/solve_refresh_command.js", "src/commands/drawing_order_command.js", "src/persistence/dxf_import.js", "src/commands/dxf_import_command.js",
+    "src/editing/image_clipboard.js", "src/editing/clipboard_transfer.js", "src/editing/clipboard_payload.js", "src/editing/clipboard_geometry.js", "src/editing/clipboard_paste_checkpoint.js", "src/editing/clipboard_session.js", "src/editing/clipboard_graph.js", "src/commands/clipboard_command.js", "src/commands/solve_refresh_command.js", "src/commands/trim_command.js", "src/commands/drawing_order_command.js", "src/persistence/dxf_import.js", "src/commands/dxf_import_command.js",
     "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/commands/png_export_command.js",
     "src/commands/dimension_line_group.js",
     "runtime-version.js", "app.js",

@@ -900,7 +900,7 @@
     currentScope: workspace.current, geometry: geometryCreation, references: constraintReferences, query: trimQuery,
     pushModelConstraint, elementSketchId, isPointUsedByPrimitive, isReferencePoint, minArcLength: MIN_ARC_LENGTH,
   });
-  const { executeLineTrim, executeArcTrim, executeCircleTrim } = trimEditing;
+  const { executeLineTrim, executeCircleTrim } = trimEditing;
   const editingCheckpoint = window.EditingCheckpoint.create({
     currentScope: workspace.current, ids: geometryIds, invalidateProjection: invalidateBlockProjectionCache,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
@@ -3426,43 +3426,13 @@
 
 
 
-  function executeTrimAt(pointer) {
-    const identity = hitSketchIdentityElement(pointer.x, pointer.y, { allowInactiveGeometry: true });
-    if (!guardSketchEdit(identity?.sketchId || activeSketchId(), "structure")) return false;
-    const preview = computeTrimPreview(pointer);
-    if (!preview) {
-      setHint("トリムできる交点がありません", "error");
-      draw();
-      return false;
-    }
-    if (!guardSketchProjectionShapeEdit([preview.item], { action: applicationText("トリム", "Trim") })) {
-      drawingPreview.setTrim(null);
-      draw();
-      return false;
-    }
-    const snapshot = snapshotGeometryMutationState();
-    if (preview.kind === "line") executeLineTrim(preview);
-    else if (preview.kind === "arc") executeArcTrim(preview);
-    else executeCircleTrim(preview);
-    drawingPreview.setTrim(null);
-    clearSelection();
-    const solved = stabilizeActiveParameterNamespace(activeSketchId());
-    const result = solved.result;
-    if (!solved.success || solved.dependent?.success === false || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-      restoreGeometryMutationState(snapshot);
-      setHint(applicationText("拘束を維持できないためトリムを戻しました。拘束状態を確認してください", "The trim was restored because its constraints could not be maintained. Check the constraint status."), "error");
-      updateUI();
-      draw();
-      return false;
-    }
-    constraintAnalysis.invalidate();
-    refreshConstraintAnalysis();
-    setHint(applicationText("トリムしました", "Trim completed"));
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory("トリム");
-    return true;
-  }
+  const { execute: executeTrimAt } = window.TrimCommand.create({
+    hitSketchIdentityElement, guardSketchEdit, activeSketchId, computeTrimPreview, setHint, draw, guardSketchProjectionShapeEdit, applicationText,
+    clearTrimPreview: () => drawingPreview.setTrim(null), editing: trimEditing,
+    checkpoint: { capture: snapshotGeometryMutationState, restore: restoreGeometryMutationState },
+    clearSelection, stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis, updateUI, recordHistory,
+  });
 
   const { candidatesAt: canvasContextCandidatesAt } = window.CanvasContextQuery.create({
     selectionScope: { sketch: isVisibleSketchId, element: isVisibleSketchElement },

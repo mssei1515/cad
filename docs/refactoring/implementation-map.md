@@ -934,3 +934,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/commands/geometry_drag.js: createDerivedEntryは派生Instance全体と参照元Geometryのdrag plan／開始調整を14依存で担当する。参照元照会と通常session生成、既存GeometryDrag lifecycleを接続し、Selection／拒否通知・live anchor・pointer map／variableAllowedの既存境界を保持する。
 
 - src/geometry/instance_projection.js: createDragSourceQueryは参照元Object収集とinverse pointer chainの解決を担当。3 read portのみで接続し、Object参照・探索順・巡回拒否・pointer複写とSketch投影flagを保つ。UI／Selection／drag状態や独自scope cacheを所有しない。
+
+- src/commands/trim_command.js: TrimCommandは対象検証・Geometry変更の依頼・求解／依存結果の判定・checkpoint復元・成功履歴を18依存で調整する。TrimEditingと既存Geometry checkpointの所有を維持し、復元条件や例外伝播・UI順を変えない。

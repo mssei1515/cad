@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### トリム操作の進行
+
+executeTrimAtの対象検証→checkpoint→Geometry変更→preview／Selection解除→Parameter安定化／依存結果判定→失敗復元または成功履歴をTrimCommandへ分離。既存TrimEditingとGeometry checkpoint APIを含む18依存を明示し、model状態やsessionは新たに持たない。形状変更はLine／Arc／Circleごとに既存TrimEditingへ委譲する。元bodyはpreview解除・analysis invalidate・閾値のcapability置換以外一致し、structure／投影guard、拒否時のcleanup範囲、現在active Sketchの参照時点、主／依存solve失敗とerrorNorm > 閾値の復元、例外伝播、UI→draw→history順を維持する。editing／checkpointの関数参照は元どおり裸の関数として使う。
+
+app.jsは4,620→4,590行（30行減、今回の再開から合計250行減）。新command／unit fileを追加しindex.html・check-syntax・明示unit一覧・unified-uiのscript期待を同期。unit4件で形状ごとの成功と閾値ちょうどの受理、guard／preview／投影拒否、主／依存solveと誤差超過の復元、想定外例外時の伝播範囲を確認。初回file URL起動でテストfixtureが使うexecuteCircleTrimの参照を誤って外したことを検出し、Line／Circleのfixture用参照を保持して修正した。修正後に構文513ファイル・単体1,426件・先行file URL読込1件・関連E2E150件が成功（すべてexit 0、関連E2E2.6分）。unified-ui／sketch-permissions／sketch-projection／phase0-characterizationを実行。全worker終了後に各専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-trim-command-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はinsertIdentifierIntoExpressionInputに残る式入力欄への識別子挿入とinput／blur-change／focus・caretの処理を既存ExpressionInputViewへ集約する。Parameterの名前解決・適用や入力確定の既存時機は変えない。
+
 ### 参照元探索と逆変換の照会
 
 resolveDerivedDragSource／geometryInstanceSourceObjectsを既存InstanceProjection.createDragSourceQueryへ集約。source points・依存参照・GeometryRef解決の3 read portだけを受け取り、inverse chainと参照元ObjectのSetを返す。元2bodyはそのまま一致し、UI／Selection／drag lifecycleを持ち込まない。Setは毎回生成し、同じIDでも異なるObjectを別に扱い、共有Point・Block／派生owner・重複や巡回の探索順と短絡を維持する。inverse関数参照を外側から内側へ収集して裸の関数として呼ぶreceiver、pointer複写、Sketch投影flag、参照切れ／非変換chain／巡回のnull結果を保持。appはGeometryReadModel生成直後に接続し、既存resolve portが操作時のscopeを読む。最初のconsumerより前の初期化と、factory生成時に照会を実行しないことを確認した。
