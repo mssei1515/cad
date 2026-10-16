@@ -116,7 +116,7 @@ const files = [
   "tests/unit/block-instance-persistence.test.js",
   "tests/unit/block-connections.test.js",
   "tests/unit/document-geometry-persistence.test.js",
-  "tests/unit/document-sequences.test.js",
+  "tests/unit/document-sequences.test.js", "tests/unit/document-ids.test.js",
   "tests/unit/document-loading.test.js",
   "tests/unit/document-state.test.js",
   "tests/unit/block-state.test.js",

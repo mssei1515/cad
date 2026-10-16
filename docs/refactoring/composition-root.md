@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Document採番状態の所有
+
+appに残った11個の採番変数をsrc/editing/document_ids.jsのDocumentIdsへ集約。生成・previewの非消費照会・reset・snapshot／restore・編集scope／付随要素の番号予約を同じownerへまとめ、変数setterの横移動にはしない。依存は既存GeometryIds.nextSeqだけ。基本Geometry採番はGeometryIds、読込候補からの純粋な復元計算はDocumentSequencesに残す。Sketchの初期値2、各prefix、操作時の番号消費、Block名のpeek、Hatchの保存予約、previewで消費しないことを維持。clipboardは従来8種類だけのcheckpointを採り、その他の番号を戻さない。freeInstanceSeq／blockElementSeqの既存復元値も保持する。読込時はGeometry予約の後に復元計算値を反映する順を保持。
+
+app.jsは4,419→4,388行（31行減、07024cbから合計71行減）。appから11個のカウンター変数がなくなり、command／test fixtureは限定したallocate／peek portへ接続。既存初期化位置に生成を置き、前段SketchProjectionのID callbackは従来どおり操作時に評価する。新scriptのindex／構文／unit一覧と読込期待を同期し、各pathが1回だけ含まれることを確認。単体4件でprefix・独立したowner・peek／reset、部分復元、番号予約と入力不変、実際のDocumentSequences.recoverとの接続を確認。構文520ファイル・単体1,447件・file URL読込1件・関連E2E239件が成功（すべてexit 0、関連E2E3.1分）。unified-ui／blocks／derived-selection-copy／derived-patterns／sketch-projection／hatching／reference-images／spline／file-safety／phase0-characterizationを実行。全runnerは正常終了。ログは一時ディレクトリのcad-document-ids-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は残存責務を再確認し、Parameterダイアログ・式入力・適用等の機能単位の生成接続をまとめられるか検討する。単なる細かなhelper分割に偏らず、依存の向きと状態所有を優先する。
+
 ### Document初期化時のCanvas表示状態
 
 resetModelStateのhover／highlight／pointer／snapと明示Selection fieldのresetを、既存CanvasSelectionInteraction.createDocumentResetへ集約。5依存は既存Selection／hover／highlightとpointer／snap解除portだけで、Documentやcommand sessionを持ち込まない。通常clearとDocument初期化で消す範囲が異なるため独立した入口とし、最初のclearSelectionや共通pending／constraint sessionのreset、採番との位置関係を維持する。hoverの段階更新、highlight→pointer→snap、Selection fieldの順も保持し、元bodyはpointer解除のcapability置換とindent以外一致。clearSnapは後段constのため、生成時は委譲callbackで接続し、実際のresetまで評価しない。

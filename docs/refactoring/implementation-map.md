@@ -950,3 +950,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/editing/draw_operation_lifecycle.js: resetForDocumentはDocument初期化時のLine／Centerline／円弧／Spline／投影／Instance等の16個の下書き破棄を順序どおり調整する。既存依存のみを使い、pending／Hatch／Selection／Document内容は初期化側が引き続き担当する。通常のexit／cancelとは独立した範囲を維持する。
 
 - src/editing/canvas_selection_interaction.js: createDocumentResetはDocument置換時のhover／highlight／pointer／snapと明示Selection fieldのresetを5依存で調整する。通常clear、早期Selection解除、pending／constraint session、Document／採番の初期化は統合せず既存の順序を維持する。
+
+- src/editing/document_ids.js: 11個のDocument採番状態を所有し、生成・preview照会・予約・reset・checkpoint復元を集約。Block編集の番号予約とclipboardの8種類だけのrollbackを維持。GeometryIdsは基本形状、persistence/DocumentSequencesは読込時の復元計算に専念する。

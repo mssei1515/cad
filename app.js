@@ -366,7 +366,7 @@
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     clearSelection, getMode: () => mode, setMode: value => { mode = value; }, clearSnap: () => clearSnap(),
     updateToolbar, setHint, applicationText, updateUI, draw, activeSketchId, normalizeGeometryInstance,
-    nextId: () => `SPI${sketchProjectionInstanceSeq++}`, geometryRefForItem, currentScope: () => model,
+    nextId: () => documentIds.allocate("sketchProjection"), geometryRefForItem, currentScope: () => model,
     canvasSelection, refreshConstraintAnalysis, recordHistory,
     clearHover: () => canvasHover.update({ point: null, line: null, circle: null, arc: null, spline: null, sketchIdentity: null }),
   });
@@ -418,17 +418,7 @@
   const { add: addOffsetChainGeometry, isClosed: offsetChainIsClosed } = offsetSelection;
   const geometryIds = window.GeometryIds.create();
   const { nextSeq } = window.GeometryIds;
-  let sketchSeq = 2;
-  let annotationSeq = 1;
-  let hatchSeq = 1;
-  let referenceImageSeq = 1;
-  let blockDefinitionSeq = 1;
-  let blockInstanceSeq = 1;
-  let sketchProjectionInstanceSeq = 1;
-  let mirrorInstanceSeq = 1;
-  let patternInstanceSeq = 1;
-  let freeInstanceSeq = 1;
-  let blockElementSeq = 1;
+  const documentIds = window.DocumentIds.create();
   const constraintRebinding = window.ConstraintRebinding.create({
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
@@ -436,14 +426,14 @@
   const blockDefinitionEditing = window.BlockDefinitionEditing.create({
     normalizedSketchCopy, cloneConstraintForBlock: constraintRebinding.cloneForBlock, blockDefinitionById, createBlockProjectionBundle,
     geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, normalizeGeometryInstance,
-    hatchSequence: () => hatchSeq, nextDefinitionId: () => `B${blockDefinitionSeq++}`,
+    hatchSequence: () => documentIds.peek("hatch"), nextDefinitionId: () => documentIds.allocate("blockDefinition"),
     isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
   });
   const { clone: cloneBlockDefinition,
     apply: mergeBlockDefinitionDraft, fromSelection: createBlockDefinitionFromSelection,
     empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const blockEditor = window.BlockEditorSession.create({
-    currentScope: workspace.current, documentModel, hatchSequence: () => hatchSeq,
+    currentScope: workspace.current, documentModel, hatchSequence: () => documentIds.peek("hatch"),
     normalizedSketchCopy, activeSketchId, blockProjectionBundles, geometryElementKey,
     captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
     restoreHostState: (original) => {
@@ -480,8 +470,8 @@
   const geometryInstanceCommand = window.GeometryInstanceCommand.create({
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     selectedItemsForGeometryInstance, geometryRefForItem, geometryRefsEqual, isVisibleSketchElement, clearSelection, normalizeGeometryInstance,
-    previewFreeId: type => type === "mirror" ? `MI${mirrorInstanceSeq}` : `PI${patternInstanceSeq}`,
-    nextInstanceId: type => type === "mirror" ? `MI${mirrorInstanceSeq++}` : `PI${patternInstanceSeq++}`,
+    previewFreeId: type => type === "mirror" ? `MI${documentIds.peek("mirror")}` : `PI${documentIds.peek("pattern")}`,
+    nextInstanceId: type => type === "mirror" ? documentIds.allocate("mirror") : documentIds.allocate("pattern"),
     activeSketchId, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI,
     applicationText, setHint, draw, currentScope: workspace.current, canvasSelection, recordHistory,
     Line, lineHasDirection, elementSketchId,
@@ -507,7 +497,7 @@
     isGeometryMode, canCreateInActiveSketch, blockDefinitionById, blockDefinitionScopeError,
     blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, snappedBlockRotation,
     blockInstanceTranslationForAnchor, activeSketchId, currentScope: workspace.current,
-    nextInstanceId: () => `BI${blockInstanceSeq++}`, clearSelection, canvasSelection, invalidateBlockProjectionCache,
+    nextInstanceId: () => documentIds.allocate("blockInstance"), clearSelection, canvasSelection, invalidateBlockProjectionCache,
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
     setPropertiesPanelCollapsed, getPointerPreview: () => drawingPreview.pointer,
     setPointerPreview: value => { drawingPreview.setPointer(value); }, getLastPointerWorld: () => lastPointerWorld,
@@ -792,7 +782,7 @@
     selectAnnotation: item => canvasSelection.set("annotations", [item]),
     canEdit: item => guardSketchEdit(elementSketchId(item), "structure") && !item.blockProjection,
     prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); },
-    nextAnnotationId: () => `AN${annotationSeq++}`, activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
+    nextAnnotationId: () => documentIds.allocate("annotation"), activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
     annotationLeaderTargetFromHit, annotationLeaderAnchor, effectiveAnnotationStyle, clearSelection, cancelPendingCommand,
     setHint, updateToolbar, updateUI, draw, recordHistory,
   });
@@ -1492,7 +1482,7 @@
     blockEditor, blockDefinitionEditing, blockCatalog, blockEditingQueries, documentModel,
     currentScope: workspace.current, canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
     canvasSelection, captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
-    defaultName: () => `Block-${blockDefinitionSeq}`, blockSelectionGeometry, blockSelectionBoundsCenter,
+    defaultName: () => `Block-${documentIds.peek("blockDefinition")}`, blockSelectionGeometry, blockSelectionBoundsCenter,
     guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
     setMode: (value) => { mode = value; }, closeDefinitions: () => blockView.closeDefinitions(),
     setEditorActive: (active) => blockView.setEditorActive(active), fitAllGeometryToViewport,
@@ -1514,10 +1504,7 @@
 
   function reserveBlockEditorSequences(draft) {
     reserveGeometryElementSequences(draft);
-    sketchSeq = Math.max(sketchSeq, nextSeq(draft.sketches || [], "S"));
-    annotationSeq = Math.max(annotationSeq, nextSeq(draft.annotations || [], "AN"));
-    hatchSeq = Math.max(hatchSeq, model.nextHatchIndex, nextSeq(draft.hatches || [], "H"));
-    referenceImageSeq = Math.max(referenceImageSeq, nextSeq(draft.referenceImages || [], "IMG"));
+    documentIds.reserveScope(draft, model.nextHatchIndex);
   }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
@@ -1528,7 +1515,7 @@
     solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
     requestChoice: (options) => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
     storedBlockInstancesReferencing, restoreBlockEditorHost, rebuildStoredBlockDefinitionConstraints,
-    nextInstanceId: () => `BI${blockInstanceSeq++}`, constraintGraphNodes, annotationReferencesRemovedGeometry,
+    nextInstanceId: () => documentIds.allocate("blockInstance"), constraintGraphNodes, annotationReferencesRemovedGeometry,
     invalidateBlockProjectionCache, blockProjectionBundles, geometryElementKey, blockDefinitionDependsOn,
     acceptError: CONSTRAINT_ACCEPT_ERROR, setSketchSolveOk, setSketchSolveError,
     clearSelection, canvasSelection, setMode: (value) => { mode = value; },
@@ -1579,17 +1566,7 @@
     constructionCommand.restore(false);
     documentCanvasReset.reset();
     geometryIds.reset();
-    sketchSeq = 2;
-    annotationSeq = 1;
-    hatchSeq = 1;
-    referenceImageSeq = 1;
-    blockDefinitionSeq = 1;
-    blockInstanceSeq = 1;
-    sketchProjectionInstanceSeq = 1;
-    mirrorInstanceSeq = 1;
-    patternInstanceSeq = 1;
-    freeInstanceSeq = 1;
-    blockElementSeq = 1;
+    documentIds.reset();
     blockPlacementCommand.reset();
     blockEditor.reset();
     window.DocumentState.resetDefaults(documentModel);
@@ -1603,8 +1580,7 @@
 
   function reserveGeometryElementSequences(source) {
     geometryIds.reserve(source);
-    hatchSeq = Math.max(hatchSeq, nextSeq(source?.hatches || [], "H"));
-    referenceImageSeq = Math.max(referenceImageSeq, nextSeq(source?.referenceImages || [], "IMG"));
+    documentIds.reserveAttachments(source);
   }
 
   function duplicateBlockElementId(definition) {
@@ -1651,7 +1627,7 @@
     ensureModelState();
     return documentSnapshot.serialize(workspace.snapshotSource(), {
       version: CURRENT_JSON_VERSION, savedAt: new Date().toISOString(),
-      documentName: effectiveDocumentName(), nextHatchIndex: hatchSeq,
+      documentName: effectiveDocumentName(), nextHatchIndex: documentIds.peek("hatch"),
     });
   }
 
@@ -1740,8 +1716,7 @@
     refreshReferenceConstraintValidity, enforceMinimumLineLengths, ensureDimensionDefaults,
     restoreSequences: sequences => {
       reserveGeometryElementSequences(sequences.geometry);
-      ({ sketchSeq, annotationSeq, hatchSeq, referenceImageSeq, blockDefinitionSeq, blockInstanceSeq,
-        sketchProjectionInstanceSeq, freeInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, blockElementSeq } = sequences);
+      documentIds.restore(sequences);
     },
     ensureAppearanceState, ensureBlockState, log,
   });
@@ -1788,7 +1763,7 @@
 
   const referenceImageCommand = window.ReferenceImageCommand.create({
     referenceImageImport, canvas, viewport, screenToWorld, currentScope: workspace.current, activeSketchId,
-    nextId: () => `IMG${referenceImageSeq++}`, canCreateInActiveSketch, clearSelection, canvasSelection,
+    nextId: () => documentIds.allocate("referenceImage"), canCreateInActiveSketch, clearSelection, canvasSelection,
     updateUI, draw, recordHistory, setHint, applicationText,
   });
   const imageClipboard = window.ImageClipboard.create({ window,
@@ -2158,27 +2133,21 @@
 
   const clipboardGeometry = window.ClipboardGeometry.create({
     geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById,
-    allocateBlockInstanceId: () => `BI${blockInstanceSeq++}`,
-    allocateGeometryInstanceId: type => type === "sketchProjection" ? "SPI" + sketchProjectionInstanceSeq++ : type === "mirror" ? "MI" + mirrorInstanceSeq++ : "PI" + patternInstanceSeq++,
+    allocateBlockInstanceId: () => documentIds.allocate("blockInstance"),
+    allocateGeometryInstanceId: type => type === "sketchProjection" ? documentIds.allocate("sketchProjection") : type === "mirror" ? documentIds.allocate("mirror") : documentIds.allocate("pattern"),
     normalizeGeometryInstance, copiedGeometryInstance: clipboardTransfer.copiedGeometryInstance, applicationText,
   });
 
   const clipboardPasteCheckpoint = window.ClipboardPasteCheckpoint.create({
     geometryIds,
-    captureSequences: () => ({ annotationSeq, hatchSeq, referenceImageSeq, sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq, blockInstanceSeq }),
-    restoreSequences: sequences => {
-      blockInstanceSeq = sequences.blockInstanceSeq;
-      ({ sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq } = sequences);
-      annotationSeq = sequences.annotationSeq;
-      hatchSeq = sequences.hatchSeq;
-      referenceImageSeq = sequences.referenceImageSeq;
-    },
+    captureSequences: () => documentIds.snapshot(["annotation", "hatch", "referenceImage", "sketchProjection", "mirror", "pattern", "free", "blockInstance"]),
+    restoreSequences: documentIds.restore,
   });
 
   const clipboardGraph = window.ClipboardGraph.create({
     geometry: clipboardGeometry, transfer: clipboardTransfer, parameters: parameterNamespace,
-    elementIds: { hatch: () => "H" + hatchSeq++, annotation: () => "AN" + annotationSeq++,
-      image: () => "IMG" + referenceImageSeq++, nextHatchIndex: () => hatchSeq },
+    elementIds: { hatch: () => documentIds.allocate("hatch"), annotation: () => documentIds.allocate("annotation"),
+      image: () => documentIds.allocate("referenceImage"), nextHatchIndex: () => documentIds.peek("hatch") },
     deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache, applicationText,
   });
 
@@ -2565,7 +2534,7 @@
 
   const sketchCommand = window.SketchCommand.create({
     currentScope: workspace.current, ensureSketchState, activeSketch, activeSketchId, sketchById, childSketchesOf,
-    sketchName, nextSketchId: () => `S${sketchSeq++}`, clearInteractionForSketchChange,
+    sketchName, nextSketchId: () => documentIds.allocate("sketch"), clearInteractionForSketchChange,
     setHint, updateUI, draw, recordHistory, promptName: (title, name) => window.prompt(title, name),
     effectiveAppearanceForElement, clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap,
     guardEdit: guardSketchEdit, applicationText, prepareLockToggle: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode(); },
@@ -2600,7 +2569,7 @@
     currentScope: workspace.current, hatchGeometryQuery, getMode: () => mode, setMode: value => { mode = value; },
     lastPointer: () => lastPointerWorld, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },
     activeSketchId, setActiveSketch, canCreateInActiveSketch, rejectRootSketchCreation,
-    nextHatchId: () => `H${hatchSeq++}`, hatchSequence: () => hatchSeq,
+    nextHatchId: () => documentIds.allocate("hatch"), hatchSequence: () => documentIds.peek("hatch"),
     cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection, canvasSelection,
     updateToolbar, updateStatusUI, updateUI, setHint, draw, recordHistory, applicationText, hatchRegionErrorText,
   });
@@ -3575,7 +3544,7 @@
     try {
       return callback();
     } finally {
-      definition.nextHatchIndex = Math.max(hatchSeq, Number(definition.nextHatchIndex) || 1);
+      definition.nextHatchIndex = Math.max(documentIds.peek("hatch"), Number(definition.nextHatchIndex) || 1);
       activateEditingScope(previousScope);
     }
   }
@@ -3905,7 +3874,7 @@
     const siblingVisibilityFixture = window.SketchTreeTestDriver.createSiblingVisibilityFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, addPoint, addLine, updateUI, draw, isVisibleSketchId, sketchRelationToActive, sketchStrokeWidth, constraintStatusColor, document });
     const inactiveHoverFixture = window.SketchTreeTestDriver.createInactiveHoverFixture({
       resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope: workspace.current, isDimensionConstraint, createEmptyBlockDefinition, Point, Line,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`, invalidateBlockProjectionCache, fitAllGeometryToViewport, viewport, updateUI, draw,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, fitAllGeometryToViewport, viewport, updateUI, draw,
       dimensionLayout, targetFromConstraint, clientPosition: canvasTestDriver.clientPosition, blockInstanceDisplayCenter, sketchIdentityRelationLabel,
     });
     const hoverIdentityObservation = window.SketchTreeTestDriver.createIdentityObservation({ canvasHover, sketchIdentityRelationLabel });
@@ -3914,10 +3883,10 @@
     });
     const rootHoverFixture = window.SketchTreeTestDriver.createRootHoverFixture({
       resetModelState, addPoint, addLine, addCircle, addArc, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`, invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw,
     });
     const blockHoverFixture = window.SketchTreeTestDriver.createBlockHoverFixture({
-      resetModelState, viewport, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
+      resetModelState, viewport, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       currentScope: workspace.current, invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw, blockProjectionBundle, clientPosition: canvasTestDriver.clientPosition,
     });
     const sketchProjectionTestObservation = window.SketchProjectionTestDriver.createObservation({
@@ -3944,7 +3913,7 @@
     });
     const sketchProjectionBlockFixture = window.SketchProjectionTestDriver.createBlockProjectionFixture({
       resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       currentScope: workspace.current, invalidateBlockProjectionCache, blockProjectionBundle,
       focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, resetHistory, updateUI, draw,
     });
@@ -4004,7 +3973,7 @@
     });
     const overlapSelectionFixture = window.CanvasSelectionTestDriver.createOverlapFixture({
       resetModelState, addLine, addPoint, currentScope: workspace.current, ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       invalidateBlockProjectionCache, canvasSelection, fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, clientPosition: canvasTestDriver.clientPosition,
     });
     const endpointSelectionFixture = window.CanvasSelectionTestDriver.createEndpointFixture({
@@ -4034,7 +4003,7 @@
     const parameterFixture = window.ParameterTestDriver.createFixture({
       resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, currentScope: workspace.current,
       formatParameterReference, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, ensureParameterNamespace,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       invalidateBlockProjectionCache, stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw,
     });
     const parameterObservation = window.ParameterTestDriver.createObservation({
@@ -4083,7 +4052,7 @@
     const derivedInstanceFixture = window.DerivedInstanceTestDriver.createFixture({
       resetModelState, addCircle, addPoint, addLine, addArc, currentScope: workspace.current, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE,
       normalizeGeometryInstance, activeSketchId, geometryRefForItem, parseGeometryRefId, hatchGeometryQuery,
-      nextProjectionId: () => `SPI${sketchProjectionInstanceSeq++}`, nextMirrorId: () => `MI${mirrorInstanceSeq++}`, nextPatternId: () => `PI${patternInstanceSeq++}`,
+      nextProjectionId: () => documentIds.allocate("sketchProjection"), nextMirrorId: () => documentIds.allocate("mirror"), nextPatternId: () => documentIds.allocate("pattern"),
       resetHistory, updateUI, draw, readState: derivedInstanceInteraction.state,
     });
     const clipboardTestObservation = window.ClipboardTestDriver.createObservation({
@@ -4099,7 +4068,7 @@
     const blockClipboardFixture = window.ClipboardTestDriver.createBlockFixture({
       resetModelState, clipboardSession, viewport, currentScope: workspace.current, ROOT_SKETCH_ID,
       createEmptyBlockDefinition, Point, Line, HorizontalConstraint, DEFAULT_SKETCH_ID,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, canvasSelection, resetHistory, updateUI, draw,
       readState: clipboardTestObservation.state,
     });
@@ -4143,10 +4112,10 @@
     });
     const splineTransferDriver = window.SplineTestDriver.createTransfer({
       currentScope: workspace.current, splineGeometry: window.SplineGeometry, annotationLeaderTargetFromItem,
-      nextAnnotationId: () => `AN${annotationSeq++}`, activeSketchId, defaultAnnotationStyle: DEFAULT_ANNOTATION_STYLE,
+      nextAnnotationId: () => documentIds.allocate("annotation"), activeSketchId, defaultAnnotationStyle: DEFAULT_ANNOTATION_STYLE,
       clearSelection, canvasSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       blockDefinitionDrawableSketchIds, invalidateBlockProjectionCache, blockProjectionBundle, updateUI, draw,
     });
     window.__jot2dTest = {

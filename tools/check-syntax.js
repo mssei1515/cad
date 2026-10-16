@@ -181,7 +181,7 @@ const files = [
   "src/commands/circular_commands.js",
   "tests/unit/circular-commands.test.js",
   "tests/e2e/circular-authoring.spec.js",
-  "src/editing/geometry_ids.js",
+  "src/editing/geometry_ids.js", "src/editing/document_ids.js",
   "src/editing/geometry_creation.js", "src/editing/first_dimension_scaling.js",
   "tests/unit/geometry-creation.test.js",
   "src/editing/checkpoint.js",
@@ -225,7 +225,7 @@ const files = [
   "src/persistence/block_connections.js",
   "tests/unit/block-connections.test.js",
   "src/persistence/document_sequences.js",
-  "tests/unit/document-sequences.test.js",
+  "tests/unit/document-sequences.test.js", "tests/unit/document-ids.test.js",
   "src/persistence/document_geometry.js",
   "tests/unit/document-geometry-persistence.test.js"
 ];
