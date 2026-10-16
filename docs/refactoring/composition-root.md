@@ -4,7 +4,101 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-14）
+## 現在の再開地点（2026-10-16）
+
+develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
+
+### Hatch／Offsetの診断表示
+
+hatchRegionErrorText／offsetChainErrorTextをsrc/ui/authoring_feedback.jsのAuthoringFeedbackへ分離。依存はapplicationTextだけとし、Geometry判定・model編集・DOM更新は持たない。既存2関数の本体を維持し、未知codeでHatchはreasonを英語fallbackとして使い、Offsetは汎用文言を使う違いと、操作時の言語参照を保持する。appはApplicationSettingsの生成直後、最初のconsumerより前で接続する。
+
+app.jsは4,488→4,459行（29行減、今回の再開から合計381行減）。script読込・構文・unit一覧と読込期待を同期。単体2件で既知code／未知code、言語切替と入力不変を確認。構文518ファイル・単体1,437件・file URL読込1件・関連E2E24件が成功（すべてexit 0、関連E2E1.0分）。ログは一時ディレクトリのcad-authoring-feedback-{check,unit,loader,e2e}.log。全workerとrunnerは終了し、実体確認済みの専用serverだけを終了した。この区切りでは全E2Eは未実行。全体目標は未完了。ユーザーのorigin/mainへのマージ指示により新規分離を止め、develop統合後の全体検証とmainへのリリースを進める。
+
+### 拘束名の表示
+
+localizedConstraintNameを既存ConstraintFeedbackへ集約。既存applicationTextと新たなreadLanguageの2 portで通常名／typeOnly表示を返す。元bodyはlive言語read portの置換以外一致し、具体名を優先する正規表現の順・suffix・未知名と空名fallback・Arc endpoint fixedの特例を保持する。Modelのnameや保存値は変更しない。appは既存Feedback instanceから関数を取得し、Block選択照会／Tree／Properties／Canvasメニューへ接続する。最初のconsumerより前に生成済みであり、getterは呼出し時だけ使う。既存summary等の明示language引数とはreadLanguageを別名にして役割を区別する。
+
+app.jsは4,512→4,488行（24行減、今回の再開から合計352行減）。新script／unit fileなし。既存ConstraintFeedback unitへ2件追加し、prefix優先／suffix・typeOnly／未知名・空名とlive言語／固定端点特例を確認。構文516ファイル・単体1,435件・関連E2E45件が成功（すべてexit 0、E2E1.7分）。unified-ui／blocks／sketch-tree-visibilityからlanguage／constraint／Properties／context／appearance／delete・deletionの関連ケースを抽出。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-constraint-name-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はhatchRegionErrorTextとoffsetChainErrorTextの診断結果→UI文言変換を整理する。Geometry判定・model編集・操作状態を表示側へ持ち込まず、各codeの文言・未知code／reason fallbackとlive言語を維持する。
+
+### Canvas参照入力の照会と操作調整
+
+focusedExpressionInputContext／insertClickedDimensionParameter／insertClickedAnnotationParameterをExpressionInputControllerへ集約。DOM／型、現在namespace・pending／Parameter draft、寸法名補完、error／hint・言語・識別子挿入の12依存を明示する。各式fieldとreadOnly／disabled、modelとdraftのnamespace同一参照、寸法／注記の対象条件、名前の補完とevent抑止・挿入／通知順を維持。特にnamespace不一致時の寸法はerror／hint→prevent／stop、注記はprevent／stop→error／hintの順であり、共通化して並べ替えない。3bodyは型・model／言語read portの置換以外一致し、namespaceをcacheせず操作時に読む。Parameterの補完は既存service、DOM変更はExpressionInputViewへ委譲し、独自model／draft／Selectionを持たない。appは最初のconsumer登録前に生成・接続する。
+
+app.jsは4,560→4,512行（48行減、今回の再開から合計328行減）。新controller／unit fileを追加しindex.html・check-syntax・明示unit一覧・unified-uiのscript期待を同期。unit4件で対象fieldとreadOnly／disabled、現在namespaceの同一性、名前補完→event／挿入順、namespace不一致時の異なる順序、注記の所有とlive言語を確認。構文516ファイル・単体1,433件・先行file URL読込1件・関連E2E35件が成功（すべてexit 0、関連E2E1.1分）。unified-ui／parameter-dialog-controller／unified-annotations／dimension-prefix／annotation-anchorsからexpression／formula／parameter／reference／inline／affix／prefixの関連ケースを抽出。全worker終了後に各専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-expression-reference-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はlocalizedConstraintNameに残る拘束名の言語／typeOnly表示を既存ConstraintFeedbackへ集約できるか確認し、Modelのnameや保存値を変更せず、正規表現の優先順・未知名のfallbackとlive言語を維持する。
+
+### 式入力欄への識別子挿入
+
+insertIdentifierIntoExpressionInputを既存ExpressionInputView.createInsertionへ集約。Event constructorとformatParameterReferenceの2依存だけを接続し、選択範囲置換・equals補完／padding・input通知・blur時のchange補完・focus／caretを担当する。元bodyはEvent constructorの注入名以外一致し、native change済みや切断inputの通知抑止、once listenerと複数挿入時の一回のchange、通知前後のDOM操作順を維持する。Parameter名前空間照会や評価／適用・履歴は持ち込まない。appは起動時に生成し、既存寸法／注記挿入の呼出しへ接続。最初のconsumerより前の初期化とfactory生成時にinputや状態へ触れないことを確認した。
+
+app.jsは4,590→4,560行（30行減、今回の再開から合計280行減）。新scriptなし、ExpressionInputView unit fileを追加して構文・明示unit一覧を同期。unit3件は実際のEventTarget／Eventを用い、選択／padding・equals／fallback caret、input→focus→caret順、native／synthetic changeと切断input、複数挿入後の一回だけの確定を確認。構文514ファイル・単体1,429件・関連E2E28件が成功（すべてexit 0、E2E54.0秒）。unified-ui／parameter-dialog-controller／unified-annotations／dimension-prefixからexpression／formula／parameter／reference／inline／affix／prefixの関連ケースを抽出した。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-expression-insertion-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はfocusedExpressionInputContextとinsertClickedDimensionParameter／insertClickedAnnotationParameterに残るCanvas参照入力の照会・操作調整をcontroller側へ集約できるか確認する。名前空間の同一参照と拒否条件、寸法／注記で異なるイベント抑止と通知順、名前の補完／挿入の所有を維持する。
+
+### トリム操作の進行
+
+executeTrimAtの対象検証→checkpoint→Geometry変更→preview／Selection解除→Parameter安定化／依存結果判定→失敗復元または成功履歴をTrimCommandへ分離。既存TrimEditingとGeometry checkpoint APIを含む18依存を明示し、model状態やsessionは新たに持たない。形状変更はLine／Arc／Circleごとに既存TrimEditingへ委譲する。元bodyはpreview解除・analysis invalidate・閾値のcapability置換以外一致し、structure／投影guard、拒否時のcleanup範囲、現在active Sketchの参照時点、主／依存solve失敗とerrorNorm > 閾値の復元、例外伝播、UI→draw→history順を維持する。editing／checkpointの関数参照は元どおり裸の関数として使う。
+
+app.jsは4,620→4,590行（30行減、今回の再開から合計250行減）。新command／unit fileを追加しindex.html・check-syntax・明示unit一覧・unified-uiのscript期待を同期。unit4件で形状ごとの成功と閾値ちょうどの受理、guard／preview／投影拒否、主／依存solveと誤差超過の復元、想定外例外時の伝播範囲を確認。初回file URL起動でテストfixtureが使うexecuteCircleTrimの参照を誤って外したことを検出し、Line／Circleのfixture用参照を保持して修正した。修正後に構文513ファイル・単体1,426件・先行file URL読込1件・関連E2E150件が成功（すべてexit 0、関連E2E2.6分）。unified-ui／sketch-permissions／sketch-projection／phase0-characterizationを実行。全worker終了後に各専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-trim-command-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はinsertIdentifierIntoExpressionInputに残る式入力欄への識別子挿入とinput／blur-change／focus・caretの処理を既存ExpressionInputViewへ集約する。Parameterの名前解決・適用や入力確定の既存時機は変えない。
+
+### 参照元探索と逆変換の照会
+
+resolveDerivedDragSource／geometryInstanceSourceObjectsを既存InstanceProjection.createDragSourceQueryへ集約。source points・依存参照・GeometryRef解決の3 read portだけを受け取り、inverse chainと参照元ObjectのSetを返す。元2bodyはそのまま一致し、UI／Selection／drag lifecycleを持ち込まない。Setは毎回生成し、同じIDでも異なるObjectを別に扱い、共有Point・Block／派生owner・重複や巡回の探索順と短絡を維持する。inverse関数参照を外側から内側へ収集して裸の関数として呼ぶreceiver、pointer複写、Sketch投影flag、参照切れ／非変換chain／巡回のnull結果を保持。appはGeometryReadModel生成直後に接続し、既存resolve portが操作時のscopeを読む。最初のconsumerより前の初期化と、factory生成時に照会を実行しないことを確認した。
+
+app.jsは4,650→4,620行（30行減、今回の再開から合計220行減）。新script／unit fileなし。既存InstanceProjection unitに3件追加し、同一参照・探索順／再照会・無変更、inverse順・入力pointer不変／captured map、参照不正／巡回時に変換を実行しないことを確認。構文511ファイル・単体1,422件・関連E2E192件が成功（すべてexit 0、E2E2.6分）。derived-patterns／derived-selection-copy／sketch-projection／sketch-permissions／blocks／unified-uiを実行。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-drag-source-query-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はexecuteTrimAtに残る検証→変更→求解→失敗復元／成功履歴の操作調整をcommandへ分離する。実際のGeometry／拘束移管は既存TrimEditingに残し、復元範囲・UI順・閾値や例外伝播を変更しない。
+
+### 派生Geometryのドラッグ開始
+
+84行のbeginDerivedGeometryDragを既存GeometryDrag.createDerivedEntryへ集約。型、編集guard、Selectionと解除、参照元／source points照会、通常session生成、GeometryDrag lifecycleとhint／UI／drawの14依存を明示する。Instance全体と参照元操作の分岐、開始plan、選択更新、拒否通知を担当し、resolveとsession生成／solve／履歴は既存ownerに残す。元84行の本体はguardの注入名以外一致。全体移動のclick metadata、線上の初期比率に追従するlive anchorと開始snapshot、source／rotationのvariableAllowed、Block ownerとarc端点の対象変換、pointerMap／元参照と配置Instance除外を維持する。anchor control／権限拒否、未解決／投影chain／固定source、anchorなしの各終了範囲とUI順も保持。factory生成はquery／lifecycleの初期化後、入力consumer登録前に置き、独自modelやdrag状態を増やさない。
+
+app.jsは4,729→4,650行（79行減、今回の再開から合計190行減）。新script／unit fileなし。既存GeometryDrag unitに6件追加し、実際のPatternInstanceModel.placedと型portで全体／sourceの境界、live座標、制限・拒否、Block／arc端点と変数除外、参照・引数・UI順を確認。構文511ファイル・単体1,419件・関連E2E192件が成功（すべてexit 0、E2E2.7分）。derived-patterns／derived-selection-copy／sketch-projection／sketch-permissions／blocks／unified-uiを実行。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-derived-drag-entry-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はappに残るresolveDerivedDragSourceとgeometryInstanceSourceObjectsの読み取り責務をInstanceProjectionへ集約できるか確認する。逆変換chain／巡回拒否とsource objectの参照・順・短絡を維持し、UI／Selectionやdrag lifecycleを照会側へ持ち込まない。
+
+### Selection解除の調整
+
+作図開始／取消・mode遷移を確認し、それ自体は既存DrawOperationLifecycleの所有であるため再分割しなかった。appに残るclearSelectionの4 owner更新をCanvasSelectionInteraction.createClearingへ集約。Selection→拘束operand→Sketch／Block／派生hover→強調reset→Annotation／Hatch／画像／Spline hoverの二段更新を元のまま維持。拘束command本体、point／line／circle／arc／寸法などの別hover参照、snap、UI・履歴は解除しない。4 APIのみで接続し、独自model／session状態を持たず、全owner生成後の早期接続とhoisted入口を残す。元bodyの一致を確認した。
+
+app.jsは4,739→4,729行（10行減、今回の再開から合計111行減）。新script／unit fileなし。既存CanvasSelectionInteraction unitに2件追加し、実際のConstraintTargetSession／CanvasHoverを使ってcommand本体と別hover参照が残ること、owner receiverと二段hover更新の順を確認。構文511ファイル・単体1,413件・関連E2E181件が成功（すべてexit 0、E2E3.3分）。unified-ui／command-panel／sketch-permissions／derived-selection-copy／blocks／sketch-projectionを実行。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-selection-clearing-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。残る手続きの長さを確認したところbeginDerivedGeometryDragが84行あり、派生Instance全体／参照元のdrag planと開始調整がまとまって残る。次はその所有者と依存を確認して既存drag機能へ集約し、mode／command操作調整・機能ごとの生成接続も続ける。
+
+### CommandPanelの表示先選択とイベント振分け
+
+共通panelの表示先選択とreadState／action／setting／row選択・削除を既存CommandPanel.createRoutingへ分離。modeと注記activeのread port、安定した派生／Hatch／注記panelとPNG commandの6依存で接続する。表示／action／settingはPNG→注記→Hatch／repair→派生の優先順位、row選択／削除は従来どおりPNGを経由しないoptional呼出しとする。5handlerの式は元のまま、selectorは操作時に状態を読む。receiver／引数／戻り値とderivedのその他公開fieldの引継ぎも保持。個別panel・commandはdraftと取消／履歴を引き続き所有し、appは生成接続を行う。panel／PNG instanceは構築後に再代入されないことと、生成時にlive状態を読まないことを確認した。
+
+app.jsは4,742→4,739行（3行減、今回の再開から合計101行減）。新scriptなし、CommandPanel unit fileを追加して構文・明示unit一覧を同期。unit3件で優先順位とlive切替、receiver／結果／引数、row callbackのoptional性を確認。構文511ファイル・単体1,411件・関連E2E62件が成功（すべてexit 0、E2E1.4分）。command-panel／png-export／unified-annotations／hatching／derived-patternsを実行し、状態／設定／行操作と空白double click取消も確認。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-panel-routing-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は作図開始・取消とmode遷移に残る操作調整、機能ごとの生成接続を整理する。
+
+### Sketchのロック更新と名前変更guard
+
+ロック反転とUI／draw／history完了を既存SketchCommand.toggleLockへ、名前変更前の権限guardも既存renameへ集約。appは既存guard・言語の照会とprepareLockToggleの3portを追加接続し、返された操作をTreeへ渡す。prepareはpending取消→拘束command取消→作図mode終了を元の順で実行し、Sketch変更時の全体resetとは統一しない。対象Sketchの取消前取得、Root／不在の拒否、guard拒否時にmodel／promptを読まない順序、locked更新→UI→draw→履歴を維持。SketchHierarchyとSketchContextのRoot判定が取得済みObjectに対して同じこと、元lock bodyとの差がprepare委譲だけであることを確認した。両aliasの最初のconsumerはfactory生成後に登録される。
+
+app.jsは4,751→4,742行（9行減、今回の再開から合計98行減）。新script／unit fileなし。既存SketchCommand unitに2件追加し、Root／不在の無変更と取消準備→反転→表示／履歴の順、名前変更拒否時のmodel／prompt未参照、scope切替と元Sketchの無変更を確認。構文510ファイル・単体1,408件・関連E2E45件が成功（すべてexit 0、E2E1.1分）。sketch-permissions／sketch-edit／sketch-tree-visibility／sketch-tree-deleteを実行し、ロック保存・Undo・名前変更・作図先／表示とTree更新を確認。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-sketch-update-command-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はCommandPanelの表示先選択とイベント振分け、残るmode／command操作調整と機能ごとの生成接続を整理する。
+
+### 表示数値の整形
+
+formatDisplayNumber／formatDimensionLabel／formatMeasuredDimensionLabelと通常1e-6・実測1e-5の許容差をNumberDisplayへ分離。UI／Canvas共通の純粋な表示文字列として状態やDOM／viewport・Documentに依存しない。appは起動冒頭で3関数を取得してProperties／Parameter／Annotation／座標・寸法へ接続する。3bodyと定数は元コードをそのまま維持し、既存の浮動小数補正・小さい値・末尾ゼロ・負のゼロ・非有限数・suffixと引数defaultを保持。モデル計算値、保存形式、寸法外観の固定桁表示は変更しない。
+
+app.jsは4,781→4,751行（30行減、今回の再開から合計89行減）。新module／unit fileを追加しindex.html・check-syntax・明示unit一覧・unified-uiのscript期待を同期。unit3件で丸め境界と微小値、通常／実測の許容差、suffix、桁数制限、有限数変換と負のゼロを確認。構文510ファイル・単体1,406件・先行file URL読込1件・関連E2E50件が成功（すべてexit 0、関連E2E1.1分）。unified-ui／dimension-prefix／parameter-dialog-controller／annotation-display-sizeから寸法・Parameter・数値入力／Properties・注記の関連ケースを抽出。全worker終了後に各専用port8784サーバーだけを確認・終了してrunnerの正常終了を回収。ログはcad-number-display-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はSketch操作に残る更新責務とmode／command操作調整、機能ごとの生成接続を整理する。
+
+### Canvasメニューのコピー可否照会
+
+hasCopyableCanvasSelectionの照会を既存ClipboardPayload.canOfferCopyへ分離し、appは現在model／Selectionを渡す入口だけを持つ。新port／script／unit fileは増やさず、既存factory内のGeometryRefとHatch境界参照照会を使う。model内のObject同一参照、対象型の順と短絡、全選択Hatchの境界GeometryRef選択を維持し、元bodyとの一致を確認。これはメニュー専用の既存判定であり、派生Instanceだけの場合を含むbuildの条件とは統一していない。UIやコピー可否の仕様変更は行わない。
+
+app.jsは4,800→4,781行（19行減、今回の再開から合計59行減）。既存ClipboardPayload unitに2件追加し、現在scopeの同一参照、既存対象型、Hatch外周／穴の境界選択と無変更を確認。構文508ファイル・単体1,403件・関連E2E20件が成功（すべてexit 0、E2E56.3秒）。unified-ui／derived-selection-copy／hatching／reference-imagesからcopy／paste／clipboard／context／cutの関連ケースを抽出し、メニュー、Hatch境界、Geometry／派生Instance／画像のコピー・貼付けを確認。npm経由のWindows引数引用で正規表現のpipeが展開されたため、Playwright CLIを直接呼び出して実行した。全20件とworker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-copy-menu-query-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は表示数値の整形と、残るmode／command操作調整・機能ごとの生成接続を整理する。
+
+### 重なり順の操作調整
+
+選択候補生成／最前面owner照会／menu状態／順序変更完了をDrawingOrderCommandへ分離。11個の限定した現在model・Selection／通常選択・権限照会とUI／draw／history／hint portで接続する。owner解決・順序補完・並べ替え計算は既存DrawingOrderを利用する。appは現在modelの取得と生成接続を持ち、Document／Block・一時model切替後のscopeを保持しない。元4bodyと一致し、作図先優先→通常選択時だけSketch配列逆順、選択Sketch→作図先fallback、guard→reorder→UI（analysis再計算なし）→draw→history→hint順と結果を維持する。
+
+app.jsは4,827→4,800行（27行減、今回の再開から合計40行減）。構文508ファイル・単体1,401件・関連E2E165件が成功（すべてexit 0、E2E2.9分）。新command／unit fileを追加しindex.html・check-syntax・明示unit一覧・unified-uiのscript期待を同期。先行してfile URLの起動／Helpとscript読込1件も成功。新unit4件でscope／元参照と配列の維持、拒否と未対応操作時の表示／履歴なし、最前面の優先と逆順、Document／Block切替時の現在scopeを確認。drawing-order／unified-ui／sketch-permissions／blocks／derived-selection-copyを実行。全worker終了後に各専用port8784サーバーを確認・終了してrunnerの正常終了を回収。ログはcad-drawing-order-command-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はCanvasメニューのコピー可否照会とClipboard責務の境界、mode／command操作調整と機能の生成接続を整理する。
+
+### 共通hit対象範囲
+
+ordinarySelectionMode／hitSketchAllowed／hitElementAllowedを既存GeometryHitQuery.createScopePolicyへ集約。mode／pending command／constraint commandとSketchの表示・要素表示・所属・作図先・編集可否の8個のread portで接続し、通常選択は表示中の別Sketch／ロック中も検査でき、command中は作図先の編集可能要素へ絞る既存動作を維持する。SelectionやDocument／操作sessionは所有・変更しない。3式は元のbodyと照合し、状態はcallbackで実行時に読む。元のhoisted関数からconstへの変更について、生成時に状態を読まないことと全consumerの登録／呼出し時点を確認。新script／unit fileなし。
+
+app.jsは4,828→4,827行（1行減、今回の再開から合計13行減）。単なるdelegateを追加せず、8個の依存の生成接続へ置換したため行数差は小さい。既存GeometryHitQuery unitへ2件追加し、通常選択／保留command／拘束command／mode／作図先／lockの切替と、非表示・非select・保留command時の短絡順を確認。構文506ファイル・単体1,397件・関連E2E180件が成功（すべてexit 0、E2E3.0分）。sketch-permissions／sketch-projection／blocks／unified-ui／drawing-order／derived-selection-copyを実行。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-hit-scope-policy-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はSelectionと重なり順操作の調整、mode／commandの開始と機能ごとの生成接続を整理する。
+
+### Sketch編集のguardと拒否処理
+
+guardSketchEdit／guardSelectionEdit／canCreateInActiveSketch／rejectRootSketchCreationを既存SketchCommand.createEditAccessへ分離。権限規則はSketchContext、Selection／preview／snap状態は既存ownerに残す。11個の限定した照会・通知・解除portで接続し、実行時の作図先、default operation、null／undefinedの扱い、選択所属の重複排除と最初の拒否での短絡、hint→snap→pointer→draw順を保持。appではSketchContext直後に生成し、後で初期化されるclearSnap／drawingPreviewはcallbackで遅延参照する。4関数の本体一致を確認し、既存SketchCommand unitに境界検証4件を追加。新script／unit fileなし。
+
+app.jsは4,840→4,828行（12行減）。構文506ファイル・単体1,395件・関連E2E171件が成功（すべてexit 0、E2E3.3分）。sketch-permissions／sketch-edit／sketch-projection／blocks／unified-uiを実行。初回E2Eで検出したclearSnap初期化前参照を修正し、同じ対象を再実行して成功。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収した。ログは一時ディレクトリのcad-sketch-edit-access-{check,unit,e2e}.log。全E2Eはこの単位では未実行。次は共通hit方針と操作調整・機能の生成接続を整理する。
+
+### 前回の停止地点（2026-10-14）
 
 週枠残量59%で停止条件に達したため新規分離を停止。2026-10-14の再開はdevelop 7a1983eを基準とし、63個の区切りのcommitを保持してcodex/interaction-observationで進めた。app.jsは7,734→4,840行（2,894行減）。コード最終commitは7dc83dc、develop統合commitは883e7ef。描画／PNG一時状態、Canvas表示更新のsnapshot、寸法／Annotation／Geometry表示、command対象／Sketch表示方針、Selection照会／identity更新、投影source／legacy fixture、Instance source、メニュー／toolbar／Document設定と入力、固定／拘束操作、テスト支援を責務ごとに整理した。各ownerと依存はimplementation-map.mdと正式なモジュール構成を参照し、区切りは本書とGit履歴に残す。
 

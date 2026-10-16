@@ -1,6 +1,7 @@
 /* Application composition, editing commands, Canvas UI and event handling. */
 (function () {
   "use strict";
+  const { formatDisplayNumber, formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
   const { validReferenceImageDataUrl, serializeReferenceImage } = window.ReferenceImageData;
   const { lineIntersectsRect, pointInExpandedBox, rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners, referenceImageBounds } = window.ReferenceImageGeometry;
@@ -170,6 +171,7 @@
   });
   const { applicationText, translatedExactText, translatedHintText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
+  const { hatchRegionErrorText, offsetChainErrorText } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
   const { DEFAULT_DOCUMENT_UNITS } = window.DocumentState;
   const documentModel = window.DocumentState.create();
@@ -191,6 +193,7 @@
   const expressionInputView = window.ExpressionInputView.create({
     document, InputElement: HTMLInputElement, referenceNamesForInput: expressionReferenceNamesForInput, escapeHtml,
   });
+  const { insert: insertIdentifierIntoExpressionInput } = window.ExpressionInputView.createInsertion({ Event: Event, formatParameterReference });
   const { sync: syncExpressionInputHighlight, install: installExpressionInputHighlights,
     refresh: refreshExpressionInputHighlights } = expressionInputView;
   const parameterDialogView = window.ParameterDialogView.create({
@@ -217,6 +220,11 @@
     sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
     sketchRelationOfElement,
   } = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
+  const sketchEditAccess = window.SketchCommand.createEditAccess({
+    activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId, isGeometryMode,
+    setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), draw,
+  });
+
   const { geometryKindForItem, geometryRefForItem, addGeometryBundleToMaps } = window.GeometryObjects;
   const instanceProjections = window.InstanceProjection.create({ elementSketchId, applicationText,
     resolveHatch: (hatch, elements) => resolvedHatchBoundary(hatch, elements),
@@ -298,6 +306,9 @@
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
+  const { resolve: resolveDerivedDragSource, sourceObjects: geometryInstanceSourceObjects } = window.InstanceProjection.createDragSourceQuery({
+    geometryInstanceSourcePoints, geometryInstanceDependencyRefs, resolveGeometryRef,
+  });
   const instanceSourceSelection = window.InstanceProjection.createSourceSelection({
     currentScope: () => model, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
   });
@@ -389,6 +400,7 @@
     setHoveredDimension: value => { canvasHover.update({ dimension: value }); }, draw,
   });
   const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
+  const selectionClearing = window.CanvasSelectionInteraction.createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight });
   const offsetSelection = window.OffsetSelection.create({
     getModel: () => model, activeSketchId, elementSketchId, constraintSketchId,
     Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
@@ -535,8 +547,6 @@
   const ANNOTATION_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const { DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR } = window.DimensionLayout;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
-  const DIMENSION_DISPLAY_PRECISION = 1e-6;
-  const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const constraintCandidates = window.ConstraintCandidates.create({
     sameSketchElements, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
@@ -892,7 +902,7 @@
     currentScope: workspace.current, geometry: geometryCreation, references: constraintReferences, query: trimQuery,
     pushModelConstraint, elementSketchId, isPointUsedByPrimitive, isReferencePoint, minArcLength: MIN_ARC_LENGTH,
   });
-  const { executeLineTrim, executeArcTrim, executeCircleTrim } = trimEditing;
+  const { executeLineTrim, executeCircleTrim } = trimEditing;
   const editingCheckpoint = window.EditingCheckpoint.create({
     currentScope: workspace.current, ids: geometryIds, invalidateProjection: invalidateBlockProjectionCache,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
@@ -1099,8 +1109,8 @@
     el.classList.toggle("error", kind === "error");
   }
 
-  const constraintFeedback = window.ConstraintFeedback.create({ applicationText });
-  const { constraintStatusBadge } = constraintFeedback;
+  const constraintFeedback = window.ConstraintFeedback.create({ applicationText, readLanguage: () => applicationSettings.language });
+  const { constraintStatusBadge, localizedConstraintName } = constraintFeedback;
   function setSolveResultHint(label, solved, analysis, dependent) {
     const hint = constraintFeedback.resultHint(label, solved, analysis, dependent, constraintRedundancy.count);
     setHint(hint.message, hint.kind);
@@ -1318,45 +1328,18 @@
 
   function selectionSketchId(...args) { return selectionScopeQuery.selectionSketchId(...args); }
 
-  function guardSketchEdit(sketchId = activeSketchId(), operation = "edit") {
-    if (canEditSketch(sketchId, operation)) return true;
-    setHint(sketchById(sketchId)?.locked
-      ? applicationText("スケッチはロック中です。ロック解除または作図先変更が必要です", "Sketch is locked. Unlock it or change the drawing sketch.")
-      : applicationText("この操作には所属スケッチを作図先に指定してください", "Set the owning sketch as the drawing sketch for this operation."), "error");
-    return false;
-  }
+  function guardSketchEdit(...args) { return sketchEditAccess.guardSketchEdit(...args); }
 
-  function guardSelectionEdit(operation = "edit") {
-    return [...new Set(selectionItems().map(elementSketchId))].every(id => guardSketchEdit(id, operation));
-  }
+  function guardSelectionEdit(...args) { return sketchEditAccess.guardSelectionEdit(...args); }
 
-  function ordinarySelectionMode() { return mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command; }
-  function hitSketchAllowed(id) {
-    return isVisibleSketchId(id) && (ordinarySelectionMode() || id === activeSketchId() && isEditableSketchId(id));
-  }
-  function hitElementAllowed(item) { return isVisibleSketchElement(item) && hitSketchAllowed(elementSketchId(item)); }
+  const { ordinarySelectionMode, hitSketchAllowed, hitElementAllowed } = window.GeometryHitQuery.createScopePolicy({
+    readMode: () => mode, readPendingCommand: () => pendingCommandSession.current, readConstraintCommand: () => constraintTargetSession.command,
+    isVisibleSketchId, isVisibleSketchElement, elementSketchId, activeSketchId, isEditableSketchId,
+  });
 
-  function toggleSketchLock(id) {
-    const sketch = sketchById(id);
-    if (!sketch || isRootSketch(sketch)) return false;
-    cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode();
-    sketch.locked = !sketch.locked;
-    updateUI(); draw(); recordHistory(applicationText("スケッチロック切替", "Toggle sketch lock"));
-    return true;
-  }
+  function canCreateInActiveSketch(...args) { return sketchEditAccess.canCreateInActiveSketch(...args); }
 
-  function canCreateInActiveSketch() {
-    return isGeometryMode() && canEditSketch(activeSketchId(), "create");
-  }
-
-  function rejectRootSketchCreation() {
-    if (canCreateInActiveSketch()) return false;
-    guardSketchEdit(activeSketchId(), "create");
-    clearSnap();
-    drawingPreview.setPointer(null);
-    draw();
-    return true;
-  }
+  function rejectRootSketchCreation(...args) { return sketchEditAccess.rejectRootSketchCreation(...args); }
 
   function parentSketchOf(sketch) {
     ensureSketchState();
@@ -1492,22 +1475,6 @@
   const { begin: beginSplineEditFromDoubleClick, finish: finishSplineEditSession,
     addPoint: addSplineFitPointFromContext, deletePoint: deleteSplineFitPointFromContext } = splineEditing;
 
-  function hatchRegionErrorText(result) {
-    const messages = {
-      "invalid-point": ["位置が正しくありません", "Invalid point"],
-      "point-on-boundary": ["境界線から離れた領域内をクリックしてください", "Click inside the region, away from its boundary"],
-      "open-region": ["クリック位置に閉領域がありません", "No closed region was found at the clicked point"],
-      "overlapping-boundary": ["境界に重複する図形があるため判定できません", "The boundary contains overlapping geometry"],
-      "missing-boundary": ["境界図形が見つかりません", "Boundary geometry is missing"],
-      "changed-topology": ["境界の接続関係が変化しています", "The boundary topology has changed"],
-      "open-boundary": ["境界が閉じていません", "The boundary is no longer closed"],
-      "collapsed-boundary": ["境界領域がつぶれています", "The boundary has collapsed"],
-      "invalid-boundary": ["境界データが正しくありません", "The fill boundary data is invalid"],
-    };
-    const pair = messages[result?.code];
-    return pair ? applicationText(pair[0], pair[1]) : applicationText("閉領域を判定できません", result?.reason || "Could not detect a closed region");
-  }
-
   const blockSelectionQuery = window.BlockSelectionQuery.create({
     currentScope: workspace.current, canvasSelection, blockProjectionBundle, elementSketchId, activeSketchId,
     constraintGraphNodes, serializeConstraint, constraintLabelForList: (constraint) => localizedConstraintName(constraint.name), resolveGeometryRef,
@@ -1588,20 +1555,6 @@
     canvasSelection.set("arcEndpointPair", null);
     canvasSelection.set("dimensionConstraint", null);
     canvasSelection.set("constraint", null);
-  }
-
-  function offsetChainErrorText(result) {
-    const messages = {
-      "empty-chain": ["オフセットするチェーンがありません", "There is no chain to offset"],
-      "invalid-distance": ["オフセット距離が正しくありません", "The offset distance is invalid"],
-      "invalid-segment": ["チェーンに無効な図形があります", "The chain contains invalid geometry"],
-      "collapsed-radius": ["指定距離では円弧の半径が成立しません", "An arc radius collapses at this offset distance"],
-      "missing-miter": ["角部をマイター接続できません", "A chain corner cannot be joined with a miter"],
-      "collapsed-segment": ["指定距離ではチェーンの一部が退化します", "Part of the chain collapses at this offset distance"],
-      "self-intersection": ["指定距離ではオフセット結果が自己交差します", "The offset result self-intersects at this distance"],
-    };
-    const pair = messages[result?.code];
-    return pair ? applicationText(pair[0], pair[1]) : applicationText("チェーンをオフセットできません", "The chain cannot be offset");
   }
 
   function resetModelState() {
@@ -1900,18 +1853,7 @@
     return addPoint(x, y, false, "endpoint");
   }
 
-  function clearSelection() {
-    canvasSelection.clear();
-    constraintTargetSession.clearOperands();
-    canvasHover.update({
-      sketchIdentity: null, block: null, geometryInstance: null,
-    });
-    selectionHighlight.reset();
-    canvasHover.update({
-      annotation: null, hatch: null, referenceImage: null,
-      spline: null,
-    });
-  }
+  function clearSelection() { return selectionClearing.clear(); }
 
   function selectableSketchElement(item) {
     return isActiveSketchElement(item) && isVisibleSketchElement(item);
@@ -1959,36 +1901,7 @@
   function resizeCanvas(...args) { return canvasWorkspaceLayout.resizeCanvas(...args); }
   function setPropertiesPanelCollapsed(...args) { return canvasWorkspaceLayout.setPropertiesPanelCollapsed(...args); }
 
-  function formatDisplayNumber(value, maxFractionDigits = 10, snapTolerance = DIMENSION_DISPLAY_PRECISION) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return "";
-    const displayDigits = Math.max(0, Math.min(10, maxFractionDigits));
-    const floatingPointSlack = Number.EPSILON * Math.max(1, Math.abs(n)) * 8;
-    const effectiveSnapTolerance = Math.max(0, snapTolerance) + floatingPointSlack;
-    let rounded = Number(n.toFixed(displayDigits));
-    let roundedDigits = displayDigits;
-    for (let digits = 0; digits <= displayDigits; digits += 1) {
-      const candidate = Number(n.toFixed(digits));
-      if (candidate === 0 && n !== 0) continue;
-      if (Math.abs(n - candidate) <= effectiveSnapTolerance) {
-        rounded = candidate;
-        roundedDigits = digits;
-        break;
-      }
-    }
-    if (Object.is(rounded, -0)) return "0";
-    const formatted = rounded.toFixed(roundedDigits);
-    if (!formatted.includes(".")) return formatted;
-    return formatted.replace(/0+$/, "").replace(/\.$/, "");
-  }
 
-  function formatDimensionLabel(value, suffix = "") {
-    return `${formatDisplayNumber(value)}${suffix}`;
-  }
-
-  function formatMeasuredDimensionLabel(value, suffix = "") {
-    return `${formatDisplayNumber(value, 10, MEASURED_DIMENSION_SNAP_TOLERANCE)}${suffix}`;
-  }
 
 
 
@@ -2695,9 +2608,9 @@
     sketchName, nextSketchId: () => `S${sketchSeq++}`, clearInteractionForSketchChange,
     setHint, updateUI, draw, recordHistory, promptName: (title, name) => window.prompt(title, name),
     effectiveAppearanceForElement, clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap,
+    guardEdit: guardSketchEdit, applicationText, prepareLockToggle: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode(); },
   });
-  const { createSketch, activate: setActiveSketch, rename: renameSketchCommand, toggleVisibility: toggleSketchVisibilityCommand } = sketchCommand;
-  function renameSketch(id) { if (guardSketchEdit(id)) return renameSketchCommand(id); }
+  const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleLock: toggleSketchLock, toggleVisibility: toggleSketchVisibilityCommand } = sketchCommand;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
   const sketchMoveQuery = window.SketchMove.create({
     currentScope: workspace.current, activeSketchId, constraintGraphNodes, constraintSketchId,
@@ -2917,91 +2830,12 @@
     blockView.render();
   }
 
-  function focusedExpressionInputContext() {
-    const input = document.activeElement;
-    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) || input.readOnly || input.disabled) return null;
-    if (input.matches('#commandPanel [data-setting="expression"]') || input.id === "annotationValueInput" && input.dataset.expression === "true") return { input, namespace: model };
-    if (input === dimensionValueInput && pendingCommandSession.current?.type === "distance-value") return { input, namespace: model };
-    if (input.matches('#propertiesPanel [data-property="constraint-expression"], #propertiesPanel [data-property="annotation-expression"]')) return { input, namespace: model };
-    const parameterExpression = input.matches('[data-parameter-field="expression"], [data-dimension-field="expression"]');
-    if (parameterExpression && input.closest("#parametersDialog") && parameterDraft.current) {
-      return { input, namespace: parameterDraft.current.namespace };
-    }
-    return null;
-  }
+  const { context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter, insertAnnotation: insertClickedAnnotationParameter } = window.ExpressionInputController.create({
+    document, types: { InputElement: HTMLInputElement, TextAreaElement: HTMLTextAreaElement }, currentNamespace: () => model, dimensionValueInput,
+    pendingCommandSession, parameterDraft, ensureDimensionParameter, setParameterDialogError,
+    setHint, applicationText, language: () => applicationSettings.language, insertIdentifierIntoExpressionInput,
+  });
 
-
-  function insertIdentifierIntoExpressionInput(input, identifier) {
-    let value = String(input.value ?? "");
-    let start = Number.isInteger(input.selectionStart) ? input.selectionStart : value.length;
-    let end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
-    if (!value.trimStart().startsWith("=")) {
-      value = `=${value}`;
-      start += 1;
-      end += 1;
-    } else if (value.startsWith("=")) {
-      start = Math.max(1, start);
-      end = Math.max(1, end);
-    }
-    const identifierCharacter = /[A-Za-z0-9_]/;
-    const leftPadding = start > 0 && identifierCharacter.test(value[start - 1]) ? " " : "";
-    const rightPadding = end < value.length && identifierCharacter.test(value[end]) ? " " : "";
-    const insertion = `${leftPadding}${formatParameterReference(identifier)}${rightPadding}`;
-    input.value = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
-    const caret = start + insertion.length;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    // Programmatic insertion alone does not make the browser emit change on blur.
-    let changed = false;
-    const onChange = () => { changed = true; };
-    input.addEventListener("change", onChange, { once: true });
-    input.addEventListener("blur", () => {
-      if (!changed && input.isConnected) input.dispatchEvent(new Event("change", { bubbles: true }));
-      input.removeEventListener("change", onChange);
-    }, { once: true });
-    input.focus({ preventScroll: true });
-    input.setSelectionRange(caret, caret);
-  }
-
-  function insertClickedDimensionParameter(event, dimensionHit) {
-    const context = focusedExpressionInputContext();
-    if (!context || !dimensionHit?.constraint || dimensionHit.constraint.annotationOwner) return false;
-    if (context.namespace !== model) {
-      const message = applicationText("表示中のCanvasと異なる名前空間のため、この寸法は参照できません", "This dimension cannot be referenced because the canvas shows a different namespace.");
-      setParameterDialogError(message);
-      setHint(message, "error");
-      event.preventDefault();
-      event.stopPropagation();
-      return true;
-    }
-    ensureDimensionParameter(dimensionHit.constraint, model);
-    if (!dimensionHit.constraint.parameterName) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    insertIdentifierIntoExpressionInput(context.input, dimensionHit.constraint.parameterName);
-    setParameterDialogError("");
-    setHint(applicationSettings.language === "en"
-      ? `Inserted ${dimensionHit.constraint.parameterName}.`
-      : `${dimensionHit.constraint.parameterName} を挿入しました`);
-    return true;
-  }
-
-  function insertClickedAnnotationParameter(event, annotationHit) {
-    const context = focusedExpressionInputContext();
-    const item = annotationHit?.element;
-    if (!context || !item?.parameterEnabled || !item.parameterName || !model.annotations.includes(item)) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    if (context.namespace !== model) {
-      const message = applicationText("表示中のCanvasと異なる名前空間のため、この注記は参照できません", "This annotation cannot be referenced because the canvas shows a different namespace.");
-      setParameterDialogError(message);
-      setHint(message, "error");
-      return true;
-    }
-    insertIdentifierIntoExpressionInput(context.input, item.parameterName);
-    setParameterDialogError("");
-    setHint(applicationSettings.language === "en" ? `Inserted ${item.parameterName}.` : `${item.parameterName} を挿入しました`);
-    return true;
-  }
 
   function effectiveConstructionAppearanceForSketch(...args) { return geometryAppearance.effectiveConstructionAppearanceForSketch(...args); }
   function effectiveDimensionAppearanceForSketch(sketch) {
@@ -3164,30 +2998,6 @@
   }
 
 
-
-  function localizedConstraintName(name, { typeOnly = false } = {}) {
-    const value = String(name || applicationText("拘束", "Constraint"));
-    const replacements = [
-      [/^円弧端点-円周一致/, "Arc endpoint on circumference"], [/^円弧端点-線一致/, "Arc endpoint on line"], [/^円弧端点一致/, "Arc endpoint coincident"],
-      [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^線-円中心寸法/, "Line-circle center dimension"], [/^同心半径差寸法/, "Concentric radius-difference dimension"], [/^チェーンオフセット寸法/, "Chain offset dimension"], [/^オフセット寸法/, "Offset dimension"],
-      [/^水平寸法/, "Horizontal dimension"], [/^垂直寸法/, "Vertical dimension"], [/^点-線一致/, "Point-line coincident"], [/^点-円周一致/, "Point on circumference"],
-      [/^平行2線中心線/, "Parallel-line centerline"], [/^2点中心線/, "Point-pair centerline"], [/^最小線長/, "Minimum line length"], [/^線固定/, "Fixed line"], [/^点水平/, "Point horizontal"], [/^点垂直/, "Point vertical"],
-      [/^円弧対称/, "Arc symmetry"], [/^線対称/, "Line symmetry"], [/^同一直線/, "Collinear"], [/^寸法/, "Dimension"], [/^角度/, "Angle"], [/^一致/, "Coincident"],
-      [/^水平/, "Horizontal"], [/^垂直/, "Vertical"], [/^平行/, "Parallel"], [/^等寸/, "Equal"], [/^半径/, "Radius"], [/^直径/, "Diameter"],
-      [/^同心/, "Concentric"], [/^接線/, "Tangent"], [/^対称/, "Symmetry"], [/^ドラッグ/, "Drag"],
-    ];
-    if (typeOnly) {
-      const matched = replacements.find(([pattern]) => pattern.test(value));
-      if (matched) {
-        const [pattern, replacement] = matched;
-        return applicationSettings.language === "en" ? replacement : value.match(pattern)?.[0] || value;
-      }
-      if (/^Arc endpoint fixed\b/.test(value)) return applicationText("円弧端点固定", "Arc endpoint fixed");
-    }
-    if (applicationSettings.language !== "en") return value;
-    for (const [pattern, replacement] of replacements) if (pattern.test(value)) return value.replace(pattern, replacement);
-    return value;
-  }
 
 
 
@@ -3384,124 +3194,12 @@
     return true;
   }
 
-  function resolveDerivedDragSource(hit, pointer) {
-    let item = hit?.item || null;
-    const inverseTransforms = [];
-    const visited = new Set();
-    let crossesSketchProjection = false;
-    while (item?.derivedProjection) {
-      if (visited.has(item) || !item.sourceElement || typeof item.derivedInversePoint !== "function") return null;
-      visited.add(item);
-      if (item.derivedInstance?.type === "sketchProjection") crossesSketchProjection = true;
-      inverseTransforms.push(item.derivedInversePoint);
-      item = item.sourceElement;
-    }
-    if (!item || inverseTransforms.length === 0) return null;
-    const mapPointer = (value) => inverseTransforms.reduce((current, inverse) => inverse(current), { x: value.x, y: value.y });
-    return { item, mapPointer, pointer: mapPointer(pointer), crossesSketchProjection };
-  }
+  const { begin: beginDerivedGeometryDrag } = window.GeometryDrag.createDerivedEntry({
+    types: { Point, Line }, canEdit: guardSketchEdit, canvasSelection, geometryInstanceSourceObjects,
+    clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource, buildDragSession, geometryDrag,
+    setHint, applicationText, updateGeometrySelectionUI, updateUI, draw,
+  });
 
-  function beginDerivedGeometryDrag(e, hit, pointer) {
-    if (hit.item?.instanceControl === "anchor") return;
-    if (!guardSketchEdit(hit.instance.sketchId)) return;
-    const wholeSelected = canvasSelection.geometryInstances.includes(hit.instance) && canvasSelection.instanceGeometry?.instanceId !== hit.instance.id;
-    if (["pattern", "circularPattern", "mirror"].includes(hit.instance.type)
-      && (!canvasSelection.geometryInstances.includes(hit.instance) || wholeSelected)) {
-      const instance = hit.instance;
-      const sources = geometryInstanceSourceObjects(instance);
-      clearSelection();
-      canvasSelection.set("geometryInstances", [instance]);
-      const plan = { kind: "free-instance", mode: "block", item: instance, sketchId: instance.sketchId,
-        startPointer: pointer, startX: instance.x, startY: instance.y,
-        clickGeometrySelection: wholeSelected ? { instanceId: instance.id, id: hit.item.id, kind: hit.kind, endpoint: hit.endpoint } : null,
-        variableAllowed: (v) => !sources.has(v.object) && !(v.object === instance && v.prop === "rotation") };
-      if (!window.PatternInstanceModel.placed(instance) || instance.placement.kind === "circular") {
-        const item = hit.item;
-        let anchor = item instanceof Point ? item : item.center || geometryInstanceSourcePoints(item)[0];
-        if (item instanceof Line) {
-          const dx = item.p2.x - item.p1.x, dy = item.p2.y - item.p1.y;
-          const t = Math.max(0, Math.min(1, ((pointer.x - item.p1.x) * dx + (pointer.y - item.p1.y) * dy) / Math.max(dx * dx + dy * dy, 1e-20)));
-          anchor = { get x() { return item.p1.x + t * (item.p2.x - item.p1.x); },
-            get y() { return item.p1.y + t * (item.p2.y - item.p1.y); } };
-        }
-        if (!anchor) return;
-        Object.assign(plan, { kind: "derived-instance", mode: "derived-placement", anchor,
-          startAnchor: { x: anchor.x, y: anchor.y } });
-      }
-      geometryDrag.begin(e, plan);
-      setHint(applicationText("インスタンス全体を移動中", "Moving the whole instance"));
-      updateGeometrySelectionUI();
-      draw();
-      return;
-    }
-    const resolved = resolveDerivedDragSource(hit, pointer);
-    clearSelection();
-    canvasSelection.set("geometryInstances", hit?.instance ? [hit.instance] : []);
-    if (hit.instance.type !== "sketchProjection") {
-      canvasSelection.set("instanceGeometry", { instanceId: hit.instance.id, id: hit.item.id, kind: hit.kind, endpoint: hit.endpoint });
-    }
-    if (!resolved) {
-      setHint(applicationText("派生インスタンスの参照元を解決できません", "The derived instance source could not be resolved."), "error");
-      updateGeometrySelectionUI();
-      draw();
-      return;
-    }
-    if (resolved.crossesSketchProjection) {
-      setHint(applicationText("スケッチ投影は先祖スケッチの参照元を変更するためドラッグできません", "Sketch projections cannot be dragged because that would modify source geometry in an ancestor sketch."), "error");
-      updateGeometrySelectionUI();
-      draw();
-      return;
-    }
-
-    let source = resolved.item;
-    let kind = hit.kind;
-    let dragItem = source;
-    if (source.blockProjection) {
-      source = source.blockInstance;
-      kind = "block";
-      dragItem = source;
-    } else if (kind === "arc-endpoint") {
-      dragItem = { arc: source, endpoint: hit.endpoint };
-    }
-    const plan = buildDragSession(kind, dragItem, resolved.pointer);
-    if (!plan) {
-      geometryDrag.reset();
-      setHint(applicationText("参照元が固定されているためドラッグできません", "The source is fixed and cannot be dragged."), "error");
-      updateGeometrySelectionUI();
-      draw();
-      return;
-    }
-    plan.displayStartPointer = pointer;
-    plan.pointerMap = resolved.mapPointer;
-    plan.derivedInstance = hit.instance;
-    plan.derivedSource = resolved.item;
-    const placements = new Set();
-    for (let node = hit.item; node?.derivedProjection; node = node.sourceElement) {
-      if (Boolean(node.derivedInstance?.placement)) placements.add(node.derivedInstance);
-    }
-    if (placements.size) plan.variableAllowed = (v) => !placements.has(v.object);
-    geometryDrag.begin(e, plan);
-    setHint(applicationText(`${geometryDrag.label}中: 参照元へ反映しながら拘束をsolveしています`, `${geometryDrag.label}: solving constraints while updating the source`));
-    updateUI({ refreshAnalysis: false });
-    draw();
-  }
-
-
-  function geometryInstanceSourceObjects(instance) {
-    const seen = new Set();
-    const visit = (item) => {
-      if (!item || seen.has(item)) return;
-      seen.add(item);
-      for (const point of geometryInstanceSourcePoints(item)) if (point !== item) visit(point);
-      if (item.blockInstance) seen.add(item.blockInstance);
-      if (item.derivedInstance) {
-        seen.add(item.derivedInstance);
-        for (const ref of geometryInstanceDependencyRefs(item.derivedInstance)) visit(resolveGeometryRef(ref));
-      }
-    };
-    for (const ref of instance.sources) visit(resolveGeometryRef(ref));
-    return seen;
-  }
 
 
   function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {
@@ -3597,43 +3295,13 @@
 
 
 
-  function executeTrimAt(pointer) {
-    const identity = hitSketchIdentityElement(pointer.x, pointer.y, { allowInactiveGeometry: true });
-    if (!guardSketchEdit(identity?.sketchId || activeSketchId(), "structure")) return false;
-    const preview = computeTrimPreview(pointer);
-    if (!preview) {
-      setHint("トリムできる交点がありません", "error");
-      draw();
-      return false;
-    }
-    if (!guardSketchProjectionShapeEdit([preview.item], { action: applicationText("トリム", "Trim") })) {
-      drawingPreview.setTrim(null);
-      draw();
-      return false;
-    }
-    const snapshot = snapshotGeometryMutationState();
-    if (preview.kind === "line") executeLineTrim(preview);
-    else if (preview.kind === "arc") executeArcTrim(preview);
-    else executeCircleTrim(preview);
-    drawingPreview.setTrim(null);
-    clearSelection();
-    const solved = stabilizeActiveParameterNamespace(activeSketchId());
-    const result = solved.result;
-    if (!solved.success || solved.dependent?.success === false || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-      restoreGeometryMutationState(snapshot);
-      setHint(applicationText("拘束を維持できないためトリムを戻しました。拘束状態を確認してください", "The trim was restored because its constraints could not be maintained. Check the constraint status."), "error");
-      updateUI();
-      draw();
-      return false;
-    }
-    constraintAnalysis.invalidate();
-    refreshConstraintAnalysis();
-    setHint(applicationText("トリムしました", "Trim completed"));
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory("トリム");
-    return true;
-  }
+  const { execute: executeTrimAt } = window.TrimCommand.create({
+    hitSketchIdentityElement, guardSketchEdit, activeSketchId, computeTrimPreview, setHint, draw, guardSketchProjectionShapeEdit, applicationText,
+    clearTrimPreview: () => drawingPreview.setTrim(null), editing: trimEditing,
+    checkpoint: { capture: snapshotGeometryMutationState, restore: restoreGeometryMutationState },
+    clearSelection, stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis, updateUI, recordHistory,
+  });
 
   const { candidatesAt: canvasContextCandidatesAt } = window.CanvasContextQuery.create({
     selectionScope: { sketch: isVisibleSketchId, element: isVisibleSketchElement },
@@ -3686,58 +3354,12 @@
   function hasCancellableCanvasCommand() { return canvasCommandCancellation.hasCancellable(); }
   function cancelCanvasCommandFromContextMenu() { return canvasCommandCancellation.cancel(); }
 
-  function hasCopyableCanvasSelection() {
-    const hasSelectionItems = canvasSelection.points.some((item) => model.points.includes(item)) ||
-      canvasSelection.lines.some((item) => model.lines.includes(item)) ||
-      canvasSelection.circles.some((item) => model.circles.includes(item)) ||
-      canvasSelection.arcs.some((item) => model.arcs.includes(item)) ||
-      canvasSelection.splines.some((item) => model.splines.includes(item)) ||
-      canvasSelection.blockInstances.some((item) => model.blockInstances.includes(item)) ||
-      canvasSelection.annotations.some((item) => model.annotations.includes(item)) ||
-      canvasSelection.hatches.some((item) => model.hatches.includes(item)) ||
-      canvasSelection.referenceImages.some(item => model.referenceImages.includes(item));
-    if (!hasSelectionItems) return false;
-    const selectedGeometryRefs = new Set([
-      ...canvasSelection.lines.map((item) => `line:${item.id}`),
-      ...canvasSelection.circles.map((item) => `circle:${item.id}`),
-      ...canvasSelection.arcs.map((item) => `arc:${item.id}`),
-      ...canvasSelection.splines.map((item) => `spline:${item.id}`),
-    ]);
-    if (!canvasSelection.hatches.every((hatch) => hatchBoundaryGeometryRefs(hatch.boundaryLoops).every((ref) => selectedGeometryRefs.has(`${ref.kind}:${geometryRefId(ref)}`)))) return false;
-    return true;
-  }
+  function hasCopyableCanvasSelection() { return clipboardPayload.canOfferCopy(model, canvasSelection); }
 
-  function selectedDrawingOrderCandidates() {
-    return [
-      ...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs, ...canvasSelection.splines,
-      ...canvasSelection.hatches, ...canvasSelection.blockInstances, ...canvasSelection.geometryInstances,
-    ];
-  }
-
-  function topmostDrawingOrderOwner(items) {
-    const active = window.DrawingOrder.topmostOwner(model, activeSketchId(), items);
-    if (active || !ordinarySelectionMode()) return active;
-    for (const sketch of [...model.sketches].reverse()) {
-      const owner = window.DrawingOrder.topmostOwner(model, sketch.id, items);
-      if (owner) return owner;
-    }
-    return null;
-  }
-
-  function drawingOrderCommandState() {
-    return window.DrawingOrder.commandState(model, selectionSketchId() || activeSketchId(), selectedDrawingOrderCandidates());
-  }
-
-  function reorderSelectedDrawingObjects(action) {
-    if (!guardSelectionEdit()) return false;
-    if (!window.DrawingOrder.reorder(model, selectionSketchId() || activeSketchId(), selectedDrawingOrderCandidates(), action)) return false;
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory(applicationText("重なり順変更", "Drawing order changed"));
-    setHint(applicationText("同じSketch内の重なり順を変更しました", "Changed drawing order within the active sketch."));
-    return true;
-  }
-
+  const { topmostOwner: topmostDrawingOrderOwner, state: drawingOrderCommandState, reorder: reorderSelectedDrawingObjects } = window.DrawingOrderCommand.create({
+    currentScope: () => model, canvasSelection, activeSketchId, selectionSketchId, ordinarySelectionMode,
+    guardSelectionEdit, updateUI, draw, recordHistory, applicationText, setHint,
+  });
 
 
   const { items: canvasContextMenuItems } = window.CanvasContextPresentation.createItems({
@@ -4813,13 +4435,10 @@
     cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
   });
   const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText, effectiveStyle: item => effectiveAnnotationStyle({ ...item, sketchId: activeSketchId() }) });
-  const currentCommandPanel = () => annotationCommand.active ? annotationPanel : ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
-  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel,
-    readState: () => pngExportCommand.active ? pngExportCommand.readState() : currentCommandPanel().readState(),
-    onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : currentCommandPanel().onAction(action),
-    onSelect: (key, index) => currentCommandPanel().onSelect?.(key, index),
-    onRemove: (key, index) => currentCommandPanel().onRemove?.(key, index),
-    onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : currentCommandPanel().onSetting(key, value),
+  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement,
+    ...window.CommandPanel.createRouting({ readMode: () => mode, isAnnotationActive: () => annotationCommand.active,
+      derivedPanel, hatchPanel, annotationPanel, pngExportCommand,
+    }),
   });
 
   installTestHooks();

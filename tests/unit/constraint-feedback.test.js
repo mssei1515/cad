@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const sandbox = { window: {} };
 vm.runInNewContext(fs.readFileSync('src/ui/constraint_feedback.js', 'utf8'), sandbox);
-const feedback = language => sandbox.window.ConstraintFeedback.create({ applicationText: (ja, en) => language === 'en' ? en : ja });
+const feedback = language => sandbox.window.ConstraintFeedback.create({ applicationText: (ja, en) => language === 'en' ? en : ja, readLanguage: () => language });
 const stable = { analysis: { stable: true } };
 
 test('solve feedback distinguishes success, unstable results, dependent failure and duplicate constraints', () => {
@@ -61,4 +61,31 @@ test('fallback label is read only for generic guidance and rejection needs no DO
  assert.equal(f.targetHint('custom', [], 'en', label), 'Select targets for Custom.'); assert.equal(reads, 1);
  assert.equal(f.invalidTargetHint('custom', [], 'en'), 'The current selection cannot be used for this constraint.');
  assert.equal(feedback('ja').invalidTargetHint('custom', [], 'ja'), 'この拘束では選択できません');
+});
+
+test('localized constraint names preserve specific-prefix priority, suffixes, type-only names and unknown fallbacks', () => {
+  const en = feedback('en'), ja = feedback('ja');
+  assert.equal(en.localizedConstraintName('円弧端点-円周一致 A1'), 'Arc endpoint on circumference A1');
+  assert.equal(en.localizedConstraintName('水平寸法 P1/P2'), 'Horizontal dimension P1/P2');
+  assert.equal(en.localizedConstraintName('水平寸法 P1/P2', { typeOnly: true }), 'Horizontal dimension');
+  assert.equal(ja.localizedConstraintName('点水平 P1/P2'), '点水平 P1/P2');
+  assert.equal(ja.localizedConstraintName('点水平 P1/P2', { typeOnly: true }), '点水平');
+  for (const name of ['Custom constraint α/β', 'Arc endpoint fixedness']) {
+    for (const f of [en, ja]) for (const typeOnly of [true, false]) assert.equal(f.localizedConstraintName(name, { typeOnly }), name);
+  }
+  assert.equal(en.localizedConstraintName(''), 'Constraint'); assert.equal(ja.localizedConstraintName(null), '拘束');
+});
+
+test('constraint name presentation reads current language and preserves the English fixed-endpoint special case', () => {
+  let language = 'ja', reads = 0;
+  const f = sandbox.window.ConstraintFeedback.create({ applicationText: (ja, en) => language === 'en' ? en : ja,
+    readLanguage: () => { reads++; return language; } });
+  assert.equal(reads, 0);
+  assert.equal(f.localizedConstraintName('水平寸法 P1/P2', { typeOnly: true }), '水平寸法');
+  language = 'en';
+  assert.equal(f.localizedConstraintName('水平寸法 P1/P2', { typeOnly: true }), 'Horizontal dimension');
+  assert.equal(f.localizedConstraintName('Arc endpoint fixed A1', { typeOnly: true }), 'Arc endpoint fixed');
+  language = 'ja';
+  assert.equal(f.localizedConstraintName('Arc endpoint fixed A1', { typeOnly: true }), '円弧端点固定');
+  assert.equal(f.localizedConstraintName('Arc endpoint fixed A1'), 'Arc endpoint fixed A1');
 });

@@ -110,3 +110,38 @@ test('identity additive selection preserves Sketch refusal, ID-toggle receiver a
   h.calls.length = 0; assert.equal(h.api.selectIdentity({ kind: 'unknown', item, sketchId: 'S' }), false); assert.deepEqual(h.calls.map(c => c[0]), ['clear']);
   h.calls.length = 0; h.state.sketchId = null; assert.equal(h.api.selectIdentity(identity, true), true); assert.deepEqual(h.calls.map(c => c[0]), ['sketch', 'toggle', 'ui', 'draw']);
 });
+
+for (const file of ['src/editing/constraint_target_session.js', 'src/editing/canvas_hover.js']) {
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox, { filename: file });
+}
+
+test('clearing selection retains the active constraint command and unrelated hover references', () => {
+  const session = sandbox.window.ConstraintTargetSession.create({});
+  const command = { type: 'horizontal' }; session.replaceCommand(command); session.replaceOperands([{}]);
+  const hover = sandbox.window.CanvasHover.create({ isEndpointPoint: () => false });
+  const keep = { point: {}, endpointPoint: {}, line: {}, circle: {}, arc: {}, arcEndpoint: {}, dimension: {}, annotationHandle: {} };
+  hover.update({ ...keep, sketchIdentity: {}, block: {}, geometryInstance: {}, annotation: {}, hatch: {}, referenceImage: {}, spline: {} });
+  const selection = { items: [{}], clear() { this.items = []; } };
+  const highlight = { current: {}, reset() { this.current = null; } };
+  const clearing = sandbox.window.CanvasSelectionInteraction.createClearing({ canvasSelection: selection,
+    constraintTargetSession: session, canvasHover: hover, selectionHighlight: highlight });
+  assert.equal(clearing.clear(), undefined);
+  assert.deepEqual(selection.items, []); assert.equal(highlight.current, null);
+  assert.equal(session.command, command); assert.equal(session.operands.length, 0);
+  for (const [key, value] of Object.entries(keep)) assert.equal(hover.current[key], value, key);
+  for (const key of ['sketchIdentity', 'block', 'geometryInstance', 'annotation', 'hatch', 'referenceImage', 'spline']) assert.equal(hover.current[key], null, key);
+});
+
+test('selection clearing preserves receiver and the two hover phases around highlight reset', () => {
+  const events = [];
+  const selection = { clear() { assert.equal(this, selection); events.push('selection'); } };
+  const session = { clearOperands() { assert.equal(this, session); events.push('operands'); } };
+  const highlight = { reset() { assert.equal(this, highlight); events.push('highlight'); } };
+  const hover = { update(patch) { assert.equal(this, hover); events.push(Object.keys(patch)); } };
+  const clearing = sandbox.window.CanvasSelectionInteraction.createClearing({ canvasSelection: selection,
+    constraintTargetSession: session, canvasHover: hover, selectionHighlight: highlight });
+  assert.deepEqual(events, []);
+  clearing.clear();
+  assert.deepEqual(events, ['selection', 'operands', ['sketchIdentity', 'block', 'geometryInstance'], 'highlight',
+    ['annotation', 'hatch', 'referenceImage', 'spline']]);
+});

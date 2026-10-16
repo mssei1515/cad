@@ -316,5 +316,15 @@
     }
     return Object.freeze({ hitHatchAt, hitReferenceImageAt });
   }
-  window.GeometryHitQuery = Object.freeze({ create, createInstances, createDimensions, createRegions });
+  // Selection may inspect visible Sketches; command targets stay in the editable drawing Sketch.
+  function createScopePolicy({ readMode, readPendingCommand, readConstraintCommand,
+    isVisibleSketchId, isVisibleSketchElement, elementSketchId, activeSketchId, isEditableSketchId }) {
+    function ordinarySelectionMode() { return readMode() === "select" && !readPendingCommand() && !readConstraintCommand(); }
+    function hitSketchAllowed(id) {
+      return isVisibleSketchId(id) && (ordinarySelectionMode() || id === activeSketchId() && isEditableSketchId(id));
+    }
+    function hitElementAllowed(item) { return isVisibleSketchElement(item) && hitSketchAllowed(elementSketchId(item)); }
+    return Object.freeze({ ordinarySelectionMode, hitSketchAllowed, hitElementAllowed });
+  }
+  window.GeometryHitQuery = Object.freeze({ create, createInstances, createDimensions, createRegions, createScopePolicy });
 })();

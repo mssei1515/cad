@@ -218,5 +218,41 @@
     }
     return Object.freeze({ read });
   }
-  window.InstanceProjection = Object.freeze({ create, createSourceSelection });
+  // Resolve source references and inverse pointer chains without changing interaction state.
+  function createDragSourceQuery({ geometryInstanceSourcePoints, geometryInstanceDependencyRefs, resolveGeometryRef }) {
+    function resolveDerivedDragSource(hit, pointer) {
+      let item = hit?.item || null;
+      const inverseTransforms = [];
+      const visited = new Set();
+      let crossesSketchProjection = false;
+      while (item?.derivedProjection) {
+        if (visited.has(item) || !item.sourceElement || typeof item.derivedInversePoint !== "function") return null;
+        visited.add(item);
+        if (item.derivedInstance?.type === "sketchProjection") crossesSketchProjection = true;
+        inverseTransforms.push(item.derivedInversePoint);
+        item = item.sourceElement;
+      }
+      if (!item || inverseTransforms.length === 0) return null;
+      const mapPointer = (value) => inverseTransforms.reduce((current, inverse) => inverse(current), { x: value.x, y: value.y });
+      return { item, mapPointer, pointer: mapPointer(pointer), crossesSketchProjection };
+    }
+
+    function geometryInstanceSourceObjects(instance) {
+      const seen = new Set();
+      const visit = (item) => {
+        if (!item || seen.has(item)) return;
+        seen.add(item);
+        for (const point of geometryInstanceSourcePoints(item)) if (point !== item) visit(point);
+        if (item.blockInstance) seen.add(item.blockInstance);
+        if (item.derivedInstance) {
+          seen.add(item.derivedInstance);
+          for (const ref of geometryInstanceDependencyRefs(item.derivedInstance)) visit(resolveGeometryRef(ref));
+        }
+      };
+      for (const ref of instance.sources) visit(resolveGeometryRef(ref));
+      return seen;
+    }
+    return Object.freeze({ resolve: resolveDerivedDragSource, sourceObjects: geometryInstanceSourceObjects });
+  }
+  window.InstanceProjection = Object.freeze({ create, createSourceSelection, createDragSourceQuery });
 })();

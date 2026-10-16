@@ -914,3 +914,33 @@ InstanceProjection.createSourceSelectionは現在model／選択Geometry・Canvas
 
 
 CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入口からcategory順・重複／元参照を維持したselectionItemsと、先頭itemのSketch→inspection→nullのselectionSketchIdを返す。CanvasSelectionInteraction.createIdentitySelectionはSelection／Sketch照会／clear／UI／drawの5入口でidentity選択を行う。Block→derived ownerの優先、additive時のSketch拒否／ID toggle、non-additive clear→kind判定→set、UI→drawと結果を維持し、identityを変更しない。照会と状態更新を分け、appは早期callback用のhoisted入口と生成接続を持つ。
+
+- src/commands/sketch_command.js: createEditAccessは既存SketchContextの編集可否に基づく拒否通知、選択所属のguard、作図拒否のpreview cleanupを担当。権限規則とSelection／preview状態の所有は各既存moduleに残し、appは生成・接続を担当する。
+
+- src/editing/geometry_hit_query.js: createScopePolicyは通常select／commandの状態とSketchの表示・所属・編集可否から共通hit対象範囲を照会する。8個のread portのみで接続し、Geometry／Instance／寸法／Hatch／画像／Annotationで使う判定をappが接続する。
+
+- src/commands/drawing_order_command.js: Selectionからの重なり順候補／操作可否／最前面owner照会と、権限guard・順序変更・表示／履歴完了を担当。現在modelを含む11個の限定portを接続し、owner解決・順序補完・並べ替えはsrc/document/drawing_order.jsへ委譲する。
+
+- src/editing/clipboard_payload.js: canOfferCopyはCanvasメニューで使うコピー／切り取り可否をmodelとSelectionから照会する。既存のObject同一参照とHatch境界選択の条件を維持し、payload生成・clipboard session・UI更新を行わない。
+
+- src/ui/number_display.js: NumberDisplayはUI／Canvas共通の自動数値表示、通常／実測寸法labelとsuffix整形を担当する。丸め許容差と3つの純粋関数を所有し、モデル計算値・UI状態・寸法の固定桁外観を更新しない。
+
+- src/commands/sketch_command.js: renameの編集guardとtoggleLockの状態更新／UI・描画・履歴を所有する。appは権限照会と専用の取消準備callbackを接続し、Sketch切替の全体resetとは別の順序を維持する。
+
+- src/ui/command_panel.js: createRoutingはPNG／注記／Hatch／派生の表示先選択とイベント振分けを6依存で担当する。row選択・削除のoptional性とPNGを経由しない経路、receiver・引数・結果を維持し、appは個別panelとviewを接続する。
+
+- src/editing/canvas_selection_interaction.js: createClearingはSelection・拘束operand・hoverの限定した参照・強調表示の解除を4 ownerのAPIで調整する。拘束command本体や他のhover参照・snapを保ち、UI／履歴／model更新は担当しない。
+
+- src/commands/geometry_drag.js: createDerivedEntryは派生Instance全体と参照元Geometryのdrag plan／開始調整を14依存で担当する。参照元照会と通常session生成、既存GeometryDrag lifecycleを接続し、Selection／拒否通知・live anchor・pointer map／variableAllowedの既存境界を保持する。
+
+- src/geometry/instance_projection.js: createDragSourceQueryは参照元Object収集とinverse pointer chainの解決を担当。3 read portのみで接続し、Object参照・探索順・巡回拒否・pointer複写とSketch投影flagを保つ。UI／Selection／drag状態や独自scope cacheを所有しない。
+
+- src/commands/trim_command.js: TrimCommandは対象検証・Geometry変更の依頼・求解／依存結果の判定・checkpoint復元・成功履歴を18依存で調整する。TrimEditingと既存Geometry checkpointの所有を維持し、復元条件や例外伝播・UI順を変えない。
+
+- src/ui/expression_input_view.js: createInsertionは識別子の挿入とinput／blur-change・focus／caretのDOM操作を2依存で担当する。native changeの重複と切断inputへの補完を避ける既存挙動を保持し、Parameterの名前解決・評価・適用は担当しない。
+
+- src/ui/expression_input_controller.js: フォーカス式field／namespace照会とCanvasの寸法・注記からの参照入力を12依存で担当する。名前補完とDOM挿入は既存service／viewへ委譲し、namespaceの同一参照・拒否条件と異なるevent／通知順を保持する。
+
+- src/ui/constraint_feedback.js: localizedConstraintNameは拘束名の言語／typeOnly表示を担当。2つの言語／文言read portを使い、正規表現の優先順と未知名・固定端点のfallback、Modelのname／保存値を維持する。
+
+- src/ui/authoring_feedback.js: Hatch／Offsetの診断codeからUI文言への変換を1つの文言read portで担当する。未知code／reasonの既存fallbackと言語の実行時反映を保ち、Geometry判定・model編集・DOM更新は持たない。
