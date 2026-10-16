@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Properties表示とCanvas resizeのUI寿命
+
+既存CanvasWorkspaceLayoutへ選択Propertiesの表示操作とtoggle／window resizeのlistener寿命を集約。パネル展開→Properties更新→現在panelの再取得とscroll初期化→hint、context menu解除→現在world中心→既存resizeの順を保持する。bindControls／bindWindowを元の起動位置へ接続し、二重登録防止・自己listenerだけのdispose／再bindを実装。DOM不在時のパネル無変更と、Properties更新／hintを継続する元の範囲を維持する。model・Selection・履歴を別に所有しない。
+
+app.jsは4,001→3,990行（11行減、b120651から合計153行減）。新scriptなし。既存canvas-workspace-layout unitへ3件追加し、更新後panelの参照、中心保持・menu解除後のlive中心、現在classと登録寿命、外部listener保持、DOM不在の通知を確認。構文545ファイル・単体1,525件・関連E2E149件成功（すべてexit 0、E2E2.1分）。blocks／canvas-zoom-input／toolbar-layout／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-workspace-layout-binding-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はSketch移動先選択中にTree外入力を抑止するdocument capture listenerを調べ、Sketch Tree／移動UIの所有者へ寄せる。対象六eventと許可領域、stopImmediatePropagationと登録順を保つ。
+
 ### ドラッグ検証用sample図面の所有
 
 sampleModelがGeometryDragTestDriver.createResponsiveFixtureだけから使われることを確認し、既存fixtureのresetへ図面生成を統合。4点・4線・距離二つ／平行二つ／直交一つの拘束、寸法既定値・求解／logからfit160→draw→履歴初期化→serializeまでを一つのテスト準備として所有する。生成・拘束／求解・履歴APIは明示portで受け、独自ルールや状態を持たない。旧生成bodyはindent以外一致。通常appの関数とfixtureからappへ戻るsample生成依存を撤去し、既存公開hook名と結果を維持する。

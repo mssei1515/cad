@@ -614,6 +614,7 @@
   const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
   const pngRendering = window.CanvasExport.createRenderer({ viewport, withGeometryReadCache, drawCanvas, syncCanvasBitmapSize, draw });
   const canvasWorkspaceLayout = window.CanvasWorkspaceLayout.create({
+    window, updatePropertiesUI, setHint, closeContextMenu: closeCanvasContextMenu,
     canvas, document, viewport, syncCanvasBitmapSize, applySketchTreeWidth: () => applySketchTreeWidth(), draw,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
     syncDimensionValueInput: () => syncDimensionValueInput(), currentCanvasCenterWorld, applicationText, readLanguage: () => applicationSettings.language,
@@ -3180,18 +3181,12 @@
   });
   function openCanvasContextMenu(event) { return canvasContextEntry.open(event); }
 
-  function showSelectedObjectProperties() {
-    setPropertiesPanelCollapsed(false);
-    updatePropertiesUI();
-    const panel = document.getElementById("propertiesPanel");
-    if (panel) panel.scrollTop = 0;
-    setHint(applicationText("選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."));
-  }
+
 
   const canvasContextActions = window.CanvasContextActions.create({
     guardSelectionEdit, guardSketchEdit, elementSketchId, selectionSketchId, activeSketchId,
     commitSketchProjectionCommand, cancelCanvasCommandFromContextMenu, undoHistory, redoHistory, copySelectionToClipboard,
-    imageClipboard, document, showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit, setBlockInstanceRotationLocked,
+    imageClipboard, document, showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit, setBlockInstanceRotationLocked,
     startDimensionEditInput, selectedDimensionLineGroup, dimensionLineGroup, updateGeometrySelectionUI, draw, recordHistory, applicationText, setHint,
     sketchMoveCommand, startHatchBoundaryRepair, reorderSelectedDrawingObjects, addSplineFitPointFromContext, deleteSplineFitPointFromContext,
     splineEditing, fitVisibleGeometryToViewport,
@@ -3385,10 +3380,7 @@
   applicationMenus.start();
   toolFlyouts = window.ToolFlyouts.create({ document, window, onOpen: closeAppMenus });
   toolFlyouts.start();
-  document.getElementById("togglePropertiesPanelBtn")?.addEventListener("click", () => {
-    const workspace = document.querySelector(".workspace");
-    setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));
-  });
+  canvasWorkspaceLayout.bindControls();
   parameterEditor.start();
   const documentAppearanceEditor = window.DocumentAppearanceEditor.create({
     document, readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
@@ -3461,10 +3453,7 @@
 
 
 
-  window.addEventListener("resize", () => {
-    closeCanvasContextMenu();
-    resizeCanvas({ centerWorld: currentCanvasCenterWorld() });
-  });
+  canvasWorkspaceLayout.bindWindow();
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;

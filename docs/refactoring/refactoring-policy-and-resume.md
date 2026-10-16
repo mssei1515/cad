@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。作図command組立てに続き、テスト専用sampleModelを既存GeometryDragTestDriver.createResponsiveFixtureのresetへ統合。app.jsは4,143→4,001行（合計142行減、直近18行減）。構文545ファイル・単体1,522件・関連E2E122件成功。今回は全E2E未実行。最新週枠使用27%／残量73%。全体目標は未完了。次はPropertiesパネルの表示／toggleとCanvas resizeの残るUI操作・listenerを調べ、既存CanvasWorkspaceLayoutへ責務を寄せる。close context menu→現在center取得→resize、パネル展開→Properties更新→scroll初期化→hintの順序、DOM不在と初期化／listener登録時期を保持する。巨大contextや異なる操作の単一stateへの統合を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。Properties表示とパネルtoggle／window resizeのlistener寿命を既存CanvasWorkspaceLayoutへ集約。app.jsは4,143→3,990行（合計153行減、直近11行減）。構文545ファイル・単体1,525件・関連E2E149件成功。今回は全E2E未実行。最新週枠使用28%／残量72%。全体目標は未完了。次はSketch移動先選択中にTree外入力を抑止するdocument capture listenerを調べ、Sketch Tree／移動UIの所有者へ寄せる。六eventと許可領域、inactive時の短絡・stopImmediatePropagationと登録順を維持し、Keyboardの別経路と統合しない。巨大contextや異なる操作の単一stateへの統合を避ける。
 
 ### 直前のリリース（2026-10-16）
 
