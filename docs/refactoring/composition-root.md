@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### AnnotationテストAPIの機能組立て
+
+AnnotationTestDriver.createSupportへ寸法／外観／所有関係の観測、snapshot、drag fixture、hit照会の6factoryとdrag状態照会を集約。共有snapshotをdrag fixtureへ内部で接続し、既存製品ownerからの操作・read portだけを受け取る。7つの公開APIはfixtures／observations／interactionの三群で返し、appは元の位置へ展開することで他featureを含む公開順も維持する。全個別factoryの本体は変更前と完全一致し、生成接続もport置換とindent以外一致。drag状態は元と同じannotationDrag.inspectの操作時照会と返値を保ち、通常起動で支援を生成しないtest query guardも保持する。任意のapp contextや製品状態を新たに所有しない。
+
+app.jsは4,219→4,207行（12行減、07024cbから合計252行減）。新scriptなし。新unit fileを構文／unit一覧へ一回だけ追加。単体2件で三群の7公開名・順序と生成時無処理、live drag／snapshot照会、hitの座標変換、実際のdrag fixture→snapshot接続、元のstyle template不変を確認。構文531ファイル・単体1,466件・関連E2E239件が成功（すべてexit 0、E2E3.6分）。7つのAnnotation APIを参照するannotation-anchors／free-text-input-drag／unified-ui／unified-annotations／leader-appearance／annotation-display-size／phase0-characterization／png-exportの全8fileを実行。全runnerは正常終了。ログは一時ディレクトリのcad-annotation-test-support-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はDimensionのfixtureと表示観測の生成接続・公開API対応を同様に整理できるか検討する。
+
 ### Sketch投影テストAPIの機能組立て
 
 SketchProjectionTestDriver.createSupportへ状態観測・通常Geometry・旧形式互換・Block編集／投影・選択／外観／削除・source編集・読込・資格・転送の生成接続と21個の公開API対応を集約。共有readState、選択APIと転送、旧形式target構築の内部リンクをdriver内で接続し、appは従来の型・操作・read portを明示する。全個別factoryの本体は変更前と完全一致し、生成接続bodyもread port置換とindent以外一致。公開名・順序、callbackと現在scope／履歴の参照、test queryで有効なときだけ生成する範囲を保持する。旧形式target constructorは状態を照会しないfactoryなので、支援内部での生成へ移してもモデル操作を増やさない。任意のapp contextや新しい製品状態は持たず、既存command／model／solver操作をfixtureが引き続き利用する。

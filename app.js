@@ -3638,20 +3638,14 @@
       currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
       computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), targetConstraintCount: geometryDragSolver.targetConstraintCount, now: () => performance.now(),
     });
-    const annotationDimensionObservation = window.AnnotationTestDriver.createDimensionObservation({ annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint });
-    const annotationAppearanceObservation = window.AnnotationTestDriver.createAppearanceObservation({
-      currentScope: workspace.current, viewport, clampZoom, effectiveAnnotationStyle, draw, annotationTextMetrics, annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextWorldHeight,
-      screenPxPerMm: ANNOTATION_SCREEN_PX_PER_MM, annotationDisplayFactor: window.Appearance.annotationDisplayFactor, annotationLeaderAnchor, displayText: window.AnnotationRenderer.displayText, formatDisplayNumber, serializeAnnotation,
+    const annotationTestSupport = window.AnnotationTestDriver.createSupport({
+      annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint,
+      currentScope: workspace.current, viewport, clampZoom, effectiveAnnotationStyle, draw, annotationTextMetrics, annotationTextLayout,
+      annotationLeaderDisplayGeometry, annotationTextWorldHeight, screenPxPerMm: ANNOTATION_SCREEN_PX_PER_MM, annotationDisplayFactor: window.Appearance.annotationDisplayFactor, annotationLeaderAnchor,
+      displayText: window.AnnotationRenderer.displayText, formatDisplayNumber, serializeAnnotation, canvas, worldToCanvasScreen, allAnnotations, canvasSelection, allGeometryBounds,
+      resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas,
+      screenToWorld, hitAnnotationElement, readDragState: () => annotationDrag.inspect()
     });
-    const annotationOwnershipObservation = window.AnnotationTestDriver.createOwnershipObservation({
-      canvas, worldToCanvasScreen, annotationTextLayout, annotationLeaderDisplayGeometry, currentScope: workspace.current, serializeAnnotation, allAnnotations,
-      displayText: window.AnnotationRenderer.displayText, formatDisplayNumber, effectiveAnnotationStyle, annotationLeaderAnchor, canvasSelection, allGeometryBounds,
-    });
-    const annotationSnapshotObservation = window.AnnotationTestDriver.createSnapshot({ currentScope: workspace.current, annotationLeaderDisplayGeometry, canvas, worldToCanvasScreen });
-    const annotationDragFixture = window.AnnotationTestDriver.createDragFixture({
-      resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas, readSnapshot: annotationSnapshotObservation.snapshot,
-    });
-    const annotationHitObservation = window.AnnotationTestDriver.createHitObservation({ canvas, screenToWorld, hitAnnotationElement });
     const readOnlyDuplicateFixture = window.DimensionTestDriver.createReadOnlyDuplicateFixture({
       resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope: workspace.current,
       isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
@@ -4076,7 +4070,7 @@
       constraintAnalysisForTest: constraintAnalysisObservation.analysis,
       blockConstraintStatusForTest: blockConstraintObservation.state,
       addBlockPointOnLineConstraintForTest: blockConstraintInsertion.add,
-      resetForAnnotationDrag: annotationDragFixture.reset,
+      ...annotationTestSupport.fixtures,
       resetForReadOnlyDuplicateDimension: readOnlyDuplicateFixture.reset,
       resetForReadOnlyDimensionPlacement: readOnlyPlacementFixture.reset,
       pointPointRectangleDimensionExtensionVisibilityCases: extensionVisibilityFixture.cases,
@@ -4086,15 +4080,9 @@
       resetForTrimConstraintTransfer: trimLineTransferFixture.reset,
       trimConstructionBoundaryCase: trimConstructionFixture.boundaryCase,
       trimCircleDiameterDimensionCase: trimDiameterFixture.diameterCase,
-      annotationSnapshot: annotationSnapshotObservation.snapshot,
-      annotationDimensionStateForTest: annotationDimensionObservation.state,
-      annotationAppearanceStateForTest: annotationAppearanceObservation.state,
-      annotationOwnershipStateForTest: annotationOwnershipObservation.state,
+      ...annotationTestSupport.observations,
       fitAllGeometryForTest: testFitOperation.fit,
-      annotationHitAt: annotationHitObservation.hit,
-      annotationDragActive() {
-        return annotationDrag.inspect();
-      },
+      ...annotationTestSupport.interaction,
       historyState: readTestHistory,
       resetForActiveSketchDimensionVisibility: sketchVisibilityFixture.reset,
       resetForAllGeometryFit: allGeometryFitFixture.reset,
