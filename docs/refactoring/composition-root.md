@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### symbol削除の共通guard
+
+guardDimensionSymbolDeletionを既存ParameterApplication.createDeletionGuardへ分離。ParameterNamespaceの依存照会と、現在namespace／言語／hint／logの5依存を明示し、独立した編集前guardとして各削除commandへ接続する。名前空間のdefault引数評価、依存なしの通知省略、依存名の順と区切り、操作時の言語、hint→log順、例外伝播を維持。モデルと削除transaction・履歴は持ち込まない。appではParameterNamespace直後、最初のconsumerより前で初期化し、生成時に照会を実行しない。新scriptなし。
+
+最新develop/main 07024cbからcodex/parameter-edit-guardで再開。週枠使用10%／残量90%を確認し、app.jsは4,459→4,453行（6行減）。既存unitに2件を追加。構文518ファイル・単体1,439件・関連E2E83件が成功（すべてexit 0）。内訳はblocks／parameter-dialog-controller／unified-annotationsの59件、sketch-tree-delete／unified-uiのsymbol・parameter・削除・参照関連23件、一括寸法削除の依存拒否1件。最初のE2E指定に存在しない2つのfile名が含まれたため、実在するSketch削除fileと統合UIを追加実行し、coverageを補った。ログは一時ディレクトリのcad-symbol-deletion-guard-{check,unit,e2e,deletion-e2e,batch-e2e}.log。全runnerは正常終了。全E2Eはこの区切りでは未実行。全体目標は未完了。次はresetModelStateの操作sessionリセット範囲と、既存ownerへの委譲・初期化順を確認し、巨大なcontext移動を避けて共通状態の所有を整理する。
+
 ### 2026-10-16のリリース検証
 
 ユーザーのorigin/mainへのマージ指示により、この区切りで新規分離を停止。コード最終accde5dをdevelopへ統合したa83beddで、構文518ファイル・単体1,437件・全E2E583件が成功（すべてexit 0、全E2E24.5分）。拘束ドラッグ回帰全fileは12.5分。ログは一時ディレクトリのcad-oct16-release-{check,unit,e2e}.log。app.jsは再開時4,840→4,459行。検証後はこの記録だけを更新し、develop先行・main最後・main/develop同期の手順でリリースする。全体のcomposition root化は未完了であり、次回は最新developから継続する。

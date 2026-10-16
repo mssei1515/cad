@@ -178,6 +178,10 @@
   const workspace = window.EditingWorkspace.create(documentModel);
   const currentParameterNamespace = workspace.current;
   const parameterNamespace = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
+  const { guard: guardDimensionSymbolDeletion } = window.ParameterApplication.createDeletionGuard({
+    currentNamespace: currentParameterNamespace, symbolDeletionDependents: parameterNamespace.symbolDeletionDependents,
+    readLanguage: () => applicationSettings.language, setHint, log,
+  });
   const {
     evaluateDimensionExpressionDraft: evaluateNamedDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
@@ -1213,16 +1217,6 @@
     }, draw, updateUI,
   });
 
-  function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
-    const { removedNames, dependents } = parameterNamespace.symbolDeletionDependents(constraints, namespace);
-    if (dependents.length === 0) return true;
-    const message = applicationSettings.language === "en"
-      ? `Cannot delete ${removedNames.join(", ")}; referenced by ${dependents.join(", ")}`
-      : `${removedNames.join("、")} は ${dependents.join("、")} から参照されているため削除できません`;
-    setHint(message, "error");
-    log(message);
-    return false;
-  }
 
   function isGeometryMode() {
     return true;

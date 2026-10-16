@@ -944,3 +944,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/ui/constraint_feedback.js: localizedConstraintNameは拘束名の言語／typeOnly表示を担当。2つの言語／文言read portを使い、正規表現の優先順と未知名・固定端点のfallback、Modelのname／保存値を維持する。
 
 - src/ui/authoring_feedback.js: Hatch／Offsetの診断codeからUI文言への変換を1つの文言read portで担当する。未知code／reasonの既存fallbackと言語の実行時反映を保ち、Geometry判定・model編集・DOM更新は持たない。
+
+- src/parameters/application.js: createDeletionGuardはsymbol依存照会を使った削除可否と拒否通知を所有。5依存だけを受け取り、namespaceやmodelは保持・変更しない。各削除commandは共通guardを利用し、削除範囲とtransactionは従来のownerが担当する。
