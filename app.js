@@ -26,7 +26,7 @@
 
   const {
     MIN_ORIENTATION_LENGTH,
-    arcEndpointPoint,
+    arcEndpointPoint, arcEndpointDragValue,
     circlePointAtAngle,
     arcSweep,
     unwrapAngleNear,
@@ -1693,23 +1693,6 @@
 
 
 
-  function arcEndpointDragValue(arc, endpoint, rawAngle) {
-    const twoPi = Math.PI * 2;
-    const maxSweep = twoPi - 1e-6;
-    const prop = endpoint === "start" ? "startAngle" : "endAngle";
-    const value = unwrapAngleNear(rawAngle, arc[prop]);
-    const sweep = endpoint === "start" ? arc.endAngle - value : value - arc.startAngle;
-    if (Math.abs(sweep) >= maxSweep) {
-      // Stay on the same angular branch at the almost-full-circle boundary.
-      // Returning the opposite endpoint collapses the sweep to zero and makes
-      // a small pointer crossing jump most of the circumference.
-      const direction = sweep < 0 ? -1 : 1;
-      return endpoint === "start"
-        ? arc.endAngle - direction * maxSweep
-        : arc.startAngle + direction * maxSweep;
-    }
-    return value;
-  }
 
 
   function findArcEndpointFixedConstraint(arc, endpoint) {

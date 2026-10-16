@@ -14,6 +14,43 @@ function loadGeometryKernel() {
 
 const kernel = loadGeometryKernel();
 
+test('arc endpoint drag values retain the current revolution and do not mutate either endpoint', () => {
+  const turn = Math.PI * 2;
+  for (const revolution of [-3, 0, 4]) {
+    const arc = Object.freeze({ startAngle: revolution * turn + 0.2, endAngle: revolution * turn + 1.2 });
+    assert.ok(Math.abs(kernel.arcEndpointDragValue(arc, 'start', 0.4) - (revolution * turn + 0.4)) < 1e-12);
+    assert.ok(Math.abs(kernel.arcEndpointDragValue(arc, 'end', 1.4) - (revolution * turn + 1.4)) < 1e-12);
+    assert.equal(arc.startAngle, revolution * turn + 0.2); assert.equal(arc.endAngle, revolution * turn + 1.2);
+  }
+});
+
+test('both arc endpoints preserve the signed almost-full-circle branch when the pointer crosses the wrap', () => {
+  const turn = Math.PI * 2, limit = turn - 1e-6;
+  for (const direction of [-1, 1]) for (const endpoint of ['start', 'end']) {
+    const arc = Object.freeze({ startAngle: 0, endAngle: direction * (turn - 1e-7) });
+    for (const rawAngle of [-1e-8, 0, 1e-8]) {
+      const value = kernel.arcEndpointDragValue(arc, endpoint, rawAngle);
+      const sweep = endpoint === 'start' ? arc.endAngle - value : value - arc.startAngle;
+      assert.equal(Math.sign(sweep), direction);
+      assert.ok(Math.abs(sweep - direction * limit) < 1e-12);
+      assert.ok(Math.abs(sweep) > 6, 'a wrap crossing must not collapse the arc');
+    }
+  }
+});
+
+test('arc endpoint movement away from the full-circle boundary remains continuous and unclamped', () => {
+  const turn = Math.PI * 2;
+  for (const direction of [-1, 1]) for (const endpoint of ['start', 'end']) {
+    const arc = Object.freeze({ startAngle: 0, endAngle: direction * (turn - 5e-6) });
+    for (const distance of [1e-6, 2e-6, 3e-6]) {
+      const expected = endpoint === 'start' ? direction * distance : arc.endAngle - direction * distance;
+      const rawAngle = Math.atan2(Math.sin(expected), Math.cos(expected));
+      const value = kernel.arcEndpointDragValue(arc, endpoint, rawAngle);
+      assert.ok(Math.abs(value - expected) < 1e-12);
+    }
+  }
+});
+
 test("positive angle normalization preserves the app range [0, 2pi)", () => {
   const twoPi = Math.PI * 2;
   assert.equal(kernel.normalizeAnglePositive(0), 0);

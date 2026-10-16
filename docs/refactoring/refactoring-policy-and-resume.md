@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用35%／残量65%。未使用入口／静的alias整理、Offset選択反映、寸法外観、寸法label（0708887）に続き、Annotationのアンカー読取りをAnnotationRendererへ、編集座標の具体化をAnnotationAnchorConstraints.createMaterializationへ集約した。既存anchor／captureの分岐、leaderの倍率逆変換・参照fallback、保存座標とstyle読取りの時機を維持。app.jsは開始3,949→現在3,778行（合計171行減、直近3,792→3,778で14行減）。構文546ファイル・単体1,554件・関連E2E183件成功（exit 0、4file、2.9分）。ログはcad-annotation-anchor-materialization-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用36%／残量64%。未使用入口／静的alias整理、Offset選択反映、寸法外観、寸法label、Annotationアンカー（6c3631c）に続き、今回は円弧端点dragの角度境界計算をGeometryKernelへ集約した。unwrapの周回、正負の枝、start／end基準と2π−1e-6上限を維持し、モデルや操作stateを更新しない。app.jsは開始3,949→現在3,761行（合計188行減、直近3,778→3,761で17行減）。構文546ファイル・単体1,557件・関連E2E115件成功（exit 0、3file、1.6分）。ログはcad-arc-endpoint-angle-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-次はarcEndpointDragValueの角度境界計算をGeometryKernel／GeometryDragの責務と照らして確認する。unwrapAngleNearの分岐維持、start／endで異なるsweepと更新基準、almost-full-circleの2π−1e-6境界で符号付きの枝を保つ規則を変更せず、純粋な計算として集約できるか検討する。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。異なるreset対象の統一や巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
+次はaddConstraintIfMissingの作図中の暗黙拘束追加を、SnapConstraints／ConstraintCommitCommandの所有境界と照らして確認する。enabled拘束の一致、明示／現在Sketch、参照元と循環guard、参照属性付与、push後の冗長判定と配列差替え／forgetを維持する。通常のユーザー拘束確定とは求解・履歴・UI・拒否規則が異なるため安易に共通化しない。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。異なるreset対象の統一や巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
 
 ### 直前のリリース（4859400）
 

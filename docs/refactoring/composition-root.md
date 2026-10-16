@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 円弧端点dragの角度境界計算
+
+arcEndpointDragValueを既存GeometryKernelへ集約。現在の開始／終了角にunwrapAngleNearで入力角を合わせ、signed sweepが2π−1e-6以上なら同じ正負の枝で一周直前に制限する。開始点はendAngle、終了点はstartAngleを基準とし、相手端点へ戻して円弧を縮退させない既存規則をそのまま維持した。入力Arc・操作state・求解・履歴を変更しない純粋計算で、appは同関数を既存GeometryDragEditingの端点処理へ渡す。新factoryやwrapperは追加していない。
+
+app.jsは3,778→3,761行（17行減、今回再開から188行減）。既存geometry-kernel unitへ3件を追加し、複数周回の維持と非破壊性、開始／終了と正負両方向のalmost-full-circle境界、境界から離れる際の連続性・非clampを確認。構文546ファイル・単体1,557件・関連E2E115件成功（すべてexit 0、E2E1.6分）。unified-ui／block-geometry-fixed／fixed-commandの全3file。ログは一時ディレクトリのcad-arc-endpoint-angle-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### Annotationアンカー読取りと編集座標の具体化
 
 annotationPlacementAnchorを既存AnnotationRendererの読取りAPIへ、materializeAnnotationAnchorを既存AnnotationAnchorConstraints.createMaterializationへ集約。前者はlayout優先とmetrics fallback、anchorX／anchorYのnullish判定を維持。後者は表示anchor・leader表示geometry・参照anchor・実効styleの4依存で、既存anchorPositionあり／captureなしでは保存座標だけを返し、未具体化またはcapture時は表示位置を読む。leaderは参照anchorまたはstartを基準にshelfScaleを逆適用しtextPlacementをanchorへ設定する。x／yとanchorPositionを書き込むのは既存anchorPositionがない場合だけで、styleを読む時機も同じ。appは早期生成される利用者へのhoisted入口を残し、履歴・UI・拘束確定は既存呼出し側へ維持する。

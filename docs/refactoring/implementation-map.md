@@ -1042,3 +1042,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/rendering/annotation_renderer.js: annotationPlacementAnchorが表示位置の読取りを所有する。src/commands/annotation_anchor_constraints.js: createMaterializationが座標の具体化と既存条件に応じたAnnotation更新を所有する。appは同じ入口を拘束／寸法／drag／Properties／snapへ接続し、capture・既存anchor保持・leaderの倍率逆変換の規則を重複実装しない。
+
+
+- src/geometry/geometry_kernel.js: arcEndpointDragValueが端点角の周回合わせとalmost-full-circleのsigned sweep制限を所有する。app内の同計算本体は撤去し、既存GeometryDragEditingの注入先へ同APIを接続する。開始／終了角の基準・符号・上限・非破壊性を維持する。
