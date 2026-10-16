@@ -1075,3 +1075,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/testing/constraint_test_driver.js: createStatusObservationは解析更新後の現在Sketchを照会ごとに一度取得し、同じSketchで全statusを絞り込む。照会間の状態交換を維持し、返却用itemsは独立させる。
 
 - src/editing/sketch_context.js: membershipQueryが正規化と所属の読取りを分ける。同じ所属resolverを共有し、現在Sketchへのfallbackを同期照会単位で捕捉する。src/constraints/constraint_analysis.jsは参照更新後、src/testing/constraint_test_driver.jsは解析更新後に取得し、appはreadSketchMembershipを両者へ接続する。Queryをscope切替後まで保存しない。
+
+- src/rendering/dimension_presentation.js: createLayer.drawはその描画内だけActive判定を共有し、sort comparatorと非active色判定でのSketch照会の重複を減らす。次の描画へ判定を保持せず、既存配列と安定した描画順を維持する。

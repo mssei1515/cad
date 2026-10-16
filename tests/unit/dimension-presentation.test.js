@@ -145,3 +145,32 @@ test('angle painter keeps span sign handling, outside shaft conversion/radius cl
   h.calls.length = 0; h.layout.radius = 0; h.painter.drawAngleDimension(target, dimension, 'a'); assert.equal(h.calls.at(-1)[1].arcExtension, 12 / 1e-12);
   h.calls.length = 0; h.state.outside = false; h.painter.drawAngleDimension(target, dimension, 'a'); payload = h.calls.at(-1)[1]; assert.equal(payload.arcExtension, 0); assert.equal(h.calls.some(c => c[0] === 'world'), false);
 });
+
+
+test('dimension traversal shares active queries within a draw and refreshes them for later draws and replacement objects', () => {
+  const a = { id: 'same', name: 'a', active: true }, b = { id: 'same', name: 'b', active: false };
+  const c = { name: 'c', active: true }, d = { name: 'd', active: false };
+  const original = [a, b, c, d], reads = new Map(), drawn = [];
+  let scope = { constraints: original };
+  const layer = sandbox.window.DimensionPresentation.createLayer({
+    ctx: { save() {}, restore() {} }, currentScope: () => scope,
+    isActiveSketchConstraint: item => { reads.set(item, (reads.get(item) || 0) + 1); return item.active; },
+    isVisibleSketchId: () => true, constraintSketchId: () => 'S1', targetFromConstraint: item => item,
+    defaultDimensionForTarget: () => ({}), effectiveDimensionAppearance: () => ({ visible: true }), isVisibleValue: value => value,
+    canvasSelection: { inspectionContains: () => false, constraintSelectedInCanvas: () => false },
+    readHoverDimension: () => null, readDraggedDimension: () => null, readPending: () => null, readExportFrame: () => null,
+    readConstraintStatus: () => true, inactiveColor: 'inactive', dimensionLabelForConstraint: item => item.name,
+    dimensionUsesExpression: () => false, drawDimension: (target, _dimension, _label, _preview, _highlight, _edit, color) => drawn.push([target, color]),
+  });
+  assert.equal(reads.size, 0); layer.draw();
+  assert.equal(scope.constraints, original); assert.deepEqual(original, [b, d, a, c]);
+  assert.deepEqual(drawn, [[b, 'inactive'], [d, 'inactive'], [a, null], [c, null]]);
+  for (const item of original) assert.equal(reads.get(item), 1);
+  a.active = false; b.active = true; drawn.length = 0; layer.draw();
+  assert.deepEqual(original, [d, a, b, c]);
+  assert.deepEqual(drawn, [[d, 'inactive'], [a, 'inactive'], [b, null], [c, null]]);
+  for (const item of original) assert.equal(reads.get(item), 2);
+  const replacement = { id: 'same', name: 'new', active: false };
+  scope = { constraints: [replacement] }; drawn.length = 0; layer.draw();
+  assert.equal(reads.get(replacement), 1); assert.deepEqual(drawn, [[replacement, 'inactive']]);
+});

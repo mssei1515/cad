@@ -8,6 +8,10 @@
 
 現在の統合済みコードはdevelop／origin/developの2fa864b（作業最終d66a231）。app.jsは3,652行で、数百行への全体目標は未完了。構文552ファイル・単体1,590件成功。全E2Eは583／584件成功（24.0分）し、航空機の全96経路は成功した。middle-button-panの性能超過1件は再確認でも失敗しており、main／origin/mainへの反映は保留。最新の再開地点と検証記録はrefactoring-policy-and-resume.mdのsection 8を参照する。
 
+### 寸法描画内のActive照会
+
+DimensionPresentationの同じdraw内で、同一constraint ObjectのActive判定を共有した。従来はsort comparatorと色判定からSketch照会を繰り返していた。必要時に取得し次のdrawでは再評価するため、scope切替・同一IDの別Object・Active変更を持ち越さない。既存配列へのin-place sort、非active→activeの安定順、可視性の短絡、PNGのflagsとCanvas保存／復元を維持する。app.jsは3,652→3,652行（0行変化）。構文552ファイル・単体1,591件・関連E2E129件成功（通常UI／寸法／PNG／描画順117件1.5分、性能12件48.1秒、パン161ms）。この単位では全E2E未実行。
+
 ### Sketch所属の正規化と照会
 
 SketchContext.membershipQueryが同期照会の入口で正規化を行い、現在Sketchと所属の読取りを返す。既存のelementSketchIdとresolverを共有し、照会をまたぐcacheや別の所属規則を持たない。ConstraintAnalysisは参照有効性の更新後、ConstraintTestDriverは解析更新後に取得し、appは生成済みAPIを接続する。app.jsは3,652→3,652行（0行変化）。構文552ファイル・単体1,590件・関連E2E168件が成功（通常UI／Block／対称拘束144件、権限11件、航空機1件9.2分、性能12件55.2秒）。航空機の全96経路・1,872previewが元の10分制限で成功し、性能基準も変更していない。この単位では全E2E未実行。
