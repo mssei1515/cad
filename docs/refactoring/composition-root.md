@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### ドラッグ検証用sample図面の所有
+
+sampleModelがGeometryDragTestDriver.createResponsiveFixtureだけから使われることを確認し、既存fixtureのresetへ図面生成を統合。4点・4線・距離二つ／平行二つ／直交一つの拘束、寸法既定値・求解／logからfit160→draw→履歴初期化→serializeまでを一つのテスト準備として所有する。生成・拘束／求解・履歴APIは明示portで受け、独自ルールや状態を持たない。旧生成bodyはindent以外一致。通常appの関数とfixtureからappへ戻るsample生成依存を撤去し、既存公開hook名と結果を維持する。
+
+app.jsは4,019→4,001行（18行減、b120651から合計142行減）。新scriptなし。既存geometry-drag-test-driver unitへ2件追加し、座標・固定状態と参照・拘束対象、効果と履歴の順序、再準備後のID／新Object、求解例外の伝播と後続省略を確認。構文545ファイル・単体1,522件・関連E2E122件成功（すべてexit 0、E2E2.4分）。公開hook利用先のadversarial-authoring-performance／view-visibility／toolbar-layout／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-responsive-drag-fixture-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はPropertiesパネルの表示／toggleとCanvas resizeの残るUI操作・listenerを調べ、既存CanvasWorkspaceLayoutへ責務を寄せる。
+
 ### Centerlineの生成接続
 
 BasicDrawingTools.createCenterlineへCenterlineGeometry／CenterlineConstruction／CenterlineCommandの三factoryの接続を集約。同じcommandを公開し、plan許容差、現在scope／Geometry／採番・snap拘束とcommit、preselection／guard／snap／preview／mode・表示の依存を明示する。各既存ownerのbody・stateと開始／確定／取消は変更しない。primitiveやSplineとは独立した入口に留め、巨大な統合stateやbuilderは持たない。

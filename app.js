@@ -1727,28 +1727,7 @@
   function hasActiveDrawOperation() { return drawOperationLifecycle.active(); }
   function cancelActiveDrawOperation() { return drawOperationLifecycle.cancel(); }
 
-  function sampleModel() {
-    resetModelState();
 
-    const A = addPoint(160, 160, true, "endpoint");
-    const B = addPoint(300, 180, false, "endpoint");
-    const C = addPoint(280, 290, false, "endpoint");
-    const D = addPoint(140, 270, false, "endpoint");
-    const AB = addLine(A, B);
-    const BC = addLine(B, C);
-    const CD = addLine(C, D);
-    const DA = addLine(D, A);
-
-    pushModelConstraint(new DistanceConstraint(A, B, 140));
-    pushModelConstraint(new DistanceConstraint(B, C, 100));
-    pushModelConstraint(new ParallelConstraint(AB, CD));
-    pushModelConstraint(new ParallelConstraint(BC, DA));
-    pushModelConstraint(new PerpendicularConstraint(AB, BC));
-    ensureDimensionDefaults();
-
-    solveAndRefresh("サンプル復元");
-    log("サンプルを復元しました");
-  }
 
   function resizeCanvas(...args) { return canvasWorkspaceLayout.resizeCanvas(...args); }
   function setPropertiesPanelCollapsed(...args) { return canvasWorkspaceLayout.setPropertiesPanelCollapsed(...args); }
@@ -3611,7 +3590,10 @@
     const fileObservation = window.DocumentTestDriver.createFileObservation({ fileSession });
     const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
     const sketchVisibilityObservation = window.SketchTreeTestDriver.createVisibilityObservation({ sketchById, serializeModel, isVisibleSketchId, document });
-    const responsiveDragFixture = window.GeometryDragTestDriver.createResponsiveFixture({ sampleModel, fitAllGeometryToViewport, draw, resetHistory, serializeModel });
+    const responsiveDragFixture = window.GeometryDragTestDriver.createResponsiveFixture({
+      resetModelState, addPoint, addLine, pushModelConstraint, DistanceConstraint, ParallelConstraint, PerpendicularConstraint,
+      ensureDimensionDefaults, solveAndRefresh, log, fitAllGeometryToViewport, draw, resetHistory, serializeModel,
+    });
     const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetTestSupport = window.OffsetTestDriver.createSupport({
       resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, currentScope: workspace.current,

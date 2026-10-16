@@ -1000,3 +1000,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/application/basic_drawing_tools.js: BasicDrawingTools.createCenterlineはCenterlineGeometry・CenterlineConstruction・CenterlineCommandの生成接続を担当し、元のcommand参照を返す。planに平行許容差、constructionに現在scope／Geometry／採番・snap拘束・commit、commandにSelection／guard／snap／preview・modeと表示更新を明示接続する。snap adapterは解決後のactive snapを返す。preselection／対象・端点stateはcommand、support計算はGeometry、部分rollbackはConstructionが保持する。各ownerのbody・開始／拒否・取消・確定方針や履歴を変更せず、新しい状態機械を持たない。
+
+
+- src/testing/geometry_drag_test_driver.js: GeometryDragTestDriver.createResponsiveFixtureはドラッグ応答検証用図面の生成を所有する。resetModelState後、既存addPoint／addLineで4点・4線を生成し、同じ参照を使う距離二つ・平行二つ・直交一つの拘束を既存push APIへ渡す。寸法既定値→solveAndRefresh（サンプル復元）→log→fit（padding160）→draw→fixture履歴初期化→serializeの順を保持し、serialization結果をそのまま返す。求解例外は後続fit・履歴初期化等へ進まず伝播する。生成値・ID・拘束計算は既存ownerへ委譲し、独自モデル／採番／solverは持たない。旧sampleModelは通常起動から撤去し、test query内だけでfixtureを生成する。

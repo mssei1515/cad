@@ -207,9 +207,30 @@
     return Object.freeze({ path });
   }
 
-  function createResponsiveFixture({ sampleModel, fitAllGeometryToViewport, draw, resetHistory, serializeModel }) {
+  function createResponsiveFixture({ resetModelState, addPoint, addLine, pushModelConstraint,
+    DistanceConstraint, ParallelConstraint, PerpendicularConstraint, ensureDimensionDefaults, solveAndRefresh, log,
+    fitAllGeometryToViewport, draw, resetHistory, serializeModel }) {
     function reset() {
-      sampleModel();
+      resetModelState();
+
+      const A = addPoint(160, 160, true, "endpoint");
+      const B = addPoint(300, 180, false, "endpoint");
+      const C = addPoint(280, 290, false, "endpoint");
+      const D = addPoint(140, 270, false, "endpoint");
+      const AB = addLine(A, B);
+      const BC = addLine(B, C);
+      const CD = addLine(C, D);
+      const DA = addLine(D, A);
+
+      pushModelConstraint(new DistanceConstraint(A, B, 140));
+      pushModelConstraint(new DistanceConstraint(B, C, 100));
+      pushModelConstraint(new ParallelConstraint(AB, CD));
+      pushModelConstraint(new ParallelConstraint(BC, DA));
+      pushModelConstraint(new PerpendicularConstraint(AB, BC));
+      ensureDimensionDefaults();
+
+      solveAndRefresh("サンプル復元");
+      log("サンプルを復元しました");
       fitAllGeometryToViewport(160);
       draw();
       resetHistory("responsive line drag test");

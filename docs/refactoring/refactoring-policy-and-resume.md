@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。基本作図とSplineに続き、Centerlineの三owner生成接続をBasicDrawingTools.createCenterlineへ集約。app.jsは4,143→4,019行（合計124行減、直近1行減）。構文545ファイル・単体1,520件・関連E2E133件成功。今回は全E2E未実行。最新週枠使用26%／残量74%。全体目標は未完了。次は利用先がGeometryDragTestDriver.createResponsiveFixtureだけのsampleModelを調べ、テスト用Geometry・拘束の初期化を既存fixtureへ寄せる。生成値・ID／Object参照・求解／通知／履歴順を維持する。各機能の依存を明示し、異なる操作を単一の巨大builderやstateへ押し込まない。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。作図command組立てに続き、テスト専用sampleModelを既存GeometryDragTestDriver.createResponsiveFixtureのresetへ統合。app.jsは4,143→4,001行（合計142行減、直近18行減）。構文545ファイル・単体1,522件・関連E2E122件成功。今回は全E2E未実行。最新週枠使用27%／残量73%。全体目標は未完了。次はPropertiesパネルの表示／toggleとCanvas resizeの残るUI操作・listenerを調べ、既存CanvasWorkspaceLayoutへ責務を寄せる。close context menu→現在center取得→resize、パネル展開→Properties更新→scroll初期化→hintの順序、DOM不在と初期化／listener登録時期を保持する。巨大contextや異なる操作の単一stateへの統合を避ける。
 
 ### 直前のリリース（2026-10-16）
 
