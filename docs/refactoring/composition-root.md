@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 基本作図command群の機能組立て
+
+BasicDrawingToolsへLine／Rectangle／Circular／Slotの六つのfactory生成接続と六つのclick入力を集約。GeometryCreation・採番・現在scope・DrawingSnap・SnapConstraints・Selection・preview・checkpointを明示接続し、共通preview callbackとsnap入力adapterを内部で共有する。四つのcommandは同じ参照、Line.clickは元の関数で公開し、残る入力はsnap解決→現在active snap→元commandメソッドの順を保持。各下書き・reset／取消・確定・求解／履歴を統一しない。Circular／Slotの生成を早めるが、既存factoryは生成時にモデルを触らず、後で初期化されるmutation checkpointには遅延callbackで接続する。巨大contextや独自状態は追加しない。
+
+app.jsは4,054→4,025行（29行減、b120651から合計118行減）。新classic scriptのindex／構文／E2E読込順とunit一覧を同期。新単体3件で同じcommand・geometry／Selection／checkpoint参照、入力のsnap解決後の値とreceiver・現在メソッド、共有previewとLine snap入力を確認。構文545ファイル・単体1,514件・loader1件・関連E2E168件成功（すべてexit 0、E2E2.3分）。unified-ui／slot-dimension／phase0-characterization／command-panel／blocksの全5fileを実行。ログは一時ディレクトリのcad-basic-drawing-tools-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はSpline／Centerlineの開始・取消とDrawOperationLifecycleへの接続を比較し、状態所有と依存を整理できる機能単位を選ぶ。異なる操作を単一の巨大builderへ押し込まない。
+
 ### Canvasからの式参照入力
 
 appのpickParameterDialogDimensionを既存ExpressionInputController.pickCanvasへ集約。Canvas／座標変換／寸法hit／注記hitの四つのportを加え、現在の入力先・namespace判定と挿入は同じowner内の既存処理を使う。Canvas範囲外での短絡と境界包含、activeOnly:false、寸法hit優先（挿入拒否時も注記へ進まない）、同じeventとworld座標、undefined返値を維持。早く生成するParameterEditorは遅延callbackで後のControllerへ接続する。新しいinput状態・Geometry／hit規則は持たない。

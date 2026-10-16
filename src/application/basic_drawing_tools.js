@@ -1,0 +1,47 @@
+/* Compose primitive drawing commands around shared geometry, snap and preview owners. */
+(() => {
+  "use strict";
+  function create({ geometry, ids, currentScope, snap, snapConstraints, snapForDrawing, endpointAt, samePosition,
+    transientAuthoring, pushModelConstraint, addConstraintIfMissing, minLineLength, minArcLength,
+    selection, preview, checkpoint, clearSelection, setHint, updateUI, draw, solveAndRefresh, log }) {
+    const { addPoint, addLine, addCircle, addArc } = geometry;
+    const { addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, addLineBoundarySnapConstraints } = snapConstraints;
+    const { clear: clearSnap } = snap;
+    const setPointerPreview = point => { preview.setPointer(point); };
+    const line = window.LineCommand.create({
+      minLineLength, snapForDrawing: point => ({ point: snapForDrawing(point), snap: snap.active }),
+      samePosition, addPoint, endpointAt, addLine, addPointSnapConstraints, pushModelConstraint, transientAuthoring,
+      selection, setPointerPreview, clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
+    });
+    const rectangle = window.RectangleCommand.create({
+      endpointAt, addPoint, addLine, addPointSnapConstraints, pushModelConstraint, minLineLength, samePosition,
+      selection, setPointerPreview, clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
+    });
+    const circularConstruction = window.CircularConstruction.create({
+      endpointAt, addPoint, addCircle, addArc, addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints,
+      currentScope, sequences: ids,
+    });
+    const circular = window.CircularCommands.create({
+      construction: circularConstruction, selection, minArcLength, setPointerPreview,
+      clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh,
+    });
+    const slotConstruction = window.SlotConstruction.create({
+      addPoint, addLine, addArc, addConstraintIfMissing, addPointSnapConstraints, addLineBoundarySnapConstraints,
+      snapshotGeometryMutationState: checkpoint.capture, restoreGeometryMutationState: checkpoint.restore, solveAndRefresh,
+    });
+    const slot = window.SlotCommand.create({
+      construction: slotConstruction, minLineLength, minArcLength, setPointerPreview,
+      clearSnap, clearSelection, setHint, updateUI, draw,
+    });
+    const input = Object.freeze({
+      line: line.click,
+      rectangle: point => { const snapped = snapForDrawing(point); rectangle.click(snapped, snap.active); },
+      circle: point => { const snapped = snapForDrawing(point); circular.clickCircle(snapped, snap.active); },
+      arc: point => { const snapped = snapForDrawing(point); circular.clickArc(snapped, snap.active); },
+      threePointArc: point => { const snapped = snapForDrawing(point); circular.clickThreePointArc(snapped, snap.active); },
+      slot: point => { const snapped = snapForDrawing(point); slot.click(snapped, snap.active); },
+    });
+    return Object.freeze({ line, rectangle, circular, slot, input });
+  }
+  window.BasicDrawingTools = Object.freeze({ create });
+})();

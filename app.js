@@ -834,19 +834,16 @@
   const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
   const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, addPoint, addConstraintIfMissing });
   const { addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, addLineBoundarySnapConstraints } = snapConstraints;
-  const lineCommand = window.LineCommand.create({
-    minLineLength: MIN_LINE_LENGTH, snapForDrawing: point => ({ point: snapForDrawing(point), snap: drawingSnap.active }),
-    samePosition, addPoint, endpointAt, addLine, addPointSnapConstraints, pushModelConstraint, transientAuthoring,
-    selection: canvasSelection, setPointerPreview: value => { drawingPreview.setPointer(value); },
+  const basicDrawingTools = window.BasicDrawingTools.create({
+    geometry: geometryCreation, ids: geometryIds, currentScope: workspace.current, snap: drawingSnap, snapConstraints,
+    snapForDrawing, endpointAt, samePosition, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
+    minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH, selection: canvasSelection, preview: drawingPreview,
+    checkpoint: { capture: (...args) => snapshotGeometryMutationState(...args), restore: (...args) => restoreGeometryMutationState(...args) },
     clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
   });
-  const { click: handleLineClick } = lineCommand;
-  const rectangleCommand = window.RectangleCommand.create({
-    endpointAt, addPoint, addLine, addPointSnapConstraints, pushModelConstraint,
-    minLineLength: MIN_LINE_LENGTH, samePosition, selection: canvasSelection,
-    setPointerPreview: value => { drawingPreview.setPointer(value); },
-    clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
-  });
+  const { line: lineCommand, rectangle: rectangleCommand, circular: circularCommands, slot: slotCommand } = basicDrawingTools;
+  const { line: handleLineClick, rectangle: handleRectangleClick, circle: handleCircleClick, arc: handleArcClick,
+    threePointArc: handleThreePointArcClick, slot: handleSlotClick } = basicDrawingTools.input;
   const offsetGeometry = window.OffsetGeometry.create({
     types: window.GeometrySolver, kernel: window.GeometryKernel, buildOffsetChainGeometry,
   });
@@ -1044,36 +1041,13 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
   });
   const { start: startCenterlineCommand, reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
-  const circularConstruction = window.CircularConstruction.create({
-    endpointAt, addPoint, addCircle, addArc, addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints,
-    currentScope: workspace.current, sequences: geometryIds,
-  });
-  const circularCommands = window.CircularCommands.create({
-    construction: circularConstruction, selection: canvasSelection, minArcLength: MIN_ARC_LENGTH,
-    setPointerPreview: point => { drawingPreview.setPointer(point); }, clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh,
-  });
   const { resetArcs: resetArcCommandState } = circularCommands;
-  function handleCircleClick(point) { const snapped = snapForDrawing(point); circularCommands.clickCircle(snapped, drawingSnap.active); }
-  function handleArcClick(point) { const snapped = snapForDrawing(point); circularCommands.clickArc(snapped, drawingSnap.active); }
-  function handleThreePointArcClick(point) { const snapped = snapForDrawing(point); circularCommands.clickThreePointArc(snapped, drawingSnap.active); }
-  const slotConstruction = window.SlotConstruction.create({
-    addPoint, addLine, addArc, addConstraintIfMissing, addPointSnapConstraints, addLineBoundarySnapConstraints,
-    snapshotGeometryMutationState, restoreGeometryMutationState, solveAndRefresh,
-  });
-  const slotCommand = window.SlotCommand.create({
-    construction: slotConstruction, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
-    setPointerPreview: point => { drawingPreview.setPointer(point); }, clearSnap, clearSelection, setHint, updateUI, draw,
-  });
   const authoringPreviewLayer = window.AuthoringPreviewRenderer.createLayer({
     renderer: authoringPreview, readMode: () => mode, readPointer: () => drawingPreview.pointer, readTrim: () => drawingPreview.trim,
     lineCommand, rectangleCommand, slotCommand, circularCommands, splineDraft, centerlineCommand, projectPointToCenterlineSupport,
     readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
   });
   const { reset: resetSlotCommandState } = slotCommand;
-  function handleSlotClick(point) {
-    const snapped = snapForDrawing(point);
-    slotCommand.click(snapped, drawingSnap.active);
-  }
   const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;
   const runtimeVersionView = window.RuntimeVersionView.create({ document, applicationText });
 
@@ -3132,10 +3106,7 @@
     constraint.target = Math.abs(angles.signed);
   }
 
-  function handleRectangleClick(point) {
-    const snapped = snapForDrawing(point);
-    rectangleCommand.click(snapped, drawingSnap.active);
-  }
+
 
 
   const { begin: beginBlockDrag } = window.GeometryDrag.createBlockEntry({

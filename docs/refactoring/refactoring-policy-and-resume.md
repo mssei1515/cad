@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。入力・drag・保存済み定義評価に続き、Canvas上の寸法／注記を式へ挿入する範囲判定とhit振分けをExpressionInputController.pickCanvasへ集約。app.jsは4,143→4,054行（合計89行減、直近5行減）。構文543ファイル・単体1,511件・関連E2E115件成功。今回は全E2E未実行。最新週枠使用25%／残量75%。全体目標は未完了。次は作図command群（Line／Rectangle／Slot／Circular等）の生成接続をまとまりとして確認し、既存commandが持つdraft・確定／取消とgeometry／snap／描画の依存を整理できる境界を選ぶ。生成順とlate constの参照時点、各commandの異なるreset／取消を維持する。巨大contextへまとめたり、行数だけの一括移動はしない。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。入力・drag・定義評価の整理に続き、Line／Rectangle／Circular／Slotの生成接続とsnap入力をBasicDrawingToolsへ集約。app.jsは4,143→4,025行（合計118行減、直近29行減）。構文545ファイル・単体1,514件・loader1件・関連E2E168件成功。今回は全E2E未実行。最新週枠使用25%／残量75%。全体目標は未完了。次はSpline／Centerlineの開始・取消とDrawOperationLifecycleへの接続を比較し、状態所有と依存を整理できる機能単位を選ぶ。各draftのresetとGeometry／snap／preview／checkpointの参照同一性、生成順とlate constの参照時点を維持する。異なる操作を単一の巨大builderへ押し込まない。
 
 ### 直前のリリース（2026-10-16）
 
