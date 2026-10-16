@@ -221,5 +221,22 @@
     }
     return Object.freeze({ begin: beginDerivedGeometryDrag });
   }
-  window.GeometryDrag = Object.freeze({ create, createDerivedEntry });
+  function createBlockEntry({ clearSelection, canvasSelection, buildDragSession, geometryDrag, setHint, updateUI, draw }) {
+    function begin(e, instance, pointer, rotate = false) {
+      clearSelection();
+      canvasSelection.set("blockInstances", [instance]);
+      const plan = buildDragSession(rotate ? "block-rotation" : "block", instance, pointer);
+      if (!geometryDrag.begin(e, plan)) {
+        setHint(rotate && instance.rotationLocked ? "回転がロックされたブロックインスタンスです" : "固定されたブロックインスタンスです", "error");
+        draw();
+        return;
+      }
+      setHint(rotate ? "ブロックを回転中" : "ブロックを移動中");
+      updateUI({ refreshAnalysis: false });
+      draw();
+    }
+    return Object.freeze({ begin });
+  }
+
+  window.GeometryDrag = Object.freeze({ create, createDerivedEntry, createBlockEntry });
 })();

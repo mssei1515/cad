@@ -78,3 +78,17 @@ test('document reset propagates command failure and leaves later owners untouche
   assert.throws(() => f.controller.resetForDocument(), error => error === marker);
   assert.deepEqual(f.calls, ['line', 'centerline', 'clearPoint', 'clearCompletion']);
 });
+
+
+test('Sketch switch resets only its ordered drawing input subset without rollback, selection, feedback or mode effects',()=>{
+ const f=fixture();f.deps.slot.firstCenter={id:'slot'};f.deps.centerline.targets=[{id:'target'}];f.deps.spline.points=[{id:'point'}];
+ const slot=f.deps.slot.firstCenter,targets=f.deps.centerline.targets,points=f.deps.spline.points;
+ assert.equal(f.controller.resetInputsForSketchChange(),undefined);
+ assert.deepEqual(f.calls,['line','rectangle','fillet','circle','arcs','preview','offset']);
+ assert.equal(f.deps.slot.firstCenter,slot);assert.equal(f.deps.centerline.targets,targets);assert.equal(f.deps.spline.points,points);
+});
+
+test('Sketch input reset errors propagate at the same boundary without resetting later owners or adding recovery',()=>{
+ const f=fixture(),error=new Error('circle reset');f.deps.circular.resetCircle=()=>{throw error;};
+ assert.throws(()=>f.controller.resetInputsForSketchChange(),value=>value===error);assert.deepEqual(f.calls,['line','rectangle','fillet']);
+});

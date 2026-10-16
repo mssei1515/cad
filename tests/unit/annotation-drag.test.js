@@ -117,3 +117,58 @@ test('coincident geometry drag delegates without starting a competing annotation
   command.begin({ pointerId: 1 }, { element: item, type: 'text', part: 'frame-enable' }, { x: 3, y: 4 });
   assert.equal(delegated, 1); assert.equal(command.handlesActive, true);
 });
+
+
+function constrainedFixture() {
+ const events=[],point={x:20,y:30},constraint={id:'aux'},variables=[{id:'x'},{id:'y'},{id:'radius'}];
+ const state={ready:false,scope:{points:[{id:'P1'}],constraints:[{id:'C1'}],annotations:[]},valid:true,plan:true,accepted:true,leaderAnchor:null,scale:2};
+ const geometry={point,constraints:[constraint],variables};let owner,plan;
+ const context={window:{AnnotationAnchorConstraints:{createDragGeometry(annotation,anchor,resolve){
+  events.push('geometry');assert.equal(anchor,annotation.anchor);assert.equal(resolve,state.resolve);return {...geometry,valid:state.valid};
+ }}}};vm.runInNewContext(fs.readFileSync('src/commands/annotation_drag.js','utf8'),context);
+ state.resolve=()=>null;
+ owner=context.window.AnnotationDrag.createConstrained({
+  currentScope:()=>{assert.equal(state.ready,true);return state.scope;},placementAnchor:annotation=>annotation.anchor,resolveGeometryRef:state.resolve,
+  buildPlan:(kind,target,pointer)=>{assert.equal(kind,'point');assert.equal(target,point);assert.equal(owner.scope().points.at(-1),point);events.push('plan');
+   plan={pointer};return state.plan?plan:null;},
+  beginGeometryDrag:(event,value)=>{assert.equal(value,plan);assert.equal(owner.scope().points.at(-1),point);events.push('begin');return state.accepted;},
+  leaderDisplay:()=>({shelfScale:state.scale}),leaderAnchor:()=>state.leaderAnchor,
+  invalidateAnalysis:()=>{assert.equal(owner.scope(),state.scope);events.push('invalidate');},
+  applicationText:jp=>jp,setHint:(message,type)=>events.push(['hint',type]),updateUI:()=>events.push('ui'),draw:()=>events.push('draw'),
+ });
+ state.ready=true;return {owner,state,events,geometry,point,constraint,variables,get plan(){return plan;}};
+}
+
+test('constrained annotation drag exposes current auxiliary scope and variables only during its lifecycle',()=>{
+ const f=constrainedFixture(),scope=f.state.scope,annotation={type:'text',anchorConstraints:[{type:'coincident'}],anchor:{x:1,y:2}},pointer={x:4,y:5};
+ assert.deepEqual(f.events,[]);assert.equal(f.owner.scope(),scope);assert.equal(f.owner.additionalVariables().length,0);
+ assert.equal(f.owner.begin({pointerId:1},annotation,pointer),true);assert.equal(f.plan.pointer,pointer);
+ const augmented=f.owner.scope();assert.notEqual(augmented,scope);assert.equal(augmented.annotations,scope.annotations);assert.equal(augmented.points[0],scope.points[0]);
+ assert.equal(augmented.points.at(-1),f.point);assert.equal(augmented.constraints.at(-1),f.constraint);assert.equal(scope.points.length,1);assert.equal(scope.constraints.length,1);
+ const extra=f.owner.additionalVariables();assert.equal(extra.length,1);assert.equal(extra[0],f.variables[2]);assert.notEqual(extra,f.owner.additionalVariables());
+ f.state.scope={points:[],constraints:[]};assert.equal(f.owner.scope().points.length,1);
+ f.point.x=44;f.point.y=55;f.plan.syncAnnotation();assert.equal(annotation.x,44);assert.equal(annotation.y,55);
+ f.events.length=0;f.plan.onEnd();assert.deepEqual(f.events,['invalidate','ui','draw']);assert.equal(f.owner.scope(),f.state.scope);assert.equal(f.owner.additionalVariables().length,0);
+});
+
+test('unconstrained, fixed and unresolved anchors preserve interception results without plan or state changes',()=>{
+ const f=constrainedFixture();assert.equal(f.owner.begin({},{}),false);assert.deepEqual(f.events,[]);
+ assert.equal(f.owner.begin({},{anchorConstraints:[{type:'fixed'}]}),true);assert.equal(f.events[0][0],'hint');assert.equal(f.events[0][1],'error');
+ f.events.length=0;f.state.valid=false;assert.equal(f.owner.begin({},{anchorConstraints:[{type:'coincident'}],anchor:{}}),true);
+ assert.deepEqual(f.events.map(e=>Array.isArray(e)?e[0]:e),['geometry','hint']);assert.equal(f.owner.scope(),f.state.scope);
+});
+
+test('missing plan and rejected geometry begin release auxiliary state without display or analysis updates',()=>{
+ for(const mode of ['plan','accepted']){
+  const f=constrainedFixture();f.state[mode]=false;
+  assert.equal(f.owner.begin({},{anchorConstraints:[{type:'coincident'}],anchor:{}}),true);
+  assert.equal(f.owner.scope(),f.state.scope);assert.equal(f.owner.additionalVariables().length,0);
+  assert.deepEqual(f.events,mode==='plan'?['geometry','plan']:['geometry','plan','begin']);
+ }
+});
+
+test('leader synchronization uses current display scale and resolved anchor with existing start fallback',()=>{
+ const f=constrainedFixture(),annotation={type:'leader',anchorConstraints:[{type:'coincident'}],anchor:{},start:{x:10,y:12}};
+ f.owner.begin({},annotation,{});f.plan.syncAnnotation();assert.equal(annotation.x,15);assert.equal(annotation.y,21);
+ f.state.leaderAnchor={x:4,y:6};f.state.scale=4;f.plan.syncAnnotation();assert.equal(annotation.x,14);assert.equal(annotation.y,18);
+});

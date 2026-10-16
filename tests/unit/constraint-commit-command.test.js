@@ -16,12 +16,14 @@ function fixture() {
   constraintSketchId: c => c.sketchId, lineCollapseQuery: { find: () => state.collapse }, redundantConstraintInfo: () => state.duplicate, acceptError: 0.001,
   targetFromConstraint: c => { assert.equal(model.constraints.length, 0); events.push('readOnly'); return state.target; },
   measuredConstraintTargetValue: (...args) => { state.measurementArgs=args; return state.measured; },
-  startDistanceResolution: (resolution,pointer) => { events.push('place');state.placement={resolution,pointer};return true; },
+  startDistanceResolution: (resolution,pointer) => { events.push('place');state.placement={resolution,pointer};return Object.hasOwn(state,"placementReturn") ? state.placementReturn : true; },
   distanceConstraintFromTarget: (...args) => { state.creationArgs=args;return state.constructionRejected?null:constraint; },
   clearSelection: () => events.push('clear'), refreshConstraintAnalysis: () => events.push('analysis'), updateUI: () => events.push('ui'), draw: () => events.push('draw'),
   setHint: (text, kind) => { hints.push([text, kind]); events.push('hint'); }, log: () => events.push('log'), recordHistory: text => { state.history.push(text);events.push('history'); },
   applicationText: text => text, isReferenceSourceSketchId: () => state.source, descendantSketchIds: () => [], wouldCreateReferenceCycle: () => state.cycle,
   sketchName: id => id, now: () => ++time, recordPerformance: trace => { state.trace = trace; events.push('performance'); },
+  resolveSelection: type => { events.push('resolve'); state.requestedType=type; return state.resolution; },
+  canvasSelection: { set: (field,value) => { assert.equal(field,'arcEndpointPair'); state.arcEndpointPair=value; events.push('selection'); } },
  });
  return { command, model, state, events, hints, result, constraint };
 }
@@ -87,4 +89,29 @@ test('dimension commit preserves constructor arguments, expression fallback and 
  const fallback=fixture();fallback.command.dimension(target,5,dimension,{expression:''});assert.equal(fallback.constraint.expression,'5');
  const ref=fixture();assert.equal(ref.command.dimension(target,5,dimension,{referenceSketchId:'S0'}),true);assert.equal(ref.constraint.expression,undefined);assert.equal(ref.constraint.referenceSketchId,'S0');
  const rejected=fixture();rejected.state.constructionRejected=true;assert.equal(rejected.command.dimension(target,5,dimension),false);assert.deepEqual(rejected.events,[]);
+});
+
+
+test('selection application short-circuits empty and error resolutions before selection, guards or effects',()=>{
+ const f=fixture();assert.deepEqual(f.events,[]);assert.equal(f.command.fromSelection('parallel'),undefined);
+ assert.deepEqual(f.events,['resolve']);assert.equal(f.state.requestedType,'parallel');
+ f.events.length=0;f.state.resolution={error:'invalid target',target:{},constraint:f.constraint};
+ assert.equal(f.command.fromSelection('equal'),undefined);assert.deepEqual(f.events,['resolve','hint']);assert.deepEqual(f.hints,[['invalid target','error']]);
+ f.events.length=0;f.state.resolution={};f.command.fromSelection('parallel');assert.deepEqual(f.events,['resolve']);
+});
+
+test('selection application routes dimension action or target before ordinary commit and preserves resolution and raw return',()=>{
+ for(const resolution of [{action:'place-dimension',constraint:{}},{target:{},constraint:{}}]){
+  const f=fixture();f.state.editable=false;f.state.resolution=resolution;f.state.placementReturn={placed:true};
+  assert.equal(f.command.fromSelection('distance'),f.state.placementReturn);assert.equal(f.state.placement.resolution,resolution);assert.equal(f.state.placement.pointer,null);
+  assert.deepEqual(f.events,['resolve','place']);assert.equal(f.model.constraints.length,0);assert.deepEqual(f.state.history,[]);
+ }
+});
+
+test('ordinary selection application clears arc pair before commit while retaining guard result semantics and undefined return',()=>{
+ const f=fixture();f.state.arcEndpointPair={endpoint:'start'};f.state.resolution={type:'parallel',constraint:f.constraint,sketchId:'S1'};
+ assert.equal(f.command.fromSelection('parallel'),undefined);assert.equal(f.state.arcEndpointPair,null);assert.equal(f.model.constraints[0],f.constraint);
+ assert.deepEqual(f.events.slice(0,2),['resolve','selection']);assert.equal(f.state.history.at(-1),'拘束追加: parallel');
+ const denied=fixture();denied.state.editable=false;denied.state.resolution={constraint:denied.constraint};
+ assert.equal(denied.command.fromSelection('parallel'),undefined);assert.equal(denied.state.arcEndpointPair,null);assert.deepEqual(denied.events,['resolve','selection']);assert.equal(denied.model.constraints.length,0);
 });

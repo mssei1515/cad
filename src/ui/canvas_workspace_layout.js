@@ -2,7 +2,8 @@
 (() => {
   "use strict";
   function create({ canvas, document, viewport, syncCanvasBitmapSize, applySketchTreeWidth, draw,
-    isValueInputPending, syncDimensionValueInput, currentCanvasCenterWorld, applicationText, readLanguage }) {
+    isValueInputPending, syncDimensionValueInput, currentCanvasCenterWorld, applicationText, readLanguage,
+    window: browserWindow, updatePropertiesUI, setHint, closeContextMenu }) {
     function resizeCanvas(options = {}) {
       const rect = canvas.getBoundingClientRect();
       syncCanvasBitmapSize(rect.width, rect.height);
@@ -29,7 +30,40 @@
       button.title = actionLabel;
       resizeCanvas({ centerWorld });
     }
-    return Object.freeze({ resizeCanvas, setPropertiesPanelCollapsed });
+    function showSelectedObjectProperties() {
+      setPropertiesPanelCollapsed(false);
+      updatePropertiesUI();
+      const panel = document.getElementById("propertiesPanel");
+      if (panel) panel.scrollTop = 0;
+      setHint(applicationText("選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."));
+    }
+    function togglePropertiesPanel() {
+      const workspace = document.querySelector(".workspace");
+      setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));
+    }
+    function onResize() {
+      closeContextMenu();
+      resizeCanvas({ centerWorld: currentCanvasCenterWorld() });
+    }
+    let controlsBound = false, windowBound = false, toggleButton = null;
+    function bindControls() {
+      if (controlsBound) return;
+      controlsBound = true;
+      toggleButton = document.getElementById("togglePropertiesPanelBtn");
+      toggleButton?.addEventListener("click", togglePropertiesPanel);
+    }
+    function bindWindow() {
+      if (windowBound) return;
+      windowBound = true;
+      browserWindow.addEventListener("resize", onResize);
+    }
+    function dispose() {
+      toggleButton?.removeEventListener("click", togglePropertiesPanel);
+      if (windowBound) browserWindow.removeEventListener("resize", onResize);
+      controlsBound = windowBound = false;
+      toggleButton = null;
+    }
+    return Object.freeze({ resizeCanvas, setPropertiesPanelCollapsed, showSelectedObjectProperties, bindControls, bindWindow, dispose });
   }
   window.CanvasWorkspaceLayout = Object.freeze({ create });
 })();

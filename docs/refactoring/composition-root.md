@@ -8,6 +8,126 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 既存端点の解決とendpoint生成
+
+endpointAtを既存GeometryCreation.createEndpointResolverへ集約。hit端点の同一参照優先→explicit Pointの現在座標で新endpoint→入力座標でendpoint生成という順序・引数を保持し、後続のhit queryには遅延callbackで接続する。既存採番／Sketch付与／scopeはaddPointへ、hit方針はGeometryHitQueryへ委譲。app内だけの未使用pointAtと未使用hitAnyPoint aliasを参照監査後に撤去した。新しいhit規則やPoint共有／固定の変更は加えない。
+
+app.jsは3,956→3,949行（7行減、b120651から合計194行減）。新scriptなし。既存geometry-creation unitへ3件追加し、既存端点の同一性と無採番、explicitと別Object／固定状態・kind・所属、現在scope／IDと引数順を確認。構文546ファイル・単体1,542件・関連E2E154件成功（すべてexit 0、E2E2.2分）。unified-ui／spline／centerline／blocksの全4fileを実行。ログは一時ディレクトリのcad-endpoint-resolution-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は分離後に残った未参照の旧入口を監査する。Playwright同梱babelBundleのbabelParse(code,filename,false)とtraverseでapp IIFE scopeを調べ、未参照140binding中FunctionDeclaration候補16件を確認済み。変数initializerの副作用と区別し、自動一括削除せず関数／依存を現物で検証する。
+
+### 寸法dragの角度constraint同期
+
+DimensionDragだけが使うsyncAngleConstraintFromDimensionを同moduleのcreateAngleSynchronizationへ集約。三つの明示依存で型／target kind／dimension有無→readonly→既存角度計算→現在flip flags→target絶対値の順を保持し、既存dragの同期portへ接続する。新しい寸法計算や状態、guard／求解・履歴・例外回復は追加しない。
+
+app.jsは3,960→3,956行（4行減、b120651から合計187行減）。新scriptなし。既存dimension-drag unitへ3件追加し、対象外の短絡・readonly無変更、同じtarget／dimensionとnull pointer、角度計算後のfield更新順、同一計算例外と値の保持を確認。構文546ファイル・単体1,539件・関連E2E121件成功（すべてexit 0、E2E1.7分）。multiple-dimensions／dimension-prefix／annotation-display-size／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-dimension-angle-sync-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はendpointAtの既存端点優先／explicit Pointからのendpoint生成と、GeometryCreation・hit queryの責務を確認する。未使用のpointAtも参照を監査し、生成規則・ID・参照を変えずに整理する。
+
+### 選択解決からの拘束適用
+
+Toolbarと対象選択から使うaddConstraintの振分けを既存ConstraintCommitCommand.fromSelectionへ集約。SelectionQueryのresolutionとCanvasSelectionを明示portで受け、結果なし／errorの短絡、action／targetの寸法配置優先、同じresolution・null pointer・配置戻り値、通常constraintのarc pair解除→既存確定とundefined返値を維持する。既存guard／求解／回復・履歴は変更せず、新しい適用ルールを追加しない。appは先に生成する対象選択command用のhoisted delegateを残す。
+
+app.jsは3,970→3,960行（10行減、b120651から合計183行減）。新scriptなし。既存constraint-commit-command unitへ3件追加し、解決なし／errorの無変更、寸法優先・参照／戻り値、通常確定成功と拒否時のarc pair解除順・undefined返値を確認。構文546ファイル・単体1,536件・関連E2E146件成功（すべてexit 0、E2E2.5分）。unified-ui／head-symmetry／multiple-dimensions／bolt-diameter／command-panelの全5fileを実行。ログは一時ディレクトリのcad-selection-constraint-application-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は寸法drag時の角度constraint同期（syncAngleConstraintFromDimension）の利用と既存DimensionDrag／寸法計算ownerを確認し、readonly拒否・flip／target更新の責務を整理する。
+
+### Sketch切替の操作状態調整
+
+SketchCommand.createInteractionResetへclearInteractionForSketchChangeの残る解除調整を集約。移動reset→Selection→drag／画像／矩形→作図下書き→pending／拘束→投影／Instance sources→hover／pointer／値入力→snap→mode→Toolbarの順序と各ownerの異なる入口を保つ。後続のGeometry／Dimension dragとnullableな移動commandは遅延callbackで参照し、履歴復元等へ渡すappのhoisted入口も維持する。bodyは明示capabilityへの置換以外一致。独自state・一般化したreset／rollback・例外後の強制復旧は追加しない。
+
+app.jsは3,980→3,970行（10行減、b120651から合計173行減）。新scriptなし。既存sketch-command unitへ3件追加し、解除順とhover限定更新、pointer／input／modeの明示操作、late／nullable ownerの現在値参照、同じ例外と後続省略を確認。構文546ファイル・単体1,533件・関連E2E193件成功（すべてexit 0、E2E2.7分）。blocks／sketch-tree-visibility／sketch-move／phase0-characterization／unified-uiの全5fileを実行。ログは一時ディレクトリのcad-sketch-interaction-reset-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はaddConstraintの選択resolution→寸法配置／通常拘束確定の振分けと、ConstraintControlCommand／ConstraintCommitCommand／SelectionQueryの役割を確認する。既存guard・error／hint・arc endpoint pair解除と戻り値を保って所有者を選ぶ。
+
+### Sketch切替の作図入力reset
+
+clearInteractionForSketchChange内の連続する七つの作図resetを既存DrawOperationLifecycle.resetInputsForSketchChangeへ集約。追加依存なしで既存Line／Rectangle／Fillet／Circular／preview／Offsetのownerを利用し、順序を保持する。Document reset／通常cancelへ統一せず、元から対象でないSlot／Centerline／Spline／Hatchやrollbackを追加しない。前後のdrag・Selection、pending／constraint／instance／pointer／mode／Toolbar更新は元の位置に残す。
+
+app.jsは3,986→3,980行（6行減、b120651から合計163行減）。新scriptなし。既存draw-operation-lifecycle unitへ2件追加し、限定reset順・他ownerの参照保持と無通知、途中例外の同一伝播と後続省略を確認。構文546ファイル・単体1,530件・関連E2E172件成功（すべてexit 0、E2E2.5分）。blocks／sketch-tree-visibility／sketch-move／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-sketch-change-drawing-reset-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はclearInteractionForSketchChangeに残る操作状態の調整を既存SketchCommandの役割と照合する。dragやpointer等の後続初期化を遅延参照し、対象と順序を保って生成接続を整理する。
+
+### Sketch移動中のTree外入力抑止
+
+既存SketchTreeController.createMoveInputBindingへ移動中のdocument capture受付を集約。documentとisMovingの二portだけを受け、六eventの登録順、inactive時の短絡、Tree／resize handle許可、preventDefault→stopImmediatePropagationを維持。appは元の登録位置でbindし、二重登録防止・自己listenerだけのdispose／再bindを持つ。commandのstateや選択／移動／履歴を所有せず、Keyboardの別経路は変更しない。
+
+app.jsは3,990→3,986行（4行減、b120651から合計157行減）。新scriptなし。新sketch-tree-input-binding単体fileを構文／unit一覧へ追加。3件でcapture登録と順序・生成／登録時無照会、live状態と許可領域／抑止順、外部listener保持と再bindを確認。構文546ファイル・単体1,528件・関連E2E111件成功（すべてexit 0、E2E1.6分）。sketch-move／unified-uiの全2fileを実行。ログは一時ディレクトリのcad-sketch-move-input-binding-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はclearInteractionForSketchChange内の作図下書きresetを既存DrawOperationLifecycleの所有と照合する。Document reset／通常cancelとは対象と順序が異なるため、単一resetに統一せず限定した入口を検討する。
+
+### Properties表示とCanvas resizeのUI寿命
+
+既存CanvasWorkspaceLayoutへ選択Propertiesの表示操作とtoggle／window resizeのlistener寿命を集約。パネル展開→Properties更新→現在panelの再取得とscroll初期化→hint、context menu解除→現在world中心→既存resizeの順を保持する。bindControls／bindWindowを元の起動位置へ接続し、二重登録防止・自己listenerだけのdispose／再bindを実装。DOM不在時のパネル無変更と、Properties更新／hintを継続する元の範囲を維持する。model・Selection・履歴を別に所有しない。
+
+app.jsは4,001→3,990行（11行減、b120651から合計153行減）。新scriptなし。既存canvas-workspace-layout unitへ3件追加し、更新後panelの参照、中心保持・menu解除後のlive中心、現在classと登録寿命、外部listener保持、DOM不在の通知を確認。構文545ファイル・単体1,525件・関連E2E149件成功（すべてexit 0、E2E2.1分）。blocks／canvas-zoom-input／toolbar-layout／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-workspace-layout-binding-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はSketch移動先選択中にTree外入力を抑止するdocument capture listenerを調べ、Sketch Tree／移動UIの所有者へ寄せる。対象六eventと許可領域、stopImmediatePropagationと登録順を保つ。
+
+### ドラッグ検証用sample図面の所有
+
+sampleModelがGeometryDragTestDriver.createResponsiveFixtureだけから使われることを確認し、既存fixtureのresetへ図面生成を統合。4点・4線・距離二つ／平行二つ／直交一つの拘束、寸法既定値・求解／logからfit160→draw→履歴初期化→serializeまでを一つのテスト準備として所有する。生成・拘束／求解・履歴APIは明示portで受け、独自ルールや状態を持たない。旧生成bodyはindent以外一致。通常appの関数とfixtureからappへ戻るsample生成依存を撤去し、既存公開hook名と結果を維持する。
+
+app.jsは4,019→4,001行（18行減、b120651から合計142行減）。新scriptなし。既存geometry-drag-test-driver unitへ2件追加し、座標・固定状態と参照・拘束対象、効果と履歴の順序、再準備後のID／新Object、求解例外の伝播と後続省略を確認。構文545ファイル・単体1,522件・関連E2E122件成功（すべてexit 0、E2E2.4分）。公開hook利用先のadversarial-authoring-performance／view-visibility／toolbar-layout／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-responsive-drag-fixture-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はPropertiesパネルの表示／toggleとCanvas resizeの残るUI操作・listenerを調べ、既存CanvasWorkspaceLayoutへ責務を寄せる。
+
+### Centerlineの生成接続
+
+BasicDrawingTools.createCenterlineへCenterlineGeometry／CenterlineConstruction／CenterlineCommandの三factoryの接続を集約。同じcommandを公開し、plan許容差、現在scope／Geometry／採番・snap拘束とcommit、preselection／guard／snap／preview／mode・表示の依存を明示する。各既存ownerのbody・stateと開始／確定／取消は変更しない。primitiveやSplineとは独立した入口に留め、巨大な統合stateやbuilderは持たない。
+
+app.jsは4,020→4,019行（1行減、b120651から合計124行減）。行数効果は小さいが、三ownerの対応を組立てmodule側へ寄せた。新scriptなし。既存basic-drawing-tools unitへ実際のCenterline Geometry／Construction／Commandを使う3件を追加し、preselected対象の同一参照・support投影と構築、拒否時の配列長／採番復元と入力保持、既存command取消後の作図先拒否を確認。構文545ファイル・単体1,520件・関連E2E133件成功（すべてexit 0、E2E1.8分）。centerline／command-panel／phase0-characterization／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-centerline-drawing-tools-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は利用先がGeometryDragTestDriver.createResponsiveFixtureだけのsampleModelを調べ、テスト用Geometry・拘束の初期化を既存fixtureへ寄せる。生成値・ID／Object参照・求解／通知／履歴順を維持する。
+
+### Spline下書きと作図commandの組立て
+
+SplineとCenterlineの開始・取消を比較し、まず共有draftを持つSplineの生成接続を既存BasicDrawingTools.createSplineへ集約。SplineDraftの生成をcommand生成位置へ移し、同じdraft／commandを描画・取消・入力へ公開する。投影reset、preview更新、作成Spline選択→mode selectのadapterを内部接続し、後続のSpline編集／blank gestureのresetは遅延callbackで維持。既存draftとcommandの処理本体は変更せず、reset・cancelとrollback、guard・確定・履歴を各ownerへ残す。Centerlineやprimitive toolsと単一の状態機械には統合しない。
+
+app.jsは4,025→4,020行（5行減、b120651から合計123行減）。新scriptなし。既存basic-drawing-tools unitへ実際のSplineDraft／SplineCommandを使う3件を追加し、生成時無照会・開始拒否、点の参照共有・確定時copyと選択→mode→solve／履歴順、取消時の一時点／採番復元を確認。構文545ファイル・単体1,517件・関連E2E133件成功（すべてexit 0、E2E1.8分）。spline／command-panel／phase0-characterization／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-spline-drawing-tools-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はCenterlineのGeometry plan／construction／command生成とpreselection・開始・取消の依存を確認し、既存ownerを保った組立て境界を整理する。
+
+### 基本作図command群の機能組立て
+
+BasicDrawingToolsへLine／Rectangle／Circular／Slotの六つのfactory生成接続と六つのclick入力を集約。GeometryCreation・採番・現在scope・DrawingSnap・SnapConstraints・Selection・preview・checkpointを明示接続し、共通preview callbackとsnap入力adapterを内部で共有する。四つのcommandは同じ参照、Line.clickは元の関数で公開し、残る入力はsnap解決→現在active snap→元commandメソッドの順を保持。各下書き・reset／取消・確定・求解／履歴を統一しない。Circular／Slotの生成を早めるが、既存factoryは生成時にモデルを触らず、後で初期化されるmutation checkpointには遅延callbackで接続する。巨大contextや独自状態は追加しない。
+
+app.jsは4,054→4,025行（29行減、b120651から合計118行減）。新classic scriptのindex／構文／E2E読込順とunit一覧を同期。新単体3件で同じcommand・geometry／Selection／checkpoint参照、入力のsnap解決後の値とreceiver・現在メソッド、共有previewとLine snap入力を確認。構文545ファイル・単体1,514件・loader1件・関連E2E168件成功（すべてexit 0、E2E2.3分）。unified-ui／slot-dimension／phase0-characterization／command-panel／blocksの全5fileを実行。ログは一時ディレクトリのcad-basic-drawing-tools-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はSpline／Centerlineの開始・取消とDrawOperationLifecycleへの接続を比較し、状態所有と依存を整理できる機能単位を選ぶ。異なる操作を単一の巨大builderへ押し込まない。
+
+### Canvasからの式参照入力
+
+appのpickParameterDialogDimensionを既存ExpressionInputController.pickCanvasへ集約。Canvas／座標変換／寸法hit／注記hitの四つのportを加え、現在の入力先・namespace判定と挿入は同じowner内の既存処理を使う。Canvas範囲外での短絡と境界包含、activeOnly:false、寸法hit優先（挿入拒否時も注記へ進まない）、同じeventとworld座標、undefined返値を維持。早く生成するParameterEditorは遅延callbackで後のControllerへ接続する。新しいinput状態・Geometry／hit規則は持たない。
+
+app.jsは4,059→4,054行（5行減、b120651から合計89行減）。新scriptなし。既存expression-input-controller unitへ3件追加し、範囲外の無照会、境界・寸法優先と拒否時短絡、注記fallbackと同じevent／座標／optionsを確認。構文543ファイル・単体1,511件・関連E2E115件成功（すべてexit 0、E2E1.7分）。parameter-dialog-controller／free-text-input-drag／unified-uiの全3fileを実行。ログは一時ディレクトリのcad-expression-canvas-picker-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は作図command群（Line／Rectangle／Slot／Circular等）の生成接続をまとまりとして確認し、既存commandが持つdraft・確定／取消とgeometry／snap／描画の依存を整理できる境界を選ぶ。巨大contextへまとめたり、行数だけの一括移動はしない。
+
+### 保存済みBlock定義のParameter評価scope
+
+ParameterStabilization.createStoredDefinitionへ保存済み定義の評価とscope復帰を集約。appのwithStoredDefinitionAsModel／stabilizeStoredBlockDefinitionを撤去し、Parameter適用とBlock依存伝播は同じstabilize入口を使う。五つの明示依存で現在scopeの同一参照、定義切替後のactive Sketch／描画Sketch照会、finallyでHatch採番最大値を保存してから前scope復帰、結果・例外の透過、入れ子評価の直前scope復帰を保持。新しいscopeスタック・採番・回復規則は追加しない。既存activateEditingScopeのmenu・Solver・cache更新を利用する。
+
+app.jsは4,068→4,059行（9行減、b120651から合計84行減）。新scriptなし。既存parameter-stabilization unitへ3件追加し、生成時無照会、返値／参照、採番最大値と順序、評価例外後の復帰・同一例外伝播、入れ子評価を確認。構文543ファイル・単体1,508件・関連E2E161件成功（すべてexit 0、E2E2.3分）。blocks／parameter-dialog-controller／hatching／dimension-prefix／unified-uiの全5fileを実行。ログは一時ディレクトリのcad-stored-definition-stabilization-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はParameter dialogからCanvas上の寸法／注記をクリックして式へ挿入する入力経路を確認し、ExpressionInputControllerとParameterEditorの境界へ寄せる。
+
+### 投影テスト専用の選択外観変更
+
+appのsetAppearanceForSelectionの利用先を調査し、SketchProjectionTestDriverのテスト操作だけが使用することを確認。既存PropertiesTestDriver.createAppearanceActionへ六つの明示依存で移し、test query guard内で生成して同じsetter portへ接続する。現在の対象／key、patch merge→normalize→field置換、Blockだけcache無効化、Properties→draw→履歴、対象なしfalseを保持。処理bodyは関数名・indent以外一致。製品用commandにテスト操作を混ぜず、通常起動の生成をなくした。
+
+app.jsは4,074→4,068行（6行減、b120651から合計75行減）。新scriptなし。単体3件で生成時無照会・対象なし、live対象／keyとnormalize結果、元値／patchの保持、Block cacheと通知順、normalize例外時無変更を確認。単体fileを構文／unit一覧へ追加。既存互換性driver E2Eに投影リンク維持・外観反映・Undo一段の検証を追加し、単独1件成功。構文543ファイル・単体1,505件・関連E2E126件成功（すべてexit 0、E2E1.7分）。sketch-projection／sketch-projection-compatibility-driver／unified-uiの全3fileを実行。ログは一時ディレクトリのcad-test-appearance-action-{check,unit,focused,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は保存済みBlock定義のParameter安定化で行う編集scope一時切替と復帰、Hatch採番の保存を調べる。
+
+### Block drag開始入口の所有
+
+GeometryDrag.createBlockEntryへBlockの選択・plan生成・開始拒否・hint／表示更新を集約。七つの明示依存で既存plan／GeometryDragへ接続し、同じInstance／pointer／event／plan参照、移動と回転、選択後の拒否、回転lock別通知、成功時だけ解析なしUI更新→drawを保持する。planなしも既存beginへ委譲する。旧開始bodyと名前・indent以外一致。session／Solver／履歴は既存ownerのままで、独自状態や権限規則を追加しない。
+
+app.jsは4,084→4,074行（10行減、b120651から合計69行減）。新scriptなし。既存geometry-drag unitへ3件追加し、同一参照と順序、移動／回転、拒否時の選択保持と通知・描画、null plan委譲を確認。構文542ファイル・単体1,502件・関連E2E146件成功（すべてexit 0、E2E2.1分）。blocks／fixed-command／unified-uiの全3fileを実行。ログは一時ディレクトリのcad-block-drag-entry-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はappに残る直接モデル更新の利用先と責務を調べる。特にsetAppearanceForSelectionはテストfixtureからの利用であり、製品commandへ無理に混ぜずPropertiesTestDriverとの境界を確認する。
+
+### 拘束付き注記dragの補助Solver状態
+
+既存AnnotationDrag.createConstrainedへ一時Geometryとbegin・補助scope・追加変数を集約。appのannotationSolveDrag変数と開始処理を撤去し、Solverと注記dragが同じ所有者を参照する。現在scopeのObject同一性、拡張時の各要素参照・先頭二変数を除くslice、無拘束false／固定・未解決true、planなし／開始拒否時の解除、終了→解析無効化→UI→draw、引出線の実効anchor／表示倍率を保持する。後に初期化されるplan／GeometryDrag／描画／解析への依存は操作時のcallbackとし、生成時には照会しない。既存AnnotationDrag本体は完全一致、拘束付きbeginも依存名置換とindent以外一致。保存配列へ補助Geometryを追加せず、独自resetや例外復元の変更を混ぜない。
+
+app.jsは4,101→4,084行（17行減、b120651から合計59行減）。新scriptなし。既存annotation-drag unitへ4件追加し、補助scopeと変数の参照・live scope、拒否時の無変更、plan／begin拒否の解除、終了順とtext／leader座標反映を確認。構文542ファイル・単体1,499件・関連E2E228件成功（すべてexit 0、E2E3.5分）。annotation-anchors／free-text-input-drag／leader-appearance／annotation-display-size／blocks／unified-uiの全6fileを実行。ログは一時ディレクトリのcad-constrained-annotation-drag-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はBlock drag開始時のSelection・plan／開始拒否・hintと表示更新のまとまりを調べ、既存GeometryDragの入口との役割を揃える。
+
+### Keyboard入力の機能組立て
+
+KeyboardInputへ既存KeyboardInteractionController.createCancellation／createの生成接続、注記ハンドルresetと選択解除の表示adapter、keydown登録寿命を集約。各controllerの本体と取消／受付優先順位は変更せず、mode・pending・拘束・handle・Selectionを操作時に既存ownerから読む。Instance.finishのmethod receiver、現在pointer、native Clipboardと非同期保存を保持。startの二重登録防止、disposeは自己listenerだけを解除し再start可能。keyup／blurはCanvasViewControlsに残す。操作種類が多いため依存数自体は残るが、巨大mutable contextで隠さず明示portで接続する。
+
+app.jsは4,106→4,101行（5行減、b120651から合計42行減）。classic script／構文／unit／E2E読込一覧を同期。新単体4件で生成時無照会、listener所有、live状態による取消優先・reset／表示順、現在mode／pointerでの確定、寸法入力／native Clipboardの優先を確認。構文542ファイル・単体1,495件・loader1件・関連E2E277件成功（すべてexit 0、E2E4.0分）。unified-ui／blocks／spline／hatching／derived-patterns／free-instance／reference-images／command-panel／sketch-move／file-safety／annotation-anchorsの全11fileを実行。ログは一時ディレクトリのcad-keyboard-input-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は拘束付き注記dragの一時stateとSolver scope／追加変数への接続を調べる。開始・拒否・終了・復元とObject同一性を維持して所有者を整理する。
+
+### 編集Toolbar入力の登録寿命
+
+既存ToolbarView.createEditingBindingへUndo／Redo・選択可視性・削除・Annotation開始の五つのclick登録を集約。作図controlとは依存と登録時期を分け、元の生handler／DOM receiver、Annotationメソッドの操作時照会、削除のGeometry mode短絡→remove→成功時だけUI→drawの順を保持する。bindの二重登録を防止し、disposeは自己listenerだけを解除、再bindも可能。履歴・可視性・Selectionの処理本体や取消・復元は既存ownerのまま。
+
+app.jsは4,112→4,106行（6行減、b120651から合計37行減）。新scriptなし。既存toolbar unitへ3件追加し、handler receiver／現在メソッド・モード拒否／削除失敗での表示無変更・成功順序・任意DOMと登録寿命を確認。構文540ファイル・単体1,491件・関連E2E280件成功（すべてexit 0、E2E4.2分）。annotation-anchors／blocks／leader-appearance／phase0-characterization／sketch-tree-visibility／toolbar-layout／unified-annotations／view-visibility／unified-uiの全9fileを実行。ログは一時ディレクトリのcad-toolbar-editing-binding-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はKeyboardの取消優先順位と入力受付の生成接続を調べ、各commandの取消・復元責務を維持しながら組立て境界を整理する。
+
+### Canvas表示設定の状態所有とUI接続
+
+CanvasViewControlsへconstraintStatus／geometryIds／showHiddenElementsの値と表示control／window keyup・blurのlistener寿命を集約。read-only getterのlive stateを描画・照会へ渡し、外部からの直接更新をなくした。既存ConstraintStatusViewのmouse latch／Space保持・hint・再描画の判定は変更せず、KeyboardInteractionControllerのkeydown優先順とtext入力判定も維持。bindWindowとbindControlsを元の位置で接続し、二重登録防止・dispose／再bindは自分のlistenerだけを対象とする。保存や履歴には組み込まない。
+
+app.jsは4,129→4,112行（17行減、b120651から合計31行減）。classic script／構文／unit／E2E読込一覧を同期。新単体4件で既定値とlive read-only state、値更新→毎回再描画、mouse／Space／blur、listener所有と再bind、任意DOM不在を確認。構文540ファイル・単体1,488件・loader1件・関連E2E114件成功（すべてexit 0）。view-visibility／unified-ui全106件（1.5分）、canvas-zoom-inputの表示ケース1件とconstraint-drag-regressionsのnative pointer reversals and undo全7件（計8件、26.4秒）を実行。拘束drag全fileや全E2Eの実行ではない。ログは一時ディレクトリのcad-canvas-view-controls-{check,unit,loader,e2e,pointer-e2e}.log。全体目標は未完了。次は編集Toolbar（Undo／Redo／選択削除・可視性／Annotation開始）の入力と既存操作ownerの境界を調べる。
+
+### 参照画像入力の機能組立て
+
+ReferenceImageInputへ画像準備・配置command・Clipboardの生成接続とfile inputのlistener寿命を集約。画像変換／配置／Clipboard分岐の既存ownerは変更せず、bindClipboardとbindControlsを分けて従来の登録時期を維持する。importFileとclipboardは元のAPIを返し、menu／Canvas／診断の利用先を保つ。input値解除→非同期import、準備後の現在scope・Sketch・倍率と再権限確認を保持する。巨大contextや独自モデル状態を追加しない。Geometry Clipboardとの共有に必要なcopy／paste操作portは明示して残す。
+
+app.jsは4,143→4,129行（14行減）。新scriptのindex／構文／E2E読込順とunit一覧を同期。新単体4件で待機中scope／Sketch／倍率変更、権限変更による無変更、input値解除、Clipboard marker／text入力／cut、二重bind防止とdispose／再bindを確認。構文538ファイル・単体1,484件・loader1件・関連E2E125件が成功（すべてexit 0、関連E2E1.7分）。関連はreference-images／png-export／sketch-move／unified-ui。ログは一時ディレクトリのcad-reference-image-input-{check,unit,loader,e2e}.log。全E2Eはこの単位では未実行。直前のリリースb120651は全E2E583件成功だが、以降のコードの全体検証とは区別する。全体目標は未完了。次はToolbar／表示設定のlistenerと既存UI ownerの境界を調べる。
+
 ### 2026-10-16のリリース全体検証
 
 ユーザーのmain／origin反映指示を受け、コードdde227eをdevelopの91d532cへ統合・Push。最新コードで構文536ファイル・単体1,480件・全E2E583件が成功（すべてexit 0、全E2E24.6分）。拘束drag回帰file12.5分を含み、runnerは正常終了。ログは一時ディレクトリのcad-refactor-oct16-final-{check,unit,e2e}.log。検証後はリリース／再開記録だけを変更し、mainを最後に反映してlocal／originのmainとdevelopを同期する。app.jsは4,459→4,143行、合計316行減。数百行のcomposition rootという全体目標は未完了。次回の責務候補と再開手順は方針書section 8を参照。

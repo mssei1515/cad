@@ -134,5 +134,32 @@
 
     return Object.freeze({ guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation });
   }
-  window.SketchCommand = Object.freeze({ create, createEditAccess });
+  // Sketch transitions retain their own reset scope and effect order.
+  function createInteractionReset({ resetSketchMove, clearSelection, resetGeometryDrag, resetDimensionDrag,
+    referenceImage, selectionRectangle, drawing, pending, constraint, projection, instances, instanceSources,
+    hover, clearPointer, hideValueInput, clearSnap, selectMode, updateToolbar }) {
+    function clear() {
+      resetSketchMove();
+      clearSelection();
+      resetGeometryDrag();
+      resetDimensionDrag();
+      referenceImage.reset();
+      selectionRectangle.reset();
+      drawing.resetInputsForSketchChange();
+      pending.clear();
+      constraint.clearCommand();
+      projection.reset();
+      instances.clearSources();
+      instanceSources.reset();
+      hover.update({ sketchIdentity: null });
+      clearPointer();
+      hideValueInput();
+      clearSnap();
+      selectMode();
+      updateToolbar();
+    }
+    return Object.freeze({ clear });
+  }
+
+  window.SketchCommand = Object.freeze({ create, createEditAccess, createInteractionReset });
 })();

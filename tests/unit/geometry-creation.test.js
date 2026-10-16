@@ -82,3 +82,31 @@ test('batch minimum-shape repair uses the current scope and reports changes and 
   assert.deepEqual(plain(creation.enforceMinimumLineLengths()), { changed: 0, failed: 0 });
   assert.equal(creation.normalizeArcSweeps(), 1); assert.equal(creation.normalizeArcSweeps(), 0);
 });
+
+
+test('endpoint resolver returns the same existing endpoint before other hit queries or allocation',()=>{
+ const f=fixture(),calls=[],endpoint=f.creation.addPoint(10,20,false,'endpoint'),next=f.ids.peek('point');
+ const resolver=GeometryCreation.createEndpointResolver({hitEndpointPoint:(x,y)=>{calls.push([x,y]);return endpoint;},
+  hitExplicitPoint:()=>{throw Error('endpoint hit must short circuit');},addPoint:()=>{throw Error('endpoint must not allocate');}});
+ assert.deepEqual(calls,[]);assert.equal(resolver.endpointAt(11,21),endpoint);assert.deepEqual(calls,[[11,21]]);
+ assert.equal(f.ids.peek('point'),next);assert.equal(f.state.scope.points.length,1);
+});
+
+test('explicit Point hits create a distinct unfixed endpoint at current source coordinates in the current sketch',()=>{
+ const f=fixture(),calls=[],explicit=f.creation.addPoint(10,20,true,'explicit');
+ const resolver=GeometryCreation.createEndpointResolver({hitEndpointPoint:(...args)=>{calls.push(['endpoint',...args]);return null;},
+  hitExplicitPoint:(...args)=>{calls.push(['explicit',...args]);return explicit;},addPoint:(...args)=>{calls.push(['add',...args]);return f.creation.addPoint(...args);}});
+ explicit.x=30;f.state.sketch='S2';const point=resolver.endpointAt(12,22);
+ assert.notEqual(point,explicit);assert.equal(point.kind,'endpoint');assert.equal(point.fixed,false);assert.equal(point.sketchId,'S2');assert.equal(point.id,'P2');
+ assert.equal(explicit.kind,'explicit');assert.equal(explicit.fixed,true);assert.equal(explicit.sketchId,'S1');
+ assert.deepEqual(calls,[['endpoint',12,22],['explicit',12,22],['add',30,20,false,'endpoint']]);
+});
+
+test('endpoint fallback delegates original coordinates and reads the replacement editing scope at allocation time',()=>{
+ const f=fixture(),calls=[],previous=f.state.scope;
+ const resolver=GeometryCreation.createEndpointResolver({hitEndpointPoint:(...args)=>{calls.push(['endpoint',...args]);return null;},
+  hitExplicitPoint:(...args)=>{calls.push(['explicit',...args]);return null;},addPoint:(...args)=>{calls.push(['add',...args]);return f.creation.addPoint(...args);}});
+ f.state.scope=scope();f.state.sketch='S3';const point=resolver.endpointAt(12,22);
+ assert.equal(previous.points.length,0);assert.equal(f.state.scope.points[0],point);assert.equal(point.sketchId,'S3');assert.equal(point.id,'P1');
+ assert.deepEqual(calls,[['endpoint',12,22],['explicit',12,22],['add',12,22,false,'endpoint']]);
+});

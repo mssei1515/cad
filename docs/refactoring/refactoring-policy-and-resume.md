@@ -82,7 +82,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回のリリース対象は`codex/parameter-edit-guard`。統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/reference-image-feature`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -99,6 +99,14 @@
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-16）
+
+ユーザーのorigin/mainへの反映指示により、codex/reference-image-featureの20単位をdevelopの1bfffa2へ統合・Pushした。コード最終commitは16090aa。app.jsは4,143→3,949行（194行減）。Reference Image入力、Canvas表示操作、Keyboard入力、基本作図の生成・接続、drag補助状態、Sketch切替reset、拘束適用、端点生成などの責務を既存ownerへ整理した。UI／操作／保存形式の仕様は変更していない。全体の数百行への目標は未完了。
+
+最新developの1bfffa2で構文546ファイル・単体1,542件が成功。全E2E584件を実行し、初回は583件成功・1件失敗（26.0分、exit 1）。失敗はadversarial-authoring-performanceのmiddle-button-panが175ms未満の基準に対して175msだった。コード・基準を変えず同file全12件を再実行し、すべて成功（1.2分、exit 0、当該操作160ms）。したがって全ケースの成功を確認したが、一括実行が初回から全成功だったとは扱わない。ログは一時ディレクトリのcad-origin-main-final-{check,unit,e2e}.logとcad-origin-main-performance-rerun.log。テスト本体／worker終了後に専用port8784サーバーだけの終了待ちが残ったため、親子processとcommandを確認してそのサーバーだけを終了し、各runnerの終了結果を回収した。最終検証後はこの記録以外の実装変更を行っていない。この記録をCommit／Push後、mainを最後に反映・Pushし、developをmainへfast-forward・Pushしてlocal／originの両branchを同期する。統合済み作業branchを削除しruntimeを再生成する。
+
+次回は最新developから新しい作業branchを作成する。終了済みcodex/reference-image-featureは再使用しない。次は分離後に残った未参照の旧入口を監査する。node_modules/playwright/lib/transform/babelBundleのbabelParse(code,filename,false)とtraverseでapp IIFE scopeを調べ、未参照140binding中FunctionDeclaration候補16件を確認済み。変数initializerの副作用と区別し、自動一括削除せず関数／依存を現物で検証する。局所scopeと公開hook／コールバック、動的参照の有無を確認し、現役ownerを再分離するだけの変更を避ける。巨大contextや異なる操作の単一stateへの統合を避ける。
+
+### 直前のリリース（2026-10-16）
 
 ユーザーのmain／origin反映指示により、この区切りをリリースする。07024cbを基準にcodex/parameter-edit-guardで16個の責務単位を整理し、コード最終commitはdde227e、develop統合commitは91d532c。app.jsは4,459→4,143行（316行減）。Parameter削除guard、Document下書き／Canvas reset、採番状態、Parameter／外観／PNG／Documentファイルの機能組立て、Offset・Sketch投影・Annotation・Dimension・Blockのテスト支援生成と公開API対応を整理した。
 

@@ -121,5 +121,17 @@
 
     return Object.freeze({ addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep, enforceMinimumLineLengths, normalizeArcSweeps });
   }
-  window.GeometryCreation = Object.freeze({ create });
+  // Reuse endpoints, but create a distinct endpoint when snapping to an explicit Point.
+  function createEndpointResolver({ hitEndpointPoint, hitExplicitPoint, addPoint }) {
+    function endpointAt(x, y) {
+      const endpoint = hitEndpointPoint(x, y);
+      if (endpoint) return endpoint;
+      const explicit = hitExplicitPoint(x, y);
+      if (explicit) return addPoint(explicit.x, explicit.y, false, "endpoint");
+      return addPoint(x, y, false, "endpoint");
+    }
+    return Object.freeze({ endpointAt });
+  }
+
+  window.GeometryCreation = Object.freeze({ create, createEndpointResolver });
 })();
