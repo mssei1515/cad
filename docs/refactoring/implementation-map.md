@@ -1051,3 +1051,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/ui/toolbar_view.js: createCommandStatusが操作名ステータスの翻訳とDOM反映を所有する。mode／pending／constraintはappからの限定した読取りAPIで参照し、注記→拘束→mode→raw値の優先順と短絡を維持する。appのupdateStatusUIは接続だけを担う。
+
+
+- src/ui/toolbar_view.js: createIconsがtoolbarSvgMarkup／constraintToolbarIconを所有する。TreeとCanvas候補の共用表示APIとして、現在DOMのSVG取得・既存class付与・欠損fallback・型優先と名前patternを維持。appは同APIをSketchTreeObjects／CanvasContextPresentationへ接続し、操作・選択・hover状態を同factoryへ渡さない。

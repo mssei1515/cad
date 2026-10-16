@@ -2314,24 +2314,10 @@
   const { remove: deleteSketch } = sketchDeletionCommand;
 
 
-  function toolbarSvgMarkup(selector) {
-    const svg = document.querySelector(selector)?.querySelector("svg");
-    return svg ? svg.outerHTML.replace("<svg", '<svg class="sketch-object-icon"') : "";
-  }
-
-  function constraintToolbarIcon(constraint, fixedPoint = false) {
-    if (fixedPoint || constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint || constraint instanceof GeometryFixedConstraint) return toolbarSvgMarkup("#fixPointBtn");
-    if (constraint instanceof SketchProjectionConstraint) return toolbarSvgMarkup("#toolSketchProjection");
-    if (constraint instanceof ParallelLinesCenterlineConstraint || constraint instanceof PointPairCenterlineConstraint) return toolbarSvgMarkup("#toolCenterline");
-    if (isDimensionConstraint(constraint)) return toolbarSvgMarkup('[data-constraint="distance"]');
-    const name = String(constraint?.name || "");
-    const mappings = [
-      [/水平/, "horizontal"], [/垂直/, "vertical"], [/平行/, "parallel"], [/直角/, "perpendicular"], [/対称/, "symmetry"],
-      [/同心/, "concentric"], [/等寸/, "equal"], [/接線/, "tangent"], [/一致|円周/, "coincident"],
-    ];
-    const type = mappings.find(([pattern]) => pattern.test(name))?.[1] || "coincident";
-    return toolbarSvgMarkup(`[data-constraint="${type}"]`);
-  }
+  const { toolbarSvgMarkup, constraintToolbarIcon } = window.ToolbarView.createIcons({
+    document, isDimensionConstraint, types: { LineFixedConstraint, ArcEndpointFixedConstraint, GeometryFixedConstraint,
+      SketchProjectionConstraint, ParallelLinesCenterlineConstraint, PointPairCenterlineConstraint },
+  });
 
   function sketchTreeObjectSelected(category, entry) {
     const item = category === "constraint" ? entry.point || entry.constraint : entry;

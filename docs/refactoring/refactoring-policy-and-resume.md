@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用37%／残量63%。未使用入口／静的alias整理、Offset選択反映、寸法外観・label、Annotationアンカー、円弧端点角度、暗黙拘束追加（6ccd616）に続き、今回は操作名ステータス表示をToolbarView.createCommandStatusへ集約。注記pending→拘束command→mode名→raw modeの優先順と短絡、21modeの日英表記・現在言語を維持した。app.jsは開始3,949→現在3,738行（合計211行減、直近3,746→3,738で8行減）。構文546ファイル・単体1,564件・関連E2E110件成功（exit 0、3file、1.6分）。ログはcad-command-status-view-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用38%／残量62%。未使用入口／alias整理、Offset選択、寸法外観・label、Annotationアンカー、円弧端点角度、暗黙拘束、操作名表示（21b02cc）に続き、今回はTree／Canvas候補が共用するToolbar SVG／拘束アイコンをToolbarView.createIconsへ集約した。現在DOM・欠損・markup、型優先と名前fallbackを維持し、選択／hover状態は持ち込まない。app.jsは開始3,949→現在3,724行（合計225行減、直近3,738→3,724で14行減）。構文546ファイル・単体1,567件・関連E2E133件成功（exit 0、3file、1.9分）。ログはcad-toolbar-icon-presentation-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-次はtoolbarSvgMarkup／constraintToolbarIconを既存SketchTreeObjectsの表示責務と照らして確認する。ToolbarのSVG取得・class付与・欠損時の空文字、固定／投影／中心線／寸法の型優先と名前によるfallbackを維持し、Treeと操作の所有を混ぜない。updateUIUnprofiledの更新順・refreshAnalysis指定とは別に整理する。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
+次はsketchTreeObjectSelectedの選択照会をCanvasSelectionの所有と照らして確認する。inspectionでのcategory＋Object／ID照合、Hatch／画像／Block／派生Instance／Annotationの同一参照判定、固定Pointと通常Constraint、通常Geometryの既存選択規則を維持する。hoverは別所有者なので同じstateへまとめない。updateUIUnprofiledの更新順・refreshAnalysis指定も別に扱う。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
 
 ### 直前のリリース（4859400）
 

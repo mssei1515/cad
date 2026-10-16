@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Tree／Canvas候補の共用Toolbarアイコン
+
+toolbarSvgMarkup／constraintToolbarIconを既存ToolbarView.createIconsへ集約。調査でSketchTreeObjectsだけでなくCanvasContextPresentationも使うことを確認し、Treeの状態に依存しない共用Toolbar表示APIとした。document・6拘束型・寸法判定だけを受け、現在DOMのSVG読取り・最初のsvgタグへの既存class付与・欠損時空文字を維持する。固定flag／固定型→投影→中心線→寸法→既存の名前patternとcoincident fallbackの優先順もそのまま。appは生成結果の同じ2APIを両利用者へ接続し、cache・DOM変更・操作／選択／hover状態を加えない。参照は全て生成後なので不要なhoisted wrapperも残していない。
+
+app.jsは3,738→3,724行（14行減、今回再開から225行減）。既存toolbar-view unitへ3件追加し、現在DOM／差替え・SVG欠損・markup非破壊、型とflagの優先・寸法短絡、全名前patternと欠損／未知のfallbackを確認。構文546ファイル・単体1,567件・関連E2E133件成功（すべてexit 0、E2E1.9分）。unified-ui／sketch-tree-visibility／block-geometry-fixedの全3file。ログは一時ディレクトリのcad-toolbar-icon-presentation-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### 操作名のステータス表示
 
 updateStatusUIを既存ToolbarView.createCommandStatusへ集約。document・applicationText・mode／pending type／拘束commandの5依存だけを受け、操作stateを所有せず現在値を表示時に読む。statusCommandのDOM取得→21modeの現在言語表記構成→DOMありなら注記pending／拘束／mode名／raw modeの優先順を維持する。注記や拘束が優先される場合の下位stateの読取り短絡、DOMなし時の表記構成も保持。appはhoisted入口を同じUI更新順で呼び、Toolbarの他の更新・listener・操作遷移は変更していない。

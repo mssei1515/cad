@@ -6,6 +6,56 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync('src/ui/toolbar_view.js','utf8'),sandbox);
 const modeButtons = { select:'toolSelect',point:'toolPoint',line:'toolLine',centerline:'toolCenterline','circle-center-cross':'toolCircleCenterCross',rectangle:'toolRectangle',slot:'toolSlot',fillet:'toolFillet',trim:'toolTrim',offset:'toolOffset',circle:'toolCircle',arc:'toolArc','three-point-arc':'toolThreePointArc',spline:'toolSpline','sketch-projection':'toolSketchProjection','pattern-placement-origin':'toolPattern','pattern-placement-place':'toolPattern',hatch:'toolHatch','hatch-repair':'toolHatch' };
 
+function iconFixture() {
+ const calls = [], nodes = new Map(), types = Object.fromEntries(['LineFixedConstraint', 'ArcEndpointFixedConstraint', 'GeometryFixedConstraint',
+  'SketchProjectionConstraint', 'ParallelLinesCenterlineConstraint', 'PointPairCenterlineConstraint'].map(name => [name, class {}]));
+ const document = { querySelector(selector) { assert.equal(this, document); calls.push(['dom', selector]); return nodes.get(selector) || null; } };
+ const api = sandbox.window.ToolbarView.createIcons({ document, types,
+  isDimensionConstraint: constraint => { calls.push(['dimension', constraint]); return Boolean(constraint?.dimension); } });
+ function add(selector, markup = '<svg viewBox="0 0 10 10"><path /></svg>') {
+  const svg = { outerHTML: markup }, button = { querySelector(name) { assert.equal(this, button); assert.equal(name, 'svg'); return svg; } };
+  nodes.set(selector, button); return svg;
+ }
+ return { api, calls, nodes, types, add };
+}
+
+test('toolbar SVG reads current DOM, preserves markup and returns empty text for missing buttons or SVG', () => {
+ const f = iconFixture(); assert.deepEqual(f.calls, []);
+ assert.equal(f.api.toolbarSvgMarkup('#toolLine'), '');
+ f.nodes.set('#toolLine', { querySelector: () => null }); assert.equal(f.api.toolbarSvgMarkup('#toolLine'), '');
+ const svg = f.add('#toolLine'), original = svg.outerHTML;
+ assert.equal(f.api.toolbarSvgMarkup('#toolLine'), '<svg class="sketch-object-icon" viewBox="0 0 10 10"><path /></svg>');
+ assert.equal(svg.outerHTML, original);
+ f.add('#toolLine', '<svg data-current="yes"></svg>');
+ assert.equal(f.api.toolbarSvgMarkup('#toolLine'), '<svg class="sketch-object-icon" data-current="yes"></svg>');
+});
+
+test('constraint icons retain fixed, projection, centerline and dimension priority before name matching', () => {
+ const f = iconFixture();
+ for (const selector of ['#fixPointBtn', '#toolSketchProjection', '#toolCenterline', '[data-constraint="distance"]']) f.add(selector);
+ const cases = [ ['LineFixedConstraint', '#fixPointBtn'], ['ArcEndpointFixedConstraint', '#fixPointBtn'], ['GeometryFixedConstraint', '#fixPointBtn'],
+  ['SketchProjectionConstraint', '#toolSketchProjection'], ['ParallelLinesCenterlineConstraint', '#toolCenterline'], ['PointPairCenterlineConstraint', '#toolCenterline'] ];
+ for (const [kind, selector] of cases) {
+  f.calls.length = 0; const constraint = Object.assign(new f.types[kind](), { name: '水平', dimension: true });
+  assert.notEqual(f.api.constraintToolbarIcon(constraint), ''); assert.deepEqual(f.calls, [['dom', selector]]);
+ }
+ f.calls.length = 0; f.api.constraintToolbarIcon(new f.types.SketchProjectionConstraint(), true);
+ assert.deepEqual(f.calls, [['dom', '#fixPointBtn']]);
+ f.calls.length = 0; const dimension = { name: '水平', dimension: true }; f.api.constraintToolbarIcon(dimension);
+ assert.deepEqual(f.calls, [['dimension', dimension], ['dom', '[data-constraint="distance"]']]);
+});
+
+test('constraint icons keep ordered name matching and coincident fallback for unknown or absent constraints', () => {
+ const f = iconFixture(), cases = [['水平', 'horizontal'], ['垂直', 'vertical'], ['平行', 'parallel'], ['直角', 'perpendicular'],
+  ['対称', 'symmetry'], ['同心', 'concentric'], ['等寸', 'equal'], ['接線', 'tangent'], ['一致', 'coincident'], ['円周', 'coincident'],
+  ['平行 水平', 'horizontal'], ['unknown', 'coincident'], [45, 'coincident']];
+ for (const [name, type] of cases) {
+  f.calls.length = 0; f.api.constraintToolbarIcon({ name }); assert.equal(f.calls.at(-1)[1], `[data-constraint="${type}"]`);
+ }
+ for (const constraint of [null, undefined, {}]) { f.calls.length = 0; assert.equal(f.api.constraintToolbarIcon(constraint), '');
+  assert.equal(f.calls.at(-1)[1], '[data-constraint="coincident"]'); }
+});
+
 function statusFixture() {
  const state = { node: { textContent: '' }, mode: 'line', pending: null, constraint: null, english: false }, reads = [], translations = [];
  const view = sandbox.window.ToolbarView.createCommandStatus({ document: { getElementById(id) { assert.equal(id, 'statusCommand'); reads.push('dom'); return state.node; } },
