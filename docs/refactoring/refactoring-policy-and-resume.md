@@ -82,8 +82,8 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/dimension-draw-queries`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
-- 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/composition-entry-audit`、`codex/constraint-status-observation`、`codex/dimension-draw-queries`。この区切りでdevelopへ統合済みであり、リリース完了時に削除し、再開時は最新developから新しく作成する。
+- 通常は作業branchで進める。停止時にこの区切りをdevelop／mainへ統合し、mainを最後に反映する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
 2026-10-02、コードcommit `4ead051`に対する全E2E327件が成功した（19.5分、exit 0）。構文347件・単体785件も同じコードで成功済み。全体リファクタリングの完成とは区別し、以後コードを変更した場合は変更に応じて再検証する。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
@@ -100,17 +100,31 @@
 
 ## 8. 再開地点（2026-10-16）
 
+週枠使用51%／残量49%を確認し、指定の停止条件に達したため新たな分離を停止する。この区切りのmain反映と同期を完了して目標を一時停止し、クレジット回復後に再開する。全体目標は未完了。app.jsは今回の開始3,949→3,652行（297行減）。直近の所属照会と寸法描画の整理は3,652→3,652行（0行変化）であり、数百行のcomposition rootへ収束したとは扱わない。
+
+コード最終commitはaa9e3af、develop統合commitは1be84e3。旧入口・未使用alias、Selection／表示照会、Annotation、拘束確定、Toolbar、Tree hover、Canvas描画、Offset／Fillet／Trimの機能組立てを整理した。さらにSketchContextの正規化と所属照会、ConstraintAnalysisの照会入口、寸法描画内のActive判定の責務を整理した。UI・求解方法・保存形式、テストの期待値・性能基準は変更していない。Solverループの試作は取り下げ済み。現在の責務と依存はimplementation-map.mdと正式なモジュール構成を参照する。
+
+最終コードで構文552ファイル・単体1,591件・全E2E584件が成功（すべてexit 0、全E2E23.7分）。全E2Eはdevelopの1be84e3で一括実行し全件成功を確認した。aa9e3afと1be84e3のファイル内容は同一であり、構文・単体も同じコードの結果。以前の失敗や部分検証だけを最終結果として流用していない。航空機は96経路・1,872previewが7.1分で成功（最大237.2ms、失敗0）、パンは164msで175ms未満の基準内。全runnerの正常終了を回収済み。ログは一時ディレクトリのcad-dimension-draw-{check,unit}.logとcad-dimension-release-final-e2e.log。
+
+最終検証後はこの停止／リリース記録以外の実装変更を行わない。この記録をdevelopへCommit／Pushした後、元の明示的な指示に従いmainを最後に反映・Pushする。直ちにdevelopへ戻りmainへfast-forward・Pushし、local／originのmainとdevelopを同期する。codex/composition-entry-audit、codex/constraint-status-observation、codex/dimension-draw-queriesは取り込みを確認してローカル・リモートとも削除し、runtime-version.jsを再生成する。不合格のままリリースする例外判断は不要になった。
+
+再開時はGitの現物、usage、worktree、origin/main／developと祖先関係を確認し、最新developから新しい作業branchを作成する。終了済みbranchを再使用しない。次の候補はSketch Projectionの生成・接続の境界。appのquery（早期）／command／source照会／editing（後段）は生成位置と共有先が異なる。queriesは他機能から使われ、commandはmodel、editingはworkspace.currentを参照する。初期化順とcallbackの参照時点、共有query／保存・編集からの利用先を先に分析し、単に全部を一つのFeatureへ移さない。すでにBasicDrawingToolsへ分離したCenterlineの再分離、巨大mutable context、別の巨大app、行数だけの薄いdelegate分割を避ける。
+
+### この区切りの調査・検証履歴
+
+以下はリリース前の各時点の記録である。「main保留」「未解決」「回答待ち」等は当時の状態であり、現在の最終結果は上記の一括全件成功を参照する。失敗と切り分けの経緯を調査可能にするため保持する。
+
 local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開した。今回の16単位で旧入口／未使用alias、Selection／表示照会、Annotation、拘束確定、Toolbar、Tree hover、Canvas描画、Offset／Fillet／Trimの機能組立てを整理した。app.jsは3,949→3,652行（297行減、直近Trimは3,658→3,652で6行減）。全体の数百行への目標は未完了。
 
 TrimはTrimFeatureへquery／editing／commandの組立てを集約し、テストfixtureの接続はTrimTestDriver.createFeatureへ分離した。現在scope／倍率と7／倍率のhit幅、Point／寸法拘束の転送、checkpointと失敗段階の復元、既存hookを維持する。構文552ファイル・単体1,587件・読込E2E1件・関連E2E143件成功（142件1.9分＋性能1件4.5秒）。ログはcad-trim-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。
 
-### 最新の寸法描画の修正（codex/dimension-draw-queries）
+#### 最新の寸法描画の修正（codex/dimension-draw-queries）
 
 2fa864bの検証結果を110bd4aとしてdevelopへ保存した後、DimensionPresentation.createLayer.drawで同じconstraintのActive判定を何度も取得する箇所を整理した。ObjectをキーにしたMapをdraw内で作り、sort comparatorと色判定に必要な時だけ取得し共有する。draw終了後は保持しない。元のconstraints配列をそのままin-place sortし、非active→activeの安定順、非表示対象の短絡、PNG時flags、Canvas save／restoreと例外処理は変更しない。Sketch切替・Active変更・同一IDの別Objectは次の描画で新しく評価する。app.jsは3,652→3,652行（0行変化）。
 
 構文552ファイル・単体1,591件・関連E2E129件成功（exit 0）。関連はunified-ui／dimension-prefix／png-export／drawing-order117件1.5分、adversarial-authoring-performance全12件48.1秒。パンは161msで元の175ms未満の基準内に入った。テストの期待値や基準を変更していない。ログはcad-dimension-draw-{check,unit,related-e2e,performance-e2e}.log。全E2Eはこの単位では未実行。作業branchをCommit／Push後developへ統合し、最新コードで全体検証を行う。全体検証が成功した場合は元のmain反映指示に従いmainへ最後に反映する。以前の失敗履歴を消さず、最新結果を区別する。
 
-### 最新developの全体検証結果（2fa864b）
+#### 最新developの全体検証結果（2fa864b）
 
 コード最終d66a231をdevelopの2fa864bへ統合・Push済み。main／origin/mainは4859400のまま。最新developで構文552ファイル・単体1,590件成功（exit 0）。全E2E584件は583成功・1失敗（24.0分、exit 1）。航空機は全96経路・1,872previewを7.2分で成功（最大260ms、失敗0）。以前の航空機timeoutは最新全体実行で再現していない。失敗はadversarial-authoring-performance.spec.jsのmiddle-button-panが176ms（175ms未満が基準）だった1件。
 
@@ -122,7 +136,7 @@ TrimはTrimFeatureへquery／editing／commandの組立てを集約し、テス�
 
 次はDimensionPresentation.createLayer.drawのsort comparatorが同じisActiveSketchConstraintを何度も呼び、その先でSketch全体の正規化を繰り返す箇所を分析する。候補は描画ごとに必要なActive判定を一度取得してsort／色判定で共有し、次のdrawで再評価する方法。まだ実装していない。既存constraints配列へのin-place sort、非active→activeの安定した描画順、非表示の短絡、export時のflags、Canvasのsave／restoreと例外時の挙動を維持し、描画中にSketchが切り替わらない前提も確認する。mainは失敗を残した反映への判断待ちとして保留する。
 
-### 最新の修正と検証（codex/constraint-status-observation）
+#### 最新の修正と検証（codex/constraint-status-observation）
 
 所属照会の重複取得整理93124c8に続き、SketchContext.membershipQueryでscopeの正規化と要素ごとの所属読取りを分離した。元のelementSketchIdと共通resolverを使い、直接ID／端点／中心／Spline fitPoint／現在Sketchへのfallbackの優先順を維持する。Queryは現在Sketchのfallbackを同期照会単位で捕捉し、次の解析・状態照会では新しく取得する。ConstraintAnalysisは参照有効性の更新後、ConstraintTestDriverは解析更新後に取得し、appはreadSketchMembershipとして接続する。通常のelementSketchIdの正規化順やSolverの数値計算・保存形式は変更しない。app.jsは3,652→3,652行（0行変化）。
 
@@ -132,7 +146,7 @@ Solverの内側ループ整理も試作したが、単独の行列ベンチ改�
 
 以前の失敗は下記の履歴として保持する。現在は同じ2ケースの成功を最新コードで確認できたため、作業branchをCommit／Pushしてdevelopへ統合し、最新の全体検証へ進む。全検証が成功した場合は不合格のままリリースする例外判断を必要とせず、元の明示的なmain反映指示に従いmainを最後に反映する。全体の数百行への目標は未完了。
 
-### origin/main反映前の検証で保留（2026-10-16）
+#### origin/main反映前の検証で保留（2026-10-16）
 
 ユーザーのorigin/main反映指示により、コード最終commit80771ffをdevelopの77e4e19へ統合しPush済み。main／origin/mainは4859400のまま。作業branch codex/composition-entry-auditは80771ffで保持する。全体目標は未完了であり、mainへのリリースも未完了。
 
