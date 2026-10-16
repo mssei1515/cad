@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 寸法外観の解決と表示値構成
+
+effectiveDimensionAppearance／effectiveDimensionAppearanceForSketch／dimensionDisplayStateを既存GeometryAppearanceQuery.createDimensionへ集約。document・currentSketches・activeSketchId・isRootSketchの4依存で、操作時の現在Sketchとscope、明示されたBlock DefinitionのSketch一覧、Document寸法既定→終端既定→Root以外のSketch→個別displayの優先順を維持する。表示値のprecision制限、色fallback、接頭辞／接尾辞／公差の文字列化、終端・文字寸法の取出しを同ownerが担う。保存値を変更せず独自state／cache・UI更新を持たない。appは既存hoisted入口で利用者へ接続し、scopeを生成時に読まない。移動した3本体は明示したscope portの置換以外が元と一致することを確認。
+
+app.jsは3,823→3,800行（23行減、今回再開から149行減）。既存geometry-appearance-query unitへ3件を追加し、遅延scope照会と置換、明示definition一覧、Root除外、外観優先順と表示値／非破壊snapshotを確認。構文546ファイル・単体1,548件・関連E2E144件成功（すべてexit 0、E2E2.0分）。unified-ui／blocks／dimension-prefixの全3file。ログは一時ディレクトリのcad-dimension-appearance-query-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### Offset入力状態のCanvas選択への反映
 
 syncOffsetChainSelectionの選択更新本体を既存CanvasSelection.applyOffsetSelectionへ集約した。OffsetSelectionはsource／entries／確定状態・接続判定・通知を継続所有し、OffsetCommandは操作の進行を維持する。appはチェーン追加通知と円選択後の二経路を同APIへ接続する。sourceのCircle、entriesのLine／Arcを同じObjectで選択し、既存12項目のset順と選択解除対象を維持する。Spline／geometryInstances／instanceGeometryは変更せず、空反映時はTree／inspectionを一律解除しない。描画・UI・履歴・Offset resetを選択APIへ追加していない。

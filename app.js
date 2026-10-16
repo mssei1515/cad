@@ -14,7 +14,7 @@
     DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES,
     normalizeAppearance, normalizeConstructionAppearance, normalizeDimensionAppearance,
     normalizeHatchAppearance, normalizeAnnotationStyle,
-    resolveGeometryAppearance, resolveDimensionAppearance,
+    resolveGeometryAppearance,
   } = window.Appearance;
   const {
     ensureDrawingOrderState, drawingOrderOwner,
@@ -263,6 +263,9 @@
   const geometryAppearance = window.GeometryAppearanceQuery.create({
     document: documentModel, readAppearance: geometryReads.readAppearance, cacheAppearance: geometryReads.cacheAppearance,
     sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements: () => viewState.showHiddenElements,
+  });
+  const dimensionAppearance = window.GeometryAppearanceQuery.createDimension({
+    document: documentModel, currentSketches: () => model.sketches, activeSketchId, isRootSketch,
   });
   const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document: documentModel, currentSketches: () => model.sketches });
   const { hitAnnotationTarget, annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
@@ -1068,11 +1071,7 @@
     };
   }
 
-  function effectiveDimensionAppearance(dimension, sketchId = activeSketchId(), sketches = model.sketches) {
-    const sketch = sketches.find((item) => item.id === sketchId) || sketches.find((item) => isRootSketch(item)) || null;
-    return resolveDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance },
-      sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null, dimension?.display);
-  }
+  function effectiveDimensionAppearance(...args) { return dimensionAppearance.effectiveDimensionAppearance(...args); }
 
   function ensureAppearanceState() {
     window.DocumentState.normalizeAppearanceState(documentModel, model, { blockEditing: Boolean(blockEditor.current) });
@@ -2531,10 +2530,7 @@
 
 
   function effectiveConstructionAppearanceForSketch(...args) { return geometryAppearance.effectiveConstructionAppearanceForSketch(...args); }
-  function effectiveDimensionAppearanceForSketch(sketch) {
-    return resolveDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance },
-      sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null);
-  }
+  function effectiveDimensionAppearanceForSketch(...args) { return dimensionAppearance.effectiveDimensionAppearanceForSketch(...args); }
 
   function effectiveAppearanceForSketch(...args) { return geometryAppearance.effectiveAppearanceForSketch(...args); }
 
@@ -2669,26 +2665,7 @@
 
 
 
-  function dimensionDisplayState(dimension, sketchId = activeSketchId(), sketches = model.sketches) {
-    const display = effectiveDimensionAppearance(dimension, sketchId, sketches);
-    return {
-      visible: display.visible !== false,
-      color: display.color || DEFAULT_DIMENSION_APPEARANCE.color,
-      lineWidth: display.lineWidth,
-      precision: Number.isInteger(display.precision) ? Math.max(0, Math.min(10, display.precision)) : null,
-      prefix: String(display.prefix || ""),
-      suffix: String(display.suffix || ""),
-      toleranceUpper: display.toleranceUpper == null ? "" : String(display.toleranceUpper),
-      toleranceLower: display.toleranceLower == null ? "" : String(display.toleranceLower),
-      terminatorType: display.terminatorType,
-      extensionLineOvershoot: display.extensionLineOvershoot,
-      extensionLineOriginGap: display.extensionLineOriginGap,
-      terminatorSize: display.terminatorSize,
-      arrowheadAngle: display.arrowheadAngle,
-      dimensionTextHeight: display.dimensionTextHeight,
-      dimensionTextGap: display.dimensionTextGap,
-    };
-  }
+  function dimensionDisplayState(...args) { return dimensionAppearance.dimensionDisplayState(...args); }
 
 
 
