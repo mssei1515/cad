@@ -1027,3 +1027,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - app.js: 構文scopeの参照監査で未使用と確認した旧入口16個を撤去。Sketch階層／Instance参照／求解／Block完了／作図解除／寸法描画・配置／拘束適用は既存ownerを継続利用し、旧selectHitOnly等の重複経路を残さない。公開hook・現役接続・副作用を持つfactory初期化は維持する。
+
+
+- app.js: 静的namespaceから受け取る未使用alias58個を撤去。Hatch領域engineへの直接destructureも廃止した。各既存ownerの依存・公開API・script読込順・factory生成は維持し、appの静的依存一覧を実際の利用へ合わせる。

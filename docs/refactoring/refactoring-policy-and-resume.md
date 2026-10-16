@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、最新developからcodex/composition-entry-auditを作成して再開。週枠使用34%／残量66%で停止条件未到達。app IIFEの未参照関数16個を公開経路・動的参照・callback利用の有無を確認して撤去した。残存statement本文が変更前後で一致することを確認。app.jsは3,949→3,885行（64行減）。構文546ファイル・単体1,542件・関連E2E156件成功（すべてexit 0、全3file、2.8分）。ログはcad-entry-audit-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。新規テスト／moduleは追加していない。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。週枠使用34%／残量66%。前の区切りfc3190aで未使用関数16個を撤去し、今回は静的namespaceの未使用alias58個を整理した。公開元の通常値property・動的参照なしを確認し、factoryやイベント登録を維持。構文木比較で対象alias以外が一致することを確認。app.jsは3,949→3,885→3,836行（合計113行減、直近49行減）。構文546ファイル・単体1,542件・関連E2E142件成功（exit 0、4file）。ログはcad-static-alias-{check,unit,e2e}.logとcad-static-alias-hatching-e2e.log。今回は全E2E未実行。全体目標は未完了。新規module／テストなし。
 
-次は未使用aliasの依存監査。再監査で未参照関数宣言は0件、残る124bindingは変数宣言。namespaceの単純な静的値参照と、副作用／getter／listener登録を伴う生成を区別する。自動一括削除せず既存ownerのexport実装を確認して対象を限定し、初期化順・公開APIを維持する。別ファイルへ巨大contextを移したり、行数のみを目的にAPIを細分化したりしない。
+未参照bindingは残り66件で、factoryが返すAPIや動的値の別名は未監査。副作用／getter／listener登録を確認せず削除しない。次は実際の責務分離へ戻り、syncOffsetChainSelectionとOffsetSelection／OffsetCommandの選択反映の境界を調べる。既存のsource／entries更新・取消・選択解除の対象と時機を確認し、Selectionの現役ownerへ選択反映を集約できるか検討する。異なるreset対象を統合したり、巨大contextを移したりしない。残る生成・接続は依存の方向と初期化順を確かめて機能単位で整理する。
 
 ### 直前のリリース（4859400）
 

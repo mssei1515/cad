@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 静的namespaceの未使用依存名を整理
+
+app IIFEで未参照の静的alias58個を撤去した。ReferenceImageData／HatchData／Appearance／DrawingOrder／DocumentFiles／GeometryKernel／GeometryRef／HatchRegionEngine／ParameterEngine／GeometrySolver／DimensionQueriesに限定し、公開元が通常の値propertyでgetterや生成時の処理を持たないことを確認した。全aliasが不要だったHatchRegionEngineの直接destructureとcirclePointAtPointer宣言も削除したが、元namespaceの公開APIとscript読込を維持する。factory／sessionの生成、副作用の可能性があるその他の変数宣言には手を加えない。変更前の構文木から対象aliasだけを除いた構文木が変更後と一致することを検証した。
+
+app.jsは3,885→3,836行（49行減、今回再開から113行減）。構文546ファイル・単体1,542件・関連E2E142件成功（すべてexit 0）。unified-ui／phase0-characterization／drawing-orderの126件（1.7分）とhatching全16件（13.7秒）で、既存保存形式・正規化・画面比較・描画順・Hatch再読込／Block投影を確認。ログは一時ディレクトリのcad-static-alias-{check,unit,e2e}.logとcad-static-alias-hatching-e2e.log。新規script／module／テストなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### 分離済み責務の未使用旧入口の撤去
 
 app IIFEのbindingを構文scopeで再監査し、参照のない関数宣言16個を撤去した。Instance参照正規化、Sketch階層照会、求解誤差、Block完了、作図解除、primitive判定、求解、配列削除、角度寸法描画、拘束完了・参照確定、primitive寸法開始と旧selectHitOnlyが対象。strict IIFE内の非公開宣言で、eval等の動的参照はなく、公開hookやcallbackは現役ownerへ接続されている。変更前後の残存top-level statement本文が同一であることも確認し、factory初期化やイベント登録は変更していない。新規module／状態／テストは追加していない。責務の再分離ではなく、移行後の重複経路と依存の整理である。

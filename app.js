@@ -2,14 +2,14 @@
 (function () {
   "use strict";
   const { formatDisplayNumber, formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
-  const { validReferenceImageDataUrl, serializeReferenceImage } = window.ReferenceImageData;
+  const { serializeReferenceImage } = window.ReferenceImageData;
   const { lineIntersectsRect, pointInExpandedBox, rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners, referenceImageBounds } = window.ReferenceImageGeometry;
-  const { validSerializedHatch, validSerializedHatchList, serializeHatch } = window.HatchData;
+  const { serializeHatch } = window.HatchData;
   const { serializeAnnotation } = window.AnnotationData;
 
   const {
-    CSS_PX_PER_MM, DEFAULT_APPEARANCE, DEFAULT_CONSTRUCTION_APPEARANCE,
+    CSS_PX_PER_MM, DEFAULT_APPEARANCE,
     DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
     DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES,
     normalizeAppearance, normalizeConstructionAppearance, normalizeDimensionAppearance,
@@ -17,18 +17,15 @@
     resolveGeometryAppearance, resolveDimensionAppearance,
   } = window.Appearance;
   const {
-    normalizedDrawingOrder, drawingOrderItemsForScope, ensureDrawingOrderState, drawingOrderOwner,
+    ensureDrawingOrderState, drawingOrderOwner,
   } = window.DrawingOrder;
   const {
-    DEFAULT_DOCUMENT_NAME,
-    sanitizeDocumentNameValue, fileNameStem,
-    effectiveDocumentNameFromValue, documentContentSignature,
+    fileNameStem,
+    effectiveDocumentNameFromValue,
   } = window.DocumentFiles;
 
   const {
     MIN_ORIENTATION_LENGTH,
-    normalizeAnglePositive,
-    normalizeAngleSigned,
     arcEndpointPoint,
     circlePointAtAngle,
     arcSweep,
@@ -36,53 +33,24 @@
     shortestAngleFrom,
     threePointArcGeometry,
     slotGeometry,
-    angleOnSignedSweep,
-    arcParamOnSweep,
     angleAtArcParam,
     arcSamplePoints,
-    lineUnit,
     lineNormal,
-    lineSupportNormal,
     lineHasDirection,
-    lineAngle,
     signedPointLineDistance,
-    signedPointDirectedLineDistance,
-    projectPointToLine,
-    projectPointToSegmentPoint,
-    closestPointOnSegment,
-    distancePointToSegment,
-    distancePointToSegmentPoints,
-    lineIntersection,
   } = window.GeometryKernel;
 
   const {
-    create: createGeometryRef,
     parseId: parseGeometryRefId,
-    parseKey: parseGeometryRefKey,
     id: geometryRefId,
     key: geometryRefKey,
     equals: geometryRefsEqual,
-    resolve: resolveGeometryRefValue,
   } = window.GeometryRef;
-
-  const {
-    createRegionIndex: createHatchRegionIndex,
-    findFaceInIndex: findHatchFaceInIndex,
-    resolveBoundary: resolveHatchBoundaryLoops,
-    containsPoint: hatchContainsPoint,
-    normalizeBoundaryLoops: normalizeHatchBoundaryLoops,
-    boundaryGeometryRefs: hatchBoundaryGeometryRefs,
-    rewriteBoundaryRefs: rewriteHatchBoundaryRefs,
-  } = window.HatchRegionEngine;
 
   const { build: buildOffsetChainGeometry } = window.OffsetChainEngine;
 
   const {
-    evaluate: evaluateParameterExpression,
-    evaluateDefinitions: evaluateParameterDefinitions,
     formatReference: formatParameterReference,
-    validateIdentifier: validateParameterIdentifier,
-    rewriteIdentifiers: rewriteParameterIdentifiers,
   } = window.ParameterEngine;
 
   const {
@@ -114,32 +82,16 @@
     GeometryFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
-    PointHorizontalConstraint,
     PointVerticalConstraint,
-    ArcEndpointHorizontalConstraint,
-    ArcEndpointVerticalConstraint,
-    SymmetryConstraint,
-    LineSymmetryConstraint,
-    ArcSymmetryConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
-    CollinearConstraint,
-    EqualLengthConstraint,
     RadiusConstraint,
     DiameterConstraint,
-    ConcentricConstraint,
     EqualRadiusConstraint,
-    PointOnCircleConstraint,
-    ArcEndpointOnCircleConstraint,
-    LineCircleTangentConstraint,
-    CircleCircleTangentConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
     SplineSplineTangentConstraint,
     SketchProjectionConstraint,
-    DragConstraint,
-    ParameterDragConstraint,
-    ArcEndpointDragConstraint,
     ConstraintSolver,
   } = window.GeometrySolver;
 
@@ -151,8 +103,8 @@
 
   const {
     targetFromConstraint, offsetPairSign, angleDegrees,
-    angleDimensionSweep, signedAngleBetweenLines, measuredDimensionValue,
-    angleDimensionAngles, angleDimensionCandidate, geometryTargetValue,
+    measuredDimensionValue,
+    angleDimensionAngles,
     isReadOnlyDimension, isDimensionConstraint,
   } = window.DimensionQueries;
 
@@ -819,7 +771,6 @@
     geometryReads, isVisibleSketchElement, isActiveSketchElement, isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint, sketchName, elementSketchId, applicationText,
   });
   const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
-  const { circlePointAtPointer } = window.GeometryKernel;
   function snapForDrawing(point) { return drawingSnap.resolve(point, 10 / viewport.scale); }
   const { draft: splineDraft, command: splineCommand } = window.BasicDrawingTools.createSpline({
     currentScope: workspace.current, ids: geometryIds, endpointAt, samePosition, isPointUsedByPrimitive,
