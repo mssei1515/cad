@@ -6,7 +6,7 @@
 
 ## 現在の再開地点（2026-10-16）
 
-develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
+現在のコードはdevelop／origin/developの77e4e19（作業最終80771ff）。app.jsは3,652行で、数百行への全体目標は未完了。main／origin/mainへの反映は全E2Eの性能超過・航空機ケースtimeoutの2件により保留している。構文552ファイル・単体1,587件成功、全E2Eは582／584件成功。前回版との比較結果と回答待ちの判断はrefactoring-policy-and-resume.mdのsection 8を参照する。
 
 ### Trim機能とテスト支援の生成・接続
 

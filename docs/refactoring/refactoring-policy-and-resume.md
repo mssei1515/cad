@@ -104,7 +104,19 @@ local／originのmainとdevelopが4859400で同期・cleanであることを確�
 
 TrimはTrimFeatureへquery／editing／commandの組立てを集約し、テストfixtureの接続はTrimTestDriver.createFeatureへ分離した。現在scope／倍率と7／倍率のhit幅、Point／寸法拘束の転送、checkpointと失敗段階の復元、既存hookを維持する。構文552ファイル・単体1,587件・読込E2E1件・関連E2E143件成功（142件1.9分＋性能1件4.5秒）。ログはcad-trim-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。
 
-ユーザーのorigin/main反映指示により、この区切りをCommit／Pushしてdevelopへ統合し、最新コードの全体検証後にmainへ最後に反映する。main反映後はdevelopをfast-forwardしてlocal／originの両branchを同期し、統合済み作業branchを削除、runtimeを再生成する。全体検証結果と最終commitは完了時に追記する。次回は最新developから新しい作業branchを作成し、状態所有と依存を明示できる機能単位を選ぶ。巨大mutable contextや別の巨大appへの移動、行数だけの薄いdelegate分割を避ける。
+### origin/main反映前の検証で保留（2026-10-16）
+
+ユーザーのorigin/main反映指示により、コード最終commit80771ffをdevelopの77e4e19へ統合しPush済み。main／origin/mainは4859400のまま。作業branch codex/composition-entry-auditは80771ffで保持する。全体目標は未完了であり、mainへのリリースも未完了。
+
+最新develop 77e4e19の構文552ファイル・単体1,587件は成功（exit 0）。全E2E584件は582成功・2失敗（31.2分、exit 1）。失敗はadversarial-authoring-performance.spec.jsの「selection, deletion, undo and redo stay responsive on the complete fixture」がselection/blank-rectangle 266ms（基準250ms未満）、constraint-drag-regressions.spec.jsの「aircraft A2 and A3 respond at multiple locations without freezing or losing constraint status」が600000ms timeout。後者はloadのconstraintStatusesForTestをpage.evaluateしている時点で時間切れとなった。
+
+同じ最新コード・同じ基準で失敗2件を再実行して両方失敗（性能はselection/line-pointerdown-up 150ms、基準150ms未満。航空機は同じtimeout）。cleanな前回main 4859400へ一時checkoutし同じ2件を比較実行すると両方成功（9.9分、航空機9.8分、性能のblank-rectangle 249ms・line-pointerdown-up 147ms）。developへ戻しruntimeを再生成して同じ2件を再比較すると両方失敗（性能189ms、航空機10.0分timeout）。コードやテスト基準はこれらの検証中に変更していない。前回版も上限付近だが、最新側で失敗が続き、今回との差分が原因でないとは確認できていない。全成功や既存不具合と断定してはならない。
+
+ログは一時ディレクトリのcad-origin-main-oct16-final-{check,unit,e2e}.log、cad-origin-main-oct16-failed-rerun.log、cad-origin-main-oct16-baseline-comparison.log、cad-origin-main-oct16-current-comparison.log。各runnerの終了結果を回収済み。検証後の変更はこの記録のみ。
+
+ユーザーへ、原因調査のためmainを保留するか、今回の不合格結果を記録して反映するかの判断を質問済みで回答待ち。回答がないままmainへ反映しない。今回のCommit／develop Pushとmain反映の成否を区別する。調査継続時は新たな責務分離を始めず、selection操作の描画／UI時間と航空機の拘束状態照会を現物比較して原因を絞る。閾値を上げるだけの対応や、繰り返し成功するまで実行して失敗を隠す対応をしない。必要な修正はdevelopから作業branchを作成し、既存の区切りの履歴を保持する。mainへリリースできた後はdevelopをmainへfast-forwardして両者をPush・同期し、統合済み作業branchを削除、runtimeを再生成する。
+
+責務分離の次の候補は、状態所有と依存を明示できる機能単位から選ぶ。巨大mutable contextや別の巨大appへの移動、行数だけの薄いdelegate分割を避ける。
 
 ### 直前のリリース（4859400）
 
