@@ -1060,3 +1060,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/ui/sketch_tree_objects.js: Tree行のhover判定を同module内へ集約。readCanvasHover／readSidebarHoverの限定APIで現在値を読み、カテゴリ別のObject同一性と固定Point／Constraint解決を維持する。CanvasHover／SelectionHighlightの状態所有と既存hovered公開APIは維持し、appの照会本体を撤去。
+
+
+- src/rendering/canvas_surface.js: createInteractiveRendererが通常Canvasの18段階の重ね描きを所有し、createFrameRendererのPNG分岐とは分ける。src/rendering/annotation_renderer.js: layer.drawPreviewが現在previewの取得とleader／textの描画振分けを所有。appは既存描画器と描画用callbackだけを接続し、model／操作contextやpreview stateを複製しない。

@@ -665,7 +665,7 @@
     showResizeHandles: element => !pngRendering.frame && !element.blockProjection && canvasSelection.annotations.includes(element) && isEditableSketchElement(element) && annotationDrag.resizeEnabled(element),
     isResizeHandleHovered: (element, handle) => canvasHover.current.annotationHandle?.element === element && canvasHover.current.annotationHandle.resizeX === handle.resizeX && canvasHover.current.annotationHandle.resizeY === handle.resizeY,
     showLeaderEndHandle: element => !pngRendering.frame && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
-  const annotationLayer = window.AnnotationRenderer.createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText });
+  const annotationLayer = window.AnnotationRenderer.createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText, readPreview: () => annotationCommand.preview() });
   function annotationPlacementAnchor(...args) { return readAnnotationPlacementAnchor(...args); }
   function materializeAnnotationAnchor(...args) { return annotationAnchorMaterialization.materialize(...args); }
   const annotationAnchorMaterialization = window.AnnotationAnchorConstraints.createMaterialization({
@@ -1954,39 +1954,23 @@
 
   function draw() { return canvasRefresh.draw(); }
 
+  const interactiveCanvas = window.CanvasSurface.createInteractiveRenderer({
+    drawBlockInstanceHandles, dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
+    authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
+    drawSnapMarker, drawArcEndpointHandles, drawSplineEditHandles, drawPoints, drawReferenceImageOverlays,
+    drawSketchIdentityLabel, drawSelectionRect, drawExportOverlay: () => pngExportCommand?.drawOverlay(ctx, viewport.scale),
+  });
   const canvasFrameRenderer = window.CanvasSurface.createFrameRenderer({
     canvas, ctx, viewport, surface: canvasSurface,
     syncZoom: () => canvasZoomControl.sync(), readExportFrame: () => pngRendering.frame,
     recordDraw: () => pointerMoveScheduler.recordDraw(),
     drawContent: () => { drawReferenceImages(); drawHatches([], { includePreview: true }); drawDrawingStack(); },
     drawExport: () => { drawDimensions(); drawAnnotations(); drawPoints(); },
-    drawInteractive: drawInteractiveCanvas,
+    drawInteractive: interactiveCanvas.draw,
   });
 
   function drawCanvas() { return canvasFrameRenderer.draw(); }
 
-  function drawInteractiveCanvas() {
-    drawBlockInstanceHandles();
-    drawDimensions();
-    drawDimensionPreview();
-    drawAnnotations();
-    const annotationPreview = annotationCommand.preview();
-    if (annotationPreview?.type === "leader") drawAnnotationLeader(annotationPreview, true);
-    else if (annotationPreview) drawAnnotationText(annotationPreview, "#2563eb");
-    authoringPreviewLayer.draw();
-    placementPreviewLayer.drawBlockPlacementPreview();
-    placementPreviewLayer.drawFreeInstancePreview();
-    offsetPreviewLayer.draw();
-    authoringPreviewLayer.drawTrimPreview();
-    drawSnapMarker();
-    drawArcEndpointHandles();
-    drawSplineEditHandles();
-    drawPoints();
-    drawReferenceImageOverlays();
-    drawSketchIdentityLabel();
-    drawSelectionRect();
-    pngExportCommand?.drawOverlay(ctx, viewport.scale);
-  }
 
   const selectionRectangle = window.SelectionRectangle.create({
     rectFromPoints, hypot2, viewScale: () => viewport.scale,

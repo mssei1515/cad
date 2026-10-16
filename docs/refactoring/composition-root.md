@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 通常Canvasの描画進行とAnnotation preview
+
+drawInteractiveCanvasの描画順を既存CanvasSurface.createInteractiveRendererへ集約し、Annotation previewの読取りとleader／text振分けは既存AnnotationRenderer.createLayer.drawPreviewへ移した。通常CanvasはBlock handleからPNG操作overlayまでの18段階を維持し、寸法／注記／作図／配置／Offsetの既存描画器と描画用入口だけを受ける。Document／操作stateの可変contextは渡さない。previewは段階到達時に1回読み、leaderはtrue、truthyな非leaderは既存色で描く。appはannotationCommandの遅延読取りとnullable PNG commandのoverlayを接続し、receiverと現在scaleの参照時点を保持。createFrameRendererの通常／PNG分岐と出力経路は変更せず、新たなcatch／finallyやcleanupも加えない。
+
+app.jsは3,704→3,688行（16行減、今回再開から261行減）。既存canvas-surface unitへ2件、annotation-renderer unitへ1件追加し、全段階順・renderer receiver・現在method参照・例外時の後続抑止、previewの1回読取り／引数／空値と保存注記の照会をしないことを確認。構文546ファイル・単体1,576件・関連E2E185件成功（すべてexit 0、E2E2.8分）。unified-ui／png-export／annotation-anchors／phase0-characterizationの全4fileでPNGと画面比較を含む。ログは一時ディレクトリのcad-interactive-canvas-pass-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### Treeのhover状態の照会
 
 sketchTreeObjectHoveredを既存SketchTreeObjects.createの内部へ集約し、従来の外部predicate注入をreadCanvasHover／readSidebarHoverの2読取りへ置換した。Hatch／画像／Block／派生Instance／AnnotationはCanvasHoverの対応field、それ以外はSelectionHighlightの現在itemを同一参照で照合する。固定PointとConstraintのentry解決、dimensionからconstraintへの既存変換、関係ない側のhoverを読まない短絡を維持する。同IDの別Objectを一致にせず、状態複製・同期・書込みを加えない。Tree行と既存hovered公開APIは同じ内部判定を利用し、appは状態所有者からの読取りだけを接続する。新factoryは増やしていない。

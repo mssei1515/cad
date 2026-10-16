@@ -97,5 +97,30 @@
     }
     return Object.freeze({ draw });
   }
-  window.CanvasSurface = Object.freeze({ create, createFrameRenderer });
+  function createInteractiveRenderer({ drawBlockInstanceHandles, dimensions, drawDimensionPreview, annotations,
+    authoringPreview, placements, offsetPreview, drawSnapMarker, drawArcEndpointHandles, drawSplineEditHandles,
+    drawPoints, drawReferenceImageOverlays, drawSketchIdentityLabel, drawSelectionRect, drawExportOverlay }) {
+    function draw() {
+      drawBlockInstanceHandles();
+      dimensions.draw();
+      drawDimensionPreview();
+      annotations.draw();
+      annotations.drawPreview();
+      authoringPreview.draw();
+      placements.drawBlockPlacementPreview();
+      placements.drawFreeInstancePreview();
+      offsetPreview.draw();
+      authoringPreview.drawTrimPreview();
+      drawSnapMarker();
+      drawArcEndpointHandles();
+      drawSplineEditHandles();
+      drawPoints();
+      drawReferenceImageOverlays();
+      drawSketchIdentityLabel();
+      drawSelectionRect();
+      drawExportOverlay();
+    }
+    return Object.freeze({ draw });
+  }
+  window.CanvasSurface = Object.freeze({ create, createFrameRenderer, createInteractiveRenderer });
 })();

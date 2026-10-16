@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用39%／残量61%。未使用入口／alias、Offset選択、寸法外観・label、Annotationアンカー、円弧端点角度、暗黙拘束、操作名／Toolbarアイコン、Tree選択（5c49b62）に続き、今回はTreeのhover照会を既存SketchTreeObjects内へ集約。CanvasHoverとSelectionHighlightの状態所有は維持し、2つの読取りでカテゴリ別Object照合と固定Point／Constraint解決を行う。app.jsは開始3,949→現在3,704行（合計245行減、直近3,712→3,704で8行減）。構文546ファイル・単体1,573件・関連E2E158件成功（exit 0、3file、2.2分）。ログはcad-tree-hover-query-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用39%／残量61%。未使用入口／alias、Offset選択、寸法外観・label、Annotationアンカー、円弧端点角度、暗黙拘束、操作名／アイコン、Tree選択・hover（79de24f）に続き、今回は通常Canvasの18段階の描画進行をCanvasSurface.createInteractiveRendererへ、Annotation previewを既存layerへ集約。現在値の読取り・描画順・receiver・例外伝播・PNGとの差を維持。app.jsは開始3,949→現在3,688行（合計261行減、直近3,704→3,688で16行減）。構文546ファイル・単体1,576件・関連E2E185件成功（exit 0、4file、2.8分）。ログはcad-interactive-canvas-pass-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-次はdrawInteractiveCanvasとCanvasSurface.createFrameRendererの描画段階の責務を確認する。通常CanvasとPNG出力の違い、Annotation previewの現在値／leaderとtextの分岐、作図／配置／Offset／trim／snap／handle／Point／画像overlay／Sketch identity／矩形選択／PNG overlayの順序を維持する。単なる巨大なcallback一覧や可変contextへ移すのでなく、描画器とpreview ownerの既存公開APIで段階をまとめられるか検討する。updateUIUnprofiledの更新順・refreshAnalysis指定は別に扱う。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。
+次は残る作図系の生成・接続を分析する。GeometryCreation／端点解決、DrawingSnap、SnapConstraints、BasicDrawingToolsの共有依存と公開先を追い、既存src/applicationの機能組立てへまとめられる範囲を確認する。数行のwrapperをさらに分割するだけでなく、現在scope・採番・選択／preview・commandの所有と開始／更新／確定／取消を維持した機能単位を選ぶ。late constの参照時点やSpline／Point等の独立した入口、外部利用者を崩さない。巨大app contextや単なる別の巨大組立てmoduleへ移さない。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。
 
 ### 直前のリリース（4859400）
 
