@@ -145,3 +145,50 @@ test('selection clearing preserves receiver and the two hover phases around high
   assert.deepEqual(events, ['selection', 'operands', ['sketchIdentity', 'block', 'geometryInstance'], 'highlight',
     ['annotation', 'hatch', 'referenceImage', 'spline']]);
 });
+
+
+test('document Canvas reset uses live owners and preserves fields outside the explicit replacement phase', () => {
+  const context = { window: { GeometrySolver: {} } }; vm.createContext(context);
+  for (const file of ['selection.js', 'canvas_hover.js', 'canvas_selection_interaction.js']) {
+    vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing', file), 'utf8'), context);
+  }
+  const selection = context.window.CanvasSelection.create();
+  const hover = context.window.CanvasHover.create({ isEndpointPoint: () => false });
+  const retained = Object.freeze({ id: 'retained' }), events = [];
+  for (const field of ['points', 'lines', 'circles', 'arcs', 'splines', 'annotations', 'hatches', 'referenceImages', 'blockInstances', 'geometryInstances', 'dimensionConstraints']) selection.set(field, [retained]);
+  selection.set('arcEndpoint', retained); selection.set('arcEndpointPair', retained);
+  selection.set('constraint', retained); selection.set('instanceGeometry', retained);
+  selection.set('sketchId', 'S2');
+  hover.update(Object.fromEntries(Object.keys(hover.current).map(key => [key, retained])));
+  let pointer = retained, snap = retained;
+  const api = context.window.CanvasSelectionInteraction.createDocumentReset({
+    canvasSelection: selection, canvasHover: hover,
+    selectionHighlight: { reset() { events.push('highlight'); } },
+    clearPointer: () => { pointer = null; events.push('pointer'); }, clearSnap: () => { snap = null; events.push('snap'); },
+  });
+  assert.equal(pointer, retained); assert.equal(selection.annotations[0], retained);
+  assert.equal(api.reset(), undefined); assert.equal(pointer, null); assert.equal(snap, null);
+  assert.deepEqual(events, ['highlight', 'pointer', 'snap']);
+  for (const field of ['points', 'lines', 'circles', 'arcs']) assert.equal(selection[field][0], retained);
+  for (const field of ['splines', 'annotations', 'hatches', 'referenceImages', 'blockInstances', 'geometryInstances', 'dimensionConstraints']) assert.equal(selection[field].length, 0);
+  for (const field of ['arcEndpoint', 'arcEndpointPair', 'constraint', 'instanceGeometry']) assert.equal(selection[field], null);
+  assert.equal(selection.sketchId, 'S2');
+  for (const [key, value] of Object.entries(hover.current)) assert.equal(value, ['annotation', 'annotationHandle'].includes(key) ? retained : null, key);
+  assert.equal(api.reset(), undefined);
+});
+
+test('document Canvas reset retains phases around pointer, snap and related selection clearing', () => {
+  const events = [], selection = { set(key, value) { assert.equal(this, selection); events.push(['set', key]); } };
+  const hover = { update(patch) { assert.equal(this, hover); events.push(['hover', ...Object.keys(patch)]); } };
+  const highlight = { reset() { assert.equal(this, highlight); events.push(['highlight']); } };
+  const api = sandbox.window.CanvasSelectionInteraction.createDocumentReset({ canvasSelection: selection, canvasHover: hover, selectionHighlight: highlight,
+    clearPointer: () => events.push(['pointer']), clearSnap: () => events.push(['snap']),
+  });
+  assert.deepEqual(events, []); api.reset();
+  assert.deepEqual(events, [
+    ['hover', 'point', 'endpointPoint', 'line', 'circle', 'arc', 'spline', 'arcEndpoint', 'dimension'],
+    ['highlight'], ['hover', 'sketchIdentity'], ['pointer'], ['snap'],
+    ...['arcEndpoint', 'arcEndpointPair', 'dimensionConstraint', 'constraint', 'annotations', 'hatches', 'referenceImages', 'splines', 'blockInstances', 'geometryInstances'].map(key => ['set', key]),
+    ['hover', 'block'], ['set', 'instanceGeometry'], ['hover', 'geometryInstance', 'hatch', 'referenceImage'],
+  ]);
+});

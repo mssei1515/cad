@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Document初期化時のCanvas表示状態
+
+resetModelStateのhover／highlight／pointer／snapと明示Selection fieldのresetを、既存CanvasSelectionInteraction.createDocumentResetへ集約。5依存は既存Selection／hover／highlightとpointer／snap解除portだけで、Documentやcommand sessionを持ち込まない。通常clearとDocument初期化で消す範囲が異なるため独立した入口とし、最初のclearSelectionや共通pending／constraint sessionのreset、採番との位置関係を維持する。hoverの段階更新、highlight→pointer→snap、Selection fieldの順も保持し、元bodyはpointer解除のcapability置換とindent以外一致。clearSnapは後段constのため、生成時は委譲callbackで接続し、実際のresetまで評価しない。
+
+app.jsは4,438→4,419行（19行減、07024cbから合計40行減）。新scriptなし。実際のCanvasSelection／CanvasHoverを使う単体2件で対象field、対象外の基本Geometry／Sketch選択とannotation hover等の保持、反復reset、ownerのreceiverと更新順を確認。構文518ファイル・単体1,443件・関連E2E179件が成功（すべてexit 0、E2E2.4分）。file-safety／unified-ui／blocks／sketch-permissions／sketch-projectionを実行。全runnerは正常終了。ログは一時ディレクトリのcad-document-canvas-reset-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は採番変数とDocumentSequences／GeometryIdsの役割、reset／reserve／restoreの境界を調べ、状態所有を整理する。
+
 ### Document初期化時の作図下書き破棄
 
 resetModelStateの連続した16個の作図下書きresetを、既存DrawOperationLifecycle.resetForDocumentへ集約。追加依存なしでLine／Centerline、transient Point／Line completion、Rectangle／Slot／Fillet／Circle／Arc／Spline、投影／派生source、Spline編集、preview pointer、Offsetを従来順に破棄する。通常のexit／cancelはrollback・preview全体・Hatch・UI通知等の範囲が異なるため共用しない。Document内容・cache・採番、共通pending／constraint session、後段Hatch等のresetは元の初期化側に残す。factory生成はresetModelStateの実呼出しより前であり、既存factoryはreset callbackを生成時に実行しないことを確認。

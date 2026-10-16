@@ -405,6 +405,10 @@
   });
   const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
   const selectionClearing = window.CanvasSelectionInteraction.createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight });
+  const documentCanvasReset = window.CanvasSelectionInteraction.createDocumentReset({
+    canvasSelection, canvasHover, selectionHighlight, clearPointer: () => { lastPointerWorld = null; },
+    clearSnap: () => clearSnap(),
+  });
   const offsetSelection = window.OffsetSelection.create({
     getModel: () => model, activeSketchId, elementSketchId, constraintSketchId,
     Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
@@ -1573,30 +1577,7 @@
     pendingCommandSession.clear();
     constraintTargetSession.reset();
     constructionCommand.restore(false);
-    canvasHover.update({
-      point: null, endpointPoint: null, line: null,
-      circle: null, arc: null, spline: null,
-      arcEndpoint: null, dimension: null,
-    });
-    selectionHighlight.reset();
-    canvasHover.update({ sketchIdentity: null });
-    lastPointerWorld = null;
-    clearSnap();
-    canvasSelection.set("arcEndpoint", null);
-    canvasSelection.set("arcEndpointPair", null);
-    canvasSelection.set("dimensionConstraint", null);
-    canvasSelection.set("constraint", null);
-    canvasSelection.set("annotations", []);
-    canvasSelection.set("hatches", []);
-    canvasSelection.set("referenceImages", []);
-    canvasSelection.set("splines", []);
-    canvasSelection.set("blockInstances", []);
-    canvasSelection.set("geometryInstances", []);
-    canvasHover.update({ block: null });
-    canvasSelection.set("instanceGeometry", null);
-    canvasHover.update({
-      geometryInstance: null, hatch: null, referenceImage: null,
-    });
+    documentCanvasReset.reset();
     geometryIds.reset();
     sketchSeq = 2;
     annotationSeq = 1;

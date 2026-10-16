@@ -230,5 +230,35 @@
     }
     return Object.freeze({ clear });
   }
-  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection, createClearing });
+  // Reset Canvas presentation for document replacement, independently of command cancellation.
+  function createDocumentReset({ canvasSelection, canvasHover, selectionHighlight, clearPointer, clearSnap }) {
+    function reset() {
+      canvasHover.update({
+        point: null, endpointPoint: null, line: null,
+        circle: null, arc: null, spline: null,
+        arcEndpoint: null, dimension: null,
+      });
+      selectionHighlight.reset();
+      canvasHover.update({ sketchIdentity: null });
+      clearPointer();
+      clearSnap();
+      canvasSelection.set("arcEndpoint", null);
+      canvasSelection.set("arcEndpointPair", null);
+      canvasSelection.set("dimensionConstraint", null);
+      canvasSelection.set("constraint", null);
+      canvasSelection.set("annotations", []);
+      canvasSelection.set("hatches", []);
+      canvasSelection.set("referenceImages", []);
+      canvasSelection.set("splines", []);
+      canvasSelection.set("blockInstances", []);
+      canvasSelection.set("geometryInstances", []);
+      canvasHover.update({ block: null });
+      canvasSelection.set("instanceGeometry", null);
+      canvasHover.update({
+        geometryInstance: null, hatch: null, referenceImage: null,
+      });
+    }
+    return Object.freeze({ reset });
+  }
+  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection, createClearing, createDocumentReset });
 })();
