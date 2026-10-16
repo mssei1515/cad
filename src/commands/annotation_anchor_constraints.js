@@ -223,5 +223,23 @@
     }
     return Object.freeze({ start, click, complete: finish, cancel, submitDistance, get active() { return active(); }, reset: () => { draft = null; } });
   }
-  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, createDimensions, axes, degree, refs, create });
+  function createMaterialization({ annotationPlacementAnchor, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle }) {
+    function materializeAnnotationAnchor(element, { capture = false } = {}) {
+      if (!element.anchorPosition || capture) {
+        const anchor = annotationPlacementAnchor(element);
+        const position = { ...anchor };
+        if (element.type === "leader") {
+          const geometry = annotationLeaderDisplayGeometry(element), start = annotationLeaderAnchor(element) || element.start;
+          position.x = element.start.x + (anchor.x - start.x) / geometry.shelfScale;
+          position.y = element.start.y + (anchor.y - start.y) / geometry.shelfScale;
+          element.textPlacement = "anchor";
+        }
+        if (!element.anchorPosition) { element.x = position.x; element.y = position.y; element.anchorPosition = `${effectiveAnnotationStyle(element).textAlign}-middle`; }
+        return position;
+      }
+      return { x: element.x, y: element.y };
+    }
+    return Object.freeze({ materialize: materializeAnnotationAnchor });
+  }
+  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, createDimensions, axes, degree, refs, create, createMaterialization });
 })();

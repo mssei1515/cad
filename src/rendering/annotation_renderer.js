@@ -251,7 +251,11 @@
         }
       });
     }
-    return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
+    function annotationPlacementAnchor(element) {
+      const layout = annotationTextLayout(element) || annotationTextMetrics(element, element.type === "leader" ? annotationLeaderDisplayGeometry(element) : element);
+      return { x: layout.anchorX ?? layout.x, y: layout.anchorY ?? layout.y };
+    }
+    return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader, annotationPlacementAnchor });
   }
   function createColor({ effectiveAnnotationStyle, readExportFrame, canvasSelection, readHoveredAnnotation, canvasThemeColor }) {
     function annotationDisplayColor(element, style = effectiveAnnotationStyle(element)) {

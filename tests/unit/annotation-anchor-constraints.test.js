@@ -9,6 +9,48 @@ const sources = vm.runInNewContext(fs.readFileSync(path.join(root, 'index.html')
 for (const file of sources.filter(p => p.startsWith('src/'))) vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), sandbox);
 const { AnnotationAnchorConstraints: A, AnnotationData: D, Appearance } = sandbox.window;
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
+
+test('materialization skips display reads for established anchors and capture preserves their stored coordinates', () => {
+  const calls = [], element = { type: 'text', x: 10, y: 20, anchorPosition: 'left-middle' };
+  const api = A.createMaterialization({ annotationPlacementAnchor: item => { calls.push(item); return { x: 30, y: 40 }; },
+    annotationLeaderDisplayGeometry: () => { throw Error('text must not read leader geometry'); },
+    annotationLeaderAnchor: () => { throw Error('text must not read leader target'); },
+    effectiveAnnotationStyle: () => { throw Error('existing anchor must not read alignment'); } });
+  assert.deepEqual(calls, []); const before = JSON.stringify(element), position = api.materialize(element);
+  assert.equal(position.x, 10); assert.equal(position.y, 20); assert.deepEqual(calls, []);
+  position.x = 100; assert.equal(element.x, 10);
+  const captured = api.materialize(element, { capture: true });
+  assert.equal(captured.x, 30); assert.equal(captured.y, 40); assert.equal(calls[0], element);
+  assert.equal(JSON.stringify(element), before);
+});
+
+test('new text anchors copy display coordinates before resolving alignment and retain the source position object', () => {
+  const anchor = { x: 12, y: 34 }, element = { type: 'text', x: 1, y: 2 }, calls = [];
+  const api = A.createMaterialization({ annotationPlacementAnchor: item => { assert.equal(item, element); return anchor; },
+    effectiveAnnotationStyle: item => { calls.push([item.x, item.y]); return { textAlign: 'right' }; } });
+  const position = api.materialize(element);
+  assert.notEqual(position, anchor); assert.equal(position.x, 12); assert.equal(position.y, 34);
+  assert.deepEqual(calls, [[12, 34]]); assert.equal(element.anchorPosition, 'right-middle');
+  position.x = 99; assert.equal(anchor.x, 12); assert.equal(element.x, 12);
+});
+
+test('leader materialization reverses shelf scaling around its resolved anchor and capture falls back to stored start without overwriting an existing anchor', () => {
+  let target = { x: 10, y: 20 };
+  const calls = [], api = A.createMaterialization({ annotationPlacementAnchor: () => ({ x: 110, y: 220 }),
+    annotationLeaderDisplayGeometry: element => { calls.push(['geometry', element]); return { shelfScale: 2 }; },
+    annotationLeaderAnchor: element => { calls.push(['target', element]); return target; },
+    effectiveAnnotationStyle: element => { assert.equal(element.textPlacement, 'anchor'); return { textAlign: 'center' }; } });
+  const element = { type: 'leader', x: 1, y: 2, start: { x: 50, y: 100 }, textPlacement: 'shelf' };
+  const position = api.materialize(element);
+  assert.equal(position.x, 100); assert.equal(position.y, 200); assert.equal(element.x, 100); assert.equal(element.y, 200);
+  assert.equal(element.anchorPosition, 'center-middle'); assert.equal(element.textPlacement, 'anchor');
+  assert.deepEqual(calls.map(c => c[0]), ['geometry', 'target']);
+  target = null; element.textPlacement = 'shelf';
+  const captured = api.materialize(element, { capture: true });
+  assert.equal(captured.x, 80); assert.equal(captured.y, 160);
+  assert.equal(element.x, 100); assert.equal(element.y, 200); assert.equal(element.anchorPosition, 'center-middle');
+  assert.equal(element.textPlacement, 'anchor'); assert.equal(element.start.x, 50); assert.equal(element.start.y, 100);
+});
 function renderer(handles = false, hoveredHandle = null) {
   const calls = [], ctx = {}, viewport = { scale: Appearance.CSS_PX_PER_MM };
   for (const key of ['save', 'restore', 'translate', 'rotate', 'fillText', 'beginPath', 'moveTo', 'lineTo', 'stroke', 'rect', 'arc', 'setLineDash', 'fill', 'closePath']) ctx[key] = (...args) => calls.push([key, ...args]);
@@ -30,6 +72,8 @@ test('nine positions keep the model anchor while changing text, padding, alignme
       h.viewport.scale = scale;
       const layout = h.api.annotationTextLayout(item);
       near(layout.anchorX, 10); near(layout.anchorY, 20);
+      const placement = h.api.annotationPlacementAnchor(item);
+      near(placement.x, 10); near(placement.y, 20);
       const [column, row] = position.split('-');
       const fractions = { left: 0, center: 0.5, right: 1, top: 0, middle: 0.5, bottom: 1 };
       const localX = layout.frame.left + layout.frame.width * fractions[column];

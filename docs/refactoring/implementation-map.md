@@ -1039,3 +1039,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/rendering/dimension_presentation.js: DimensionPresentation.createLabelが寸法labelの文字列構成を所有する。数値formatはNumberDisplay、外観はGeometryAppearanceQuery、測定／readonlyと角度値はDimensionQueriesの既存APIへ委譲。appは既存hoisted入口を描画・hit・観測へ接続し、参照寸法／角度interval／桁数／公差の規則を重複実装しない。
+
+
+- src/rendering/annotation_renderer.js: annotationPlacementAnchorが表示位置の読取りを所有する。src/commands/annotation_anchor_constraints.js: createMaterializationが座標の具体化と既存条件に応じたAnnotation更新を所有する。appは同じ入口を拘束／寸法／drag／Properties／snapへ接続し、capture・既存anchor保持・leaderの倍率逆変換の規則を重複実装しない。

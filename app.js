@@ -659,32 +659,18 @@
     effectiveAnnotationStyle, readExportFrame: () => pngRendering.frame, canvasSelection,
     readHoveredAnnotation: () => canvasHover.current.annotation, canvasThemeColor,
   });
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader, annotationPlacementAnchor: readAnnotationPlacementAnchor } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
     resolvePlacement: (element, base) => window.AnnotationAnchorConstraints.resolve(element, base, resolveGeometryRef),
     showFrame: element => !pngRendering.frame && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
     showResizeHandles: element => !pngRendering.frame && !element.blockProjection && canvasSelection.annotations.includes(element) && isEditableSketchElement(element) && annotationDrag.resizeEnabled(element),
     isResizeHandleHovered: (element, handle) => canvasHover.current.annotationHandle?.element === element && canvasHover.current.annotationHandle.resizeX === handle.resizeX && canvasHover.current.annotationHandle.resizeY === handle.resizeY,
     showLeaderEndHandle: element => !pngRendering.frame && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
   const annotationLayer = window.AnnotationRenderer.createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText });
-  function annotationPlacementAnchor(element) {
-    const layout = annotationTextLayout(element) || annotationTextMetrics(element, element.type === "leader" ? annotationLeaderDisplayGeometry(element) : element);
-    return { x: layout.anchorX ?? layout.x, y: layout.anchorY ?? layout.y };
-  }
-  function materializeAnnotationAnchor(element, { capture = false } = {}) {
-    if (!element.anchorPosition || capture) {
-      const anchor = annotationPlacementAnchor(element);
-      const position = { ...anchor };
-      if (element.type === "leader") {
-        const geometry = annotationLeaderDisplayGeometry(element), start = annotationLeaderAnchor(element) || element.start;
-        position.x = element.start.x + (anchor.x - start.x) / geometry.shelfScale;
-        position.y = element.start.y + (anchor.y - start.y) / geometry.shelfScale;
-        element.textPlacement = "anchor";
-      }
-      if (!element.anchorPosition) { element.x = position.x; element.y = position.y; element.anchorPosition = `${effectiveAnnotationStyle(element).textAlign}-middle`; }
-      return position;
-    }
-    return { x: element.x, y: element.y };
-  }
+  function annotationPlacementAnchor(...args) { return readAnnotationPlacementAnchor(...args); }
+  function materializeAnnotationAnchor(...args) { return annotationAnchorMaterialization.materialize(...args); }
+  const annotationAnchorMaterialization = window.AnnotationAnchorConstraints.createMaterialization({
+    annotationPlacementAnchor, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle,
+  });
   const annotationAnchorConstraints = window.AnnotationAnchorConstraints.create({
     getCommand: () => constraintTargetSession.command, setCommand: value => { constraintTargetSession.replaceCommand(value); },
     selectedAnnotation: () => canvasSelection.selectedElementCount() === 1 ? canvasSelection.annotations[0] : null,

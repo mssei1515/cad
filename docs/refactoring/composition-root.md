@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Annotationアンカー読取りと編集座標の具体化
+
+annotationPlacementAnchorを既存AnnotationRendererの読取りAPIへ、materializeAnnotationAnchorを既存AnnotationAnchorConstraints.createMaterializationへ集約。前者はlayout優先とmetrics fallback、anchorX／anchorYのnullish判定を維持。後者は表示anchor・leader表示geometry・参照anchor・実効styleの4依存で、既存anchorPositionあり／captureなしでは保存座標だけを返し、未具体化またはcapture時は表示位置を読む。leaderは参照anchorまたはstartを基準にshelfScaleを逆適用しtextPlacementをanchorへ設定する。x／yとanchorPositionを書き込むのは既存anchorPositionがない場合だけで、styleを読む時機も同じ。appは早期生成される利用者へのhoisted入口を残し、履歴・UI・拘束確定は既存呼出し側へ維持する。
+
+app.jsは3,792→3,778行（14行減、今回再開から171行減）。既存annotation-anchor-constraints unitへ3件追加し、既存anchorの照会短絡、captureで保存座標を保持、位置Objectの非共有、style読取り時点、leaderの逆変換と参照fallbackを確認。既存9位置・回転・倍率のテストからRendererのanchor読取りも確認。構文546ファイル・単体1,554件・関連E2E183件成功（すべてexit 0、E2E2.9分）。annotation-anchors／leader-appearance／unified-ui／free-text-input-dragの全4file。ログは一時ディレクトリのcad-annotation-anchor-materialization-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### 寸法label文字列の構成
 
 dimensionLabelForConstraintを既存DimensionPresentation.createLabelへ集約した。readonly／測定値／角度変換／外観／拘束Sketch／通常と測定用のformatを限定した依存として受ける。参照寸法は現在の測定値と測定用丸め、通常寸法はtarget値、angle intervalは符号付きdegree、通常angleは既存angleDegreesを使用する。precision指定時のtoFixed、接頭辞・接尾辞・改行・片側公差の0補完・角度単位・参照括弧を維持する。NumberDisplayは数値format、DimensionQueriesは値の照会、GeometryAppearanceQueryは外観の所有を維持し、appは既存hoisted入口を接続する。元の本体を同じ順序で移し、生成時に寸法や現在scopeを読まない。
