@@ -806,6 +806,9 @@
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
   });
   const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
+  const { endpointAt } = window.GeometryCreation.createEndpointResolver({
+    addPoint, hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
+  });
   const sketchProjectionEditing = window.SketchProjectionEditing.create({
     currentScope: workspace.current, queries: sketchProjectionQueries, resolveGeometryRef, geometryRefForItem, geometryKindForItem,
     constraintSketchId, constraintIsOperational, addPointToSketch, constraintReferencesPoint, nextSeq, normalizeAppearance,
@@ -1694,17 +1697,7 @@
   referenceImageInput.bindClipboard();
   const { importFile: importReferenceImageFile, clipboard: imageClipboard } = referenceImageInput;
 
-  function pointAt(x, y) {
-    return hitAnyPoint(x, y) || addPoint(x, y);
-  }
 
-  function endpointAt(x, y) {
-    const endpoint = hitEndpointPoint(x, y);
-    if (endpoint) return endpoint;
-    const explicit = hitExplicitPoint(x, y);
-    if (explicit) return addPoint(explicit.x, explicit.y, false, "endpoint");
-    return addPoint(x, y, false, "endpoint");
-  }
 
   function clearSelection() { return selectionClearing.clear(); }
 
@@ -1775,7 +1768,7 @@
     currentScope: workspace.current, viewportScale: () => viewport.scale, hitSketchAllowed, isVisibleSketchId, blockProjectionBundle,
     annotationBounds, resolvedHatchBoundary, isVisibleValue, hatchAppearanceForDisplay, hatchContainsSelectablePoint, geometryInstanceBundles,
   });
-  const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitAnyPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
+  const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
     currentScope: workspace.current, viewportScale: () => viewport.scale,
     isEditableSketchElement: hitElementAllowed, isSelectableEndpointPoint, isExplicitPoint, preferredSketchId: activeSketchId,
     hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById,

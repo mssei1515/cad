@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 既存端点の解決とendpoint生成
+
+endpointAtを既存GeometryCreation.createEndpointResolverへ集約。hit端点の同一参照優先→explicit Pointの現在座標で新endpoint→入力座標でendpoint生成という順序・引数を保持し、後続のhit queryには遅延callbackで接続する。既存採番／Sketch付与／scopeはaddPointへ、hit方針はGeometryHitQueryへ委譲。app内だけの未使用pointAtと未使用hitAnyPoint aliasを参照監査後に撤去した。新しいhit規則やPoint共有／固定の変更は加えない。
+
+app.jsは3,956→3,949行（7行減、b120651から合計194行減）。新scriptなし。既存geometry-creation unitへ3件追加し、既存端点の同一性と無採番、explicitと別Object／固定状態・kind・所属、現在scope／IDと引数順を確認。構文546ファイル・単体1,542件・関連E2E154件成功（すべてexit 0、E2E2.2分）。unified-ui／spline／centerline／blocksの全4fileを実行。ログは一時ディレクトリのcad-endpoint-resolution-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は分離後に残った未参照の旧入口を監査する。Playwright同梱babelBundleのbabelParse(code,filename,false)とtraverseでapp IIFE scopeを調べ、未参照140binding中FunctionDeclaration候補16件を確認済み。変数initializerの副作用と区別し、自動一括削除せず関数／依存を現物で検証する。
+
 ### 寸法dragの角度constraint同期
 
 DimensionDragだけが使うsyncAngleConstraintFromDimensionを同moduleのcreateAngleSynchronizationへ集約。三つの明示依存で型／target kind／dimension有無→readonly→既存角度計算→現在flip flags→target絶対値の順を保持し、既存dragの同期portへ接続する。新しい寸法計算や状態、guard／求解・履歴・例外回復は追加しない。

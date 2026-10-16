@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。寸法dragの角度constraint同期をDimensionDrag.createAngleSynchronizationへ集約。app.jsは4,143→3,956行（合計187行減、直近4行減）。構文546ファイル・単体1,539件・関連E2E121件成功。今回は全E2E未実行。最新週枠使用31%／残量69%。全体目標は未完了。次はendpointAtの既存端点優先／explicit Pointからのendpoint生成と、GeometryCreation・hit queryの責務を確認する。未使用のpointAtも参照を監査し、生成規則・ID・参照を変えずに整理する。endpointAtの既存端点返却→explicit座標でendpoint作成→通常addPointの順・引数を維持し、起動順と操作時の現在scopeを保つ。巨大contextや異なる操作の単一stateへの統合を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。端点解決とendpoint生成をGeometryCreation.createEndpointResolverへ集約し、未使用pointAt／hitAnyPoint aliasを監査後に撤去。app.jsは4,143→3,949行（合計194行減、直近7行減）。構文546ファイル・単体1,542件・関連E2E154件成功。今回は全E2E未実行。最新週枠使用32%／残量68%。全体目標は未完了。次は分離後に残った未参照の旧入口を監査する。node_modules/playwright/lib/transform/babelBundleのbabelParse(code,filename,false)とtraverseでapp IIFE scopeを調べ、未参照140binding中FunctionDeclaration候補16件を確認済み。変数initializerの副作用と区別し、自動一括削除せず関数／依存を現物で検証する。局所scopeと公開hook／コールバック、動的参照の有無を確認し、現役ownerを再分離するだけの変更を避ける。巨大contextや異なる操作の単一stateへの統合を避ける。
 
 ### 直前のリリース（2026-10-16）
 
