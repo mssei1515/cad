@@ -114,6 +114,12 @@ TrimはTrimFeatureへquery／editing／commandの組立てを集約し、テス�
 
 ログは一時ディレクトリのcad-origin-main-oct16-final-{check,unit,e2e}.log、cad-origin-main-oct16-failed-rerun.log、cad-origin-main-oct16-baseline-comparison.log、cad-origin-main-oct16-current-comparison.log。各runnerの終了結果を回収済み。検証後の変更はこの記録のみ。
 
+追加の切り分け（週枠使用45%／残量55%）では、製品コードやテストを変更せず一時診断を実行した。選択の同じ既存E2Eを固定3回ずつ比較すると前回mainも3回失敗（line-pointerdown-up 219／222／215ms）、最新developも3回失敗（231／215／249ms、いずれも150ms未満が基準）。したがってこの性能失敗は最新差分だけで発生するものではない。CPU profilerを使う別の短い診断でも両版の主な処理は寸法外観の正規化、描画、拘束解析であり、計測自体の負荷もあるため通常E2Eの代替合格結果とは扱わない。
+
+航空機はA2／A3のfraction 0.2、x方向0.5のslow反転経路（各30preview）を同じhookで比較した。elapsedMsのみを除いた全result（全previewの形状・求解結果・拘束状態と最終形状）がJSONで完全一致し、初期拘束状態も完全一致、両版とも失敗previewは0。短い2経路の一致を全96経路の検証に代用しない。最新側の各dragは9,824／9,909ms、前回版は7,978／7,693msで、今回側が遅い計測も得られた。一方、独立した初期拘束状態照会3回は最新436／340／324ms、前回388／408／367msであり、一つの処理の一律な回帰とは特定できていない。航空機全ケースのtimeout原因は未解決。閾値・コード・テスト期待値を変更していない。app.jsの行数は3,652→3,652（0行変化）。
+
+追加ログはcad-{baseline,current}-selection-repeat.log、cad-{baseline,current}-refactor-profile.log、cad-{baseline,current}-aircraft-sample.log（いずれも一時ディレクトリ）。診断scriptも一時ディレクトリのcad-refactor-profile.cjsとcad-refactor-aircraft-sample.cjsで、repositoryには含めていない。全診断processは終了を回収済み、checkoutは最新developへ戻してruntimeを再生成済み。
+
 ユーザーへ、原因調査のためmainを保留するか、今回の不合格結果を記録して反映するかの判断を質問済みで回答待ち。回答がないままmainへ反映しない。今回のCommit／develop Pushとmain反映の成否を区別する。調査継続時は新たな責務分離を始めず、selection操作の描画／UI時間と航空機の拘束状態照会を現物比較して原因を絞る。閾値を上げるだけの対応や、繰り返し成功するまで実行して失敗を隠す対応をしない。必要な修正はdevelopから作業branchを作成し、既存の区切りの履歴を保持する。mainへリリースできた後はdevelopをmainへfast-forwardして両者をPush・同期し、統合済み作業branchを削除、runtimeを再生成する。
 
 責務分離の次の候補は、状態所有と依存を明示できる機能単位から選ぶ。巨大mutable contextや別の巨大appへの移動、行数だけの薄いdelegate分割を避ける。
