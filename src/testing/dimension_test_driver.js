@@ -736,5 +736,129 @@
     return Object.freeze({ state });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
+  // Assemble dimension display measurements independently of interactive editing fixtures.
+  function createDisplaySupport({
+    Point, Arc, placement, layouts, metrics, circlePointAtAngle, viewport, hypot2, screenPxPerMm,
+    outsideShaftLengthFactor, fitMarginFactor, canvasSelection, canvasHover, ctx, drawDimensions,
+    currentScope, readDocument, isDimensionConstraint, constraintSketchId, activeSketchId, normalizeDimensionAppearance,
+    effectiveDimensionAppearanceForSketch, dimensionDisplayState, targetFromConstraint, effectiveDimensionAppearance, displayFactor,
+    formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle, dimensionTextOffset
+  }) {
+    const dimensionDisplayCases = createDisplayCases({ formatDimensionLabel, formatMeasuredDimensionLabel });
+    const dimensionTextAngleCases = createTextAngleCases({ jisDimensionTextAngle, dimensionTextOffset });
+    const readTestDefaultDimensionAppearance = () => normalizeDimensionAppearance({ ...readDocument().defaultDimensionAppearance, ...readDocument().defaultTerminatorAppearance }, { partial: false });
+    const radiusFixture = createRadiusFixture({
+      Point, Arc, placement, layouts, circlePointAtAngle, readDefaultAppearance: readTestDefaultDimensionAppearance,
+      viewport, hypot2, screenPxPerMm, outsideShaftLengthFactor,
+    });
+    const terminatorFixture = createTerminatorFixture({
+      readDefaultAppearance: readTestDefaultDimensionAppearance, layouts, metrics, viewport,
+      screenPxPerMm, fitMarginFactor, outsideShaftLengthFactor, hypot2,
+    });
+    const dimensionColorObservation = createColorObservation({ canvasSelection, canvasHover, ctx, drawDimensions });
+    const dimensionAppearanceObservation = createAppearanceObservation({
+      currentScope, readDocument, isDimensionConstraint, constraintSketchId, activeSketchId,
+      normalizeDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState,
+    });
+    const dimensionRenderObservation = createRenderObservation({
+      currentScope, isDimensionConstraint, targetFromConstraint, constraintSketchId, activeSketchId, effectiveDimensionAppearance,
+      placement, layouts, metrics, viewport, screenPxPerMm,
+      displayFactor, hypot2,
+    });
+    return Object.freeze({
+      appearance: Object.freeze({
+        dimensionAppearanceStateForTest: dimensionAppearanceObservation.state,
+        arcRadiusDimensionRenderPlanForTest: radiusFixture.radiusPlan,
+        dimensionAppearanceRenderMetricsForTest: dimensionRenderObservation.appearanceMetrics,
+        dimensionTerminatorFitForTest: terminatorFixture.fit,
+        dimensionArrowTipAlignmentForTest: terminatorFixture.arrowAlignment,
+        drawnDimensionColorsForTest: dimensionColorObservation.colors,
+      }),
+      cases: Object.freeze({
+        dimensionDisplayPrecisionCases: dimensionDisplayCases.precision,
+        dimensionTextAngleCases: dimensionTextAngleCases.angles,
+      }),
+    });
+  }
+
+  // Compose dimension editing/placement test operations around existing model and session owners.
+  function createInteractionSupport({
+    currentScope, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition, startDimensionEditInput,
+    clearSelection, canvasSelection, updateUI, draw, resetModelState, addPoint, addLine, addCircle, addArc,
+    addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, fitAllGeometryToViewport,
+    startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, viewport, dimensionAnchor, serializeModel,
+    LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, signedPointLineDistance,
+    vectorNorm, hypot2, solveSketchAndDependents, snapshotModelState, refreshConstraintAnalysis, dimensionValueInput, dimensionDrag
+  }) {
+    const dimensionPositionObservation = createPositionObservation({ currentScope, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition });
+    const dimensionExpressionAction = createExpressionAction({ currentScope, isDimensionConstraint, startDimensionEditInput });
+    const dimensionSelectionDriver = createSelectionDriver({ currentScope, isDimensionConstraint, clearSelection, canvasSelection, updateUI, draw });
+    const commandLineDragFixture = createCommandLineDragFixture({ resetModelState, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, canvasSelection, fitAllGeometryToViewport, startDistanceCommand, currentScope, isDimensionConstraint, constraintGraphNodes, targetFromConstraint, dimensionLayout, worldToCanvasScreen, canvas, viewport, dimensionAnchor });
+    const clickPlacementFixture = createClickPlacementFixture({ resetModelState, addLine, addPoint, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const lineCircleFixture = createLineCircleFixture({ resetModelState, addLine, addPoint, addCircle, addArc, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const lineCircleObservation = createLineCircleObservation({ serializeModel, currentScope, LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, constraintTargetSession, signedPointLineDistance, vectorNorm, hypot2 });
+    const radiusDifferenceRecovery = createRadiusDifferenceRecovery({ currentScope, ConcentricRadiusDifferenceConstraint, hypot2, solveSketchAndDependents, activeSketchId, snapshotModelState, refreshConstraintAnalysis, updateUI, draw, vectorNorm });
+    const clickPlacementObservation = createClickPlacementObservation({ currentScope, isDimensionConstraint, dimensionValueInput, pendingCommandSession });
+    const commandLineDragObservation = createCommandLineDragObservation({ currentScope, isDimensionConstraint, targetFromConstraint, dimensionAnchor, constraintTargetSession, pendingCommandSession, canvasSelection, dimensionDrag });
+    return Object.freeze({
+      placement: Object.freeze({
+        resetForDimensionCommandLineDrag: commandLineDragFixture.reset,
+        resetForLineLengthClickPlacement: clickPlacementFixture.reset,
+        resetForLineCircleAndRadiusDifferenceDimensions: lineCircleFixture.reset,
+        lineCircleAndRadiusDifferenceState: lineCircleObservation.state,
+        perturbRadiusDifferenceDimensionForTest: radiusDifferenceRecovery.perturb,
+        lineLengthClickPlacementState: clickPlacementObservation.state,
+        dimensionCommandLineDragState: commandLineDragObservation.state,
+      }),
+      selection: Object.freeze({
+        dimensionClientPositionForTest: dimensionPositionObservation.position,
+        startDimensionExpressionEditForTest: dimensionExpressionAction.start,
+        selectDimensionForPropertiesForTest: dimensionSelectionDriver.select,
+        multipleDimensionSelectionForTest: dimensionSelectionDriver.state,
+        fitForMultipleDimensionsForTest() {
+          viewport.update({ scale: 2, x: 350, y: 250 });
+          updateUI();
+          draw();
+        },
+      }),
+    });
+  }
+
+  // Assemble default Dimension scenarios, preserving each fixture's existing setup and observation.
+  function createFixtureSupport({
+    resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope,
+    isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
+    constraintTargetSession, pendingCommandSession, startDistanceValueInput, dimensionValueInput, dimensionWithLabelAt,
+    angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, serializeDimension,
+    rootSketchId, ctx, drawDimensions, sketchById, constraintSketchId, isVisibleSketchId
+  }) {
+    const readOnlyDuplicateFixture = createReadOnlyDuplicateFixture({
+      resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope,
+      isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
+    });
+    const readOnlyPlacementFixture = createReadOnlyPlacementFixture({
+      resetModelState, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, pendingCommandSession,
+      startDistanceValueInput, dimensionValueInput, currentScope, isReadOnlyDimension, isDimensionConstraint,
+    });
+    const extensionVisibilityFixture = createExtensionVisibilityFixture({ resetModelState, addPoint, addLine, hypot2, dimensionLayout, dimensionWithLabelAt, dimensionFromAnchor });
+    const angleLabelFixture = createAngleLabelFixture({
+      resetModelState, addPoint, addLine, dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets,
+      setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, hypot2, serializeDimension,
+    });
+    const sketchVisibilityFixture = createSketchVisibilityFixture({
+      resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope, rootSketchId,
+      ctx, drawDimensions, sketchById, isDimensionConstraint, constraintSketchId, isVisibleSketchId,
+    });
+    return Object.freeze({
+      readOnly: Object.freeze({
+        resetForReadOnlyDuplicateDimension: readOnlyDuplicateFixture.reset,
+        resetForReadOnlyDimensionPlacement: readOnlyPlacementFixture.reset,
+        pointPointRectangleDimensionExtensionVisibilityCases: extensionVisibilityFixture.cases,
+      }),
+      angleDimensionLabelFollowCase: angleLabelFixture.followCase,
+      resetForActiveSketchDimensionVisibility: sketchVisibilityFixture.reset,
+    });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
 })();

@@ -36,6 +36,7 @@
 | `src/parameters/` | Parameter名前空間、評価、依存と適用 | 任意のUI／アプリglobal |
 | `src/diagnostics/` | 診断・計測と描画の観測 | 通常機能を代わりに所有する実装 |
 | `src/testing/` | ブラウザテストの準備・状態照会・シナリオ支援 | 通常機能の所有、アプリ全体の可変context |
+| `src/application/` | 機能単位の生成・接続と狭い公開API | 巨大なapp context、モデル編集やDOM表示の再実装 |
 | `app.js` | 構築・接続・起動。移行中は未分離の責務も残る | 最終形での機能実装の集中 |
 
 この表は、既存フォルダを生かす基本方針である。新しい上位の機能組立てモジュールが必要なら、実際の依存を見て導入する。最初から固定の階層を押しつけず、`app.js`をそのまま移した別の巨大な組立てモジュールも作らない。
@@ -81,7 +82,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/sketch-edit-access`。停止時の統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回のリリース対象は`codex/parameter-edit-guard`。統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -99,11 +100,11 @@
 
 ## 8. 再開地点（2026-10-16）
 
-最新develop／mainとoriginの両branchが007288bで同期した状態からcodex/sketch-edit-accessで再開。app.jsは4,840→4,459行（381行減）。Sketch編集guard、hit方針、重なり順、コピー可否、表示数値、CommandPanel振分け、Selection解除、派生ドラッグと参照元照会、トリム操作、式入力、拘束名とHatch／Offset診断表示を責務ごとに分離した。詳細はcomposition-root.mdとimplementation-map.mdを参照。最新の区切りは構文518ファイル・単体1,437件・読込1件・関連E2E24件成功。全体目標は未完了。
+ユーザーのmain／origin反映指示により、この区切りをリリースする。07024cbを基準にcodex/parameter-edit-guardで16個の責務単位を整理し、コード最終commitはdde227e、develop統合commitは91d532c。app.jsは4,459→4,143行（316行減）。Parameter削除guard、Document下書き／Canvas reset、採番状態、Parameter／外観／PNG／Documentファイルの機能組立て、Offset・Sketch投影・Annotation・Dimension・Blockのテスト支援生成と公開API対応を整理した。
 
-ユーザーからorigin/mainへのマージ指示を受領し、新規分離を停止。コード最終commitはaccde5d、develop統合commitはa83bedd。統合済みa83beddで構文518ファイル・単体1,437件・全E2E583件が成功（すべてexit 0、全E2E24.5分）。拘束ドラッグ回帰の全file（12.5分）、file URL起動、保存互換性、Block／Sketch／派生Geometry、式入力とUIを含む。ログは一時ディレクトリのcad-oct16-release-{check,unit,e2e}.log。runnerのexit 0を回収済みで、専用serverの残留もない。最終検証後の変更はこのリリース記録だけとし、developへCommit／Push後、mainを最後にマージ・Pushし、直ちにdevelopを同じcommitへ同期する。
+最新developの91d532cで構文536ファイル・単体1,480件・全E2E583件が成功（すべてexit 0、全E2E24.6分）。拘束drag回帰fileは12.5分。ログは一時ディレクトリのcad-refactor-oct16-final-{check,unit,e2e}.log。全runnerが正常終了し、検証後はこのリリース／再開記録だけを変更した。この記録をCommit／Push後、mainへ最後に反映し、developをmainへfast-forwardして両者をPush・同期する。統合済み作業branchを削除してruntimeを再生成する。
 
-全体の数百行への目標は未完了。今回の作業branchは統合確認後に削除し、次回は最新developから新しく作成する。次は寸法symbol削除guardの適切な所有者、mode／command操作調整と機能ごとの生成接続を確認する。小さなhelper単位の分割を目的にせず、既存ownerの責務と依存を優先する。
+全体の数百行への目標は未完了。次回はGitの現物・usage・worktree・origin/main／developの祖先関係を確認し、最新developから新しい作業branchを作成する。終了済みcodex/parameter-edit-guardは再使用しない。次の候補は残るBlock fixtureとUIイベント登録・mode／command接続。すでに一行のfactory接続をまとめるだけの分割を無理に増やさず、状態の所有・開始／更新／確定／取消の依存を整理できる機能単位を選ぶ。巨大mutable contextや別の巨大appへの移動を避ける。
 
 ### 前回の停止地点（2026-10-14）
 

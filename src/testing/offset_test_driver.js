@@ -221,5 +221,39 @@
     return Object.freeze({ reselect });
   }
 
-  window.OffsetTestDriver = Object.freeze({ createPrimitiveFixture, createUiFixture, createUiObservation, createDirectionFixture, createChainFixture, createChainObservation, createChainReload, createChainTargetEdit, createChainReselection });
+  // Assemble the Offset-only browser test surface without publishing or reading app state.
+  function createSupport({
+    resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, currentScope,
+    RadiusConstraint, OffsetConstraint, OffsetChainConstraint, HorizontalConstraint, VerticalConstraint, Line,
+    createOffsetGeometry, preconditionNewConstraint, solveSketchAndDependents, activeSketchId, snapshotModelState,
+    targetFromConstraint, measuredConstraintTargetValue, serializeModel, loadModelData,
+    offsetSelection, drawingPreview, offsetDistanceFromPointer, pendingCommandSession, addOffsetChainGeometry, clearSelection,
+    fitAllGeometryToViewport, resetHistory, solveAndRefresh, draw, canvas, worldToCanvasScreen, document
+  }) {
+    const offsetChainFixture = createChainFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, resetHistory, draw, canvas, worldToCanvasScreen });
+    const offsetChainObservation = createChainObservation({ currentScope, OffsetChainConstraint, serializeModel, offsetSelection, pendingCommandSession, Line });
+    const offsetChainReload = createChainReload({ serializeModel, loadModelData, currentScope, OffsetChainConstraint });
+    const offsetChainTargetEdit = createChainTargetEdit({ currentScope, OffsetChainConstraint, preconditionNewConstraint, targetFromConstraint, measuredConstraintTargetValue, Line });
+    const offsetChainReselection = createChainReselection({ currentScope, OffsetChainConstraint, offsetSelection, addOffsetChainGeometry, clearSelection });
+    const offsetPrimitiveFixture = createPrimitiveFixture({
+      resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, RadiusConstraint, createOffsetGeometry, currentScope, OffsetConstraint, preconditionNewConstraint,
+      solveSketchAndDependents, activeSketchId, snapshotModelState, measuredConstraintTargetValue, serializeModel, loadModelData, fitAllGeometryToViewport, draw,
+    });
+    const offsetUiFixture = createUiFixture({ resetModelState, addPoint, addLine, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen });
+    const offsetUiObservation = createUiObservation({ currentScope, OffsetConstraint, offsetSelection, drawingPreview, offsetDistanceFromPointer, pendingCommandSession, document, Line });
+    const offsetDirectionFixture = createDirectionFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, VerticalConstraint, solveAndRefresh, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen });
+    return Object.freeze({
+      resetForOffsetConstraints: offsetPrimitiveFixture.reset,
+      resetForOffsetUi: offsetUiFixture.reset,
+      offsetUiState: offsetUiObservation.state,
+      resetForOffsetDirection: offsetDirectionFixture.reset,
+      resetForOffsetChainUi: offsetChainFixture.reset,
+      offsetChainUiState: offsetChainObservation.state,
+      roundTripOffsetChainForTest: offsetChainReload.reload,
+      updateOffsetChainTargetForTest: offsetChainTargetEdit.update,
+      canReselectOffsetResultChainForTest: offsetChainReselection.reselect,
+    });
+  }
+
+  window.OffsetTestDriver = Object.freeze({ createSupport, createPrimitiveFixture, createUiFixture, createUiObservation, createDirectionFixture, createChainFixture, createChainObservation, createChainReload, createChainTargetEdit, createChainReselection });
 })();

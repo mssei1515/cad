@@ -61,3 +61,42 @@ test('parameter dialog rejects direct edits to a locked sketch dimension before 
   assert.deepEqual(f.driving, before);
   assert.equal(f.calls.includes('solve'), false);
 });
+
+
+test('symbol deletion guard follows current or explicit namespace and stays silent for permitted removal', () => {
+  let current = { id: 'document' }, reads = 0;
+  const explicit = { id: 'block' }, items = new Set([Object.freeze({ parameterName: 'd1' })]), calls = [];
+  const api = sandbox.window.ParameterApplication.createDeletionGuard({
+    currentNamespace: () => { reads++; return current; },
+    symbolDeletionDependents: (actual, namespace) => { assert.equal(actual, items); calls.push(namespace); return { removedNames: ['d1'], dependents: [] }; },
+    readLanguage: () => { throw Error('no notification'); }, setHint: () => assert.fail('no hint'), log: () => assert.fail('no log'),
+  });
+  assert.deepEqual(calls, []);
+  assert.equal(api.guard(items), true);
+  current = { id: 'other' };
+  assert.equal(api.guard(items), true);
+  assert.equal(api.guard(items, explicit), true);
+  assert.equal(api.guard(items, undefined), true);
+  assert.deepEqual(calls, [{ id: 'document' }, current, explicit, current]);
+  assert.equal(reads, 3); assert.equal(items.size, 1);
+});
+
+test('symbol deletion guard reports dependency names in the live language, hint before log, and propagates query failure', () => {
+  let language = 'ja', failure = null;
+  const events = [], marker = new Error('query failed'), namespace = {};
+  const removedNames = Object.freeze(['d1', 'note1']), dependents = Object.freeze(['width', 'd2']);
+  const api = sandbox.window.ParameterApplication.createDeletionGuard({
+    currentNamespace: () => namespace,
+    symbolDeletionDependents: () => { if (failure) throw failure; return { removedNames, dependents }; },
+    readLanguage: () => language,
+    setHint: (message, kind) => events.push(['hint', message, kind]), log: message => events.push(['log', message]),
+  });
+  assert.equal(api.guard([]), false);
+  const ja = 'd1、note1 は width、d2 から参照されているため削除できません';
+  assert.deepEqual(events.splice(0), [['hint', ja, 'error'], ['log', ja]]);
+  language = 'en'; assert.equal(api.guard([]), false);
+  const en = 'Cannot delete d1, note1; referenced by width, d2';
+  assert.deepEqual(events.splice(0), [['hint', en, 'error'], ['log', en]]);
+  failure = marker; assert.throws(() => api.guard([]), error => error === marker);
+  assert.deepEqual(events, []);
+});

@@ -944,3 +944,33 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/ui/constraint_feedback.js: localizedConstraintNameは拘束名の言語／typeOnly表示を担当。2つの言語／文言read portを使い、正規表現の優先順と未知名・固定端点のfallback、Modelのname／保存値を維持する。
 
 - src/ui/authoring_feedback.js: Hatch／Offsetの診断codeからUI文言への変換を1つの文言read portで担当する。未知code／reasonの既存fallbackと言語の実行時反映を保ち、Geometry判定・model編集・DOM更新は持たない。
+
+- src/parameters/application.js: createDeletionGuardはsymbol依存照会を使った削除可否と拒否通知を所有。5依存だけを受け取り、namespaceやmodelは保持・変更しない。各削除commandは共通guardを利用し、削除範囲とtransactionは従来のownerが担当する。
+
+- src/editing/draw_operation_lifecycle.js: resetForDocumentはDocument初期化時のLine／Centerline／円弧／Spline／投影／Instance等の16個の下書き破棄を順序どおり調整する。既存依存のみを使い、pending／Hatch／Selection／Document内容は初期化側が引き続き担当する。通常のexit／cancelとは独立した範囲を維持する。
+
+- src/editing/canvas_selection_interaction.js: createDocumentResetはDocument置換時のhover／highlight／pointer／snapと明示Selection fieldのresetを5依存で調整する。通常clear、早期Selection解除、pending／constraint session、Document／採番の初期化は統合せず既存の順序を維持する。
+
+- src/editing/document_ids.js: 11個のDocument採番状態を所有し、生成・preview照会・予約・reset・checkpoint復元を集約。Block編集の番号予約とclipboardの8種類だけのrollbackを維持。GeometryIdsは基本形状、persistence/DocumentSequencesは読込時の復元計算に専念する。
+
+- src/application/parameter_editor.js: Parameter編集UIの組立て。draft、式入力表示／挿入、dialog View／Controllerと適用結果adapterを接続し、live scope選択肢と入力欄に応じたsymbol名を提供する。モデル適用・Canvas hit判定は外部portに残し、controllerと適用adapterの相互接続を内部で完結する。
+
+- src/application/document_appearance_editor.js: Document既定外観設定の三組のcommand／Viewを生成接続し、Geometry→Dimension→Shared準備とdialog表示、開始buttonのlistener寿命を担当。既定値のread／writeと既存編集service・rows・通知を受け、外観変更とfield表示は既存ownerへ委譲する。
+
+- src/application/png_export.js: PNG出力の機能組立て。CanvasExport／PngFile／PngExportCommandとmode session、開始拒否の順序、snap解決、fonts→現在画像準備、開始buttonのstart／disposeを接続する。appは既存renderer・可視画像準備・session／read portを提供し、Canvas入力／CommandPanelには同じcommand APIを渡す。Documentファイルcontrolsは独立した既存ownerに残す。
+
+- src/application/document_file.js: Documentの状態表示／checkpoint・bookmark・file command・control／startup／beforeunloadの機能組立て。モデル適用・solve・履歴・viewportは限定した操作portへ委譲し、statusの履歴snapshot照会とunloadの実データ照会を保持する。choice dialogと修復案内は遅延callbackで接続し、初期化時には実行しない。
+
+- src/testing/offset_test_driver.js: createSupportは単独Offset／UI／方向とchain関連の9factoryの生成接続と公開API対応を所有する。個別factoryの実装とexportは維持し、appはOffset専用の操作／型／照会portを一度接続してAPIを展開する。巨大なapp contextは受け取らず、通常起動時は呼ばれない。
+
+- src/testing/sketch_projection_test_driver.js: createSupportはSketch投影テスト支援の生成接続と21公開APIの対応を所有。共通observation、旧形式target生成、選択と転送の内部リンクを同じdriver内で完結し、個別factoryの実装／exportと通常起動のtest query guardを維持する。
+
+- src/testing/annotation_test_driver.js: createSupportはAnnotationの6factoryとdrag状態照会を生成接続し、7公開APIを準備／状態観測／入力照会の三群で返す。appは各群を元の位置へ展開するだけとし、公開順と共有snapshot／drag fixtureの接続を維持する。
+
+- src/testing/dimension_test_driver.js: createDisplaySupportは表示計測に関する7factoryと8公開APIを生成接続し、表示観測とprecision／angle casesの二群を返す。現在Documentの既定外観を合成するgetterを内部で共有し、appは関連portと公開位置だけを接続する。編集・配置の支援とは分離した境界。
+
+- src/testing/dimension_test_driver.js: createInteractionSupportは編集・配置に関する10factoryと複数寸法fitの生成接続・公開対応を所有する。placementとselectionの二群で12 APIを返し、現在scope・session・Selection・Viewportを既存portへ委譲する。表示テスト支援とは独立した依存で生成する。
+
+- src/testing/dimension_test_driver.js: createFixtureSupportは残る読み取り専用寸法・補助線・角度ラベル・Sketch表示の5fixtureの生成接続を所有し、5公開APIを提供する。app側のDimension支援の生成はcreateFixtureSupport／createInteractionSupport／createDisplaySupportの三入口へ整理済み。
+
+- src/testing/block_test_driver.js: createEditorSupportはBlock定義編集・階層操作・配置・再読込の11factoryと11公開APIを組み立てる。readDefinitionsからの定義数のlive照会を内部で共有し、appは操作／read portと公開位置を接続する。createObservationSupportは一般状態・操作位置・回転lock・投影端点・hoverの五つの観測factoryと五つの公開API対応を組み立てる。16個の明示portで既存ownerへ接続し、照会時の現在値を使い、独自の製品状態を保持しない。
