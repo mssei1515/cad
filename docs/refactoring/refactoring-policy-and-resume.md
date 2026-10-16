@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。入力機能・拘束注記／Block dragの整理に続き、Sketch投影テスト専用の選択外観変更をPropertiesTestDriver.createAppearanceActionへ分離し、test query内だけで生成接続する。app.jsは4,143→4,068行（合計75行減、直近6行減）。構文543ファイル・単体1,505件・関連E2E126件成功。今回は全E2E未実行。最新週枠使用24%／残量76%。全体目標は未完了。次は保存済みBlock定義のParameter安定化で行う編集scope一時切替と復帰、Hatch採番の保存を調べる。withStoredDefinitionAsModel／stabilizeStoredBlockDefinitionの利用と既存workspace／Parameter ownerへの依存を確認し、finallyの復帰順・参照同一性・エラー伝播・採番保持を変えずに整理する。巨大contextや単なる別の巨大appへの移動を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。入力機能・drag・投影テストの整理に続き、保存済みBlock定義のParameter評価scope切替・採番保存・復帰をParameterStabilization.createStoredDefinitionへ集約。app.jsは4,143→4,059行（合計84行減、直近9行減）。構文543ファイル・単体1,508件・関連E2E161件成功。今回は全E2E未実行。最新週枠使用24%／残量76%。全体目標は未完了。次はParameter dialogからCanvas上の寸法／注記をクリックして式へ挿入する入力経路（pickParameterDialogDimension）を確認し、ExpressionInputControllerとParameterEditorの境界へ寄せる。生成順が早いためhit／座標変換と挿入portの参照時点に注意し、Canvas範囲判定・寸法優先とactiveOnly:false・例外／短絡順を保持する。巨大contextや単なる別の巨大appへの移動を避ける。
 
 ### 直前のリリース（2026-10-16）
 

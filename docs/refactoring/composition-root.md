@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 保存済みBlock定義のParameter評価scope
+
+ParameterStabilization.createStoredDefinitionへ保存済み定義の評価とscope復帰を集約。appのwithStoredDefinitionAsModel／stabilizeStoredBlockDefinitionを撤去し、Parameter適用とBlock依存伝播は同じstabilize入口を使う。五つの明示依存で現在scopeの同一参照、定義切替後のactive Sketch／描画Sketch照会、finallyでHatch採番最大値を保存してから前scope復帰、結果・例外の透過、入れ子評価の直前scope復帰を保持。新しいscopeスタック・採番・回復規則は追加しない。既存activateEditingScopeのmenu・Solver・cache更新を利用する。
+
+app.jsは4,068→4,059行（9行減、b120651から合計84行減）。新scriptなし。既存parameter-stabilization unitへ3件追加し、生成時無照会、返値／参照、採番最大値と順序、評価例外後の復帰・同一例外伝播、入れ子評価を確認。構文543ファイル・単体1,508件・関連E2E161件成功（すべてexit 0、E2E2.3分）。blocks／parameter-dialog-controller／hatching／dimension-prefix／unified-uiの全5fileを実行。ログは一時ディレクトリのcad-stored-definition-stabilization-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はParameter dialogからCanvas上の寸法／注記をクリックして式へ挿入する入力経路を確認し、ExpressionInputControllerとParameterEditorの境界へ寄せる。
+
 ### 投影テスト専用の選択外観変更
 
 appのsetAppearanceForSelectionの利用先を調査し、SketchProjectionTestDriverのテスト操作だけが使用することを確認。既存PropertiesTestDriver.createAppearanceActionへ六つの明示依存で移し、test query guard内で生成して同じsetter portへ接続する。現在の対象／key、patch merge→normalize→field置換、Blockだけcache無効化、Properties→draw→履歴、対象なしfalseを保持。処理bodyは関数名・indent以外一致。製品用commandにテスト操作を混ぜず、通常起動の生成をなくした。

@@ -103,3 +103,42 @@ test('namespace and measurement errors are reported while dependent failure is r
   const { state, service } = fixture(), failed = { success: true, result: { errorNorm: 0 }, dependent: { success: false } };
   state.solve = () => failed; assert.equal(service.stabilize(), failed);
 });
+
+
+function storedDefinitionFixture() {
+ const events=[],state={scope:{id:'document'},nextHatch:4,result:{success:true},onStabilize:null};
+ const service=sandbox.window.ParameterStabilization.createStoredDefinition({
+  currentScope:()=>state.scope,
+  activateScope:scope=>{events.push(['activate',scope]);state.scope=scope;},
+  nextHatchIndex:()=>{events.push('hatch');return state.nextHatch;},
+  drawableSketchIds:definition=>{assert.equal(state.scope,definition);events.push('sketches');return definition.sketches;},
+  stabilizeNamespace:(sketchId,options)=>{assert.equal(sketchId,state.scope.activeSketchId);assert.equal(options.allSketches,state.scope.sketches);
+   events.push('stabilize');state.onStabilize?.();return state.result;},
+ });return{service,state,events};
+}
+
+test('stored definition stabilization uses the same definition and restores its caller scope after retaining Hatch IDs',()=>{
+ const f=storedDefinitionFixture(),prior=f.state.scope,definition={activeSketchId:'S2',sketches:['S2','S3'],nextHatchIndex:2};
+ assert.deepEqual(f.events,[]);assert.equal(f.service.stabilize(definition),f.state.result);
+ assert.equal(f.state.scope,prior);assert.equal(definition.nextHatchIndex,4);
+ assert.deepEqual(f.events,[['activate',definition],'sketches','stabilize','hatch',['activate',prior]]);
+ f.events.length=0;const nextPrior={id:'other scope'};f.state.scope=nextPrior;definition.nextHatchIndex='12';f.state.result={success:false};
+ assert.equal(f.service.stabilize(definition),f.state.result);assert.equal(f.state.scope,nextPrior);assert.equal(definition.nextHatchIndex,12);
+});
+
+test('stored definition stabilization preserves the same thrown error after Hatch retention and scope restoration',()=>{
+ const f=storedDefinitionFixture(),prior=f.state.scope,definition={activeSketchId:'S1',sketches:['S1']},error=new Error('solve failed');
+ f.state.onStabilize=()=>{f.state.nextHatch=9;throw error;};
+ assert.throws(()=>f.service.stabilize(definition),value=>value===error);
+ assert.equal(f.state.scope,prior);assert.equal(definition.nextHatchIndex,9);
+ assert.deepEqual(f.events.slice(-2),['hatch',['activate',prior]]);
+});
+
+test('nested stored definition evaluations restore their immediate caller without maintaining a second scope stack',()=>{
+ const f=storedDefinitionFixture(),prior=f.state.scope,a={activeSketchId:'A',sketches:['A']},b={activeSketchId:'B',sketches:['B'],nextHatchIndex:8};
+ f.state.onStabilize=()=>{
+  if(f.state.scope===a){f.service.stabilize(b);assert.equal(f.state.scope,a);f.state.nextHatch=10;}
+ };
+ f.service.stabilize(a);assert.equal(f.state.scope,prior);assert.equal(a.nextHatchIndex,10);assert.equal(b.nextHatchIndex,8);
+ assert.deepEqual(f.events.filter(e=>Array.isArray(e)&&e[0]==='activate').map(e=>e[1]),[a,b,a,prior]);
+});

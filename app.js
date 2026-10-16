@@ -914,6 +914,10 @@
     nonConvergenceReason: () => applicationText("Parameter計算が収束しません", "Parameter calculation did not converge"),
     profile: work => interactionProfiler.active ? profileInteractionWork("parameters", work) : work(),
   });
+  const storedDefinitionStabilization = window.ParameterStabilization.createStoredDefinition({
+    currentScope: () => model, activateScope: activateEditingScope, nextHatchIndex: () => documentIds.peek("hatch"),
+    drawableSketchIds: blockDefinitionDrawableSketchIds, stabilizeNamespace: stabilizeActiveParameterNamespace,
+  });
   const solveRefreshCommand = window.SolveRefreshCommand.create({
     activeSketchId, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
   });
@@ -1014,7 +1018,7 @@
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
   const blockParameterPropagation = window.BlockParameterPropagation.create({
     catalog: blockCatalog, invalidateProjection: invalidateBlockProjectionCache, applicationText,
-    definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: stabilizeStoredBlockDefinition },
+    definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: storedDefinitionStabilization.stabilize },
     document: { rebuild: rebuildRootConstraintObjects, stabilize: () =>
       stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }) },
   });
@@ -1027,7 +1031,7 @@
     },
     stabilize: namespace => namespace === model
       ? stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) })
-      : stabilizeStoredBlockDefinition(namespace),
+      : storedDefinitionStabilization.stabilize(namespace),
     propagate: blockParameterPropagation.propagate,
   });
   const centerlinePlans = window.CenterlineGeometry.create({ applicationText, parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE });
@@ -3420,20 +3424,7 @@
   editingToolBinding.bind();
   canvasViewControls.bindControls();
 
-  function withStoredDefinitionAsModel(definition, callback) {
-    const previousScope = model;
-    activateEditingScope(definition);
-    try {
-      return callback();
-    } finally {
-      definition.nextHatchIndex = Math.max(documentIds.peek("hatch"), Number(definition.nextHatchIndex) || 1);
-      activateEditingScope(previousScope);
-    }
-  }
 
-  function stabilizeStoredBlockDefinition(definition) {
-    return withStoredDefinitionAsModel(definition, () => stabilizeActiveParameterNamespace(definition.activeSketchId, { allSketches: blockDefinitionDrawableSketchIds(definition) }));
-  }
 
   function rebuildRootConstraintObjects() {
     constraintRebinding.rebuildDocument(model, blockProjectionBundles());
