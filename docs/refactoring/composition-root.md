@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Block観測テストAPIの機能組立て
+
+BlockTestDriver.createObservationSupportへ五つの観測factoryの生成接続と公開API対応を集約。16個の明示portを使い、scope／Definition／Solver変数／投影／viewport／hoverは既存ownerから呼出し時に読む。公開名・順序と個別factoryの本体を維持し、独自状態や汎用app contextは追加しない。
+
+app.jsは4,147→4,143行（4行減、07024cbから合計316行減）。構文536ファイル・単体1,480件・関連E2E142件が成功（E2E2.0分）。blocks／unified-uiを実行。新単体3件で生成時無処理、五つのAPI、現在投影／倍率、Solver変数のObject同一性とsession引数、scope／hover更新後の照会を確認。ログは一時ディレクトリのcad-block-observation-test-support-{check,unit,e2e}.log。全体目標は未完了。次は残るBlock fixtureとUIイベント登録・mode／command接続を再評価し、分離効果のある責務を選ぶ。
+
 ### Block編集テスト支援の機能組立て
 
 BlockTestDriver.createEditorSupportへ空Block準備、編集状態、配置・入れ子拘束・子Geometry・確定／取消・有効Sketch指定、通常／旧形式再読込、定義更新の11factoryの生成接続と11公開APIを集約。定義数はreadDefinitionsを使って操作時に照会し、確定／取消・再読込後の現在値を保つ。公開名・順序を維持するため、空Block／定義更新の入口とlifecycle群を元の位置で接続する。各既存factoryの本体は完全一致し、生成接続もread port置換とindent以外一致。生成時に状態照会やモデル操作を行わず、通常起動で生成しないtest query guardも保持する。定義編集／Geometry／配置／履歴の状態は既存ownerへ留め、汎用app contextや新しい編集状態は持たない。

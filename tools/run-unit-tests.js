@@ -14,7 +14,7 @@ const files = [
   "tests/unit/clipboard-geometry.test.js",
   "tests/unit/clipboard-payload.test.js",
   "tests/unit/dxf-import.test.js",
-  "tests/unit/png-export.test.js", "tests/unit/png-export-feature.test.js", "tests/unit/offset-test-support.test.js", "tests/unit/sketch-projection-test-support.test.js", "tests/unit/annotation-test-support.test.js", "tests/unit/dimension-display-test-support.test.js", "tests/unit/dimension-interaction-test-support.test.js", "tests/unit/dimension-fixture-test-support.test.js", "tests/unit/block-editor-test-support.test.js",
+  "tests/unit/png-export.test.js", "tests/unit/png-export-feature.test.js", "tests/unit/offset-test-support.test.js", "tests/unit/sketch-projection-test-support.test.js", "tests/unit/annotation-test-support.test.js", "tests/unit/dimension-display-test-support.test.js", "tests/unit/dimension-interaction-test-support.test.js", "tests/unit/dimension-fixture-test-support.test.js", "tests/unit/block-editor-test-support.test.js", "tests/unit/block-observation-test-support.test.js",
   "tests/unit/constraint-codec-registry.test.js",
   "tests/unit/parameter-engine.test.js",
   "tests/unit/geometry-ref.test.js",

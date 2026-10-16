@@ -102,7 +102,7 @@
 
 前回のリリースは07024cb。local／originのmainとdevelopが同じcommit、作業treeがcleanであることを確認。週枠使用10%／残量90%で、最新developからcodex/parameter-edit-guardを作成して継続した。現在はこの作業branchで進める。停止条件はsection 6どおり残量50%未満であり、各抽出ごとにmainへは統合しない。
 
-Parameter削除guard、Document用下書き／Canvas reset、11個の採番状態とParameter／外観／PNG／Documentファイルのfeature組立てに続き、Offset・Sketch投影・Annotation・Dimension・Block編集のtest driverへ公開API対応と生成接続を集約。Dimensionの22個のfactory生成は三入口に整理済み。app.jsは4,459→4,147行（今回合計312行減、直近12行減）。最新の構文535ファイル・単体1,477件・関連E2E163件が成功。詳細とログはcomposition-root.md。前回リリース07024cbで全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次はBlockの一般状態・投影／回転／hover等の観測支援を調べる。既存driverの責務を変えず、巨大なapp contextを移すだけにしない。mode／command操作調整と起動接続も残る。状態の所有と依存の整理を優先する。
+Parameter削除guard、Document下書き／Canvas reset、採番状態、Parameter／外観／PNG／Documentファイルの機能組立て、Offset・Sketch投影・Annotation・Dimension・Blockのテスト支援生成と公開API対応を整理した。app.jsは4,459→4,143行（合計316行減、直近4行減）。構文536ファイル・単体1,480件・関連E2E142件成功。全体の数百行への目標は未完了。ユーザーからmainとoriginへの反映指示を受領したため、この区切りをCommit／Push後、developへ統合し全体検証、main最後のリリースと両branch同期を行う。再開時は残るBlock fixtureとUIイベント登録・mode／command接続を再評価し、意味のある責務単位を選ぶ。
 
 ### 前回の停止地点（2026-10-14）
 

@@ -419,5 +419,25 @@
     });
   }
 
-  window.BlockTestDriver = Object.freeze({ createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
+  // Compose live Block test observations without caching product state.
+  function createObservationSupport({
+    blockInstanceById, currentScope, blockInstanceDisplayCenter, readSolverVariables, buildDragSession,
+    blockProjectionBundle, worldToCanvasScreen, canvas, constraintTargetSession, canvasHover,
+    blockProjectionBundles, readDefinitions, canvasSelection, readMode, serializeModel, viewport
+  }) {
+    const blockRotationObservation = createRotationObservation({ blockInstanceById, currentScope, blockInstanceDisplayCenter, readSolverVariables, buildDragSession });
+    const blockEndpointObservation = createEndpointObservation({ currentScope, blockProjectionBundle, worldToCanvasScreen, canvas });
+    const blockHoverObservation = createHoverObservation({ constraintTargetSession, canvasHover });
+    const blockStateObservation = createStateObservation({ blockProjectionBundles, readDefinitions, currentScope, canvasSelection, readMode, serializeModel });
+    const blockInteractionObservation = createInteractionObservation({ blockInstanceById, currentScope, canvas, blockProjectionBundle, worldToCanvasScreen, blockInstanceDisplayCenter, viewport });
+    return Object.freeze({
+      blockState: blockStateObservation.state,
+      blockInteractionPoints: blockInteractionObservation.points,
+      blockRotationLockStateForTest: blockRotationObservation.state,
+      blockProjectionEndpointForTest: blockEndpointObservation.position,
+      blockProjectionHoverState: blockHoverObservation.state,
+    });
+  }
+
+  window.BlockTestDriver = Object.freeze({ createObservationSupport, createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
 })();

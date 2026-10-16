@@ -3714,17 +3714,17 @@
       createSketch, activeSketchId, addLine, addPoint, cancelBlockDefinitionEdit, completeBlockDefinitionEdit,
       setBlockInstanceEnabledSketchIds, serializeModel, loadModelData, allGeometryLines, enterBlockDefinitionEdit
     });
-    const blockRotationObservation = window.BlockTestDriver.createRotationObservation({ blockInstanceById, currentScope: workspace.current, blockInstanceDisplayCenter, readSolverVariables: () => solver.getVariables(), buildDragSession });
-    const blockEndpointObservation = window.BlockTestDriver.createEndpointObservation({ currentScope: workspace.current, blockProjectionBundle, worldToCanvasScreen, canvas });
-    const blockHoverObservation = window.BlockTestDriver.createHoverObservation({ constraintTargetSession, canvasHover });
+    const blockObservationSupport = window.BlockTestDriver.createObservationSupport({
+      blockInstanceById, currentScope: workspace.current, blockInstanceDisplayCenter, readSolverVariables: () => solver.getVariables(), buildDragSession,
+      blockProjectionBundle, worldToCanvasScreen, canvas, constraintTargetSession, canvasHover,
+      blockProjectionBundles, readDefinitions: () => documentModel.blockDefinitions, canvasSelection, readMode: () => mode, serializeModel, viewport
+    });
     const blockRejectionFixture = window.BlockTestDriver.createRejectionFixture({ resetModelState, addPoint, addLine, canvasSelection, blockSelectionGeometry, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current, activeSketchId, geometryRefForItem });
-    const blockStateObservation = window.BlockTestDriver.createStateObservation({ blockProjectionBundles, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, canvasSelection, readMode: () => mode, serializeModel });
     const sidebarHighlightObservation = window.PropertiesTestDriver.createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover });
     const sidebarHoverKeyObservation = window.PropertiesTestDriver.createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey });
     const blockDimensionFixture = window.BlockTestDriver.createReadOnlyDimensionFixture({ currentScope: workspace.current, blockProjectionBundle, defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint });
     const blockExternalFixture = window.BlockTestDriver.createExternalConstraintFixture({ currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
-    const blockInteractionObservation = window.BlockTestDriver.createInteractionObservation({ blockInstanceById, currentScope: workspace.current, canvas, blockProjectionBundle, worldToCanvasScreen, blockInstanceDisplayCenter, viewport });
     const dimensionInteractionSupport = window.DimensionTestDriver.createInteractionSupport({
       currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput,
       clearSelection, canvasSelection, updateUI, draw, resetModelState, addPoint, addLine, addCircle, addArc,
@@ -4080,11 +4080,7 @@
       resetForBlockCreationUi: blockCreationFixture.reset,
       resetForEmptyBlockCreation: blockEditorTestSupport.resetForEmptyBlockCreation,
       ...dimensionInteractionSupport.placement,
-      blockState: blockStateObservation.state,
-      blockInteractionPoints: blockInteractionObservation.points,
-      blockRotationLockStateForTest: blockRotationObservation.state,
-      blockProjectionEndpointForTest: blockEndpointObservation.position,
-      blockProjectionHoverState: blockHoverObservation.state,
+      ...blockObservationSupport,
       drawnGeometryIdLabelsForTest: canvasRenderProbe.geometryIdLabels,
       constraintStatusEndpointMarkerCountForTest: canvasRenderProbe.constraintEndpointMarkerCount,
       drawnPointMarkerCountForTest: canvasRenderProbe.pointMarkerCount,
