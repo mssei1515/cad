@@ -2859,60 +2859,12 @@
     blockView.render();
   }
 
-  function focusedExpressionInputContext() {
-    const input = document.activeElement;
-    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) || input.readOnly || input.disabled) return null;
-    if (input.matches('#commandPanel [data-setting="expression"]') || input.id === "annotationValueInput" && input.dataset.expression === "true") return { input, namespace: model };
-    if (input === dimensionValueInput && pendingCommandSession.current?.type === "distance-value") return { input, namespace: model };
-    if (input.matches('#propertiesPanel [data-property="constraint-expression"], #propertiesPanel [data-property="annotation-expression"]')) return { input, namespace: model };
-    const parameterExpression = input.matches('[data-parameter-field="expression"], [data-dimension-field="expression"]');
-    if (parameterExpression && input.closest("#parametersDialog") && parameterDraft.current) {
-      return { input, namespace: parameterDraft.current.namespace };
-    }
-    return null;
-  }
+  const { context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter, insertAnnotation: insertClickedAnnotationParameter } = window.ExpressionInputController.create({
+    document, types: { InputElement: HTMLInputElement, TextAreaElement: HTMLTextAreaElement }, currentNamespace: () => model, dimensionValueInput,
+    pendingCommandSession, parameterDraft, ensureDimensionParameter, setParameterDialogError,
+    setHint, applicationText, language: () => applicationSettings.language, insertIdentifierIntoExpressionInput,
+  });
 
-
-  function insertClickedDimensionParameter(event, dimensionHit) {
-    const context = focusedExpressionInputContext();
-    if (!context || !dimensionHit?.constraint || dimensionHit.constraint.annotationOwner) return false;
-    if (context.namespace !== model) {
-      const message = applicationText("表示中のCanvasと異なる名前空間のため、この寸法は参照できません", "This dimension cannot be referenced because the canvas shows a different namespace.");
-      setParameterDialogError(message);
-      setHint(message, "error");
-      event.preventDefault();
-      event.stopPropagation();
-      return true;
-    }
-    ensureDimensionParameter(dimensionHit.constraint, model);
-    if (!dimensionHit.constraint.parameterName) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    insertIdentifierIntoExpressionInput(context.input, dimensionHit.constraint.parameterName);
-    setParameterDialogError("");
-    setHint(applicationSettings.language === "en"
-      ? `Inserted ${dimensionHit.constraint.parameterName}.`
-      : `${dimensionHit.constraint.parameterName} を挿入しました`);
-    return true;
-  }
-
-  function insertClickedAnnotationParameter(event, annotationHit) {
-    const context = focusedExpressionInputContext();
-    const item = annotationHit?.element;
-    if (!context || !item?.parameterEnabled || !item.parameterName || !model.annotations.includes(item)) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    if (context.namespace !== model) {
-      const message = applicationText("表示中のCanvasと異なる名前空間のため、この注記は参照できません", "This annotation cannot be referenced because the canvas shows a different namespace.");
-      setParameterDialogError(message);
-      setHint(message, "error");
-      return true;
-    }
-    insertIdentifierIntoExpressionInput(context.input, item.parameterName);
-    setParameterDialogError("");
-    setHint(applicationSettings.language === "en" ? `Inserted ${item.parameterName}.` : `${item.parameterName} を挿入しました`);
-    return true;
-  }
 
   function effectiveConstructionAppearanceForSketch(...args) { return geometryAppearance.effectiveConstructionAppearanceForSketch(...args); }
   function effectiveDimensionAppearanceForSketch(sketch) {

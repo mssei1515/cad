@@ -938,3 +938,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/commands/trim_command.js: TrimCommandは対象検証・Geometry変更の依頼・求解／依存結果の判定・checkpoint復元・成功履歴を18依存で調整する。TrimEditingと既存Geometry checkpointの所有を維持し、復元条件や例外伝播・UI順を変えない。
 
 - src/ui/expression_input_view.js: createInsertionは識別子の挿入とinput／blur-change・focus／caretのDOM操作を2依存で担当する。native changeの重複と切断inputへの補完を避ける既存挙動を保持し、Parameterの名前解決・評価・適用は担当しない。
+
+- src/ui/expression_input_controller.js: フォーカス式field／namespace照会とCanvasの寸法・注記からの参照入力を12依存で担当する。名前補完とDOM挿入は既存service／viewへ委譲し、namespaceの同一参照・拒否条件と異なるevent／通知順を保持する。

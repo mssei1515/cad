@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Canvas参照入力の照会と操作調整
+
+focusedExpressionInputContext／insertClickedDimensionParameter／insertClickedAnnotationParameterをExpressionInputControllerへ集約。DOM／型、現在namespace・pending／Parameter draft、寸法名補完、error／hint・言語・識別子挿入の12依存を明示する。各式fieldとreadOnly／disabled、modelとdraftのnamespace同一参照、寸法／注記の対象条件、名前の補完とevent抑止・挿入／通知順を維持。特にnamespace不一致時の寸法はerror／hint→prevent／stop、注記はprevent／stop→error／hintの順であり、共通化して並べ替えない。3bodyは型・model／言語read portの置換以外一致し、namespaceをcacheせず操作時に読む。Parameterの補完は既存service、DOM変更はExpressionInputViewへ委譲し、独自model／draft／Selectionを持たない。appは最初のconsumer登録前に生成・接続する。
+
+app.jsは4,560→4,512行（48行減、今回の再開から合計328行減）。新controller／unit fileを追加しindex.html・check-syntax・明示unit一覧・unified-uiのscript期待を同期。unit4件で対象fieldとreadOnly／disabled、現在namespaceの同一性、名前補完→event／挿入順、namespace不一致時の異なる順序、注記の所有とlive言語を確認。構文516ファイル・単体1,433件・先行file URL読込1件・関連E2E35件が成功（すべてexit 0、関連E2E1.1分）。unified-ui／parameter-dialog-controller／unified-annotations／dimension-prefix／annotation-anchorsからexpression／formula／parameter／reference／inline／affix／prefixの関連ケースを抽出。全worker終了後に各専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-expression-reference-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はlocalizedConstraintNameに残る拘束名の言語／typeOnly表示を既存ConstraintFeedbackへ集約できるか確認し、Modelのnameや保存値を変更せず、正規表現の優先順・未知名のfallbackとlive言語を維持する。
+
 ### 式入力欄への識別子挿入
 
 insertIdentifierIntoExpressionInputを既存ExpressionInputView.createInsertionへ集約。Event constructorとformatParameterReferenceの2依存だけを接続し、選択範囲置換・equals補完／padding・input通知・blur時のchange補完・focus／caretを担当する。元bodyはEvent constructorの注入名以外一致し、native change済みや切断inputの通知抑止、once listenerと複数挿入時の一回のchange、通知前後のDOM操作順を維持する。Parameter名前空間照会や評価／適用・履歴は持ち込まない。appは起動時に生成し、既存寸法／注記挿入の呼出しへ接続。最初のconsumerより前の初期化とfactory生成時にinputや状態へ触れないことを確認した。
