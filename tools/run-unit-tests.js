@@ -43,7 +43,7 @@ const files = [
   "tests/unit/history-restoration.test.js",
   "tests/unit/document-application.test.js",
   "tests/unit/dimension-persistence.test.js",
-  "tests/unit/document-files.test.js",
+  "tests/unit/document-files.test.js", "tests/unit/document-file-feature.test.js",
   "tests/unit/constraint-persistence.test.js",
   "tests/unit/geometry-persistence.test.js",
   "tests/unit/sketch-hierarchy.test.js",

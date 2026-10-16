@@ -1110,16 +1110,15 @@
     return effectiveDocumentNameFromValue(documentModel.documentName);
   }
 
-  const documentStatusView = window.DocumentStatusView.create({
-    document, applicationText, fileSession, getDocumentName: effectiveDocumentName,
-    currentSnapshot: () => documentHistory.currentSnapshot, isEditingBlock: () => Boolean(blockEditor.current),
+  const documentFileFeature = window.DocumentFileFeature.create({
+    window, document, fileSession, applicationText,
+    readDocumentName: () => documentModel.documentName, currentSnapshot: () => documentHistory.currentSnapshot,
+    isEditingBlock: () => Boolean(blockEditor.current), serializeModel, requestChoice: options => choiceDialog.show(options),
+    loadModelData, solveAndRefresh, resetHistory, fitAllGeometryToViewport,
+    repairMessage: () => documentApplication.blockConstraintRepairMessage, setHint, log, draw,
   });
-  function updateDocumentNameUI() { documentStatusView.render(); }
-
-  function markDocumentFileCheckpoint(kind, data = serializeModel()) {
-    fileSession.markCheckpoint(kind, data);
-    updateDocumentNameUI();
-  }
+  const { refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint,
+    save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, importFileData } = documentFileFeature;
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
@@ -1703,24 +1702,6 @@
   function loadModelData(data, options = {}) {
     return documentApplication.load(data, options);
   }
-
-  const documentFileCommand = window.DocumentFileCommand.create({
-    window, document, fileSession, choiceDialog, applicationText,
-    bookmarks: window.DocumentBookmarks.create({ indexedDB: window.indexedDB, crypto: window.crypto }),
-    isEditingBlock: () => Boolean(blockEditor.current), getDocumentName: () => documentModel.documentName,
-    serializeModel, markDocumentFileCheckpoint, updateDocumentNameUI, setHint, log,
-    applyLoadedDocument: (data, fileName) => {
-      loadModelData(data, { documentNameOverride: fileNameStem(fileName) });
-      solveAndRefresh("ファイル読み込み");
-      resetHistory("ファイル読み込み");
-      markDocumentFileCheckpoint("saved");
-      updateDocumentNameUI();
-      fitAllGeometryToViewport();
-      draw();
-      if (documentApplication.blockConstraintRepairMessage) setHint(documentApplication.blockConstraintRepairMessage);
-    },
-  });
-  const { save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, importFileData } = documentFileCommand;
 
   const referenceImageImport = window.ReferenceImageImport.create({ window, document, applicationText });
 
@@ -3570,10 +3551,7 @@
   });
   drawingToolBinding.bind();
 
-  const documentFileControls = window.DocumentFileControls.createDocument({
-    document, saveJot2DFile, saveJot2DFileAs, openJot2DFile, documentFileCommand,
-  });
-  documentFileControls.bind();
+  documentFileFeature.bindControls();
   const pngExport = window.PngExport.create({
     document, window, canvas, rendering: pngRendering, text: applicationText, documentName: effectiveDocumentName,
     prepareImages: () => referenceImageRenderer.ready(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId))),
@@ -4311,6 +4289,5 @@
   canvasSurface.start();
   resetHistory("起動");
   markDocumentFileCheckpoint("new");
-  window.addEventListener("beforeunload", documentFileCommand.beforeUnload);
-  void documentFileCommand.openStartupDocument();
+  documentFileFeature.start();
 })();

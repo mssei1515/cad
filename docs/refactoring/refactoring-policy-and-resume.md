@@ -102,7 +102,7 @@
 
 前回のリリースは07024cb。local／originのmainとdevelopが同じcommit、作業treeがcleanであることを確認。週枠使用10%／残量90%で、最新developからcodex/parameter-edit-guardを作成して継続した。現在はこの作業branchで進める。停止条件はsection 6どおり残量50%未満であり、各抽出ごとにmainへは統合しない。
 
-Parameter削除guard、Document用下書き／Canvas reset、11個の採番状態に続き、ParameterEditor・DocumentAppearanceEditor・PngExportへ機能単位の生成接続を集約。app.jsは4,459→4,316行（今回合計143行減、直近19行減）。最新の構文526ファイル・単体1,456件・file URL読込1件・関連E2E127件が成功。詳細とログはcomposition-root.md。前回リリース07024cbで全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次はDocumentファイル操作の生成・終了保護とDocument状態表示との接続を調べる。mode／command操作調整、test hook公開境界も残る。小さなhelper分割や巨大contextの移動に偏らず、状態の所有と依存の整理を優先する。
+Parameter削除guard、Document用下書き／Canvas reset、11個の採番状態に続き、ParameterEditor・DocumentAppearanceEditor・PngExport・DocumentFileFeatureへ機能単位の生成接続を集約。app.jsは4,459→4,293行（今回合計166行減、直近23行減）。最新の構文528ファイル・単体1,460件・file URL読込1件・関連E2E142件が成功。詳細とログはcomposition-root.md。前回リリース07024cbで全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次はinstallTestHooksのfeature別fixture／observation生成接続と公開APIを調べる。既存driverの責務を変えず、巨大なapp contextを移すだけにしない。mode／command操作調整と起動接続も残る。状態の所有と依存の整理を優先する。
 
 ### 前回の停止地点（2026-10-14）
 

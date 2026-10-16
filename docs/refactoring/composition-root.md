@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Documentファイル操作の機能組立て
+
+src/application/document_file.jsにDocumentFileFeatureを追加。DocumentStatusView／DocumentBookmarks／DocumentFileCommandとDocument用controlを生成・接続し、checkpoint→status更新と読込成功時の適用→solve→履歴初期化→saved checkpoint→再表示→fit→draw→修復案内を機能内で調整する。保存先／排他／checkpointは既存DocumentFiles、codecとmodel反映は既存DocumentApplication、ブラウザI/Oと置換／終了保護は既存DocumentFileCommandのまま。状態表示が履歴snapshot、置換とunloadが現在実データを使う違いと、二回のstatus更新も維持する。早いstatus生成位置でfeatureを組むが、command／bookmark／controlのfactoryがI/O・描画・model操作を開始しないことを確認し、後段choiceDialogとDocumentApplicationは遅延callbackで接続。controlのbindと初期化完了後のbeforeunload／startup開始は元の時点に置く。disposeは登録listenerだけを解除し、I/O取消や新たなrollback保証は追加しない。
+
+app.jsは4,316→4,293行（23行減、07024cbから合計166行減）。新scriptとunitをindex／構文／unit一覧／読込期待へ同期し、各pathが一回だけ存在することを確認。実際のfile command／status／session／controlを使う単体4件で履歴表示と実データ保護の区別、読込完了順、失敗時の後続停止、control／beforeunloadの二重登録抑止とdispose／再startを確認。構文528ファイル・単体1,460件・file URL読込1件・関連E2E142件が成功（すべてexit 0）。file-safety／unified-ui／phase0-characterizationの135件（1.8分）とdocument-bookmarksの7件（6.9秒）を実行。全runnerは正常終了。ログは一時ディレクトリのcad-document-file-feature-{check,unit,loader,e2e,links}.log。全E2Eは今回未実行。全体目標は未完了。次はinstallTestHooksに残るfeature別のfixture／observation生成接続と公開APIを調べ、既存driverの責務を変えずにまとまりを移せるか検討する。
+
 ### PNG出力の機能組立て
 
 src/application/png_export.jsにPngExportを追加。CanvasExportのcapture、PngFile、PngExportCommandとmode session、開始buttonを生成・接続する。既存の一時描画frameはappが作るCanvasExport rendererに残し、入力とCommandPanelには同じcommand参照を接続。開始前pointer処理→file busy／作図中／pending／拘束command／Block配置modeの短絡順と拒否文言を維持する。DPIから倍率への変換、cache内の10px snap照会、font待機の後に現在の可視画像を準備する時機、描画bitmapの復元・保存・元modeへの復帰は既存ownerと同じ順を保持。Documentファイルcontrolsは既に明確な責務であるため無理にPNGと統合しない。独自Document／Viewport／履歴やアプリ全体のcontextを持たない。

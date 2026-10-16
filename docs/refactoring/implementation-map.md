@@ -958,3 +958,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/application/document_appearance_editor.js: Document既定外観設定の三組のcommand／Viewを生成接続し、Geometry→Dimension→Shared準備とdialog表示、開始buttonのlistener寿命を担当。既定値のread／writeと既存編集service・rows・通知を受け、外観変更とfield表示は既存ownerへ委譲する。
 
 - src/application/png_export.js: PNG出力の機能組立て。CanvasExport／PngFile／PngExportCommandとmode session、開始拒否の順序、snap解決、fonts→現在画像準備、開始buttonのstart／disposeを接続する。appは既存renderer・可視画像準備・session／read portを提供し、Canvas入力／CommandPanelには同じcommand APIを渡す。Documentファイルcontrolsは独立した既存ownerに残す。
+
+- src/application/document_file.js: Documentの状態表示／checkpoint・bookmark・file command・control／startup／beforeunloadの機能組立て。モデル適用・solve・履歴・viewportは限定した操作portへ委譲し、statusの履歴snapshot照会とunloadの実データ照会を保持する。choice dialogと修復案内は遅延callbackで接続し、初期化時には実行しない。
