@@ -1208,10 +1208,6 @@
     return model.blockInstances.find((instance) => instance.id === id) || null;
   }
 
-  function normalizeGeometryInstanceRef(value, expectedKind = null) {
-    return geometryInstancePersistence.normalizeRef(value, expectedKind);
-  }
-
   function normalizeGeometryInstance(raw, normalizeSketch = value => String(value || activeSketchId()), index = 0) {
     return geometryInstancePersistence.normalize(raw, normalizeSketch, index);
   }
@@ -1276,16 +1272,6 @@
 
   function rejectRootSketchCreation(...args) { return sketchEditAccess.rejectRootSketchCreation(...args); }
 
-  function parentSketchOf(sketch) {
-    ensureSketchState();
-    return window.SketchHierarchy.parentSketchOf(model.sketches, sketch);
-  }
-
-  function sketchDepth(sketch) {
-    ensureSketchState();
-    return window.SketchHierarchy.sketchDepth(model.sketches, sketch);
-  }
-
   function isVisibleValue(...args) { return geometryAppearance.isVisibleValue(...args); }
   function isVisibleSketchId(...args) { return geometryAppearance.isVisibleSketchId(...args); }
   function isVisibleSketchElement(...args) { return geometryAppearance.isVisibleSketchElement(...args); }
@@ -1333,10 +1319,6 @@
   function solveAndRefresh(...args) { return solveRefreshCommand.run(...args); }
 
   function stabilizeActiveParameterNamespace(...args) { return parameterStabilization.stabilize(...args); }
-
-  function geometryErrorNorm() {
-    return vectorNorm(solver.computeErrorVector());
-  }
 
   function refreshConstraintAnalysis(options = {}) { return constraintAnalysis.refresh(options); }
 
@@ -1469,10 +1451,6 @@
     setHint, log, updateUI, draw, recordHistory,
   });
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
-
-  function exitBlockDefinitionEdit() {
-    completeBlockDefinitionEdit();
-  }
 
   function syncOffsetChainSelection() {
     canvasSelection.set("points", []);
@@ -1716,7 +1694,6 @@
     cancelConstraintTargetCommand, setMode: value => { mode = value; },
     clearTrimHover: () => canvasHover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null }),
   });
-  function exitLineMode() { return drawOperationLifecycle.exitLine(); }
   function exitDrawMode() { return drawOperationLifecycle.exit(); }
   function hasActiveDrawOperation() { return drawOperationLifecycle.active(); }
   function cancelActiveDrawOperation() { return drawOperationLifecycle.cancel(); }
@@ -1848,14 +1825,6 @@
 
   function hitDimension(...args) { return dimensionHitQuery.hitDimension(...args); }
 
-  function primitiveId(primitive) {
-    return primitive?.id || "";
-  }
-
-  function isPrimitive(item) {
-    return item instanceof Circle || item instanceof Arc;
-  }
-
 
   function distanceTargetFromSelection() { return constraintSelectionQuery.distanceTarget(); }
 
@@ -1912,7 +1881,6 @@
     return readOnly ? `(${label})` : label;
   }
 
-  function solveActiveSketch(...args) { return sketchSolving.solveActiveSketch(...args); }
   function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
 
   function solveFinalDragSession(session) {
@@ -1923,15 +1891,6 @@
   function solveReferenceDependentSketches(...args) { return sketchSolving.solveReferenceDependentSketches(...args); }
   function solveSketchAndDependents(...args) { return sketchSolving.solveSketchAndDependents(...args); }
   function solveConstraintComponentAndDependents(...args) { return sketchSolving.solveConstraintComponentAndDependents(...args); }
-
-  function solveElementSketchAndDescendants(element, rollbackState = null) {
-    return solveSketchAndDependents(elementSketchId(element), rollbackState);
-  }
-
-  function removeFromArray(array, item) {
-    const i = array.indexOf(item);
-    if (i >= 0) array.splice(i, 1);
-  }
 
   function geometryInstanceUsesRemovedGeometry(instance, removedKeys = new Set(), removedOwnerIds = new Set()) {
     return geometryInstanceDependencyRefs(instance).some((ref) => removedKeys.has(geometryRefKey(ref)) || removedOwnerIds.has(ref.path?.[0]));
@@ -2188,8 +2147,6 @@
 
 
   function drawDimension(...args) { return dimensionPainter.drawDimension(...args); }
-  function drawAngleDimension(...args) { return dimensionPainter.drawAngleDimension(...args); }
-
 
 
 
@@ -2324,7 +2281,6 @@
   });
   function startConstraintTargetCommand(type) { return constraintTargetCommand.start(type); }
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
-  function executeConstraintCommandIfReady() { return constraintTargetCommand.complete(); }
   function completePendingDimensionLineLength() { return constraintTargetCommand.completeLineLength(); }
 
   function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
@@ -2359,8 +2315,6 @@
     setHint("角度間隔寸法の表示位置をクリックしてください"); updateToolbar(); draw(); return true;
   }
   function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
-
-  function startPrimitiveDimensionCommand(kind) { return dimensionPlacementCommand.startPrimitiveDimensionCommand(kind); }
 
   function cancelPendingCommand(message) { return pendingCommandSession.cancel(message); }
 
@@ -2887,7 +2841,6 @@
     sketchName, now: () => performance.now(), recordPerformance: trace => { lastAuthoringPerformance = trace; },
   });
   function commitNewConstraint(...args) { return constraintCommitCommand.ordinary(...args); }
-  function commitReferenceConstraint(...args) { return constraintCommitCommand.reference(...args); }
   function markReferenceConstraint(...args) { return constraintCommitCommand.markReference(...args); }
 
   const constraintIntentResolver = window.ConstraintIntentResolver.create({
@@ -2971,23 +2924,6 @@
   });
 
 
-
-  function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {
-    canvasSelection.set("instanceGeometry", null);
-    canvasSelection.set("dimensionConstraint", null);
-    canvasSelection.set("constraint", null);
-    canvasSelection.set("blockInstances", []);
-    canvasSelection.set("annotations", []);
-    canvasSelection.set("hatches", []);
-    canvasSelection.set("referenceImages", []);
-    canvasSelection.set("points", hitP ? [hitP] : []);
-    canvasSelection.set("lines", hitL ? [hitL] : []);
-    canvasSelection.set("circles", hitC ? [hitC] : []);
-    canvasSelection.set("arcs", hitA ? [hitA] : hitArcEnd ? [hitArcEnd.arc] : []);
-    canvasSelection.set("arcEndpoint", hitArcEnd ? { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint } : null);
-    canvasSelection.set("arcEndpointPair", null);
-    draw();
-  }
 
   function dragResultForSession(session, pointer) {
     if (!interactionProfiler.active) return geometryDragEditing.preview(session, pointer);

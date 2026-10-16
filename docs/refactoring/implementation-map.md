@@ -1024,3 +1024,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/editing/geometry_creation.js: GeometryCreation.createEndpointResolverは既存端点の再利用とendpoint Point生成の振分けを担当する。hitEndpointPoint→hitExplicitPoint→addPointの三つの依存を明示し、端点hitなら同じObjectを返して後続照会／採番を行わない。explicit Point hitではその現在座標でaddPoint(x,y,false,endpoint)を呼び、元Pointを変更せず現在Sketch／scopeへ新しいendpointを追加する。両hitがない場合は入力座標で同じaddPoint引数を使う。hitの選択／可視性規則は既存GeometryHitQuery、採番／所属付与は既存GeometryCreationに残す。appは後で生成されるhit照会を遅延callbackで接続する。
+
+
+- app.js: 構文scopeの参照監査で未使用と確認した旧入口16個を撤去。Sketch階層／Instance参照／求解／Block完了／作図解除／寸法描画・配置／拘束適用は既存ownerを継続利用し、旧selectHitOnly等の重複経路を残さない。公開hook・現役接続・副作用を持つfactory初期化は維持する。

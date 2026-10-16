@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 分離済み責務の未使用旧入口の撤去
+
+app IIFEのbindingを構文scopeで再監査し、参照のない関数宣言16個を撤去した。Instance参照正規化、Sketch階層照会、求解誤差、Block完了、作図解除、primitive判定、求解、配列削除、角度寸法描画、拘束完了・参照確定、primitive寸法開始と旧selectHitOnlyが対象。strict IIFE内の非公開宣言で、eval等の動的参照はなく、公開hookやcallbackは現役ownerへ接続されている。変更前後の残存top-level statement本文が同一であることも確認し、factory初期化やイベント登録は変更していない。新規module／状態／テストは追加していない。責務の再分離ではなく、移行後の重複経路と依存の整理である。
+
+app.jsは3,949→3,885行（64行減）。構文546ファイル・単体1,542件・関連E2E156件成功（すべてexit 0、E2E2.8分）。E2Eはunified-ui／blocks／derived-patternsの全3fileで、寸法と拘束の既存UIケースを含む。ログは一時ディレクトリのcad-entry-audit-{check,unit,e2e}.log。全ケース／worker終了後に専用serverのみ残ったため、process実体を確認し同serverだけを終了して正常終了を回収。全E2Eは今回未実行。残る未参照124bindingは変数宣言であり、副作用・getter・生成時機を確認するまで自動削除しない。全体目標は未完了。
+
 ### 既存端点の解決とendpoint生成
 
 endpointAtを既存GeometryCreation.createEndpointResolverへ集約。hit端点の同一参照優先→explicit Pointの現在座標で新endpoint→入力座標でendpoint生成という順序・引数を保持し、後続のhit queryには遅延callbackで接続する。既存採番／Sketch付与／scopeはaddPointへ、hit方針はGeometryHitQueryへ委譲。app内だけの未使用pointAtと未使用hitAnyPoint aliasを参照監査後に撤去した。新しいhit規則やPoint共有／固定の変更は加えない。

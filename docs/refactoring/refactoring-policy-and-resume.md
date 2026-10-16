@@ -82,7 +82,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/reference-image-feature`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/composition-entry-audit`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -99,6 +99,12 @@
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-16）
+
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、最新developからcodex/composition-entry-auditを作成して再開。週枠使用34%／残量66%で停止条件未到達。app IIFEの未参照関数16個を公開経路・動的参照・callback利用の有無を確認して撤去した。残存statement本文が変更前後で一致することを確認。app.jsは3,949→3,885行（64行減）。構文546ファイル・単体1,542件・関連E2E156件成功（すべてexit 0、全3file、2.8分）。ログはcad-entry-audit-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。新規テスト／moduleは追加していない。
+
+次は未使用aliasの依存監査。再監査で未参照関数宣言は0件、残る124bindingは変数宣言。namespaceの単純な静的値参照と、副作用／getter／listener登録を伴う生成を区別する。自動一括削除せず既存ownerのexport実装を確認して対象を限定し、初期化順・公開APIを維持する。別ファイルへ巨大contextを移したり、行数のみを目的にAPIを細分化したりしない。
+
+### 直前のリリース（4859400）
 
 ユーザーのorigin/mainへの反映指示により、codex/reference-image-featureの20単位をdevelopの1bfffa2へ統合・Pushした。コード最終commitは16090aa。app.jsは4,143→3,949行（194行減）。Reference Image入力、Canvas表示操作、Keyboard入力、基本作図の生成・接続、drag補助状態、Sketch切替reset、拘束適用、端点生成などの責務を既存ownerへ整理した。UI／操作／保存形式の仕様は変更していない。全体の数百行への目標は未完了。
 
