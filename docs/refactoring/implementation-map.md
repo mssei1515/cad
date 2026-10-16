@@ -966,3 +966,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/testing/sketch_projection_test_driver.js: createSupportはSketch投影テスト支援の生成接続と21公開APIの対応を所有。共通observation、旧形式target生成、選択と転送の内部リンクを同じdriver内で完結し、個別factoryの実装／exportと通常起動のtest query guardを維持する。
 
 - src/testing/annotation_test_driver.js: createSupportはAnnotationの6factoryとdrag状態照会を生成接続し、7公開APIを準備／状態観測／入力照会の三群で返す。appは各群を元の位置へ展開するだけとし、公開順と共有snapshot／drag fixtureの接続を維持する。
+
+- src/testing/dimension_test_driver.js: createDisplaySupportは表示計測に関する7factoryと8公開APIを生成接続し、表示観測とprecision／angle casesの二群を返す。現在Documentの既定外観を合成するgetterを内部で共有し、appは関連portと公開位置だけを接続する。編集・配置の支援とは分離した境界。

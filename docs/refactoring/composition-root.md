@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Dimension表示テスト支援の機能組立て
+
+DimensionTestDriver.createDisplaySupportへ外観観測・描画計測・半径／端末記号・色・数値精度／文字角度の7factoryの生成接続と8公開APIを集約。編集／配置fixtureは依存と操作責務が異なるため別の既存factoryに残す。現在Documentの寸法／端末既定値を合成するgetterを内部で共有し、appはappearance／casesの二群を元の公開位置で展開して名前・順序を維持する。個別factoryの本体は完全一致し、生成接続もread port置換とindent以外一致。早い場所にあったcase factoryの生成は表示支援の組立て位置へ移るが、生成時に測定・モデル照会を行わず、各APIの呼出し時に評価する。製品ownerの外観／描画計算やSelection・hoverの復元範囲は変更しない。巨大なapp contextや独自製品状態を追加しない。
+
+app.jsは4,207→4,187行（20行減、07024cbから合計272行減）。新scriptなし。新unit fileを構文／unit一覧へ一回だけ追加。単体3件で8 APIの名前・順序と生成時無処理、precision入口、live既定値の合成と倍率、色観測後のSelection／hover／stroke復元と描画失敗時の例外伝播を確認。構文532ファイル・単体1,469件・関連E2E127件が成功（すべてexit 0、E2E1.9分）。8 APIを使うunified-ui／annotation-display-size／leader-appearanceの全3fileを実行し、file URL起動も含む。全runnerは正常終了。ログは一時ディレクトリのcad-dimension-display-test-support-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はDimensionの編集・配置fixtureと操作観測の生成接続・公開対応を調べる。
+
 ### AnnotationテストAPIの機能組立て
 
 AnnotationTestDriver.createSupportへ寸法／外観／所有関係の観測、snapshot、drag fixture、hit照会の6factoryとdrag状態照会を集約。共有snapshotをdrag fixtureへ内部で接続し、既存製品ownerからの操作・read portだけを受け取る。7つの公開APIはfixtures／observations／interactionの三群で返し、appは元の位置へ展開することで他featureを含む公開順も維持する。全個別factoryの本体は変更前と完全一致し、生成接続もport置換とindent以外一致。drag状態は元と同じannotationDrag.inspectの操作時照会と返値を保ち、通常起動で支援を生成しないtest query guardも保持する。任意のapp contextや製品状態を新たに所有しない。

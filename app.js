@@ -3655,8 +3655,6 @@
       startDistanceValueInput, dimensionValueInput, currentScope: workspace.current, isReadOnlyDimension, isDimensionConstraint,
     });
     const extensionVisibilityFixture = window.DimensionTestDriver.createExtensionVisibilityFixture({ resetModelState, addPoint, addLine, hypot2, dimensionLayout, dimensionWithLabelAt, dimensionFromAnchor });
-    const dimensionDisplayCases = window.DimensionTestDriver.createDisplayCases({ formatDimensionLabel, formatMeasuredDimensionLabel });
-    const dimensionTextAngleCases = window.DimensionTestDriver.createTextAngleCases({ jisDimensionTextAngle, dimensionTextOffset });
     const angleLabelFixture = window.DimensionTestDriver.createAngleLabelFixture({
       resetModelState, addPoint, addLine, dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets,
       setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, hypot2, serializeDimension,
@@ -3868,24 +3866,12 @@
       currentScope: workspace.current, clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection,
       blockSelectionBoundsCenter, dimensionConstraintsInNamespace, deleteElements, document,
     });
-    const readTestDefaultDimensionAppearance = () => normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false });
-    const radiusFixture = window.DimensionTestDriver.createRadiusFixture({
-      Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, circlePointAtAngle, readDefaultAppearance: readTestDefaultDimensionAppearance,
-      viewport, hypot2, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
-    });
-    const terminatorFixture = window.DimensionTestDriver.createTerminatorFixture({
-      readDefaultAppearance: readTestDefaultDimensionAppearance, layouts: dimensionLayouts, metrics: dimensionMetrics, viewport,
-      screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM, fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, hypot2,
-    });
-    const dimensionColorObservation = window.DimensionTestDriver.createColorObservation({ canvasSelection, canvasHover, ctx, drawDimensions });
-    const dimensionAppearanceObservation = window.DimensionTestDriver.createAppearanceObservation({
-      currentScope: workspace.current, readDocument: () => documentModel, isDimensionConstraint, constraintSketchId, activeSketchId,
-      normalizeDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState,
-    });
-    const dimensionRenderObservation = window.DimensionTestDriver.createRenderObservation({
-      currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, constraintSketchId, activeSketchId, effectiveDimensionAppearance,
-      placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, viewport, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
-      displayFactor: window.Appearance.annotationDisplayFactor, hypot2,
+    const dimensionDisplaySupport = window.DimensionTestDriver.createDisplaySupport({
+      Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, circlePointAtAngle, viewport, hypot2, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
+      outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, canvasSelection, canvasHover, ctx, drawDimensions,
+      currentScope: workspace.current, readDocument: () => documentModel, isDimensionConstraint, constraintSketchId, activeSketchId, normalizeDimensionAppearance,
+      effectiveDimensionAppearanceForSketch, dimensionDisplayState, targetFromConstraint, effectiveDimensionAppearance, displayFactor: window.Appearance.annotationDisplayFactor,
+      formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle, dimensionTextOffset
     });
     const referenceImageTestObservation = window.ReferenceImageTestDriver.createObservation({
       canvasSelection, currentScope: workspace.current, serializeReferenceImage, isEditingBlock: () => Boolean(blockEditor.current),
@@ -4026,12 +4012,7 @@
       importReferenceImageDataForTest: referenceImageTestImport.importData,
       openReferenceImageBlockEditorForTest: referenceImageBlockFixture.open,
       completeReferenceImageBlockEditorForTest: referenceImageBlockFixture.complete,
-      dimensionAppearanceStateForTest: dimensionAppearanceObservation.state,
-      arcRadiusDimensionRenderPlanForTest: radiusFixture.radiusPlan,
-      dimensionAppearanceRenderMetricsForTest: dimensionRenderObservation.appearanceMetrics,
-      dimensionTerminatorFitForTest: terminatorFixture.fit,
-      dimensionArrowTipAlignmentForTest: terminatorFixture.arrowAlignment,
-      drawnDimensionColorsForTest: dimensionColorObservation.colors,
+      ...dimensionDisplaySupport.appearance,
       resetForParameterTest: parameterFixture.reset,
       resetForParameterFeedbackTest: parameterFixture.resetFeedback,
       parameterStateForTest: parameterObservation.state,
@@ -4074,8 +4055,7 @@
       resetForReadOnlyDuplicateDimension: readOnlyDuplicateFixture.reset,
       resetForReadOnlyDimensionPlacement: readOnlyPlacementFixture.reset,
       pointPointRectangleDimensionExtensionVisibilityCases: extensionVisibilityFixture.cases,
-      dimensionDisplayPrecisionCases: dimensionDisplayCases.precision,
-      dimensionTextAngleCases: dimensionTextAngleCases.angles,
+      ...dimensionDisplaySupport.cases,
       angleDimensionLabelFollowCase: angleLabelFixture.followCase,
       resetForTrimConstraintTransfer: trimLineTransferFixture.reset,
       trimConstructionBoundaryCase: trimConstructionFixture.boundaryCase,
