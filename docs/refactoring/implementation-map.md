@@ -926,3 +926,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/ui/number_display.js: NumberDisplayはUI／Canvas共通の自動数値表示、通常／実測寸法labelとsuffix整形を担当する。丸め許容差と3つの純粋関数を所有し、モデル計算値・UI状態・寸法の固定桁外観を更新しない。
 
 - src/commands/sketch_command.js: renameの編集guardとtoggleLockの状態更新／UI・描画・履歴を所有する。appは権限照会と専用の取消準備callbackを接続し、Sketch切替の全体resetとは別の順序を維持する。
+
+- src/ui/command_panel.js: createRoutingはPNG／注記／Hatch／派生の表示先選択とイベント振分けを6依存で担当する。row選択・削除のoptional性とPNGを経由しない経路、receiver・引数・結果を維持し、appは個別panelとviewを接続する。

@@ -4715,13 +4715,10 @@
     cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
   });
   const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText, effectiveStyle: item => effectiveAnnotationStyle({ ...item, sketchId: activeSketchId() }) });
-  const currentCommandPanel = () => annotationCommand.active ? annotationPanel : ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
-  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel,
-    readState: () => pngExportCommand.active ? pngExportCommand.readState() : currentCommandPanel().readState(),
-    onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : currentCommandPanel().onAction(action),
-    onSelect: (key, index) => currentCommandPanel().onSelect?.(key, index),
-    onRemove: (key, index) => currentCommandPanel().onRemove?.(key, index),
-    onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : currentCommandPanel().onSetting(key, value),
+  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement,
+    ...window.CommandPanel.createRouting({ readMode: () => mode, isAnnotationActive: () => annotationCommand.active,
+      derivedPanel, hatchPanel, annotationPanel, pngExportCommand,
+    }),
   });
 
   installTestHooks();

@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### CommandPanelの表示先選択とイベント振分け
+
+共通panelの表示先選択とreadState／action／setting／row選択・削除を既存CommandPanel.createRoutingへ分離。modeと注記activeのread port、安定した派生／Hatch／注記panelとPNG commandの6依存で接続する。表示／action／settingはPNG→注記→Hatch／repair→派生の優先順位、row選択／削除は従来どおりPNGを経由しないoptional呼出しとする。5handlerの式は元のまま、selectorは操作時に状態を読む。receiver／引数／戻り値とderivedのその他公開fieldの引継ぎも保持。個別panel・commandはdraftと取消／履歴を引き続き所有し、appは生成接続を行う。panel／PNG instanceは構築後に再代入されないことと、生成時にlive状態を読まないことを確認した。
+
+app.jsは4,742→4,739行（3行減、今回の再開から合計101行減）。新scriptなし、CommandPanel unit fileを追加して構文・明示unit一覧を同期。unit3件で優先順位とlive切替、receiver／結果／引数、row callbackのoptional性を確認。構文511ファイル・単体1,411件・関連E2E62件が成功（すべてexit 0、E2E1.4分）。command-panel／png-export／unified-annotations／hatching／derived-patternsを実行し、状態／設定／行操作と空白double click取消も確認。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-panel-routing-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は作図開始・取消とmode遷移に残る操作調整、機能ごとの生成接続を整理する。
+
 ### Sketchのロック更新と名前変更guard
 
 ロック反転とUI／draw／history完了を既存SketchCommand.toggleLockへ、名前変更前の権限guardも既存renameへ集約。appは既存guard・言語の照会とprepareLockToggleの3portを追加接続し、返された操作をTreeへ渡す。prepareはpending取消→拘束command取消→作図mode終了を元の順で実行し、Sketch変更時の全体resetとは統一しない。対象Sketchの取消前取得、Root／不在の拒否、guard拒否時にmodel／promptを読まない順序、locked更新→UI→draw→履歴を維持。SketchHierarchyとSketchContextのRoot判定が取得済みObjectに対して同じこと、元lock bodyとの差がprepare委譲だけであることを確認した。両aliasの最初のconsumerはfactory生成後に登録される。

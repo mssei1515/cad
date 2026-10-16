@@ -10,7 +10,7 @@ const files = [
   "src/editing/clipboard_transfer.js", "src/editing/clipboard_payload.js", "src/editing/clipboard_geometry.js", "src/editing/clipboard_paste_checkpoint.js", "src/editing/clipboard_session.js", "src/editing/clipboard_graph.js", "src/commands/clipboard_command.js", "src/commands/solve_refresh_command.js", "src/commands/drawing_order_command.js", "tests/unit/clipboard-transfer.test.js", "tests/unit/clipboard-geometry.test.js", "tests/unit/clipboard-paste-checkpoint.test.js", "tests/unit/clipboard-session.test.js", "tests/unit/clipboard-graph.test.js", "tests/unit/clipboard-command.test.js", "tests/unit/solve-refresh-command.test.js", "tests/unit/drawing-order-command.test.js",
   "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/commands/png_export_command.js", "tests/unit/png-export.test.js", "tests/e2e/png-export.spec.js",
   "src/ui/annotation_command_panel.js", "src/ui/annotation_input_controller.js", "tests/e2e/unified-annotations.spec.js",
-  "src/ui/command_panel.js", "src/ui/canvas_refresh.js", "src/ui/derived_command_panel.js", "tests/e2e/command-panel.spec.js",
+  "src/ui/command_panel.js", "tests/unit/command-panel.test.js", "src/ui/canvas_refresh.js", "src/ui/derived_command_panel.js", "tests/e2e/command-panel.spec.js",
   "src/ui/tool_flyouts.js", "tests/e2e/tool-flyouts.spec.js",
   "tests/e2e/multiple-dimensions.spec.js",
   "tests/unit/property-selection.test.js",
