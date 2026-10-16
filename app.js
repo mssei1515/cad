@@ -551,10 +551,14 @@
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
-  let annotationSolveDrag = null;
+  const constrainedAnnotationDrag = window.AnnotationDrag.createConstrained({
+    currentScope: workspace.current, placementAnchor: annotationPlacementAnchor, resolveGeometryRef,
+    buildPlan: (...args) => buildDragSession(...args), beginGeometryDrag: (event, plan) => geometryDrag.begin(event, plan),
+    leaderDisplay: annotation => annotationLeaderDisplayGeometry(annotation), leaderAnchor: annotationLeaderAnchor,
+    invalidateAnalysis: () => constraintAnalysis.invalidate(), applicationText, setHint, updateUI, draw,
+  });
   const solveScopeQuery = window.SolveScopeQuery.create({
-    currentScope: () => { const scope = workspace.current(); return annotationSolveDrag ? { ...scope, points: [...scope.points, annotationSolveDrag.point], constraints: [...scope.constraints, ...annotationSolveDrag.constraints] } : scope; },
-    additionalVariables: () => annotationSolveDrag?.variables.slice(2) || [],
+    currentScope: constrainedAnnotationDrag.scope, additionalVariables: constrainedAnnotationDrag.additionalVariables,
     geometryReads, activeSketchId, elementSketchId, constraintSketchId,
     isVisibleSketchElement, constraintIsOperational, constraintGraphNodes: constraint => constraint.annotationGeometryNodes || constraintGraphNodes(constraint), geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
   });
@@ -2284,7 +2288,7 @@
 
   const annotationDrag = window.AnnotationDrag.create({
     canEdit: item => guardSketchEdit(item.sketchId),
-    beginConstrainedDrag: beginConstrainedAnnotationDrag,
+    beginConstrainedDrag: constrainedAnnotationDrag.begin,
     annotationById, canvasSelection, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry,
     annotationTextLayout, effectiveAnnotationStyle, materializeAnchor: materializeAnnotationAnchor,
     resizeText: (item, height) => appearanceEditing.applyAnnotationStyleValue(item, "textHeight", height),
@@ -3050,28 +3054,7 @@
     applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
   });
 
-  function beginConstrainedAnnotationDrag(event, annotation, pointer) {
-    if (!annotation.anchorConstraints?.length) return false;
-    if (annotation.anchorConstraints.some(item => item.type === "fixed")) {
-      setHint(applicationText("注記の基準点が固定されているため移動できません", "The annotation anchor is fixed and cannot be moved."), "error"); return true;
-    }
-    const geometry = window.AnnotationAnchorConstraints.createDragGeometry(annotation, annotationPlacementAnchor(annotation), resolveGeometryRef);
-    if (!geometry.valid) { setHint(applicationText("注記の拘束先を解決できません", "The annotation constraint target could not be resolved."), "error"); return true; }
-    annotationSolveDrag = geometry;
-    const plan = buildDragSession("point", geometry.point, pointer);
-    if (!plan) { annotationSolveDrag = null; return true; }
-    plan.syncAnnotation = () => {
-      if (annotation.type === "leader") {
-        const display = annotationLeaderDisplayGeometry(annotation), start = annotationLeaderAnchor(annotation) || annotation.start;
-        annotation.x = annotation.start.x + (geometry.point.x - start.x) / display.shelfScale;
-        annotation.y = annotation.start.y + (geometry.point.y - start.y) / display.shelfScale;
-      } else { annotation.x = geometry.point.x; annotation.y = geometry.point.y; }
-    };
-    plan.onEnd = () => { annotationSolveDrag = null; constraintAnalysis.invalidate(); updateUI(); draw(); };
-    if (!geometryDrag.begin(event, plan)) { annotationSolveDrag = null; return true; }
-    setHint(applicationText("注記の基準点と図形を拘束を保ちながら移動中", "Moving the annotation anchor and geometry while maintaining constraints"));
-    return true;
-  }
+
 
   const { begin: beginDerivedGeometryDrag } = window.GeometryDrag.createDerivedEntry({
     types: { Point, Line }, canEdit: guardSketchEdit, canvasSelection, geometryInstanceSourceObjects,

@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 拘束付き注記dragの補助Solver状態
+
+既存AnnotationDrag.createConstrainedへ一時Geometryとbegin・補助scope・追加変数を集約。appのannotationSolveDrag変数と開始処理を撤去し、Solverと注記dragが同じ所有者を参照する。現在scopeのObject同一性、拡張時の各要素参照・先頭二変数を除くslice、無拘束false／固定・未解決true、planなし／開始拒否時の解除、終了→解析無効化→UI→draw、引出線の実効anchor／表示倍率を保持する。後に初期化されるplan／GeometryDrag／描画／解析への依存は操作時のcallbackとし、生成時には照会しない。既存AnnotationDrag本体は完全一致、拘束付きbeginも依存名置換とindent以外一致。保存配列へ補助Geometryを追加せず、独自resetや例外復元の変更を混ぜない。
+
+app.jsは4,101→4,084行（17行減、b120651から合計59行減）。新scriptなし。既存annotation-drag unitへ4件追加し、補助scopeと変数の参照・live scope、拒否時の無変更、plan／begin拒否の解除、終了順とtext／leader座標反映を確認。構文542ファイル・単体1,499件・関連E2E228件成功（すべてexit 0、E2E3.5分）。annotation-anchors／free-text-input-drag／leader-appearance／annotation-display-size／blocks／unified-uiの全6fileを実行。ログは一時ディレクトリのcad-constrained-annotation-drag-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はBlock drag開始時のSelection・plan／開始拒否・hintと表示更新のまとまりを調べ、既存GeometryDragの入口との役割を揃える。
+
 ### Keyboard入力の機能組立て
 
 KeyboardInputへ既存KeyboardInteractionController.createCancellation／createの生成接続、注記ハンドルresetと選択解除の表示adapter、keydown登録寿命を集約。各controllerの本体と取消／受付優先順位は変更せず、mode・pending・拘束・handle・Selectionを操作時に既存ownerから読む。Instance.finishのmethod receiver、現在pointer、native Clipboardと非同期保存を保持。startの二重登録防止、disposeは自己listenerだけを解除し再start可能。keyup／blurはCanvasViewControlsに残す。操作種類が多いため依存数自体は残るが、巨大mutable contextで隠さず明示portで接続する。

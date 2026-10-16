@@ -127,5 +127,40 @@
       get handlesActive() { return Boolean(resizeHandlesId); },
       get resizing() { return annotationDragSession?.hit.part === "frame"; }, get active() { return Boolean(annotationDragSession); } });
   }
-  window.AnnotationDrag = Object.freeze({ create });
+  // Share auxiliary solve geometry with the solver only for this drag lifecycle.
+  function createConstrained({ currentScope, placementAnchor, resolveGeometryRef, buildPlan, beginGeometryDrag,
+    leaderDisplay, leaderAnchor, invalidateAnalysis, applicationText, setHint, updateUI, draw }) {
+    let geometrySession = null;
+    function scope() {
+      const current = currentScope();
+      return geometrySession ? { ...current, points: [...current.points, geometrySession.point],
+        constraints: [...current.constraints, ...geometrySession.constraints] } : current;
+    }
+    function additionalVariables() { return geometrySession?.variables.slice(2) || []; }
+    function begin(event, annotation, pointer) {
+      if (!annotation.anchorConstraints?.length) return false;
+      if (annotation.anchorConstraints.some(item => item.type === "fixed")) {
+        setHint(applicationText("注記の基準点が固定されているため移動できません", "The annotation anchor is fixed and cannot be moved."), "error"); return true;
+      }
+      const geometry = window.AnnotationAnchorConstraints.createDragGeometry(annotation, placementAnchor(annotation), resolveGeometryRef);
+      if (!geometry.valid) { setHint(applicationText("注記の拘束先を解決できません", "The annotation constraint target could not be resolved."), "error"); return true; }
+      geometrySession = geometry;
+      const plan = buildPlan("point", geometry.point, pointer);
+      if (!plan) { geometrySession = null; return true; }
+      plan.syncAnnotation = () => {
+        if (annotation.type === "leader") {
+          const display = leaderDisplay(annotation), start = leaderAnchor(annotation) || annotation.start;
+          annotation.x = annotation.start.x + (geometry.point.x - start.x) / display.shelfScale;
+          annotation.y = annotation.start.y + (geometry.point.y - start.y) / display.shelfScale;
+        } else { annotation.x = geometry.point.x; annotation.y = geometry.point.y; }
+      };
+      plan.onEnd = () => { geometrySession = null; invalidateAnalysis(); updateUI(); draw(); };
+      if (!beginGeometryDrag(event, plan)) { geometrySession = null; return true; }
+      setHint(applicationText("注記の基準点と図形を拘束を保ちながら移動中", "Moving the annotation anchor and geometry while maintaining constraints"));
+      return true;
+    }
+    return Object.freeze({ begin, scope, additionalVariables });
+  }
+
+  window.AnnotationDrag = Object.freeze({ create, createConstrained });
 })();
