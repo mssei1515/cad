@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。Sketch切替の操作状態調整をSketchCommand.createInteractionResetへ集約し、appは遅延接続とhoisted入口を残す。app.jsは4,143→3,970行（合計173行減、直近10行減）。構文546ファイル・単体1,533件・関連E2E193件成功。今回は全E2E未実行。最新週枠使用30%／残量70%。全体目標は未完了。次はaddConstraintの選択resolution→寸法配置／通常拘束確定の振分けと、ConstraintControlCommand／ConstraintCommitCommand／SelectionQueryの役割を確認する。既存guard・error／hint・arc endpoint pair解除、同じresolution参照と戻り値を保って所有者を選ぶ。起動順とlate constへの操作時参照を維持し、巨大contextや異なる操作の単一stateへの統合を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。選択resolutionから寸法配置／通常拘束確定への振分けをConstraintCommitCommand.fromSelectionへ集約。app.jsは4,143→3,960行（合計183行減、直近10行減）。構文546ファイル・単体1,536件・関連E2E146件成功。今回は全E2E未実行。最新週枠使用30%／残量70%。全体目標は未完了。次は寸法drag時の角度constraint同期（syncAngleConstraintFromDimension）の利用と既存DimensionDrag／寸法計算ownerを確認し、readonly拒否・flip／target更新の責務を整理する。既存型／対象kind・dimension有無の短絡、角度計算の引数と更新順・絶対値を維持する。巨大contextや異なる操作の単一stateへの統合を避ける。
 
 ### 直前のリリース（2026-10-16）
 

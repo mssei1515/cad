@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 選択解決からの拘束適用
+
+Toolbarと対象選択から使うaddConstraintの振分けを既存ConstraintCommitCommand.fromSelectionへ集約。SelectionQueryのresolutionとCanvasSelectionを明示portで受け、結果なし／errorの短絡、action／targetの寸法配置優先、同じresolution・null pointer・配置戻り値、通常constraintのarc pair解除→既存確定とundefined返値を維持する。既存guard／求解／回復・履歴は変更せず、新しい適用ルールを追加しない。appは先に生成する対象選択command用のhoisted delegateを残す。
+
+app.jsは3,970→3,960行（10行減、b120651から合計183行減）。新scriptなし。既存constraint-commit-command unitへ3件追加し、解決なし／errorの無変更、寸法優先・参照／戻り値、通常確定成功と拒否時のarc pair解除順・undefined返値を確認。構文546ファイル・単体1,536件・関連E2E146件成功（すべてexit 0、E2E2.5分）。unified-ui／head-symmetry／multiple-dimensions／bolt-diameter／command-panelの全5fileを実行。ログは一時ディレクトリのcad-selection-constraint-application-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は寸法drag時の角度constraint同期（syncAngleConstraintFromDimension）の利用と既存DimensionDrag／寸法計算ownerを確認し、readonly拒否・flip／target更新の責務を整理する。
+
 ### Sketch切替の操作状態調整
 
 SketchCommand.createInteractionResetへclearInteractionForSketchChangeの残る解除調整を集約。移動reset→Selection→drag／画像／矩形→作図下書き→pending／拘束→投影／Instance sources→hover／pointer／値入力→snap→mode→Toolbarの順序と各ownerの異なる入口を保つ。後続のGeometry／Dimension dragとnullableな移動commandは遅延callbackで参照し、履歴復元等へ渡すappのhoisted入口も維持する。bodyは明示capabilityへの置換以外一致。独自state・一般化したreset／rollback・例外後の強制復旧は追加しない。

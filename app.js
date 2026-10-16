@@ -2883,6 +2883,7 @@
   function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
   const constraintCommitCommand = window.ConstraintCommitCommand.create({
+    resolveSelection: constraintResolutionFromCurrentSelection, canvasSelection,
     guardSketchEdit, activeSketchId, constraintTargetsAreActive, snapshotModelState, restoreModelState,
     solveStepNormForConstraint, pushModelConstraint, preconditionNewConstraint, withTemporarySolveStepNorm,
     solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
@@ -2932,18 +2933,7 @@
 
   function addDistanceConstraintFromTarget(...args) { return constraintCommitCommand.dimension(...args); }
 
-  function addConstraint(type) {
-    const resolution = constraintResolutionFromCurrentSelection(type);
-    if (!resolution || resolution.error) {
-      if (resolution?.error) setHint(resolution.error, "error");
-      return;
-    }
-    if (resolution.action === "place-dimension" || resolution.target) return startDistanceResolution(resolution, null);
-    if (resolution?.constraint) {
-      canvasSelection.set("arcEndpointPair", null);
-      commitConstraintResolution(resolution);
-    }
-  }
+  function addConstraint(type) { return constraintCommitCommand.fromSelection(type); }
 
   const geometryDragSolver = window.GeometryDragSolver.create({
     solver, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
