@@ -144,14 +144,15 @@
     return Object.freeze({ add });
   }
 
-  function createStatusObservation({ refreshConstraintAnalysis, elementSketchId, activeSketchId }) {
+  function createStatusObservation({ refreshConstraintAnalysis, readMembership }) {
     function state() {
       const state = refreshConstraintAnalysis();
+      const { activeSketchId: sketchId, elementSketchId } = readMembership();
       return {
         stable: state.analysis.stable,
         errorNorm: state.analysis.errorNorm,
         freeDof: state.analysis.freeVariableCount,
-        items: [...state.statuses].filter(([item]) => elementSketchId(item) === activeSketchId())
+        items: [...state.statuses].filter(([item]) => elementSketchId(item) === sketchId)
           .map(([item, status]) => ({ id: item.id, status })),
       };
     }

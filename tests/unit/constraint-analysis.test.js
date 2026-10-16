@@ -15,7 +15,8 @@ function fixture() {
   const service = sandbox.window.ConstraintAnalysis.create({ currentScope: () => state.scope,
     solver: { analyzeConstraintState: options => { state.events.push(['solve', options]); return state.analyses.get(options.variables[0].sketchId) || analysis(); } },
     scopeQuery: { sketchSolveVariables: id => [{ sketchId: id }], sketchSolveConstraints: () => [], sketchSolveLines: () => [] },
-    activeSketchId: () => state.active, descendantSketchIds: () => state.descendants, elementSketchId: item => item.sketchId || 'S1',
+    readMembership: () => { state.events.push(['membership']); return { activeSketchId: state.active, elementSketchId: item => item.sketchId || state.active }; },
+    descendantSketchIds: () => state.descendants, elementSketchId: item => item.sketchId || 'S1',
     geometryInstanceBundles: () => state.instances, blockProjectionBundles: () => state.blocks,
     geometryInstanceSourcePoints: item => state.sample(item),
     refreshReferenceConstraintValidity: () => state.events.push(['references']),
@@ -105,4 +106,21 @@ test('Free Instance classification restores perturbed variables, caches status a
   service.invalidate();
   state.sample = () => { if (instance.x !== 0) throw Error('sampling failure'); return [line.p1, line.p2]; };
   assert.throws(() => service.statusOf(line), /sampling failure/); assert.equal(instance.x, 0);
+});
+
+
+test('analysis captures fresh Sketch membership once per refresh and follows an active Sketch change', () => {
+  const { state, service } = fixture(), p1 = point('P1'), p2 = point('P2');
+  p1.sketchId = 'S1'; p2.sketchId = 'S2'; state.scope.points = [p1, p2];
+  state.analyses.set('S2', analysis());
+  assert.equal(state.events.length, 0);
+  const first = service.refresh();
+  assert.equal(first.statuses.has(p1), true); assert.equal(first.statuses.has(p2), false);
+  assert.equal(state.events.filter(event => event[0] === 'membership').length, 1);
+  assert.ok(state.events.findIndex(event => event[0] === 'references') < state.events.findIndex(event => event[0] === 'membership'));
+  state.active = 'S2';
+  const second = service.refresh();
+  assert.equal(second.statuses.has(p1), false); assert.equal(second.statuses.has(p2), true);
+  assert.equal(first.statuses.has(p1), true);
+  assert.equal(state.events.filter(event => event[0] === 'membership').length, 2);
 });

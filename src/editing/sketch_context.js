@@ -79,14 +79,24 @@
       return item;
     }
 
+    function resolveElementSketchId(item, fallback) {
+      if (!item) return fallback();
+      if (item.sketchId) return item.sketchId;
+      if (item instanceof Line) return item.p1?.sketchId || item.p2?.sketchId || fallback();
+      if (item instanceof Circle || item instanceof Arc) return item.center?.sketchId || fallback();
+      if (item instanceof Spline) return item.fitPoints.find((point) => point?.sketchId)?.sketchId || fallback();
+      return fallback();
+    }
+
     function elementSketchId(item) {
       ensureSketchState();
-      if (!item) return activeSketchId();
-      if (item.sketchId) return item.sketchId;
-      if (item instanceof Line) return item.p1?.sketchId || item.p2?.sketchId || activeSketchId();
-      if (item instanceof Circle || item instanceof Arc) return item.center?.sketchId || activeSketchId();
-      if (item instanceof Spline) return item.fitPoints.find((point) => point?.sketchId)?.sketchId || activeSketchId();
-      return activeSketchId();
+      return resolveElementSketchId(item, activeSketchId);
+    }
+
+    function membershipQuery() {
+      const sketchId = activeSketchId();
+      const fallback = () => sketchId;
+      return Object.freeze({ activeSketchId: sketchId, elementSketchId: item => resolveElementSketchId(item, fallback) });
     }
 
     function sameSketchElements(items, sketchId = activeSketchId()) {
@@ -162,7 +172,7 @@
       orderedSketches, childSketchesOf, descendantSketchIds,
       ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds,
       activeSketch, activeSketchId, assignSketchId,
-      elementSketchId, sameSketchElements, isEditableSketchId, canEditSketch,
+      elementSketchId, membershipQuery, sameSketchElements, isEditableSketchId, canEditSketch,
       sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
       constraintTargetsAreActive, constraintReferencesSketch, wouldCreateSketchCycle,
       sketchTreeRows, isActiveSketchElement, isEditableSketchElement,

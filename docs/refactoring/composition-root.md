@@ -8,6 +8,14 @@
 
 現在のコードはdevelop／origin/developの77e4e19（作業最終80771ff）。app.jsは3,652行で、数百行への全体目標は未完了。main／origin/mainへの反映は全E2Eの性能超過・航空機ケースtimeoutの2件により保留している。構文552ファイル・単体1,587件成功、全E2Eは582／584件成功。前回版との比較結果と回答待ちの判断はrefactoring-policy-and-resume.mdのsection 8を参照する。
 
+### Sketch所属の正規化と照会
+
+SketchContext.membershipQueryが同期照会の入口で正規化を行い、現在Sketchと所属の読取りを返す。既存のelementSketchIdとresolverを共有し、照会をまたぐcacheや別の所属規則を持たない。ConstraintAnalysisは参照有効性の更新後、ConstraintTestDriverは解析更新後に取得し、appは生成済みAPIを接続する。app.jsは3,652→3,652行（0行変化）。構文552ファイル・単体1,590件・関連E2E168件が成功（通常UI／Block／対称拘束144件、権限11件、航空機1件9.2分、性能12件55.2秒）。航空機の全96経路・1,872previewが元の10分制限で成功し、性能基準も変更していない。この単位では全E2E未実行。
+
+### 拘束状態観測の重複取得
+
+航空機の時間超過を調査し、ConstraintTestDriver.createStatusObservation内で各要素ごとに現在Sketchを読み直していた処理を、解析更新後の1回へ整理した。Sketch取得はSketch全体の正規化を伴うため重複処理を減らす。返却する状態やSolver、テストの期待値・制限時間は変更しない。app.jsは3,652→3,652行（0行変化）。構文552ファイル・単体1,588件・関連E2E3件が成功。同じ航空機2経路の全resultは計測時間を除いて修正前と完全一致したが、元の96経路のE2Eは今回も10分timeoutとなった。時間超過解消や全テスト成功とは扱わない。
+
 ### Trim機能とテスト支援の生成・接続
 
 TrimQuery／TrimEditing／TrimCommandをTrimFeatureへ集約し、同じquery／editingをTrimTestDriverのfixture組立てにも接続した。scopeと倍率は操作時に読み、既存のcheckpoint、拘束転送、失敗時の復元と選択解除順を維持する。appの早期プレビューcallbackはhoisted入口を残し、初期化時のモデル読取りを増やさない。app.jsは3,658→3,652行（6行減）。構文552ファイル、単体1,587件、読込E2E1件、関連E2E143件（unified-ui／blocks142件＋操作性能1件）が成功。全E2Eはこの単位では未実行。
