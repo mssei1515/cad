@@ -138,3 +138,42 @@ test('Sketch rename checks edit permission before reading the model or prompting
   assert.equal(host.sketches[1].locked, undefined); assert.equal(host.activeSketchId, 'S1');
   assert.equal(f.state.model.activeSketchId, 'ROOT');
 });
+
+
+function interactionResetFixture() {
+ const calls=[],state={move:null,geometry:null,dimension:null,pointer:{x:1,y:2},mode:'line',inputVisible:true,hover:{sketchIdentity:'S2',line:{id:'L1'}},pending:true};
+ const resetOwner=name=>({reset(){assert.equal(this,owners[name]);calls.push(name);}});
+ const owners={reference:resetOwner('reference'),rectangle:resetOwner('rectangle'),sources:resetOwner('sources')};
+ const service=sandbox.window.SketchCommand.createInteractionReset({
+  resetSketchMove:()=>{calls.push('move');state.move?.reset();},clearSelection:()=>calls.push('selection'),
+  resetGeometryDrag:()=>state.geometry.reset(),resetDimensionDrag:()=>state.dimension.reset(),referenceImage:owners.reference,selectionRectangle:owners.rectangle,
+  drawing:{resetInputsForSketchChange:()=>calls.push('drawing')},pending:{clear:()=>{state.pending=false;calls.push('pending');}},
+  constraint:{clearCommand:()=>calls.push('constraint')},projection:{reset:()=>calls.push('projection')},instances:{clearSources:()=>calls.push('instances')},instanceSources:owners.sources,
+  hover:{update:value=>{assert.equal(Object.keys(value).length,1);assert.equal(value.sketchIdentity,null);Object.assign(state.hover,value);calls.push('hover');}},
+  clearPointer:()=>{state.pointer=null;calls.push('pointer');},hideValueInput:()=>{state.inputVisible=false;calls.push('input');},clearSnap:()=>calls.push('snap'),
+  selectMode:()=>{state.mode='select';calls.push('mode');},updateToolbar:()=>calls.push('toolbar'),
+ });
+ assert.deepEqual(calls,[]);
+ state.geometry={reset:()=>calls.push('geometry')};state.dimension={reset:()=>calls.push('dimension')};
+ return {service,state,calls};
+}
+
+test('Sketch interaction reset retains ordered owner operations and only changes its explicit pointer, hover and mode capabilities',()=>{
+ const f=interactionResetFixture(),hoverLine=f.state.hover.line;
+ assert.equal(f.service.clear(),undefined);
+ assert.deepEqual(f.calls,['move','selection','geometry','dimension','reference','rectangle','drawing','pending','constraint','projection','instances','sources','hover','pointer','input','snap','mode','toolbar']);
+ assert.equal(f.state.pointer,null);assert.equal(f.state.hover.sketchIdentity,null);assert.equal(f.state.hover.line,hoverLine);
+ assert.equal(f.state.mode,'select');assert.equal(f.state.inputVisible,false);assert.equal(f.state.pending,false);
+});
+
+test('Sketch interaction reset reads late drag and nullable move owners at execution time',()=>{
+ const f=interactionResetFixture();f.service.clear();f.calls.length=0;
+ f.state.move={reset:()=>f.calls.push('currentMove')};f.state.geometry={reset:()=>f.calls.push('currentGeometry')};f.state.dimension={reset:()=>f.calls.push('currentDimension')};
+ f.service.clear();assert.deepEqual(f.calls.slice(0,5),['move','currentMove','selection','currentGeometry','currentDimension']);
+});
+
+test('Sketch interaction reset propagates the same owner error and does not force later reset or UI recovery',()=>{
+ const f=interactionResetFixture(),error=new Error('drag reset'),pointer=f.state.pointer;
+ f.state.geometry={reset:()=>{throw error;}};assert.throws(()=>f.service.clear(),value=>value===error);
+ assert.deepEqual(f.calls,['move','selection']);assert.equal(f.state.pointer,pointer);assert.equal(f.state.mode,'line');assert.equal(f.state.pending,true);
+});

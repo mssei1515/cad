@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Sketch切替の操作状態調整
+
+SketchCommand.createInteractionResetへclearInteractionForSketchChangeの残る解除調整を集約。移動reset→Selection→drag／画像／矩形→作図下書き→pending／拘束→投影／Instance sources→hover／pointer／値入力→snap→mode→Toolbarの順序と各ownerの異なる入口を保つ。後続のGeometry／Dimension dragとnullableな移動commandは遅延callbackで参照し、履歴復元等へ渡すappのhoisted入口も維持する。bodyは明示capabilityへの置換以外一致。独自state・一般化したreset／rollback・例外後の強制復旧は追加しない。
+
+app.jsは3,980→3,970行（10行減、b120651から合計173行減）。新scriptなし。既存sketch-command unitへ3件追加し、解除順とhover限定更新、pointer／input／modeの明示操作、late／nullable ownerの現在値参照、同じ例外と後続省略を確認。構文546ファイル・単体1,533件・関連E2E193件成功（すべてexit 0、E2E2.7分）。blocks／sketch-tree-visibility／sketch-move／phase0-characterization／unified-uiの全5fileを実行。ログは一時ディレクトリのcad-sketch-interaction-reset-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はaddConstraintの選択resolution→寸法配置／通常拘束確定の振分けと、ConstraintControlCommand／ConstraintCommitCommand／SelectionQueryの役割を確認する。既存guard・error／hint・arc endpoint pair解除と戻り値を保って所有者を選ぶ。
+
 ### Sketch切替の作図入力reset
 
 clearInteractionForSketchChange内の連続する七つの作図resetを既存DrawOperationLifecycle.resetInputsForSketchChangeへ集約。追加依存なしで既存Line／Rectangle／Fillet／Circular／preview／Offsetのownerを利用し、順序を保持する。Document reset／通常cancelへ統一せず、元から対象でないSlot／Centerline／Spline／Hatchやrollbackを追加しない。前後のdrag・Selection、pending／constraint／instance／pointer／mode／Toolbar更新は元の位置に残す。

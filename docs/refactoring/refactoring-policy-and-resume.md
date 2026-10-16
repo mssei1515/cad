@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。Sketch切替時の連続する七つの作図下書きresetをDrawOperationLifecycle.resetInputsForSketchChangeへ集約。app.jsは4,143→3,980行（合計163行減、直近6行減）。構文546ファイル・単体1,530件・関連E2E172件成功。今回は全E2E未実行。最新週枠使用29%／残量71%。全体目標は未完了。次はclearInteractionForSketchChangeに残る操作状態の調整を既存SketchCommandの役割と照合する。dragやpointer等の後続初期化を遅延参照し、Selection→drag→作図下書き→pending／constraint／instances→pointer／入力→snap→mode→Toolbarの順を維持する。Document reset／通常cancelと統一せず、巨大contextや異なる操作の単一stateへの統合を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。Sketch切替の操作状態調整をSketchCommand.createInteractionResetへ集約し、appは遅延接続とhoisted入口を残す。app.jsは4,143→3,970行（合計173行減、直近10行減）。構文546ファイル・単体1,533件・関連E2E193件成功。今回は全E2E未実行。最新週枠使用30%／残量70%。全体目標は未完了。次はaddConstraintの選択resolution→寸法配置／通常拘束確定の振分けと、ConstraintControlCommand／ConstraintCommitCommand／SelectionQueryの役割を確認する。既存guard・error／hint・arc endpoint pair解除、同じresolution参照と戻り値を保って所有者を選ぶ。起動順とlate constへの操作時参照を維持し、巨大contextや異なる操作の単一stateへの統合を避ける。
 
 ### 直前のリリース（2026-10-16）
 

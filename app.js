@@ -2402,26 +2402,16 @@
   });
   function updateConstraintButtons() { constraintControlsView.update(); }
 
-  function clearInteractionForSketchChange() {
-    sketchMoveCommand?.reset();
-    clearSelection();
-    geometryDrag.reset();
-    dimensionDrag.reset();
-    referenceImageInteraction.reset();
-    selectionRectangle.reset();
-    drawOperationLifecycle.resetInputsForSketchChange();
-    pendingCommandSession.clear();
-    constraintTargetSession.clearCommand();
-    sketchProjectionCommand.reset();
-    geometryInstanceCommand.clearSources();
-    instanceSourceCommand.reset();
-    canvasHover.update({ sketchIdentity: null });
-    lastPointerWorld = null;
-    hideDimensionValueInput();
-    clearSnap();
-    mode = "select";
-    updateToolbar();
-  }
+  const sketchInteractionReset = window.SketchCommand.createInteractionReset({
+    resetSketchMove: () => sketchMoveCommand?.reset(), clearSelection,
+    resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(),
+    referenceImage: referenceImageInteraction, selectionRectangle, drawing: drawOperationLifecycle,
+    pending: pendingCommandSession, constraint: constraintTargetSession, projection: sketchProjectionCommand,
+    instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, hover: canvasHover,
+    clearPointer: () => { lastPointerWorld = null; }, hideValueInput: hideDimensionValueInput, clearSnap,
+    selectMode: () => { mode = "select"; }, updateToolbar,
+  });
+  function clearInteractionForSketchChange() { return sketchInteractionReset.clear(); }
 
   const sketchCommand = window.SketchCommand.create({
     currentScope: workspace.current, ensureSketchState, activeSketch, activeSketchId, sketchById, childSketchesOf,
