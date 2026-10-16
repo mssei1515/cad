@@ -6,6 +6,49 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync('src/ui/toolbar_view.js','utf8'),sandbox);
 const modeButtons = { select:'toolSelect',point:'toolPoint',line:'toolLine',centerline:'toolCenterline','circle-center-cross':'toolCircleCenterCross',rectangle:'toolRectangle',slot:'toolSlot',fillet:'toolFillet',trim:'toolTrim',offset:'toolOffset',circle:'toolCircle',arc:'toolArc','three-point-arc':'toolThreePointArc',spline:'toolSpline','sketch-projection':'toolSketchProjection','pattern-placement-origin':'toolPattern','pattern-placement-place':'toolPattern',hatch:'toolHatch','hatch-repair':'toolHatch' };
 
+function statusFixture() {
+ const state = { node: { textContent: '' }, mode: 'line', pending: null, constraint: null, english: false }, reads = [], translations = [];
+ const view = sandbox.window.ToolbarView.createCommandStatus({ document: { getElementById(id) { assert.equal(id, 'statusCommand'); reads.push('dom'); return state.node; } },
+  applicationText: (ja, en) => { translations.push([ja, en]); return state.english ? en : ja; },
+  readMode: () => { reads.push('mode'); return state.mode; }, readPendingType: () => { reads.push('pending'); return state.pending; },
+  readConstraintCommand: () => { reads.push('constraint'); return state.constraint; } });
+ return { view, state, reads, translations };
+}
+
+test('command status preserves annotation then constraint then mode priority and short circuits lower-priority reads', () => {
+ const f = statusFixture(); assert.deepEqual(f.reads, []); assert.deepEqual(f.translations, []);
+ f.state.pending = 'annotation-text-place'; f.state.constraint = {};
+ f.view.update(); assert.equal(f.state.node.textContent, '注記'); assert.deepEqual(f.reads, ['dom', 'pending']);
+ f.reads.length = 0; f.state.pending = 'distance-value'; f.view.update();
+ assert.equal(f.state.node.textContent, '拘束'); assert.deepEqual(f.reads, ['dom', 'pending', 'constraint']);
+ f.reads.length = 0; f.state.constraint = null; f.view.update();
+ assert.equal(f.state.node.textContent, '線'); assert.deepEqual(f.reads, ['dom', 'pending', 'constraint', 'mode']);
+ f.state.english = true; f.state.pending = 'annotation-leader-point'; f.view.update(); assert.equal(f.state.node.textContent, 'Annotation');
+});
+
+test('command status keeps every existing localized mode label and raw fallback using the current language', () => {
+ const f = statusFixture(), labels = [
+  ['pattern-placement-origin', '配置基準点', 'Placement anchor'], ['pattern-placement-place', '直線パターン', 'Linear Pattern'],
+  ['pattern-placement-mirror', 'ミラー', 'Mirror'], ['pattern-placement-circular', '円形パターン', 'Circular Pattern'],
+  ['select', '選択', 'Select'], ['point', '点', 'Point'], ['line', '線', 'Line'], ['centerline', '中心線', 'Centerline'],
+  ['circle-center-cross', '円中心十字線', 'Circle Center Cross'], ['rectangle', '矩形', 'Rectangle'], ['slot', '長穴', 'Slot'],
+  ['circle', '円', 'Circle'], ['arc', '円弧', 'Arc'], ['three-point-arc', '3点円弧', 'Three-point Arc'], ['spline', 'スプライン', 'Spline'],
+  ['fillet', 'R面取り', 'Fillet'], ['trim', 'トリム', 'Trim'], ['offset', 'オフセット', 'Offset'], ['hatch', '塗りつぶし', 'Fill'],
+  ['hatch-repair', '境界を再指定', 'Reselect boundary'], ['block-place', 'ブロック配置', 'Block placement'],
+ ];
+ for (const [mode, ja, en] of labels) { f.state.mode = mode; f.state.english = false; f.view.update(); assert.equal(f.state.node.textContent, ja);
+  f.state.english = true; f.view.update(); assert.equal(f.state.node.textContent, en); }
+ for (const mode of ['sketch-projection', 'future-mode', '']) { f.state.mode = mode; f.view.update(); assert.equal(f.state.node.textContent, mode); }
+ f.state.constraint = {}; f.view.update(); assert.equal(f.state.node.textContent, 'Constraint');
+});
+
+test('command status resolves replacement DOM on each update and skips interaction reads when the status node is absent', () => {
+ const f = statusFixture(), previous = f.state.node;
+ f.state.node = null; f.view.update(); assert.deepEqual(f.reads, ['dom']); assert.equal(f.translations.length, 21);
+ f.state.node = { textContent: '' }; f.state.mode = 'arc'; f.view.update();
+ assert.equal(f.state.node.textContent, '円弧'); assert.equal(previous.textContent, '');
+});
+
 function bindingSurface(ids) {
  const nodes=new Map(ids.map(id=>{const listeners=new Set();const node={listeners,
   addEventListener(type,handler){assert.equal(type,'click');listeners.add(handler);},

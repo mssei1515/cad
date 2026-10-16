@@ -1048,3 +1048,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/commands/constraint_commit_command.js: ifMissingが作図時の重複回避・参照guard／属性付与・追加後冗長判定／除去を所有する。currentScopeとforgetConstraintのみ依存を追加し、既存の明示確定APIは変更しない。appはSnapConstraints／BasicDrawingToolsの既存入口を接続し、求解・UI・履歴の異なる暗黙追加と明示確定を混同しない。
+
+
+- src/ui/toolbar_view.js: createCommandStatusが操作名ステータスの翻訳とDOM反映を所有する。mode／pending／constraintはappからの限定した読取りAPIで参照し、注記→拘束→mode→raw値の優先順と短絡を維持する。appのupdateStatusUIは接続だけを担う。

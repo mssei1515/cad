@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用36%／残量64%。未使用入口／静的alias整理、Offset選択反映、寸法外観・label、Annotationアンカー、円弧端点角度（9563533）に続き、今回は作図時の暗黙拘束追加をConstraintCommitCommand.ifMissingへ集約した。通常確定とは独立し、求解・履歴・UIを追加せず、参照guard／属性付与・push後の冗長判定と配列差替え／forgetを維持。app.jsは開始3,949→現在3,746行（合計203行減、直近3,761→3,746で15行減）。構文546ファイル・単体1,561件・関連E2E126件成功（exit 0、4file、1.7分）。ログはcad-implicit-constraint-commit-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用37%／残量63%。未使用入口／静的alias整理、Offset選択反映、寸法外観・label、Annotationアンカー、円弧端点角度、暗黙拘束追加（6ccd616）に続き、今回は操作名ステータス表示をToolbarView.createCommandStatusへ集約。注記pending→拘束command→mode名→raw modeの優先順と短絡、21modeの日英表記・現在言語を維持した。app.jsは開始3,949→現在3,738行（合計211行減、直近3,746→3,738で8行減）。構文546ファイル・単体1,564件・関連E2E110件成功（exit 0、3file、1.6分）。ログはcad-command-status-view-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-次はupdateStatusUIの操作名表示を既存UI側の所有と照らして確認する。statusCommandのDOM取得、注記pending→拘束command→mode名→未定義modeのraw値という優先順、日英の現在言語と全mode名を維持する。updateUIUnprofiledの更新順・refreshAnalysis指定とは分けて扱い、単に巨大なUI contextへ移さない。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。異なるreset対象の統一や巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
+次はtoolbarSvgMarkup／constraintToolbarIconを既存SketchTreeObjectsの表示責務と照らして確認する。ToolbarのSVG取得・class付与・欠損時の空文字、固定／投影／中心線／寸法の型優先と名前によるfallbackを維持し、Treeと操作の所有を混ぜない。updateUIUnprofiledの更新順・refreshAnalysis指定とは別に整理する。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
 
 ### 直前のリリース（4859400）
 

@@ -141,5 +141,23 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.ToolbarView = Object.freeze({ create, createBinding, createEditingBinding });
+  function createCommandStatus({ document, applicationText, readMode, readPendingType, readConstraintCommand }) {
+    function updateStatusUI() {
+      const command = document.getElementById("statusCommand");
+      const modeLabels = {
+        "pattern-placement-origin": applicationText("配置基準点", "Placement anchor"),
+        "pattern-placement-place": applicationText("直線パターン", "Linear Pattern"),
+        "pattern-placement-mirror": applicationText("ミラー", "Mirror"),
+        "pattern-placement-circular": applicationText("円形パターン", "Circular Pattern"),
+        select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), "circle-center-cross": applicationText("円中心十字線", "Circle Center Cross"), rectangle: applicationText("矩形", "Rectangle"),
+        slot: applicationText("長穴", "Slot"), circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
+        offset: applicationText("オフセット", "Offset"), hatch: applicationText("塗りつぶし", "Fill"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
+      };
+      if (command) {
+        command.textContent = readPendingType()?.startsWith("annotation-") ? applicationText("注記", "Annotation") : readConstraintCommand() ? applicationText("拘束", "Constraint") : modeLabels[readMode()] || readMode();
+      }
+    }
+    return Object.freeze({ update: updateStatusUI });
+  }
+  window.ToolbarView = Object.freeze({ create, createBinding, createEditingBinding, createCommandStatus });
 })();

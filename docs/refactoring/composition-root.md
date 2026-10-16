@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 操作名のステータス表示
+
+updateStatusUIを既存ToolbarView.createCommandStatusへ集約。document・applicationText・mode／pending type／拘束commandの5依存だけを受け、操作stateを所有せず現在値を表示時に読む。statusCommandのDOM取得→21modeの現在言語表記構成→DOMありなら注記pending／拘束／mode名／raw modeの優先順を維持する。注記や拘束が優先される場合の下位stateの読取り短絡、DOMなし時の表記構成も保持。appはhoisted入口を同じUI更新順で呼び、Toolbarの他の更新・listener・操作遷移は変更していない。
+
+app.jsは3,746→3,738行（8行減、今回再開から211行減）。既存toolbar-view unitへ3件追加し、表示優先順・全21modeの日英表記・未知mode・現在言語・DOM差替えと不在時短絡を確認。構文546ファイル・単体1,564件・関連E2E110件成功（すべてexit 0、E2E1.6分）。unified-ui／toolbar-layout／command-panelの全3file。ログは一時ディレクトリのcad-command-status-view-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### 作図時の暗黙拘束追加
 
 addConstraintIfMissingの本体を既存ConstraintCommitCommand.ifMissingへ集約した。enabled一致の短絡、明示／現在Sketch、参照元許可→循環guard→既存markReferenceによる属性付与、push→冗長判定→同一Objectだけをfilterで除去→cache forgetの順序を維持する。既存依存を共有し、currentScopeとforgetConstraintだけを追加した。appのmodelはworkspace.activateの結果でのみ差し替わることも確認。通常のordinary／reference確定とは独立入口とし、求解・snapshot・UI・履歴・追加の権限guardを呼ばない。冗長時も元配列とconstraint属性を巻き戻さない。appはSnapConstraints／BasicDrawingToolsへ渡すhoisted入口を維持する。
