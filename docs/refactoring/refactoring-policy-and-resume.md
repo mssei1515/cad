@@ -100,7 +100,7 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。参照画像入力、Canvas表示設定、編集Toolbar、Keyboard入力に続き、拘束付き注記dragの補助Geometry state・scope／変数照会・開始／終了をAnnotationDrag.createConstrainedへ集約。app.jsは4,143→4,084行（合計59行減、直近17行減）。構文542ファイル・単体1,499件・関連E2E228件成功。今回は全E2E未実行。最新週枠使用23%／残量77%。全体目標は未完了。次はBlock drag開始時のSelection・plan／開始拒否・hintと表示更新のまとまりを調べ、既存GeometryDragの入口との役割を揃える。各機能の依存を明示し、巨大contextや単なる別の巨大appへの移動を避ける。
+前回リリースb120651でlocal／originのmainとdevelopを同期、cleanを確認。現在はcodex/reference-image-featureで継続する。参照画像入力、Canvas表示設定、編集Toolbar、Keyboard入力、拘束付き注記dragに続き、Block drag開始のSelection・plan・拒否通知／表示更新をGeometryDrag.createBlockEntryへ集約。app.jsは4,143→4,074行（合計69行減、直近10行減）。構文542ファイル・単体1,502件・関連E2E146件成功。今回は全E2E未実行。最新週枠使用23%／残量77%。全体目標は未完了。次はappに残る直接モデル更新の利用先と責務を調べる。特にsetAppearanceForSelectionはテストfixtureからの利用であり、製品commandへ無理に混ぜずPropertiesTestDriverとの境界を確認する。各機能の依存を明示し、巨大contextや単なる別の巨大appへの移動を避ける。
 
 ### 直前のリリース（2026-10-16）
 

@@ -3141,19 +3141,9 @@
   }
 
 
-  function beginBlockDrag(e, instance, pointer, rotate = false) {
-    clearSelection();
-    canvasSelection.set("blockInstances", [instance]);
-    const plan = buildDragSession(rotate ? "block-rotation" : "block", instance, pointer);
-    if (!geometryDrag.begin(e, plan)) {
-      setHint(rotate && instance.rotationLocked ? "回転がロックされたブロックインスタンスです" : "固定されたブロックインスタンスです", "error");
-      draw();
-      return;
-    }
-    setHint(rotate ? "ブロックを回転中" : "ブロックを移動中");
-    updateUI({ refreshAnalysis: false });
-    draw();
-  }
+  const { begin: beginBlockDrag } = window.GeometryDrag.createBlockEntry({
+    clearSelection, canvasSelection, buildDragSession, geometryDrag, setHint, updateUI, draw,
+  });
 
 
 

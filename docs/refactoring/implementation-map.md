@@ -935,6 +935,8 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 - src/editing/canvas_selection_interaction.js: createClearingはSelection・拘束operand・hoverの限定した参照・強調表示の解除を4 ownerのAPIで調整する。拘束command本体や他のhover参照・snapを保ち、UI／履歴／model更新は担当しない。
 
+- src/commands/geometry_drag.js: GeometryDrag.createBlockEntryはBlock移動／回転の開始調整を七つの依存で担当する。clearSelection→同じInstanceを選択→block／block-rotation plan生成→既存GeometryDrag.beginの順で委譲する。開始拒否時は選択を保持し、回転lock／固定の既存hint→drawだけを行う。成功時は移動／回転hint→updateUI（refreshAnalysis:false）→draw。planがnullでも既存beginへ渡し、独自の編集権限や開始可否判定を追加しない。drag session・求解・完了／復元・履歴は既存GeometryDrag／plan／solverのownerに残す。
+
 - src/commands/geometry_drag.js: createDerivedEntryは派生Instance全体と参照元Geometryのdrag plan／開始調整を14依存で担当する。参照元照会と通常session生成、既存GeometryDrag lifecycleを接続し、Selection／拒否通知・live anchor・pointer map／variableAllowedの既存境界を保持する。
 
 - src/geometry/instance_projection.js: createDragSourceQueryは参照元Object収集とinverse pointer chainの解決を担当。3 read portのみで接続し、Object参照・探索順・巡回拒否・pointer複写とSketch投影flagを保つ。UI／Selection／drag状態や独自scope cacheを所有しない。

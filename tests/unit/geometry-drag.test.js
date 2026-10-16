@@ -246,3 +246,37 @@ test('missing whole-instance anchor stops after selecting the instance without s
   assert.equal(f.selection.geometryInstances[0], f.instance); assert.equal(f.state.started, undefined);
   assert.deepEqual(f.calls.map(call => call[0]), ['guard', 'sources', 'clear', 'set']);
 });
+
+
+function blockEntryFixture() {
+ const events=[],state={accepted:true,plan:{id:'plan'},selected:null};
+ const canvasSelection={set(kind,items){assert.equal(this,canvasSelection);events.push('select');assert.equal(kind,'blockInstances');state.selected=items;}};
+ const geometryDrag={begin(event,plan){assert.equal(this,geometryDrag);assert.equal(plan,state.plan);events.push('begin');state.event=event;return state.accepted;}};
+ const entry=sandbox.window.GeometryDrag.createBlockEntry({clearSelection:()=>events.push('clear'),canvasSelection,
+  buildDragSession:(kind,instance,pointer)=>{events.push('plan');assert.equal(state.selected[0],instance);state.kind=kind;state.instance=instance;state.pointer=pointer;return state.plan;},
+  geometryDrag,setHint:(message,type)=>events.push(['hint',message,type]),updateUI:options=>events.push(['ui',options.refreshAnalysis]),draw:()=>events.push('draw')});
+ return {entry,events,state};
+}
+
+test('Block drag entry shares current instance, pointer and plan and refreshes after successful start',()=>{
+ const f=blockEntryFixture(),instance={id:'B1'},pointer={x:10,y:20},event={pointerId:7};assert.deepEqual(f.events,[]);
+ assert.equal(f.entry.begin(event,instance,pointer),undefined);assert.equal(f.state.kind,'block');assert.equal(f.state.instance,instance);
+ assert.equal(f.state.pointer,pointer);assert.equal(f.state.event,event);
+ assert.deepEqual(f.events,['clear','select','plan','begin',['hint','ブロックを移動中',undefined],['ui',false],'draw']);
+ f.events.length=0;f.state.plan={id:'rotationPlan'};f.entry.begin(event,instance,pointer,true);
+ assert.equal(f.state.kind,'block-rotation');assert.equal(f.events[4][1],'ブロックを回転中');
+});
+
+test('rejected Block drag retains selection and distinguishes rotation lock without success UI refresh',()=>{
+ for(const [rotate,locked,message] of [[false,true,'固定されたブロックインスタンスです'],[true,false,'固定されたブロックインスタンスです'],[true,true,'回転がロックされたブロックインスタンスです']]){
+  const f=blockEntryFixture(),instance={rotationLocked:locked};f.state.accepted=false;
+  assert.equal(f.entry.begin({},instance,{},rotate),undefined);assert.equal(f.state.selected[0],instance);
+  assert.deepEqual(f.events,['clear','select','plan','begin',['hint',message,'error'],'draw']);
+ }
+});
+
+test('Block entry delegates missing plans to GeometryDrag and does not invent a second permission or lifecycle check',()=>{
+ const f=blockEntryFixture(),instance={};f.state.plan=null;f.state.accepted=false;
+ f.entry.begin({},instance,{});assert.deepEqual(f.events.slice(0,4),['clear','select','plan','begin']);
+ assert.equal(f.events.at(-1),'draw');assert.equal(f.events.filter(e=>Array.isArray(e)&&e[0]==='ui').length,0);
+});

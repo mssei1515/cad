@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Block drag開始入口の所有
+
+GeometryDrag.createBlockEntryへBlockの選択・plan生成・開始拒否・hint／表示更新を集約。七つの明示依存で既存plan／GeometryDragへ接続し、同じInstance／pointer／event／plan参照、移動と回転、選択後の拒否、回転lock別通知、成功時だけ解析なしUI更新→drawを保持する。planなしも既存beginへ委譲する。旧開始bodyと名前・indent以外一致。session／Solver／履歴は既存ownerのままで、独自状態や権限規則を追加しない。
+
+app.jsは4,084→4,074行（10行減、b120651から合計69行減）。新scriptなし。既存geometry-drag unitへ3件追加し、同一参照と順序、移動／回転、拒否時の選択保持と通知・描画、null plan委譲を確認。構文542ファイル・単体1,502件・関連E2E146件成功（すべてexit 0、E2E2.1分）。blocks／fixed-command／unified-uiの全3fileを実行。ログは一時ディレクトリのcad-block-drag-entry-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はappに残る直接モデル更新の利用先と責務を調べる。特にsetAppearanceForSelectionはテストfixtureからの利用であり、製品commandへ無理に混ぜずPropertiesTestDriverとの境界を確認する。
+
 ### 拘束付き注記dragの補助Solver状態
 
 既存AnnotationDrag.createConstrainedへ一時Geometryとbegin・補助scope・追加変数を集約。appのannotationSolveDrag変数と開始処理を撤去し、Solverと注記dragが同じ所有者を参照する。現在scopeのObject同一性、拡張時の各要素参照・先頭二変数を除くslice、無拘束false／固定・未解決true、planなし／開始拒否時の解除、終了→解析無効化→UI→draw、引出線の実効anchor／表示倍率を保持する。後に初期化されるplan／GeometryDrag／描画／解析への依存は操作時のcallbackとし、生成時には照会しない。既存AnnotationDrag本体は完全一致、拘束付きbeginも依存名置換とindent以外一致。保存配列へ補助Geometryを追加せず、独自resetや例外復元の変更を混ぜない。
