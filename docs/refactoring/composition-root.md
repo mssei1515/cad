@@ -8,6 +8,10 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 2026-10-16のリリース検証
+
+ユーザーのorigin/mainへのマージ指示により、この区切りで新規分離を停止。コード最終accde5dをdevelopへ統合したa83beddで、構文518ファイル・単体1,437件・全E2E583件が成功（すべてexit 0、全E2E24.5分）。拘束ドラッグ回帰全fileは12.5分。ログは一時ディレクトリのcad-oct16-release-{check,unit,e2e}.log。app.jsは再開時4,840→4,459行。検証後はこの記録だけを更新し、develop先行・main最後・main/develop同期の手順でリリースする。全体のcomposition root化は未完了であり、次回は最新developから継続する。
+
 ### Hatch／Offsetの診断表示
 
 hatchRegionErrorText／offsetChainErrorTextをsrc/ui/authoring_feedback.jsのAuthoringFeedbackへ分離。依存はapplicationTextだけとし、Geometry判定・model編集・DOM更新は持たない。既存2関数の本体を維持し、未知codeでHatchはreasonを英語fallbackとして使い、Offsetは汎用文言を使う違いと、操作時の言語参照を保持する。appはApplicationSettingsの生成直後、最初のconsumerより前で接続する。
