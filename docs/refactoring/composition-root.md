@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 重なり順の操作調整
+
+選択候補生成／最前面owner照会／menu状態／順序変更完了をDrawingOrderCommandへ分離。11個の限定した現在model・Selection／通常選択・権限照会とUI／draw／history／hint portで接続する。owner解決・順序補完・並べ替え計算は既存DrawingOrderを利用する。appは現在modelの取得と生成接続を持ち、Document／Block・一時model切替後のscopeを保持しない。元4bodyと一致し、作図先優先→通常選択時だけSketch配列逆順、選択Sketch→作図先fallback、guard→reorder→UI（analysis再計算なし）→draw→history→hint順と結果を維持する。
+
+app.jsは4,827→4,800行（27行減、今回の再開から合計40行減）。構文508ファイル・単体1,401件・関連E2E165件が成功（すべてexit 0、E2E2.9分）。新command／unit fileを追加しindex.html・check-syntax・明示unit一覧・unified-uiのscript期待を同期。先行してfile URLの起動／Helpとscript読込1件も成功。新unit4件でscope／元参照と配列の維持、拒否と未対応操作時の表示／履歴なし、最前面の優先と逆順、Document／Block切替時の現在scopeを確認。drawing-order／unified-ui／sketch-permissions／blocks／derived-selection-copyを実行。全worker終了後に各専用port8784サーバーを確認・終了してrunnerの正常終了を回収。ログはcad-drawing-order-command-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はCanvasメニューのコピー可否照会とClipboard責務の境界、mode／command操作調整と機能の生成接続を整理する。
+
 ### 共通hit対象範囲
 
 ordinarySelectionMode／hitSketchAllowed／hitElementAllowedを既存GeometryHitQuery.createScopePolicyへ集約。mode／pending command／constraint commandとSketchの表示・要素表示・所属・作図先・編集可否の8個のread portで接続し、通常選択は表示中の別Sketch／ロック中も検査でき、command中は作図先の編集可能要素へ絞る既存動作を維持する。SelectionやDocument／操作sessionは所有・変更しない。3式は元のbodyと照合し、状態はcallbackで実行時に読む。元のhoisted関数からconstへの変更について、生成時に状態を読まないことと全consumerの登録／呼出し時点を確認。新script／unit fileなし。

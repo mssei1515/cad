@@ -3694,37 +3694,10 @@
     return true;
   }
 
-  function selectedDrawingOrderCandidates() {
-    return [
-      ...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs, ...canvasSelection.splines,
-      ...canvasSelection.hatches, ...canvasSelection.blockInstances, ...canvasSelection.geometryInstances,
-    ];
-  }
-
-  function topmostDrawingOrderOwner(items) {
-    const active = window.DrawingOrder.topmostOwner(model, activeSketchId(), items);
-    if (active || !ordinarySelectionMode()) return active;
-    for (const sketch of [...model.sketches].reverse()) {
-      const owner = window.DrawingOrder.topmostOwner(model, sketch.id, items);
-      if (owner) return owner;
-    }
-    return null;
-  }
-
-  function drawingOrderCommandState() {
-    return window.DrawingOrder.commandState(model, selectionSketchId() || activeSketchId(), selectedDrawingOrderCandidates());
-  }
-
-  function reorderSelectedDrawingObjects(action) {
-    if (!guardSelectionEdit()) return false;
-    if (!window.DrawingOrder.reorder(model, selectionSketchId() || activeSketchId(), selectedDrawingOrderCandidates(), action)) return false;
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory(applicationText("重なり順変更", "Drawing order changed"));
-    setHint(applicationText("同じSketch内の重なり順を変更しました", "Changed drawing order within the active sketch."));
-    return true;
-  }
-
+  const { topmostOwner: topmostDrawingOrderOwner, state: drawingOrderCommandState, reorder: reorderSelectedDrawingObjects } = window.DrawingOrderCommand.create({
+    currentScope: () => model, canvasSelection, activeSketchId, selectionSketchId, ordinarySelectionMode,
+    guardSelectionEdit, updateUI, draw, recordHistory, applicationText, setHint,
+  });
 
 
   const { items: canvasContextMenuItems } = window.CanvasContextPresentation.createItems({
