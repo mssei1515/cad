@@ -972,3 +972,5 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/testing/dimension_test_driver.js: createInteractionSupportは編集・配置に関する10factoryと複数寸法fitの生成接続・公開対応を所有する。placementとselectionの二群で12 APIを返し、現在scope・session・Selection・Viewportを既存portへ委譲する。表示テスト支援とは独立した依存で生成する。
 
 - src/testing/dimension_test_driver.js: createFixtureSupportは残る読み取り専用寸法・補助線・角度ラベル・Sketch表示の5fixtureの生成接続を所有し、5公開APIを提供する。app側のDimension支援の生成はcreateFixtureSupport／createInteractionSupport／createDisplaySupportの三入口へ整理済み。
+
+- src/testing/block_test_driver.js: createEditorSupportはBlock定義編集・階層操作・配置・再読込の11factoryと11公開APIを組み立てる。readDefinitionsからの定義数のlive照会を内部で共有し、appは操作／read portと公開位置を接続する。Blockの一般状態・投影／回転／hover観測は別の個別factoryに残る。

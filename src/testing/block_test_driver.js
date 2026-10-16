@@ -382,5 +382,42 @@
     return Object.freeze({ points });
   }
 
-  window.BlockTestDriver = Object.freeze({ createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
+  // Assemble Block editor lifecycle test actions without owning product state.
+  function createEditorSupport({
+    resetModelState, updateUI, draw, readDefinitions, currentScope, blockEditor, blockEditorSessionChain,
+    readMode, blockPlacementCommand, commitBlockPlacement, blockProjectionBundle, HorizontalConstraint, VerticalConstraint,
+    pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, recordHistory, serializeConstraint,
+    createSketch, activeSketchId, addLine, addPoint, cancelBlockDefinitionEdit, completeBlockDefinitionEdit,
+    setBlockInstanceEnabledSketchIds, serializeModel, loadModelData, allGeometryLines, enterBlockDefinitionEdit
+  }) {
+    const readDefinitionCount = () => readDefinitions().length;
+    const emptyBlockFixture = createEmptyFixture({ resetModelState, updateUI, draw, readDefinitionCount, currentScope });
+    const blockEditorObservation = createEditorObservation({ blockEditor, blockEditorSessionChain, currentScope });
+    const blockPlacementAction = createPlacementAction({ readMode, blockPlacementCommand, commitBlockPlacement });
+    const nestedConstraintAction = createNestedConstraintAction({ currentScope, blockProjectionBundle, HorizontalConstraint, VerticalConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, recordHistory, updateUI, draw, serializeConstraint });
+    const blockChildGeometryAction = createChildGeometryAction({ blockEditor, createSketch, activeSketchId, addLine, addPoint, recordHistory, updateUI, draw, currentScope });
+    const blockCancelAction = createCancelAction({ cancelBlockDefinitionEdit, blockEditor, readDefinitionCount, currentScope });
+    const blockCompleteAction = createCompleteAction({ completeBlockDefinitionEdit, blockEditor, readDefinitionCount, currentScope });
+    const blockEnabledSketchAction = createEnabledSketchAction({ currentScope, setBlockInstanceEnabledSketchIds });
+    const blockReload = createReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions, currentScope, allGeometryLines });
+    const legacyBlockReload = createLegacyReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions, currentScope, blockProjectionBundle });
+    const definitionUpdateFixture = createDefinitionUpdateFixture({ readDefinitions, currentScope, blockProjectionBundle, enterBlockDefinitionEdit, blockEditor, completeBlockDefinitionEdit });
+    return Object.freeze({
+      resetForEmptyBlockCreation: emptyBlockFixture.reset,
+      blockDefinitionUpdateCase: definitionUpdateFixture.run,
+      lifecycle: Object.freeze({
+        reloadBlockState: blockReload.reload,
+        reloadLegacyBlockState: legacyBlockReload.reload,
+        blockEditorState: blockEditorObservation.state,
+        commitBlockPlacementForTest: blockPlacementAction.commit,
+        constrainFirstNestedBlockLineForTest: nestedConstraintAction.constrain,
+        addBlockEditorChildGeometry: blockChildGeometryAction.add,
+        cancelBlockEditor: blockCancelAction.cancel,
+        completeBlockEditor: blockCompleteAction.complete,
+        setFirstBlockInstanceSketches: blockEnabledSketchAction.set,
+      }),
+    });
+  }
+
+  window.BlockTestDriver = Object.freeze({ createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
 })();

@@ -3707,24 +3707,20 @@
     const siblingReferenceMove = window.ConstraintTestDriver.createSiblingReferenceMove({ currentScope: workspace.current, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId: DEFAULT_SKETCH_ID, isExplicitPoint, wouldCreateReferenceCycle });
     const pointLineObservation = window.ConstraintTestDriver.createPointLineObservation({ currentScope: workspace.current, PointOnLineConstraint, signedPointLineDistance, constraintSketchId });
     const blockCreationFixture = window.BlockTestDriver.createCreationFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, VerticalConstraint, canvasSelection, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
-    const emptyBlockFixture = window.BlockTestDriver.createEmptyFixture({ resetModelState, updateUI, draw, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current });
+    const blockEditorTestSupport = window.BlockTestDriver.createEditorSupport({
+      resetModelState, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockEditor, blockEditorSessionChain,
+      readMode: () => mode, blockPlacementCommand, commitBlockPlacement, blockProjectionBundle, HorizontalConstraint, VerticalConstraint,
+      pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, recordHistory, serializeConstraint,
+      createSketch, activeSketchId, addLine, addPoint, cancelBlockDefinitionEdit, completeBlockDefinitionEdit,
+      setBlockInstanceEnabledSketchIds, serializeModel, loadModelData, allGeometryLines, enterBlockDefinitionEdit
+    });
     const blockRotationObservation = window.BlockTestDriver.createRotationObservation({ blockInstanceById, currentScope: workspace.current, blockInstanceDisplayCenter, readSolverVariables: () => solver.getVariables(), buildDragSession });
     const blockEndpointObservation = window.BlockTestDriver.createEndpointObservation({ currentScope: workspace.current, blockProjectionBundle, worldToCanvasScreen, canvas });
     const blockHoverObservation = window.BlockTestDriver.createHoverObservation({ constraintTargetSession, canvasHover });
-    const blockEditorObservation = window.BlockTestDriver.createEditorObservation({ blockEditor, blockEditorSessionChain, currentScope: workspace.current });
-    const blockPlacementAction = window.BlockTestDriver.createPlacementAction({ readMode: () => mode, blockPlacementCommand, commitBlockPlacement });
-    const nestedConstraintAction = window.BlockTestDriver.createNestedConstraintAction({ currentScope: workspace.current, blockProjectionBundle, HorizontalConstraint, VerticalConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, recordHistory, updateUI, draw, serializeConstraint });
-    const blockChildGeometryAction = window.BlockTestDriver.createChildGeometryAction({ blockEditor, createSketch, activeSketchId, addLine, addPoint, recordHistory, updateUI, draw, currentScope: workspace.current });
-    const blockCancelAction = window.BlockTestDriver.createCancelAction({ cancelBlockDefinitionEdit, blockEditor, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current });
-    const blockCompleteAction = window.BlockTestDriver.createCompleteAction({ completeBlockDefinitionEdit, blockEditor, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current });
-    const blockEnabledSketchAction = window.BlockTestDriver.createEnabledSketchAction({ currentScope: workspace.current, setBlockInstanceEnabledSketchIds });
     const blockRejectionFixture = window.BlockTestDriver.createRejectionFixture({ resetModelState, addPoint, addLine, canvasSelection, blockSelectionGeometry, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current, activeSketchId, geometryRefForItem });
     const blockStateObservation = window.BlockTestDriver.createStateObservation({ blockProjectionBundles, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, canvasSelection, readMode: () => mode, serializeModel });
-    const blockReload = window.BlockTestDriver.createReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, allGeometryLines });
-    const legacyBlockReload = window.BlockTestDriver.createLegacyReload({ serializeModel, loadModelData, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockProjectionBundle });
     const sidebarHighlightObservation = window.PropertiesTestDriver.createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover });
     const sidebarHoverKeyObservation = window.PropertiesTestDriver.createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey });
-    const definitionUpdateFixture = window.BlockTestDriver.createDefinitionUpdateFixture({ readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockProjectionBundle, enterBlockDefinitionEdit, blockEditor, completeBlockDefinitionEdit });
     const blockDimensionFixture = window.BlockTestDriver.createReadOnlyDimensionFixture({ currentScope: workspace.current, blockProjectionBundle, defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint });
     const blockExternalFixture = window.BlockTestDriver.createExternalConstraintFixture({ currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
@@ -4082,7 +4078,7 @@
       moveSiblingReferenceLine: siblingReferenceMove.move,
       referencePointLineState: pointLineObservation.state,
       resetForBlockCreationUi: blockCreationFixture.reset,
-      resetForEmptyBlockCreation: emptyBlockFixture.reset,
+      resetForEmptyBlockCreation: blockEditorTestSupport.resetForEmptyBlockCreation,
       ...dimensionInteractionSupport.placement,
       blockState: blockStateObservation.state,
       blockInteractionPoints: blockInteractionObservation.points,
@@ -4097,18 +4093,10 @@
       drawnDimensionLabelsForTest: canvasRenderProbe.dimensionLabels,
       drawnDimensionExpressionMarksForTest: canvasRenderProbe.dimensionExpressionMarks,
       ...dimensionInteractionSupport.selection,
-      blockDefinitionUpdateCase: definitionUpdateFixture.run,
+      blockDefinitionUpdateCase: blockEditorTestSupport.blockDefinitionUpdateCase,
       blockReadOnlyDimensionCase: blockDimensionFixture.run,
       blockExternalConstraintCase: blockExternalFixture.run,
-      reloadBlockState: blockReload.reload,
-      reloadLegacyBlockState: legacyBlockReload.reload,
-      blockEditorState: blockEditorObservation.state,
-      commitBlockPlacementForTest: blockPlacementAction.commit,
-      constrainFirstNestedBlockLineForTest: nestedConstraintAction.constrain,
-      addBlockEditorChildGeometry: blockChildGeometryAction.add,
-      cancelBlockEditor: blockCancelAction.cancel,
-      completeBlockEditor: blockCompleteAction.complete,
-      setFirstBlockInstanceSketches: blockEnabledSketchAction.set,
+      ...blockEditorTestSupport.lifecycle,
       blockCreationRejectionCases: blockRejectionFixture.cases,
       sidebarHighlightIds: sidebarHighlightObservation.ids,
       currentSidebarHoveredGeometryKeys: sidebarHoverKeyObservation.keys,

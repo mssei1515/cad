@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Block編集テスト支援の機能組立て
+
+BlockTestDriver.createEditorSupportへ空Block準備、編集状態、配置・入れ子拘束・子Geometry・確定／取消・有効Sketch指定、通常／旧形式再読込、定義更新の11factoryの生成接続と11公開APIを集約。定義数はreadDefinitionsを使って操作時に照会し、確定／取消・再読込後の現在値を保つ。公開名・順序を維持するため、空Block／定義更新の入口とlifecycle群を元の位置で接続する。各既存factoryの本体は完全一致し、生成接続もread port置換とindent以外一致。生成時に状態照会やモデル操作を行わず、通常起動で生成しないtest query guardも保持する。定義編集／Geometry／配置／履歴の状態は既存ownerへ留め、汎用app contextや新しい編集状態は持たない。
+
+app.jsは4,159→4,147行（12行減、07024cbから合計312行減）。新scriptなし。新unit fileを構文／unit一覧へ一回だけ追加。単体3件で11公開APIと生成時無処理、編集状態と確定／取消後のlive定義数・instance照会、配置のreceiver／数値変換、Sketch指定のObject・引数・返値、通常再読込→UI／draw→最新状態の順を確認。構文535ファイル・単体1,477件・関連E2E163件が成功（すべてexit 0、E2E2.2分）。11 APIを使うblocks／phase0-characterization／unified-uiの全3fileを実行。全runnerは正常終了。ログは一時ディレクトリのcad-block-editor-test-support-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はBlockの一般状態・投影／回転／hover等の観測支援の生成接続を調べる。
+
 ### Dimension既定fixtureの機能組立て
 
 DimensionTestDriver.createFixtureSupportへ読み取り専用寸法の重複／配置、補助線表示、角度ラベル追従、Sketch表示の5factoryを集約。5公開APIはreadOnly群と角度／Sketch表示の入口で返し、appは元の位置へ接続する。公開名・順序を維持し、全個別factoryの本体は完全一致、生成接続もcurrentScope／rootSketchIdのport置換とindent以外一致する。Sketch表示fixtureのfactory生成は同支援へ移るが、生成時に状態照会・準備を実行しない。準備と検証時のGeometry／寸法／session／描画は既存ownerへ委譲し、独自製品状態や汎用app contextを持たない。これでDimensionの22個の個別factory生成はappからなくなり、fixture／interaction／displayの三つの支援入口へ整理された。
