@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Sketch切替の作図入力reset
+
+clearInteractionForSketchChange内の連続する七つの作図resetを既存DrawOperationLifecycle.resetInputsForSketchChangeへ集約。追加依存なしで既存Line／Rectangle／Fillet／Circular／preview／Offsetのownerを利用し、順序を保持する。Document reset／通常cancelへ統一せず、元から対象でないSlot／Centerline／Spline／Hatchやrollbackを追加しない。前後のdrag・Selection、pending／constraint／instance／pointer／mode／Toolbar更新は元の位置に残す。
+
+app.jsは3,986→3,980行（6行減、b120651から合計163行減）。新scriptなし。既存draw-operation-lifecycle unitへ2件追加し、限定reset順・他ownerの参照保持と無通知、途中例外の同一伝播と後続省略を確認。構文546ファイル・単体1,530件・関連E2E172件成功（すべてexit 0、E2E2.5分）。blocks／sketch-tree-visibility／sketch-move／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-sketch-change-drawing-reset-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はclearInteractionForSketchChangeに残る操作状態の調整を既存SketchCommandの役割と照合する。dragやpointer等の後続初期化を遅延参照し、対象と順序を保って生成接続を整理する。
+
 ### Sketch移動中のTree外入力抑止
 
 既存SketchTreeController.createMoveInputBindingへ移動中のdocument capture受付を集約。documentとisMovingの二portだけを受け、六eventの登録順、inactive時の短絡、Tree／resize handle許可、preventDefault→stopImmediatePropagationを維持。appは元の登録位置でbindし、二重登録防止・自己listenerだけのdispose／再bindを持つ。commandのstateや選択／移動／履歴を所有せず、Keyboardの別経路は変更しない。

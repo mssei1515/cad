@@ -2409,13 +2409,7 @@
     dimensionDrag.reset();
     referenceImageInteraction.reset();
     selectionRectangle.reset();
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.reset();
-    offsetSelection.reset();
+    drawOperationLifecycle.resetInputsForSketchChange();
     pendingCommandSession.clear();
     constraintTargetSession.clearCommand();
     sketchProjectionCommand.reset();
