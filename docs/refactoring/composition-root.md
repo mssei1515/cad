@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 式入力欄への識別子挿入
+
+insertIdentifierIntoExpressionInputを既存ExpressionInputView.createInsertionへ集約。Event constructorとformatParameterReferenceの2依存だけを接続し、選択範囲置換・equals補完／padding・input通知・blur時のchange補完・focus／caretを担当する。元bodyはEvent constructorの注入名以外一致し、native change済みや切断inputの通知抑止、once listenerと複数挿入時の一回のchange、通知前後のDOM操作順を維持する。Parameter名前空間照会や評価／適用・履歴は持ち込まない。appは起動時に生成し、既存寸法／注記挿入の呼出しへ接続。最初のconsumerより前の初期化とfactory生成時にinputや状態へ触れないことを確認した。
+
+app.jsは4,590→4,560行（30行減、今回の再開から合計280行減）。新scriptなし、ExpressionInputView unit fileを追加して構文・明示unit一覧を同期。unit3件は実際のEventTarget／Eventを用い、選択／padding・equals／fallback caret、input→focus→caret順、native／synthetic changeと切断input、複数挿入後の一回だけの確定を確認。構文514ファイル・単体1,429件・関連E2E28件が成功（すべてexit 0、E2E54.0秒）。unified-ui／parameter-dialog-controller／unified-annotations／dimension-prefixからexpression／formula／parameter／reference／inline／affix／prefixの関連ケースを抽出した。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-expression-insertion-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はfocusedExpressionInputContextとinsertClickedDimensionParameter／insertClickedAnnotationParameterに残るCanvas参照入力の照会・操作調整をcontroller側へ集約できるか確認する。名前空間の同一参照と拒否条件、寸法／注記で異なるイベント抑止と通知順、名前の補完／挿入の所有を維持する。
+
 ### トリム操作の進行
 
 executeTrimAtの対象検証→checkpoint→Geometry変更→preview／Selection解除→Parameter安定化／依存結果判定→失敗復元または成功履歴をTrimCommandへ分離。既存TrimEditingとGeometry checkpoint APIを含む18依存を明示し、model状態やsessionは新たに持たない。形状変更はLine／Arc／Circleごとに既存TrimEditingへ委譲する。元bodyはpreview解除・analysis invalidate・閾値のcapability置換以外一致し、structure／投影guard、拒否時のcleanup範囲、現在active Sketchの参照時点、主／依存solve失敗とerrorNorm > 閾値の復元、例外伝播、UI→draw→history順を維持する。editing／checkpointの関数参照は元どおり裸の関数として使う。

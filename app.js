@@ -192,6 +192,7 @@
   const expressionInputView = window.ExpressionInputView.create({
     document, InputElement: HTMLInputElement, referenceNamesForInput: expressionReferenceNamesForInput, escapeHtml,
   });
+  const { insert: insertIdentifierIntoExpressionInput } = window.ExpressionInputView.createInsertion({ Event: Event, formatParameterReference });
   const { sync: syncExpressionInputHighlight, install: installExpressionInputHighlights,
     refresh: refreshExpressionInputHighlights } = expressionInputView;
   const parameterDialogView = window.ParameterDialogView.create({
@@ -2871,37 +2872,6 @@
     return null;
   }
 
-
-  function insertIdentifierIntoExpressionInput(input, identifier) {
-    let value = String(input.value ?? "");
-    let start = Number.isInteger(input.selectionStart) ? input.selectionStart : value.length;
-    let end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
-    if (!value.trimStart().startsWith("=")) {
-      value = `=${value}`;
-      start += 1;
-      end += 1;
-    } else if (value.startsWith("=")) {
-      start = Math.max(1, start);
-      end = Math.max(1, end);
-    }
-    const identifierCharacter = /[A-Za-z0-9_]/;
-    const leftPadding = start > 0 && identifierCharacter.test(value[start - 1]) ? " " : "";
-    const rightPadding = end < value.length && identifierCharacter.test(value[end]) ? " " : "";
-    const insertion = `${leftPadding}${formatParameterReference(identifier)}${rightPadding}`;
-    input.value = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
-    const caret = start + insertion.length;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    // Programmatic insertion alone does not make the browser emit change on blur.
-    let changed = false;
-    const onChange = () => { changed = true; };
-    input.addEventListener("change", onChange, { once: true });
-    input.addEventListener("blur", () => {
-      if (!changed && input.isConnected) input.dispatchEvent(new Event("change", { bubbles: true }));
-      input.removeEventListener("change", onChange);
-    }, { once: true });
-    input.focus({ preventScroll: true });
-    input.setSelectionRange(caret, caret);
-  }
 
   function insertClickedDimensionParameter(event, dimensionHit) {
     const context = focusedExpressionInputContext();
