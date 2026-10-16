@@ -6,7 +6,113 @@
 
 ## 現在の再開地点（2026-10-16）
 
-develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
+最新の検証済みコードはaa9e3af（develop統合1be84e3）。構文552ファイル・単体1,591件・全E2E584件が成功（全E2E23.7分、exit 0）。app.jsは今回の3,949→3,652行（297行減）、直近の照会整理は3,652→3,652行（0行変化）。週枠残量49%の停止条件に達したため、この記録を保存後mainを最後に反映してdevelopと同期し、一時停止する。数百行への全体目標は未完了。再開時の判断と以前の失敗経緯はrefactoring-policy-and-resume.mdのsection 8を参照する。
+
+### 寸法描画内のActive照会
+
+DimensionPresentationの同じdraw内で、同一constraint ObjectのActive判定を共有した。従来はsort comparatorと色判定からSketch照会を繰り返していた。必要時に取得し次のdrawでは再評価するため、scope切替・同一IDの別Object・Active変更を持ち越さない。既存配列へのin-place sort、非active→activeの安定順、可視性の短絡、PNGのflagsとCanvas保存／復元を維持する。app.jsは3,652→3,652行（0行変化）。構文552ファイル・単体1,591件・関連E2E129件成功（通常UI／寸法／PNG／描画順117件1.5分、性能12件48.1秒、パン161ms）。この単位では全E2E未実行。
+
+### Sketch所属の正規化と照会
+
+SketchContext.membershipQueryが同期照会の入口で正規化を行い、現在Sketchと所属の読取りを返す。既存のelementSketchIdとresolverを共有し、照会をまたぐcacheや別の所属規則を持たない。ConstraintAnalysisは参照有効性の更新後、ConstraintTestDriverは解析更新後に取得し、appは生成済みAPIを接続する。app.jsは3,652→3,652行（0行変化）。構文552ファイル・単体1,590件・関連E2E168件が成功（通常UI／Block／対称拘束144件、権限11件、航空機1件9.2分、性能12件55.2秒）。航空機の全96経路・1,872previewが元の10分制限で成功し、性能基準も変更していない。この単位では全E2E未実行。
+
+### 拘束状態観測の重複取得
+
+航空機の時間超過を調査し、ConstraintTestDriver.createStatusObservation内で各要素ごとに現在Sketchを読み直していた処理を、解析更新後の1回へ整理した。Sketch取得はSketch全体の正規化を伴うため重複処理を減らす。返却する状態やSolver、テストの期待値・制限時間は変更しない。app.jsは3,652→3,652行（0行変化）。構文552ファイル・単体1,588件・関連E2E3件が成功。同じ航空機2経路の全resultは計測時間を除いて修正前と完全一致したが、元の96経路のE2Eは今回も10分timeoutとなった。時間超過解消や全テスト成功とは扱わない。
+
+### Trim機能とテスト支援の生成・接続
+
+TrimQuery／TrimEditing／TrimCommandをTrimFeatureへ集約し、同じquery／editingをTrimTestDriverのfixture組立てにも接続した。scopeと倍率は操作時に読み、既存のcheckpoint、拘束転送、失敗時の復元と選択解除順を維持する。appの早期プレビューcallbackはhoisted入口を残し、初期化時のモデル読取りを増やさない。app.jsは3,658→3,652行（6行減）。構文552ファイル、単体1,587件、読込E2E1件、関連E2E143件（unified-ui／blocks142件＋操作性能1件）が成功。全E2Eはこの単位では未実行。
+
+### Fillet機能の生成・接続
+
+FilletGeometry／FilletConstruction／FilletCommandは他機能から直接利用されていないことを確認し、新しいFilletFeatureへ生成と接続を集約した。同じcommand objectを返し、firstLine／半径入力／reset／snapshotと安定化失敗時の復元は既存FilletCommandへ維持する。Geometry／選択／pending／値入力／checkpointは既存ownerを共有し、選択線・pointer・開始準備と安定化は操作時に読む。計算と生成factoryは副作用を持たないためcheckpoint生成後のcommand生成位置へ集め、Trimの生成と役割は変更しない。入力状態や履歴の独立コピーを増やさず、現在未使用のstart aliasも外した。注入するUI通知は依然多く、app全体の可変contextへ隠さない。
+
+app.jsは3,665→3,658行（7行減、今回再開から291行減）。実Fillet計算／生成／command／checkpointを接続するunit3件を追加し、生成時のscope無読取り、前選択からの半径入力・7拘束と円弧の生成、安定化拒否と円弧生成失敗で異なる選択保持／解除と端点Object・配列・採番復元を確認。構文550ファイル・単体1,583件・読込E2E1件・関連E2E107件成功（すべてexit 0）。関連はunified-ui／command-panel全106件（1.4分）と編集性能1件（4.4秒）。index.html／構文一覧／unit一覧／file URLの読込順期待を同期。ログは一時ディレクトリのcad-fillet-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。全E2Eは今回未実行。全体目標は未完了。
+
+### Offset機能の生成・接続
+
+GeometryCreation／snapはDXF・Trim・投影等にも共有されるため、基本作図へ一括で取り込まないことを確認。まとまりの明確なOffsetの5factory（計算→生成→command→preview renderer→layer）を新しいOffsetFeatureへ集約した。Geometry計算・配列／採番復元・入力確定・描画は既存ownerへ残し、現在scope・採番・選択・pending・previewを同じ所有者で共有する。選択の順序と反映、pointer更新、値入力のadapterを内部へ集め、外部にはplans／command／previewLayer／単体生成／closedを補うchainDraftを公開。新しいmodel・cache・独立sessionやアプリ全体の可変contextは作らない。既存通知callbackは多く残るが、Offsetの公開境界を超える状態操作を追加しない。appで不要になった計算・入力aliasは撤去し、早期のOffsetSelection通知入口は維持する。
+
+app.jsは3,688→3,665行（23行減、今回再開から284行減）。実Offset計算・Geometry生成・選択・command・描画を使うunit4件を追加し、生成時のscope無読取り、source／既定chain plan、値入力と成功生成、scope差替えと拒否時の配列／採番復元、現在mode／pointerによる円previewを検証。構文548ファイル・単体1,580件・読込E2E1件・関連E2E143件成功（すべてexit 0）。関連はunified-ui／blocksの全142件（1.9分）とadversarial-authoring-performanceのOffset等編集操作1件（4.4秒）。classic scriptはindex.html／構文一覧／unit一覧／file URLの読込順期待を同期。ログは一時ディレクトリのcad-offset-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。unitの最終assert強化後も全unitを再実行・成功し、新testの構文を確認。全E2Eは今回未実行。全体目標は未完了。
+
+### 通常Canvasの描画進行とAnnotation preview
+
+drawInteractiveCanvasの描画順を既存CanvasSurface.createInteractiveRendererへ集約し、Annotation previewの読取りとleader／text振分けは既存AnnotationRenderer.createLayer.drawPreviewへ移した。通常CanvasはBlock handleからPNG操作overlayまでの18段階を維持し、寸法／注記／作図／配置／Offsetの既存描画器と描画用入口だけを受ける。Document／操作stateの可変contextは渡さない。previewは段階到達時に1回読み、leaderはtrue、truthyな非leaderは既存色で描く。appはannotationCommandの遅延読取りとnullable PNG commandのoverlayを接続し、receiverと現在scaleの参照時点を保持。createFrameRendererの通常／PNG分岐と出力経路は変更せず、新たなcatch／finallyやcleanupも加えない。
+
+app.jsは3,704→3,688行（16行減、今回再開から261行減）。既存canvas-surface unitへ2件、annotation-renderer unitへ1件追加し、全段階順・renderer receiver・現在method参照・例外時の後続抑止、previewの1回読取り／引数／空値と保存注記の照会をしないことを確認。構文546ファイル・単体1,576件・関連E2E185件成功（すべてexit 0、E2E2.8分）。unified-ui／png-export／annotation-anchors／phase0-characterizationの全4fileでPNGと画面比較を含む。ログは一時ディレクトリのcad-interactive-canvas-pass-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### Treeのhover状態の照会
+
+sketchTreeObjectHoveredを既存SketchTreeObjects.createの内部へ集約し、従来の外部predicate注入をreadCanvasHover／readSidebarHoverの2読取りへ置換した。Hatch／画像／Block／派生Instance／AnnotationはCanvasHoverの対応field、それ以外はSelectionHighlightの現在itemを同一参照で照合する。固定PointとConstraintのentry解決、dimensionからconstraintへの既存変換、関係ない側のhoverを読まない短絡を維持する。同IDの別Objectを一致にせず、状態複製・同期・書込みを加えない。Tree行と既存hovered公開APIは同じ内部判定を利用し、appは状態所有者からの読取りだけを接続する。新factoryは増やしていない。
+
+app.jsは3,712→3,704行（8行減、今回再開から245行減）。既存sketch-tree-presentation unitへ3件追加し、カテゴリ別の参照元・現在値・Object同一性、固定Point／Constraint／dimension解決、Tree行の強調と非破壊性を確認。構文546ファイル・単体1,573件・関連E2E158件成功（すべてexit 0、E2E2.2分）。unified-ui／blocks／hatchingの全3file。ログは一時ディレクトリのcad-tree-hover-query-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### Treeの選択状態の照会
+
+sketchTreeObjectSelectedを既存CanvasSelectionへ集約し、appは同メソッドを既存SketchTreeObjectsへ接続する。inspectionのcategory＋同一Object／truthyな同一ID照合、通常のHatch／画像／Block／派生Instance／Annotationの同一参照包含、固定Pointと通常Constraintの違いを維持した。Geometry／Constraintは同ownerの既存照会を使用し、Arcの未選択時に既存照会が返すundefinedもBoolean化しない。モデルや選択stateを変更せず、DOM・hover・求解・履歴・追加callback依存を持たない。appの未使用になったgeometryItemSelectedInCanvas aliasも同じ区切りで外したが、元APIは維持する。
+
+app.jsは3,724→3,712行（12行減、今回再開から237行減）。既存selection unitへ3件追加し、inspectionのcategory／IDと状態保持、各カテゴリのObject包含、固定Point・寸法・effective constraintの優先、通常LineとArc端点選択を確認。構文546ファイル・単体1,570件・関連E2E135件成功（すべてexit 0、E2E1.9分）。unified-ui／sketch-tree-visibility／derived-selection-copyの全3file。ログは一時ディレクトリのcad-tree-selection-query-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### Tree／Canvas候補の共用Toolbarアイコン
+
+toolbarSvgMarkup／constraintToolbarIconを既存ToolbarView.createIconsへ集約。調査でSketchTreeObjectsだけでなくCanvasContextPresentationも使うことを確認し、Treeの状態に依存しない共用Toolbar表示APIとした。document・6拘束型・寸法判定だけを受け、現在DOMのSVG読取り・最初のsvgタグへの既存class付与・欠損時空文字を維持する。固定flag／固定型→投影→中心線→寸法→既存の名前patternとcoincident fallbackの優先順もそのまま。appは生成結果の同じ2APIを両利用者へ接続し、cache・DOM変更・操作／選択／hover状態を加えない。参照は全て生成後なので不要なhoisted wrapperも残していない。
+
+app.jsは3,738→3,724行（14行減、今回再開から225行減）。既存toolbar-view unitへ3件追加し、現在DOM／差替え・SVG欠損・markup非破壊、型とflagの優先・寸法短絡、全名前patternと欠損／未知のfallbackを確認。構文546ファイル・単体1,567件・関連E2E133件成功（すべてexit 0、E2E1.9分）。unified-ui／sketch-tree-visibility／block-geometry-fixedの全3file。ログは一時ディレクトリのcad-toolbar-icon-presentation-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### 操作名のステータス表示
+
+updateStatusUIを既存ToolbarView.createCommandStatusへ集約。document・applicationText・mode／pending type／拘束commandの5依存だけを受け、操作stateを所有せず現在値を表示時に読む。statusCommandのDOM取得→21modeの現在言語表記構成→DOMありなら注記pending／拘束／mode名／raw modeの優先順を維持する。注記や拘束が優先される場合の下位stateの読取り短絡、DOMなし時の表記構成も保持。appはhoisted入口を同じUI更新順で呼び、Toolbarの他の更新・listener・操作遷移は変更していない。
+
+app.jsは3,746→3,738行（8行減、今回再開から211行減）。既存toolbar-view unitへ3件追加し、表示優先順・全21modeの日英表記・未知mode・現在言語・DOM差替えと不在時短絡を確認。構文546ファイル・単体1,564件・関連E2E110件成功（すべてexit 0、E2E1.6分）。unified-ui／toolbar-layout／command-panelの全3file。ログは一時ディレクトリのcad-command-status-view-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### 作図時の暗黙拘束追加
+
+addConstraintIfMissingの本体を既存ConstraintCommitCommand.ifMissingへ集約した。enabled一致の短絡、明示／現在Sketch、参照元許可→循環guard→既存markReferenceによる属性付与、push→冗長判定→同一Objectだけをfilterで除去→cache forgetの順序を維持する。既存依存を共有し、currentScopeとforgetConstraintだけを追加した。appのmodelはworkspace.activateの結果でのみ差し替わることも確認。通常のordinary／reference確定とは独立入口とし、求解・snapshot・UI・履歴・追加の権限guardを呼ばない。冗長時も元配列とconstraint属性を巻き戻さない。appはSnapConstraints／BasicDrawingToolsへ渡すhoisted入口を維持する。
+
+app.jsは3,761→3,746行（15行減、今回再開から203行減）。既存constraint-commit-command unitへ4件追加し、空／enabled一致の無変更、disabled一致の除外、scope置換・明示Sketch、参照guardの短絡と属性、同一IDの別Objectを保持した除去とforget順を確認。構文546ファイル・単体1,561件・関連E2E126件成功（すべてexit 0、E2E1.7分）。unified-ui／spline／centerline／sketch-permissionsの全4file。ログは一時ディレクトリのcad-implicit-constraint-commit-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### 円弧端点dragの角度境界計算
+
+arcEndpointDragValueを既存GeometryKernelへ集約。現在の開始／終了角にunwrapAngleNearで入力角を合わせ、signed sweepが2π−1e-6以上なら同じ正負の枝で一周直前に制限する。開始点はendAngle、終了点はstartAngleを基準とし、相手端点へ戻して円弧を縮退させない既存規則をそのまま維持した。入力Arc・操作state・求解・履歴を変更しない純粋計算で、appは同関数を既存GeometryDragPlanの端点処理へ渡す。新factoryやwrapperは追加していない。
+
+app.jsは3,778→3,761行（17行減、今回再開から188行減）。既存geometry-kernel unitへ3件を追加し、複数周回の維持と非破壊性、開始／終了と正負両方向のalmost-full-circle境界、境界から離れる際の連続性・非clampを確認。構文546ファイル・単体1,557件・関連E2E115件成功（すべてexit 0、E2E1.6分）。unified-ui／block-geometry-fixed／fixed-commandの全3file。ログは一時ディレクトリのcad-arc-endpoint-angle-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### Annotationアンカー読取りと編集座標の具体化
+
+annotationPlacementAnchorを既存AnnotationRendererの読取りAPIへ、materializeAnnotationAnchorを既存AnnotationAnchorConstraints.createMaterializationへ集約。前者はlayout優先とmetrics fallback、anchorX／anchorYのnullish判定を維持。後者は表示anchor・leader表示geometry・参照anchor・実効styleの4依存で、既存anchorPositionあり／captureなしでは保存座標だけを返し、未具体化またはcapture時は表示位置を読む。leaderは参照anchorまたはstartを基準にshelfScaleを逆適用しtextPlacementをanchorへ設定する。x／yとanchorPositionを書き込むのは既存anchorPositionがない場合だけで、styleを読む時機も同じ。appは早期生成される利用者へのhoisted入口を残し、履歴・UI・拘束確定は既存呼出し側へ維持する。
+
+app.jsは3,792→3,778行（14行減、今回再開から171行減）。既存annotation-anchor-constraints unitへ3件追加し、既存anchorの照会短絡、captureで保存座標を保持、位置Objectの非共有、style読取り時点、leaderの逆変換と参照fallbackを確認。既存9位置・回転・倍率のテストからRendererのanchor読取りも確認。構文546ファイル・単体1,554件・関連E2E183件成功（すべてexit 0、E2E2.9分）。annotation-anchors／leader-appearance／unified-ui／free-text-input-dragの全4file。ログは一時ディレクトリのcad-annotation-anchor-materialization-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### 寸法label文字列の構成
+
+dimensionLabelForConstraintを既存DimensionPresentation.createLabelへ集約した。readonly／測定値／角度変換／外観／拘束Sketch／通常と測定用のformatを限定した依存として受ける。参照寸法は現在の測定値と測定用丸め、通常寸法はtarget値、angle intervalは符号付きdegree、通常angleは既存angleDegreesを使用する。precision指定時のtoFixed、接頭辞・接尾辞・改行・片側公差の0補完・角度単位・参照括弧を維持する。NumberDisplayは数値format、DimensionQueriesは値の照会、GeometryAppearanceQueryは外観の所有を維持し、appは既存hoisted入口を接続する。元の本体を同じ順序で移し、生成時に寸法や現在scopeを読まない。
+
+app.jsは3,800→3,792行（8行減、今回再開から157行減）。既存dimension-presentation unitへ3件を追加し、参照値のtarget非参照と測定用丸め、precision時のformatter短絡、通常／interval角度と距離、現在の外観・公差・非破壊性を確認。構文546ファイル・単体1,551件・関連E2E119件成功（すべてexit 0、E2E1.7分）。unified-ui／dimension-prefix／derived-patternsの全3file。ログは一時ディレクトリのcad-dimension-label-owner-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### 寸法外観の解決と表示値構成
+
+effectiveDimensionAppearance／effectiveDimensionAppearanceForSketch／dimensionDisplayStateを既存GeometryAppearanceQuery.createDimensionへ集約。document・currentSketches・activeSketchId・isRootSketchの4依存で、操作時の現在Sketchとscope、明示されたBlock DefinitionのSketch一覧、Document寸法既定→終端既定→Root以外のSketch→個別displayの優先順を維持する。表示値のprecision制限、色fallback、接頭辞／接尾辞／公差の文字列化、終端・文字寸法の取出しを同ownerが担う。保存値を変更せず独自state／cache・UI更新を持たない。appは既存hoisted入口で利用者へ接続し、scopeを生成時に読まない。移動した3本体は明示したscope portの置換以外が元と一致することを確認。
+
+app.jsは3,823→3,800行（23行減、今回再開から149行減）。既存geometry-appearance-query unitへ3件を追加し、遅延scope照会と置換、明示definition一覧、Root除外、外観優先順と表示値／非破壊snapshotを確認。構文546ファイル・単体1,548件・関連E2E144件成功（すべてexit 0、E2E2.0分）。unified-ui／blocks／dimension-prefixの全3file。ログは一時ディレクトリのcad-dimension-appearance-query-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### Offset入力状態のCanvas選択への反映
+
+syncOffsetChainSelectionの選択更新本体を既存CanvasSelection.applyOffsetSelectionへ集約した。OffsetSelectionはsource／entries／確定状態・接続判定・通知を継続所有し、OffsetCommandは操作の進行を維持する。appはチェーン追加通知と円選択後の二経路を同APIへ接続する。sourceのCircle、entriesのLine／Arcを同じObjectで選択し、既存12項目のset順と選択解除対象を維持する。Spline／geometryInstances／instanceGeometryは変更せず、空反映時はTree／inspectionを一律解除しない。描画・UI・履歴・Offset resetを選択APIへ追加していない。
+
+app.jsは3,836→3,823行（13行減、今回再開から126行減）。既存selection unitへ3件を追加し、同一参照／解除・保持対象、空反映のTree規則、実OffsetSelectionの追加・拒否・reset・円sourceの通知境界を確認。構文546ファイル・単体1,545件・関連E2E106件成功（すべてexit 0、E2E1.5分）。unified-ui／command-panelの全2fileで、線／円／円弧Offset・反転線・連結チェーン・既存取消を確認。ログは一時ディレクトリのcad-offset-selection-reflection-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
+### 静的namespaceの未使用依存名を整理
+
+app IIFEで未参照の静的alias58個を撤去した。ReferenceImageData／HatchData／Appearance／DrawingOrder／DocumentFiles／GeometryKernel／GeometryRef／HatchRegionEngine／ParameterEngine／GeometrySolver／DimensionQueriesに限定し、公開元が通常の値propertyでgetterや生成時の処理を持たないことを確認した。全aliasが不要だったHatchRegionEngineの直接destructureとcirclePointAtPointer宣言も削除したが、元namespaceの公開APIとscript読込を維持する。factory／sessionの生成、副作用の可能性があるその他の変数宣言には手を加えない。変更前の構文木から対象aliasだけを除いた構文木が変更後と一致することを検証した。
+
+app.jsは3,885→3,836行（49行減、今回再開から113行減）。構文546ファイル・単体1,542件・関連E2E142件成功（すべてexit 0）。unified-ui／phase0-characterization／drawing-orderの126件（1.7分）とhatching全16件（13.7秒）で、既存保存形式・正規化・画面比較・描画順・Hatch再読込／Block投影を確認。ログは一時ディレクトリのcad-static-alias-{check,unit,e2e}.logとcad-static-alias-hatching-e2e.log。新規script／module／テストなし。全E2Eは今回未実行。全体目標は未完了。
+
+### 分離済み責務の未使用旧入口の撤去
+
+app IIFEのbindingを構文scopeで再監査し、参照のない関数宣言16個を撤去した。Instance参照正規化、Sketch階層照会、求解誤差、Block完了、作図解除、primitive判定、求解、配列削除、角度寸法描画、拘束完了・参照確定、primitive寸法開始と旧selectHitOnlyが対象。strict IIFE内の非公開宣言で、eval等の動的参照はなく、公開hookやcallbackは現役ownerへ接続されている。変更前後の残存top-level statement本文が同一であることも確認し、factory初期化やイベント登録は変更していない。新規module／状態／テストは追加していない。責務の再分離ではなく、移行後の重複経路と依存の整理である。
+
+app.jsは3,949→3,885行（64行減）。構文546ファイル・単体1,542件・関連E2E156件成功（すべてexit 0、E2E2.8分）。E2Eはunified-ui／blocks／derived-patternsの全3fileで、寸法と拘束の既存UIケースを含む。ログは一時ディレクトリのcad-entry-audit-{check,unit,e2e}.log。全ケース／worker終了後に専用serverのみ残ったため、process実体を確認し同serverだけを終了して正常終了を回収。全E2Eは今回未実行。残る未参照124bindingは変数宣言であり、副作用・getter・生成時機を確認するまで自動削除しない。全体目標は未完了。
 
 ### 既存端点の解決とendpoint生成
 

@@ -115,5 +115,19 @@
     return Object.freeze({ diameterCase });
   }
 
-  window.TrimTestDriver = Object.freeze({ createLineTransferFixture, createConstructionBoundaryFixture, createDiameterTransferFixture });
+  function createFeature({ feature, resetModelState, geometry, pushModelConstraint, currentScope }) {
+    const { PointOnLineConstraint, DiameterConstraint } = window.GeometrySolver;
+    const { circlePointAtAngle } = window.GeometryKernel;
+    const { addPoint, addLine, addCircle, addArc } = geometry;
+    const { query, editing } = feature;
+    const lineTransfer = createLineTransferFixture({ resetModelState, addPoint, addLine, pushModelConstraint, PointOnLineConstraint,
+      executeLineTrim: editing.executeLineTrim, currentScope });
+    const constructionBoundary = createConstructionBoundaryFixture({ resetModelState, addPoint, addLine, addCircle, addArc,
+      lineTrimBoundaries: query.lineTrimBoundaries, trimPreviewForLine: query.trimPreviewForLine, arcTrimBoundaries: query.arcTrimBoundaries,
+      trimPreviewForArc: query.trimPreviewForArc, circlePointAtAngle, circleTrimBoundaries: query.circleTrimBoundaries, trimPreviewForCircle: query.trimPreviewForCircle });
+    const diameterTransfer = createDiameterTransferFixture({ resetModelState, addCircle, addPoint, pushModelConstraint, DiameterConstraint,
+      angleAtCircleParam: query.angleAtCircleParam, circlePointAtAngle, executeCircleTrim: editing.executeCircleTrim, currentScope });
+    return Object.freeze({ lineTransfer, constructionBoundary, diameterTransfer });
+  }
+  window.TrimTestDriver = Object.freeze({ createLineTransferFixture, createConstructionBoundaryFixture, createDiameterTransferFixture, createFeature });
 })();

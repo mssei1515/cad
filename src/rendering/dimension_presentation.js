@@ -28,7 +28,12 @@
     readHoverDimension, readDraggedDimension, readPending, readExportFrame, readConstraintStatus, inactiveColor,
     dimensionLabelForConstraint, drawDimension, dimensionUsesExpression }) {
     function draw() {
-      for (const c of currentScope().constraints.sort((a, b) => Number(isActiveSketchConstraint(a)) - Number(isActiveSketchConstraint(b)))) {
+      const activeByConstraint = new Map();
+      function active(constraint) {
+        if (!activeByConstraint.has(constraint)) activeByConstraint.set(constraint, isActiveSketchConstraint(constraint));
+        return activeByConstraint.get(constraint);
+      }
+      for (const c of currentScope().constraints.sort((a, b) => Number(active(a)) - Number(active(b)))) {
         if (!isVisibleSketchId(constraintSketchId(c))) continue;
         const target = targetFromConstraint(c);
         if (!target) continue;
@@ -38,7 +43,7 @@
         const highlighted = canvasSelection.inspectionContains(c) || c === readHoverDimension() || canvasSelection.constraintSelectedInCanvas(c) || c === readDraggedDimension();
         const label = dimensionLabelForConstraint(c, target, dimension);
         const editing = readPending()?.type === "distance-value" && readPending().constraint === c;
-        const colorOverride = !readExportFrame() && readConstraintStatus() && !isActiveSketchConstraint(c) ? inactiveColor : null;
+        const colorOverride = !readExportFrame() && readConstraintStatus() && !active(c) ? inactiveColor : null;
         ctx.save();
         drawDimension(target, dimension, label, false, !readExportFrame() && (highlighted || editing), !readExportFrame() && editing ? { hidden: true } : null, colorOverride, sketchId, !readExportFrame() && dimensionUsesExpression(c));
         ctx.restore();
@@ -71,5 +76,22 @@
     }
     return Object.freeze({ drawDimension, drawAngleDimension });
   }
-  window.DimensionPresentation = Object.freeze({ createSelectionBounds, createLayer, createPainter });
+  function createLabel({ isReadOnlyDimension, measuredDimensionValue, angleDegrees, dimensionDisplayState, constraintSketchId,
+    formatDimensionLabel, formatMeasuredDimensionLabel }) {
+    function dimensionLabelForConstraint(constraint, target, dimension) {
+      const readOnly = isReadOnlyDimension(constraint);
+      const value = readOnly ? measuredDimensionValue(target, dimension) : target.interval ? constraint.target * 180 / Math.PI : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
+      const formatLabel = readOnly ? formatMeasuredDimensionLabel : formatDimensionLabel;
+      const display = dimensionDisplayState(dimension, constraintSketchId(constraint));
+      const number = display.precision == null ? formatLabel(value) : Number(value).toFixed(display.precision);
+      const unit = target.kind === "angle" ? "°" : "";
+      const tolerance = display.toleranceUpper !== "" || display.toleranceLower !== ""
+        ? ` +${display.toleranceUpper === "" ? "0" : display.toleranceUpper}/-${display.toleranceLower === "" ? "0" : Math.abs(Number(display.toleranceLower))}`
+        : "";
+      const label = `${display.prefix}${number}${unit}${display.suffix}${tolerance}`;
+      return readOnly ? `(${label})` : label;
+    }
+    return Object.freeze({ label: dimensionLabelForConstraint });
+  }
+  window.DimensionPresentation = Object.freeze({ createSelectionBounds, createLayer, createPainter, createLabel });
 })();

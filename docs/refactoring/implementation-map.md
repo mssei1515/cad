@@ -1024,3 +1024,56 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/editing/geometry_creation.js: GeometryCreation.createEndpointResolverは既存端点の再利用とendpoint Point生成の振分けを担当する。hitEndpointPoint→hitExplicitPoint→addPointの三つの依存を明示し、端点hitなら同じObjectを返して後続照会／採番を行わない。explicit Point hitではその現在座標でaddPoint(x,y,false,endpoint)を呼び、元Pointを変更せず現在Sketch／scopeへ新しいendpointを追加する。両hitがない場合は入力座標で同じaddPoint引数を使う。hitの選択／可視性規則は既存GeometryHitQuery、採番／所属付与は既存GeometryCreationに残す。appは後で生成されるhit照会を遅延callbackで接続する。
+
+
+- app.js: 構文scopeの参照監査で未使用と確認した旧入口16個を撤去。Sketch階層／Instance参照／求解／Block完了／作図解除／寸法描画・配置／拘束適用は既存ownerを継続利用し、旧selectHitOnly等の重複経路を残さない。公開hook・現役接続・副作用を持つfactory初期化は維持する。
+
+
+- app.js: 静的namespaceから受け取る未使用alias58個を撤去。Hatch領域engineへの直接destructureも廃止した。各既存ownerの依存・公開API・script読込順・factory生成は維持し、appの静的依存一覧を実際の利用へ合わせる。
+
+
+- src/editing/selection.js: CanvasSelection.applyOffsetSelectionがOffset source／entriesの選択反映と限定した選択解除を所有する。OffsetSelectionはチェーン状態と通知、OffsetCommandは操作進行を所有し、appのsyncOffsetChainSelectionは既存二経路を同APIへ接続する。Geometryの参照・未解除の選択・空反映時のTree規則を維持する。
+
+
+- src/geometry/appearance_query.js: GeometryAppearanceQuery.createDimensionがeffectiveDimensionAppearance／effectiveDimensionAppearanceForSketch／dimensionDisplayStateを所有する。Document既定と終端既定の合成、現在または明示Sketchの外観、個別displayの優先順とRoot除外を維持する。appはUI・label・テスト支援へのhoisted入口を接続し、初期化時に現在scopeを読み出さない。
+
+
+- src/rendering/dimension_presentation.js: DimensionPresentation.createLabelが寸法labelの文字列構成を所有する。数値formatはNumberDisplay、外観はGeometryAppearanceQuery、測定／readonlyと角度値はDimensionQueriesの既存APIへ委譲。appは既存hoisted入口を描画・hit・観測へ接続し、参照寸法／角度interval／桁数／公差の規則を重複実装しない。
+
+
+- src/rendering/annotation_renderer.js: annotationPlacementAnchorが表示位置の読取りを所有する。src/commands/annotation_anchor_constraints.js: createMaterializationが座標の具体化と既存条件に応じたAnnotation更新を所有する。appは同じ入口を拘束／寸法／drag／Properties／snapへ接続し、capture・既存anchor保持・leaderの倍率逆変換の規則を重複実装しない。
+
+
+- src/geometry/geometry_kernel.js: arcEndpointDragValueが端点角の周回合わせとalmost-full-circleのsigned sweep制限を所有する。app内の同計算本体は撤去し、既存GeometryDragEditingの注入先へ同APIを接続する。開始／終了角の基準・符号・上限・非破壊性を維持する。
+
+
+- src/commands/constraint_commit_command.js: ifMissingが作図時の重複回避・参照guard／属性付与・追加後冗長判定／除去を所有する。currentScopeとforgetConstraintのみ依存を追加し、既存の明示確定APIは変更しない。appはSnapConstraints／BasicDrawingToolsの既存入口を接続し、求解・UI・履歴の異なる暗黙追加と明示確定を混同しない。
+
+
+- src/ui/toolbar_view.js: createCommandStatusが操作名ステータスの翻訳とDOM反映を所有する。mode／pending／constraintはappからの限定した読取りAPIで参照し、注記→拘束→mode→raw値の優先順と短絡を維持する。appのupdateStatusUIは接続だけを担う。
+
+
+- src/ui/toolbar_view.js: createIconsがtoolbarSvgMarkup／constraintToolbarIconを所有する。TreeとCanvas候補の共用表示APIとして、現在DOMのSVG取得・既存class付与・欠損fallback・型優先と名前patternを維持。appは同APIをSketchTreeObjects／CanvasContextPresentationへ接続し、操作・選択・hover状態を同factoryへ渡さない。
+
+
+- src/editing/selection.js: sketchTreeObjectSelectedがinspectionのcategory／Object／ID照合と、通常のカテゴリ別選択照会を所有する。固定Point・Constraint・Geometryは同ownerの既存判定を使用。app内の選択配列読取りを撤去し、SketchTreeObjectsへ同メソッドを接続する。hoverは引き続き別所有者。
+
+
+- src/ui/sketch_tree_objects.js: Tree行のhover判定を同module内へ集約。readCanvasHover／readSidebarHoverの限定APIで現在値を読み、カテゴリ別のObject同一性と固定Point／Constraint解決を維持する。CanvasHover／SelectionHighlightの状態所有と既存hovered公開APIは維持し、appの照会本体を撤去。
+
+
+- src/rendering/canvas_surface.js: createInteractiveRendererが通常Canvasの18段階の重ね描きを所有し、createFrameRendererのPNG分岐とは分ける。src/rendering/annotation_renderer.js: layer.drawPreviewが現在previewの取得とleader／textの描画振分けを所有。appは既存描画器と描画用callbackだけを接続し、model／操作contextやpreview stateを複製しない。
+
+
+- src/application/offset_feature.js: Offsetの計算／生成／command／previewの機能組立て。OffsetSelection・pending・選択・preview・Geometry生成と採番は既存所有者を共有し、plans／command／previewLayer／createGeometry／chainDraftを公開する。appは同featureの生成・接続を行い、早期のOffsetSelection通知入口と他機能の共有Geometry／snapを維持する。
+
+
+- src/application/fillet_feature.js: Filletの計算／生成／transactional commandの組立て。Geometry、選択、pending、値入力、checkpointは既存ownerを共有し、実FilletCommandをそのまま返す。appはcheckpoint生成後に同featureを作り、更新／確定／click／resetを既存利用者へ接続する。
+
+- src/application/trim_feature.js: Trimの照会・編集・commandの組立て。現在scope／倍率、共有Geometry／preview／checkpointと既存の権限・求解・UI通知を接続し、computePreview／executeを公開する。src/testing/trim_test_driver.jsのcreateFeatureが同じquery／editingから既存fixtureを組み立て、appから内部API列挙を取り除く。
+
+- src/testing/constraint_test_driver.js: createStatusObservationは解析更新後の現在Sketchを照会ごとに一度取得し、同じSketchで全statusを絞り込む。照会間の状態交換を維持し、返却用itemsは独立させる。
+
+- src/editing/sketch_context.js: membershipQueryが正規化と所属の読取りを分ける。同じ所属resolverを共有し、現在Sketchへのfallbackを同期照会単位で捕捉する。src/constraints/constraint_analysis.jsは参照更新後、src/testing/constraint_test_driver.jsは解析更新後に取得し、appはreadSketchMembershipを両者へ接続する。Queryをscope切替後まで保存しない。
+
+- src/rendering/dimension_presentation.js: createLayer.drawはその描画内だけActive判定を共有し、sort comparatorと非active色判定でのSketch照会の重複を減らす。次の描画へ判定を保持せず、既存配列と安定した描画順を維持する。

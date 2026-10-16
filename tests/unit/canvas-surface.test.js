@@ -5,6 +5,39 @@ const vm = require("node:vm");
 const test = require("node:test");
 const sandbox = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../src/rendering/canvas_surface.js"), "utf8"), sandbox);
+const interactiveStages = ['block-handles', 'dimensions', 'dimension-preview', 'annotations', 'annotation-preview', 'authoring',
+  'block-placement', 'free-instance', 'offset', 'trim', 'snap', 'arc-handles', 'spline-handles', 'points', 'image-overlays', 'identity', 'selection-rect', 'export-overlay'];
+function interactiveFixture() {
+  const calls = [], state = { failure: null }, call = name => { calls.push(name); if (state.failure === name) throw Error(name); };
+  const dimensions = { draw() { assert.equal(this, dimensions); call('dimensions'); } };
+  const annotations = { draw() { assert.equal(this, annotations); call('annotations'); }, drawPreview() { assert.equal(this, annotations); call('annotation-preview'); } };
+  const authoringPreview = { draw() { assert.equal(this, authoringPreview); call('authoring'); }, drawTrimPreview() { assert.equal(this, authoringPreview); call('trim'); } };
+  const placements = { drawBlockPlacementPreview() { assert.equal(this, placements); call('block-placement'); }, drawFreeInstancePreview() { assert.equal(this, placements); call('free-instance'); } };
+  const offsetPreview = { draw() { assert.equal(this, offsetPreview); call('offset'); } };
+  const renderer = sandbox.window.CanvasSurface.createInteractiveRenderer({
+    drawBlockInstanceHandles: () => call('block-handles'), dimensions, drawDimensionPreview: () => call('dimension-preview'), annotations,
+    authoringPreview, placements, offsetPreview, drawSnapMarker: () => call('snap'), drawArcEndpointHandles: () => call('arc-handles'),
+    drawSplineEditHandles: () => call('spline-handles'), drawPoints: () => call('points'), drawReferenceImageOverlays: () => call('image-overlays'),
+    drawSketchIdentityLabel: () => call('identity'), drawSelectionRect: () => call('selection-rect'), drawExportOverlay: () => call('export-overlay'),
+  });
+  return { renderer, calls, state, annotations };
+}
+
+test('interactive Canvas preserves every layer order and renderer receiver and reads the current preview method at its stage', () => {
+  const f = interactiveFixture(); assert.deepEqual(f.calls, []);
+  f.renderer.draw(); assert.deepEqual(f.calls, interactiveStages);
+  f.calls.length = 0;
+  f.annotations.drawPreview = function () { assert.equal(this, f.annotations); f.calls.push('current-preview'); };
+  f.renderer.draw(); assert.deepEqual(f.calls, interactiveStages.map(name => name === 'annotation-preview' ? 'current-preview' : name));
+});
+
+test('interactive Canvas stage failures propagate without drawing later layers or adding cleanup', () => {
+  for (const stage of ['annotation-preview', 'trim', 'points', 'export-overlay']) {
+    const f = interactiveFixture(); f.state.failure = stage;
+    assert.throws(() => f.renderer.draw(), new RegExp(stage));
+    assert.deepEqual(f.calls, interactiveStages.slice(0, interactiveStages.indexOf(stage) + 1));
+  }
+});
 function create() {
   const calls = [], observers = [];
   let dpr = 2, redraws = 0;

@@ -85,3 +85,23 @@ test("manual editing policy separates ownership, destination and lock without ch
   }
   assert.equal(context.canEditSketch("ROOT", "create"), false);
 });
+
+
+test('membership query reuses normalized ownership rules without rereading scope for each item', () => {
+  let document = scope('Document'), reads = 0;
+  const context = create({ currentScope: () => { reads++; return document; }, constraintGraphNodes: () => [] });
+  const p = new Point('P1', 0, 0), q = new Point('P2', 10, 0), r = new Point('P3', 10, 10);
+  q.sketchId = 'S2';
+  const line = new Line('L1', p, q), circle = new Circle('C1', q, 3), spline = new Spline('SP1', [p, q, r]);
+  const items = [null, p, q, line, circle, spline, {}];
+  const expected = items.map(item => context.elementSketchId(item));
+  const query = context.membershipQuery(), initialReads = reads, before = JSON.stringify(document);
+  assert.equal(Object.isFrozen(query), true); assert.equal(query.activeSketchId, 'S1');
+  assert.deepEqual(items.map(query.elementSketchId), expected);
+  assert.equal(reads, initialReads); assert.equal(JSON.stringify(document), before);
+  document = { sketches: [{ id: 'S2', name: 'Block', parentSketchId: 'ROOT' }], activeSketchId: 'S2' };
+  const next = context.membershipQuery();
+  assert.equal(next.activeSketchId, 'S2'); assert.equal(next.elementSketchId(p), 'S2');
+  assert.equal(query.elementSketchId(p), 'S1'); assert.equal(context.elementSketchId(p), 'S2');
+  line.sketchId = 'explicit'; assert.equal(next.elementSketchId(line), 'explicit');
+});

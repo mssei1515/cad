@@ -3,7 +3,7 @@
   "use strict";
   const { Point, Line, Circle, Arc, vectorNorm, variableDeltaInBasis } = window.GeometrySolver;
   const { lineSupportNormal } = window.GeometryKernel;
-  function create({ currentScope, solver, scopeQuery, activeSketchId, descendantSketchIds, elementSketchId,
+  function create({ currentScope, solver, scopeQuery, readMembership, descendantSketchIds, elementSketchId,
     geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
     refreshReferenceConstraintValidity, refreshConstraintRedundancy, sketchHasSolveError,
     isEditableSketchElement, isExplicitPoint, minimumLength, acceptError, profileAnalysis }) {
@@ -84,7 +84,7 @@
 
     function refreshConstraintAnalysisUnprofiled(options = {}) {
       refreshReferenceConstraintValidity();
-      const rootSketchId = activeSketchId();
+      const { activeSketchId: rootSketchId, elementSketchId } = readMembership();
       const sketchIdSet = new Set([rootSketchId, ...descendantSketchIds(rootSketchId)]);
       const derivedBundles = geometryInstanceBundles().filter((bundle) => bundle.valid);
       let sourceSketchAdded = true;

@@ -251,7 +251,11 @@
         }
       });
     }
-    return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
+    function annotationPlacementAnchor(element) {
+      const layout = annotationTextLayout(element) || annotationTextMetrics(element, element.type === "leader" ? annotationLeaderDisplayGeometry(element) : element);
+      return { x: layout.anchorX ?? layout.x, y: layout.anchorY ?? layout.y };
+    }
+    return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader, annotationPlacementAnchor });
   }
   function createColor({ effectiveAnnotationStyle, readExportFrame, canvasSelection, readHoveredAnnotation, canvasThemeColor }) {
     function annotationDisplayColor(element, style = effectiveAnnotationStyle(element)) {
@@ -262,7 +266,7 @@
     }
     return Object.freeze({ annotationDisplayColor });
   }
-  function createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText }) {
+  function createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText, readPreview = () => null }) {
     function draw() {
       for (const element of allAnnotations()) {
         if (!isVisibleValue(element.visible) || !isVisibleSketchId(element.sketchId)) continue;
@@ -270,7 +274,12 @@
         else if (element.type === "text") drawAnnotationText(element);
       }
     }
-    return Object.freeze({ draw });
+    function drawPreview() {
+      const annotationPreview = readPreview();
+      if (annotationPreview?.type === "leader") drawAnnotationLeader(annotationPreview, true);
+      else if (annotationPreview) drawAnnotationText(annotationPreview, "#2563eb");
+    }
+    return Object.freeze({ draw, drawPreview });
   }
   window.AnnotationRenderer = Object.freeze({ create, createColor, createLayer, displayText, resizeHandles });
 })();

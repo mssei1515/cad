@@ -114,3 +114,25 @@ test('intent fixture resolves call-time geometry references and rejects missing 
   assert.equal(serialized, 1);
   assert.deepEqual(inputs, [{ kind: 'point', id: 'P1' }, { kind: 'arc-endpoint', id: 'A1', endpoint: 'start', parameter: 0.25 }]);
 });
+
+
+test('status observation captures the current sketch after refresh and observes replacement state on each query', () => {
+  const first = { id: 'P1', sketchId: 'S1' }, second = { id: 'P2', sketchId: 'S2' };
+  let active = 'S1', reads = 0, refreshed = 0;
+  let analysis = { stable: true, errorNorm: 0, freeVariableCount: 2 };
+  let statuses = new Map([[first, 'full'], [second, 'under']]);
+  const observation = sandbox.window.ConstraintTestDriver.createStatusObservation({
+    refreshConstraintAnalysis: () => { refreshed++; active = refreshed === 1 ? 'S2' : 'S1'; return { analysis, statuses }; },
+    readMembership: () => { reads++; return { activeSketchId: active, elementSketchId: item => item.sketchId }; },
+  });
+  assert.equal(reads, 0);
+  const result = observation.state();
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { stable: true, errorNorm: 0, freeDof: 2, items: [{ id: 'P2', status: 'under' }] });
+  assert.equal(reads, 1); assert.equal(statuses.size, 2);
+  result.items[0].status = 'changed'; assert.equal(statuses.get(second), 'under');
+  analysis = { stable: false, errorNorm: 0.5, freeVariableCount: 0 };
+  statuses = new Map([[first, 'conflict']]);
+  const next = observation.state();
+  assert.deepEqual(JSON.parse(JSON.stringify(next)), { stable: false, errorNorm: 0.5, freeDof: 0, items: [{ id: 'P1', status: 'conflict' }] });
+  assert.equal(reads, 2); assert.equal(refreshed, 2);
+});

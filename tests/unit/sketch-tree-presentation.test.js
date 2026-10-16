@@ -10,6 +10,7 @@ for (const file of ['sketch_tree_objects', 'sketch_tree_controller']) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui', `${file}.js`), 'utf8'), sandbox);
 }
 function objectFixture() {
+  const state = { canvasHover: {}, sidebarHover: null }, reads = [];
   const model = { sketches: [{ id: 'S1' }, { id: 'S2' }], points: [], lines: [], circles: [], arcs: [], splines: [], hatches: [], referenceImages: [], blockInstances: [], geometryInstances: [], constraints: [], annotations: [] };
   const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
   const objects = sandbox.window.SketchTreeObjects.create({ currentScope: () => model, getLanguage: () => 'en', ensureAnalysis() {}, types: {},
@@ -18,9 +19,44 @@ function objectFixture() {
     blockProjectionBundle: instance => instance.bundle, applicationText: (_ja, en) => en, escapeHtml: escape,
     isDimensionConstraint: item => Boolean(item.dimension),
     toolbarSvgMarkup: () => '<svg></svg>', sketchTreeGutter: () => '',
-    sketchTreeObjectSelected: () => true, sketchTreeObjectHovered: () => false });
-  return { model, objects };
+    sketchTreeObjectSelected: () => true,
+    readCanvasHover: () => { reads.push('canvas'); return state.canvasHover; },
+    readSidebarHover: () => { reads.push('sidebar'); return state.sidebarHover; } });
+  return { model, objects, state, reads };
 }
+
+test('Tree hover reads only the current Canvas source for attachments and instances and keeps object identity', () => {
+ const f = objectFixture(); assert.deepEqual(f.reads, []);
+ for (const [category, field] of [['hatch', 'hatch'], ['image', 'referenceImage'], ['block', 'block'], ['instance', 'geometryInstance'], ['annotation', 'annotation']]) {
+  const item = { id: 'same' }, hover = { [field]: item }; f.state.canvasHover = hover; f.state.sidebarHover = { item: { id: 'same' } };
+  f.reads.length = 0; assert.equal(f.objects.hovered(category, item), true); assert.deepEqual(f.reads, ['canvas']);
+  assert.equal(f.objects.hovered(category, { id: 'same' }), false);
+  f.state.canvasHover = {}; assert.equal(f.objects.hovered(category, item), false);
+  assert.equal(hover[field], item);
+ }
+});
+
+test('Tree geometry and constraint hover use the current Sidebar object and resolve fixed-point and dimension entries', () => {
+ const f = objectFixture(), point = { id: 'P1' }, constraint = { id: 'K1' }, line = { id: 'L1' };
+ for (const [category, entry, item] of [['line', line, line], ['constraint', { kind: 'fixed-point', point }, point],
+  ['constraint', { constraint }, constraint], ['dimension', { constraint }, constraint]]) {
+  f.state.sidebarHover = { item }; f.reads.length = 0;
+  assert.equal(f.objects.hovered(category, entry), true); assert.deepEqual(f.reads, ['sidebar']);
+  f.state.sidebarHover = { item: { id: item.id } }; assert.equal(f.objects.hovered(category, entry), false);
+  f.state.sidebarHover = null; assert.equal(f.objects.hovered(category, entry), false);
+ }
+});
+
+test('Tree rows reflect hover changes without changing source objects or writing to hover owners', () => {
+ const f = objectFixture(), image = { id: 'I1', name: 'image', pixelWidth: 20, pixelHeight: 30 }, before = JSON.stringify(image);
+ const row = () => f.objects.row('image', image, [], 'S1');
+ assert.equal(row().includes('sidebar-related'), false);
+ f.state.canvasHover = { referenceImage: image }; assert.equal(row().includes('sidebar-related'), true);
+ const snapshot = f.state.canvasHover; f.state.sidebarHover = { item: image };
+ assert.equal(row().includes('sidebar-related'), true); assert.equal(f.state.canvasHover, snapshot);
+ f.state.canvasHover = {}; assert.equal(row().includes('sidebar-related'), false);
+ assert.equal(JSON.stringify(image), before); assert.equal(f.state.sidebarHover.item, image);
+});
 test('tree index keeps source constraint indices and includes hidden fixed points only as constraints', () => {
   const f = objectFixture();
   const point = { id: 'P1', sketchId: 'S1', fixed: true }, explicit = { id: 'P2', sketchId: 'S2', explicit: true };
