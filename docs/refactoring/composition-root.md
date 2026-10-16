@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Centerlineの生成接続
+
+BasicDrawingTools.createCenterlineへCenterlineGeometry／CenterlineConstruction／CenterlineCommandの三factoryの接続を集約。同じcommandを公開し、plan許容差、現在scope／Geometry／採番・snap拘束とcommit、preselection／guard／snap／preview／mode・表示の依存を明示する。各既存ownerのbody・stateと開始／確定／取消は変更しない。primitiveやSplineとは独立した入口に留め、巨大な統合stateやbuilderは持たない。
+
+app.jsは4,020→4,019行（1行減、b120651から合計124行減）。行数効果は小さいが、三ownerの対応を組立てmodule側へ寄せた。新scriptなし。既存basic-drawing-tools unitへ実際のCenterline Geometry／Construction／Commandを使う3件を追加し、preselected対象の同一参照・support投影と構築、拒否時の配列長／採番復元と入力保持、既存command取消後の作図先拒否を確認。構文545ファイル・単体1,520件・関連E2E133件成功（すべてexit 0、E2E1.8分）。centerline／command-panel／phase0-characterization／unified-uiの全4fileを実行。ログは一時ディレクトリのcad-centerline-drawing-tools-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は利用先がGeometryDragTestDriver.createResponsiveFixtureだけのsampleModelを調べ、テスト用Geometry・拘束の初期化を既存fixtureへ寄せる。生成値・ID／Object参照・求解／通知／履歴順を維持する。
+
 ### Spline下書きと作図commandの組立て
 
 SplineとCenterlineの開始・取消を比較し、まず共有draftを持つSplineの生成接続を既存BasicDrawingTools.createSplineへ集約。SplineDraftの生成をcommand生成位置へ移し、同じdraft／commandを描画・取消・入力へ公開する。投影reset、preview更新、作成Spline選択→mode selectのadapterを内部接続し、後続のSpline編集／blank gestureのresetは遅延callbackで維持。既存draftとcommandの処理本体は変更せず、reset・cancelとrollback、guard・確定・履歴を各ownerへ残す。Centerlineやprimitive toolsと単一の状態機械には統合しない。

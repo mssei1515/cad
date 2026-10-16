@@ -1026,13 +1026,12 @@
       : storedDefinitionStabilization.stabilize(namespace),
     propagate: blockParameterPropagation.propagate,
   });
-  const centerlinePlans = window.CenterlineGeometry.create({ applicationText, parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE });
-  const centerlineConstruction = window.CenterlineConstruction.create({ currentScope: workspace.current, geometry: geometryCreation, ids: geometryIds, addPointSnapConstraints, commitNewConstraint });
-  const centerlineCommand = window.CenterlineCommand.create({
+  const centerlineCommand = window.BasicDrawingTools.createCenterline({
+    currentScope: workspace.current, geometry: geometryCreation, ids: geometryIds, snapConstraints, commitNewConstraint,
+    parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE, minLineLength: MIN_LINE_LENGTH,
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar,
-    plans: centerlinePlans, construction: centerlineConstruction, selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength: MIN_LINE_LENGTH,
-    snapForDrawing: pointer => ({ point: snapForDrawing(pointer), snap: drawingSnap.active }), clearSnap,
-    setPointerPreview: value => { drawingPreview.setPointer(value); }, setMode: value => { mode = value; },
+    selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText,
+    snapForDrawing, snap: drawingSnap, preview: drawingPreview, setMode: value => { mode = value; },
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
   });
   const { start: startCenterlineCommand, reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;

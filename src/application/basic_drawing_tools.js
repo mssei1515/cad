@@ -60,5 +60,21 @@
     return Object.freeze({ draft, command });
   }
 
-  window.BasicDrawingTools = Object.freeze({ create, createSpline });
+  function createCenterline({ currentScope, geometry, ids, snapConstraints, commitNewConstraint,
+    parallelTolerance, cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+    clearSelection, updateToolbar, selection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText,
+    minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw }) {
+    const plans = window.CenterlineGeometry.create({ applicationText, parallelTolerance });
+    const construction = window.CenterlineConstruction.create({
+      currentScope, geometry, ids, addPointSnapConstraints: snapConstraints.addPointSnapConstraints, commitNewConstraint,
+    });
+    return window.CenterlineCommand.create({
+      cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar,
+      plans, construction, selection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength,
+      snapForDrawing: pointer => ({ point: snapForDrawing(pointer), snap: snap.active }), clearSnap: snap.clear,
+      setPointerPreview: value => { preview.setPointer(value); }, setMode, invalidateAnalysis, setHint, updateUI, draw,
+    });
+  }
+
+  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline });
 })();
