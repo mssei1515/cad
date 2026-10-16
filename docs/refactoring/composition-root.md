@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Sketch投影テストAPIの機能組立て
+
+SketchProjectionTestDriver.createSupportへ状態観測・通常Geometry・旧形式互換・Block編集／投影・選択／外観／削除・source編集・読込・資格・転送の生成接続と21個の公開API対応を集約。共有readState、選択APIと転送、旧形式target構築の内部リンクをdriver内で接続し、appは従来の型・操作・read portを明示する。全個別factoryの本体は変更前と完全一致し、生成接続bodyもread port置換とindent以外一致。公開名・順序、callbackと現在scope／履歴の参照、test queryで有効なときだけ生成する範囲を保持する。旧形式target constructorは状態を照会しないfactoryなので、支援内部での生成へ移してもモデル操作を増やさない。任意のapp contextや新しい製品状態は持たず、既存command／model／solver操作をfixtureが引き続き利用する。
+
+app.jsは4,281→4,219行（62行減、07024cbから合計240行減）。新scriptなし。新unit fileを構文／unit一覧へ追加。単体2件で21公開名・順序と生成時無処理、live mode／staged／scope／履歴、保存情報の複写、選択・コピー転送・再読込と共有observationの接続を確認。構文530ファイル・単体1,464件・関連E2E178件が成功（すべてexit 0、E2E2.4分）。sketch-projection／blocks／unified-ui／phase0-characterizationを実行し、通常／Block／旧形式互換・コピー・保存とfile URL起動を含む。全runnerは正常終了。ログは一時ディレクトリのcad-sketch-projection-test-support-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。既存fixtureの依存が多い点は残し、巨大な汎用contextで隠さない。次はAnnotationの観測・drag fixture生成と公開APIの対応を整理できるか検討する。
+
 ### OffsetテストAPIの機能組立て
 
 installTestHooksに残る単独Offset／UI／方向／chainの9factoryの生成接続と公開名の対応を、既存OffsetTestDriver.createSupportへ集約。個別factoryと既存API名・順序は維持し、通常起動では生成しない既存test query guard内でのみ接続する。35個の既存の型・操作／照会portを明示し、任意のapp fieldやモデル全体へアクセスできるcontextは渡さない。factory生成は状態照会・Geometry編集を実行せず、各APIは従来のdriver関数へ直接接続する。9factoryの接続bodyはcurrentScopeのport置換とindent以外一致し、作図・求解処理やE2E期待値は変更しない。appは公開APIの個別対応を持たず、一つのOffset用APIを元の位置に展開する。

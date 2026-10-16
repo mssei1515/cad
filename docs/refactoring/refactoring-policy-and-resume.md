@@ -102,7 +102,7 @@
 
 前回のリリースは07024cb。local／originのmainとdevelopが同じcommit、作業treeがcleanであることを確認。週枠使用10%／残量90%で、最新developからcodex/parameter-edit-guardを作成して継続した。現在はこの作業branchで進める。停止条件はsection 6どおり残量50%未満であり、各抽出ごとにmainへは統合しない。
 
-Parameter削除guard、Document用下書き／Canvas reset、11個の採番状態とParameter／外観／PNG／Documentファイルのfeature組立てに続き、OffsetTestDriver.createSupportへ9つのテストAPI対応と生成接続を集約。app.jsは4,459→4,281行（今回合計178行減、直近12行減）。最新の構文529ファイル・単体1,462件・unified-ui全103件が成功。詳細とログはcomposition-root.md。前回リリース07024cbで全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次はAnnotationやSketch投影等のtest API対応・生成接続を調べる。既存driverの責務を変えず、巨大なapp contextを移すだけにしない。mode／command操作調整と起動接続も残る。状態の所有と依存の整理を優先する。
+Parameter削除guard、Document用下書き／Canvas reset、11個の採番状態とParameter／外観／PNG／Documentファイルのfeature組立てに続き、OffsetとSketch投影のtest driverへ公開API対応と生成接続を集約。app.jsは4,459→4,219行（今回合計240行減、直近62行減）。最新の構文530ファイル・単体1,464件・関連E2E178件が成功。詳細とログはcomposition-root.md。前回リリース07024cbで全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次はAnnotationの観測・drag fixture生成と公開API対応を調べる。既存driverの責務を変えず、巨大なapp contextを移すだけにしない。mode／command操作調整と起動接続も残る。状態の所有と依存の整理を優先する。
 
 ### 前回の停止地点（2026-10-14）
 

@@ -3616,7 +3616,6 @@
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
-    const { createSketchProjectionTarget } = window.SketchProjectionTestDriver.createLegacyTargetConstruction({ addPointToSketch, addLine, addCircle, addArc, addSpline });
     const historyObservation = window.DocumentTestDriver.createHistoryObservation({ activeEditHistory, blockEditor, document, constructionCommand });
     const readTestHistory = historyObservation.state;
     const selectedGeometryObservation = window.CanvasSelectionTestDriver.createIdObservation({ canvasSelection });
@@ -3791,59 +3790,18 @@
       resetModelState, viewport, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       currentScope: workspace.current, invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw, blockProjectionBundle, clientPosition: canvasTestDriver.clientPosition,
     });
-    const sketchProjectionTestObservation = window.SketchProjectionTestDriver.createObservation({
-      types: { Point, Line, Circle, Arc }, currentScope: workspace.current, readMode: () => mode,
-      readStagedCount: () => sketchProjectionCommand.count, readConstraints: sketchProjectionConstraints,
+    const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createSupport({
+      types: { Point, Line, Circle, Arc, Spline }, currentScope: workspace.current, readMode: () => mode, readStagedCount: () => sketchProjectionCommand.count, readConstraints: sketchProjectionConstraints,
       constraintGeometryId, constraintSketchId, effectiveAppearanceForElement, geometryDisplayColor,
       constraintStatusOf, constraintStatusColor, constraintIsRedundant, serializeModel, readHistory: readTestHistory, document,
-    });
-    const sketchProjectionGeometryFixture = window.SketchProjectionTestDriver.createGeometryFixture({
-      resetModelState, currentScope: workspace.current, DEFAULT_SKETCH_ID, addPoint, addLine, addCircle, addArc, addSpline,
-      focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, splineGeometry: window.SplineGeometry,
-      resetHistory, updateUI, draw,
-    });
-    const sketchProjectionCompatibilityFixture = window.SketchProjectionTestDriver.createCompatibilityFixture({
-      resetModelState, currentScope: workspace.current, DEFAULT_SKETCH_ID, addPoint, addLine, addCircle, addArc, addSpline,
-      createSketchProjectionTarget, SketchProjectionConstraint, markReferenceConstraint, pushModelConstraint,
-      synchronizeSketchProjectionMetadata, solveSketchAndDependents, serializeModel, loadModelData,
-      resetHistory, updateUI, draw, readState: sketchProjectionTestObservation.state,
-    });
-    const sketchProjectionBlockEditorFixture = window.SketchProjectionTestDriver.createBlockEditorFixture({
-      resetModelState, currentScope: workspace.current, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, openBlockDefinitionEditor,
-      addLine, addPoint, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition,
-      resetBlockEditorHistory, updateUI, draw, completeBlockDefinitionEdit, isEditingBlock: () => Boolean(blockEditor.current), serializeModel,
-    });
-    const sketchProjectionBlockFixture = window.SketchProjectionTestDriver.createBlockProjectionFixture({
-      resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      currentScope: workspace.current, invalidateBlockProjectionCache, blockProjectionBundle,
-      focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, resetHistory, updateUI, draw,
-    });
-    const sketchProjectionBlockInteraction = window.SketchProjectionTestDriver.createBlockProjectionInteraction({
-      currentScope: workspace.current, invalidateBlockProjectionCache, solveSketchAndDependents, DEFAULT_SKETCH_ID,
-      updateUI, draw, readState: sketchProjectionTestObservation.state, clearSelection, canvasSelection, deleteCurrentSelection,
-    });
-    const sketchProjectionGeometryInteraction = window.SketchProjectionTestDriver.createGeometryInteraction({
-      types: { Point, Line, Circle, Arc, Spline }, readConstraints: sketchProjectionConstraints, clearSelection, canvasSelection, updateUI, draw,
-      readState: sketchProjectionTestObservation.state, clientPosition: canvasTestDriver.clientPosition, constraintGeometryId,
-      setAppearanceForSelection, deleteElements, deleteCurrentSelection, deleteSketch, DEFAULT_SKETCH_ID,
-    });
-    const sketchProjectionSourceEditing = window.SketchProjectionTestDriver.createSourceEditing({
-      currentScope: workspace.current, DEFAULT_SKETCH_ID, elementSketchId, addPointToSketch, solveSketchAndDependents,
-      updateUI, draw, readState: sketchProjectionTestObservation.state, readConstraints: sketchProjectionConstraints,
-      constraintSketchId, sketchProjectionSourceKey, createSketchProjectionTarget, SketchProjectionConstraint,
-      markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata,
-    });
-    const sketchProjectionReload = window.SketchProjectionTestDriver.createReload({
-      CURRENT_JSON_VERSION, serializeModel, loadModelData, updateUI, draw, readState: sketchProjectionTestObservation.state,
-    });
-    const sketchProjectionEligibilityFixture = window.SketchProjectionTestDriver.createEligibilityFixture({
-      resetModelState, currentScope: workspace.current, DEFAULT_SKETCH_ID, ROOT_SKETCH_ID, addPointToSketch, Line, sketchProjectionEntryFromOperand,
-    });
-    const sketchProjectionTransfer = window.SketchProjectionTestDriver.createTransfer({
-      select: sketchProjectionGeometryInteraction.select, readConstraints: sketchProjectionConstraints,
-      copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState: sketchProjectionTestObservation.state,
-      blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint,
+      resetModelState, DEFAULT_SKETCH_ID, ROOT_SKETCH_ID, addPoint, addLine, addCircle, addArc, addSpline, addPointToSketch,
+      focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, splineGeometry: window.SplineGeometry, resetHistory, updateUI, draw, SketchProjectionConstraint,
+      markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata, solveSketchAndDependents, loadModelData,
+      createEmptyBlockDefinition, openBlockDefinitionEditor, resetBlockEditorHistory, completeBlockDefinitionEdit, isEditingBlock: () => Boolean(blockEditor.current),
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, blockProjectionBundle, clearSelection, canvasSelection,
+      deleteCurrentSelection, setAppearanceForSelection, deleteElements, deleteSketch, elementSketchId, sketchProjectionSourceKey,
+      CURRENT_JSON_VERSION, sketchProjectionEntryFromOperand, copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
+      blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter
     });
     const constraintInputObservation = window.ConstraintTestDriver.createInputObservation({
       readSelectedGeometry: readTestSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
@@ -4069,27 +4027,7 @@
       derivedInstanceStateForTest: derivedInstanceInteraction.state,
       deleteDerivedSourceForTest: derivedInstanceInteraction.deleteSource,
       deleteDerivedInstanceForTest: derivedInstanceInteraction.deleteInstance,
-      resetForSketchProjectionTest: sketchProjectionGeometryFixture.reset,
-      resetForSketchProjectionRectangleTest: sketchProjectionCompatibilityFixture.resetRectangle,
-      resetForSketchProjectionSharedKindsTest: sketchProjectionCompatibilityFixture.resetSharedKinds,
-      sketchProjectionEligibilityForTest: sketchProjectionEligibilityFixture.read,
-      resetForSketchProjectionBlockEditorTest: sketchProjectionBlockEditorFixture.reset,
-      completeSketchProjectionBlockEditorForTest: sketchProjectionBlockEditorFixture.complete,
-      resetForBlockProjectionSketchProjectionTest: sketchProjectionBlockFixture.reset,
-      moveBlockProjectionSketchProjectionSourceForTest: sketchProjectionBlockInteraction.move,
-      deleteBlockProjectionSketchProjectionSourceForTest: sketchProjectionBlockInteraction.deleteSource,
-      sketchProjectionStateForTest: sketchProjectionTestObservation.state,
-      moveSketchProjectionSourcesForTest: sketchProjectionSourceEditing.move,
-      createSketchProjectionChainForTest: sketchProjectionSourceEditing.createChain,
-      selectSketchProjectionTargetForTest: sketchProjectionGeometryInteraction.select,
-      removeFirstSketchProjectionConstraintForTest: sketchProjectionGeometryInteraction.removeConstraint,
-      setSketchProjectionAppearanceForTest: sketchProjectionGeometryInteraction.setAppearance,
-      deleteSketchProjectionSourceGeometryForTest: sketchProjectionGeometryInteraction.deleteSource,
-      deleteSketchProjectionTargetGeometryForTest: sketchProjectionGeometryInteraction.deleteTarget,
-      deleteSketchProjectionSourceSketchForTest: sketchProjectionGeometryInteraction.deleteSourceSketch,
-      copySketchProjectionTargetForTest: sketchProjectionTransfer.copyAndPaste,
-      blockizeSketchProjectionTargetForTest: sketchProjectionTransfer.blockize,
-      reloadSketchProjectionForTest: sketchProjectionReload.reload,
+      ...sketchProjectionTestSupport,
       referenceImageStateForTest: referenceImageTestObservation.state,
       importReferenceImageDataForTest: referenceImageTestImport.importData,
       openReferenceImageBlockEditorForTest: referenceImageBlockFixture.open,
