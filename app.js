@@ -1703,8 +1703,6 @@
     return documentApplication.load(data, options);
   }
 
-  const referenceImageImport = window.ReferenceImageImport.create({ window, document, applicationText });
-
   const canImportDxf = () => canCreateInActiveSketch() && !hasActiveDrawOperation()
     && !pendingCommandSession.current && !constraintTargetSession.command && mode !== "block-place";
   const dxfImportCommand = window.DxfImportCommand.create({
@@ -1722,20 +1720,14 @@
     },
   });
 
-  const referenceImageCommand = window.ReferenceImageCommand.create({
-    referenceImageImport, canvas, viewport, screenToWorld, currentScope: workspace.current, activeSketchId,
+  const referenceImageInput = window.ReferenceImageInput.create({
+    window, document, applicationText, canvas, viewport, screenToWorld, currentScope: workspace.current, activeSketchId,
     nextId: () => documentIds.allocate("referenceImage"), canCreateInActiveSketch, clearSelection, canvasSelection,
-    updateUI, draw, recordHistory, setHint, applicationText,
-  });
-  const imageClipboard = window.ImageClipboard.create({ window,
-    importFile: referenceImageCommand.importFile, pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard,
+    updateUI, draw, recordHistory, setHint, pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard,
     isGeometryMode, isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
-    setHint, applicationText,
   });
-  document.addEventListener("paste", imageClipboard.paste);
-  document.addEventListener("copy", imageClipboard.copy);
-  document.addEventListener("cut", imageClipboard.copy);
-  const { importFile: importReferenceImageFile } = referenceImageCommand;
+  referenceImageInput.bindClipboard();
+  const { importFile: importReferenceImageFile, clipboard: imageClipboard } = referenceImageInput;
 
   function pointAt(x, y) {
     return hitAnyPoint(x, y) || addPoint(x, y);
@@ -3566,13 +3558,7 @@
     document, flushScheduledCanvasPointerMove, fileSession, canImportDxf, setHint, applicationText, dxfImportCommand,
   });
   dxfFileControls.bind();
-  document.getElementById("importReferenceImageBtn")?.addEventListener("click", () => document.getElementById("referenceImageFileInput")?.click());
-  document.getElementById("referenceImageFileInput")?.addEventListener("change", (event) => {
-    const input = event.currentTarget;
-    const file = input.files?.[0] || null;
-    input.value = "";
-    void importReferenceImageFile(file);
-  });
+  referenceImageInput.bindControls();
   document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
   document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
 

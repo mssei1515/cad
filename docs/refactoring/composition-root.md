@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 参照画像入力の機能組立て
+
+ReferenceImageInputへ画像準備・配置command・Clipboardの生成接続とfile inputのlistener寿命を集約。画像変換／配置／Clipboard分岐の既存ownerは変更せず、bindClipboardとbindControlsを分けて従来の登録時期を維持する。importFileとclipboardは元のAPIを返し、menu／Canvas／診断の利用先を保つ。input値解除→非同期import、準備後の現在scope・Sketch・倍率と再権限確認を保持する。巨大contextや独自モデル状態を追加しない。Geometry Clipboardとの共有に必要なcopy／paste操作portは明示して残す。
+
+app.jsは4,143→4,129行（14行減）。新scriptのindex／構文／E2E読込順とunit一覧を同期。新単体4件で待機中scope／Sketch／倍率変更、権限変更による無変更、input値解除、Clipboard marker／text入力／cut、二重bind防止とdispose／再bindを確認。構文538ファイル・単体1,484件・loader1件・関連E2E125件が成功（すべてexit 0、関連E2E1.7分）。関連はreference-images／png-export／sketch-move／unified-ui。ログは一時ディレクトリのcad-reference-image-input-{check,unit,loader,e2e}.log。全E2Eはこの単位では未実行。直前のリリースb120651は全E2E583件成功だが、以降のコードの全体検証とは区別する。全体目標は未完了。次はToolbar／表示設定のlistenerと既存UI ownerの境界を調べる。
+
 ### 2026-10-16のリリース全体検証
 
 ユーザーのmain／origin反映指示を受け、コードdde227eをdevelopの91d532cへ統合・Push。最新コードで構文536ファイル・単体1,480件・全E2E583件が成功（すべてexit 0、全E2E24.6分）。拘束drag回帰file12.5分を含み、runnerは正常終了。ログは一時ディレクトリのcad-refactor-oct16-final-{check,unit,e2e}.log。検証後はリリース／再開記録だけを変更し、mainを最後に反映してlocal／originのmainとdevelopを同期する。app.jsは4,459→4,143行、合計316行減。数百行のcomposition rootという全体目標は未完了。次回の責務候補と再開手順は方針書section 8を参照。

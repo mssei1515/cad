@@ -953,6 +953,8 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 - src/editing/document_ids.js: 11個のDocument採番状態を所有し、生成・preview照会・予約・reset・checkpoint復元を集約。Block編集の番号予約とclipboardの8種類だけのrollbackを維持。GeometryIdsは基本形状、persistence/DocumentSequencesは読込時の復元計算に専念する。
 
+- src/application/reference_image_input.js: 参照画像の準備／配置／Clipboard生成接続とfile input登録を担当。bindClipboard／bindControlsで起動順を保持し、disposeで自分のlistenerだけを解除する。画像変換はReferenceImageImport、現在scopeへの配置はReferenceImageCommand、Geometry／画像／text入力判定はImageClipboardへ委譲。appは明示portと従来の起動タイミングを接続する。
+
 - src/application/parameter_editor.js: Parameter編集UIの組立て。draft、式入力表示／挿入、dialog View／Controllerと適用結果adapterを接続し、live scope選択肢と入力欄に応じたsymbol名を提供する。モデル適用・Canvas hit判定は外部portに残し、controllerと適用adapterの相互接続を内部で完結する。
 
 - src/application/document_appearance_editor.js: Document既定外観設定の三組のcommand／Viewを生成接続し、Geometry→Dimension→Shared準備とdialog表示、開始buttonのlistener寿命を担当。既定値のread／writeと既存編集service・rows・通知を受け、外観変更とfield表示は既存ownerへ委譲する。
