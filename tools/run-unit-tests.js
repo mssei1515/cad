@@ -107,7 +107,7 @@ const files = [
   "tests/unit/drawing-snap.test.js",
   "tests/unit/parameter-dialog-draft.test.js",
   "tests/unit/parameter-application.test.js",
-  "tests/unit/parameter-dialog-application.test.js",
+  "tests/unit/parameter-dialog-application.test.js", "tests/unit/parameter-editor.test.js",
   "tests/unit/block-parameter-propagation.test.js",
   "tests/unit/constraint-rebinding.test.js",
   "tests/unit/block-ownership.test.js",

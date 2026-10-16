@@ -193,25 +193,17 @@
   function evaluateDimensionExpressionDraft(constraint, expression, namespace, options) {
     return evaluateNamedDimensionExpressionDraft(constraint?.annotationOwner ? null : constraint, expression, namespace, options);
   }
-  const parameterDraft = window.ParameterDialogDraft.create({ namespace: parameterNamespace });
-  const expressionInputView = window.ExpressionInputView.create({
-    document, InputElement: HTMLInputElement, referenceNamesForInput: expressionReferenceNamesForInput, escapeHtml,
+  const parameterEditor = window.ParameterEditor.create({
+    document, window, InputElement: HTMLInputElement, Event,
+    namespace: parameterNamespace, currentScope: () => model,
+    readDefinitions: () => documentModel.blockDefinitions, readBlockEditor: () => blockEditor.current,
+    applicationText, language: () => applicationSettings.language,
+    formatting: { escapeHtml, formatDisplayNumber, formatParameterReference, parameterErrorText, defaultSketchId: DEFAULT_SKETCH_ID },
+    localizeApplicationUI, applyDraft: (...args) => parameterApplication.apply(...args),
+    recordHistory, setHint, updateUI, draw, pickDimension: pickParameterDialogDimension,
   });
-  const { insert: insertIdentifierIntoExpressionInput } = window.ExpressionInputView.createInsertion({ Event: Event, formatParameterReference });
-  const { sync: syncExpressionInputHighlight, install: installExpressionInputHighlights,
-    refresh: refreshExpressionInputHighlights } = expressionInputView;
-  const parameterDialogView = window.ParameterDialogView.create({
-    document, applicationText, escapeHtml, formatDisplayNumber, parameterErrorText,
-    localizeApplicationUI, installExpressionInputHighlights, defaultSketchId: DEFAULT_SKETCH_ID,
-  });
-  const { setError: setParameterDialogError } = parameterDialogView;
-  const parameterDialogController = window.ParameterDialogController.create({
-    document, window, draft: parameterDraft, view: parameterDialogView,
-    scopes: parameterScopeOptions, scopeLocked: () => Boolean(blockEditor.current),
-    apply: applyParameterDialogDraft, applicationText, language: () => applicationSettings.language,
-    refreshExpressionInputHighlights, pickDimension: pickParameterDialogDimension,
-  });
-  const { loadScope: loadParameterDialogScope } = parameterDialogController;
+  const { draft: parameterDraft, setParameterDialogError, insertIdentifierIntoExpressionInput,
+    syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
     ensureSketchState, isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
@@ -1176,18 +1168,6 @@
     ensureParameterNamespace(model);
   }
 
-  function expressionReferenceNamesForInput(input) {
-    if (input?.closest("#parametersDialog") && parameterDraft.current) {
-      return new Set([
-        ...parameterDraft.current.parameters.map((parameter) => String(parameter.name || "")),
-        ...parameterDraft.current.dimensions.map((dimension) => String(dimension.name || "")),
-      ]);
-    }
-    return new Set([
-      ...(model.parameters || []).map((parameter) => String(parameter.name || "")),
-      ...parameterNamespace.symbolElementsInNamespace(model).map((constraint) => String(constraint.parameterName || "")),
-    ]);
-  }
 
   const annotationParameterCommand = window.AnnotationParameterCommand.create({
     capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
@@ -3530,13 +3510,6 @@
     viewState.geometryIds = event.target.checked;
     draw();
   });
-  function parameterScopeOptions() {
-    if (blockEditor.current) return [{ key: `block:${blockEditor.current.draft.id}`, label: `${applicationText("ブロック", "Block")}: ${blockEditor.current.draft.name}`, namespace: model }];
-    return [
-      { key: "document", label: "Document", namespace: model },
-      ...documentModel.blockDefinitions.map((definition) => ({ key: `block:${definition.id}`, label: `${applicationText("ブロック", "Block")}: ${definition.name}`, namespace: definition })),
-    ];
-  }
 
   function withStoredDefinitionAsModel(definition, callback) {
     const previousScope = model;
@@ -3558,11 +3531,6 @@
     clearSelection();
   }
 
-  const parameterDialogApplication = window.ParameterDialogController.createApplication({
-    draft: parameterDraft, application: parameterApplication, recordHistory, applicationText, setHint,
-    loadScope: loadParameterDialogScope, setError: setParameterDialogError, parameterErrorText, updateUI, draw,
-  });
-  function applyParameterDialogDraft() { return parameterDialogApplication.apply(); }
 
   function pickParameterDialogDimension(event) {
     const rect = canvas.getBoundingClientRect();
@@ -3582,7 +3550,7 @@
     const workspace = document.querySelector(".workspace");
     setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));
   });
-  parameterDialogController.start();
+  parameterEditor.start();
   const documentGeometryAppearanceCommand = window.DocumentDefaultAppearanceCommand.createGeometry({
     readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
     applyAppearanceInput, normalizeAppearance, normalizeConstructionAppearance, recordHistory, updateUI, draw,

@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Parameter編集UIの機能組立て
+
+src/application/parameter_editor.jsにParameterEditorを追加。appの複数箇所に分かれていたdraft・式入力表示／挿入・dialog View／Controller・適用結果adapterの生成接続を一つの機能へまとめる。既存ownerの実装と状態は再実装せず、相互参照するcontrollerと適用adapterを内部で接続し、appはモデル適用の遅延callbackと外部操作を提供する。scope選択肢と入力欄に応じたsymbol名の照会もこのfeatureへ集約。2つの照会bodyはread portへの置換とindent以外一致し、現在scope／Block編集中draft／保存定義・言語を操作時に読む。DOM表示・listener／dirty確認は既存View／Controller、モデルへの適用・solve・checkpoint復元は既存ParameterApplicationに残す。
+
+app.jsは4,388→4,356行（32行減、07024cbから合計103行減）。src/applicationは機能単位の生成接続を置く層として導入し、巨大なapp contextや新しいmodel状態は作らない。初期化時はscope・BlockEditor・後段ParameterApplicationへ触れず、元と同じ時点にcontrollerをstartする。新scriptとunitを読込・構文・unit一覧／期待へ同期し、各pathが一回だけ存在することを確認。単体3件で実際のParameterDialogControllerを使い、初期化時の遅延参照、live scopeと語句、start重複抑止・dispose／再start、dialogとCanvasのsymbol名分離、適用成功／失敗の通知順を確認。構文522ファイル・単体1,450件・file URL読込1件・関連E2E128件が成功（すべてexit 0、関連E2E1.8分）。unified-ui／parameter-dialog-controller／unified-annotations／dimension-prefix／command-panelを実行。全runnerは正常終了。ログは一時ディレクトリのcad-parameter-editor-{check,unit,loader,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はDocument既定外観設定のcommand／Viewとdialog開閉の生成接続を、同様に機能単位へまとめられるか検討する。
+
 ### Document採番状態の所有
 
 appに残った11個の採番変数をsrc/editing/document_ids.jsのDocumentIdsへ集約。生成・previewの非消費照会・reset・snapshot／restore・編集scope／付随要素の番号予約を同じownerへまとめ、変数setterの横移動にはしない。依存は既存GeometryIds.nextSeqだけ。基本Geometry採番はGeometryIds、読込候補からの純粋な復元計算はDocumentSequencesに残す。Sketchの初期値2、各prefix、操作時の番号消費、Block名のpeek、Hatchの保存予約、previewで消費しないことを維持。clipboardは従来8種類だけのcheckpointを採り、その他の番号を戻さない。freeInstanceSeq／blockElementSeqの既存復元値も保持する。読込時はGeometry予約の後に復元計算値を反映する順を保持。
