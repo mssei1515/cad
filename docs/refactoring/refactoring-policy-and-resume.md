@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用36%／残量64%。未使用入口／静的alias整理、Offset選択反映、寸法外観、寸法label、Annotationアンカー（6c3631c）に続き、今回は円弧端点dragの角度境界計算をGeometryKernelへ集約した。unwrapの周回、正負の枝、start／end基準と2π−1e-6上限を維持し、モデルや操作stateを更新しない。app.jsは開始3,949→現在3,761行（合計188行減、直近3,778→3,761で17行減）。構文546ファイル・単体1,557件・関連E2E115件成功（exit 0、3file、1.6分）。ログはcad-arc-endpoint-angle-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用36%／残量64%。未使用入口／静的alias整理、Offset選択反映、寸法外観・label、Annotationアンカー、円弧端点角度（9563533）に続き、今回は作図時の暗黙拘束追加をConstraintCommitCommand.ifMissingへ集約した。通常確定とは独立し、求解・履歴・UIを追加せず、参照guard／属性付与・push後の冗長判定と配列差替え／forgetを維持。app.jsは開始3,949→現在3,746行（合計203行減、直近3,761→3,746で15行減）。構文546ファイル・単体1,561件・関連E2E126件成功（exit 0、4file、1.7分）。ログはcad-implicit-constraint-commit-{check,unit,e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-次はaddConstraintIfMissingの作図中の暗黙拘束追加を、SnapConstraints／ConstraintCommitCommandの所有境界と照らして確認する。enabled拘束の一致、明示／現在Sketch、参照元と循環guard、参照属性付与、push後の冗長判定と配列差替え／forgetを維持する。通常のユーザー拘束確定とは求解・履歴・UI・拒否規則が異なるため安易に共通化しない。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。異なるreset対象の統一や巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
+次はupdateStatusUIの操作名表示を既存UI側の所有と照らして確認する。statusCommandのDOM取得、注記pending→拘束command→mode名→未定義modeのraw値という優先順、日英の現在言語と全mode名を維持する。updateUIUnprofiledの更新順・refreshAnalysis指定とは分けて扱い、単に巨大なUI contextへ移さない。未参照binding66件はfactory由来API等の未監査分で、副作用／getter／listenerを確認せず削除しない。異なるreset対象の統一や巨大contextの移動は行わず、残る生成・接続も機能単位で整理する。
 
 ### 直前のリリース（4859400）
 

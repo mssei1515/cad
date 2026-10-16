@@ -8,9 +8,15 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 作図時の暗黙拘束追加
+
+addConstraintIfMissingの本体を既存ConstraintCommitCommand.ifMissingへ集約した。enabled一致の短絡、明示／現在Sketch、参照元許可→循環guard→既存markReferenceによる属性付与、push→冗長判定→同一Objectだけをfilterで除去→cache forgetの順序を維持する。既存依存を共有し、currentScopeとforgetConstraintだけを追加した。appのmodelはworkspace.activateの結果でのみ差し替わることも確認。通常のordinary／reference確定とは独立入口とし、求解・snapshot・UI・履歴・追加の権限guardを呼ばない。冗長時も元配列とconstraint属性を巻き戻さない。appはSnapConstraints／BasicDrawingToolsへ渡すhoisted入口を維持する。
+
+app.jsは3,761→3,746行（15行減、今回再開から203行減）。既存constraint-commit-command unitへ4件追加し、空／enabled一致の無変更、disabled一致の除外、scope置換・明示Sketch、参照guardの短絡と属性、同一IDの別Objectを保持した除去とforget順を確認。構文546ファイル・単体1,561件・関連E2E126件成功（すべてexit 0、E2E1.7分）。unified-ui／spline／centerline／sketch-permissionsの全4file。ログは一時ディレクトリのcad-implicit-constraint-commit-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
+
 ### 円弧端点dragの角度境界計算
 
-arcEndpointDragValueを既存GeometryKernelへ集約。現在の開始／終了角にunwrapAngleNearで入力角を合わせ、signed sweepが2π−1e-6以上なら同じ正負の枝で一周直前に制限する。開始点はendAngle、終了点はstartAngleを基準とし、相手端点へ戻して円弧を縮退させない既存規則をそのまま維持した。入力Arc・操作state・求解・履歴を変更しない純粋計算で、appは同関数を既存GeometryDragEditingの端点処理へ渡す。新factoryやwrapperは追加していない。
+arcEndpointDragValueを既存GeometryKernelへ集約。現在の開始／終了角にunwrapAngleNearで入力角を合わせ、signed sweepが2π−1e-6以上なら同じ正負の枝で一周直前に制限する。開始点はendAngle、終了点はstartAngleを基準とし、相手端点へ戻して円弧を縮退させない既存規則をそのまま維持した。入力Arc・操作state・求解・履歴を変更しない純粋計算で、appは同関数を既存GeometryDragPlanの端点処理へ渡す。新factoryやwrapperは追加していない。
 
 app.jsは3,778→3,761行（17行減、今回再開から188行減）。既存geometry-kernel unitへ3件を追加し、複数周回の維持と非破壊性、開始／終了と正負両方向のalmost-full-circle境界、境界から離れる際の連続性・非clampを確認。構文546ファイル・単体1,557件・関連E2E115件成功（すべてexit 0、E2E1.6分）。unified-ui／block-geometry-fixed／fixed-commandの全3file。ログは一時ディレクトリのcad-arc-endpoint-angle-{check,unit,e2e}.log。新scriptなし。全E2Eは今回未実行。全体目標は未完了。
 

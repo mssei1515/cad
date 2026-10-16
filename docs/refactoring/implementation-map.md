@@ -1045,3 +1045,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/geometry/geometry_kernel.js: arcEndpointDragValueが端点角の周回合わせとalmost-full-circleのsigned sweep制限を所有する。app内の同計算本体は撤去し、既存GeometryDragEditingの注入先へ同APIを接続する。開始／終了角の基準・符号・上限・非破壊性を維持する。
+
+
+- src/commands/constraint_commit_command.js: ifMissingが作図時の重複回避・参照guard／属性付与・追加後冗長判定／除去を所有する。currentScopeとforgetConstraintのみ依存を追加し、既存の明示確定APIは変更しない。appはSnapConstraints／BasicDrawingToolsの既存入口を接続し、求解・UI・履歴の異なる暗黙追加と明示確定を混同しない。

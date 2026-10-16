@@ -1715,23 +1715,7 @@
     return Boolean(a && b && hypot2(a.x - b.x, a.y - b.y) <= tolerance);
   }
 
-  function addConstraintIfMissing(constraint, matches, options = {}) {
-    if (!constraint) return false;
-    if (model.constraints.some((c) => c.enabled !== false && matches(c))) return false;
-    const sketchId = options.sketchId || activeSketchId();
-    if (options.referenceSketchId) {
-      if (!isReferenceSourceSketchId(options.referenceSketchId, sketchId) || wouldCreateReferenceCycle(sketchId, options.referenceSketchId)) return false;
-      markReferenceConstraint(constraint, options.referenceSketchId, sketchId);
-    }
-    pushModelConstraint(constraint, sketchId);
-    const duplicate = redundantConstraintInfo(constraint, constraintSketchId(constraint));
-    if (duplicate?.redundant) {
-      model.constraints = model.constraints.filter((item) => item !== constraint);
-      constraintRedundancy.forgetConstraint(constraint);
-      return false;
-    }
-    return true;
-  }
+  function addConstraintIfMissing(...args) { return constraintCommitCommand.ifMissing(...args); }
 
   function hitDimension(...args) { return dimensionHitQuery.hitDimension(...args); }
 
@@ -2706,6 +2690,7 @@
   function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
   const constraintCommitCommand = window.ConstraintCommitCommand.create({
+    currentScope: workspace.current, forgetConstraint: constraintRedundancy.forgetConstraint,
     resolveSelection: constraintResolutionFromCurrentSelection, canvasSelection,
     guardSketchEdit, activeSketchId, constraintTargetsAreActive, snapshotModelState, restoreModelState,
     solveStepNormForConstraint, pushModelConstraint, preconditionNewConstraint, withTemporarySolveStepNorm,
