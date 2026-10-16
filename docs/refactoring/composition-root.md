@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Fillet機能の生成・接続
+
+FilletGeometry／FilletConstruction／FilletCommandは他機能から直接利用されていないことを確認し、新しいFilletFeatureへ生成と接続を集約した。同じcommand objectを返し、firstLine／半径入力／reset／snapshotと安定化失敗時の復元は既存FilletCommandへ維持する。Geometry／選択／pending／値入力／checkpointは既存ownerを共有し、選択線・pointer・開始準備と安定化は操作時に読む。計算と生成factoryは副作用を持たないためcheckpoint生成後のcommand生成位置へ集め、Trimの生成と役割は変更しない。入力状態や履歴の独立コピーを増やさず、現在未使用のstart aliasも外した。注入するUI通知は依然多く、app全体の可変contextへ隠さない。
+
+app.jsは3,665→3,658行（7行減、今回再開から291行減）。実Fillet計算／生成／command／checkpointを接続するunit3件を追加し、生成時のscope無読取り、前選択からの半径入力・7拘束と円弧の生成、安定化拒否と円弧生成失敗で異なる選択保持／解除と端点Object・配列・採番復元を確認。構文550ファイル・単体1,583件・読込E2E1件・関連E2E107件成功（すべてexit 0）。関連はunified-ui／command-panel全106件（1.4分）と編集性能1件（4.4秒）。index.html／構文一覧／unit一覧／file URLの読込順期待を同期。ログは一時ディレクトリのcad-fillet-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。全E2Eは今回未実行。全体目標は未完了。
+
 ### Offset機能の生成・接続
 
 GeometryCreation／snapはDXF・Trim・投影等にも共有されるため、基本作図へ一括で取り込まないことを確認。まとまりの明確なOffsetの5factory（計算→生成→command→preview renderer→layer）を新しいOffsetFeatureへ集約した。Geometry計算・配列／採番復元・入力確定・描画は既存ownerへ残し、現在scope・採番・選択・pending・previewを同じ所有者で共有する。選択の順序と反映、pointer更新、値入力のadapterを内部へ集め、外部にはplans／command／previewLayer／単体生成／closedを補うchainDraftを公開。新しいmodel・cache・独立sessionやアプリ全体の可変contextは作らない。既存通知callbackは多く残るが、Offsetの公開境界を超える状態操作を追加しない。appで不要になった計算・入力aliasは撤去し、早期のOffsetSelection通知入口は維持する。

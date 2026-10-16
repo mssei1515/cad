@@ -100,9 +100,9 @@
 
 ## 8. 再開地点（2026-10-16）
 
-local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用40%／残量60%。各責務の整理（詳細はcomposition-root）と通常Canvas描画（a9e0b9c）に続き、今回はOffsetの計算／生成／command／previewの組立てをsrc/application/offset_feature.jsへ集約した。GeometryCreation／snapは他機能共有のため取り込まず、既存scope・採番・選択・pending・previewと復元規則を維持。app.jsは開始3,949→現在3,665行（合計284行減、直近3,688→3,665で23行減）。構文548ファイル・単体1,580件・読込E2E1件・関連E2E143件成功（exit 0、関連142件1.9分＋性能1件4.4秒）。ログはcad-offset-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。今回は全E2E未実行。全体目標は未完了。
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開。最新週枠使用41%／残量59%。各責務の整理、通常Canvas描画、Offset組立て（9f0a9fb）に続き、今回はFilletの計算／生成／commandの組立てをsrc/application/fillet_feature.jsへ集約した。既存commandをそのまま返し、選択／pending／checkpoint／採番、端点の復元と失敗段階で異なる選択保持を維持。app.jsは開始3,949→現在3,658行（合計291行減、直近3,665→3,658で7行減）。構文550ファイル・単体1,583件・読込E2E1件・関連E2E107件成功（exit 0、関連106件1.4分＋性能1件4.4秒）。ログはcad-fillet-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。今回は全E2E未実行。全体目標は未完了。
 
-次はFilletGeometry／FilletConstruction／FilletCommandの共有依存と外部利用を確認し、Offsetと同様に機能の生成・接続を整理できるか検討する。Trim等との接続や早期／遅延生成、snapshot／復元・確定・取消・pointer previewの既存所有を追う。OffsetFeatureの公開APIはplans／command／previewLayer／createGeometry／chainDraftに限定し、UI callbackの多さを大きな可変contextで隠さない。現在scope／modeを生成時に読み出したり、異なるresetを統合したりしない。既存GeometryCreation／DrawingSnapを基本作図だけの所有に変えない。
+次はTrimQuery／TrimEditing／TrimCommandの共有依存と利用先を分析する。computeTrimPreviewは早期のDrawingPreviewへhoisted入口として渡され、query／editingの一部APIは後続test fixtureでも使う。初期化順とcallbackの参照時点、7/viewport.scaleのhit幅、projection guard、checkpoint／求解と寸法・Point拘束転送、失敗復元を維持して機能組立てへまとめられるか検討する。Offset／FilletFeatureのUI callbackの多さを大きな可変contextで隠さず、共有Geometry／snapを無理に取り込まない。全体の数百行への目標と検証範囲を縮小しない。
 
 ### 直前のリリース（4859400）
 

@@ -797,12 +797,6 @@
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, createGeometry: createOffsetGeometry, chainDraft: offsetChainDraft } = offsetFeature;
   const { offsetDistanceFromPointer } = offsetFeature.plans;
   const { submit: submitOffsetValue } = offsetCommand;
-  const filletPlans = window.FilletGeometry.create({ minLineLength: MIN_LINE_LENGTH });
-  const { filletGeometryBasis, filletGeometryFromPointer } = filletPlans;
-  const { createFillet } = window.FilletConstruction.create({
-    plans: filletPlans, geometry: geometryCreation, defaultDimensionForTarget,
-    syncLineOrientationHints: () => solver.syncLineOrientationHints?.(), pushModelConstraint,
-  });
   const trimQuery = window.TrimQuery.create({ currentScope: workspace.current, isActiveSketchElement, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH });
   const { angleAtCircleParam, lineTrimBoundaries, arcTrimBoundaries, circleTrimBoundaries, trimPreviewForLine, trimPreviewForArc, trimPreviewForCircle } = trimQuery;
   function computeTrimPreview(pointer) { return trimQuery.computeTrimPreview(pointer, 7 / viewport.scale); }
@@ -838,18 +832,17 @@
   const solveRefreshCommand = window.SolveRefreshCommand.create({
     activeSketchId, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
   });
-  const filletCommand = window.FilletCommand.create({
-    cancelConstraintTargetCommand, selectedLines: () => canvasSelection.lines, getPointer: () => lastPointerWorld,
-    prepareStart: () => drawOperationLifecycle.prepare("fillet"), clearSnap, updateToolbar,
-    getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
-    guardSketchProjectionShapeEdit, filletGeometryBasis, filletGeometryFromPointer, hideDimensionValueInput,
-    snapshotGeometryMutationState, restoreGeometryMutationState, createFillet, clearSelection, selection: canvasSelection,
+  const filletCommand = window.FilletFeature.create({
+    geometry: geometryCreation, minLineLength: MIN_LINE_LENGTH, defaultDimensionForTarget,
+    syncLineOrientationHints: () => solver.syncLineOrientationHints?.(), pushModelConstraint,
+    pending: pendingCommandSession, selection: canvasSelection, readPointer: () => lastPointerWorld,
+    prepareStart: () => drawOperationLifecycle.prepare("fillet"), clearSnap, updateToolbar, guardSketchProjectionShapeEdit,
+    valueInput: dimensionInputController, checkpoint: editingCheckpoint, clearSelection,
     stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
-    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand,
   });
-  const { start: startFilletRadiusPlacement, update: updateFilletRadiusPlacement,
-    submit: submitFilletRadiusPlacement, click: handleFilletClick } = filletCommand;
+  const { update: updateFilletRadiusPlacement, submit: submitFilletRadiusPlacement, click: handleFilletClick } = filletCommand;
   const geometryInstancePersistence = window.GeometryInstancePersistence.create({ applicationText });
   const blockDefinitionPersistence = window.BlockDefinitionPersistence.create({ applicationText, serializedGeometryInstanceListError });
   const blockConnectionsPersistence = window.BlockConnectionsPersistence.create({

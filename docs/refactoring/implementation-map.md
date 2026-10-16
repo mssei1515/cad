@@ -1066,3 +1066,6 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 
 - src/application/offset_feature.js: Offsetの計算／生成／command／previewの機能組立て。OffsetSelection・pending・選択・preview・Geometry生成と採番は既存所有者を共有し、plans／command／previewLayer／createGeometry／chainDraftを公開する。appは同featureの生成・接続を行い、早期のOffsetSelection通知入口と他機能の共有Geometry／snapを維持する。
+
+
+- src/application/fillet_feature.js: Filletの計算／生成／transactional commandの組立て。Geometry、選択、pending、値入力、checkpointは既存ownerを共有し、実FilletCommandをそのまま返す。appはcheckpoint生成後に同featureを作り、更新／確定／click／resetを既存利用者へ接続する。
