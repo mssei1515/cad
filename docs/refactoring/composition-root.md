@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### Dimension操作テスト支援の機能組立て
+
+DimensionTestDriver.createInteractionSupportへ位置照会／式編集／Selection、command中drag／click配置／Line-Circle・半径差／復元・操作観測の10factoryと複数寸法用fitを集約。placementとselectionの二群で12 APIを返し、appは元の位置へ展開して公開名・順序を維持する。各個別factoryの本体は変更前と完全一致し、生成接続はcurrentScope／clientPositionのport置換とindent以外一致。fit操作のbodyもViewport→UI→drawの同じ値・順を維持する。製品のGeometry・寸法・求解／復元方針は変更せず、既存model／Selection／pending／drag／Viewportのownerへ委譲する。生成時に状態照会やモデル変更を実行しないことと、通常起動で生成しないtest query guardを保持。巨大なapp contextや独自状態を作らない。
+
+app.jsは4,187→4,171行（16行減、07024cbから合計288行減）。新scriptなし。新unit fileを構文／unit一覧へ一回だけ追加。単体3件で12公開API名・順序と遅延参照、live寸法のObject同一性・式編集返値、SelectionとUI／draw順、対象なしの無処理、pending pointerの複写・drag状態、fit順を確認。構文533ファイル・単体1,472件・関連E2E213件が成功（すべてexit 0、E2E4.0分）。12 APIを使うadversarial-authoring-performance／annotation-display-size／bolt-diameter／blocks／dimension-prefix／free-text-input-drag／multiple-dimensions／slot-dimension／unified-uiの全9fileを実行。全runnerは正常終了。ログは一時ディレクトリのcad-dimension-interaction-test-support-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次は残る読み取り専用寸法・補助線・角度ラベル・Sketch表示fixtureの生成接続を調べる。
+
 ### Dimension表示テスト支援の機能組立て
 
 DimensionTestDriver.createDisplaySupportへ外観観測・描画計測・半径／端末記号・色・数値精度／文字角度の7factoryの生成接続と8公開APIを集約。編集／配置fixtureは依存と操作責務が異なるため別の既存factoryに残す。現在Documentの寸法／端末既定値を合成するgetterを内部で共有し、appはappearance／casesの二群を元の公開位置で展開して名前・順序を維持する。個別factoryの本体は完全一致し、生成接続もread port置換とindent以外一致。早い場所にあったcase factoryの生成は表示支援の組立て位置へ移るが、生成時に測定・モデル照会を行わず、各APIの呼出し時に評価する。製品ownerの外観／描画計算やSelection・hoverの復元範囲は変更しない。巨大なapp contextや独自製品状態を追加しない。

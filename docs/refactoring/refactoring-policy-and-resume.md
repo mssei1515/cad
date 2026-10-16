@@ -102,7 +102,7 @@
 
 前回のリリースは07024cb。local／originのmainとdevelopが同じcommit、作業treeがcleanであることを確認。週枠使用10%／残量90%で、最新developからcodex/parameter-edit-guardを作成して継続した。現在はこの作業branchで進める。停止条件はsection 6どおり残量50%未満であり、各抽出ごとにmainへは統合しない。
 
-Parameter削除guard、Document用下書き／Canvas reset、11個の採番状態とParameter／外観／PNG／Documentファイルのfeature組立てに続き、Offset・Sketch投影・Annotation・Dimension表示のtest driverへ公開API対応と生成接続を集約。app.jsは4,459→4,187行（今回合計272行減、直近20行減）。最新の構文532ファイル・単体1,469件・関連E2E127件が成功。詳細とログはcomposition-root.md。前回リリース07024cbで全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次はDimensionの編集・配置fixtureと操作観測の生成接続・公開対応を調べる。既存driverの責務を変えず、巨大なapp contextを移すだけにしない。mode／command操作調整と起動接続も残る。状態の所有と依存の整理を優先する。
+Parameter削除guard、Document用下書き／Canvas reset、11個の採番状態とParameter／外観／PNG／Documentファイルのfeature組立てに続き、Offset・Sketch投影・Annotation・Dimension表示／操作のtest driverへ公開API対応と生成接続を集約。app.jsは4,459→4,171行（今回合計288行減、直近16行減）。最新の構文533ファイル・単体1,472件・関連E2E213件が成功。詳細とログはcomposition-root.md。前回リリース07024cbで全E2E583件成功（24.5分）を確認済みだが、今回の変更後は全E2E未実行。全体の数百行への目標は未完了。次は読み取り専用寸法・補助線・角度ラベル・Sketch表示fixtureの生成接続を調べる。既存driverの責務を変えず、巨大なapp contextを移すだけにしない。mode／command操作調整と起動接続も残る。状態の所有と依存の整理を優先する。
 
 ### 前回の停止地点（2026-10-14）
 

@@ -781,5 +781,48 @@
     });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
+  // Compose dimension editing/placement test operations around existing model and session owners.
+  function createInteractionSupport({
+    currentScope, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition, startDimensionEditInput,
+    clearSelection, canvasSelection, updateUI, draw, resetModelState, addPoint, addLine, addCircle, addArc,
+    addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, fitAllGeometryToViewport,
+    startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, viewport, dimensionAnchor, serializeModel,
+    LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, signedPointLineDistance,
+    vectorNorm, hypot2, solveSketchAndDependents, snapshotModelState, refreshConstraintAnalysis, dimensionValueInput, dimensionDrag
+  }) {
+    const dimensionPositionObservation = createPositionObservation({ currentScope, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition });
+    const dimensionExpressionAction = createExpressionAction({ currentScope, isDimensionConstraint, startDimensionEditInput });
+    const dimensionSelectionDriver = createSelectionDriver({ currentScope, isDimensionConstraint, clearSelection, canvasSelection, updateUI, draw });
+    const commandLineDragFixture = createCommandLineDragFixture({ resetModelState, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, canvasSelection, fitAllGeometryToViewport, startDistanceCommand, currentScope, isDimensionConstraint, constraintGraphNodes, targetFromConstraint, dimensionLayout, worldToCanvasScreen, canvas, viewport, dimensionAnchor });
+    const clickPlacementFixture = createClickPlacementFixture({ resetModelState, addLine, addPoint, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const lineCircleFixture = createLineCircleFixture({ resetModelState, addLine, addPoint, addCircle, addArc, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const lineCircleObservation = createLineCircleObservation({ serializeModel, currentScope, LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, constraintTargetSession, signedPointLineDistance, vectorNorm, hypot2 });
+    const radiusDifferenceRecovery = createRadiusDifferenceRecovery({ currentScope, ConcentricRadiusDifferenceConstraint, hypot2, solveSketchAndDependents, activeSketchId, snapshotModelState, refreshConstraintAnalysis, updateUI, draw, vectorNorm });
+    const clickPlacementObservation = createClickPlacementObservation({ currentScope, isDimensionConstraint, dimensionValueInput, pendingCommandSession });
+    const commandLineDragObservation = createCommandLineDragObservation({ currentScope, isDimensionConstraint, targetFromConstraint, dimensionAnchor, constraintTargetSession, pendingCommandSession, canvasSelection, dimensionDrag });
+    return Object.freeze({
+      placement: Object.freeze({
+        resetForDimensionCommandLineDrag: commandLineDragFixture.reset,
+        resetForLineLengthClickPlacement: clickPlacementFixture.reset,
+        resetForLineCircleAndRadiusDifferenceDimensions: lineCircleFixture.reset,
+        lineCircleAndRadiusDifferenceState: lineCircleObservation.state,
+        perturbRadiusDifferenceDimensionForTest: radiusDifferenceRecovery.perturb,
+        lineLengthClickPlacementState: clickPlacementObservation.state,
+        dimensionCommandLineDragState: commandLineDragObservation.state,
+      }),
+      selection: Object.freeze({
+        dimensionClientPositionForTest: dimensionPositionObservation.position,
+        startDimensionExpressionEditForTest: dimensionExpressionAction.start,
+        selectDimensionForPropertiesForTest: dimensionSelectionDriver.select,
+        multipleDimensionSelectionForTest: dimensionSelectionDriver.state,
+        fitForMultipleDimensionsForTest() {
+          viewport.update({ scale: 2, x: 350, y: 250 });
+          updateUI();
+          draw();
+        },
+      }),
+    });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
 })();

@@ -3739,16 +3739,14 @@
     const blockExternalFixture = window.BlockTestDriver.createExternalConstraintFixture({ currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const blockInteractionObservation = window.BlockTestDriver.createInteractionObservation({ blockInstanceById, currentScope: workspace.current, canvas, blockProjectionBundle, worldToCanvasScreen, blockInstanceDisplayCenter, viewport });
-    const dimensionPositionObservation = window.DimensionTestDriver.createPositionObservation({ currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition: canvasTestDriver.clientPosition });
-    const dimensionExpressionAction = window.DimensionTestDriver.createExpressionAction({ currentScope: workspace.current, isDimensionConstraint, startDimensionEditInput });
-    const dimensionSelectionDriver = window.DimensionTestDriver.createSelectionDriver({ currentScope: workspace.current, isDimensionConstraint, clearSelection, canvasSelection, updateUI, draw });
-    const commandLineDragFixture = window.DimensionTestDriver.createCommandLineDragFixture({ resetModelState, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, canvasSelection, fitAllGeometryToViewport, startDistanceCommand, currentScope: workspace.current, isDimensionConstraint, constraintGraphNodes, targetFromConstraint, dimensionLayout, worldToCanvasScreen, canvas, viewport, dimensionAnchor });
-    const clickPlacementFixture = window.DimensionTestDriver.createClickPlacementFixture({ resetModelState, addLine, addPoint, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
-    const lineCircleFixture = window.DimensionTestDriver.createLineCircleFixture({ resetModelState, addLine, addPoint, addCircle, addArc, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
-    const lineCircleObservation = window.DimensionTestDriver.createLineCircleObservation({ serializeModel, currentScope: workspace.current, LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, constraintTargetSession, signedPointLineDistance, vectorNorm, hypot2 });
-    const radiusDifferenceRecovery = window.DimensionTestDriver.createRadiusDifferenceRecovery({ currentScope: workspace.current, ConcentricRadiusDifferenceConstraint, hypot2, solveSketchAndDependents, activeSketchId, snapshotModelState, refreshConstraintAnalysis, updateUI, draw, vectorNorm });
-    const clickPlacementObservation = window.DimensionTestDriver.createClickPlacementObservation({ currentScope: workspace.current, isDimensionConstraint, dimensionValueInput, pendingCommandSession });
-    const commandLineDragObservation = window.DimensionTestDriver.createCommandLineDragObservation({ currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionAnchor, constraintTargetSession, pendingCommandSession, canvasSelection, dimensionDrag });
+    const dimensionInteractionSupport = window.DimensionTestDriver.createInteractionSupport({
+      currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput,
+      clearSelection, canvasSelection, updateUI, draw, resetModelState, addPoint, addLine, addCircle, addArc,
+      addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, fitAllGeometryToViewport,
+      startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, viewport, dimensionAnchor, serializeModel,
+      LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, signedPointLineDistance,
+      vectorNorm, hypot2, solveSketchAndDependents, snapshotModelState, refreshConstraintAnalysis, dimensionValueInput, dimensionDrag
+    });
     const themeObservation = window.PropertiesTestDriver.createThemeObservation({ applicationSettings, readDefaultGeometryColor: () => DEFAULT_APPEARANCE.color, canvasThemeColor, CanvasThemeColors: window.CanvasThemeColors });
     const documentNameObservation = window.DocumentTestDriver.createNameObservation({ readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document });
     const fileObservation = window.DocumentTestDriver.createFileObservation({ fileSession });
@@ -4097,13 +4095,7 @@
       referencePointLineState: pointLineObservation.state,
       resetForBlockCreationUi: blockCreationFixture.reset,
       resetForEmptyBlockCreation: emptyBlockFixture.reset,
-      resetForDimensionCommandLineDrag: commandLineDragFixture.reset,
-      resetForLineLengthClickPlacement: clickPlacementFixture.reset,
-      resetForLineCircleAndRadiusDifferenceDimensions: lineCircleFixture.reset,
-      lineCircleAndRadiusDifferenceState: lineCircleObservation.state,
-      perturbRadiusDifferenceDimensionForTest: radiusDifferenceRecovery.perturb,
-      lineLengthClickPlacementState: clickPlacementObservation.state,
-      dimensionCommandLineDragState: commandLineDragObservation.state,
+      ...dimensionInteractionSupport.placement,
       blockState: blockStateObservation.state,
       blockInteractionPoints: blockInteractionObservation.points,
       blockRotationLockStateForTest: blockRotationObservation.state,
@@ -4116,15 +4108,7 @@
       pointDisplayStateForTest: canvasRenderProbe.pointDisplayState,
       drawnDimensionLabelsForTest: canvasRenderProbe.dimensionLabels,
       drawnDimensionExpressionMarksForTest: canvasRenderProbe.dimensionExpressionMarks,
-      dimensionClientPositionForTest: dimensionPositionObservation.position,
-      startDimensionExpressionEditForTest: dimensionExpressionAction.start,
-      selectDimensionForPropertiesForTest: dimensionSelectionDriver.select,
-      multipleDimensionSelectionForTest: dimensionSelectionDriver.state,
-      fitForMultipleDimensionsForTest() {
-        viewport.update({ scale: 2, x: 350, y: 250 });
-        updateUI();
-        draw();
-      },
+      ...dimensionInteractionSupport.selection,
       blockDefinitionUpdateCase: definitionUpdateFixture.run,
       blockReadOnlyDimensionCase: blockDimensionFixture.run,
       blockExternalConstraintCase: blockExternalFixture.run,
