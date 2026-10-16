@@ -1108,8 +1108,8 @@
     el.classList.toggle("error", kind === "error");
   }
 
-  const constraintFeedback = window.ConstraintFeedback.create({ applicationText });
-  const { constraintStatusBadge } = constraintFeedback;
+  const constraintFeedback = window.ConstraintFeedback.create({ applicationText, readLanguage: () => applicationSettings.language });
+  const { constraintStatusBadge, localizedConstraintName } = constraintFeedback;
   function setSolveResultHint(label, solved, analysis, dependent) {
     const hint = constraintFeedback.resultHint(label, solved, analysis, dependent, constraintRedundancy.count);
     setHint(hint.message, hint.kind);
@@ -3027,30 +3027,6 @@
   }
 
 
-
-  function localizedConstraintName(name, { typeOnly = false } = {}) {
-    const value = String(name || applicationText("拘束", "Constraint"));
-    const replacements = [
-      [/^円弧端点-円周一致/, "Arc endpoint on circumference"], [/^円弧端点-線一致/, "Arc endpoint on line"], [/^円弧端点一致/, "Arc endpoint coincident"],
-      [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^線-円中心寸法/, "Line-circle center dimension"], [/^同心半径差寸法/, "Concentric radius-difference dimension"], [/^チェーンオフセット寸法/, "Chain offset dimension"], [/^オフセット寸法/, "Offset dimension"],
-      [/^水平寸法/, "Horizontal dimension"], [/^垂直寸法/, "Vertical dimension"], [/^点-線一致/, "Point-line coincident"], [/^点-円周一致/, "Point on circumference"],
-      [/^平行2線中心線/, "Parallel-line centerline"], [/^2点中心線/, "Point-pair centerline"], [/^最小線長/, "Minimum line length"], [/^線固定/, "Fixed line"], [/^点水平/, "Point horizontal"], [/^点垂直/, "Point vertical"],
-      [/^円弧対称/, "Arc symmetry"], [/^線対称/, "Line symmetry"], [/^同一直線/, "Collinear"], [/^寸法/, "Dimension"], [/^角度/, "Angle"], [/^一致/, "Coincident"],
-      [/^水平/, "Horizontal"], [/^垂直/, "Vertical"], [/^平行/, "Parallel"], [/^等寸/, "Equal"], [/^半径/, "Radius"], [/^直径/, "Diameter"],
-      [/^同心/, "Concentric"], [/^接線/, "Tangent"], [/^対称/, "Symmetry"], [/^ドラッグ/, "Drag"],
-    ];
-    if (typeOnly) {
-      const matched = replacements.find(([pattern]) => pattern.test(value));
-      if (matched) {
-        const [pattern, replacement] = matched;
-        return applicationSettings.language === "en" ? replacement : value.match(pattern)?.[0] || value;
-      }
-      if (/^Arc endpoint fixed\b/.test(value)) return applicationText("円弧端点固定", "Arc endpoint fixed");
-    }
-    if (applicationSettings.language !== "en") return value;
-    for (const [pattern, replacement] of replacements) if (pattern.test(value)) return value.replace(pattern, replacement);
-    return value;
-  }
 
 
 

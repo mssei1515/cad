@@ -8,6 +8,12 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 拘束名の表示
+
+localizedConstraintNameを既存ConstraintFeedbackへ集約。既存applicationTextと新たなreadLanguageの2 portで通常名／typeOnly表示を返す。元bodyはlive言語read portの置換以外一致し、具体名を優先する正規表現の順・suffix・未知名と空名fallback・Arc endpoint fixedの特例を保持する。Modelのnameや保存値は変更しない。appは既存Feedback instanceから関数を取得し、Block選択照会／Tree／Properties／Canvasメニューへ接続する。最初のconsumerより前に生成済みであり、getterは呼出し時だけ使う。既存summary等の明示language引数とはreadLanguageを別名にして役割を区別する。
+
+app.jsは4,512→4,488行（24行減、今回の再開から合計352行減）。新script／unit fileなし。既存ConstraintFeedback unitへ2件追加し、prefix優先／suffix・typeOnly／未知名・空名とlive言語／固定端点特例を確認。構文516ファイル・単体1,435件・関連E2E45件が成功（すべてexit 0、E2E1.7分）。unified-ui／blocks／sketch-tree-visibilityからlanguage／constraint／Properties／context／appearance／delete・deletionの関連ケースを抽出。全worker終了後に専用port8784サーバーだけを確認・終了しrunnerの正常終了を回収。ログはcad-constraint-name-{check,unit,e2e}.log。全E2Eは今回未実行。全体目標は未完了。次はhatchRegionErrorTextとoffsetChainErrorTextの診断結果→UI文言変換を整理する。Geometry判定・model編集・操作状態を表示側へ持ち込まず、各codeの文言・未知code／reason fallbackとlive言語を維持する。
+
 ### Canvas参照入力の照会と操作調整
 
 focusedExpressionInputContext／insertClickedDimensionParameter／insertClickedAnnotationParameterをExpressionInputControllerへ集約。DOM／型、現在namespace・pending／Parameter draft、寸法名補完、error／hint・言語・識別子挿入の12依存を明示する。各式fieldとreadOnly／disabled、modelとdraftのnamespace同一参照、寸法／注記の対象条件、名前の補完とevent抑止・挿入／通知順を維持。特にnamespace不一致時の寸法はerror／hint→prevent／stop、注記はprevent／stop→error／hintの順であり、共通化して並べ替えない。3bodyは型・model／言語read portの置換以外一致し、namespaceをcacheせず操作時に読む。Parameterの補完は既存service、DOM変更はExpressionInputViewへ委譲し、独自model／draft／Selectionを持たない。appは最初のconsumer登録前に生成・接続する。
