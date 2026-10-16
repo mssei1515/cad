@@ -8,9 +8,19 @@
     findLineFixedConstraint, blockDefinitionById, geometryInstanceTypeLabel, geometryInstanceBundle,
     resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
     isDimensionConstraint = () => false, localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
-    constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected, sketchTreeObjectHovered,
+    constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected, readCanvasHover, readSidebarHover,
     constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements, activeSketchId, objectVisible = () => true }) {
     const { ParallelLinesCenterlineConstraint, PointPairCenterlineConstraint, SketchProjectionConstraint } = types;
+    function sketchTreeObjectHovered(category, entry) {
+      if (category === "hatch") return readCanvasHover().hatch === entry;
+      if (category === "image") return readCanvasHover().referenceImage === entry;
+      if (category === "block") return readCanvasHover().block === entry;
+      if (category === "instance") return readCanvasHover().geometryInstance === entry;
+      if (category === "annotation") return readCanvasHover().annotation === entry;
+      const item = category === "constraint" ? (entry.kind === "fixed-point" ? entry.point : entry.constraint) : entry;
+      return readSidebarHover()?.item === item;
+    }
+
     function sketchTreeObjectIndex() {
       const model = currentScope();
       const index = new Map(model.sketches.map((sketch) => [sketch.id, { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], instance: [], dimension: [], constraint: [], annotation: [] }]));

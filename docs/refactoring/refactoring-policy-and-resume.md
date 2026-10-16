@@ -82,7 +82,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/reference-image-feature`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/composition-entry-audit`。停止時に統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -99,6 +99,14 @@
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-16）
+
+local／originのmainとdevelopが4859400で同期・cleanであることを確認し、codex/composition-entry-auditで再開した。今回の16単位で旧入口／未使用alias、Selection／表示照会、Annotation、拘束確定、Toolbar、Tree hover、Canvas描画、Offset／Fillet／Trimの機能組立てを整理した。app.jsは3,949→3,652行（297行減、直近Trimは3,658→3,652で6行減）。全体の数百行への目標は未完了。
+
+TrimはTrimFeatureへquery／editing／commandの組立てを集約し、テストfixtureの接続はTrimTestDriver.createFeatureへ分離した。現在scope／倍率と7／倍率のhit幅、Point／寸法拘束の転送、checkpointと失敗段階の復元、既存hookを維持する。構文552ファイル・単体1,587件・読込E2E1件・関連E2E143件成功（142件1.9分＋性能1件4.5秒）。ログはcad-trim-feature-{check,unit,loader-e2e,e2e,performance-e2e}.log。
+
+ユーザーのorigin/main反映指示により、この区切りをCommit／Pushしてdevelopへ統合し、最新コードの全体検証後にmainへ最後に反映する。main反映後はdevelopをfast-forwardしてlocal／originの両branchを同期し、統合済み作業branchを削除、runtimeを再生成する。全体検証結果と最終commitは完了時に追記する。次回は最新developから新しい作業branchを作成し、状態所有と依存を明示できる機能単位を選ぶ。巨大mutable contextや別の巨大appへの移動、行数だけの薄いdelegate分割を避ける。
+
+### 直前のリリース（4859400）
 
 ユーザーのorigin/mainへの反映指示により、codex/reference-image-featureの20単位をdevelopの1bfffa2へ統合・Pushした。コード最終commitは16090aa。app.jsは4,143→3,949行（194行減）。Reference Image入力、Canvas表示操作、Keyboard入力、基本作図の生成・接続、drag補助状態、Sketch切替reset、拘束適用、端点生成などの責務を既存ownerへ整理した。UI／操作／保存形式の仕様は変更していない。全体の数百行への目標は未完了。
 

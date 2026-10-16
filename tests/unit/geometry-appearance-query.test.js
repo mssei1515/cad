@@ -5,6 +5,58 @@ const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/document/appearance.js', 'src/geometry/appearance_query.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
 const { Point, Line } = sandbox.window.GeometrySolver;
+
+test('dimension appearance reads current document defaults and editing sketches only when queried', () => {
+  let active = 'S1', sketches = [{ id: 'ROOT', kind: 'root', dimensionAppearance: { color: '#ff0000' } },
+    { id: 'S1', dimensionAppearance: { color: '#333333', lineWidth: 3 } }];
+  const calls = [], document = { defaultDimensionAppearance: { color: '#111111', terminatorType: 'filledArrow' }, defaultTerminatorAppearance: { terminatorType: 'dot' } };
+  const query = sandbox.window.GeometryAppearanceQuery.createDimension({ document,
+    currentSketches: () => { calls.push('sketches'); return sketches; }, activeSketchId: () => { calls.push('active'); return active; },
+    isRootSketch: sketch => sketch?.kind === 'root' });
+  assert.deepEqual(calls, []);
+  const dimension = { display: { lineWidth: 4 } }, before = JSON.stringify({ document, sketches, dimension });
+  const appearance = query.effectiveDimensionAppearance(dimension);
+  assert.equal(appearance.color, '#333333'); assert.equal(appearance.lineWidth, 4); assert.equal(appearance.terminatorType, 'dot');
+  assert.deepEqual(calls, ['active', 'sketches']); assert.equal(JSON.stringify({ document, sketches, dimension }), before);
+  sketches = [{ id: 'S2', dimensionAppearance: { color: '#444444' } }]; active = 'S2';
+  document.defaultTerminatorAppearance.terminatorType = 'arrow';
+  assert.equal(query.effectiveDimensionAppearance(null).color, '#444444');
+  assert.equal(query.effectiveDimensionAppearance(null).terminatorType, 'arrow');
+  active = 'missing'; assert.equal(query.effectiveDimensionAppearance(null).color, '#111111');
+});
+
+test('dimension appearance respects explicit definition sketches and excludes Root styling without reading the editing scope', () => {
+  const document = { defaultDimensionAppearance: { color: '#111111' }, defaultTerminatorAppearance: { terminatorSize: 7 } };
+  const query = sandbox.window.GeometryAppearanceQuery.createDimension({ document,
+    currentSketches: () => { throw Error('explicit sketches must bypass current scope'); },
+    activeSketchId: () => { throw Error('explicit sketch must bypass active sketch'); }, isRootSketch: sketch => sketch?.kind === 'root' });
+  const root = { id: 'ROOT', kind: 'root', dimensionAppearance: { color: '#ff0000' } };
+  const local = { id: 'local', dimensionAppearance: { color: '#333333', lineWidth: 3 } };
+  assert.equal(query.effectiveDimensionAppearance(null, 'local', [root, local]).color, '#333333');
+  assert.equal(query.dimensionDisplayState(null, 'local', [root, local]).lineWidth, 3);
+  assert.equal(query.effectiveDimensionAppearance(null, 'missing', [root, local]).color, '#111111');
+  assert.equal(query.effectiveDimensionAppearanceForSketch(root).color, '#111111');
+  assert.equal(query.effectiveDimensionAppearanceForSketch(local).color, '#333333');
+  assert.equal(query.effectiveDimensionAppearanceForSketch(null).terminatorSize, 7);
+});
+
+test('dimension display snapshots retain the established numeric, affix, tolerance and terminator values without changing stored data', () => {
+  const document = { defaultDimensionAppearance: {}, defaultTerminatorAppearance: {} };
+  const query = sandbox.window.GeometryAppearanceQuery.createDimension({ document, currentSketches: () => [], activeSketchId: () => 'S1', isRootSketch: () => false });
+  const dimension = { display: { visible: false, color: '#ABCDEF', lineWidth: 2, precision: 40, prefix: 'A\n', suffix: 'mm',
+    toleranceUpper: '+0.2', toleranceLower: '-0.1', terminatorType: 'dot', terminatorSize: 4, arrowheadAngle: 45,
+    extensionLineOvershoot: 5, extensionLineOriginGap: 6, dimensionTextHeight: 7, dimensionTextGap: 8 } };
+  const before = JSON.stringify(dimension), state = query.dimensionDisplayState(dimension);
+  assert.deepEqual(JSON.parse(JSON.stringify(state)), { visible: false, color: '#abcdef', lineWidth: 2, precision: 10,
+    prefix: 'A\n', suffix: 'mm', toleranceUpper: '0.2', toleranceLower: '-0.1', terminatorType: 'dot', terminatorSize: 4,
+    arrowheadAngle: 45, extensionLineOvershoot: 5, extensionLineOriginGap: 6, dimensionTextHeight: 7, dimensionTextGap: 8 });
+  state.color = '#000000'; assert.equal(query.dimensionDisplayState(dimension).color, '#abcdef');
+  const defaults = query.dimensionDisplayState(null);
+  assert.equal(defaults.precision, null); assert.equal(defaults.prefix, ''); assert.equal(defaults.suffix, '');
+  assert.equal(defaults.toleranceUpper, ''); assert.equal(defaults.toleranceLower, '');
+  assert.equal(defaults.color, sandbox.window.Appearance.DEFAULT_DIMENSION_APPEARANCE.color);
+  assert.equal(JSON.stringify(dimension), before);
+});
 function fixture() {
   const state = { hidden: false, caching: false, cache: new WeakMap() };
   const document = { defaultAppearance: { color: '#111111', lineWidth: 1 }, defaultConstructionAppearance: { color: '#222222', lineWidth: 2 } };

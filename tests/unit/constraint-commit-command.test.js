@@ -4,6 +4,67 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync('src/commands/constraint_commit_command.js', 'utf8'), sandbox);
+function implicitFixture() {
+ const events = [], state = { scope: { constraints: [] }, active: 'S1', source: true, cycle: false, redundant: false };
+ const command = sandbox.window.ConstraintCommitCommand.create({
+  currentScope: () => { events.push(['scope']); return state.scope; },
+  activeSketchId: () => { events.push(['active']); return state.active; },
+  isReferenceSourceSketchId: (...args) => { events.push(['source', ...args]); return state.source; },
+  wouldCreateReferenceCycle: (...args) => { events.push(['cycle', ...args]); return state.cycle; },
+  pushModelConstraint: (constraint, sketchId) => { constraint.sketchId = sketchId; state.scope.constraints.push(constraint); events.push(['push', constraint, sketchId]); },
+  constraintSketchId: constraint => constraint.sketchId,
+  redundantConstraintInfo: (constraint, sketchId) => { events.push(['redundancy', constraint, sketchId]); return { redundant: state.redundant }; },
+  forgetConstraint: constraint => { assert.equal(state.scope.constraints.includes(constraint), false); events.push(['forget', constraint]); },
+ });
+ return { command, state, events };
+}
+
+test('implicit additions reject absent constraints and enabled matches before Sketch reads or mutations', () => {
+ const f = implicitFixture(), disabled = { enabled: false }, enabled = {}, candidate = {};
+ assert.deepEqual(f.events, []);
+ assert.equal(f.command.ifMissing(null, () => { throw Error('absent constraint must short circuit'); }), false);
+ assert.deepEqual(f.events, []);
+ const constraints = f.state.scope.constraints = [disabled, enabled], matched = [];
+ assert.equal(f.command.ifMissing(candidate, item => { matched.push(item); return true; }), false);
+ assert.deepEqual(matched, [enabled]); assert.equal(f.state.scope.constraints, constraints);
+ assert.deepEqual(candidate, {}); assert.deepEqual(f.events, [['scope']]);
+});
+
+test('implicit additions use the current scope and explicit or current Sketch while preserving constraint identity', () => {
+ const f = implicitFixture(), previous = f.state.scope, candidate = { name: 'snap' }, disabled = { enabled: false };
+ f.state.scope = { constraints: [disabled] }; f.state.active = 'S2';
+ assert.equal(f.command.ifMissing(candidate, () => { throw Error('disabled match must be skipped'); }), true);
+ assert.equal(previous.constraints.length, 0); assert.equal(f.state.scope.constraints[1], candidate); assert.equal(candidate.sketchId, 'S2');
+ assert.deepEqual(f.events.map(e => e[0]), ['scope', 'active', 'push', 'redundancy']);
+ f.events.length = 0; const explicit = {};
+ assert.equal(f.command.ifMissing(explicit, () => false, { sketchId: 'S3' }), true);
+ assert.equal(explicit.sketchId, 'S3'); assert.equal(f.events.some(e => e[0] === 'active'), false);
+});
+
+test('implicit reference guards retain short-circuit order and mark before insertion without ordinary commit effects', () => {
+ const f = implicitFixture(), candidate = { name: 'coincident' }, options = { sketchId: 'child', referenceSketchId: 'parent' };
+ f.state.source = false;
+ assert.equal(f.command.ifMissing(candidate, () => false, options), false);
+ assert.deepEqual(f.events, [['scope'], ['source', 'parent', 'child']]); assert.deepEqual(candidate, { name: 'coincident' });
+ f.events.length = 0; f.state.source = true; f.state.cycle = true;
+ assert.equal(f.command.ifMissing(candidate, () => false, options), false);
+ assert.deepEqual(f.events, [['scope'], ['source', 'parent', 'child'], ['cycle', 'child', 'parent']]);
+ f.events.length = 0; f.state.cycle = false;
+ assert.equal(f.command.ifMissing(candidate, () => false, options), true);
+ assert.deepEqual(candidate, { name: '参照 coincident', reference: true, referenceSketchId: 'parent', sketchId: 'child' });
+ assert.equal(f.state.scope.constraints[0], candidate);
+ assert.deepEqual(f.events.map(e => e[0]), ['scope', 'source', 'cycle', 'push', 'redundancy']);
+});
+
+test('redundant implicit additions replace the current array by identity before forgetting but retain metadata on the rejected object', () => {
+ const f = implicitFixture(), candidate = { id: 'same', name: 'snap' }, survivor = { id: 'same' };
+ const previous = f.state.scope.constraints = [survivor]; f.state.redundant = true;
+ assert.equal(f.command.ifMissing(candidate, () => false, { referenceSketchId: 'parent' }), false);
+ assert.notEqual(f.state.scope.constraints, previous); assert.equal(previous[1], candidate);
+ assert.equal(f.state.scope.constraints.length, 1); assert.equal(f.state.scope.constraints[0], survivor);
+ assert.equal(candidate.reference, true); assert.equal(candidate.name, '参照 snap');
+ assert.equal(f.events.at(-1)[0], 'forget'); assert.equal(f.events.at(-1)[1], candidate);
+});
 function fixture() {
  const events = [], hints = [], model = { constraints: [] }, state = { editable: true, active: true, source: true, cycle: false, dimension: false, collapse: null, duplicate: null, trace: null, target: {}, history: [], measured: 44 };
  const result = { success: true, result: { errorNorm: 0, variableCount: 2, constraintCount: 1, iterations: 3, reason: 'ok' } };

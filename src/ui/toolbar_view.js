@@ -141,5 +141,46 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.ToolbarView = Object.freeze({ create, createBinding, createEditingBinding });
+  function createCommandStatus({ document, applicationText, readMode, readPendingType, readConstraintCommand }) {
+    function updateStatusUI() {
+      const command = document.getElementById("statusCommand");
+      const modeLabels = {
+        "pattern-placement-origin": applicationText("配置基準点", "Placement anchor"),
+        "pattern-placement-place": applicationText("直線パターン", "Linear Pattern"),
+        "pattern-placement-mirror": applicationText("ミラー", "Mirror"),
+        "pattern-placement-circular": applicationText("円形パターン", "Circular Pattern"),
+        select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), "circle-center-cross": applicationText("円中心十字線", "Circle Center Cross"), rectangle: applicationText("矩形", "Rectangle"),
+        slot: applicationText("長穴", "Slot"), circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
+        offset: applicationText("オフセット", "Offset"), hatch: applicationText("塗りつぶし", "Fill"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
+      };
+      if (command) {
+        command.textContent = readPendingType()?.startsWith("annotation-") ? applicationText("注記", "Annotation") : readConstraintCommand() ? applicationText("拘束", "Constraint") : modeLabels[readMode()] || readMode();
+      }
+    }
+    return Object.freeze({ update: updateStatusUI });
+  }
+  function createIcons({ document, isDimensionConstraint, types }) {
+    const { LineFixedConstraint, ArcEndpointFixedConstraint, GeometryFixedConstraint,
+      SketchProjectionConstraint, ParallelLinesCenterlineConstraint, PointPairCenterlineConstraint } = types;
+    function toolbarSvgMarkup(selector) {
+      const svg = document.querySelector(selector)?.querySelector("svg");
+      return svg ? svg.outerHTML.replace("<svg", '<svg class="sketch-object-icon"') : "";
+    }
+
+    function constraintToolbarIcon(constraint, fixedPoint = false) {
+      if (fixedPoint || constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint || constraint instanceof GeometryFixedConstraint) return toolbarSvgMarkup("#fixPointBtn");
+      if (constraint instanceof SketchProjectionConstraint) return toolbarSvgMarkup("#toolSketchProjection");
+      if (constraint instanceof ParallelLinesCenterlineConstraint || constraint instanceof PointPairCenterlineConstraint) return toolbarSvgMarkup("#toolCenterline");
+      if (isDimensionConstraint(constraint)) return toolbarSvgMarkup('[data-constraint="distance"]');
+      const name = String(constraint?.name || "");
+      const mappings = [
+        [/水平/, "horizontal"], [/垂直/, "vertical"], [/平行/, "parallel"], [/直角/, "perpendicular"], [/対称/, "symmetry"],
+        [/同心/, "concentric"], [/等寸/, "equal"], [/接線/, "tangent"], [/一致|円周/, "coincident"],
+      ];
+      const type = mappings.find(([pattern]) => pattern.test(name))?.[1] || "coincident";
+      return toolbarSvgMarkup(`[data-constraint="${type}"]`);
+    }
+    return Object.freeze({ toolbarSvgMarkup, constraintToolbarIcon });
+  }
+  window.ToolbarView = Object.freeze({ create, createBinding, createEditingBinding, createCommandStatus, createIcons });
 })();

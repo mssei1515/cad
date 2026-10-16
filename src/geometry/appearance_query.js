@@ -99,5 +99,40 @@
 
     return Object.freeze({ effectiveLeaderAppearanceForSketch, effectiveAnnotationStyle });
   }
-  window.GeometryAppearanceQuery = Object.freeze({ create, createAnnotation });
+  function createDimension({ document, currentSketches, activeSketchId, isRootSketch }) {
+    const { resolveDimensionAppearance, DEFAULT_DIMENSION_APPEARANCE } = window.Appearance;
+    function effectiveDimensionAppearance(dimension, sketchId = activeSketchId(), sketches = currentSketches()) {
+      const sketch = sketches.find((item) => item.id === sketchId) || sketches.find((item) => isRootSketch(item)) || null;
+      return resolveDimensionAppearance({ ...document.defaultDimensionAppearance, ...document.defaultTerminatorAppearance },
+        sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null, dimension?.display);
+    }
+
+    function effectiveDimensionAppearanceForSketch(sketch) {
+      return resolveDimensionAppearance({ ...document.defaultDimensionAppearance, ...document.defaultTerminatorAppearance },
+        sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null);
+    }
+
+    function dimensionDisplayState(dimension, sketchId = activeSketchId(), sketches = currentSketches()) {
+      const display = effectiveDimensionAppearance(dimension, sketchId, sketches);
+      return {
+        visible: display.visible !== false,
+        color: display.color || DEFAULT_DIMENSION_APPEARANCE.color,
+        lineWidth: display.lineWidth,
+        precision: Number.isInteger(display.precision) ? Math.max(0, Math.min(10, display.precision)) : null,
+        prefix: String(display.prefix || ""),
+        suffix: String(display.suffix || ""),
+        toleranceUpper: display.toleranceUpper == null ? "" : String(display.toleranceUpper),
+        toleranceLower: display.toleranceLower == null ? "" : String(display.toleranceLower),
+        terminatorType: display.terminatorType,
+        extensionLineOvershoot: display.extensionLineOvershoot,
+        extensionLineOriginGap: display.extensionLineOriginGap,
+        terminatorSize: display.terminatorSize,
+        arrowheadAngle: display.arrowheadAngle,
+        dimensionTextHeight: display.dimensionTextHeight,
+        dimensionTextGap: display.dimensionTextGap,
+      };
+    }
+    return Object.freeze({ effectiveDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState });
+  }
+  window.GeometryAppearanceQuery = Object.freeze({ create, createAnnotation, createDimension });
 })();

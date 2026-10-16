@@ -218,3 +218,20 @@ test('annotation layer reads current ordered elements, keeps visibility short ci
   calls.length = 0; b.sketchId = 'A'; elements = [b, a]; layer.draw(); assert.deepEqual(calls.filter(call => ['leader', 'text'].includes(call[0])).map(call => call[0]), ['text', 'leader']);
   assert.equal(calls.find(call => call[0] === 'text').length, 2); assert.equal(calls.find(call => call[0] === 'text')[1], b);
 });
+
+test('annotation preview reads once at draw time and preserves leader flag, text color, original objects and empty preview behavior', () => {
+  const calls = [], leader = { type: 'leader' }, text = { type: 'text' };
+  let preview = null;
+  const layer = sandbox.window.AnnotationRenderer.createLayer({
+    allAnnotations: () => { throw Error('preview must not traverse saved annotations'); },
+    isVisibleValue: () => { throw Error('preview must not apply saved visibility rules'); },
+    isVisibleSketchId: () => { throw Error('preview must not apply saved Sketch visibility'); },
+    readPreview: () => { calls.push(['read']); return preview; },
+    drawAnnotationLeader: (...args) => calls.push(['leader', ...args]), drawAnnotationText: (...args) => calls.push(['text', ...args]),
+  });
+  assert.deepEqual(calls, []); layer.drawPreview(); assert.deepEqual(calls, [['read']]);
+  calls.length = 0; preview = leader; layer.drawPreview(); assert.deepEqual(calls, [['read'], ['leader', leader, true]]);
+  calls.length = 0; preview = text; layer.drawPreview(); assert.deepEqual(calls, [['read'], ['text', text, '#2563eb']]);
+  calls.length = 0; preview = { type: 'other' }; layer.drawPreview(); assert.deepEqual(calls, [['read'], ['text', preview, '#2563eb']]);
+  const emptyLayer = sandbox.window.AnnotationRenderer.createLayer({}); assert.equal(emptyLayer.drawPreview(), undefined);
+});

@@ -149,6 +149,21 @@
       }
     }
 
+    function applyOffsetSelection(offsetSelection) {
+      set("points", []);
+      set("circles", offsetSelection.source instanceof Circle ? [offsetSelection.source] : []);
+      set("lines", offsetSelection.entries.map((entry) => entry.geometry).filter((item) => item instanceof Line));
+      set("arcs", offsetSelection.entries.map((entry) => entry.geometry).filter((item) => item instanceof Arc));
+      set("blockInstances", []);
+      set("annotations", []);
+      set("hatches", []);
+      set("referenceImages", []);
+      set("arcEndpoint", null);
+      set("arcEndpointPair", null);
+      set("dimensionConstraint", null);
+      set("constraint", null);
+    }
+
     function applyConstraintTargets(targets) {
       set("points", targets.points);
       set("lines", targets.lines);
@@ -328,6 +343,19 @@
       }
     }
 
+    function sketchTreeObjectSelected(category, entry) {
+      const item = category === "constraint" ? entry.point || entry.constraint : entry;
+      if (state.inspection?.targets.some((target) => target.category === category
+        && (target.item === item || item?.id && target.item.id === item.id))) return true;
+      if (category === "hatch") return state.hatches.includes(entry);
+      if (category === "image") return state.referenceImages.includes(entry);
+      if (category === "block") return state.blockInstances.includes(entry);
+      if (category === "instance") return state.geometryInstances.includes(entry);
+      if (category === "annotation") return state.annotations.includes(entry);
+      if (category === "constraint") return entry.kind === "fixed-point" ? state.points.includes(entry.point) : constraintSelectedInCanvas(entry.constraint);
+      return geometryItemSelectedInCanvas(entry);
+    }
+
     function geometryItemSelectedInCanvas(item) {
       if (!item) return false;
       if (item instanceof Point) return state.points.includes(item);
@@ -375,11 +403,11 @@
     const api = {
       toggleDimensionConstraint: item => { if (!item) return; clearTreeSelection(); state.constraint = null; const index = state.dimensionConstraints.indexOf(item); if (index < 0) state.dimensionConstraints.push(item); else state.dimensionConstraints.splice(index, 1); },
       inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle, applyClipboard, discardDeletedGeometry, discardDeletedConstraints,
-      selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, applyConstraintTargets, currentConstraintTargets,
+      selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, applyOffsetSelection, applyConstraintTargets, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
       toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
-      trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
+      trimConstraintSelection, pushPrimitiveSelection, sketchTreeObjectSelected, geometryItemSelectedInCanvas,
       constraintSelectedInCanvas, hasSelection,
     };
     for (const field of [...fields, "dimensionConstraint"]) Object.defineProperty(api, field, { get: () => state[field], enumerable: true });

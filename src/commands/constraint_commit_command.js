@@ -8,7 +8,25 @@
     targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
     clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
     recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
-    sketchName, now, recordPerformance, resolveSelection, canvasSelection }) {
+    sketchName, now, recordPerformance, resolveSelection, canvasSelection, currentScope, forgetConstraint }) {
+    function addConstraintIfMissing(constraint, matches, options = {}) {
+      if (!constraint) return false;
+      if (currentScope().constraints.some((c) => c.enabled !== false && matches(c))) return false;
+      const sketchId = options.sketchId || activeSketchId();
+      if (options.referenceSketchId) {
+        if (!isReferenceSourceSketchId(options.referenceSketchId, sketchId) || wouldCreateReferenceCycle(sketchId, options.referenceSketchId)) return false;
+        markReferenceConstraint(constraint, options.referenceSketchId, sketchId);
+      }
+      pushModelConstraint(constraint, sketchId);
+      const duplicate = redundantConstraintInfo(constraint, constraintSketchId(constraint));
+      if (duplicate?.redundant) {
+        currentScope().constraints = currentScope().constraints.filter((item) => item !== constraint);
+        forgetConstraint(constraint);
+        return false;
+      }
+      return true;
+    }
+
     function commitNewConstraint(type, constraint) {
       if (!guardSketchEdit(activeSketchId(), "constraint")) return false;
       if (!constraintTargetsAreActive(constraint)) {
@@ -198,7 +216,7 @@
       }
     }
 
-    return Object.freeze({ fromSelection: applySelection, readOnly: addReadOnlyDimensionConstraint, resolution: commitConstraintResolution, dimension: addDistanceConstraintFromTarget,
+    return Object.freeze({ ifMissing: addConstraintIfMissing, fromSelection: applySelection, readOnly: addReadOnlyDimensionConstraint, resolution: commitConstraintResolution, dimension: addDistanceConstraintFromTarget,
       ordinary: commitNewConstraint, reference: commitReferenceConstraint, markReference: markReferenceConstraint });
   }
   window.ConstraintCommitCommand = Object.freeze({ create });
