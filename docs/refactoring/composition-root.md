@@ -8,6 +8,10 @@
 
 develop／main／originの両branchが007288bで同期、未コミット変更なしを確認し、週枠残量100%でcodex/sketch-edit-accessから再開。最新指示に合わせ停止条件を残量50%未満とする。全体目標は未完了。
 
+### 2026-10-16のリリース全体検証
+
+ユーザーのmain／origin反映指示を受け、コードdde227eをdevelopの91d532cへ統合・Push。最新コードで構文536ファイル・単体1,480件・全E2E583件が成功（すべてexit 0、全E2E24.6分）。拘束drag回帰file12.5分を含み、runnerは正常終了。ログは一時ディレクトリのcad-refactor-oct16-final-{check,unit,e2e}.log。検証後はリリース／再開記録だけを変更し、mainを最後に反映してlocal／originのmainとdevelopを同期する。app.jsは4,459→4,143行、合計316行減。数百行のcomposition rootという全体目標は未完了。次回の責務候補と再開手順は方針書section 8を参照。
+
 ### Block観測テストAPIの機能組立て
 
 BlockTestDriver.createObservationSupportへ五つの観測factoryの生成接続と公開API対応を集約。16個の明示portを使い、scope／Definition／Solver変数／投影／viewport／hoverは既存ownerから呼出し時に読む。公開名・順序と個別factoryの本体を維持し、独自状態や汎用app contextは追加しない。

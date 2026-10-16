@@ -82,7 +82,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/sketch-edit-access`。停止時の統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回のリリース対象は`codex/parameter-edit-guard`。統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -100,9 +100,11 @@
 
 ## 8. 再開地点（2026-10-16）
 
-前回のリリースは07024cb。local／originのmainとdevelopが同じcommit、作業treeがcleanであることを確認。週枠使用10%／残量90%で、最新developからcodex/parameter-edit-guardを作成して継続した。現在はこの作業branchで進める。停止条件はsection 6どおり残量50%未満であり、各抽出ごとにmainへは統合しない。
+ユーザーのmain／origin反映指示により、この区切りをリリースする。07024cbを基準にcodex/parameter-edit-guardで16個の責務単位を整理し、コード最終commitはdde227e、develop統合commitは91d532c。app.jsは4,459→4,143行（316行減）。Parameter削除guard、Document下書き／Canvas reset、採番状態、Parameter／外観／PNG／Documentファイルの機能組立て、Offset・Sketch投影・Annotation・Dimension・Blockのテスト支援生成と公開API対応を整理した。
 
-Parameter削除guard、Document下書き／Canvas reset、採番状態、Parameter／外観／PNG／Documentファイルの機能組立て、Offset・Sketch投影・Annotation・Dimension・Blockのテスト支援生成と公開API対応を整理した。app.jsは4,459→4,143行（合計316行減、直近4行減）。構文536ファイル・単体1,480件・関連E2E142件成功。全体の数百行への目標は未完了。ユーザーからmainとoriginへの反映指示を受領したため、この区切りをCommit／Push後、developへ統合し全体検証、main最後のリリースと両branch同期を行う。再開時は残るBlock fixtureとUIイベント登録・mode／command接続を再評価し、意味のある責務単位を選ぶ。
+最新developの91d532cで構文536ファイル・単体1,480件・全E2E583件が成功（すべてexit 0、全E2E24.6分）。拘束drag回帰fileは12.5分。ログは一時ディレクトリのcad-refactor-oct16-final-{check,unit,e2e}.log。全runnerが正常終了し、検証後はこのリリース／再開記録だけを変更した。この記録をCommit／Push後、mainへ最後に反映し、developをmainへfast-forwardして両者をPush・同期する。統合済み作業branchを削除してruntimeを再生成する。
+
+全体の数百行への目標は未完了。次回はGitの現物・usage・worktree・origin/main／developの祖先関係を確認し、最新developから新しい作業branchを作成する。終了済みcodex/parameter-edit-guardは再使用しない。次の候補は残るBlock fixtureとUIイベント登録・mode／command接続。すでに一行のfactory接続をまとめるだけの分割を無理に増やさず、状態の所有・開始／更新／確定／取消の依存を整理できる機能単位を選ぶ。巨大mutable contextや別の巨大appへの移動を避ける。
 
 ### 前回の停止地点（2026-10-14）
 
