@@ -460,6 +460,8 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 
 - CanvasInputBinding: Canvas DOM入力接続と座標表示。CanvasNavigation.zoom: pointer中心の倍率変更。操作判断と状態は既存controllerへ委譲。
 
+CanvasInputBinding.createCommandRoutingは通常pointer controllerに共通command panelとPNG範囲選択の入力優先順位を接続する。pointer・panel／PNGのreader・blank gesture・座標変換・blank判定・navigationの9入口だけを受け、後段panel／PNGを生成時には読まない。左押下はactive panel→PNG→通常controller、移動はinactiveを含むpanel通知→現在PNGとpan優先→通常controller、終了はPNGの左buttonだけ通常処理を抑制する。double clickは一回のsuppression→active panel→PNG guard→通常controllerとし、preventDefault・world／screen座標・同じevent／receiver・例外の停止範囲を維持する。panel／pan操作の後に切り替わったPNGもその都度読む。gesture state・panel command・編集／取消は各既存ownerが保持し、bindingのschedule／flush・計測・座標statusは既存createに残す。appは遅延readerと操作を接続する。
+
 - KeyboardInteractionController.createCancellation: Escの一段取消と優先順位。状態は各commandから照会し、appはcommandとpending／selectionの限定APIを接続する。
 
 - src/ui/runtime_version_view.js: 実行コミット情報の検証・状態保持・Help表示。appが起動データと翻訳を接続。

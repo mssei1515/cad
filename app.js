@@ -2549,35 +2549,10 @@
     return true;
   }
   const canvasInputBinding = window.CanvasInputBinding.create({
-    canvas, pointer: {
-      ...pointerInteractionController,
-      down: e => {
-        if (e.button === 0 && commandPanel?.active) {
-          if (commandPanel.canvasPress(canvasScreenPoint(e), isBlankCommandPanelPoint(canvasPoint(e)))) {
-            blankCanvasGesture.suppressNext();
-            e.preventDefault();
-            return;
-          }
-        }
-        if (pngExportCommand?.active && e.button === 0) pngExportCommand.pick(screenToWorld({ x: e.offsetX, y: e.offsetY }));
-        else pointerInteractionController.down(e);
-      },
-      move: (screen, world, shift) => {
-        commandPanel?.canvasMove(screen);
-        if (pngExportCommand?.active) { if (!canvasNavigation.movePan(screen)) pngExportCommand.move(world); }
-        else pointerInteractionController.move(screen, world, shift);
-      },
-      finish: e => { if (!pngExportCommand?.active || e.button !== 0) pointerInteractionController.finish(e); },
-      doubleClick: e => {
-        if (blankCanvasGesture.takeSuppression()) { e.preventDefault(); return; }
-        if (commandPanel?.active) {
-          commandPanel.canvasDoubleClick(isBlankCommandPanelPoint(canvasPoint(e)));
-          e.preventDefault();
-          return;
-        }
-        if (!pngExportCommand?.active) pointerInteractionController.doubleClick(e);
-      },
-    }, scheduler: pointerMoveScheduler, navigation: canvasNavigation,
+    canvas, pointer: window.CanvasInputBinding.createCommandRouting({
+      pointer: pointerInteractionController, readCommandPanel: () => commandPanel, readPngExportCommand: () => pngExportCommand,
+      blankCanvasGesture, canvasScreenPoint, canvasPoint, isBlankCommandPanelPoint, screenToWorld, navigation: canvasNavigation,
+    }), scheduler: pointerMoveScheduler, navigation: canvasNavigation,
     profileCommit: work => profileInteractionPhase("commit", work), closeContextMenu: closeCanvasContextMenu,
     afterZoom: () => { if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput(); },
     screenToWorld, formatCoordinate: formatDisplayNumber, coordinateStatus: () => document.getElementById("statusCoordinates"),
