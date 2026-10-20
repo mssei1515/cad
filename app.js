@@ -905,14 +905,13 @@
     snapForDrawing, snap: drawingSnap, preview: drawingPreview, setMode: value => { mode = value; },
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
   });
-  const { start: startCenterlineCommand, reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
+  const { start: startCenterlineCommand, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
   const { resetArcs: resetArcCommandState } = circularCommands;
   const authoringPreviewLayer = window.AuthoringPreviewRenderer.createLayer({
     renderer: authoringPreview, readMode: () => mode, readPointer: () => drawingPreview.pointer, readTrim: () => drawingPreview.trim,
     lineCommand, rectangleCommand, slotCommand, circularCommands, splineDraft, centerlineCommand, projectPointToCenterlineSupport,
     readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
   });
-  const { reset: resetSlotCommandState } = slotCommand;
   const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;
   const runtimeVersionView = window.RuntimeVersionView.create({ document, applicationText });
 
@@ -1446,7 +1445,7 @@
     spline: splineDraft, splineEditing, projection: sketchProjectionCommand, preview: drawingPreview, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() },
     transient: { clearPoint: clearTransientPointRollback, clearLineCompletion: clearTransientLineCompletionRollback, rollbackLineStart: rollbackTransientLineStart },
     clearSnap, clearSelection, selectMode: () => { mode = "select"; }, updateToolbar, setHint, updateUI, draw,
-    cancelConstraintTargetCommand, setMode: value => { mode = value; },
+    cancelConstraintTargetCommand, cancelPendingCommand, readMode: () => mode, setMode: value => { mode = value; },
     clearTrimHover: () => canvasHover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null }),
   });
   function exitDrawMode() { return drawOperationLifecycle.exit(); }
@@ -1935,19 +1934,7 @@
   const constraintTargetCommand = window.ConstraintTargetCommand.create({
     session: constraintTargetSession, startAnnotationAnchorConstraint,
     canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
-    prepareStart: () => {
-      cancelPendingCommand("");
-      resetCenterlineCommandState();
-      resetSlotCommandState();
-      mode = "select";
-      lineCommand.reset();
-      rectangleCommand.reset();
-      filletCommand.reset();
-      circularCommands.resetCircle();
-      resetArcCommandState();
-      drawingPreview.reset();
-    },
-    prepareCancel: () => { if (mode === "centerline") resetCenterlineCommandState(); if (mode === "slot") resetSlotCommandState(); },
+    prepareStart: drawOperationLifecycle.prepareConstraintStart, prepareCancel: drawOperationLifecycle.prepareConstraintCancel,
     constraintLabel, clearSelection, constraintOperandsFromSelection, trimConstraintSelection,
     resolveConstraintIntent, startDistanceResolution, commitConstraintResolution, syncSelectionFromConstraintOperands,
     updateToolbar, updateConstraintButtons, setHint, constraintTargetHint, draw,
@@ -1968,12 +1955,9 @@
 
   const dimensionPlacementCommand = window.DimensionPlacementCommand.create({
     session: constraintTargetSession, selection: canvasSelection, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
+    guardSketchEdit, isPlacingInstance: geometryInstanceCommand.isPlacing, geometryInstanceBundle, targetFromConstraint, cancelPendingCommand, cancelConstraintTargetCommand,
     canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
-    prepareStart: () => {
-      mode = "select";
-      lineCommand.reset(); rectangleCommand.reset(); filletCommand.reset(); circularCommands.resetCircle();
-      resetArcCommandState(); drawingPreview.reset();
-    },
+    prepareStart: drawOperationLifecycle.prepareDimensionStart,
     selectMode: () => { mode = "select"; },
     constraintOperandsFromSelection, constraintResolutionFromCurrentSelection, selectedPrimitives,
     placement: dimensionPlacement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
@@ -1982,15 +1966,7 @@
     hideDimensionValueInput, syncDimensionValueInput, focusDimensionValueInput,
     applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
   });
-  function startInstanceAngleDimension(instance) {
-    if (!guardSketchEdit(instance.sketchId) || geometryInstanceCommand.isPlacing(instance) || instance.placement?.kind !== "circular") return false;
-    cancelPendingCommand(""); cancelConstraintTargetCommand(""); mode = "select";
-    const anchor = geometryInstanceBundle(instance).controlPoints.find(point => point.instanceControl === "anchor");
-    const c = new window.GeometrySolver.InstanceAngleIntervalConstraint(anchor, instance.placement.angleStep);
-    const target = targetFromConstraint(c);
-    pendingCommandSession.replace({ type: "distance-place", target, pointer: defaultDimensionForTarget(target), sketchId: instance.sketchId });
-    setHint("角度間隔寸法の表示位置をクリックしてください"); updateToolbar(); draw(); return true;
-  }
+  function startInstanceAngleDimension(instance) { return dimensionPlacementCommand.startInstanceAngleDimension(instance); }
   function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
 
   function cancelPendingCommand(message) { return pendingCommandSession.cancel(message); }

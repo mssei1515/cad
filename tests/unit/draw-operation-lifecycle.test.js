@@ -3,7 +3,7 @@ const fs = require('node:fs'); const path = require('node:path'); const vm = req
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/draw_operation_lifecycle.js'), 'utf8'), sandbox);
 function fixture() {
-  const calls = [], deps = {}; const record = name => () => calls.push(name);
+  const calls = [], deps = {}, state = { mode: "select" }; const record = name => () => calls.push(name);
   for (const name of ['instances', 'instanceSources', 'centerline', 'line', 'rectangle', 'slot', 'fillet', 'spline', 'splineEditing', 'projection', 'preview', 'offset', 'hatch']) deps[name] = { reset: record(name) };
   deps.centerline.targets = []; deps.spline.points = []; deps.offset.entries = []; deps.spline.cancel = record('splineCancel');
   deps.circular = { resetCircle: record('circle'), resetArcs: record('arcs'), resetCenterArc: record('centerArc') };
@@ -11,7 +11,8 @@ function fixture() {
   deps.cancelConstraintTargetCommand = record('cancelConstraint'); deps.setMode = value => calls.push(value); deps.clearTrimHover = record('trimHover');
   deps.transient = { clearPoint: record('clearPoint'), clearLineCompletion: record('clearCompletion'), rollbackLineStart: record('rollbackLine') };
   for (const name of ['clearSnap', 'clearSelection', 'selectMode', 'updateToolbar', 'setHint', 'updateUI', 'draw']) deps[name] = record(name);
-  return { deps, calls, controller: sandbox.window.DrawOperationLifecycle.create(deps) };
+  deps.cancelPendingCommand = message => { assert.equal(message, ""); calls.push("pendingCancel"); }; deps.readMode = () => state.mode;
+  return { deps, calls, state, controller: sandbox.window.DrawOperationLifecycle.create(deps) };
 }
 test('exit resets drafts and selects normal mode without rolling geometry back', () => {
   const f = fixture(); f.controller.exit();
@@ -91,4 +92,28 @@ test('Sketch switch resets only its ordered drawing input subset without rollbac
 test('Sketch input reset errors propagate at the same boundary without resetting later owners or adding recovery',()=>{
  const f=fixture(),error=new Error('circle reset');f.deps.circular.resetCircle=()=>{throw error;};
  assert.throws(()=>f.controller.resetInputsForSketchChange(),value=>value===error);assert.deepEqual(f.calls,['line','rectangle','fillet']);
+});
+
+
+test('constraint and dimension start preparation retain distinct cancellation prefixes and the same ordered reset subset', () => {
+  const f = fixture();
+  f.controller.prepareConstraintStart();
+  assert.deepEqual(f.calls, ['pendingCancel', 'centerline', 'slot', 'selectMode', 'line', 'rectangle', 'fillet', 'circle', 'arcs', 'preview']);
+  f.calls.length = 0; f.controller.prepareDimensionStart();
+  assert.deepEqual(f.calls, ['selectMode', 'line', 'rectangle', 'fillet', 'circle', 'arcs', 'preview']);
+});
+
+test('start preparation propagates a command reset error without resetting later drafts, drawing or rolling back', () => {
+  for (const method of ['prepareConstraintStart', 'prepareDimensionStart']) {
+    const f = fixture(), marker = new Error('circle reset failed'); f.deps.circular.resetCircle = () => { throw marker; };
+    assert.throws(() => f.controller[method](), error => error === marker);
+    assert.deepEqual(f.calls, [...(method === 'prepareConstraintStart' ? ['pendingCancel', 'centerline', 'slot'] : []), 'selectMode', 'line', 'rectangle', 'fillet']);
+  }
+});
+
+test('constraint cancellation reads mode independently before each conditional reset without selecting or notifying', () => {
+  const f = fixture(); f.state.mode = 'centerline';
+  f.deps.centerline.reset = () => { f.calls.push('centerline'); f.state.mode = 'slot'; };
+  f.controller.prepareConstraintCancel(); assert.deepEqual(f.calls, ['centerline', 'slot']); assert.equal(f.state.mode, 'slot');
+  f.state.mode = 'line'; f.calls.length = 0; f.controller.prepareConstraintCancel(); assert.deepEqual(f.calls, []);
 });

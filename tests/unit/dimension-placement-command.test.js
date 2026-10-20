@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const path of ['src/editing/constraint_target_session.js', 'src/commands/dimension_placement_command.js']) vm.runInContext(fs.readFileSync(path, 'utf8'), sandbox);
-function fixture() {
+for (const path of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/editing/constraint_target_session.js', 'src/commands/dimension_placement_command.js']) vm.runInContext(fs.readFileSync(path, 'utf8'), sandbox);
+function fixture(overrides = {}) {
  const events = [], state = { pending: null, editable: true, resolution: null, selected: [], operands: [], hit: null, readOnly: null, axis: 'x' };
  const session = sandbox.window.ConstraintTargetSession.create({ acceptTarget: () => ({ ok: true, operands: [] }) });
  const placement = { defaultDimensionForTarget: () => ({ x: 10, y: 20 }), dimensionAnchor: () => ({ x: 30, y: 40 }),
@@ -22,6 +22,7 @@ function fixture() {
   hideDimensionValueInput: () => events.push('hide'), syncDimensionValueInput: () => events.push('input'), focusDimensionValueInput: () => events.push('focus'),
   applicationText: text => text, setHint: (text, kind) => { events.push('hint'); state.hint = { text, kind }; }, log: () => events.push('log'),
   updateConstraintButtons: () => events.push('buttons'), updateToolbar: () => events.push('toolbar'), draw: () => events.push('draw'),
+  ...overrides,
  });
  return { command, state, session, selection, events };
 }
@@ -98,4 +99,54 @@ test('annotation point distance uses normal placement and input while retaining 
  assert.equal(f.state.pending.type, 'distance-value'); assert.equal(f.state.pending.target.annotationAnchor, true);
  assert.equal(f.state.pending.target.dimensionAxis, 'x'); assert.equal(f.state.probe, undefined);
  assert.ok(!f.events.includes('readOnly'));
+});
+
+
+function intervalFixture() {
+ let f; const target = { kind: 'angle' }, pointer = { x: 40, y: 50 };
+ f = fixture({ guardSketchEdit: id => { f.events.push('guard'); assert.equal(id, f.state.instance.sketchId); return f.state.editable; },
+  isPlacingInstance: instance => { f.events.push('placing'); assert.equal(instance, f.state.instance); return f.state.placing; },
+  geometryInstanceBundle: instance => { f.events.push('bundle'); assert.equal(instance, f.state.instance); return f.state.bundle; },
+  targetFromConstraint: constraint => { f.events.push('target'); if (f.state.failTarget) throw f.state.failTarget; f.state.constraint = constraint; return target; },
+  cancelPendingCommand: message => { assert.equal(message, ''); f.events.push('cancelPending'); if (f.state.failCancel) throw f.state.failCancel; f.state.pending = null; },
+  cancelConstraintTargetCommand: message => { assert.equal(message, ''); f.events.push('cancelConstraint'); f.session.reset(); },
+  placement: { defaultDimensionForTarget: value => { f.events.push('pointer'); assert.equal(value, target); return pointer; } },
+ });
+ const instance = { id: 'FI1', sketchId: 'S2', placement: { kind: 'circular', angleStep: Math.PI / 6 } };
+ const anchor = Object.assign(new sandbox.window.GeometrySolver.Point('FI1@anchor', 1, 2), { instanceControl: 'anchor', derivedInstance: instance });
+ Object.assign(f.state, { instance, anchor, placing: false, bundle: { controlPoints: [{ instanceControl: 'destination' }, anchor] }, target, pointer });
+ return f;
+}
+
+test('interval dimension denial checks authority, placement and circular kind in order without cancelling existing work', () => {
+ for (const reason of ['authority', 'placing', 'kind']) {
+  const f = intervalFixture(), old = { type: 'old' }; f.state.pending = old; f.session.begin('parallel', []); const command = f.session.command;
+  if (reason === 'authority') f.state.editable = false;
+  if (reason === 'placing') f.state.placing = true;
+  if (reason === 'kind') f.state.instance.placement.kind = 'linear';
+  assert.equal(f.command.startInstanceAngleDimension(f.state.instance), false);
+  assert.deepEqual(f.events, reason === 'authority' ? ['guard'] : ['guard', 'placing']);
+  assert.equal(f.state.pending, old); assert.equal(f.session.command, command);
+ }
+});
+
+test('interval dimension cancels both sessions before selecting mode and uses the live anchor, angle step and same target/pointer', () => {
+ const f = intervalFixture(); f.session.begin('parallel', []); f.state.pending = { type: 'old' };
+ assert.equal(f.command.startInstanceAngleDimension(f.state.instance), true);
+ assert.deepEqual(f.events, ['guard', 'placing', 'cancelPending', 'cancelConstraint', 'mode', 'bundle', 'target', 'pointer', 'pending', 'hint', 'toolbar', 'draw']);
+ assert.ok(f.state.constraint instanceof sandbox.window.GeometrySolver.InstanceAngleIntervalConstraint);
+ assert.equal(f.state.constraint.point, f.state.anchor); assert.equal(f.state.constraint.target, Math.PI / 6); assert.equal(f.session.command, null);
+ assert.equal(f.state.pending.type, 'distance-place'); assert.equal(f.state.pending.target, f.state.target); assert.equal(f.state.pending.pointer, f.state.pointer); assert.equal(f.state.pending.sketchId, 'S2');
+ f.state.instance.placement.angleStep = Math.PI / 4; f.events.length = 0; f.command.startInstanceAngleDimension(f.state.instance); assert.equal(f.state.constraint.target, Math.PI / 4);
+});
+
+test('interval dimension preserves partial cancellation and propagates errors without later placement, UI or recovery', () => {
+ for (const phase of ['cancel', 'target']) {
+  const f = intervalFixture(), marker = new Error(phase), old = { type: 'old' }; f.state.pending = old;
+  f.session.begin('parallel', []); const command = f.session.command;
+  if (phase === 'cancel') f.state.failCancel = marker; else f.state.failTarget = marker;
+  assert.throws(() => f.command.startInstanceAngleDimension(f.state.instance), error => error === marker);
+  assert.deepEqual(f.events, phase === 'cancel' ? ['guard', 'placing', 'cancelPending'] : ['guard', 'placing', 'cancelPending', 'cancelConstraint', 'mode', 'bundle', 'target']);
+  assert.equal(f.state.pending, phase === 'cancel' ? old : null); assert.equal(f.session.command, phase === 'cancel' ? command : null);
+ }
 });
