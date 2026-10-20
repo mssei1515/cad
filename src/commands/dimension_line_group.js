@@ -1,4 +1,4 @@
-/* Parallel linear dimension placement, independent of selection, UI and history. */
+/* Parallel dimension placement; selection eligibility is a separate read-only factory. */
 (() => {
   "use strict";
   function create({ placement, Line }) {
@@ -44,5 +44,18 @@
     }
     return Object.freeze({ group, translate, align });
   }
-  window.DimensionLineGroup = Object.freeze({ create });
+  function createSelection({ currentScope, canvasSelection, constraintSketchId, isEditableSketchId, isVisibleSketchId,
+    targetFromConstraint, effectiveDimensionAppearance, defaultDimensionForTarget, isVisibleValue, lineGroup }) {
+    function selected(reference) {
+      const constraints = canvasSelection.dimensionConstraints;
+      if (constraints.some(constraint => !currentScope().constraints.includes(constraint) || !isEditableSketchId(constraintSketchId(constraint))
+        || !isVisibleSketchId(constraintSketchId(constraint)))) return null;
+      const entries = constraints.map(constraint => ({ constraint, target: targetFromConstraint(constraint) }));
+      if (entries.some(({ constraint, target }) => !target || !isVisibleValue(effectiveDimensionAppearance(
+        constraint.dimension || defaultDimensionForTarget(target), constraintSketchId(constraint)).visible))) return null;
+      return lineGroup.group(entries, reference);
+    }
+    return Object.freeze({ selected });
+  }
+  window.DimensionLineGroup = Object.freeze({ create, createSelection });
 })();
