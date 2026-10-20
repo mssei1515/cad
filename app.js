@@ -1446,7 +1446,7 @@
 
 
 
-  const { hitConstraintOperand: queryConstraintOperand, hitReferenceTarget } = sceneHitQueries.operands;
+  const { hitConstraintOperand: queryConstraintOperand } = sceneHitQueries.operands;
 
   function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
     if (!target) return NaN;
@@ -2346,8 +2346,8 @@
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag,
   });
 
-  const { press: canvasPressQuery, hover: pointerHover } = sceneHitQueries.createInteraction({
-    canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget,
+  const { press: canvasPressQuery, hover: pointerHover, isBlankCommandPanelPoint } = sceneHitQueries.createInteraction({
+    canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget, blankCanvasGesture, instanceSourceCommand, hatchCommand,
   });
 
   const pointerInteractionController = window.PointerInteractionController.create({
@@ -2372,19 +2372,8 @@
       inputs: canvasCommandInputs },
   });
 
-  function isDrawToolMode() {
-    return mode === "instance-sources" || mode === "line" || mode === "centerline" || mode === "circle-center-cross" || mode === "point" || mode === "rectangle" || mode === "slot" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
-  }
+  function isDrawToolMode() { return window.DrawOperationLifecycle.isToolMode(mode); }
 
-  function isBlankCommandPanelPoint(point) {
-    const hits = canvasPressQuery.read(point);
-    if (!blankCanvasGesture.isBlank({ ...hits, annotationHit: hits.blankAnnotationHit })) return false;
-    if ((mode === "sketch-projection" || mode === "instance-sources" && instanceSourceCommand.instance?.type === "sketchProjection")
-      && hitReferenceTarget(point.x, point.y)) return false;
-    if (["hatch", "hatch-repair"].includes(mode)
-      && hatchGeometryQuery.hatchFaceAt(point, { includeConstruction: hatchCommand.includeConstruction }).ok) return false;
-    return true;
-  }
   const canvasInputBinding = window.CanvasInputBinding.create({
     canvas, pointer: window.CanvasInputBinding.createCommandRouting({
       pointer: pointerInteractionController, readCommandPanel: () => commandPanel, readPngExportCommand: () => pngExportCommand,

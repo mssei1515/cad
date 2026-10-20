@@ -45,8 +45,9 @@
         points: { isExplicitPoint, isPointUsedByPrimitive, isReferencePoint },
         makeConstraintOperand: operandValues.makeConstraintOperand, operandFromReferenceTarget: operandValues.operandFromReferenceTarget,
         hits: geometry });
-      function createInteraction({ canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget }) {
-        return create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint, geometry,
+      function createInteraction({ canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget,
+        blankCanvasGesture, instanceSourceCommand, hatchCommand }) {
+        const interaction = create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint, geometry,
           scene: { hitHatchAt: (...args) => regions.hitHatchAt(...args), hitReferenceImageAt: (...args) => regions.hitReferenceImageAt(...args),
             hitDimension: (...args) => dimensionQueries.hitDimension(...args), hitBlockRotationHandle,
             hitBlockInstance: (...args) => instances.hitBlockInstance(...args),
@@ -55,6 +56,18 @@
             hitAnnotationElement, hitAnnotationTarget, activeSketchId,
             hitDerivedProjectionOperand: operands.hitDerivedProjectionOperand, hitBlockProjectionOperand: operands.hitBlockProjectionOperand,
             hitReferenceTarget: operands.hitReferenceTarget } });
+        if (!blankCanvasGesture) return interaction;
+        const { hitReferenceTarget } = operands;
+        function isBlankCommandPanelPoint(point) {
+          const hits = interaction.press.read(point);
+          if (!blankCanvasGesture.isBlank({ ...hits, annotationHit: hits.blankAnnotationHit })) return false;
+          if ((readMode() === "sketch-projection" || readMode() === "instance-sources" && instanceSourceCommand.instance?.type === "sketchProjection")
+            && hitReferenceTarget(point.x, point.y)) return false;
+          if (["hatch", "hatch-repair"].includes(readMode())
+            && hatches.hatchFaceAt(point, { includeConstruction: hatchCommand.includeConstruction }).ok) return false;
+          return true;
+        }
+        return Object.freeze({ ...interaction, isBlankCommandPanelPoint });
       }
       return Object.freeze({ regions, dimensions: dimensionQueries, instances, geometry, operands, createInteraction });
     }

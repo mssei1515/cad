@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のCanvas command終了判定単位
+
+command panelの空白判定を、同じpress／参照／Hatch照会を持つ既存CanvasHitInteraction.createInteractionへ集約した。blankCanvasGesture・instanceSourceCommand・hatchCommandの三つの既存ownerを追加指定すると、press／hoverとともにisBlankCommandPanelPointを返す。press snapshot→blankAnnotationHitによるblank判定→投影参照除外→Hatch face除外の順と短絡、元参照、owner receiver、現在mode／source／includeConstructionと例外を維持する。pressやscene queryを再生成せず、新しいhover／model／gesture stateを持たない。追加owner未指定時の従来APIはpress／hoverのまま。
+
+作図tool modeの分類は既存DrawOperationLifecycle.isToolModeへ集約した。内部modeやdraftを持たない純粋なqueryで、進行中の下書き有無を読むactiveとは異なる。appのhoisted wrapperは生成前の早期callbackからも使われるため、Lifecycleインスタンスへ依存させず、現在modeをstatic queryへ渡す。元のapp関数を実行した25種類の値で分類が一致し、未知値の文字列変換も行わない。Canvasの空白判定bindingは生成2,349行目、参照2,380行目で、前方参照なし。rootの未使用bindingは0。app.jsは3,037→3,026行（11行減）。新file／script・汎用app context・state containerはない。仕様と実装mapを更新した。
+
+構文588ファイル・全単体1,776件・関連単体29件が成功（exit 0）。追加4件は生成時の無照会、実press snapshotと注記のblank除外、元のsource点参照・現在投影typeとquery短絡、Hatchの現在optionとreceiver、例外時のhover無変更、初期化前のtool分類とdraft有無の区別を確認する。関連E2E230件が全成功（4.0分、exit 0）。unified-ui／phase0-characterization／command-panel／sketch-projection／free-instance／hatching／spline／circular-authoring／png-export／adversarial-authoring-performance／unified-annotationsを実行した。panelの空白double click取消と通常配置／source指定の継続、Hatch／修復・作図／Splineの終了、PNG出力の取消・retry、権限・履歴・保存再読込を確認した。性能file全12件を含み、pan141ms（175ms未満）、空白矩形203ms（250ms未満）だった。全runner終了と専用server停止を確認した。ログは一時directoryのcad-command-canvas-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。前単位c3a213cの全E2E584成功を、今回コードの全E2E成功へ読み替えない。mainは5ee5f3fのまま保留し、全体目標は未完了。開始時の週枠使用19%・残量81%で停止条件未到達。
+
+次は構築・接続の中心を扱う。test API公開Objectは現時点で142 property（うちspread12）、参照するbinding104、inline method5だった。単一の104引数のcontextへ移す案は採らず、既存test driverのfamilyごとに共通ownerと構築を集められるか確認する。Canvas／viewportの支援群など、既存owner・生成順・query／操作の契約を持つまとまった単位を選ぶ。rootのmodeそのものの所有とbind／start段階も引き続き未完了であり、小さなquery移管だけで200〜500行へ届いたとは扱わない。
+
+
 ### 最新の旧root接続整理単位
 
 既存ownerへ移管済みで参照のなくなったローカルalias・委譲関数を整理した。ASTのroot binding参照から65個の未使用分割代入と4個の委譲関数を確認し、委譲の撤去後に不要になるannotationColorも除去した。計70 bindingを除去し、rootの未使用bindingは0。Selection・Sketch／Block／Instance・Parameter・Solver照会・snap／rollback・寸法描画・注記／画像・保存読込の機能APIとowner生成は維持する。共有ownerから直接使う経路とtest hooksの公開は残す。新しい責務分離として水増しせず、これまでの移管で残った接続の整理として扱う。
