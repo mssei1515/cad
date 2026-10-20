@@ -93,6 +93,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のTree hover描画責務とpan調査単位
+
+pan計測中にTreeを離れる経路で、SelectionHighlightの即時描画→Tree pointerOutの描画→空になったleaveの描画が重複していた。[調査記録](pan-latency-investigation.md)に3版比較と呼出しstack・計測方法を記録した。SelectionHighlightは状態所有と既定の即時描画を維持し、redraw:falseとclearの変更有無を使ってTreeControllerが同じイベントの更新後に一度描画する。no-op leaveは描画しない。object exit／leaveの解除範囲、別の寸法hoverの保護、通常frame描画・scope・選択・Document・保存形式を維持する。
+
+app.jsは3,066→3,066行（0行差）。実装は既存SelectionHighlight／SketchTreeController内だけで、rootや新たな可変contextに処理を増やさない。正式仕様と実装mapを更新した。追加単体4件を含む全単体1,761件・構文588ファイル・専用12件が成功（exit 0）。関連E2E233件も全成功（4.7分、exit 0）。unified-ui／phase0-characterization／sketch-permissions／sketch-projection／free-instance／unified-annotations／hatching／reference-images／multiple-dimensions／adversarial-authoring-performanceを実行し、性能file全12件を含む。panは165msで元の175ms未満の基準内。Tree連携・ロック／非表示・既存画面比較・注記／寸法／Hatch／画像・Instance／投影・保存再読込を確認した。全runner終了と専用serverの終了を回収済み。ログはcad-pan-fix-{focused,check,unit,related}.log。
+
+修正後3回ともCanvas描画は7→5、通常preview／drawは4、Geometry reader呼出しは21のまま。操作全体wallには146.5／222.8／161.5msのばらつきがあり、重複描画の是正を全性能問題の解消とは扱わない。別の終了後比較ではmain／分離前／修正後のCanvas PNGとauthoring state、serialized model（savedAtのみ除外）が完全一致した。mainは5ee5f3fのまま保留、最新全E2Eは未実行、全体目標は未完了。
+
 ### 最新のscene query共有単位
 
 sceneHitQueries.createInteractionで構築済みのGeometry／region／dimension／instance／operand queryからpress／hoverを接続する。appの接続に列挙するroot binding参照は25→4（canvasHover、sameArcEndpoint、hitBlockRotationHandle、hitAnnotationTarget）となり、sceneHitQueries自体の依存は別に保持する。新たな大contextを渡すのではなく、既に構築したqueryを同じowner内で共有する。後段の接続位置、既存createのreader直接指定API、注記interactionとpress／hoverの優先順、receiver・遅延読取り・例外伝播を維持する。scope policy／query／hoverの生成し直し、新state／cache／fileはない。不要になったhitGeometryInstance／hitDerivedGeometryForDragのroot委譲二関数を除去した。app.jsは3,072→3,066行（6行減）、今回再開時3,652行から586行減。

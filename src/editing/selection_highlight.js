@@ -122,19 +122,20 @@
       return new Set(constraint ? constraintHighlightNodes(constraint).filter(Boolean) : []);
     }
 
-    function setSidebarHover(type, item, elements) {
+    function setSidebarHover(type, item, elements, { redraw = true } = {}) {
       hoveredSidebarItem = { type, item, elements };
       if (type === "constraint" && targetFromConstraint(item)) setHoveredDimension(item);
-      draw();
+      if (redraw) draw();
     }
 
-    function clearSidebarHover(type = null, item = null) {
-      if (!hoveredSidebarItem) return;
-      if (type && hoveredSidebarItem.type !== type) return;
-      if (item && hoveredSidebarItem.item !== item) return;
+    function clearSidebarHover(type = null, item = null, { redraw = true } = {}) {
+      if (!hoveredSidebarItem) return false;
+      if (type && hoveredSidebarItem.type !== type) return false;
+      if (item && hoveredSidebarItem.item !== item) return false;
       if (getHoveredDimension() === hoveredSidebarItem.item) setHoveredDimension(null);
       hoveredSidebarItem = null;
-      draw();
+      if (redraw) draw();
+      return true;
     }
 
     function reset() { hoveredSidebarItem = null; }

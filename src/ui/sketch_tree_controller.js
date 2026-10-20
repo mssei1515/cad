@@ -184,13 +184,13 @@
         else if (category === "annotation") canvasHover.update({ annotation: currentScope().annotations.find((item) => item.id === objectRow.dataset.id) || null });
         else if (objectRow.dataset.fixedPointId) {
           const point = currentScope().points.find((item) => item.id === objectRow.dataset.fixedPointId);
-          setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point));
+          setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point), { redraw: false });
         } else if (category === "constraint") {
           const constraint = currentScope().constraints[Number(objectRow.dataset.constraintIndex)];
-          setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint));
+          setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint), { redraw: false });
         } else {
           const item = sidebarGeometryItem(category, objectRow.dataset.id);
-          setSidebarHover("geometry", item, sidebarHoverElementsForItem(item));
+          setSidebarHover("geometry", item, sidebarHoverElementsForItem(item), { redraw: false });
         }
         draw();
         return;
@@ -203,20 +203,22 @@
     }
 
     function handleSketchTreePointerOut(event) {
+      let changed = false;
       const objectRow = event.target.closest(".sketch-object-row");
       if (objectRow && !objectRow.contains(event.relatedTarget)) {
-        clearSidebarHover();
+        const canvasChanged = ["block", "geometryInstance", "annotation", "hatch", "referenceImage"].some(key => canvasHover.current?.[key] != null);
+        changed = Boolean(clearSidebarHover(null, null, { redraw: false })) || canvasChanged;
         canvasHover.update({
           block: null, geometryInstance: null, annotation: null,
           hatch: null, referenceImage: null,
         });
-        draw();
       }
       const sketchRow = event.target.closest(".sketch-item");
       if (sketchRow && !sketchRow.contains(event.relatedTarget) && hoveredSketchTreeId === sketchRow.dataset.id) {
         hoveredSketchTreeId = null;
-        draw();
+        changed = true;
       }
+      if (changed) draw();
     }
 
     function isSidebarHighlightedElement(item) {
@@ -228,9 +230,12 @@
 
     function clearHoverSketch() { hoveredSketchTreeId = null; }
     function leave() {
-      clearHoverSketch(); clearSidebarHover();
+      const sketchChanged = hoveredSketchTreeId !== null;
+      clearHoverSketch();
+      const sidebarChanged = clearSidebarHover(null, null, { redraw: false });
+      const canvasChanged = ["block", "annotation", "hatch", "referenceImage"].some(key => canvasHover.current?.[key] != null);
       canvasHover.update({ block: null, annotation: null, hatch: null, referenceImage: null });
-      draw();
+      if (sketchChanged || sidebarChanged || canvasChanged) draw();
     }
     return Object.freeze({ pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut, isHighlightedElement: isSidebarHighlightedElement, clearHoverSketch, leave, click: handleSketchTreeClick, doubleClick: activateRow, keyDown, contextMenu, editSketch, activateObject: activateSketchTreeObject });
   }
