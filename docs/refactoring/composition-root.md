@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas command入力routing単位
+
+共通command panel／PNG／通常pointerの入力振分けを既存CanvasInputBinding.createCommandRoutingへ統合した。九つの明示的な入口と後段panel／PNGの遅延readerで、press・move・finish・double clickの優先順位、座標、抑止・例外・参照を維持する。既存native event登録とschedule／flushは変更せず、新file・script・state・保存形式変更はない。app.jsは3,225→3,200行（25行減）、今回の再開から3,652→3,200行（452行減）。
+
+構文580ファイル・単体1,700件・関連E2E165件（2.4分）が成功（全runner exit 0）。関連はunified-ui／command-panel／png-export／derived-patterns／hatching／unified-annotationsで、file URL起動、共通panelの空白double click取消と通常配置、PNG cropとpan、派生／Hatch／注記の入力、Undo／Redo・保存再読込を確認した。追加単体5件はpanelの左press優先・座標／prevent／suppression／例外、PNGと通常pointerへのfallback、inactive panelへのmove後の現在PNGとpan優先、finishと一回のdouble click抑止、実native bindingのflush／座標status／終了profileとの結線を検証する。生成時に後段readerを読まず、同じevent・world／screen・receiverを保持する。既存bindingの単体3件は変更しない。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-canvas-command-routing-{focused,check,unit,related}.log。
+
+基準はdevelop e881647（前実装fd0efea）。開始時の週枠残量68%／検証後67%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は五つのCanvas command input（Instance／Annotation／Constraint／Drawing／Selection）の生成群を分析する。現在はappが共有mode／pending／Selection・command・hit queryとfocus／pointer captureを各dispatcherへ接続し、全五つをPointerInteractionController.press.inputsだけへ渡す。PointCommandの生成を含め、共有ownerを一つの機能として構築できるか確認する。個別のcommandの確定／取消・snap条件・panel focus解除は既存ownerと既存順に保つ。read portsと操作portsを明示し、各dispatcherへ不要な依存を渡す巨大contextにせず、初期化前constを直接捕捉しない。最終200〜500行という目標は未達であり、機能組立てと残るstate所有の整理を継続する。
+
 ### 最新のCanvas表示基盤組立て単位
 
 CanvasDisplayへ座標・navigation・zoomと、surface・PNG renderer・workspace layoutの生成結線を集約した。create→既存TransientAuthoring→createWorkspaceの二段階で生成順を保ち、同じviewport／ctx／surfaceへの接続を明示する。六つの既存ownerのstateや処理は移さず、Zoomの生成時DOM接続・後段bind／start・flush／倍率変更／寸法入力同期・resizeとexport復元の順を維持する。classic scriptと構文・単体・E2E読込一覧を同期した。app.jsは3,247→3,225行（22行減）、今回の再開から3,652→3,225行（427行減）。
