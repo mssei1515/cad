@@ -399,7 +399,7 @@ SelectionHighlightが拘束の定義図形role・表示ラベル・端点除外�
 
 - `GeometryPresentation`（`src/rendering/geometry_presentation.js`）: GeometryRenderer、点描画、診断へ共通の描画状態・所有Instance選択／hover・色／線幅照会を提供する。状態更新、DOM、Canvas描画を持たない。
 
-GeometryPresentationは点の可視性・中心表示・強調・ID／固定表示も判断し、GeometryRenderer.drawPointsはその状態から描画する。appのdrawPointsは整列済み点一覧の接続のみ。
+GeometryPresentationは点の可視性・中心表示・強調・ID／固定表示も判断し、GeometryRenderer.drawPointsはその状態から描画する。GeometryDisplayが現在点一覧とSketch描画順を接続し、appのdrawPointsはその公開入口へ委譲する。
 
 GeometryPresentationはarcEndpointPaintState／splineHandleStateを提供し、GeometryRendererが編集ハンドルを描く。編集中Splineとドラッグは遅延照会、所属確認は現在scopeを使う。
 
@@ -1230,3 +1230,6 @@ GeometryPresentation.createは点分類の既存PointUsage ownerをpointUsageと
 
 
 GeometryPresentation.createは既存commandTargetsとsketchStyleのAPIを受けられる。commandTargetsからoperand選択／pending reference target／reference hover、sketchStyleからalpha／stroke width／constraint status colorを取得する。各ownerを指定しなければ従来の個別関数portを使い、同時指定時はownerの三関数を採用する。関数を生成時に取得するだけでqueryは実行せず、評価時のpanel snapshot優先・predicate短絡・同じSelection／scope／status・solve error／Sketch relationを維持する。Hatchやtest支援で引き続き使うappの委譲入口は維持し、sidebar／dragの後段ownerは従来のcallbackで読む。独自policy state、cache、Document編集、DOM処理を持たない。
+
+
+- `GeometryDisplay`（`src/application/geometry_display.js`）: GeometryDisplay（src/application/geometry_display.js）はGeometryPresentation本体→line display→GeometryRenderer本体→Layerを既存順に生成する機能組立てである。同じPointUsage・command targets・Sketch style・CanvasSurfaceとGeometryReadModelの五つの一覧APIを共有する。24個の明示port（handleQueries／pointQueriesを含む）を受け、各子へ必要なAPIだけを渡す。点の現在一覧→Sketch描画順、円弧の現在一覧→可視filter、Spline編集状態→ハンドル描画の接続も所有する。返すのは四種類の図形描画・点／円弧端点／Splineハンドル描画・色／線幅照会・Spline pathの10入口である。明示itemsのfilterと既定一覧の整列、options、同じObject参照、現在viewport／SurfaceのDPR、export・後段drag／Spline／sidebarの遅延照会、例外伝播と既存Canvas復元を維持する。描画policy・Canvas命令・モデルstateは既存ownerに残し、独自state・cache・アプリ全体の可変contextを持たない。appのhoisted描画入口は先行callback登録のため維持する。

@@ -541,7 +541,7 @@
     window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
     applicationText, readLanguage: () => applicationSettings.language,
   });
-  const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
+  const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState } = canvasSurface;
   const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, DIMENSION_ARROW_MITER_LIMIT } = window.DimensionMetrics;
   const dimensionDisplay = window.DimensionDisplay.create({ ctx, viewport, currentLines: () => workspace.current().lines,
     minLineLength: MIN_LINE_LENGTH, canvasThemeColor, onExpressionMark: canvasRenderProbe.captureExpressionMark,
@@ -572,22 +572,21 @@
   const sketchPresentation = window.GeometryPresentation.createSketchStyle({
     sketchHasSolveError, elementSketchId, sketchRelationOfElement, constraintStatusOf, isVisibleSketchElement, isActiveSketchElement,
   });
-  const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
-    Point, pointUsage, commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, canvasSelection, canvasHover, viewState,
+  const geometryDisplay = window.GeometryDisplay.create({
+    Point, ctx, viewport, surface: canvasSurface,
+    pointUsage, commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, canvasSelection, canvasHover, viewState,
     isExporting: () => Boolean(pngRendering.frame),
     effectiveAppearanceForElement, isEditableSketchElement,
     isSidebarHighlightedElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement,
-    canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+    canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
+    fixedPointLabel: () => applicationText("固定", "Fixed"), geometryReads, isVisibleSketchElement,
     handleQueries: { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint,
       isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
       editedSpline: () => splineEditing.current?.spline, currentScope: workspace.current },
     pointQueries: { pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
       isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point) },
   });
-  const lineDisplay = window.GeometryPresentation.createLineDisplay({ viewport, effectiveAppearanceForElement, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX });
-  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, readPixelRatio: () => canvasSurface.dpr, paintState: geometryPaintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
-  const { traceSplinePath } = geometryRenderer;
-  const geometryLayer = window.GeometryRenderer.createLayer({ renderer: geometryRenderer, isVisibleSketchElement, drawOrderBySketch, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines });
+  const { geometryDisplayColor, geometryStrokeWidth, traceSplinePath } = geometryDisplay;
   const interactionOverlay = window.InteractionOverlayRenderer.create({ ctx, viewport, withCanvasState,
     elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName });
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
@@ -1108,7 +1107,6 @@
     return window.CanvasThemeColors.color(value, applicationSettings.theme);
   }
 
-  function drawOrderBySketch(...args) { return sketchPresentation.drawOrderBySketch(...args); }
 
   function sketchAlpha(...args) { return sketchPresentation.sketchAlpha(...args); }
 
@@ -1715,7 +1713,6 @@
 
   function drawSelectionRect() { return interactionOverlay.drawSelectionRect(selectionRectangle.preview()); }
 
-  function lineDisplaySegment(...args) { return lineDisplay.lineDisplaySegment(...args); }
 
 
 
@@ -1723,14 +1720,13 @@
 
 
 
+  function drawLines(...args) { return geometryDisplay.drawLines(...args); }
+  function drawCircles(...args) { return geometryDisplay.drawCircles(...args); }
+  function drawArcs(...args) { return geometryDisplay.drawArcs(...args); }
+  function drawSplines(...args) { return geometryDisplay.drawSplines(...args); }
 
-  function drawLines(...args) { return geometryLayer.drawLines(...args); }
-  function drawCircles(...args) { return geometryLayer.drawCircles(...args); }
-  function drawArcs(...args) { return geometryLayer.drawArcs(...args); }
-  function drawSplines(...args) { return geometryLayer.drawSplines(...args); }
 
-
-  function drawSplineEditHandles() { geometryRenderer.drawSplineEditHandles(splineHandleState()); }
+  function drawSplineEditHandles() { return geometryDisplay.drawSplineEditHandles(); }
 
 
 
@@ -1803,11 +1799,9 @@
   }
 
 
-  function drawArcEndpointHandles() { geometryRenderer.drawArcEndpointHandles(allGeometryArcs().filter(isVisibleSketchElement)); }
+  function drawArcEndpointHandles() { return geometryDisplay.drawArcEndpointHandles(); }
 
-  function drawPoints() {
-    geometryRenderer.drawPoints(drawOrderBySketch(allGeometryPoints()));
-  }
+  function drawPoints() { return geometryDisplay.drawPoints(); }
 
   function selectedVisibilityTargets() { return propertySelection.visibilityTargets(); }
   function selectionVisibilityIsHidden(targets) { return propertySelection.visibilityIsHidden(targets); }
