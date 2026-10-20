@@ -1233,3 +1233,6 @@ GeometryPresentation.createは既存commandTargetsとsketchStyleのAPIを受け�
 
 
 - `GeometryDisplay`（`src/application/geometry_display.js`）: GeometryDisplay（src/application/geometry_display.js）はGeometryPresentation本体→line display→GeometryRenderer本体→Layerを既存順に生成する機能組立てである。同じPointUsage・command targets・Sketch style・CanvasSurfaceとGeometryReadModelの五つの一覧APIを共有する。24個の明示port（handleQueries／pointQueriesを含む）を受け、各子へ必要なAPIだけを渡す。点の現在一覧→Sketch描画順、円弧の現在一覧→可視filter、Spline編集状態→ハンドル描画の接続も所有する。返すのは四種類の図形描画・点／円弧端点／Splineハンドル描画・色／線幅照会・Spline pathの10入口である。明示itemsのfilterと既定一覧の整列、options、同じObject参照、現在viewport／SurfaceのDPR、export・後段drag／Spline／sidebarの遅延照会、例外伝播と既存Canvas復元を維持する。描画policy・Canvas命令・モデルstateは既存ownerに残し、独自state・cache・アプリ全体の可変contextを持たない。appのhoisted描画入口は先行callback登録のため維持する。
+
+
+CanvasDisplay.createRenderingは、描画器の生成後に同じCanvas／viewport／Surface／zoom controlとGeometryDisplay・寸法／注記／作図／配置／Offsetの限定APIを受け、Surfaceのinteractive renderer→frame rendererを既存順で生成する。23個の明示portで、共通contentを画像→Hatch（空の明示items、includePreview:true）→描画stack、PNG出力を寸法→注記→点へ結線する。対話描画の18段階はSurface、各図形の描画内容は既存renderer、描画計測とread cache・PNG frameは各既存ownerに残す。返すのはframe rendererのdrawだけで、新たな描画state・モデル変更・全app contextを持たない。生成時は描画・frame照会を行わず、描画時のzoom同期・現在frameの再照会、同じowner receiver・viewport／DPR・後段PNG操作overlayの遅延、短絡順と例外・既存の復元範囲を維持する。create／createWorkspaceの初期構築順とbind／startは変更しない。appには必要なhoisted描画入口と個別ownerの接続を残す。

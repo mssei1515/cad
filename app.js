@@ -1675,19 +1675,13 @@
 
   function draw() { return canvasRefresh.draw(); }
 
-  const interactiveCanvas = window.CanvasSurface.createInteractiveRenderer({
-    drawBlockInstanceHandles, dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
+  const canvasFrameRenderer = window.CanvasDisplay.createRendering({
+    canvas, ctx, viewport, surface: canvasSurface, zoomControl: canvasZoomControl,
+    readExportFrame: () => pngRendering.frame, recordDraw: () => pointerMoveScheduler.recordDraw(),
+    geometry: geometryDisplay, dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
     authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
-    drawSnapMarker, drawArcEndpointHandles, drawSplineEditHandles, drawPoints, drawReferenceImageOverlays,
+    drawBlockInstanceHandles, drawSnapMarker, drawReferenceImages, drawHatches, drawDrawingStack, drawReferenceImageOverlays,
     drawSketchIdentityLabel, drawSelectionRect, drawExportOverlay: () => pngExportCommand?.drawOverlay(ctx, viewport.scale),
-  });
-  const canvasFrameRenderer = window.CanvasSurface.createFrameRenderer({
-    canvas, ctx, viewport, surface: canvasSurface,
-    syncZoom: () => canvasZoomControl.sync(), readExportFrame: () => pngRendering.frame,
-    recordDraw: () => pointerMoveScheduler.recordDraw(),
-    drawContent: () => { drawReferenceImages(); drawHatches([], { includePreview: true }); drawDrawingStack(); },
-    drawExport: () => { drawDimensions(); drawAnnotations(); drawPoints(); },
-    drawInteractive: interactiveCanvas.draw,
   });
 
   function drawCanvas() { return canvasFrameRenderer.draw(); }
@@ -1726,7 +1720,6 @@
   function drawSplines(...args) { return geometryDisplay.drawSplines(...args); }
 
 
-  function drawSplineEditHandles() { return geometryDisplay.drawSplineEditHandles(); }
 
 
 
@@ -1749,7 +1742,6 @@
 
   function drawDimensions() { return dimensionLayer.draw(); }
 
-  function drawAnnotations() { return annotationLayer.draw(); }
 
   function effectiveLeaderAppearanceForSketch(sketch) { return annotationAppearance.effectiveLeaderAppearanceForSketch(sketch); }
   function effectiveAnnotationStyle(element) { return annotationAppearance.effectiveAnnotationStyle(element); }

@@ -31,5 +31,22 @@
     }
     return Object.freeze({ viewport, navigation, zoomControl, createWorkspace });
   }
-  window.CanvasDisplay = Object.freeze({ create });
+  function createRendering({ canvas, ctx, viewport, surface, zoomControl, readExportFrame, recordDraw,
+    geometry, dimensions, drawDimensionPreview, annotations, authoringPreview, placements, offsetPreview,
+    drawBlockInstanceHandles, drawSnapMarker, drawReferenceImages, drawHatches, drawDrawingStack,
+    drawReferenceImageOverlays, drawSketchIdentityLabel, drawSelectionRect, drawExportOverlay }) {
+    const interactive = window.CanvasSurface.createInteractiveRenderer({
+      drawBlockInstanceHandles, dimensions, drawDimensionPreview, annotations, authoringPreview, placements, offsetPreview,
+      drawSnapMarker, drawArcEndpointHandles: () => geometry.drawArcEndpointHandles(),
+      drawSplineEditHandles: () => geometry.drawSplineEditHandles(), drawPoints: () => geometry.drawPoints(),
+      drawReferenceImageOverlays, drawSketchIdentityLabel, drawSelectionRect, drawExportOverlay,
+    });
+    return window.CanvasSurface.createFrameRenderer({
+      canvas, ctx, viewport, surface, syncZoom: () => zoomControl.sync(), readExportFrame, recordDraw,
+      drawContent: () => { drawReferenceImages(); drawHatches([], { includePreview: true }); drawDrawingStack(); },
+      drawExport: () => { dimensions.draw(); annotations.draw(); geometry.drawPoints(); },
+      drawInteractive: interactive.draw,
+    });
+  }
+  window.CanvasDisplay = Object.freeze({ create, createRendering });
 })();
