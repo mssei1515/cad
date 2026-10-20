@@ -93,6 +93,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のProperties共通reader構築単位
+
+通常機能のProperties選択queryと表示へ、同じ既存GeometryReadServices／SketchContextを共有した。PropertiesDisplay.createSelectionはCanvasSelection・getOperation・Document・readServices・SketchContext・Hatch外観の六つから、既存PropertySelection.createへ必要な個別依存を渡す。queryの対象優先順位・混在値・参照・可視性／lock等の実装はediting層のPropertySelectionに残し、application層が型・正規化・read ownerとの結線だけを所有する。外観は元のreceiverと引数を維持するadapterを使い、静的namespaceの型／正規化／寸法種別queryも元の値を使う。
+
+GeometryReadServicesの生成結果を名前付きで保持し、直後に従来の各ownerへdestructureする。新規生成・state／cacheのcopyや初期化位置の変更はない。PropertiesDisplay.createWithControllerにもreadServices／SketchContextの任意指定を追加し、従来の個別指定を優先、undefinedのfieldだけを補う。両getOperationの形と読取時機、AppearanceUIのeditingScopeBinding.currentと他のWorkspace current reader、編集action・Controller／PaletteとDOMの生成順は変えない。新file・汎用app contextはなく、rootの不要なnormalizeAnnotationStyle／resolveGeometryAppearance aliasを除去した。
+
+対象二構築のcanonical引数合計81→55、引数内の異なるroot binding参照71→47。app.jsは2,990→2,984行（6行減）。行数差よりも、共有ownerと結線の所有・24個の個別root依存削減を評価する。root未使用bindingは0。仕様書と実装mapを更新した。
+
+構文588ファイル・全単体1,780件・関連単体20件が成功（exit 0）。追加2件は共有reader／従来構成の実markup・混在値・所属表示とモデル無変更、現在operation・lockと編集routeの同等性、生成時の無照会、Geometry／Annotation／Dimension外観のreceiver・引数・例外境界を確認する。fixtureのDOM模擬は既存Viewの所属表示を扱えるよう補完した。旧aa596a9との実ブラウザ比較では、初期／同種複数／異種複数／固定対象／Geometry／BlockのProperties HTMLと保存値が一致した（savedAtだけを比較対象外）。診断は一時directoryのcad-properties-scene-equivalence.cjs／.log。
+
+関連E2E287件が全成功（5.0分、exit 0）。unified-ui／phase0-characterization／blocks／free-instance／sketch-permissions／sketch-projection／unified-annotations／leader-appearance／multiple-dimensions／hatching／parameter-dialog-controller／adversarial-authoring-performanceを実行した。単独／複数Properties、既定値と継承外観、Geometry・寸法・注記・Block／Instance・Hatch、lock／権限、式とParameter、既存画面比較・履歴・保存再読込を確認した。性能file全12件を含み、pan141ms（175ms未満）、空白矩形217ms（250ms未満）だった。全runner終了と専用server停止を確認した。ログは一時directoryのcad-properties-scene-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。mainは5ee5f3fのまま保留、現在コードの全E2Eは未実行、全体目標は未完了。c3a213cの全E2E584成功は過去の基準として保持する。開始時の週枠使用21%・残量79%で停止条件未到達。
+
+次はPropertiesの編集側／AppearanceUIと表示Controllerに残る接続を、既存のcommand・query ownerで整理する。今回共有したreadServices／SketchContextを起点にし、constraint表示情報・Parameter式・編集action等の元ownerを確認する。広い引数をそのまま一つのconfigへ移さず、役割ごとのread／edit能力を明示して、Propertiesの生成・接続をまとまった境界へ近づける。各getOperation／scope・遅延callback・startの違いは維持する。modeの所有・他の通常機能の構築・test支援も未完了で、200〜500行の目標を縮小しない。
+
+
 ### 最新のClipboardテスト支援組立て単位
 
 既存ClipboardTestDriver.createSupportへ観測→Geometry fixture→Block fixtureの生成と三つの公開API名の接続を集約した。ClipboardSession・CanvasSelection・現在scope・履歴、既存GeometryCreation／SketchContextと型namespace等24個の限定依存を受ける。両fixtureのreadStateは同じ観測関数を参照し、session／Selection／モデル／履歴・採番の新たなcopyを持たない。コピー／貼付け本体、commit／rollbackとID発行の時機は既存command／fixtureに残す。従来の個別factoryも維持する。

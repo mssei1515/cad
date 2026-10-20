@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のProperties共通reader構築単位
+
+PropertiesDisplayが既存PropertySelectionの結線を所有し、選択と表示で同じGeometryReadServices／SketchContextを共有する。編集層の判定実装や各scope・operation readerは維持し、新context／stateは増やさない。対象二構築の引数81→55、root依存71→47、app.jsは2,990→2,984行（6行減）。旧appとの実ブラウザ比較で六つの選択scenarioのHTML・保存値が一致した。検証と次の編集／AppearanceUIの接続境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のClipboardテスト支援組立て単位
 
 ClipboardTestDriverで観測とGeometry／Block fixtureを同じsession・Selection・scope・履歴へ接続し、三つの公開APIを返す。生成順と元関数を維持し、新stateや汎用contextは増やさない。対象factory呼出し3→1、root依存35→21、app.jsは3,004→2,990行（14行減）。旧appとの実ブラウザ比較でAPI全204名の順序・fixture／Selection／履歴・保存値が一致した。検証と次の通常Properties／Appearance構築境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

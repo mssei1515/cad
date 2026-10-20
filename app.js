@@ -12,8 +12,7 @@
     CSS_PX_PER_MM, DEFAULT_APPEARANCE,
     DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
     normalizeAppearance, normalizeDimensionAppearance,
-    normalizeHatchAppearance, normalizeAnnotationStyle,
-    resolveGeometryAppearance,
+    normalizeHatchAppearance,
   } = window.Appearance;
   const {
     ensureDrawingOrderState, drawingOrderOwner,
@@ -177,13 +176,14 @@
     defaultLineWidth: () => Number(documentModel.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth, viewportScale: () => viewport.scale,
   });
   const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems, hatchContainsSelectablePoint } = hatchGeometryQuery;
-  const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
-    geometryAppearance, dimensionAppearance, annotationAppearance } = window.GeometryReadServices.create({
+  const geometryReadServices = window.GeometryReadServices.create({
     document: documentModel, currentScope: workspace.current, currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     elementSketchId, applicationText, hatchGeometryQuery, sketchById, isRootSketch, activeSketchId,
     showHiddenElements: () => viewState.showHiddenElements,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
+  const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
+    geometryAppearance, dimensionAppearance, annotationAppearance } = geometryReadServices;
   const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const { blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
@@ -2034,13 +2034,9 @@
 
 
 
-  const propertySelection = window.PropertySelection.create({
-    Point, Line, canvasSelection,
+  const propertySelection = window.PropertiesDisplay.createSelection({
+    canvasSelection, documentModel, readServices: geometryReadServices, sketchContext, hatchAppearanceForDisplay,
     getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
-    effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, sketchName, activeSketchId,
-    blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
-    hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveAnnotationStyle, effectiveDimensionAppearance,
-    isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance,
   });
   function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
   const propertyEditing = window.PropertyEditingFeature.create({
@@ -2059,9 +2055,7 @@
   const propertiesView = window.PropertiesDisplay.createWithController({
     document, documentModel, currentScope: workspace.current, canvasSelection,
     getOperation: () => ({ mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
-    propertySelection, geometryAppearance, dimensionAppearance, annotationAppearance,
-    catalog: blockCatalog, projections: blockProjections, instances: instanceProjections, geometryReads,
-    sketchName, sketchById, isRootSketch, activeSketchId, constraintSketchId, sketchProjectionConstraintForTarget,
+    propertySelection, readServices: geometryReadServices, sketchContext, sketchProjectionConstraintForTarget,
     constraintGeometryId, constraintStatusBadge, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
     hatchAppearanceForDisplay, resolvedHatchBoundary, applicationText, escapeHtml, hatchRegionErrorText,
     geometryInstanceTypeLabel, expressionInputValue, numericDimensionExpression, localizedConstraintName,
