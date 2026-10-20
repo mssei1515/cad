@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の寸法入力継続単位
+
+Dimension dragから距離入力へ戻る処理と有効判定を、既存ConstraintCommandInputの専用APIへ集約した。六つの限定依存と二操作で分岐を所有し、DimensionDragFeatureへ共有する。rootの状態判定・hover解除／座標変換とcommand振分けの実装を除去し、生成順とdrag session・履歴は維持した。app.jsは3,063→3,055行（8行減）。旧実装との276ケース比較・単体と最新検証は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のInstance入力照会共有単位
 
 CanvasCommandInputsで既存scene queryを共有し、投影／参照とHatch照会を同じownerから接続した。未使用のmakeConstraintOperand受渡しとrootのHatch委譲・投影aliasを除去し、必要なoperandElementは限定portのまま維持する。canonical構築引数59→55、root参照58→54、app.jsは3,064→3,063行（1行減）。正式仕様・実装mapを更新した。検証と次のCanvas構築境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

@@ -2234,28 +2234,20 @@
     return window.DimensionQueries.hasDirectRadiusDimension(editingScopeBinding.current.constraints, primitive);
   }
 
+  const dimensionCommandInput = window.ConstraintCommandInput.createDimensionContinuation({
+    canvasHover, canvasPoint, pending: pendingCommandSession, targets: constraintTargetSession,
+    placement: dimensionPlacementCommand, constraints: constraintTargetCommand,
+  });
   const { command: dimensionDrag, lineGroup: dimensionLineGroup, selectedLineGroup: selectedDimensionLineGroup } = window.DimensionDragFeature.create({
     placement: dimensionPlacement, viewport, canvasSelection, currentScope: workspace.current,
     constraintSketchId, isEditableSketchId, isVisibleSketchId, effectiveDimensionAppearance, isVisibleValue,
-    guardSketchEdit, isDimensionConstraintCommandActive, setHint, clearSnap, hypot2,
+    guardSketchEdit, commandInput: dimensionCommandInput, setHint, clearSnap, hypot2,
     beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
     draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
-    continueCommandClick: (event, hits) => {
-      canvasHover.update({ dimension: null });
-      const pointer = canvasPoint(event);
-      if (pendingCommandSession.current?.type === "distance-place") {
-        if (!retargetDistancePlaceWithOperand(pointer, hits)) startDistanceValueInput(pointer);
-      } else if (constraintTargetSession.command?.type === "distance") {
-        handleConstraintOperandClick(pointer, "distance", hits);
-      }
-    },
   });
   const { begin: beginDimensionDrag } = dimensionDrag;
 
-  function isDimensionConstraintCommandActive() {
-    return constraintTargetSession.command?.type === "distance" && pendingCommandSession.current?.type !== "distance-value";
-  }
 
 
 
@@ -2363,7 +2355,7 @@
   const canvasCommandInputs = window.CanvasCommandInputs.create({
     readMode: () => mode, readPending: pendingCommandSession.read, readPendingConstraint: () => constraintTargetSession.command,
     document, canvas, canvasSelection, clearSelection, canvasHover, draw, updateUI, updateGeometrySelectionUI, setHint, applicationText,
-    annotationCommand, annotationDrag, startAnnotationAnchorConstraint, selectedDimensionLineGroup, isDimensionConstraintCommandActive, beginDimensionDrag,
+    annotationCommand, annotationDrag, startAnnotationAnchorConstraint, selectedDimensionLineGroup, isDimensionConstraintCommandActive: dimensionCommandInput.isActive, beginDimensionDrag,
     retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint, handleConstraintOperandClick,
     instanceSourceCommand, geometryInstanceCommand, sceneQueries: sceneHitQueries, operandElement, toggleSketchProjectionSource,
     clearSnap, selectionRectangle, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing,

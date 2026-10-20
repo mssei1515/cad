@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ placement, viewport, canvasSelection, currentScope, constraintSketchId, isEditableSketchId, isVisibleSketchId,
-    effectiveDimensionAppearance, isVisibleValue, guardSketchEdit, isDimensionConstraintCommandActive,
+    effectiveDimensionAppearance, isVisibleValue, guardSketchEdit, commandInput, isDimensionConstraintCommandActive,
     beginPointer, endPointer, setHint, clearSnap, hypot2, continueCommandClick, draw, updateUI, updateGeometrySelectionUI,
     syncDimensionValueInput, recordHistory }) {
     const { Line, LineAngleConstraint } = window.GeometrySolver;
@@ -12,14 +12,15 @@
       isEditableSketchId, isVisibleSketchId, targetFromConstraint, effectiveDimensionAppearance,
       defaultDimensionForTarget: placement.defaultDimensionForTarget, isVisibleValue, lineGroup });
     const { sync } = window.DimensionDrag.createAngleSynchronization({ LineAngleConstraint, isReadOnlyDimension, angleDimensionAngles });
+    const input = commandInput || { isActive: isDimensionConstraintCommandActive, continueClick: continueCommandClick };
     const command = window.DimensionDrag.create({ canEdit: item => guardSketchEdit(constraintSketchId(item)),
       selectedLineGroup: selected, translateLineGroup: lineGroup.translate,
       dimensionAnchor: placement.dimensionAnchor, migrateAngleDimensionLabelPlacement: placement.migrateAngleDimensionLabelPlacement,
       angleDimensionLabelOffsets: placement.angleDimensionLabelOffsets, angleDimensionFromLabelPoint: placement.angleDimensionFromLabelPoint,
       dimensionWithLabelAt: placement.dimensionWithLabelAt, dimensionFromAnchor: placement.dimensionFromAnchor,
       setAngleDimensionLabelOffsets: placement.setAngleDimensionLabelOffsets, syncAngleConstraintFromDimension: sync,
-      canvasSelection, viewScale: () => viewport.scale, isDimensionConstraintCommandActive, beginPointer, endPointer, setHint, clearSnap, hypot2,
-      draw, continueCommandClick, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory });
+      canvasSelection, viewScale: () => viewport.scale, isDimensionConstraintCommandActive: input.isActive, beginPointer, endPointer, setHint, clearSnap, hypot2,
+      draw, continueCommandClick: input.continueClick, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory });
     return Object.freeze({ command, lineGroup, selectedLineGroup: selected });
   }
   window.DimensionDragFeature = Object.freeze({ create });
