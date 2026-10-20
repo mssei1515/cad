@@ -520,7 +520,7 @@
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
     draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
-  const { currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds } = viewport;
+  const { clampZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, visibleWorldBounds } = viewport;
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
@@ -2536,12 +2536,12 @@
     const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint, currentScope: workspace.current,
     });
-    const allGeometryFitFixture = window.CanvasTestDriver.createAllGeometryFitFixture({
-      resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, fitAllGeometryToViewport, allGeometryBounds, screenBoxForBounds, canvas,
+    const canvasTestDriver = window.CanvasTestDriver.createDisplaySupport({
+      viewport, canvas, resizeCanvas, draw, resetModelState, geometry: geometryCreation, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID,
+      fitAllGeometryToViewport, allGeometryBounds, visibleGeometryBounds, isVisibleSketchId, updateUI, readUnits: () => documentModel.units, cssPxPerMm: CSS_PX_PER_MM,
+      snapCandidates, hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
+      evaluateSpline: window.SplineGeometry.evaluate, elementFromPoint: (x, y) => document.elementFromPoint(x, y),
     });
-    const middleButtonFitFixture = window.CanvasTestDriver.createMiddleButtonFitFixture({ resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, updateUI, draw, canvas });
-    const fitObservation = window.CanvasTestDriver.createFitObservation({ canvas, viewport, screenBoxForBounds, visibleGeometryBounds, isVisibleSketchId });
-    const testFitOperation = window.CanvasTestDriver.createFitOperation({ fitAllGeometryToViewport, draw });
     const canvasRenderingTestSupport = window.CanvasRenderTestDriver.createRenderingSupport({
       setMode: value => { mode = value; }, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
       authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
@@ -2592,7 +2592,6 @@
     const sidebarHoverKeyObservation = window.PropertiesTestDriver.createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey });
     const blockDimensionFixture = window.BlockTestDriver.createReadOnlyDimensionFixture({ currentScope: workspace.current, blockProjectionBundle, defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint });
     const blockExternalFixture = window.BlockTestDriver.createExternalConstraintFixture({ currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
-    const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const dimensionInteractionSupport = window.DimensionTestDriver.createInteractionSupport({
       currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput,
       clearSelection, canvasSelection, updateUI, draw, resetModelState, addPoint, addLine, addCircle, addArc,
@@ -2610,7 +2609,6 @@
       resetModelState, addPoint, addLine, pushModelConstraint, DistanceConstraint, ParallelConstraint, PerpendicularConstraint,
       ensureDimensionDefaults, solveAndRefresh, log, fitAllGeometryToViewport, draw, resetHistory, serializeModel,
     });
-    const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetTestSupport = window.OffsetTestDriver.createSupport({
       resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, currentScope: workspace.current,
       RadiusConstraint, OffsetConstraint, OffsetChainConstraint, HorizontalConstraint, VerticalConstraint, Line,
@@ -2661,23 +2659,14 @@
       allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle, effectiveAppearanceForElement,
       isSidebarHighlightedElement, Point, isAnyLineEndpoint, isSidebarHoveredElement, canvasHover, geometryDisplayColor, geometryStrokeWidth,
     });
-    const snapObservation = window.CanvasTestDriver.createSnapObservation({ viewport, snapCandidates });
     const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
       readMode: () => mode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
-    });
-    const selectableLinePosition = window.CanvasTestDriver.createSelectableLinePosition({
-      currentScope: workspace.current, canvas, hitPoint, hitLine, hitDimension, worldToCanvasScreen, elementFromPoint: (x, y) => document.elementFromPoint(x, y),
-    });
-    const geometryHitObservation = window.CanvasTestDriver.createHitObservation({ hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline });
-    const geometryPositionObservation = window.CanvasTestDriver.createGeometryPosition({
-      currentScope: workspace.current, evaluateSpline: window.SplineGeometry.evaluate, clientPosition: canvasTestDriver.clientPosition,
     });
     const sketchMoveObservation = window.CanvasSelectionTestDriver.createMoveObservation({
       sketchMoveCommand, activeSketchId, fields: window.SketchMove.fields, canvasSelection, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock: () => Boolean(blockEditor.current),
     });
-    const displayZoomObservation = window.CanvasTestDriver.createZoomObservation({ viewport, clampZoom, readUnits: () => documentModel.units, formatZoom, cssPxPerMm: CSS_PX_PER_MM });
     const geometryIdSelection = window.CanvasSelectionTestDriver.createIdSelection({
       clearSelection, currentScope: workspace.current, canvasSelection, updateUI, draw, blockSelectionGeometry, readSelectedGeometry: readTestSelectedGeometry,
     });
@@ -2893,15 +2882,9 @@
       resolveConstraintIntentForTest: constraintIntentTestDriver.resolve,
       sketchMoveStateForTest: sketchMoveObservation.state,
       selectGeometryIdsForTest: geometryIdSelection.select,
-      focusWorldForTest: canvasTestDriver.focus,
-      displayZoomStateForTest: displayZoomObservation.state,
-      worldClientPositionForTest: canvasTestDriver.clientPosition,
-      hitGeometryAtWorldForTest: geometryHitObservation.hit,
-      geometryClientPositionForTest: geometryPositionObservation.position,
+      ...canvasTestDriver.publicAPI,
       hoverDisplayStateForTest: hoverDisplayObservation.state,
-      snapLabelsAtWorldForTest: snapObservation.labels,
       authoringStateForTest: authoringObservation.state,
-      selectableLineClientPositionForTest: selectableLinePosition.position,
       guidedPointDragForTest: pointDragTestDriver.drag,
       guidedPointDragPathForTest: pointDragTestDriver.path,
       geometryDragPathForTest: geometryDragTestDriver.path,
@@ -2917,17 +2900,12 @@
       trimConstructionBoundaryCase: trimConstructionFixture.boundaryCase,
       trimCircleDiameterDimensionCase: trimDiameterFixture.diameterCase,
       ...annotationTestSupport.observations,
-      fitAllGeometryForTest: testFitOperation.fit,
       ...annotationTestSupport.interaction,
       historyState: readTestHistory,
       resetForActiveSketchDimensionVisibility: dimensionFixtureSupport.resetForActiveSketchDimensionVisibility,
-      resetForAllGeometryFit: allGeometryFitFixture.reset,
-      resetForMiddleButtonFit: middleButtonFitFixture.reset,
-      middleButtonFitState: fitObservation.state,
       canvasDashIsolationCases: canvasRenderingTestSupport.canvasDashIsolationCases,
       resetForSidebarInspection: sidebarInspectionFixture.reset,
       resetForRootSketchTreeHoverTest: rootHoverFixture.reset,
-      resetForFixedPointDisplayTest: fixedPointFixture.reset,
       resetForSketchTreeBlockHoverTest: blockHoverFixture.reset,
       ...offsetTestSupport,
       resetForSketchDeletion: sketchDeletionFixture.reset,

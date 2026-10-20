@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のCanvas表示テスト支援組立て単位
+
+CanvasTestDriver.createDisplaySupportへ表示・座標・hit／snap・fit fixtureの11 factoryの生成と既存12個のテストAPI名の接続を集約した。既存viewportとGeometryCreationを共有し、readUnits・現在scope・fit／bounds・hit・snap等の19個の限定依存から各子へ必要な入口だけを渡す。focus／clientPositionは同じ元関数を他driverと公開APIへ共有する。作図sessionを読むAuthoringObservationと表示切替のViewObservationはこの表示支援に混ぜず、従来どおり別に生成する。新file・state・cache・app contextはない。
+
+元の個別factoryは関数宣言とObject.freeze APIの返却のみで、生成時にmodel／DOM／Canvas／viewportを読まないことを確認した。test guard内の最初のfit支援の位置で同じ11支援をまとめて生成し、fixtureやquery・resize／drawは実行しない。Viewportの五つの関数とGeometry生成の二つの関数は元の非bind値を共有する。不要になったrootのcurrentCanvasCenterWorld／formatZoom／screenBoxForBounds aliasも除去した。app内の対象factory呼出し11→1、引数内の異なるroot binding参照29→23。app.jsは3,026→3,004行（22行減）。仕様書と実装mapを更新した。
+
+構文588ファイル・全単体1,778件・関連単体8件が成功（exit 0）。追加2件は実CanvasViewportと共有geometryを使い、生成時の無照会、focus／clientPositionの関数同一性、現在scope差替え・unitsのcopyとviewport更新、描画失敗時の部分state、fit既定値とall／middle／fixed-point fixtureの元の呼出し順を確認する。root alias削除後もappの個別syntaxを確認済み。
+
+旧361d890のappと現在appを同じmodule群で実ブラウザ比較し、テストAPI全204名の集合、初期保存値、zoom／focus／world-client／Geometry位置、all fit／middle fit／固定点の結果と各fixtureの保存値が一致した（savedAtだけを比較対象外とした）。通常起動でテストAPIがないことと両起動の例外なしも確認した。診断は一時directoryのcad-canvas-display-support-equivalence.cjs／.log。公開名・引数・戻り値は維持し、publicAPIは表示familyとして接続する。関連E2E225件が全成功（3.8分、exit 0）。unified-ui／phase0-characterization／free-instance／hatching／sketch-projection／png-export／reference-images／view-visibility／selection-zoom-shadow／annotation-display-size／multiple-dimensions／adversarial-authoring-performanceを実行した。表示倍率・全体／中button fit・座標／実hit・選択表示・画像／注記・投影とInstance・Hatch・権限・履歴・保存再読込を確認した。性能file全12件を含み、pan142ms（175ms未満）、空白矩形216ms（250ms未満）だった。全runner終了と専用server停止を確認した。ログは一時directoryのcad-canvas-display-support-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。前単位c3a213cの全E2E584成功を現在コードの全体成功とは扱わない。mainは5ee5f3fのまま保留し、全体目標は未完了。開始時の週枠使用20%・残量80%で停止条件未到達。
+
+次はtest hooksの残るfamilyの構築と公開境界を確認する。表示支援と同様に、既存owner・現在scope・読取りと操作を共有できる実際のまとまりを選び、104 bindingを渡す単一contextや、細かい委譲factoryの乱立にしない。modeの所有・通常機能の構築群・bind／start段階も未完了のままであり、test支援の整理だけで200〜500行の目標を達成したとは扱わない。
+
+
 ### 最新のCanvas command終了判定単位
 
 command panelの空白判定を、同じpress／参照／Hatch照会を持つ既存CanvasHitInteraction.createInteractionへ集約した。blankCanvasGesture・instanceSourceCommand・hatchCommandの三つの既存ownerを追加指定すると、press／hoverとともにisBlankCommandPanelPointを返す。press snapshot→blankAnnotationHitによるblank判定→投影参照除外→Hatch face除外の順と短絡、元参照、owner receiver、現在mode／source／includeConstructionと例外を維持する。pressやscene queryを再生成せず、新しいhover／model／gesture stateを持たない。追加owner未指定時の従来APIはpress／hoverのまま。
