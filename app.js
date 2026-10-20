@@ -1781,18 +1781,12 @@
 
   function ensureDimensionDefaults() { return window.DocumentState.normalizeDimensionState(model, targetFromConstraint, (target, dimension) => dimensionPlacement.normalizeDimension(target, dimension)); }
 
-  const dimensionSelectionBounds = window.DimensionPresentation.createSelectionBounds({
-    isActiveSketchConstraint, isVisibleSketchId, constraintSketchId, targetFromConstraint, defaultDimensionForTarget,
-    effectiveDimensionAppearance, isVisibleValue, dimensionLayout, dimensionTextDrawingMetrics,
-    dimensionLabelForConstraint, dimensionTextWidth, dimensionUsesExpression,
-  });
-  const dimensionLayer = window.DimensionPresentation.createLayer({
-    ctx, currentScope: dimensionPresentationScope, isActiveSketchConstraint, isVisibleSketchId, constraintSketchId,
-    targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, isVisibleValue, canvasSelection,
+  const { selectionBounds: dimensionSelectionBounds, layer: dimensionLayer } = dimensionDisplay.createTraversal({
+    currentScope: dimensionPresentationScope, isActiveSketchConstraint, isVisibleSketchId, constraintSketchId, isVisibleValue, canvasSelection,
     readHoverDimension: () => canvasHover.current.dimension, readDraggedDimension: () => dimensionDrag.constraint,
     readPending: () => pendingCommandSession.current, readExportFrame: () => pngRendering.frame,
     readConstraintStatus: () => viewState.constraintStatus, inactiveColor: INACTIVE_CONSTRAINT_STATUS_COLOR,
-    dimensionLabelForConstraint, drawDimension, dimensionUsesExpression,
+    dimensionLabelForConstraint, dimensionUsesExpression,
   });
 
   const rectangleSelectionQuery = window.RectangleSelectionQuery.create({

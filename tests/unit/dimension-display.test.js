@@ -84,3 +84,86 @@ test('standalone linear and angle paints resolve live defaults and preserve hidd
     assert.equal(f.marks.length, marks); assert.equal(f.stack.length, 0);
   }
 });
+
+function traversalFixture() {
+  const f = fixture(), selection = w.CanvasSelection.create();
+  Object.assign(f.state, { scope: { lines: [], constraints: [] }, annotations: [], hiddenSketches: new Set(), labels: [],
+    hover: null, dragged: null, pending: null, exportFrame: null, constraintStatus: true });
+  const labels = w.DimensionPresentation.createLabel({ ...w.DimensionQueries,
+    dimensionDisplayState: () => { throw Error('traversal must supply its resolved appearance'); }, constraintSketchId: item => item.sketchId,
+    formatDimensionLabel: String, formatMeasuredDimensionLabel: String });
+  const live = read => (...args) => { assert.equal(f.state.ready, true); return read(...args); };
+  f.state.ready = false;
+  const traversal = f.display.createTraversal({
+    currentScope: live(() => { f.state.presented = { constraints: [...f.state.scope.constraints, ...f.state.annotations] }; return f.state.presented; }),
+    isActiveSketchConstraint: live(item => item.sketchId === f.state.active), isVisibleSketchId: live(id => !f.state.hiddenSketches.has(id)),
+    constraintSketchId: item => item.sketchId, isVisibleValue: value => value !== false, canvasSelection: selection,
+    readHoverDimension: live(() => f.state.hover), readDraggedDimension: live(() => f.state.dragged), readPending: live(() => f.state.pending),
+    readExportFrame: live(() => f.state.exportFrame), readConstraintStatus: live(() => f.state.constraintStatus), inactiveColor: '#999999',
+    dimensionLabelForConstraint: (constraint, target, dimension, appearance) => { f.state.labels.push([constraint, appearance]); return labels.label(constraint, target, dimension, appearance); },
+    dimensionUsesExpression: () => true });
+  assert.deepEqual(f.calls, []); assert.deepEqual(f.state.resolves, []); f.state.ready = true;
+  function dimension(id, sketchId = 'S1') {
+    const item = new w.GeometrySolver.DistanceConstraint(new Point(`${id}a`, 0, 0), new Point(`${id}b`, 100, 0), 100);
+    item.sketchId = sketchId;
+    item.dimension = f.display.placement.dimensionFromAnchor(w.DimensionQueries.targetFromConstraint(item), { x: 50, y: -20 });
+    return item;
+  }
+  return { ...f, traversal, selection, dimension };
+}
+
+test('display traversal keeps the supplied presentation scope, object identity and one appearance resolution per visible dimension', () => {
+  const f = traversalFixture(), active = f.dimension('a'), inactive = f.dimension('b', 'S2'), annotation = f.dimension('annotation');
+  annotation.readOnlyDimension = true;
+  const hidden = f.dimension('hidden', 'S3'); f.state.hiddenSketches.add('S3');
+  f.state.scope.constraints = [active, inactive, hidden]; f.state.annotations = [annotation];
+  const source = f.state.scope.constraints, before = JSON.stringify(source);
+  f.traversal.layer.draw();
+  assert.deepEqual(f.state.labels.map(entry => entry[0]), [inactive, active, annotation]);
+  assert.deepEqual(Array.from(f.state.presented.constraints), [inactive, hidden, active, annotation]);
+  assert.equal(f.state.scope.constraints, source); assert.equal(JSON.stringify(source), before);
+  assert.equal(f.state.resolves.length, 3);
+  assert.deepEqual(f.calls.filter(call => call[0] === 'fillText').map(call => call[1]), ['100', '100', '(100)']);
+  const replacement = f.dimension('same-id', 'S2');
+  f.state.scope = { lines: [], constraints: [replacement] }; f.state.annotations = []; f.state.active = 'S2';
+  f.document.defaultDimensionAppearance = { color: '#445566' }; f.state.labels.length = 0; f.calls.length = 0;
+  f.traversal.layer.draw();
+  assert.equal(f.state.resolves.length, 4); assert.equal(f.state.labels[0][0], replacement);
+  assert.equal(f.state.labels[0][1].color, '#445566'); assert.equal(f.stack.length, 0);
+});
+
+test('selection bounds share live metrics and resolved labels without mutating dimensions or reading inactive geometry', () => {
+  const f = traversalFixture(), item = f.dimension('a'), before = JSON.stringify(item);
+  const first = f.traversal.selectionBounds.read(item);
+  assert.ok([first.x1, first.y1, first.x2, first.y2].every(Number.isFinite));
+  assert.equal(f.state.resolves.length, 1); assert.equal(f.state.labels[0][0], item);
+  f.document.defaultDimensionAppearance = { dimensionTextHeight: 12 };
+  const larger = f.traversal.selectionBounds.read(item); assert.ok(larger.y1 < first.y1);
+  assert.equal(f.state.resolves.length, 2); assert.equal(JSON.stringify(item), before);
+  f.state.active = 'S2'; assert.equal(f.traversal.selectionBounds.read(item), null); assert.equal(f.state.resolves.length, 2);
+  f.state.active = 'S1'; f.state.hiddenSketches.add('S1');
+  assert.equal(f.traversal.selectionBounds.read(item), null); assert.equal(f.state.resolves.length, 2);
+  f.state.hiddenSketches.clear(); item.dimension.display = { visible: false };
+  assert.equal(f.traversal.selectionBounds.read(item), null); assert.equal(f.state.resolves.length, 3);
+});
+
+test('traversal observes hover, drag, selection, editing and PNG export flags through the same painter', () => {
+  const f = traversalFixture(), active = f.dimension('a'), inactive = f.dimension('b', 'S2');
+  f.state.scope.constraints = [active];
+  for (const kind of ['hover', 'dragged', 'selected', 'inspection']) {
+    f.state.hover = null; f.state.dragged = null; f.selection.set('dimensionConstraint', null); f.selection.set('inspection', null);
+    if (kind === 'selected') f.selection.set('dimensionConstraint', active);
+    else if (kind === 'inspection') f.selection.set('inspection', { targets: [{ kind: 'constraint', item: active }] });
+    else f.state[kind] = active;
+    f.calls.length = 0; f.traversal.layer.draw();
+    assert.ok(f.calls.some(call => call[0] === 'stroke' && call[1] === '#2563eb'), kind);
+  }
+  f.state.pending = { type: 'distance-value', constraint: active }; f.state.scope.constraints.push(inactive);
+  f.calls.length = 0; f.marks.length = 0; f.traversal.layer.draw();
+  assert.equal(f.calls.filter(call => call[0] === 'fillText').length, 1); assert.equal(f.marks.length, 1);
+  assert.ok(f.calls.some(call => call[0] === 'stroke' && call[1] === '#999999'));
+  f.state.exportFrame = {}; f.calls.length = 0; f.marks.length = 0; f.traversal.layer.draw();
+  assert.equal(f.calls.filter(call => call[0] === 'fillText').length, 2); assert.equal(f.marks.length, 0);
+  assert.equal(f.calls.some(call => call[0] === 'stroke' && ['#2563eb', '#999999'].includes(call[1])), false);
+  assert.equal(f.stack.length, 0);
+});
