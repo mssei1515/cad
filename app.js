@@ -1677,22 +1677,15 @@
   function drawCanvas() { return canvasFrameRenderer.draw(); }
 
 
+  const { add: addInstanceSourcesByRect } = window.InstanceCommandInput.createRectangleSources({
+    getMode: () => mode, instanceSourceCommand, geometryInstanceCommand, geometryReads, query: rectangleSelectionQuery,
+    sketchProjectionEntriesByRect, elementSketchId, activeSketchId, isVisibleSketchElement,
+  });
   const selectionRectangle = window.SelectionRectangle.create({
     rectFromPoints, hypot2, viewScale: () => viewport.scale,
     releasePointer: (id) => { try { canvas.releasePointerCapture(id); } catch (_) {} },
-    clearSelection, selectByRect, addSketchProjectionSourcesByRect,
-    addInstanceSourcesByRect: (rect, crossing) => {
-      if (mode === "instance-sources" && instanceSourceCommand.instance?.type === "sketchProjection") {
-        const entries = sketchProjectionEntriesByRect(rect, crossing);
-        instanceSourceCommand.addSources(entries.map(entry => entry.item));
-      } else {
-        const items = rectangleSelectionQuery.readProjection(rect, crossing, {
-          points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
-          arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches,
-        }, item => elementSketchId(item) === activeSketchId() && isVisibleSketchElement(item) ? item : null);
-        (mode === "instance-sources" ? instanceSourceCommand : geometryInstanceCommand).addSources(items);
-      }
-    }, setHint, updateGeometrySelectionUI, draw,
+    clearSelection, selectByRect, addSketchProjectionSourcesByRect, addInstanceSourcesByRect,
+    setHint, updateGeometrySelectionUI, draw,
   });
 
   function drawSelectionRect() { return interactionOverlay.drawSelectionRect(selectionRectangle.preview()); }

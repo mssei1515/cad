@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のInstance参照元の矩形入力単位
+
+既存InstanceCommandInput.createRectangleSourcesへSketchProjection型のentry→itemと、通常の六Geometry一覧→readProjection／active・visible条件→現在modeに応じたcommandへの追加を集約した。九つの限定APIからaddだけを返し、Geometryの選別・command state／確定・通常Selection／gestureとUI通知は元ownerへ残す。生成時照会、新file・state・cache・scriptはない。元の短絡とquery後のmode再読取り、同じreader／provider構造・候補array／item参照・receiver・undefined戻り値・例外の短絡を維持する。app.jsは3,114→3,107行（7行減）、今回再開時3,652行から545行減。新たな未使用root bindingがないことをBabelで確認した。
+
+最終コードで構文588ファイル・単体1,741件・関連E2E239件（4.0分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／free-instance／sketch-projection／sketch-projection-compatibility-driver／blocks／hatching／command-panel／adversarial-authoring-performanceで、file URL起動、参照元編集・投影entry／互換経路、Block／Instance、Hatch・command panel、既存画面比較・履歴・保存再読込を確認した。パンは164msで元の175ms未満の基準内。追加単体4件は実RectangleSelectionQuery／SplineGeometryと組み合わせ、生成時遅延、projection型のentry順・重複／item参照とquery後も同じcommand、通常の六reader／包含とcrossing／active・visible短絡と新しい一覧、provider再生成・同じ関数、query後のmode変更による追加先再選択、戻り値とreceiver・query／predicate／command例外の短絡を確認する。既存click APIの5件も維持し、関連単体23件成功。新file・script・保存形式変更はない。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-instance-rectangle-{check,unit,related}.log。
+
+基準はdevelop 99daae2（前実装ada73d2）。開始時週枠残量59%。検証後はusage toolの週枠reset時刻とusedPercentの表示が更新され、used 1%／残量99%を確認したため継続する。mainは5ee5f3fを維持し、全体目標は未完了。次はfindArcEndpointFixedConstraint／findLineFixedConstraint／pointLockedByLineFixedの三つの読取りを、既に両拘束型を参照するConstraintReferencesへ集約できるか確認する。currentScopeはEditingScopeBindingの同期済みscopeを使い、enabled厳密false・型判定・表示要素比較とpoint端点のObject同一性、現在配列の先頭一致／undefined／booleanと例外を維持する。同じ比較関数はSelectionHighlight生成後に利用可能になるため初期化順を確認し、必要のないhoisted wrapperや新たな小file・cache・編集stateは増やさない。
+
+
 ### 最新の通常矩形選択の適用単位
 
 既存CanvasSelectionInteraction.createRectangleSelectionへ追加選択のSketch整合guard→Instance内部選択解除→矩形query→Selection反映を集約した。四つの限定APIとselectだけで、図形選別は既存RectangleSelectionQuery、集合更新はCanvasSelection、gesture／UI通知は既存SelectionRectangleに残す。生成時照会や新state・cache・scriptはない。元の短絡・照会回数、query前の解除、同じObject／rect・options・receiver・undefined戻り値・例外時の部分状態を維持する。selectByRectの唯一の参照は宣言後のSelectionRectangleへの接続であることをBabelで確認し、不要なhoisted wrapperを追加せずselectを直接接続した。app.jsは3,118→3,114行（4行減）、今回再開時3,652行から538行減。
