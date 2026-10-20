@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新の読込codec生成単位
+### 最新のSketch正規化copy単位
+
+前単位は499abbaをdevelopの02f580bへ統合・Push済み。今回はcodex/sketch-normalized-copyで継続した。開始時は週枠使用18%／残量82%で停止条件には達していない。
+
+normalizedSketchCopyの本体をSketchHierarchy.copyWithNormalizedAppearanceへ統合した。Block clone／apply・Session同期・Block履歴が同じ関数を使う。四種の外観は独立して正規化し、その他のfieldはshallow copyで参照を維持する。ID／親／Root名の補正や読込版移行は行わず、null／未指定の継承用空外観、元Sketchの無変更を維持する。新file・state・依存portは増やさず、appは関数の接続だけを保持する。app.jsは3,396→3,387行（9行減）、今回の再開から3,652→3,387行（265行減）。
+
+構文574ファイル・単体1,651件・関連E2E163件（2.3分）が成功（全runner exit 0）。関連はunified-ui／blocks／block-geometry-fixed／derived-selection-copy／sketch-editで、file URL起動、Blockのclone／編集／確定・取消と履歴、Sketch外観・階層、複写回帰、Undo／Redo・保存再読込を確認した。追加単体3件は四種の外観正規化・入力無変更・コピー間の独立性、未知fieldと外観以外の参照の維持、Root／親／IDを修復しないこと、空値と継承を確認する。呼出し監査では直接利用はBlock編集とSession同期、clone経由のBlock履歴であり、当初のClipboard経由という説明を修正した。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-sketch-normalized-copy-{check,unit,related}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量81%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は現在のapp.js全体の残存責務と依存を再監査する。初期分析から大幅に構成が変わっており、残るstate・実処理・feature組立て・test hooks・起動を現在のownerと照合する。数百行のcomposition rootへ進むため、既存ownerを束ねる意味のある機能境界と初期化段階、循環参照・遅延callbackの理由を具体化してsection 5と再開候補を更新する。巨大context／app本体の移動／空行削除だけで目標を達成した扱いにせず、薄いfileを増やすだけの分割も見送る。監査結果から次の実装単位を選び、現在の中間成果で全体完了としない。
+
+### 前単位の読込codec生成単位
 
 前単位は9976050をdevelopの6a26548へ統合・Push済み。今回はcodex/document-loading-codecsで継続した。開始時は週枠使用17%／残量83%で停止条件には達していない。
 
