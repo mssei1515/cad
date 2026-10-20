@@ -6,19 +6,66 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/constraint_command_input.js'), 'utf8'), sandbox);
 class Circle {} class Arc {}
-function continuationFixture() {
+function continuationFixture(feature = false) {
   const state = { ready: false, pending: null, target: null, retarget: false, fail: null, error: new Error('continuation failed'), pointer: { x: 8, y: 9 } }, calls = [];
   const read = (name, ...args) => { assert.equal(state.ready, true); calls.push([name, ...args]); if (state.fail === name) throw state.error; };
   const hover = { current: { dimension: {}, line: {} }, update(value) { assert.equal(this, hover); read('hover', value); Object.assign(hover.current, value); } };
-  const pending = { get current() { read('pending'); return state.pending; } }, targets = { get command() { read('targets'); return state.target; } };
+  const pending = { get current() { read('pending'); return state.pending; }, read: function() { 'use strict'; assert.equal(this, undefined); read('pending'); return state.pending; } }, targets = { get command() { read('targets'); return state.target; } };
   const placement = { retargetDistancePlaceWithOperand(pointer, hits) { assert.equal(this, placement); read('retarget', pointer, hits); return state.retarget; },
     startDistanceValueInput(pointer) { assert.equal(this, placement); read('value', pointer); } };
   const constraints = { operandClick(pointer, type, hits) { assert.equal(this, constraints); read('operand', pointer, type, hits); } };
-  const api = sandbox.window.ConstraintCommandInput.createDimensionContinuation({ canvasHover: hover, pending, targets, placement, constraints,
+  const factory = feature ? sandbox.window.ConstraintCommandInput.createFeature : sandbox.window.ConstraintCommandInput.createDimensionContinuation;
+  const api = factory({ canvasHover: hover, pending, targets, placement, constraints,
     canvasPoint: function(event) { 'use strict'; assert.equal(this, undefined); read('point', event); return state.pointer; } });
   assert.deepEqual(calls, []); state.ready = true;
   return { api, state, calls, hover, names: () => calls.map(c => c[0]) };
 }
+
+function featureFixture() {
+  const f = continuationFixture(true), selection = { clear: () => f.calls.push(['clear']), effectiveSelectedConstraint: () => null };
+  f.state.ready = false;
+  const input = f.api.createInput({ canvasSelection: selection,
+    dragging: { selectedLineGroup: function(constraint) { 'use strict'; assert.equal(this, undefined); f.calls.push(['group', constraint]); return f.state.group; },
+      command: { begin: function() { 'use strict'; assert.equal(this, undefined); f.calls.push(['drag', ...arguments]); } } },
+    constraintTargetHint: type => type, setHint: value => f.calls.push(['hint', value]),
+    updateGeometrySelectionUI: () => f.calls.push(['ui']), draw: () => f.calls.push(['draw']),
+  });
+  assert.deepEqual(f.calls, []); f.state.ready = true;
+  const event = { preventDefault: () => f.calls.push(['prevent']) };
+  return { ...f, input, selection, event };
+}
+
+test('constraint feature shares live command owners across staged input and dimension continuation without construction reads', () => {
+  const f = featureFixture(), pointer = {}, point = {}, hits = { hitP: point };
+  assert.ok(Object.isFrozen(f.api)); assert.ok(Object.isFrozen(f.api.dimension)); assert.ok(Object.isFrozen(f.input));
+  f.state.pending = { type: 'distance-place' }; f.state.target = { type: 'distance' };
+  assert.equal(f.api.dimension.isActive(), true); f.calls.length = 0;
+  assert.equal(f.input.click(f.event, pointer, hits), true);
+  assert.deepEqual(f.names(), ['pending', 'prevent', 'retarget', 'value']);
+  assert.equal(f.calls[2][1], pointer); assert.equal(f.calls[2][2].hitP, point); assert.equal(f.calls[3][1], pointer);
+  f.calls.length = 0; f.state.retarget = true; f.input.click(f.event, pointer, hits);
+  assert.deepEqual(f.names(), ['pending', 'prevent', 'retarget']);
+  f.calls.length = 0; f.state.pending = null; f.state.target = { type: 'horizontal' };
+  assert.equal(f.input.click(f.event, pointer, hits), true);
+  const operand = f.calls.find(call => call[0] === 'operand');
+  assert.equal(operand[1], pointer); assert.equal(operand[2], 'horizontal'); assert.equal(operand[3].hitP, point);
+  f.calls.length = 0; f.state.target = { type: 'distance' }; f.api.dimension.continueClick(f.event, hits);
+  assert.deepEqual(f.names(), ['hover', 'point', 'pending', 'targets', 'operand']); assert.equal(f.calls.at(-1)[3], hits);
+});
+
+test('staged constraint input retains group selection and original drag functions, and propagates command failure', () => {
+  const f = featureFixture(), constraint = {}, hitD = { constraint }, pointer = {};
+  f.state.group = {}; f.input.click(f.event, pointer, { hitD });
+  assert.equal(f.names().includes('clear'), false); assert.equal(f.calls.find(call => call[0] === 'group')[1], constraint);
+  const drag = f.calls.find(call => call[0] === 'drag'); assert.equal(drag[1], f.event); assert.equal(drag[2], hitD); assert.equal(drag[3], pointer);
+  f.calls.length = 0; f.state.group = null; f.input.click(f.event, pointer, { hitD });
+  assert.ok(f.names().indexOf('clear') < f.names().indexOf('drag'));
+  f.calls.length = 0; f.state.pending = { type: 'distance-place' }; f.state.fail = 'retarget';
+  assert.throws(() => f.input.click(f.event, pointer, {}), error => error === f.state.error);
+  assert.deepEqual(f.names(), ['pending', 'prevent', 'retarget']);
+  f.calls.length = 0; f.state.fail = null; f.state.pending = { type: 'offset-value' };
+  assert.equal(f.input.click(f.event, pointer, {}), true); assert.equal(f.names().includes('value'), false);
+});
 
 test('dimension continuation reads current command state lazily and keeps predicate short circuits', () => {
   const f = continuationFixture(); assert.ok(Object.isFrozen(f.api));

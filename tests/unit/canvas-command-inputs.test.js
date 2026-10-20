@@ -6,6 +6,32 @@ const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
+test('staged constraint assembly keeps child construction order and uses shared owners instead of legacy callbacks', () => {
+  const order = [], originals = new Map();
+  for (const name of ['AnnotationCommandInput', 'InstanceCommandInput', 'PointCommand', 'DrawingCommandInput', 'CanvasSelectionInteraction']) {
+    const owner = w[name]; originals.set(name, owner);
+    w[name] = { ...owner, create(...args) { order.push(name); return owner.create(...args); } };
+  }
+  try {
+    let built, pending = { type: 'distance-place' }; const calls = [], pointer = {};
+    const feature = w.ConstraintCommandInput.createFeature({
+      pending: { read: () => pending, get current() { return pending; } }, targets: { command: null },
+      canvasHover: { update() { throw new Error('unexpected continuation'); } }, canvasPoint: () => pointer,
+      placement: { retargetDistancePlaceWithOperand(p) { calls.push(['retarget', p]); return false; }, startDistanceValueInput(p) { calls.push(['value', p]); } },
+      constraints: { operandClick() { throw new Error('unexpected operand'); } },
+    });
+    const dragging = { selectedLineGroup: () => null, command: { begin() {} } };
+    const f = fixture({ constraintInputFeature: { createInput(options) {
+      order.push('ConstraintCommandInput'); assert.equal(options.dragging, dragging);
+      built = feature.createInput(options); return built;
+    } }, dimensionDragging: dragging,
+      retargetDistancePlaceWithOperand() { throw new Error('legacy retarget'); }, startDistanceValueInput() { throw new Error('legacy value'); } });
+    assert.deepEqual(order, ['AnnotationCommandInput', 'ConstraintCommandInput', 'InstanceCommandInput', 'PointCommand', 'DrawingCommandInput', 'CanvasSelectionInteraction']);
+    assert.equal(f.api.constraint, built); assert.deepEqual(calls, []);
+    assert.equal(f.api.constraint.click(f.event, pointer, {}), true); assert.deepEqual(calls, [['retarget', pointer], ['value', pointer]]);
+    pending = null; calls.length = 0; assert.equal(f.api.constraint.click(f.event, pointer, {}), false); assert.deepEqual(calls, []);
+  } finally { for (const [name, owner] of originals) w[name] = owner; }
+});
 function fixture(extra = {}) {
   const calls = [], state = { ready: false, mode: 'select', pending: null, constraint: null, focus: true, reject: false, group: null, top: null, points: [], rollbackError: null };
   const ready = () => assert.equal(state.ready, true);

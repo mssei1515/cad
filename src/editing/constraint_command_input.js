@@ -121,5 +121,22 @@
     }
     return Object.freeze({ isActive, continueClick });
   }
-  window.ConstraintCommandInput = Object.freeze({ create, createRetargetHover, createDimensionContinuation });
+  // Share command owners before drag construction; assemble ordinary input afterwards.
+  function createFeature({ canvasHover, canvasPoint, pending, targets, placement, constraints }) {
+    const dimension = createDimensionContinuation({ canvasHover, canvasPoint, pending, targets, placement, constraints });
+    function createInput({ dragging, canvasSelection, constraintTargetHint, setHint, updateGeometrySelectionUI, draw }) {
+      const { selectedLineGroup } = dragging;
+      return create({
+        getPending: pending.read, getPendingConstraint: () => targets.command, canvasSelection, canvasHover,
+        isDimensionConstraintCommandActive: dimension.isActive,
+        canDragDimensionGroup: hit => Boolean(selectedLineGroup(hit.constraint)), beginDimensionDrag: dragging.command.begin,
+        retargetDistancePlaceWithOperand: (pointer, hits = {}) => placement.retargetDistancePlaceWithOperand(pointer, hits),
+        startDistanceValueInput: pointer => placement.startDistanceValueInput(pointer),
+        handleConstraintOperandClick: (pointer, type, hits = {}) => constraints.operandClick(pointer, type, hits),
+        constraintTargetHint, setHint, updateGeometrySelectionUI, draw,
+      });
+    }
+    return Object.freeze({ dimension, createInput });
+  }
+  window.ConstraintCommandInput = Object.freeze({ create, createRetargetHover, createDimensionContinuation, createFeature });
 })();
