@@ -1651,21 +1651,13 @@
   });
   function deleteCurrentSelection() { return selectionDeletionCommand.remove(); }
 
+  const clipboardTransfer = window.ClipboardTransfer.create({
+    blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText,
+    annotationTextLayout, annotationTextMetrics, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle, readViewportScale: () => viewport.scale,
+  });
   const clipboardPayload = window.ClipboardPayload.create({
     geometryInstanceBundle, geometryInstanceSourcePoints, serializeGeometryInstance, blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, constraintGraphNodes, applicationText,
-    detachedAnnotation: annotation => {
-      const data = serializeAnnotation(annotation);
-      const layout = annotationTextLayout(annotation) || annotationTextMetrics(annotation, annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : annotation);
-      data.x = layout.anchorX; data.y = layout.anchorY;
-      data.anchorPosition = annotation.anchorPosition || effectiveAnnotationStyle(annotation).textAlign + "-middle";
-      if (annotation.type === "leader") {
-        const geometry = annotationLeaderDisplayGeometry(annotation);
-        data.start = { ...annotationLeaderAnchor(annotation) }; data.elbow = { ...geometry.elbow }; data.end = { ...geometry.end };
-        data.textPlacement = "anchor";
-        data.shelfReferenceScale = viewport.scale / window.Appearance.annotationDisplayFactor(effectiveAnnotationStyle(annotation), viewport.scale);
-      }
-      return data;
-    },
+    detachedAnnotation: clipboardTransfer.detachedAnnotation,
     serializeConstraint: constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint),
   });
   function copyableSelectionPayload() {
@@ -1682,9 +1674,6 @@
   });
 
   function copySelectionToClipboard(options = {}) { return clipboardCommand.copy(options); }
-
-  const clipboardTransfer =
-    window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText });
 
   const clipboardGeometry = window.ClipboardGeometry.create({
     geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById,
