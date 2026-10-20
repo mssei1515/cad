@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のscene hit構築単位
+
+監査案に従い、既存CanvasHitInteraction.createSceneへscope policyとregion／dimension／instance／基本Geometry／operand queryの構築を集約した。早期policyと後段createQueriesの二段階を維持し、25個の限定依存から各子へ必要なAPIを接続する。既存SketchContextを名前付きで保持して共有し、GeometryReadModel／PointUsage／外観／寸法／Hatch／Block ownerを再生成しない。判定処理・cache・選択規則は既存GeometryHitQuery／OperandHitQueryへ残す。Workspace currentと寸法scopeの違い、owner receiver、可変長引数・既定options・後段callback・呼出し時のscale／mode／scope取得と例外伝播を維持した。新file・script・state・保存形式変更はない。
+
+app.jsは3,088→3,072行（16行減）、今回再開時3,652行から580行減。新しいowner参照の宣言前利用はなく、依存25個をASTで確認した。未使用になったreferenceSourceSketchIds／dimensionTextDrawingMetrics／dimensionTextWidthとoperandFromReferenceTargetのroot aliasを除去し、新たな未使用bindingがないことを確認した。正式仕様はspec/architecture/モジュール構成.mdと実装mapを更新した。
+
+構文588ファイル・単体1,755件が成功（exit 0）。追加単体4件は生成時遅延、mode／pending／command・権限／可視性／scale・scope差替え、別の寸法scopeとreceiver、inactive options／注記引数、Block／derived operandと元Object参照・例外伝播を確認する。既存query単体と合わせた35件も成功。関連E2E233件は232成功・1失敗（4.8分、exit 1）。unified-ui／phase0-characterization／sketch-permissions／sketch-projection／free-instance／unified-annotations／hatching／reference-images／multiple-dimensions／adversarial-authoring-performanceを実行し、線選択154msが150ms未満の基準を超えた。性能fileは11成功・1失敗であり、全成功とは扱わない。後続の未使用alias除去後にapp構文・全単体1,755件・ASTを再検証した。
+
+変更前e3dece3をGit archiveで一時directoryへ展開し、同じ性能test／fixtureで変更前と現在版を交互に固定3回ずつ実行した。変更前は2成功・1失敗（線選択145／133／151ms）。現在版は1成功・2失敗（pan 199／185／173ms、前2回が175ms未満を超過）。変更前にも今回の線選択超過が再現し、panも既存の失敗履歴がある。ただし小標本から性能同等や原因解決とは判断せず、今回だけが原因とも断定しない。成功するまでの再実行や基準変更は行っていない。初回の比較filterは先頭anchorにより対象0件だったため、filterを修正して実際の6件を測定した。比較終了と全runnerのexitを回収し、専用serverを終了した。ログは一時directoryのcad-scene-{check,unit,focused,related,final-unit}.logとcad-scene-compare-v2-{baseline,current}-{1,2,3}.log。製品test／閾値／fixtureを緩めていない。
+
+mainは5ee5f3fのまま保留し、全体目標は未完了。最新全E2Eは未実行。線選択の変更前再現と既存pan超過を明記して、この責務分離単位をCommit／Pushしdevelopへ統合する。次はscene query ownerをpress／hover側へ共有し、rootの重複したreader接続を狭められるか検討する。既存createの利用契約と優先順・hoisted wrapperを保ち、単に大量の依存をObjectで包むだけにしない。最終main反映前には最新コードで全体検証し、性能問題が残れば原因調査を続ける。
+
 ### 最新の構築境界再監査（文書のみ）
 
 develop 46dd77dを基準に構築依存を再集計し、[監査記録](bootstrap-boundary-audit.md)へ比較・次の境界案を記録した。現在はapp.js 3,088行、非空白2,595行、構築1,354行、hooks478行、一文call248行。root構築216文、複文callback33個、root let8個。旧63c886c集計は監査記録に比較基準として保持する。今回のapp.jsは3,088→3,088行（0行差）。hooks／一文callを全て除いても1,869非空白行が残るため、小関数の移動だけでは数百行へ届かない。
