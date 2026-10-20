@@ -80,3 +80,81 @@ test('export uses the shared viewport and restores its frame before interactive 
   assert.equal(renderer.frame, null); assert.equal(f.canvas.width, 400); assert.equal(f.calls.at(-1), 'draw');
   assert.deepEqual({ ...f.display.viewport.snapshot() }, { x: 10, y: 20, scale: 4 });
 });
+
+const interactiveOrder = ['block-handles', 'dimensions', 'dimension-preview', 'annotations', 'annotation-preview', 'authoring',
+  'block-placement', 'free-instance', 'offset', 'trim', 'snap', 'arc-handles', 'spline-handles', 'points', 'image-overlays', 'identity', 'selection-rect', 'export-overlay'];
+function renderingFixture() {
+  const calls = [], state = { ready: false, failure: null, onStage: null, dpr: 2, overlay: null, override: undefined };
+  const ready = () => assert.equal(state.ready, true, 'rendering construction must stay lazy');
+  function stage(name) { ready(); calls.push(name); state.onStage?.(name); if (state.failure === name) throw state.error; }
+  const ctx = Object.fromEntries(['setTransform', 'clearRect', 'save', 'translate', 'scale', 'restore', 'setLineDash'].map(name => [name, (...args) => { ready(); calls.push([name, ...args]); }]));
+  const canvas = { width: 0, height: 0, getBoundingClientRect() { ready(); return { width: 100, height: 60 }; } }, viewport = { x: 10, y: 20, scale: 3 };
+  const surface = sandbox.window.CanvasSurface.create({ canvas, ctx, viewport, readPixelRatio: () => state.dpr });
+  function owner(methods) {
+    const api = {};
+    for (const [method, name] of Object.entries(methods)) api[method] = function () { assert.equal(this, api); stage(name); };
+    return api;
+  }
+  const geometry = owner({ drawArcEndpointHandles: 'arc-handles', drawSplineEditHandles: 'spline-handles', drawPoints: 'points' });
+  const annotations = owner({ draw: 'annotations', drawPreview: 'annotation-preview' });
+  const png = sandbox.window.CanvasExport.createRenderer({ viewport, withGeometryReadCache: work => { stage('cache'); return work(); },
+    drawCanvas: () => rendering.draw(), syncCanvasBitmapSize: surface.syncCanvasBitmapSize, draw: () => rendering.draw() });
+  const hatchCalls = [];
+  const rendering = sandbox.window.CanvasDisplay.createRendering({ canvas, ctx, viewport, surface, zoomControl: owner({ sync: 'zoom' }),
+    readExportFrame: () => { ready(); return state.override === undefined ? png.frame : state.override; }, recordDraw: () => stage('record'),
+    geometry, dimensions: owner({ draw: 'dimensions' }), drawDimensionPreview: () => stage('dimension-preview'), annotations,
+    authoringPreview: owner({ draw: 'authoring', drawTrimPreview: 'trim' }), placements: owner({ drawBlockPlacementPreview: 'block-placement', drawFreeInstancePreview: 'free-instance' }),
+    offsetPreview: owner({ draw: 'offset' }), drawBlockInstanceHandles: () => stage('block-handles'), drawSnapMarker: () => stage('snap'),
+    drawReferenceImages: () => stage('images'), drawHatches: (items, options) => { hatchCalls.push([items, options]); stage('hatches'); }, drawDrawingStack: () => stage('stack'),
+    drawReferenceImageOverlays: () => stage('image-overlays'), drawSketchIdentityLabel: () => stage('identity'), drawSelectionRect: () => stage('selection-rect'),
+    drawExportOverlay: () => { stage('export-overlay'); state.overlay?.(ctx, viewport.scale); } });
+  assert.deepEqual(calls, []); assert.equal(Object.isFrozen(rendering), true); state.ready = true;
+  return { rendering, calls, state, viewport, surface, canvas, ctx, png, geometry, annotations, hatchCalls, stages: () => calls.filter(call => typeof call === 'string') };
+}
+
+test('rendering composition connects content and all interactive stages with current owners and overlay', () => {
+  const f = renderingFixture(); f.rendering.draw();
+  assert.deepEqual(f.stages(), ['zoom', 'record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+  assert.equal(f.hatchCalls[0][0].length, 0); assert.equal(f.hatchCalls[0][1].includePreview, true);
+  assert.equal(f.canvas.width, 200); assert.equal(f.canvas.height, 120);
+  f.calls.length = 0; f.viewport.scale = 5; f.state.dpr = 3; f.surface.syncCanvasBitmapSize();
+  f.state.overlay = (ctx, scale) => { assert.equal(ctx, f.ctx); assert.equal(scale, 5); };
+  f.annotations.drawPreview = function () { assert.equal(this, f.annotations); f.calls.push('current-preview'); };
+  f.geometry.drawPoints = function () { assert.equal(this, f.geometry); f.calls.push('current-points'); };
+  f.rendering.draw();
+  assert.deepEqual(f.stages(), ['zoom', 'record', 'images', 'hatches', 'stack', ...interactiveOrder.map(name => name === 'annotation-preview' ? 'current-preview' : name === 'points' ? 'current-points' : name)]);
+  assert.ok(f.calls.some(c => c[0] === 'setTransform' && c[1] === 3 && c[4] === 3));
+  assert.notEqual(f.hatchCalls[0][0], f.hatchCalls[1][0]);
+});
+
+test('PNG rendering shares content and document layers, then restore returns to interactive drawing', () => {
+  const f = renderingFixture(); f.png.render({ x: 2, y: 3, width: 10, height: 20 }, { x: 12, y: 15 });
+  assert.deepEqual(f.stages(), ['cache', 'zoom', 'images', 'hatches', 'stack', 'dimensions', 'annotations', 'points']);
+  assert.ok(f.calls.some(c => c[0] === 'setTransform' && c[1] === 4 && c[4] === 5 && c[5] === -64 && c[6] === -145));
+  assert.deepEqual({ ...f.viewport }, { x: 10, y: 20, scale: 3 });
+  f.calls.length = 0; f.png.restore(); assert.equal(f.png.frame, null);
+  assert.deepEqual(f.stages(), ['zoom', 'record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+});
+
+test('frame routing reads export state again after content instead of capturing it during construction or draw entry', () => {
+  const f = renderingFixture();
+  f.state.onStage = name => { if (name === 'stack') f.state.override = { ratio: { x: 1, y: 1 }, region: { x: 0, y: 0 } }; };
+  f.rendering.draw(); assert.deepEqual(f.stages(), ['zoom', 'record', 'images', 'hatches', 'stack', 'dimensions', 'annotations', 'points']);
+  assert.equal(f.calls.filter(c => c[0] === 'restore').length, 1);
+  f.calls.length = 0; f.state.onStage = name => { if (name === 'stack') f.state.override = null; };
+  f.rendering.draw(); assert.deepEqual(f.stages(), ['zoom', 'images', 'hatches', 'stack', ...interactiveOrder]);
+});
+
+test('composition retains failure boundaries without adding restoration or swallowing errors', () => {
+  for (const failed of ['hatches', 'stack', 'annotation-preview', 'points', 'export-overlay']) {
+    const f = renderingFixture(), error = new Error(failed); f.state.failure = failed; f.state.error = error;
+    assert.throws(() => f.rendering.draw(), value => value === error);
+    const order = ['zoom', 'record', 'images', 'hatches', 'stack', ...interactiveOrder];
+    assert.deepEqual(f.stages(), order.slice(0, order.indexOf(failed) + 1));
+    assert.equal(f.calls.some(c => c[0] === 'restore'), false);
+  }
+  const f = renderingFixture(), error = new Error('export annotations'); f.state.failure = 'annotations'; f.state.error = error;
+  assert.throws(() => f.png.render({ x: 0, y: 0, width: 10, height: 10 }, { x: 1, y: 1 }), value => value === error);
+  assert.ok(f.png.frame); assert.deepEqual(f.stages(), ['cache', 'zoom', 'images', 'hatches', 'stack', 'dimensions', 'annotations']);
+  f.state.failure = null; f.calls.length = 0; f.png.restore(); assert.equal(f.png.frame, null); assert.ok(f.stages().includes('export-overlay'));
+});

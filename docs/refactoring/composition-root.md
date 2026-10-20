@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas描画段階の組立て単位
+
+既存CanvasDisplay.createRenderingへinteractive renderer→frame rendererの生成と、共通content（画像→Hatch preview→描画stack）／PNG出力（寸法→注記→点）の接続を集約した。Surfaceのtransform・stroke resetと18段階の対話描画、各rendererの描画内容とstate、PNG frame・read cacheは元ownerに残す。23個の明示portで同じGeometryDisplay・寸法／注記／作図／配置／Offsetを共有し、drawだけを返す。既存のcreate／createWorkspaceの初期生成順、後段PNG command／schedulerの遅延、各ownerのreceiver、現在frameの再照会と短絡・例外・既存のCanvas復元範囲を維持する。新file・state・scriptは追加しない。Babelで参照0になったSpline handle／Annotation描画のroot委譲二入口を確認して除き、他の先行callback／診断に必要な入口は残した。app.jsは3,132→3,124行（8行減）、今回再開時3,652行から528行減。
+
+最終コードで構文586ファイル・単体1,729件・関連E2E177件（3.1分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／png-export／reference-images／drawing-order／canvas-zoom-input／selection-zoom-shadow／command-panel／hatching／adversarial-authoring-performanceで、file URL起動、共通描画と重なり順、画像・Hatch preview、倍率表示／選択強調、既存画面比較、PNG・履歴・保存再読込を確認した。パンは133msで元の175ms未満の基準内。追加単体4件は実Surface／Exportと組み合わせ、生成時遅延、共通contentと18段階の対話描画、各ownerのreceiver／現在method・後段overlay・viewport／DPR、PNG時の計測・対話描画の短絡と復帰、共通描画後のframe再照会、各段階の例外と後続短絡・既存の復元範囲を確認する。既存単体11件（CanvasDisplay 4件／CanvasSurface 7件）も維持した。Babelで新たな未使用root bindingがないことを確認済み。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-canvas-rendering-{check,unit,related}.log。
+
+基準はdevelop 1c16328（前実装3da1bff）。開始時週枠残量61%／検証後60%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はrootのmodel別名とactivateEditingScopeの接続境界を分析する。現在はworkspace.activateの前にSketch contextをcloseしmoveをreset、返ったscopeをmodelとsolver.modelへ順に反映してGeometry read／projection cacheを無効化する。Workspaceは値とscopeの所有に限定し、UI／Solverを持ち込まない。後段controllerの遅延・Document固定参照と現在scope・例外時の部分状態を維持できる単位かを確認する。単なるgetter／setter容器や可変app contextへの移動は採用しない。
+
+
 ### 最新のGeometry描画群の組立て単位
 
 GeometryDisplayへ描画policy・line display・renderer・Layerの四構築と、点一覧の整列／円弧端点の可視filter／Spline編集ハンドル状態の接続を集約した。既存PointUsage・command targets・Sketch style・CanvasSurface・GeometryReadModelを共有し、描画policy／Canvas命令／編集stateは元ownerに残す。24個の明示portから各子へ必要なものを接続し、10個の描画・照会APIを返す。全app contextや新stateを持ち込まない。Babelで参照0を確認したlineDisplaySegment／drawOrderBySketchのroot委譲とappearanceLineDashのroot aliasを除き、先行callback登録に必要なhoisted描画入口は維持した。app.jsは3,138→3,132行（6行減）、今回再開時3,652行から520行減。生成順、遅延照会、明示itemsと既定一覧の順序・options、同じObject／scope、viewport／DPR、exportとCanvas状態復元を維持する。
