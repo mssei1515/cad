@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 拘束保存metadataの所有
+
+ConstraintPersistence.createMetadataへ共有decorateとDocumentSnapshot用snapshotDataを統合した。raw codecを変更せず、null／未指定・data同一性・field順、read-only／式fallback、Document／BlockのSketch IDと参照情報の扱いを維持する。metadata ownerは早いBlock機能より前に生成し、raw codecの後段初期化はhoisted serializerの遅延呼出しで保つ。装飾のhoisted入口はBlock履歴・Clipboard・test support向けに残し、Snapshotには同じownerの保存用methodを直接接続する。新file・state・script・保存形式変更はない。app.jsは3,295→3,281行（14行減）、今回の再開から3,652→3,281行（371行減）。
+
+構文578ファイル・単体1,680件・関連E2E177件（2.5分）が成功（全runner exit 0）。関連はunified-ui／file-safety／blocks／derived-patterns／derived-selection-copyで、file URL起動、保存読込・Block履歴／編集、Clipboard・派生参照、円形配列と角度間隔寸法、Undo／Redoを確認した。追加単体4件はdata／拡張Objectの同一性・field順、read-onlyと式fallback、null／未指定、DocumentだけのSketch queryとBlockの元field、遅延生成・raw失敗／数値式例外時の停止と途中効果、実Snapshot／raw codecのDocument・Block別JSONと復元・元拘束無変更を検証する。既存raw codec4件の参照scope・型判定・legacy読込の期待値も維持した。metadata初期化はParameterNamespace／SketchContext後・早いBlock機能前で、raw codecは後段まで読まない。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-constraint-save-metadata-{focused,check,unit,related}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop 1aa49fb（前実装0c0bf86）、開始時と検証後の週枠残量72%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はAnnotationCommand.validateParameterのapp内候補検証を分析する。名前のtrim／式正規化→現在modelのsymbol収集→名前検証→Parameterと可変寸法のdefinitions＋新候補→read-only寸法の定数Map→ParameterEngine評価→有限値検査という読取り処理で、既存ParameterNamespaceが同じsymbol・分類・式変換・Engineを所有する。既存Namespaceへ新規候補の検証を統合できるか確認し、model aliasを明示してDocument／Blockのscopeを保持する。ensure／evaluateParameterNamespace等のモデル更新経路へ一律置換せず、symbol収集回数、read-onlyの値、名前重複／未知参照／循環の例外・現在言語のerror、入力draft／modelの無変更を検証する。commitParameterの適用・評価・履歴は既存の担当に残す。新たな小fileや汎用contextは作らない。
+
 ### Geometry削除時の操作終了
 
 GeometryDeletionCommandへ削除前の限定された操作終了手順を統合した。appのendInteraction callbackを除去し、後段で生成する三種類のdragは遅延reset callback、既に生成済みのSession／Line／Circular／previewは同じowner、modeは既存setterへ接続する。guardと依存／空plan／symbol検査後・実削除前の位置、clearとcancel／resetの違い、operand／trim保持と非対象draft、途中例外・求解／履歴の順序を維持した。不要になったArc reset aliasも除去した。新file・state・scriptや保存形式変更はない。app.jsは3,307→3,295行（12行減）、今回の再開から3,652→3,295行（357行減）。

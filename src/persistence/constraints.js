@@ -22,6 +22,29 @@
 
   const { isDimensionConstraint } = window.DimensionQueries;
 
+  function createMetadata({ serializeConstraint, numericDimensionExpression, constraintSketchId }) {
+    function decorate(data, constraint) {
+      if (!data || !constraint) return data;
+      if (constraint.readOnlyDimension) data.readOnlyDimension = true;
+      if (isDimensionConstraint(constraint)) {
+        data.parameterName = constraint.parameterName || null;
+        if (!constraint.readOnlyDimension) data.expression = constraint.expression || numericDimensionExpression(constraint);
+      }
+      return data;
+    }
+    function snapshotData(constraint, scope, isDocumentScope) {
+      const data = decorate(serializeConstraint(constraint), constraint);
+      if (!data) return null;
+      data.sketchId = isDocumentScope ? constraintSketchId(constraint) : constraint.sketchId;
+      if (constraint.reference) {
+        data.reference = true;
+        data.referenceSketchId = constraint.referenceSketchId || null;
+      }
+      return data;
+    }
+    return Object.freeze({ decorate, snapshotData });
+  }
+
   // Geometry IDs and dimension placement belong to the caller's display scope.
   function create({ geometryId, dimensionData }) {
     const constraintCodecs = window.ConstraintCodecRegistry.create([
@@ -439,5 +462,5 @@
     }
     return Object.freeze({ serialize: constraintCodecs.serialize, deserialize: deserializeConstraint, types: constraintCodecs.types });
   }
-  window.ConstraintPersistence = Object.freeze({ create, isDimensionConstraint });
+  window.ConstraintPersistence = Object.freeze({ create, createMetadata, isDimensionConstraint });
 })();
