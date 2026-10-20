@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のGeometry描画群の組立て単位
+
+GeometryDisplayへ描画policy・line display・renderer・Layerの四構築と、点一覧の整列／円弧端点の可視filter／Spline編集ハンドル状態の接続を集約した。既存PointUsage・command targets・Sketch style・CanvasSurface・GeometryReadModelを共有し、描画policy／Canvas命令／編集stateは元ownerに残す。24個の明示portから各子へ必要なものを接続し、10個の描画・照会APIを返す。全app contextや新stateを持ち込まない。Babelで参照0を確認したlineDisplaySegment／drawOrderBySketchのroot委譲とappearanceLineDashのroot aliasを除き、先行callback登録に必要なhoisted描画入口は維持した。app.jsは3,138→3,132行（6行減）、今回再開時3,652行から520行減。生成順、遅延照会、明示itemsと既定一覧の順序・options、同じObject／scope、viewport／DPR、exportとCanvas状態復元を維持する。
+
+最終コードで構文586ファイル・単体1,725件・関連E2E210件（3.6分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／spline／blocks／selection-zoom-shadow／png-export／hatching／adversarial-authoring-performanceで、file URL起動、点・円弧・Spline編集、scope・投影・選択表示とzoom、既存画面比較、Hatch境界再描画、PNG・履歴・保存再読込を確認した。パンは150msで元の175ms未満の基準内。新単体4件は実Presentation／command targets／Sketch style／Renderer／Layer／CanvasSurfaceを組み合わせ、生成時遅延、既定一覧のinactive→active整列と明示itemsの順序／filter、Selection無変更、DPR／viewport／export、補助線延長、四種類の描画とSpline path、点の固定ラベル、現在scopeと同じIDの別Object、reader例外とSpline描画例外のCanvas復元を確認する。初回の新単体はVM由来arrayのprototypeを直接比較して1件失敗し、内容を確認するassertへ直した。製品の期待値・性能基準は変更していない。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-geometry-display-{check,unit,related}.log。
+
+基準はdevelop c3c05e4（前実装cc7c11b）。週枠残量は開始時／検証後とも61%。mainは5ee5f3fを維持し、全体目標は未完了。次はCanvasSurface.createInteractiveRendererとcreateFrameRendererの接続、通常content／export／interactiveの描画順を分析する。GeometryDisplay・Annotation／Dimension等の既存APIを使い、Bitmap／Canvas resetはSurfaceへ残し、後段PNG command・scheduler・viewportの遅延と起動時機を維持できる機能組立てか確認する。二つのfactoryの全引数を広いcontextへ移すだけの案は採用しない。
+
+
 ### 最新の描画policy owner依存整理単位
 
 GeometryPresentationへ既存commandTargetPresentation／sketchPresentationを共有し、六つの個別policy関数を二つのowner APIへ整理した。個別関数だけの既存呼出しも維持し、Hatch／他UI／test supportで使う四つのroot委譲入口は残す。参照0をBabelのbindingで確認したisReferenceHoverElement／isPendingReferenceTargetの未使用委譲二入口は除いた。後段sidebar／drag callbackや判定の実装・優先順位は変更しない。対象factoryのroot binding参照は27→23（PointUsage整理前33から計10減）。新file・state・script・保存形式変更はない。app.jsは3,142→3,138行（4行減）。

@@ -170,7 +170,7 @@ const files = [
   "tests/unit/sketch-tree-presentation.test.js",
   "tests/unit/sidebar-controller.test.js",
   "tests/unit/canvas-theme-colors.test.js",
-  "tests/unit/geometry-presentation.test.js", "tests/unit/sketch-projection-sources.test.js",
+  "tests/unit/geometry-display.test.js", "tests/unit/geometry-presentation.test.js", "tests/unit/sketch-projection-sources.test.js",
   "tests/unit/selection-highlight.test.js",
   "tests/unit/appearance-controls.test.js",
   "tests/unit/property-selection.test.js",
