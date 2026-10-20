@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### Properties編集の生成・接続
+
+PropertyEditingFeatureへGeometry／Appearance／Bulk／SelectionVisibility／Elementの編集commandと共有AppearanceEditingの生成・接続を集約した。表示・対象決定・操作stateは移さず、現在scope、guard、snapshot／復元、Parameter安定化、投影metadata同期、anchor具体化、cache無効化と履歴／通知の順序・範囲を維持する。外観変更、複数編集、派生Instanceを含む可視性変更は同じ値変換とcommandを共有し、palette／Document設定にも同じ変換入口を渡す。app.jsは3,495→3,476行（19行減）、今回の再開から3,652→3,476行（176行減）。
+
+構文566ファイル・単体1,625件・関連E2E205件（3.0分）が成功（全runner exit 0）。関連はunified-ui／blocks／free-instance／unified-annotations／dimension-prefix／hatching／reference-imagesで、file URL起動、Properties編集、外観継承、ロック、Undo／Redo、保存再読込を確認した。新単体4件は生成時の無処理、現在scopeでの接線拘束拒否と失敗checkpoint復元、通常／派生対象の可視性変更・guardと一回の履歴、単体／複数／外部設定での同じ値変換、anchor具体化と参照画像previewを確認する。新fixtureの外観fieldは既存の対応項目lineWidthと正規化上限10に合わせた。製品の正規化規則や既存期待値は変更していない。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-property-editing-{check,unit,related}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量88%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はappに残るProperties対象のロック判定・所有Sketch／作図Sketch labelを分析する。既存PropertySelectionへ読み取り専用の表示対象照会として統合できるか確認し、元のraw対象優先順位とObject参照を維持する。権限guardやモデル編集を照会側へ混ぜず、新たな小ファイルや可変contextを作らない。
+
+
 ### Properties表示の生成・接続
 
 PropertiesDisplayへPropertyRows／PropertyPresentation／PropertiesContent／PropertiesViewの生成・接続を集約した。PropertySelection、Geometry／Dimension／Annotation外観、Block／Instance投影とGeometryReadModelの同じownerを使う。対象決定とモデル編集は移さず、共有AppearanceControlsはpalette／Document設定にも使うため外で生成する。Controllerの元のinput／change／click関数をそのままViewへ渡し、eventのreceiverを維持する。section開閉とDOM lifecycleは同じPropertiesViewが所有し、Contentからのsection callbackは生成後のrender時に解決する。app.jsは3,516→3,495行（21行減）、今回の再開から3,652→3,495行（157行減）。
