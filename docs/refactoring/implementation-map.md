@@ -1,5 +1,7 @@
 # 実装対応表
 
+app.jsのローカルaliasと委譲関数は、実際の接続またはテスト公開で参照するものだけを保持する。既存ownerへ移管済みの機能を未使用のローカル名として重複公開しない。ownerの生成と必要な初期化は省略せず、Selection／command／描画／保存読込の公開APIは各ownerに残す。
+
 現在の実装配置を調べるための開発資料。正式仕様や将来の分割設計ではない。仕様と保証内容は[仕様の入口](../../spec/README.md)および[検証対応](../../spec/verification/保証対応.md)を参照する。
 
 現在の構築依存と初期化境界は[composition root再監査](bootstrap-boundary-audit.md)を参照する。63c886c基準の再監査では、広い構築契約をそのまま新fileへ包まず、既存ownerのAPIを用いて依存を減らす方針とした。特殊寸法編集の支援は既存DimensionValueCommandへ統合済みである。

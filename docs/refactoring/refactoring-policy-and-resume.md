@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の旧root接続整理単位
+
+既存ownerへ移管済みで参照のなくなったローカルalias・委譲関数を整理した。ASTのroot binding参照から65個の未使用分割代入と4個の委譲関数を確認し、委譲の撤去後に不要になるannotationColorも除去した。計70 bindingを除去し、rootの未使用bindingは0。Selection・Sketch／Block／Instance・Parameter・Solver照会・snap／rollback・寸法描画・注記／画像・保存読込の機能APIとowner生成は維持する。共有ownerから直接使う経路とtest hooksの公開は残す。新しい責務分離として水増しせず、これまでの移管で残った接続の整理として扱う。
+
+変更前244db06の実ブラウザ起動へ読取り監査を挿入し、31箇所で削除対象65プロパティが全て存在するdata descriptorであり、getterではないことを確認した。追加のannotationColorはAnnotationDisplayのObject.freeze({color,renderer,layer})を確認した。削除した分割代入の右辺は既存owner参照だけで、factory呼出しの削除はない。4委譲は未参照の関数宣言で、呼出しも生成時処理もない。変更前ASTからこの70 bindingだけを除いた結果と変更後ASTが一致した（位置・comment・raw表記metadataを除外）。実ブラウザ起動後も例外がなく、test APIの全204 keyが変更前と同じ順序で一致した。診断は一時directoryのcad-retired-root-{audit,post-audit,ast}.cjsとaudit／post-audit.json。app.jsは3,055→3,037行（18行減）。仕様書と実装mapには現在のroot接続方針を追記した。
+
+構文588ファイル・全単体1,772件・全E2E584件が成功（全runner exit 0、全E2E24.3分）。機能を変えず未参照接続だけを除去したため、実装名を固定する新testは追加しない。性能file全12件を含み、pan142ms（基準175ms未満）、空白矩形233ms（250ms未満）だった。長時間の拘束drag回帰も全成功し、fillet3,744・Offset10,296・航空機円弧1,872 previewを確認した。航空機caseは7.4分、拘束drag file全体は12.5分。省略・filter・timeout／期待値／閾値変更や成功までの再実行はない。全runner終了と専用server停止を確認した。ログは一時directoryのcad-retired-root-{check,unit,e2e}.log。最新全E2E未確認という状態は解消したが、過去の性能ばらつきが根本解消したと断定しない。mainは5ee5f3fのまま保留の合意を維持し、この単位をCommit／Pushしてdevelopへ統合する。全体目標は未完了。終了時の週枠使用19%・残量81%で、50%未満の停止条件には達していない。
+
+次は既存ownerによる構築・接続・起動の境界へ戻る。入力終了判断では、appのisBlankCommandPanelPointがpress snapshot→blank gesture→投影参照除外→Hatch face除外を実装している。既存CanvasHitInteraction.createInteractionは同じpressとscene queryを生成済みで、createSceneはreadMode／hatchesも保持しているため、この既存ownerに判定を集められるか確認する。isDrawToolModeの分類も既存DrawOperationLifecycleの現在mode queryと照合する。いずれも未実装候補であり、例外／短絡・live state・投影／Hatchの配置と空白double click取消を変えない。今回の未使用alias整理だけで数百行の目標へ届いたとは扱わず、残るfactory群・test公開・mode更新のまとまった境界も引き続き検討する。単純な関数移動や汎用contextへの包装、細かいwrapperの追加を避ける。
+
+
 ### 最新のConstraint入力組立て単位
 
 既存ConstraintCommandInput.createFeatureへ寸法継続と通常拘束入力の共通owner接続を集約した。六つの限定依存からdimensionを先に作り、既存DimensionDragFeatureの生成後にcreateInputで通常入力を作る。CanvasCommandInputs内のAnnotation→Constraint→Instance→Point→Drawing→Selectionという生成順を維持する。共有するのは既存session／commandとdragのbegin／selectedLineGroupであり、新たな可変context・state・cache・model・fileはない。Placement／Constraint commandのreceiver、pending.readとdrag関数の非bind呼出し、現在stateの読取り、入力優先順・例外伝播を維持し、従来の個別callback構築も残す。
