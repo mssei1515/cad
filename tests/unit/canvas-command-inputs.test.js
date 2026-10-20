@@ -6,7 +6,7 @@ const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture() {
+function fixture(extra = {}) {
   const calls = [], state = { ready: false, mode: 'select', pending: null, constraint: null, focus: true, reject: false, group: null, top: null, points: [], rollbackError: null };
   const ready = () => assert.equal(state.ready, true);
   const record = name => (...args) => { ready(); calls.push([name, ...args]); };
@@ -34,7 +34,7 @@ function fixture() {
     addPoint: (x, y, fixed) => { ready(); const value = { x, y, fixed }; state.points.push(value); calls.push(['point', value]); return value; },
     addPointSnapConstraints: record('snap-constraint'), solveAndRefresh: record('solve'), rejectRootSketchCreation: () => { ready(); return state.reject; },
     sameArcEndpoint: (a,b) => a === b, topmostDrawingOrderOwner: () => state.top, drawingOrderOwner: item => item,
-    geometryDrag: { begin: () => false },
+    geometryDrag: { begin: () => false }, ...extra,
   });
   assert.deepEqual(calls, []); state.ready = true;
   const event = { pointerId: 7, preventDefault: record('prevent') }, p = { x: 8, y: 10 };
@@ -73,6 +73,36 @@ test('pattern origin snap uses current command sources and viewport tolerance wh
   assert.equal(f.calls[1][2], 2.5); assert.equal(f.calls[1][3], false);
   f.calls.length = 0; f.command.activeInput = 'reference'; const line = {}; f.api.instance.click(f.event, f.p, { hitL: line });
   assert.deepEqual(f.names(), ['blur','snap','reference']); assert.equal(f.calls.at(-1)[1], line);
+});
+
+test('shared primitive input routes original arguments without rebinding or invoking legacy callbacks', () => {
+  const calls = [], names = ['line', 'rectangle', 'slot', 'circle', 'arc', 'threePointArc'];
+  const basicDrawingInput = Object.fromEntries(names.map(name => [name, function(point, shift) {
+    'use strict'; assert.equal(this, undefined); calls.push({ name, args: Array.from(arguments) }); return false;
+  }]));
+  const legacy = Object.fromEntries(['handleLineClick', 'handleRectangleClick', 'handleSlotClick', 'handleCircleClick', 'handleArcClick', 'handleThreePointArcClick'].map(name => [name, () => { throw Error('legacy callback used'); }]));
+  const f = fixture({ basicDrawingInput, ...legacy }); assert.deepEqual(calls, []); f.event.shiftKey = true;
+  for (const [mode, name] of [['line', 'line'], ['rectangle', 'rectangle'], ['slot', 'slot'], ['circle', 'circle'], ['arc', 'arc'], ['three-point-arc', 'threePointArc']]) {
+    f.state.mode = mode; assert.equal(f.api.drawing.click(f.event, f.p, {}), true);
+    assert.deepEqual(calls.at(-1), { name, args: name === 'line' ? [f.p, true] : [f.p] });
+  }
+  basicDrawingInput.line = () => { throw Error('router must retain its originally supplied callback'); };
+  f.state.mode = 'line'; assert.equal(f.api.drawing.click(f.event, f.p, {}), true); assert.equal(calls.at(-1).name, 'line');
+  const count = calls.length; f.state.reject = true; assert.equal(f.api.drawing.click(f.event, f.p, {}), true); assert.equal(calls.length, count);
+  f.state.mode = 'select'; assert.equal(f.api.drawing.click(f.event, f.p, {}), false); assert.equal(calls.length, count);
+});
+
+test('legacy primitive ports still route every mode and shared input errors keep their original identity', () => {
+  const calls = [], ports = {};
+  for (const name of ['Line', 'Rectangle', 'Slot', 'Circle', 'Arc', 'ThreePointArc']) ports[`handle${name}Click`] = (...args) => calls.push({ name, args });
+  const f = fixture(ports); f.event.shiftKey = false;
+  for (const [mode, name] of [['line', 'Line'], ['rectangle', 'Rectangle'], ['slot', 'Slot'], ['circle', 'Circle'], ['arc', 'Arc'], ['three-point-arc', 'ThreePointArc']]) {
+    f.state.mode = mode; assert.equal(f.api.drawing.click(f.event, f.p, {}), true);
+    assert.deepEqual(calls.at(-1), { name, args: name === 'Line' ? [f.p, false] : [f.p] });
+  }
+  const error = new Error('primitive failed'), shared = fixture({ basicDrawingInput: { line: () => { throw error; } } });
+  shared.state.mode = 'line'; assert.throws(() => shared.api.drawing.click(shared.event, shared.p, {}), value => value === error);
+  assert.equal(shared.state.points.length, 0); assert.deepEqual(shared.calls, []);
 });
 
 test('constraint and selection adapters keep shared selection identity, group drag refusal and live pending input', () => {

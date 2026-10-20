@@ -93,6 +93,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の基本作図入力API共有単位
+
+CanvasCommandInputsが既存BasicDrawingTools.inputのline／rectangle／slot／circle／arc／threePointArcをbasicDrawingInputとして受け、DrawingCommandInputへ元の関数値を渡す。appに保持していた六つの関数aliasを除去し、同じownerのAPIを一度共有する。共有API未指定時は従来の個別callback portを使い、既存呼出しも維持する。lineのpoint・Shift、他の基本作図のpoint引数、receiverを付けない呼出し、Root拒否・入力消費・例外伝播を維持する。snap／Selection／commandの生成し直しや新たなstate・cache・file・scriptはない。
+
+app.jsは3,066→3,064行（2行減）、今回再開時3,652行から588行減。ASTで構築引数64→59、引数内のroot binding参照63→58、新たな未使用bindingなしを確認した。59はcanonical APIを使うappの引数数であり、互換用の個別portを含むfactory全体の受付数ではない。BasicDrawingToolsの生成位置とCanvasCommandInputsの後段生成位置は維持し、遅延scope／snap読取りを元ownerへ残す。正式仕様と実装mapを更新した。
+
+構文588・全単体1,763・専用単体18件が成功（exit 0）。追加2件は共有API優先、全6modeの元引数／receiver・構築時の無呼出し、子routerの関数保持、Root拒否・未対象mode、互換の個別指定、例外同一性と無変更を確認した。変更前後のfactoryを共通portで構築する一時診断で、DrawingCommandInputへ渡す15項目の値と六つの子factoryの生成順が一致した。
+
+関連E2E200件は199成功・1失敗（4.1分、exit 1）。unified-ui／phase0-characterization／sketch-permissions／sketch-projection／free-instance／command-panel／slot-dimension／file-safety／adversarial-authoring-performanceを実行した。失敗は既存のview/middle-button-pan 188ms（175ms未満が基準）。基本作図、優先入力、Root・Sketch権限、投影／Instance、既存画面比較、履歴・保存再読込の関連ケースは成功したが、全検証成功とは扱わない。性能caseの過去の失敗・変更前比較はpan調査記録と以前の単位に保持する。今回の変更は構築時の関数共有だけで、pan／描画・UI更新の実装と操作時の呼出しは追加していない。性能問題を隠す閾値変更や成功するまでの反復は行わない。全runner終了と専用server終了を回収済み。ログは一時directoryのcad-primitive-input-{focused,check,unit,related}.log。
+
+既存性能問題を明記してこの単位をCommit／Pushしdevelopへ統合する。mainは5ee5f3fのまま保留、最新全E2Eは未実行、全体目標は未完了。
+
+次は同じCanvasCommandInputsでscene query／operand ownerの再利用を検討する。既存sceneHitQueriesのprojection／reference／Hatch照会とconstraintOperandValuesの変換APIを、役割のあるownerとして共有できるか確認する。呼出し時のscope・options・receiverを維持し、単なる汎用app context化や未使用wrapper追加を行わない。
+
 ### 最新のpan CPU／描画順照会調査単位（製品変更なし）
 
 pan frameのCPU samplingでSketchの外観正規化とensureの反復を確認し、GeometryPresentation.createSketchStyle.drawOrderBySketchのsort comparatorを調べた。同じObjectのactive照会を一回の呼出し内で共有するMap案を試したが、性能改善を示せず不採用とした。製品にMapや照会契約の変更を追加していない。
