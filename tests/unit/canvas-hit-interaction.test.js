@@ -47,7 +47,7 @@ function sceneFixture() {
     catalog: { blockDefinitionById: () => null }, projections: { blockProjectionBundle: item => item.bundle },
     hatches: { resolvedHatchBoundary: () => ({ ok: true }), hatchContainsSelectablePoint: (item, resolved, p) => p.x === item.x },
     effectiveDimensionAppearance: () => ({ visible: true, fixedDisplaySize: false }), dimensionLabelForConstraint: () => 'D',
-    dimensionUsesExpression: () => false, annotationBounds: () => null, hitAnnotationElement: (...args) => { read('annotation'); state.annotationArgs = args; return null; },
+    dimensionUsesExpression: () => false, annotationBounds: () => null, hitAnnotationElement: (...args) => { read('annotation'); state.annotationArgs = args; return state.annotationHit || null; },
     hatchAppearanceForDisplay: () => ({ visible: true }), targetFromConstraint: item => item.target, drawingOrderOwner: item => item,
     referenceImageWorldToLocal: (item, p) => ({ x: p.x - item.x, y: p.y - item.y }), pointInExpandedBox: () => false,
     readMode: () => { read('mode'); return state.mode; }, readPendingCommand: () => { read('pending'); return state.pending; },
@@ -117,6 +117,43 @@ test('scene operands use shared live projection readers and retain original poin
   state.hidden = false; state.error = new Error('query failed');
   assert.throws(() => queries.operands.hitDerivedProjectionOperand(50, 0), error => error === state.error);
   assert.equal(state.instances[0], bundle); assert.equal(bundle.points[0], projected);
+});
+
+test('scene interaction attaches later without reads and shares live geometry with press and hover', () => {
+  const f = sceneFixture(), { state, queries } = f;
+  const p = f.point('P', 0, 0); state.scope.points.push(p);
+  const canvasHover = sandbox.window.CanvasHover.create({ isEndpointPoint: () => false });
+  state.ready = false; const beforeReads = state.reads.slice();
+  const api = queries.createInteraction({ canvasHover, sameArcEndpoint: () => false, hitBlockRotationHandle: () => null, hitAnnotationTarget: () => null });
+  assert.deepEqual(state.reads, beforeReads); state.ready = true;
+  const hit = api.press.read({ x: 0, y: 0 }); assert.equal(hit.hitP, p); assert.equal(canvasHover.current.point, null);
+  api.hover.updateOrdinary({ x: 0, y: 0 }); assert.equal(canvasHover.current.point, p);
+  state.scope = f.empty(); const next = f.point('P', 0, 0); state.scope.points.push(next);
+  assert.equal(api.press.read({ x: 0, y: 0 }).hitP, next);
+  api.hover.updateOrdinary({ x: 0, y: 0 }); assert.equal(canvasHover.current.point, next);
+  state.hidden = true; assert.equal(api.press.read({ x: 0, y: 0 }).hitP, null);
+  api.hover.updateOrdinary({ x: 0, y: 0 }); assert.equal(canvasHover.current.point, null);
+});
+
+test('scene interaction keeps annotation priority and projected exclusion and preserves hover on reader errors', () => {
+  const f = sceneFixture(), { state, queries } = f;
+  const p = f.point('P', 0, 0); state.scope.points.push(p);
+  const canvasHover = sandbox.window.CanvasHover.create({ isEndpointPoint: () => false });
+  let target = { id: 'T' }, handle = null;
+  const api = queries.createInteraction({ canvasHover, sameArcEndpoint: () => false,
+    hitBlockRotationHandle: () => handle, hitAnnotationTarget: () => target });
+  const annotation = { id: 'AN', sketchId: 'S1' }; state.annotationHit = { element: annotation, part: 'frame', resizeX: 1, resizeY: -1 };
+  api.hover.updateOrdinary({ x: 0, y: 0 }); assert.equal(canvasHover.current.annotation, annotation); assert.equal(canvasHover.current.point, null);
+  api.hover.updateConstraint({ x: 0, y: 0 }, 'fixed'); assert.equal(canvasHover.current.annotation, null); assert.equal(canvasHover.current.point, p);
+  state.annotationHit.part = 'anchor'; api.hover.updateConstraint({ x: 0, y: 0 }, 'fixed'); assert.equal(canvasHover.current.annotation, annotation);
+  annotation.blockProjection = true; api.hover.updateOrdinary({ x: 0, y: 0 }); assert.equal(canvasHover.current.annotation, null); assert.equal(canvasHover.current.point, p);
+  assert.equal(api.press.read({ x: 0, y: 0 }).annotationTargetHit, target);
+  target = { id: 'T2' }; handle = { id: 'B', sketchId: 'S1' };
+  const hit = api.press.read({ x: 0, y: 0 }); assert.equal(hit.annotationTargetHit, target); assert.equal(hit.hitBlockHandle, handle);
+  const before = { ...canvasHover.current }; state.error = new Error('scene read failed');
+  assert.throws(() => api.hover.updateOrdinary({ x: 0, y: 0 }), error => error === state.error);
+  assert.deepEqual({ ...canvasHover.current }, before);
+  assert.throws(() => api.press.read({ x: 0, y: 0 }), error => error === state.error);
 });
 
 test('shared hit composition defers reads and press filtering keeps source references and hover unchanged across active Sketch changes', () => {

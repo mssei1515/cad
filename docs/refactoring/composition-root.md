@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のscene query共有単位
+
+構築済みscene query APIのcreateInteractionからpress／hoverを接続し、appに列挙するroot参照を25→4へ狭めた（scene owner自体の依存は別）。後段の接続と既存reader直接指定API・判定優先順を維持し、未使用になったroot委譲二関数を除去した。app.jsは3,072→3,066行（6行減）。正式仕様・実装mapを更新済み。検証結果と次の再開条件は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のscene hit構築単位
 
 CanvasHitInteraction.createSceneへ、早期scope policyと後段のscene／operand照会構築を集約した。既存ownerと25個の限定依存を使い、判定は既存GeometryHitQuery／OperandHitQueryに残す。異なるscope reader・receiver・遅延参照と生成順を維持し、新state／cache／fileはない。app.jsは3,088→3,072行（16行減）。正式仕様と実装mapを更新し、検証結果と次の再開条件は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

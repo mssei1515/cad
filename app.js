@@ -1441,8 +1441,6 @@
   function distanceTargetFromSelection() { return constraintSelectionQuery.distanceTarget(); }
 
   function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
-  function hitGeometryInstance(...args) { return instanceHitQuery.hitGeometryInstance(...args); }
-  function hitDerivedGeometryForDrag(...args) { return instanceHitQuery.hitDerivedGeometryForDrag(...args); }
   function hitBlockRotationHandle(x, y) { return null; }
 
 
@@ -2377,12 +2375,8 @@
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag,
   });
 
-  const { press: canvasPressQuery, hover: pointerHover } = window.CanvasHitInteraction.create({
-    canvasHover, sameArcEndpoint, isActiveSketchConstraint,
-    geometry: { hitPoint, hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
-    scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
-      hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget, activeSketchId,
-      hitDerivedProjectionOperand, hitBlockProjectionOperand, hitReferenceTarget },
+  const { press: canvasPressQuery, hover: pointerHover } = sceneHitQueries.createInteraction({
+    canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget,
   });
 
   const pointerInteractionController = window.PointerInteractionController.create({
