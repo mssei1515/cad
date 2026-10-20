@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の固定拘束照会単位
+
+既存ConstraintReferences.createFixedStateへ円弧端点固定・線固定の先頭検索と、点が固定線端点かの照会を集約した。既存の型importを共有し、同期済みcurrentScope／表示要素比較の二portから三つの読取りAPIだけを返す。enabled厳密false・型・比較とendpointの短絡順、Block投影の参照比較と点端点のObject同一性の違い、現在配列・返却Object・undefined／boolean・例外を維持する。SelectionHighlight生成後の359行目で構築し、最初の利用は円弧固定580／線固定1,799／point lock583行目であることをBabelで確認した。hoisted wrapperや新file・state・cache・scriptは増やしていない。app.jsは3,107→3,101行（6行減）、今回再開時3,652行から551行減。新たな未使用root bindingなし。
+
+最終コードで構文588ファイル・単体1,745件・関連E2E193件（5.0分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／fixed-command／block-geometry-fixed／blocks／selection-zoom-shadow／geometry-drag-smoothness／adversarial-authoring-performanceで、file URL起動、Fix／Unfix・Block内部の固定、拘束付きPoint／Line／Circle／Arc／端点drag、選択表示、既存画面比較・履歴・保存再読込を確認した。パンは163msで元の175ms未満の基準内。新単体4件は実拘束型・SelectionHighlight／GeometryRef／GeometryObjectsを組み合わせ、生成時遅延、enabled厳密falseと型・先頭の元Object、現在配列／scope、再生成Block投影と通常同ID別Objectの区別、Arc比較→endpointの順序、point lockの生の参照同一性と短絡、scope／比較／不正constraint例外の伝播と無変更を確認する。既存14件と合わせた関連単体18件も成功。新file・script・保存形式変更はない。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-fixed-queries-{check,unit,related}.log。
+
+基準はdevelop ce37d28（前実装0e59ee8）。開始時週枠残量99%／検証後98%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はassignConstraintSketchId／pushModelConstraintを既存ConstraintCommitCommandの早期insertion APIへ集約できるか確認する。drawable判定→最初のdrawable／active fallback→metadata付与→同期済みscopeのconstraints追加→現在Parameter namespaceでの寸法parameter確保の順を維持する。currentScopeはEditingScopeBinding、currentParameterNamespaceは既存Workspace readerの別依存であり、一括して同じscopeへ寄せない。初期値／default引数の評価・現在値の照会・無効constraintと例外時の部分更新、後段のcommit／求解／履歴の所有を維持する。必要な関数・scopeが揃う初期化地点と最初の利用を確認し、全app context・新state・不必要なwrapperを増やさない。
+
+
 ### 最新のInstance参照元の矩形入力単位
 
 既存InstanceCommandInput.createRectangleSourcesへSketchProjection型のentry→itemと、通常の六Geometry一覧→readProjection／active・visible条件→現在modeに応じたcommandへの追加を集約した。九つの限定APIからaddだけを返し、Geometryの選別・command state／確定・通常Selection／gestureとUI通知は元ownerへ残す。生成時照会、新file・state・cache・scriptはない。元の短絡とquery後のmode再読取り、同じreader／provider構造・候補array／item参照・receiver・undefined戻り値・例外の短絡を維持する。app.jsは3,114→3,107行（7行減）、今回再開時3,652行から545行減。新たな未使用root bindingがないことをBabelで確認した。

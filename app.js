@@ -356,6 +356,9 @@
     setHoveredDimension: value => { canvasHover.update({ dimension: value }); }, draw,
   });
   const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
+  const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
+    currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
+  });
   const selectionClearing = window.CanvasSelectionInteraction.createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight });
   const documentCanvasReset = window.CanvasSelectionInteraction.createDocumentReset({
     canvasSelection, canvasHover, selectionHighlight, clearPointer: () => { lastPointerWorld = null; },
@@ -1442,17 +1445,8 @@
 
 
 
-  function findArcEndpointFixedConstraint(arc, endpoint) {
-    return editingScopeBinding.current.constraints.find((c) => c.enabled !== false && c instanceof ArcEndpointFixedConstraint && sameConstraintDisplayElement(c.arc, arc) && c.endpoint === endpoint);
-  }
 
-  function findLineFixedConstraint(line) {
-    return editingScopeBinding.current.constraints.find((c) => c.enabled !== false && c instanceof LineFixedConstraint && sameConstraintDisplayElement(c.line, line));
-  }
 
-  function pointLockedByLineFixed(point) {
-    return editingScopeBinding.current.constraints.some((c) => c.enabled !== false && c instanceof LineFixedConstraint && (c.line.p1 === point || c.line.p2 === point));
-  }
 
 
 
