@@ -229,6 +229,14 @@
     }
     return Object.freeze({ selectIdentity, selectInactive, prepareSelection });
   }
+  function createRectangleSelection({ canvasSelection, selectionSketchId, activeSketchId, query }) {
+    function select(rect, crossing, additive = false) {
+      if (additive && selectionSketchId() && selectionSketchId() !== activeSketchId()) return;
+      canvasSelection.set("instanceGeometry", null);
+      canvasSelection.applyRectangle(query.read(rect, crossing), additive);
+    }
+    return Object.freeze({ select });
+  }
   // Clear selection-related presentation through its existing owners, without canceling a command.
   function createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight }) {
     function clear() {
@@ -275,5 +283,5 @@
     }
     return Object.freeze({ reset });
   }
-  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection, createClearing, createDocumentReset });
+  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection, createRectangleSelection, createClearing, createDocumentReset });
 })();

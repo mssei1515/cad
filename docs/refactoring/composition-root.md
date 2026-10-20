@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の通常矩形選択の適用単位
+
+既存CanvasSelectionInteraction.createRectangleSelectionへ追加選択のSketch整合guard→Instance内部選択解除→矩形query→Selection反映を集約した。四つの限定APIとselectだけで、図形選別は既存RectangleSelectionQuery、集合更新はCanvasSelection、gesture／UI通知は既存SelectionRectangleに残す。生成時照会や新state・cache・scriptはない。元の短絡・照会回数、query前の解除、同じObject／rect・options・receiver・undefined戻り値・例外時の部分状態を維持する。selectByRectの唯一の参照は宣言後のSelectionRectangleへの接続であることをBabelで確認し、不要なhoisted wrapperを追加せずselectを直接接続した。app.jsは3,118→3,114行（4行減）、今回再開時3,652行から538行減。
+
+最終コードで構文588ファイル・単体1,737件・関連E2E214件（3.7分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／sketch-permissions／free-instance／blocks／selection-zoom-shadow／command-panel／adversarial-authoring-performanceで、file URL起動、Sketchをまたぐ追加選択・lock／inspection、Block／Instance、通常選択・矩形・寸法と選択表示、既存画面比較・履歴・保存再読込を確認した。パンは150msで元の175ms未満の基準内。新単体4件は実CanvasSelectionと組み合わせ、生成時遅延、Sketch不一致時の無変更と空選択の短絡、全11カテゴリの置換・同じObject／metadata解除、追加時のObject同一性と同IDの別Object、現在query／rect／crossing・繰返しguard読取り、guard／解除／query／適用例外の部分状態と同じerrorの伝播を確認する。関連単体60件も成功。新file・script・保存形式の変更はない。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-rectangle-selection-{check,unit,related}.log。
+
+基準はdevelop 84ac3c9（前実装e9ae445）。週枠残量は開始時／検証後とも59%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はSelectionRectangleへ渡すInstance参照元の矩形追加callbackを、既存InstanceCommandInputへ集約できるか確認する。SketchProjection型の参照元編集は投影entry→item、その他は同じGeometryReadModelの六一覧→既存readProjectionとactive／visible条件→現在modeに応じたcommandへ追加する。modeをquery前だけに固定せず、query後のcommand選択も従来時機で読み、provider Objectとpredicate・返却参照・例外／更新短絡を維持する。通常Selection・投影専用経路・gestureは混ぜず、全app contextや新stateを持ち込まない。
+
+
 ### 最新の編集scope／Solver同期の所有単位
 
 EditingScopeBindingへ従来rootのmodel別名とSolver初期生成、context終了→move reset→Workspace切替→同期済みscope更新→Solver更新→Geometry read／projection無効化の手順を集約した。六つの明示依存とsolver／current／activateの三APIで、状態と更新の所有を揃えた。Workspace・Block session・Solverの計算／capture／restoreを移さず、cloneやscope stackは増やしていない。Block復帰のworkspace.restoreが同期処理より先に実行されるため、終了処理中のWorkspace currentと従来model／Solverの参照差をそのまま保つ。50読取りは同期済みcurrentへ接続し、DocumentApplicationの初期model捕捉、Clipboard targetのmodel property、Document固定参照とWorkspace直読は維持した。root letは9→8、app.jsは3,124→3,118行（6行減）、今回再開時3,652行から534行減。appのactivateEditingScopeは先行callback用hoisted委譲として残す。
