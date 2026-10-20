@@ -629,17 +629,13 @@
     readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRendering.frame),
     sketchAlpha, readMode: () => mode, readCommand: () => hatchCommand,
   });
-  const annotationColor = window.AnnotationRenderer.createColor({
-    effectiveAnnotationStyle, readExportFrame: () => pngRendering.frame, canvasSelection,
-    readHoveredAnnotation: () => canvasHover.current.annotation, canvasThemeColor,
+  const { color: annotationColor, renderer: annotationRenderer, layer: annotationLayer } = window.AnnotationDisplay.create({
+    ctx, viewport, surface: canvasSurface, effectiveAnnotationStyle, canvasSelection, readHover: () => canvasHover.current,
+    readExportFrame: () => pngRendering.frame, canvasThemeColor, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement,
+    resizeEnabled: element => annotationDrag.resizeEnabled(element), activeSketchId,
+    allAnnotations, isVisibleValue, isVisibleSketchId, readPreview: () => annotationCommand.preview(),
   });
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader, annotationPlacementAnchor: readAnnotationPlacementAnchor } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
-    resolvePlacement: (element, base) => window.AnnotationAnchorConstraints.resolve(element, base, resolveGeometryRef),
-    showFrame: element => !pngRendering.frame && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
-    showResizeHandles: element => !pngRendering.frame && !element.blockProjection && canvasSelection.annotations.includes(element) && isEditableSketchElement(element) && annotationDrag.resizeEnabled(element),
-    isResizeHandleHovered: (element, handle) => canvasHover.current.annotationHandle?.element === element && canvasHover.current.annotationHandle.resizeX === handle.resizeX && canvasHover.current.annotationHandle.resizeY === handle.resizeY,
-    showLeaderEndHandle: element => !pngRendering.frame && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
-  const annotationLayer = window.AnnotationRenderer.createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText, readPreview: () => annotationCommand.preview() });
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader, annotationPlacementAnchor: readAnnotationPlacementAnchor } = annotationRenderer;
   function annotationPlacementAnchor(...args) { return readAnnotationPlacementAnchor(...args); }
   function materializeAnnotationAnchor(...args) { return annotationAnchorMaterialization.materialize(...args); }
   const annotationAnchorMaterialization = window.AnnotationAnchorConstraints.createMaterialization({
