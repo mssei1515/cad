@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas press選択準備単位
+
+Canvas pressのselectInactive／prepareSelectionを、同じSelectionとidentity選択を扱う既存CanvasSelectionInteraction.createIdentitySelectionへ統合した。別Sketchへの追加拒否・lock時の選択→guard・inspection保持／解除・Tree選択解除・早期returnと例外伝播を維持し、PointerInteractionControllerには従来のmode／pending条件とroutingを残した。新file・script・state・保存形式変更はない。app.jsは3,260→3,247行（13行減）、今回の再開から3,652→3,247行（405行減）。
+
+構文578ファイル・単体1,691件・関連E2E163件（2.4分）が成功（全runner exit 0）。関連はunified-ui／sketch-permissions／blocks／derived-selection-copyで、file URL起動、同一Sketch内の追加選択・別Sketch拒否、lock対象の確認と解除後編集、Block／派生Geometryの選択・コピー・履歴・保存再読込を確認した。追加単体4件はCtrl／Shiftの短絡とinspection保持、最新lockと選択→guardの順・拒否時終了、inspection／Tree選択解除と通常継続、非active選択後の最新lock照会・拒否後guard・例外伝播を検証する。既存selectIdentityの優先・型対応・参照同一性のテストは維持した。生成時にSelection／Sketch／guardを読まず、同じownerへ接続する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-canvas-press-selection-{focused,check,unit,related}.log。
+
+基準はdevelop 784ab24（前実装771d208）。週枠残量69%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はCanvasのviewport／navigation／zoom control／surface／workspace layoutの構築境界を分析する。画面座標と倍率・Canvas bitmap・resizeを同じviewportで扱う生成群を、機能単位で組み立てられるか確認する。共有viewport／ctxの同一性、生成とbind／start、pointer move flush→scale変更→寸法入力同期、resize時のdraw→値入力同期、PNG export時の一時変更と復元を維持する。初期化順にまたがるTransientAuthoringやmodel編集は混ぜず、明示的な公開ownerと必要な遅延callbackに限定する。初期化順や依存が悪化するなら統合範囲を見直し、全app contextや別の巨大bootstrapへ移さない。
+
 ### 最新のCanvas描画診断組立て単位
 
 CanvasRenderTestDriver.createRenderingSupportへ、既存の描画診断五部品の生成・接続を集約した。appは同じcommand／preview Layer／scope／Canvasを明示し、三つの既存ブラウザAPIへ接続する。test hooksの有効条件とAPI順・準備／描画／観測の実装は維持し、通常描画や新たなstateをtestingへ持ち込まない。新file・namespace・script・保存形式変更はない。app.jsは3,270→3,260行（10行減）、今回の再開から3,652→3,260行（392行減）。
