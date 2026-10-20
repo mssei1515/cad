@@ -2480,17 +2480,8 @@
 
 
 
-  const { select: selectCanvasContextTarget, constraintHits: constraintHitsFromCanvasContextTarget } = window.CanvasContextTarget.createSelection({
-    canvasSelection, sameArcEndpoint, clearSelection, arcEndpointPoint,
-  });
-  const { state: canvasContextFixState } = window.CanvasContextTarget.createFixObservation({
-    selectedFixedBatchTargets, fixedBatchIsFullyFixed, canvasSelection, findLineFixedConstraint, findArcEndpointFixedConstraint, selectedGeometryItems,
-  });
 
-  function previewCanvasContextCandidate(target) {
-    canvasHover.previewCandidate(target);
-    draw();
-  }
+  function previewCanvasContextCandidate(target) { return canvasContextInteraction.preview(target); }
 
 
 
@@ -2516,43 +2507,35 @@
   });
 
 
-  const { items: canvasContextMenuItems } = window.CanvasContextPresentation.createItems({
-    readMode: () => mode, sketchProjectionCommand, applicationText, document, canCreateInActiveSketch, visibleGeometryBounds,
-    pendingCommandSession, constraintTargetSession, splineEditing, isReadOnlyDimension, selectedDimensionLineGroup,
-    blockDefinitionScopeError, blockDefinitionEditError, canvasContextFixState, selectedConstructionTogglePrimitives,
-    canvasSelection, selectedGeometryItems, drawingOrderCommandState, hasCopyableCanvasSelection, hasSelection,
+
+
+
+
+
+  function selectCanvasContextCandidate(target, pointer) { return canvasContextInteraction.selectCandidate(target, pointer); }
+
+
+
+  function openCanvasContextMenu(event) { return canvasContextInteraction.open(event); }
+
+
+
+  function executeCanvasContextAction(action, target, pointer) { return canvasContextInteraction.execute(action, target, pointer); }
+
+  const canvasContextInteraction = window.CanvasContextInteraction.create({
+    canvasSelection, sameArcEndpoint, clearSelection, arcEndpointPoint, selectedFixedBatchTargets, fixedBatchIsFullyFixed, findLineFixedConstraint,
+    findArcEndpointFixedConstraint, selectedGeometryItems, readMode: () => mode, sketchProjectionCommand, applicationText, document,
+    canCreateInActiveSketch, visibleGeometryBounds, pendingCommandSession, constraintTargetSession, splineEditing, isReadOnlyDimension,
+    selectedDimensionLineGroup, blockDefinitionScopeError, blockDefinitionEditError, selectedConstructionTogglePrimitives, drawingOrderCommandState,
+    hasCopyableCanvasSelection, hasSelection, handleConstraintOperandClick, updateUI, draw, canvasContextMenu, isGeometryMode,
+    closeAppMenus: () => closeAppMenus(), canvasPoint, setLastPointer: pointer => { lastPointerWorld = pointer; }, hasCancellableCanvasCommand,
+    canvasContextCandidatesAt, canvasContextController, guardSelectionEdit, guardSketchEdit, elementSketchId, selectionSketchId, activeSketchId,
+    commitSketchProjectionCommand, cancelCanvasCommandFromContextMenu, undoHistory, redoHistory, copySelectionToClipboard, imageClipboard,
+    showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit,
+    setBlockInstanceRotationLocked, startDimensionEditInput, dimensionLineGroup, updateGeometrySelectionUI, recordHistory, setHint, sketchMoveCommand,
+    startHatchBoundaryRepair, reorderSelectedDrawingObjects, addSplineFitPointFromContext, deleteSplineFitPointFromContext, fitVisibleGeometryToViewport,
+    canvasHover,
   });
-
-
-
-
-
-  const canvasContextCandidateAction = window.CanvasContextTarget.createCandidateAction({
-    constraintTargetSession, handleConstraintOperandClick, constraintHitsFromCanvasContextTarget, selectCanvasContextTarget, updateUI, draw,
-  });
-  function selectCanvasContextCandidate(target, pointer) { return canvasContextCandidateAction.select(target, pointer); }
-
-
-
-  const canvasContextEntry = window.CanvasContextMenu.createEntry({
-    canvasContextMenu, isGeometryMode, closeAppMenus: () => closeAppMenus(), canvasPoint, setLastPointer: pointer => { lastPointerWorld = pointer; },
-    hasCancellableCanvasCommand, constraintTargetSession, canvasContextCandidatesAt, selectCanvasContextTarget,
-    updateUI, draw, canvasContextController, canvasContextMenuItems,
-  });
-  function openCanvasContextMenu(event) { return canvasContextEntry.open(event); }
-
-
-
-  const canvasContextActions = window.CanvasContextActions.create({
-    guardSelectionEdit, guardSketchEdit, elementSketchId, selectionSketchId, activeSketchId,
-    commitSketchProjectionCommand, cancelCanvasCommandFromContextMenu, undoHistory, redoHistory, copySelectionToClipboard,
-    imageClipboard, document, showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit, setBlockInstanceRotationLocked,
-    startDimensionEditInput, selectedDimensionLineGroup, dimensionLineGroup, updateGeometrySelectionUI, draw, recordHistory, applicationText, setHint,
-    sketchMoveCommand, startHatchBoundaryRepair, reorderSelectedDrawingObjects, addSplineFitPointFromContext, deleteSplineFitPointFromContext,
-    splineEditing, fitVisibleGeometryToViewport,
-  });
-  function executeCanvasContextAction(action, target, pointer) { return canvasContextActions.execute(action, target, pointer); }
-
   canvasContextController.start();
 
   const annotationCommandInput = window.AnnotationCommandInput.create({
