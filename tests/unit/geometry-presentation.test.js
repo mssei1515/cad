@@ -6,10 +6,10 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/rendering/geometry_presentation.js'), 'utf8'), sandbox);
 class Point {}
-function fixture() {
+function fixture(pointUsage, legacyUsage) {
   const selection = { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], geometryInstances: [] };
   const hover = { current: {} }, view = { geometryIds: false, constraintStatus: false };
-  const presentation = sandbox.window.GeometryPresentation.create({ Point, canvasSelection: selection, canvasHover: hover, viewState: view, isExporting: () => !!view.exporting,
+  const presentation = sandbox.window.GeometryPresentation.create({ Point, pointUsage, canvasSelection: selection, canvasHover: hover, viewState: view, isExporting: () => !!view.exporting,
     effectiveAppearanceForElement: item => item.appearance || { color: 'normal', lineWidth: 1.5 },
     isEditableSketchElement: item => !item.inactive, isConstraintOperandSelected: item => !!item.operand,
     isPendingReferenceTarget: item => !!item.reference, isSidebarHighlightedElement: item => !!item.tree,
@@ -26,7 +26,7 @@ function fixture() {
       isReferencePoint: p => !!p.referencePoint, isAnyLineEndpoint: p => !!p.lineEnd,
       isEndpointPoint: p => p.kind === 'endpoint', isDraggingPoint: p => !!p.dragging,
       isDraggingCenter: p => !!p.draggingCenter, sidebarHoveredItem: () => hover.sidebarItem,
-      pointLockedByLineFixed: p => !!p.fixedByLine,
+      pointLockedByLineFixed: p => !!p.fixedByLine, ...legacyUsage,
     } });
   return { presentation, selection, hover, view };
 }
@@ -244,4 +244,63 @@ test('Sketch draw ordering filters visibility, retains item identity/stable orde
   const items = [active1, inactive1, hidden, active2, inactive2], before = [...items]; let result = h.api.drawOrderBySketch(items);
   assert.deepEqual(Array.from(result), [inactive1, inactive2, active1, active2]); assert.deepEqual(items, before);
   inactive1.visible = false; inactive2.active = true; result = h.api.drawOrderBySketch(items); assert.deepEqual(Array.from(result), [active1, active2, inactive2]); assert.deepEqual(items, before);
+});
+
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/point_usage.js'), 'utf8'), sandbox);
+function sharedUsageFixture() {
+  const empty = () => ({ lines: [], circles: [], arcs: [], splines: [], constraints: [] });
+  const calls = [], state = { ready: false, scope: empty(), expanded: empty(), edited: [], failure: null };
+  const read = name => { assert.equal(state.ready, true); calls.push(name); if (state.failure) throw state.failure; };
+  const usage = sandbox.window.PointUsage.create({ currentScope: () => { read('scope'); return state.scope; },
+    allGeometryLines: () => { read('lines'); return state.expanded.lines; }, allGeometryCircles: () => { read('circles'); return state.expanded.circles; },
+    allGeometryArcs: () => { read('arcs'); return state.expanded.arcs; }, allGeometrySplines: () => { read('splines'); return state.expanded.splines; },
+    editedFitPoints: () => { read('edited'); return state.edited; }, constraintReferencesPoint: (constraint, point) => constraint.point === point,
+  });
+  const f = fixture(usage); assert.deepEqual(calls, []); state.ready = true;
+  return { ...f, state, usage, calls, empty };
+}
+
+test('shared PointUsage follows current scope and exact point references without eager reads or point/selection mutation', () => {
+  const f = sharedUsageFixture(), point = Object.assign(new Point(), { id: 'P', kind: 'endpoint' }), other = Object.assign(new Point(), { id: 'P', kind: 'endpoint' });
+  const line = { p1: point, p2: {} }; f.state.scope.lines.push(line); f.selection.points.push(point);
+  assert.ok(f.presentation.pointPaintState(point)); assert.equal(f.presentation.pointPaintState(other), null); assert.equal(f.usage.isPointUsedByLine(point), true);
+  f.state.scope = f.empty(); assert.equal(f.presentation.pointPaintState(point), null); assert.equal(f.usage.isPointUsedByLine(point), false);
+  f.state.scope.constraints.push({ point }); assert.ok(f.presentation.pointPaintState(point));
+  f.state.scope.constraints[0].enabled = false; assert.equal(f.presentation.pointPaintState(point), null);
+  assert.equal(f.selection.points[0], point); assert.deepEqual({ ...point }, { id: 'P', kind: 'endpoint' }); assert.equal(line.p1, point);
+  const error = new Error('scope unavailable'); f.state.failure = error; assert.throws(() => f.presentation.pointPaintState(point), value => value === error);
+});
+
+test('shared PointUsage reads current spline edit membership and projection collections by reference', () => {
+  const f = sharedUsageFixture(), point = Object.assign(new Point(), { id: 'P', kind: 'endpoint' });
+  f.state.scope.splines.push({ fitPoints: [point] }); f.selection.points.push(point);
+  assert.equal(f.presentation.pointPaintState(point), null); f.state.edited = [point]; assert.ok(f.presentation.pointPaintState(point));
+  f.state.edited = [{ id: 'P' }]; assert.equal(f.presentation.pointPaintState(point), null);
+  const projected = Object.assign(new Point(), { kind: 'endpoint', blockProjection: true }); f.selection.points.push(projected);
+  f.state.expanded.splines.push({ fitPoints: [projected] }); assert.equal(f.presentation.pointPaintState(projected), null);
+  f.state.edited = [projected]; assert.ok(f.presentation.pointPaintState(projected)); assert.ok(f.calls.includes('splines'));
+  assert.equal(f.state.scope.splines[0].fitPoints[0], point); assert.equal(f.state.expanded.splines[0].fitPoints[0], projected);
+});
+
+test('shared point classification leaves dragging, center and sidebar presentation queries live and separate', () => {
+  const f = sharedUsageFixture(), point = Object.assign(new Point(), { kind: 'endpoint' }); f.state.scope.lines.push({ p1: point, p2: {} });
+  assert.equal(f.presentation.pointPaintState(point), null); point.dragging = true; assert.ok(f.presentation.pointPaintState(point).showId);
+  point.dragging = false; assert.equal(f.presentation.pointPaintState(point), null);
+  f.state.scope = f.empty(); f.state.scope.circles.push({ center: point }); f.hover.sidebarItem = { center: point }; assert.ok(f.presentation.pointPaintState(point));
+  f.hover.sidebarItem = null; assert.equal(f.presentation.pointPaintState(point), null); point.draggingCenter = true; assert.ok(f.presentation.pointPaintState(point));
+  point.draggingCenter = false; f.hover.current.point = point; point.fixedByLine = true;
+  assert.equal(f.presentation.pointPaintState(point).color, '#dc2626');
+});
+
+test('legacy pointQueries and shared PointUsage produce identical paint policy for selection, hover, status, fixed points and export', () => {
+  const modern = sharedUsageFixture(), legacy = fixture(undefined, modern.usage), point = Object.assign(new Point(), { kind: 'endpoint', fixed: true });
+  modern.state.scope.lines.push({ p1: point, p2: {} });
+  for (const config of [{}, { selected: true }, { hovered: true }, { constraintStatus: true }, { exporting: true }, { selected: true, exporting: true }, { hovered: true, geometryIds: true }]) {
+    for (const f of [modern, legacy]) {
+      f.selection.points.length = 0; if (config.selected) f.selection.points.push(point);
+      f.hover.current.point = config.hovered ? point : null;
+      f.view.constraintStatus = Boolean(config.constraintStatus); f.view.exporting = Boolean(config.exporting); f.view.geometryIds = Boolean(config.geometryIds);
+    }
+    assert.deepEqual(modern.presentation.pointPaintState(point), legacy.presentation.pointPaintState(point));
+  }
 });
