@@ -10,9 +10,14 @@
   const INACTIVE_CONSTRAINT_STATUS_COLOR = "#cbd5e1";
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   function create({ Point, canvasSelection, canvasHover, viewState,
-    effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
-    isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
-    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha, pointQueries = {}, pointUsage = pointQueries, handleQueries = {}, isExporting = () => false }) {
+    effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected: legacyOperandSelected, isPendingReferenceTarget: legacyPendingTarget,
+    isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement: legacyReferenceHover, isSelectedConstraintRelatedElement,
+    sketchAlpha: legacySketchAlpha, sketchStrokeWidth: legacySketchWidth, constraintStatusColor: legacyStatusColor,
+    canvasThemeColor, constructionAlpha, pointQueries = {}, pointUsage = pointQueries, handleQueries = {}, isExporting = () => false,
+    commandTargets = { isConstraintOperandSelected: legacyOperandSelected, isPendingReferenceTarget: legacyPendingTarget, isReferenceHoverElement: legacyReferenceHover },
+    sketchStyle = { sketchAlpha: legacySketchAlpha, sketchStrokeWidth: legacySketchWidth, constraintStatusColor: legacyStatusColor } }) {
+    const { isConstraintOperandSelected, isPendingReferenceTarget, isReferenceHoverElement } = commandTargets;
+    const { sketchAlpha, sketchStrokeWidth, constraintStatusColor } = sketchStyle;
     const { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, isDraggingArcEndpoint, editedSpline, currentScope } = handleQueries;
     const { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint, isAnyLineEndpoint, isEndpointPoint } = pointUsage;
     const { isDraggingPoint, isDraggingCenter, sidebarHoveredItem, pointLockedByLineFixed } = pointQueries;

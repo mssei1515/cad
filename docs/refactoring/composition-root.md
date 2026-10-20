@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の描画policy owner依存整理単位
+
+GeometryPresentationへ既存commandTargetPresentation／sketchPresentationを共有し、六つの個別policy関数を二つのowner APIへ整理した。個別関数だけの既存呼出しも維持し、Hatch／他UI／test supportで使う四つのroot委譲入口は残す。参照0をBabelのbindingで確認したisReferenceHoverElement／isPendingReferenceTargetの未使用委譲二入口は除いた。後段sidebar／drag callbackや判定の実装・優先順位は変更しない。対象factoryのroot binding参照は27→23（PointUsage整理前33から計10減）。新file・state・script・保存形式変更はない。app.jsは3,142→3,138行（4行減）。
+
+最終コードで構文584ファイル・単体1,721件・関連E2E176件（3.1分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／hatching／command-panel／sketch-permissions／png-export／adversarial-authoring-performanceで、file URL起動、operand／reference／選択強調、Sketch status／errorと関係色、Hatch・権限、既存画面比較、PNG・履歴・保存再読込を確認した。パンは157msで元の175ms未満の基準内。新単体4件は実CommandTargets／SketchStyleを共有し、生成時遅延と旧portよりowner優先、panel短絡とSelection無変更、現在status／solve error／relation、pendingとinactive reference hover・Arc endpoint options、旧portと新owner APIのpaint／width一致を検証する。既存22件も維持した。初回関連176件成功後、Babelで参照0を確認したroot委譲二入口を除去し、上記の構文・単体・関連全件を最終コードで再実行した。Hatch／test supportに必要な四委譲は維持した。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-geometry-policies-{focused,check,unit,related}.log、cleanup前ログはcad-geometry-policies-before-cleanup.log。
+
+基準はdevelop 33a95a5（前実装c51f79e）。開始時の週枠残量63%／検証後62%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は依存を整理したGeometryPresentationとline display／GeometryRenderer／geometry Layerの生成結線を、同じPointUsage・command targets・Sketch styleとCanvasSurface／GeometryReadServicesの限定APIを使ってまとめられるか確認する。presentationの状態・renderer・Layerを重複生成せず、Point分類・style・queryとCanvas描画を元のownerに残す。既存readers・export frame・draw順・DPR・shadow／stroke・後段drag／Spline／sidebarの遅延を維持する。全appの可変contextを渡す／67個の参照をそのまま並べる構成を作らず、公開ownerと必要なqueryを限定した機能組立てへ進める。
+
 ### 最新の描画PointUsage依存整理単位
 
 GeometryPresentationの七つの点分類依存を、同じPointUsage ownerのAPIへ整理した。appは既存生成結果を保持し、分類queryを個別列挙せず共有する。runtimeのdrag／center／sidebar／固定線queryは分けて遅延接続し、従来のpointQueriesだけの呼出しも維持する。対象factoryのroot binding参照は33→27。新file・state・script・保存形式変更はない。app.jsは3,142→3,142行（0行差）。owner保持の宣言が一行増え、個別点queryの列挙が一行減った。行数ではなく依存と所有の整理を行った。

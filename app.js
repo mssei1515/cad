@@ -573,11 +573,11 @@
     sketchHasSolveError, elementSketchId, sketchRelationOfElement, constraintStatusOf, isVisibleSketchElement, isActiveSketchElement,
   });
   const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
-    Point, pointUsage, canvasSelection, canvasHover, viewState,
+    Point, pointUsage, commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, canvasSelection, canvasHover, viewState,
     isExporting: () => Boolean(pngRendering.frame),
-    effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
-    isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
-    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+    effectiveAppearanceForElement, isEditableSketchElement,
+    isSidebarHighlightedElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement,
+    canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
     handleQueries: { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint,
       isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
       editedSpline: () => splineEditing.current?.spline, currentScope: workspace.current },
@@ -1107,10 +1107,6 @@
   function canvasThemeColor(value) {
     return window.CanvasThemeColors.color(value, applicationSettings.theme);
   }
-
-  function isReferenceHoverElement(...args) { return commandTargetPresentation.isReferenceHoverElement(...args); }
-
-  function isPendingReferenceTarget(...args) { return commandTargetPresentation.isPendingReferenceTarget(...args); }
 
   function drawOrderBySketch(...args) { return sketchPresentation.drawOrderBySketch(...args); }
 
