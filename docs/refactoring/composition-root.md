@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### Document編集状態の初期化
+
+DocumentEditingResetへresetModelStateの進行を分離した。DocumentStateの二段階reset、scope復帰と保留pointerの破棄、cache／Selection／draft／session／採番／Block編集のreset、既定値復元後のHatch／Tree／Annotation／画像操作の順を維持する。既存の重複resetも省略せず、例外境界・配列参照・取消／履歴なしの契約を維持する。各ownerを生成後に接続し、初期化前のconstを直接捕捉するgetter集合や汎用app contextを作らない。Hatchのcontent／Layerは既存renderer内に責務がまとまり、包むだけでは効果が小さいため今回は追加分割しない。app.jsは3,433→3,409行（24行減）、今回の再開から3,652→3,409行（243行減）。
+
+構文574ファイル・単体1,645件・関連E2E189件（2.6分）が成功（全runner exit 0）。関連はunified-ui／blocks／file-safety／sketch-move／command-panel／reference-images／phase0-characterizationで、file URL起動、読込候補の拒否時に現在Documentを保持すること、Block／Sketch移動・取消、参照画像、既存画面比較、Undo／Redo・保存再読込を確認した。追加単体3件は実DocumentState／EditingWorkspace／Selection／Geometry・Document IDsによるscope復帰・入力破棄・二段階resetの配列参照と既定値／採番／session、画像操作二回のreset、例外の同一参照・停止位置と後続の無処理、繰返しresetを確認する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-document-editing-reset-{check,unit,related}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量83%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はDocumentLoading／DocumentApplicationとGeometry・Block・Instance persistenceの生成依存を分析する。decode／候補検証が成功する前に現在Documentをresetしないこと、Tree状態の退避／復元、install先のDocumentと編集scope、line repair・既定寸法・採番復旧・外観／drawing orderの更新順を確認する。codecの互換性責務と編集状態のresetを区別し、共有registry／ID ownerを増やさず、生成を束ねるだけの薄いfileを追加しない。Hatch描画は既存境界で維持し、必要な依存整理が見つかった時点で再検討する。
+
+
 ### 注記表示の生成・接続
 
 AnnotationDisplayへColor／Renderer／Layerの生成・接続とframe／resize／Leader終端handleの表示規則を集約した。同じSelection／hover／export／実効外観とCanvasSurfaceを共有し、後段のAnnotation drag／commandはresize可否とpreviewの遅延callbackで参照する。アンカー解決、文字layout・Leader geometry、色の優先順位、保存frameのPNG表示、投影／編集不可・active／anchorのhandle抑制を維持する。Anchor materializationとモデル編集は既存ownerに残す。app.jsは3,437→3,433行（4行減）、今回の再開から3,652→3,433行（219行減）。
