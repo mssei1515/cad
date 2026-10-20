@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の描画PointUsage依存整理単位
+
+GeometryPresentationの七つの点分類依存を、同じPointUsage ownerのAPIへ整理した。appは既存生成結果を保持し、分類queryを個別列挙せず共有する。runtimeのdrag／center／sidebar／固定線queryは分けて遅延接続し、従来のpointQueriesだけの呼出しも維持する。対象factoryのroot binding参照は33→27。新file・state・script・保存形式変更はない。app.jsは3,142→3,142行（0行差）。owner保持の宣言が一行増え、個別点queryの列挙が一行減った。行数ではなく依存と所有の整理を行った。
+
+構文584ファイル・単体1,717件・関連E2E182件（2.6分）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／spline／blocks／selection-zoom-shadow／png-exportで、file URL起動、点・Spline編集点・投影点、scope切替、選択とzoom、既存画面比較、PNG出力・履歴・保存再読込を確認した。新単体4件は実PointUsageとGeometryPresentationを組み合わせ、生成時遅延と同じIDの別Object、現在scope／拘束／Spline編集点／投影一覧、例外伝播とモデル・Selection無変更、runtime drag／center／sidebar queryの分離、新旧APIの選択・hover・status・fixed・export結果一致を検証する。既存の描画policy単体18件も維持した。既存Babel parserによる同factoryのroot binding参照数は33→27で、PointUsageの再生成やmodel cacheはない。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-geometry-point-usage-{focused,check,unit,related}.log。
+
+基準はdevelop a134db9（前実装3c5d58b）。開始時の週枠残量64%／検証後63%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は同じGeometryPresentationに個別で渡すcommand targetの三照会とSketch styleの三照会を、既存commandTargetPresentation／sketchPresentationの限定APIとして共有できるか確認する。rootのhoisted入口はHatch／他UI・早期生成で使われるものを残す。PointUsageと同様に従来portの互換性、predicateの短絡と同じSelection／scope／status、後段ownerへの遅延参照を維持する。sidebar／drag等の後段ownerを早期にObjectへ置換せず、広い描画factoryをそのまま包む前に契約を減らす。
+
 ### 最新の特殊寸法編集支援単位
 
 特殊寸法submit／Properties適用と編集対象選択を既存DimensionValueCommand.createEditingSupportへ集約した。一般commandへ返す三つのcallbackと11依存を明示し、非対象null／拒否false／成功、型・propertyの短絡順、式評価scope、例外、履歴・選択／drag解除の順を維持する。一般createのpending／入力表示／UI更新は変更しない。新file・state・script・保存形式変更はない。app.jsは3,162→3,142行（20行減）、今回の再開から3,652→3,142行（510行減）。

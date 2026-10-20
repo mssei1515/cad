@@ -12,10 +12,10 @@
   function create({ Point, canvasSelection, canvasHover, viewState,
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
-    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha, pointQueries = {}, handleQueries = {}, isExporting = () => false }) {
+    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha, pointQueries = {}, pointUsage = pointQueries, handleQueries = {}, isExporting = () => false }) {
     const { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, isDraggingArcEndpoint, editedSpline, currentScope } = handleQueries;
-    const { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint,
-      isAnyLineEndpoint, isEndpointPoint, isDraggingPoint, isDraggingCenter, sidebarHoveredItem, pointLockedByLineFixed } = pointQueries;
+    const { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint, isAnyLineEndpoint, isEndpointPoint } = pointUsage;
+    const { isDraggingPoint, isDraggingCenter, sidebarHoveredItem, pointLockedByLineFixed } = pointQueries;
     function geometryDisplayColor(item, appearance, selected = false, hovered = false) {
       if (selected) return canvasThemeColor("#1d4ed8");
       if (hovered) return canvasThemeColor("#3b82f6");

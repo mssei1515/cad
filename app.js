@@ -233,12 +233,13 @@
   } = canvasSelection;
   const selectionScopeQuery = window.CanvasSelection.createScopeQuery({ canvasSelection, selectedGeometryItems });
   const identitySelection = window.CanvasSelectionInteraction.createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw, sketchById, guardSketchEdit });
-  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isSplineOnlyFitPoint, isEditableSplineFitPoint, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isPrimitiveCenterPoint, isStandalonePoint, isSelectableEndpointPoint } = window.PointUsage.create({
+  const pointUsage = window.PointUsage.create({
     currentScope: workspace.current, constraintReferencesPoint,
     allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
     allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines(),
     editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
   });
+  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isSplineOnlyFitPoint, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isPrimitiveCenterPoint, isStandalonePoint, isSelectableEndpointPoint } = pointUsage;
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
   const interactionProfiler = window.InteractionProfiler.create();
@@ -572,7 +573,7 @@
     sketchHasSolveError, elementSketchId, sketchRelationOfElement, constraintStatusOf, isVisibleSketchElement, isActiveSketchElement,
   });
   const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
-    Point, canvasSelection, canvasHover, viewState,
+    Point, pointUsage, canvasSelection, canvasHover, viewState,
     isExporting: () => Boolean(pngRendering.frame),
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
@@ -580,8 +581,7 @@
     handleQueries: { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint,
       isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
       editedSpline: () => splineEditing.current?.spline, currentScope: workspace.current },
-    pointQueries: { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint,
-      isAnyLineEndpoint, isEndpointPoint, pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
+    pointQueries: { pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
       isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point) },
   });
   const lineDisplay = window.GeometryPresentation.createLineDisplay({ viewport, effectiveAppearanceForElement, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX });
