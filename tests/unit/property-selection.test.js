@@ -34,6 +34,56 @@ test('property targets prioritize operation and constraint state, falling back t
   f.operation.mode = 'instance-sources'; f.operation.instanceSourceEdit = { instance: {} };
   assert.equal(f.query.selectedPropertiesTarget().item, f.operation.instanceSourceEdit.instance);
 });
+
+test('display target reads live Sketch context without mutating raw targets or selected objects', () => {
+  let ready = false, active = 'S1';
+  const sketches = new Map([['S1', { id: 'S1', name: 'Drawing' }], ['S2', { id: 'S2', name: '<Owner>', locked: true }]]);
+  const f = fixture({ sketchById: id => { assert.equal(ready, true); return sketches.get(id); },
+    sketchName: id => { assert.equal(ready, true); return sketches.get(id)?.name; }, activeSketchId: () => active });
+  const item = Object.freeze(Object.assign(new Point(), { sketchId: 'S2' })); f.geometry.push(item); ready = true;
+  const target = f.query.selectedDisplayTarget();
+  assert.equal(target.item, item); assert.equal(target.locked, true); assert.equal(target.readOnly, true);
+  assert.equal(target.owningSketchLabel, '<Owner> (S2)'); assert.equal(target.drawingSketchLabel, 'Drawing (S1)');
+  const raw = f.query.selectedPropertiesTarget();
+  assert.equal(raw.item, item); assert.equal(Object.hasOwn(raw, 'locked'), false); assert.equal(Object.hasOwn(raw, 'owningSketchLabel'), false);
+  sketches.set('S2', { id: 'S2', name: 'Replaced', locked: false }); active = 'S2';
+  const refreshed = f.query.selectedDisplayTarget();
+  assert.equal(refreshed.item, item); assert.equal(refreshed.locked, false); assert.equal(refreshed.readOnly, false);
+  assert.equal(refreshed.owningSketchLabel, 'Replaced (S2)'); assert.equal(refreshed.drawingSketchLabel, 'Replaced (S2)');
+  assert.equal(target.locked, true); assert.equal(target.owningSketchLabel, '<Owner> (S2)');
+});
+
+test('mixed display targets use every owner for locks and the first owner for the label, retaining inspection read-only', () => {
+  const sketches = { S1: { name: 'First' }, S2: { name: 'Second', locked: true } };
+  const f = fixture({ sketchById: id => sketches[id], sketchName: id => sketches[id]?.name });
+  const a = Object.freeze(Object.assign(new Point(), { sketchId: 'S1' })), b = Object.freeze(Object.assign(new Line(), { sketchId: 'S2' }));
+  f.geometry.push(a, b);
+  let target = f.query.selectedDisplayTarget();
+  assert.deepEqual(Array.from(target.items, entry => entry.item), [a, b]);
+  assert.equal(target.locked, true); assert.equal(target.readOnly, true); assert.equal(target.owningSketchLabel, 'First (S1)');
+  const entries = Object.freeze([Object.freeze({ kind: 'geometry', item: b }), Object.freeze({ kind: 'geometry', item: a })]);
+  f.selection.inspection = Object.freeze({ targets: entries }); sketches.S2.locked = false;
+  target = f.query.selectedDisplayTarget();
+  assert.equal(target.items, entries); assert.equal(target.locked, false); assert.equal(target.readOnly, true);
+  assert.equal(target.owningSketchLabel, 'Second (S2)');
+});
+
+test('Sketch and operation display targets preserve selection priority and handle absent ownership', () => {
+  const sketches = { S1: { id: 'S1', name: 'Drawing' }, S2: { id: 'S2', name: 'Selected', locked: true } };
+  const definition = Object.freeze({ id: 'B1' });
+  const f = fixture({ sketchById: id => sketches[id], sketchName: id => sketches[id]?.name, blockDefinitionById: () => definition });
+  f.selection.sketchId = 'S2'; let target = f.query.selectedDisplayTarget();
+  assert.equal(target.kind, 'sketch'); assert.equal(target.item, sketches.S2); assert.equal(target.active, false);
+  assert.equal(target.locked, true); assert.equal(target.owningSketchLabel, 'Selected (S2)');
+  f.operation.mode = 'block-place'; f.operation.blockPlacementDefinitionId = 'B1'; target = f.query.selectedDisplayTarget();
+  assert.equal(target.kind, 'blockPlacement'); assert.equal(target.item, definition); assert.equal(target.owningSketchLabel, null);
+  assert.equal(target.locked, false); assert.equal(target.drawingSketchLabel, 'Drawing (S1)');
+  f.operation.freeInstancePlacement = Object.freeze({ sketchId: 'S2' }); target = f.query.selectedDisplayTarget();
+  assert.equal(target.item, f.operation.freeInstancePlacement); assert.equal(target.readOnly, true);
+  f.operation.mode = 'instance-sources'; f.operation.instanceSourceEdit = { instance: Object.freeze({ sketchId: 'missing' }) };
+  target = f.query.selectedDisplayTarget(); assert.equal(target.item, f.operation.instanceSourceEdit.instance);
+  assert.equal(target.owningSketchLabel, 'undefined (missing)'); assert.equal(target.readOnly, false);
+});
 test('common values use effective appearance and mixed sentinel while inherited resets remove overrides', () => {
   const f = fixture(), a = new Line(), b = new Line();
   a.appearance = { color: '#111827' }; b.appearance = {};

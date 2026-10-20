@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新のProperties編集生成単位
+### 最新のProperties対象context単位
+
+前単位はc1b89dbをdevelopの17af9feへ統合・Push済み。今回はcodex/property-target-contextで継続中。週枠使用12%／残量88%で停止条件には達していない。
+
+PropertySelection.selectedDisplayTargetへProperties対象のlock／readOnlyと所有Sketch／作図Sketch labelの照会を統合した。元のraw対象APIと優先順位を維持し、複数対象は全ownerでlock判定・先頭ownerのlabelを使う。現在registryの置換、lock／名前／作図Sketch変更は操作時に取得し、選択配列とモデルObjectを変更しない。appの早期callback用hoisted入口は委譲だけを残し、Properties表示・Controller・palette・観測の同じ入口を保つ。新しいファイルやstateは増やさない。app.jsは3,476→3,468行（8行減）、今回の再開から3,652→3,468行（184行減）。
+
+構文566ファイル・単体1,628件・関連E2E175件（2.6分）が成功（全runner exit 0）。関連はunified-ui／sketch-permissions／free-instance／blocksで、Properties表示・編集、ロック／参照表示、配置中対象、file URL起動、Undo／Redo・保存再読込を確認した。追加単体3件は生成時の遅延、registry置換と名前／lock／作図Sketchの最新照会、raw対象・選択配列・モデルの無変更とObject同一性、複数owner判定／先頭label、inspectionのreadOnly維持、Sketch／操作中対象の優先順位と所属不在を確認する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-property-target-{check,unit,related}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量88%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はDimensionDragとDimensionLineGroup、角度同期の生成・接続と選択group照会を分析する。現在scopeへの所属、Sketch編集／可視性、寸法の実効外観、parallel groupのsnapshot、drag時とcontext整列時の共通入口を確認する。純粋な配置計算とSelection照会、sessionの所有を区別し、pointer capture／継続command click／historyの順を保ってまとまった責務へ寄せる。巨大contextや新たなdrag stateは作らない。
+
+### 前単位のProperties編集生成単位
 
 前単位は741e4feをdevelopの88017c6へ統合・Push済み。今回はcodex/property-editing-compositionで継続中。週枠使用12%／残量88%で停止条件には達していない。
 
