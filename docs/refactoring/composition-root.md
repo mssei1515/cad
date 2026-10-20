@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas command入力組立て単位
+
+CanvasCommandInputsへ五つのCanvas入力adapterとDrawing専用PointCommandの生成結線を集約した。同じreader／Selection／command・queryを明示し、focus解除／pointer captureを共有する。入力優先順位はPointerInteractionControllerに残し、各adapterの実装・command確定／取消／rollback・現在のsnap条件は変更しない。classic scriptと構文・単体・E2E読込一覧を同期した。新たな操作stateや保存形式変更はない。app.jsは3,200→3,170行（30行減）、今回の再開から3,652→3,170行（482行減）。
+
+構文582ファイル・単体1,704件・関連E2E150件（2.2分）が成功（全runner exit 0）。関連はunified-ui／command-panel／derived-patterns／sketch-permissions／unified-annotationsで、file URL起動、通常作図・寸法／拘束・Selection、派生配置と参照、注記・panel focusとblank double click、lock／Sketch所属、Undo／Redo・保存再読込を確認した。新単体4件は実五adapterとPointCommandを用い、生成時のDOM／scene遅延、Root拒否と点rollback／snap／同一Selection、注記とInstanceのfocus／source矩形／capture順、現在sourcesとviewportのorigin snap許可・通常snap、寸法group dragとpending／Selectionの共有を検証する。新module／testの構文・単体一覧とscript／E2E読込順を同期し、後段constの直接捕捉を増やしていない。appの最終整形後も個別syntaxを確認した。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-canvas-command-inputs-{focused,check,unit,related}.log。
+
+基準はdevelop 255db86（前実装508c916）。週枠残量67%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はCanvasPressQueryとPointerHoverの生成で重複するGeometry／scene hit入口と、appに残るAnnotation interaction hit判定を分析する。press／hoverの優先順位、通常hitとanchor-only hitの違い、Block投影の編集不可、現在Selection／active Sketchとの関係を維持し、共通の読取queryの組立て境界を作れるか確認する。入力commandの確定や新しいhover stateを読み取り側へ混ぜない。CanvasCommandInputsの64入口を汎用contextへ置き換えるのでなく、既存ownerを使う上位機能の公開APIを整理する。数百行という全体目標は未達である。
+
 ### 最新のCanvas command入力routing単位
 
 共通command panel／PNG／通常pointerの入力振分けを既存CanvasInputBinding.createCommandRoutingへ統合した。九つの明示的な入口と後段panel／PNGの遅延readerで、press・move・finish・double clickの優先順位、座標、抑止・例外・参照を維持する。既存native event登録とschedule／flushは変更せず、新file・script・state・保存形式変更はない。app.jsは3,225→3,200行（25行減）、今回の再開から3,652→3,200行（452行減）。
