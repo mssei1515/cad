@@ -354,6 +354,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `SelectionHighlight`（`src/editing/selection_highlight.js`）: サイドバーhover状態、投影図形の表示上の同一性、選択図形／拘束の参照集合を所有・照会する。Canvas選択と投影／拘束照会、寸法hover接続だけを受け取り、DOMに依存しない。
 - ツリー行のclass更新は`SketchTreeView.refreshSelection`へ、行データの対象解決は`SketchTreeObjects.resolveSelectionEntry`へ統合した。呼出し元もDOM生成も存在しない旧一覧向けイベント登録・選択処理は削除した。
 
+- `AppearanceUI`（`src/application/appearance_ui.js`）: PropertiesとDocument設定が共有するcontrols／Paletteと起動時設定の接続。実編集とPalette sessionは既存ownerを使用する。
 - `AppearanceControls`（`src/ui/appearance_controls.js`）: 図形／寸法外観の入力欄と継承値表示。Document非依存でPropertiesとDocument設定が共用する。
 - `AppearancePalette`（`src/ui/appearance_palette.js`）: 色選択session、標準色／使用中色、確定と取消を所有。各対象への適用と履歴は既存APIへ接続する。
 
@@ -1164,3 +1165,8 @@ ConstraintCommitCommandは通常確定の最後の性能traceを非公開state�
 ### 注記コピーの表示値変換
 
 ClipboardTransfer.detachedAnnotationは、参照を外すコピーの現在表示anchorとLeader形状を独立した保存値へ変換する。既存AnnotationDataのserializeを用い、layoutがなければ文字metricsへfallbackし、明示anchorPositionを優先する。Leaderは解決済みstart・表示elbow／endを複製してtextPlacementをanchorとし、現在の外観とviewport倍率からshelfReferenceScaleを計算する。layout・metrics・Leader形状／anchor・外観・倍率は狭い読取り依存として注入し、生成時には読まない。元のAnnotation・表示geometry・Selection・sessionを変更しない。参照先の同時選択判定とanchorConstraints／geometryRef／attachmentの除去はClipboardPayloadが引き続き所有し、同時コピーできる参照は通常serialize経路で保持する。appはTransferをPayloadより先に生成して同じ関数を接続する。
+
+
+### 共有外観UIの組立て
+
+AppearanceUI（src/application/appearance_ui.js）はPropertiesとDocument設定が共用する外観UIの生成・接続を担当する。AppearanceControlsとAppearancePaletteを一つずつ生成し、既存PropertySelectionの対象・共通値と、同じAppearanceEditing／AppearancePropertyCommand／複数編集APIをPaletteへ接続する。公開するのはcontrols・openPalette・startであり、Palette session・編集値・Selectionの別stateは持たない。DOM・現在scope・選択対象・既定値・倍率を生成時に読み取らず、操作時の既存readerを維持する。startはアプリ起動時に一度呼び、同じcontrols／editingをDocumentAppearanceEditorへ渡して生成し、Document設定start→Palette.bindの順で登録する。Documentの既定値は固定Document ownerの最新fieldを読み書きし、使用中色は現在編集scopeから収集する。PropertiesController／PropertiesDisplayとDocument設定は同じPalette入口／controlsを共有し、各View・command・Paletteの実処理と状態の所有は変えない。

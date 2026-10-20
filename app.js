@@ -11,7 +11,7 @@
   const {
     CSS_PX_PER_MM, DEFAULT_APPEARANCE,
     DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
-    DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES,
+    DIMENSION_APPEARANCE_NUMERIC_RULES,
     normalizeAppearance, normalizeConstructionAppearance, normalizeDimensionAppearance,
     normalizeHatchAppearance, normalizeAnnotationStyle,
     resolveGeometryAppearance,
@@ -2233,7 +2233,6 @@
 
 
 
-  const MULTIPLE_PROPERTY_MIXED = window.PropertySelection.mixedValue;
   const propertySelection = window.PropertySelection.create({
     Point, Line, canvasSelection,
     getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
@@ -2242,7 +2241,6 @@
     hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveAnnotationStyle, effectiveDimensionAppearance,
     isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance,
   });
-  const { multiplePropertyTypeKey, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertyValue } = propertySelection;
   function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
   const { geometry: geometryPropertyCommand, appearanceEditing, appearance: appearancePropertyCommand,
     applyMultiple: applyMultipleProperty, visibility: selectionVisibilityCommand, element: elementPropertyCommand } = window.PropertyEditingFeature.create({
@@ -2252,22 +2250,12 @@
     invalidateBlockProjectionCache, updateUI, updatePropertiesUI, draw, propertySelection,
     isGeometryMode, selectedVisibilityTargets, selectionVisibilityIsHidden, toggleSketchVisibility, guardSelectionEdit,
   });
-  const { applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue } = appearanceEditing;
-  const { owner: appearanceOwnerForPropertiesTarget } = appearancePropertyCommand;
-  const appearanceControls = window.AppearanceControls.create({
-    applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance, normalizeDimensionAppearance,
-    dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS, defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE,
+  const appearanceUI = window.AppearanceUI.create({
+    document, documentModel, currentScope: () => model, propertySelection, appearanceEditing, appearancePropertyCommand, applyMultipleProperty,
+    applicationText, escapeHtml, localizeApplicationUI, effectiveLeaderAppearanceForSketch, readViewportScale: () => viewport.scale,
+    invalidateBlockProjectionCache, recordHistory, updateUI, draw,
   });
-  const { defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility, prepareAffixInputs } = appearanceControls;
-  const appearancePalette = window.AppearancePalette.create({
-    document, documentModel, currentScope: () => model, applicationText, escapeHtml,
-    colorPickerValue, localizeApplicationUI, selectedPropertiesTarget, multiplePropertyValue,
-    multiplePropertyAppearance, mixedValue: MULTIPLE_PROPERTY_MIXED, appearanceOwnerForPropertiesTarget,
-    normalizeAnnotationStyle, applyMultipleProperty, applyDimensionAppearanceValue, normalizeHatchAppearance,
-    applyAnnotationStyleValue, applyAppearanceInput, invalidateBlockProjectionCache, normalizeAppearance,
-    normalizeConstructionAppearance, normalizeDimensionAppearance, recordHistory, updateUI, draw,
-  });
-  const { open: openAppearanceColorPalette, commit: commitColorPaletteValue } = appearancePalette;
+  const { controls: appearanceControls, openPalette: openAppearanceColorPalette } = appearanceUI;
   const propertiesController = window.PropertiesController.create({
     HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget, activeSketchId,
     canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
@@ -2760,16 +2748,7 @@
   toolFlyouts.start();
   canvasWorkspaceLayout.bindControls();
   parameterEditor.start();
-  const documentAppearanceEditor = window.DocumentAppearanceEditor.create({
-    document, readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
-    editing: appearanceEditing, appearanceControls,
-    rows: { geometry: appearancePropertyRows, dimension: dimensionAppearancePropertyRows },
-    prepareAffixInputs, localizeApplicationUI, updateDimensionTerminatorAngleVisibility,
-    effectiveLeaderAppearanceForSketch, readViewportScale: () => viewport.scale,
-    openAppearanceColorPalette, recordHistory, updateUI, draw,
-  });
-  documentAppearanceEditor.start();
-  appearancePalette.bind();
+  appearanceUI.start();
   applicationSettings.start();
   blockView.bind();
 
