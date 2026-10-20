@@ -2,6 +2,15 @@ const test = require('node:test'); const assert = require('node:assert/strict');
 const fs = require('node:fs'); const path = require('node:path'); const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/draw_operation_lifecycle.js'), 'utf8'), sandbox);
+test('tool mode classification works before construction and remains distinct from an active drawing draft', () => {
+  const isToolMode = sandbox.window.DrawOperationLifecycle.isToolMode;
+  assert.equal(isToolMode('instance-sources'), true);
+  const f = fixture(); f.state.mode = 'hatch';
+  assert.equal(isToolMode(f.state.mode), true); assert.equal(f.controller.active(), false);
+  f.state.mode = 'select'; f.deps.line.startPoint = { x: 0, y: 0 };
+  assert.equal(isToolMode(f.state.mode), false); assert.equal(f.controller.active(), true); assert.deepEqual(f.calls, []);
+  for (const mode of ['select', 'annotation', 'block-placement', '', null, undefined, 0, Symbol('line'), { [Symbol.toPrimitive]() { throw new Error('coercion'); } }]) assert.equal(isToolMode(mode), false);
+});
 function fixture() {
   const calls = [], deps = {}, state = { mode: "select" }; const record = name => () => calls.push(name);
   for (const name of ['instances', 'instanceSources', 'centerline', 'line', 'rectangle', 'slot', 'fillet', 'spline', 'splineEditing', 'projection', 'preview', 'offset', 'hatch']) deps[name] = { reset: record(name) };

@@ -19,7 +19,7 @@ function fixture() {
   return { api, canvasHover, calls, values, state, p: { x: 8, y: 12 }, names: () => calls.map(call => call[0]) };
 }
 
-function sceneFixture() {
+function sceneFixture(configure = () => {}) {
   const empty = () => ({ points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], referenceImages: [], blockInstances: [], geometryInstances: [], hatches: [] });
   const state = { ready: false, scope: empty(), dimensionScope: empty(), mode: 'select', active: 'S1', pending: null, command: null,
     hidden: false, locked: false, blocks: [], instances: [], reads: [], error: null };
@@ -54,12 +54,71 @@ function sceneFixture() {
     readConstraintCommand: () => { read('command'); return state.command; },
     operandValues: { makeConstraintOperand: (kind, value) => ({ kind, ...value }), operandFromReferenceTarget: value => value },
   };
+  configure(ports, state);
   const scene = sandbox.window.CanvasHitInteraction.createScene(ports);
   assert.deepEqual(state.reads, []);
   const queries = scene.createQueries();
   assert.deepEqual(state.reads, []); state.ready = true;
   return { state, scene, queries, point, empty };
 }
+
+function commandPanelFixture() {
+  const calls = [], marker = new Error('panel query failed');
+  const f = sceneFixture((ports, state) => {
+    ports.sketchContext.referenceSourceSketchIds = () => { calls.push(['reference']); if (state.fail === 'reference') throw marker; return ['S2']; };
+    ports.hatches.hatchFaceAt = function(point, options) {
+      assert.equal(this, ports.hatches); calls.push(['face', point, options.includeConstruction]);
+      if (state.fail === 'face') throw marker; return { ok: Boolean(state.face) };
+    };
+  });
+  const gesture = sandbox.window.BlankCanvasGesture.create({});
+  const blankCanvasGesture = { isBlank(hits) { assert.equal(this, blankCanvasGesture); calls.push(['blank', hits]); return f.state.forceBlank || gesture.isBlank(hits); } };
+  const instanceSourceCommand = { get instance() { calls.push(['source']); return f.state.instance; } };
+  const hatchCommand = { get includeConstruction() { calls.push(['construction']); return f.state.includeConstruction; } };
+  const canvasHover = sandbox.window.CanvasHover.create({ isEndpointPoint: () => false });
+  f.state.ready = false; const before = f.state.reads.slice();
+  const api = f.queries.createInteraction({ canvasHover, sameArcEndpoint: () => false, hitBlockRotationHandle: () => null,
+    hitAnnotationTarget: () => null, blankCanvasGesture, instanceSourceCommand, hatchCommand });
+  assert.deepEqual(f.state.reads, before); assert.deepEqual(calls, []); f.state.ready = true;
+  return { ...f, api, calls, canvasHover, marker, p: { x: 0, y: 0 }, names: () => calls.map(call => call[0]) };
+}
+
+test('command panel blank query shares the press snapshot, excludes annotations and leaves hover unchanged', () => {
+  const f = commandPanelFixture(), selected = f.point('hover', 5, 5);
+  f.canvasHover.update({ point: selected }); const before = { ...f.canvasHover.current };
+  assert.ok(Object.isFrozen(f.api)); assert.equal(f.api.isBlankCommandPanelPoint(f.p), true); assert.deepEqual(f.names(), ['blank']);
+  f.calls.length = 0; const annotation = { element: { id: 'AN', sketchId: 'S1' }, part: 'frame' }; f.state.annotationHit = annotation;
+  assert.equal(f.api.isBlankCommandPanelPoint(f.p), false); assert.deepEqual(f.names(), ['blank']);
+  assert.equal(f.calls[0][1].annotationHit, annotation); assert.equal(f.calls[0][1].blankAnnotationHit, annotation);
+  assert.deepEqual({ ...f.canvasHover.current }, before);
+});
+
+test('command panel blank query rejects projection sources only in current projection modes and preserves source identity', () => {
+  const f = commandPanelFixture(), source = f.point('source', 0, 0, 'S2');
+  f.state.scope.points.push(source); f.state.forceBlank = true; f.state.mode = 'sketch-projection';
+  assert.equal(f.api.isBlankCommandPanelPoint(f.p), false); assert.deepEqual(f.names(), ['blank', 'reference']);
+  f.calls.length = 0; f.state.mode = 'instance-sources'; f.state.instance = { type: 'free' };
+  assert.equal(f.api.isBlankCommandPanelPoint(f.p), true); assert.deepEqual(f.names(), ['blank', 'source']);
+  f.calls.length = 0; f.state.instance = { type: 'sketchProjection' };
+  assert.equal(f.api.isBlankCommandPanelPoint(f.p), false); assert.deepEqual(f.names(), ['blank', 'source', 'reference']);
+  f.calls.length = 0; f.state.scope = f.empty(); assert.equal(f.api.isBlankCommandPanelPoint(f.p), true);
+  f.calls.length = 0; f.state.fail = 'reference';
+  assert.throws(() => f.api.isBlankCommandPanelPoint(f.p), error => error === f.marker);
+  assert.deepEqual(f.names(), ['blank', 'source', 'reference']); assert.equal(source.sketchId, 'S2');
+});
+
+test('command panel blank query reads current Hatch options only after ordinary blank and propagates errors without mutation', () => {
+  const f = commandPanelFixture(); f.state.mode = 'hatch'; f.state.includeConstruction = false;
+  assert.equal(f.api.isBlankCommandPanelPoint(f.p), true); assert.deepEqual(f.names(), ['blank', 'construction', 'face']);
+  assert.equal(f.calls.at(-1)[1], f.p); assert.equal(f.calls.at(-1)[2], false);
+  f.calls.length = 0; f.state.mode = 'hatch-repair'; f.state.face = true; f.state.includeConstruction = true;
+  assert.equal(f.api.isBlankCommandPanelPoint(f.p), false); assert.equal(f.calls.at(-1)[2], true);
+  f.calls.length = 0; f.state.annotationHit = { element: { id: 'AN', sketchId: 'S1' } };
+  assert.equal(f.api.isBlankCommandPanelPoint(f.p), false); assert.deepEqual(f.names(), ['blank']);
+  f.calls.length = 0; f.state.annotationHit = null; f.state.fail = 'face'; const before = { ...f.canvasHover.current };
+  assert.throws(() => f.api.isBlankCommandPanelPoint(f.p), error => error === f.marker);
+  assert.deepEqual(f.names(), ['blank', 'construction', 'face']); assert.deepEqual({ ...f.canvasHover.current }, before);
+});
 
 test('scene stages defer reads and keep current mode, scope, scale and source identity', () => {
   const f = sceneFixture(), { state, queries, scene } = f;

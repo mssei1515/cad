@@ -1,6 +1,9 @@
 /* Coordinate draw-operation exit and cancellation without owning command drafts. */
 (() => {
   "use strict";
+  const DRAW_TOOL_MODES = Object.freeze(["instance-sources", "line", "centerline", "circle-center-cross", "point", "rectangle", "slot",
+    "fillet", "trim", "offset", "circle", "arc", "three-point-arc", "spline", "sketch-projection", "hatch", "hatch-repair"]);
+  function isToolMode(mode) { return DRAW_TOOL_MODES.includes(mode); }
   function create({ canStart = () => true, instances, instanceSources, centerline, line, rectangle, slot, fillet, circular,
     spline, splineEditing, projection, preview, offset, hatch, transient,
     clearSnap, clearSelection, selectMode, updateToolbar, setHint, updateUI, draw, cancelConstraintTargetCommand, setMode, clearTrimHover,
@@ -171,5 +174,5 @@
     return Object.freeze({ start, prepare, prepareDimensionStart, prepareConstraintStart, prepareConstraintCancel,
       resetInputs, resetInputsForSketchChange, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
-  window.DrawOperationLifecycle = Object.freeze({ create });
+  window.DrawOperationLifecycle = Object.freeze({ create, isToolMode });
 })();

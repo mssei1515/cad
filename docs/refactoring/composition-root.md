@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas command終了判定単位
+
+command panelの空白判定を既存CanvasHitInteractionへ、tool mode分類を既存DrawOperationLifecycleへ集約した。同じpress／参照／Hatch query、現在command stateと短絡順を維持する。appの早期callbackはstatic分類を使うhoisted入口で維持し、新stateや汎用contextは増やさない。app.jsは3,037→3,026行（11行減）。検証・次のtest支援familyの構築境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新の旧root接続整理単位
 
 移管済み機能の未使用alias・委譲70個を除去し、実際の接続とtest公開だけを残した。ownerの生成・公開API・factory引数は変更していない。root未使用bindingは0、app.jsは3,055→3,037行（18行減）。実ブラウザのdata descriptor監査とtest公開204 keyの一致、削除以外にAST差分がないことを確認した。新たな分離ではなく旧接続の整理であり、200〜500行の目標は維持する。構文588・全単体1,772・全E2E584件が成功した（全E2E24.3分、exit 0）。最新全E2E未確認の状態は解消した。過去の性能ばらつきは根本解消と断定せず、main保留の合意と全体目標未完了は維持する。検証詳細と次の組立て境界は[再開手順](refactoring-policy-and-resume.md)を参照する。
