@@ -167,6 +167,9 @@
     sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
     sketchRelationOfElement,
   } = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
+  const constraintMetadata = window.ConstraintPersistence.createMetadata({
+    serializeConstraint, numericDimensionExpression, constraintSketchId,
+  });
   const sketchEditAccess = window.SketchCommand.createEditAccess({
     activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId, isGeometryMode,
     setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), draw,
@@ -1076,15 +1079,7 @@
     startCalibration: startReferenceImageCalibration, cancelCalibration: cancelReferenceImageCalibration,
     calibrationClick: handleReferenceImageCalibrationClick } = referenceImageInteraction;
 
-  function decorateSerializedConstraint(data, constraint) {
-    if (!data || !constraint) return data;
-    if (constraint.readOnlyDimension) data.readOnlyDimension = true;
-    if (isDimensionConstraint(constraint)) {
-      data.parameterName = constraint.parameterName || null;
-      if (!constraint.readOnlyDimension) data.expression = constraint.expression || numericDimensionExpression(constraint);
-    }
-    return data;
-  }
+  function decorateSerializedConstraint(data, constraint) { return constraintMetadata.decorate(data, constraint); }
 
   function effectiveAppearanceForElement(...args) { return geometryAppearance.effectiveAppearanceForElement(...args); }
 
@@ -1292,16 +1287,7 @@
       sketchId: elementSketchId(item),
       kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined,
     }),
-    constraintData: (constraint, scope, isDocumentScope) => {
-      const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
-      if (!data) return null;
-      data.sketchId = isDocumentScope ? constraintSketchId(constraint) : constraint.sketchId;
-      if (constraint.reference) {
-        data.reference = true;
-        data.referenceSketchId = constraint.referenceSketchId || null;
-      }
-      return data;
-    },
+    constraintData: constraintMetadata.snapshotData,
   });
 
   function serializeModel() {
