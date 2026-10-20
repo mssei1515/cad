@@ -160,7 +160,7 @@ const files = [
   "tests/unit/geometry-hit-query.test.js",
   "tests/unit/canvas-hover.test.js",
   "tests/unit/canvas-context-query.test.js", "tests/unit/canvas-context-target.test.js",
-  "tests/unit/canvas-context-menu.test.js", "tests/unit/canvas-context-menu-items.test.js", "tests/unit/canvas-context-actions.test.js", "tests/unit/canvas-command-inputs.test.js", "tests/unit/canvas-display.test.js", "tests/unit/canvas-context-interaction.test.js", "tests/unit/fixed-toggle-command.test.js", "tests/unit/constraint-control-command.test.js", "tests/unit/document-file-controls.test.js", "tests/unit/document-appearance-settings.test.js", "tests/unit/document-appearance-editor.test.js",
+  "tests/unit/canvas-context-menu.test.js", "tests/unit/canvas-context-menu-items.test.js", "tests/unit/canvas-context-actions.test.js", "tests/unit/canvas-hit-interaction.test.js", "tests/unit/canvas-command-inputs.test.js", "tests/unit/canvas-display.test.js", "tests/unit/canvas-context-interaction.test.js", "tests/unit/fixed-toggle-command.test.js", "tests/unit/constraint-control-command.test.js", "tests/unit/document-file-controls.test.js", "tests/unit/document-appearance-settings.test.js", "tests/unit/document-appearance-editor.test.js",
   "tests/unit/annotation-spatial-query.test.js",
   "tests/unit/annotation-anchor-query.test.js",
   "tests/unit/annotation-command.test.js",

@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas hit組立て単位
+
+CanvasHitInteractionへpress query／hoverの共通hit入口の結線と注記interaction hit判定を集約した。Geometry／scene readerを共有しながら各子の依存は限定し、press読取りと既存CanvasHover更新を区別した。active SketchとGeometry／寸法／投影／注記の優先順位・参照・短絡・例外は既存ownerに維持する。classic scriptと構文・単体・E2E読込一覧を同期し、新state・cache・保存形式変更はない。app.jsは3,170→3,162行（8行減）、今回の再開から3,652→3,162行（490行減）。
+
+構文584ファイル・単体1,708件・関連E2E189件（2.9分）が成功（全runner exit 0）。関連はunified-ui／annotation-anchors／command-panel／sketch-permissions／phase0-characterizationで、file URL起動、注記anchor／frame／本文と重なるGeometryの入力、Block投影、権限と所属、panel取消、既存画面比較、Undo／Redo・保存再読込を確認した。新単体4件は実PressQuery／PointerHoverと同じCanvasHoverを用い、生成時の遅延、active Sketch変更とpress／double clickの参照・照会順とhover無変更、注記部位／anchor-only／投影の優先条件、現在の寸法・endpoint・projection operand、query例外時の伝播とhover無変更を検証する。各queryの既存実装は変更せず、script／syntax／unit／E2E読込一覧を同期した。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-canvas-hit-interaction-{focused,check,unit,related}.log。
+
+基準はdevelop 01f4851（前実装e03f311）。開始時の週枠残量67%／検証後66%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は現在のcomposition rootの構築依存と残るcallback／stateを再監査する。旧f37edc6の集計を上書きせず、最新revisionのfactory群・外へ返すAPIと利用先・mode／pointerの更新入口・後段接続・bind／startを現物から整理する。小さな結線抽出だけを続けて200〜500行へ届くとは扱わず、UI／入力／描画／編集の機能境界と初期化段階を使って、次のまとまった生成責務を選ぶ。巨大context／service locatorや別の巨大bootstrapへ移す方針は取らない。64入口のCanvasCommandInputsを含む広い契約も再検討対象とし、責務と依存の削減を行数より優先する。
+
 ### 最新のCanvas command入力組立て単位
 
 CanvasCommandInputsへ五つのCanvas入力adapterとDrawing専用PointCommandの生成結線を集約した。同じreader／Selection／command・queryを明示し、focus解除／pointer captureを共有する。入力優先順位はPointerInteractionControllerに残し、各adapterの実装・command確定／取消／rollback・現在のsnap条件は変更しない。classic scriptと構文・単体・E2E読込一覧を同期した。新たな操作stateや保存形式変更はない。app.jsは3,200→3,170行（30行減）、今回の再開から3,652→3,170行（482行減）。
