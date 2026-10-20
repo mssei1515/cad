@@ -123,7 +123,7 @@
   const { applicationText, translatedExactText, translatedHintText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText } = window.AuthoringFeedback.create({ applicationText });
-  const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
+  const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
   const { DEFAULT_DOCUMENT_UNITS } = window.DocumentState;
   const documentModel = window.DocumentState.create();
   const workspace = window.EditingWorkspace.create(documentModel);
@@ -975,15 +975,6 @@
     return applicationText("平行線", "Parallel");
   }
 
-  function normalizedSketchCopy(sketch) {
-    return {
-      ...sketch,
-      appearance: normalizeAppearance(sketch?.appearance),
-      constructionAppearance: normalizeConstructionAppearance(sketch?.constructionAppearance),
-      dimensionAppearance: normalizeDimensionAppearance(sketch?.dimensionAppearance),
-      leaderAppearance: window.Appearance.normalizeLeaderAppearance(sketch?.leaderAppearance),
-    };
-  }
 
   function effectiveDimensionAppearance(...args) { return dimensionAppearance.effectiveDimensionAppearance(...args); }
 
