@@ -6,7 +6,7 @@
     retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint, handleConstraintOperandClick,
     instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand, hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource,
     clearSnap, selectionRectangle, hitHatchAt, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing, makeConstraintOperand,
-    transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, handleLineClick, handleCenterlineClick, handleCircleCenterCrossClick,
+    transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, basicDrawingInput, handleLineClick, handleCenterlineClick, handleCircleCenterCrossClick,
     handleRectangleClick, handleSlotClick, handleFilletClick, handleCircleClick, handleArcClick, handleThreePointArcClick, handleSplineClick, executeTrimAt, offsetCommand,
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag }) {
     const releasePanelFocus = () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); };
@@ -39,10 +39,13 @@
     const pointCommand = window.PointCommand.create({
       transientAuthoring, snapForDrawing, drawingSnap, addPoint, addPointSnapConstraints, clearSnap, canvasSelection, solveAndRefresh,
     });
+    const basicInput = basicDrawingInput || { line: handleLineClick, rectangle: handleRectangleClick, slot: handleSlotClick,
+      circle: handleCircleClick, arc: handleArcClick, threePointArc: handleThreePointArcClick };
     const drawingCommandInput = window.DrawingCommandInput.create({
-      getMode: readMode, rejectRootSketchCreation, pointCommand, handleLineClick, handleCenterlineClick,
-      handleCircleCenterCrossClick, handleRectangleClick, handleSlotClick, handleFilletClick, handleCircleClick,
-      handleArcClick, handleThreePointArcClick, handleSplineClick, executeTrimAt, offsetCommand,
+      getMode: readMode, rejectRootSketchCreation, pointCommand, handleLineClick: basicInput.line, handleCenterlineClick,
+      handleCircleCenterCrossClick, handleRectangleClick: basicInput.rectangle, handleSlotClick: basicInput.slot, handleFilletClick,
+      handleCircleClick: basicInput.circle, handleArcClick: basicInput.arc, handleThreePointArcClick: basicInput.threePointArc,
+      handleSplineClick, executeTrimAt, offsetCommand,
     });
 
     const canvasSelectionInteraction = window.CanvasSelectionInteraction.create({

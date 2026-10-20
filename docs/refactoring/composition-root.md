@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の基本作図入力API共有単位
+
+CanvasCommandInputsへ既存BasicDrawingTools.inputを共有し、六つのroot関数aliasを除去した。canonical構築引数は64→59、引数内のroot参照は63→58。共有APIと従来の個別callback指定の両方を維持し、snap・モデル・Selectionや生成順は元ownerのまま。app.jsは3,066→3,064行（2行減）。正式仕様・実装mapを更新し、検証と次のowner共有候補は[再開手順](refactoring-policy-and-resume.md)へ記録する。main保留・全体目標未完了。
+
 ### 最新のpan CPU／描画順照会調査単位
 
 pan CPU profileからGeometryPresentationのsortによるSketch照会の反復を特定し、Map案で実fixtureの照会1,050→530を確認した。しかし関連E2Eと固定比較で速度改善を示せず、複雑さに見合う効果がないため採用を見送った。実装・候補単体・正式仕様を08ec689へ戻し、確定変更は調査文書のみ。app.jsは3,066→3,066行（0行差）。全結果と次の構築依存整理は[調査記録](pan-latency-investigation.md)と[再開手順](refactoring-policy-and-resume.md)へ残す。main保留・全体目標未完了。
