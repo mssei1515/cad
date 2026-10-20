@@ -1,6 +1,20 @@
 /* Compose Properties read presentation, rows, markup and view; editing stays with the controller. */
 (() => {
   "use strict";
+  function createSelection({ canvasSelection, getOperation, documentModel, readServices, sketchContext, hatchAppearanceForDisplay }) {
+    const { Point, Line } = window.GeometrySolver;
+    const { normalizeAppearance, normalizeAnnotationStyle, resolveGeometryAppearance } = window.Appearance;
+    const { isDimensionConstraint } = window.DimensionQueries;
+    const { geometryAppearance, annotationAppearance, dimensionAppearance, catalog, projections, reads } = readServices;
+    const { sketchById, sketchName, activeSketchId, isRootSketch } = sketchContext;
+    return window.PropertySelection.create({ Point, Line, canvasSelection, getOperation, documentModel,
+      effectiveSelectedConstraint: canvasSelection.effectiveSelectedConstraint, selectedGeometryItems: canvasSelection.selectedGeometryItems,
+      blockDefinitionById: catalog.blockDefinitionById, sketchById, sketchName, activeSketchId, blockProjectionBundle: projections.blockProjectionBundle,
+      effectiveAppearanceForElement: (...args) => geometryAppearance.effectiveAppearanceForElement(...args), normalizeAppearance, hatchAppearanceForDisplay,
+      normalizeAnnotationStyle, effectiveAnnotationStyle: element => annotationAppearance.effectiveAnnotationStyle(element),
+      effectiveDimensionAppearance: (...args) => dimensionAppearance.effectiveDimensionAppearance(...args),
+      isRootSketch, isDimensionConstraint, geometryInstanceBundle: reads.geometryInstanceBundle, resolveGeometryAppearance });
+  }
   function create({ document, documentModel, currentScope, canvasSelection, getOperation, propertySelection,
     geometryAppearance, dimensionAppearance, annotationAppearance, catalog, projections, instances, geometryReads,
     appearanceControls, controller, sketchName, sketchById, isRootSketch, activeSketchId, constraintSketchId,
@@ -44,8 +58,12 @@
     return view;
   }
   function createWithController({ document, documentModel, currentScope, canvasSelection, getOperation, propertySelection,
-    geometryAppearance, dimensionAppearance, annotationAppearance, catalog, projections, instances, geometryReads,
-    sketchName, sketchById, isRootSketch, activeSketchId, constraintSketchId,
+    readServices, sketchContext,
+    geometryAppearance = readServices?.geometryAppearance, dimensionAppearance = readServices?.dimensionAppearance,
+    annotationAppearance = readServices?.annotationAppearance, catalog = readServices?.catalog, projections = readServices?.projections,
+    instances = readServices?.instances, geometryReads = readServices?.reads,
+    sketchName = sketchContext?.sketchName, sketchById = sketchContext?.sketchById, isRootSketch = sketchContext?.isRootSketch,
+    activeSketchId = sketchContext?.activeSketchId, constraintSketchId = sketchContext?.constraintSketchId,
     sketchProjectionConstraintForTarget, constraintGeometryId, constraintStatusBadge, constraintStatusOf,
     snappedBlockRotation, constraintDefiningGeometryEntries, hatchAppearanceForDisplay, resolvedHatchBoundary,
     applicationText, escapeHtml, hatchRegionErrorText, geometryInstanceTypeLabel, expressionInputValue,
@@ -77,5 +95,5 @@
       localizeApplicationUI, installExpressionInputHighlights,
     });
   }
-  window.PropertiesDisplay = Object.freeze({ create, createWithController });
+  window.PropertiesDisplay = Object.freeze({ create, createSelection, createWithController });
 })();
