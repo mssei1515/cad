@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の特殊寸法編集支援単位
+
+特殊寸法submit／Properties適用と編集対象選択を既存DimensionValueCommand.createEditingSupportへ集約した。一般commandへ返す三つのcallbackと11依存を明示し、非対象null／拒否false／成功、型・propertyの短絡順、式評価scope、例外、履歴・選択／drag解除の順を維持する。一般createのpending／入力表示／UI更新は変更しない。新file・state・script・保存形式変更はない。app.jsは3,162→3,142行（20行減）、今回の再開から3,652→3,142行（510行減）。
+
+構文584ファイル・単体1,713件・関連E2E227件（3.5分）が成功（全runner exit 0）。関連はunified-ui／derived-patterns／annotation-anchors／unified-annotations／parameter-dialog-controller／blocksで、file URL起動、角度間隔の値／式、注記の距離・anchor拘束、Parameter依存・Document／Block scope、Undo／Redo・保存再読込を確認した。新単体5件は実InstanceAngleIntervalConstraint型と一般commandとの結線を用い、生成時遅延・選択同一性とdrag reset、特殊submitの優先／null・拒否・成功、現在の評価入口とAnnotationのnull constraint／property短絡、submitの例外伝播とPropertiesのhint化、履歴とpending／入力終了の順を検証する。interval submitの既存の二回の式正規化も保持し、拒否時はpendingを残す。既存一般commandの単体11件は維持した。support生成は関連する三ownerの生成後で、後段dimensionDragだけを遅延callbackで接続する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-special-dimension-editing-{focused,check,unit,related}.log。
+
+基準はdevelop 2028fb4（監査4dcaa45、実装618b17d）。開始時の週枠残量65%／検証後64%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は描画の広い構築契約を減らすため、既存PointUsageを再利用できるownerとして保持し、GeometryPresentationに渡す点分類queryと、command targets／Sketch styleの既存APIとの関係を分析する。現在の個別queryと同じ判定／scope／参照を保ち、後段drag・Spline・sidebar hoverは操作時に読む。PointUsageを複製せず、全app contextを渡さず、既存呼出しとテストの互換性を維持する。67依存の描画factoryをそのまま包む案は採用せず、ownerの限定APIで依存を減らしてから生成群をまとめる。
+
 ### 最新の構築依存再監査単位
 
 develop 63c886c（app blob 881fd70a4785a78445236016d0c6b64d705a118a）を基準に構築依存を再監査した。旧f37edc6の集計を同条件で再現し、root構築232→214文／1,564→1,376非空白行、test hooks488→478行、call一文261→264行、複文callback47→38個を確認した。stateはroot let9個、mode代入20箇所（通常19＋test1）、pointer代入4箇所。test hooks／一文callを仮に全て外しても非空白1,923行が残る。今回のapp.jsは3,162→3,162行（0行差）で、実装・UI・保存形式・正式仕様は変更していない。
