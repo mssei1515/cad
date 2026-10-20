@@ -49,5 +49,22 @@
     }
     return Object.freeze({ click });
   }
-  window.InstanceCommandInput = Object.freeze({ create });
+  function createRectangleSources({ getMode, instanceSourceCommand, geometryInstanceCommand, query, geometryReads,
+    sketchProjectionEntriesByRect, elementSketchId, activeSketchId, isVisibleSketchElement }) {
+    const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allHatches } = geometryReads;
+    function add(rect, crossing) {
+      if (getMode() === "instance-sources" && instanceSourceCommand.instance?.type === "sketchProjection") {
+        const entries = sketchProjectionEntriesByRect(rect, crossing);
+        instanceSourceCommand.addSources(entries.map(entry => entry.item));
+      } else {
+        const items = query.readProjection(rect, crossing, {
+          points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
+          arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches,
+        }, item => elementSketchId(item) === activeSketchId() && isVisibleSketchElement(item) ? item : null);
+        (getMode() === "instance-sources" ? instanceSourceCommand : geometryInstanceCommand).addSources(items);
+      }
+    }
+    return Object.freeze({ add });
+  }
+  window.InstanceCommandInput = Object.freeze({ create, createRectangleSources });
 })();
