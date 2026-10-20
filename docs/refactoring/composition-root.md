@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas表示基盤組立て単位
+
+CanvasDisplayへ座標・navigation・zoomと、surface・PNG renderer・workspace layoutの生成結線を集約した。create→既存TransientAuthoring→createWorkspaceの二段階で生成順を保ち、同じviewport／ctx／surfaceへの接続を明示する。六つの既存ownerのstateや処理は移さず、Zoomの生成時DOM接続・後段bind／start・flush／倍率変更／寸法入力同期・resizeとexport復元の順を維持する。classic scriptと構文・単体・E2E読込一覧を同期した。app.jsは3,247→3,225行（22行減）、今回の再開から3,652→3,225行（427行減）。
+
+最終コードで構文580ファイル・単体1,695件・関連E2E149件（2.7分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／png-export／selection-zoom-shadow／adversarial-authoring-performanceで、file URL起動・倍率入力と画面座標・resize／選択表示・既存画面比較・PNG出力／復元を確認した。パンは140msで元の175ms未満の基準内。新単体4件は実Viewport／Navigation／Zoom／Surface／Export／Layoutの二段階生成、倍率適用の拒否／flush例外、明示Observer開始と最新pending、同じCanvas／viewportのbitmap・export frame復元を検証する。初回E2Eは後段constであるsyncDimensionValueInputの直接参照による起動ReferenceErrorを検出し、中断した。従来の遅延callbackへ修正して全関連149件を再実行した結果が上記であり、初回から成功とは扱わない。最終構文一覧は新testも追加済み。初回ログはcad-canvas-display-related-initialization-failure.log、最終ログは一時ディレクトリのcad-canvas-display-{focused,check,unit,related}.log。専用serverはrunner終了後にPID／command lineを照合して終了した。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。
+
+基準はdevelop 581d65b（前実装aa6342c）。開始時の週枠残量69%／検証後68%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は残る構築依存と初期化順を再監査し、Canvasの入力command群／pointer controllerの組立てと、表示側へ返している公開ownerの利用範囲を確認する。互いに参照する全stateを一つのcontextへ詰めず、入力のrouting・command確定・Selection・描画の担当を区別する。生成時に参照するconstと操作時に読むcallback、bind／start、既存ownerの同一性を保持する。小さなcallback抽出だけで数百行へ到達するとは扱わず、機能単位の公開APIを整理する。
+
 ### 最新のCanvas press選択準備単位
 
 Canvas pressのselectInactive／prepareSelectionを、同じSelectionとidentity選択を扱う既存CanvasSelectionInteraction.createIdentitySelectionへ統合した。別Sketchへの追加拒否・lock時の選択→guard・inspection保持／解除・Tree選択解除・早期returnと例外伝播を維持し、PointerInteractionControllerには従来のmode／pending条件とroutingを残した。新file・script・state・保存形式変更はない。app.jsは3,260→3,247行（13行減）、今回の再開から3,652→3,247行（405行減）。

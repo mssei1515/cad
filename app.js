@@ -521,25 +521,11 @@
     profileAnalysis: work => interactionProfiler.active ? profileInteractionWork("analysis", work) : work(),
   });
   const { statusOf: constraintStatusOf } = constraintAnalysis;
-  const viewport = window.CanvasViewport.create({
-    canvasRect: () => canvas.getBoundingClientRect(), initialScale: CSS_PX_PER_MM,
-    minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
+  const { viewport, navigation: canvasNavigation, zoomControl: canvasZoomControl, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
+    canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
+    draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds } = viewport;
-  const canvasNavigation = window.CanvasNavigation.create({
-    canvas, viewport, draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport,
-  });
-  const canvasZoomControl = window.CanvasZoomControl.create({
-    button: document.getElementById("statusZoom"), input: document.getElementById("statusZoomInput"),
-    readPercent: () => viewport.scale / CSS_PX_PER_MM * 100,
-    format: () => formatZoom(viewport.scale),
-    applyPercent: percent => {
-      pointerMoveScheduler.flush();
-      const applied = canvasNavigation.setScale(percent / 100 * CSS_PX_PER_MM);
-      syncDimensionValueInput();
-      return applied;
-    },
-  });
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
@@ -548,21 +534,13 @@
   const { beginTransientLineStartRollback, clearTransientLineStartRollback, beginTransientLineCompletionRollback,
     clearTransientLineCompletionRollback, rollbackTransientLineCompletion, beginTransientPointRollback,
     clearTransientPointRollback, rollbackTransientPoint, rollbackTransientLineStart } = transientAuthoring;
-  const canvasSurface = window.CanvasSurface.create({
-    canvas, ctx, viewport, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver,
-    onResize: () => {
-      draw();
-      if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput();
-    },
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout } = createCanvasWorkspace({
+    ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
+    isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
+    window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
+    applicationText, readLanguage: () => applicationSettings.language,
   });
   const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
-  const pngRendering = window.CanvasExport.createRenderer({ viewport, withGeometryReadCache, drawCanvas, syncCanvasBitmapSize, draw });
-  const canvasWorkspaceLayout = window.CanvasWorkspaceLayout.create({
-    window, updatePropertiesUI, setHint, closeContextMenu: closeCanvasContextMenu,
-    canvas, document, viewport, syncCanvasBitmapSize, applySketchTreeWidth: () => applySketchTreeWidth(), draw,
-    isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
-    syncDimensionValueInput: () => syncDimensionValueInput(), currentCanvasCenterWorld, applicationText, readLanguage: () => applicationSettings.language,
-  });
   const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, DIMENSION_ARROW_MITER_LIMIT } = window.DimensionMetrics;
   const dimensionDisplay = window.DimensionDisplay.create({ ctx, viewport, currentLines: () => workspace.current().lines,
     minLineLength: MIN_LINE_LENGTH, canvasThemeColor, onExpressionMark: canvasRenderProbe.captureExpressionMark,
