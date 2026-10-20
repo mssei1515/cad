@@ -906,7 +906,6 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
   });
   const { start: startCenterlineCommand, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
-  const { resetArcs: resetArcCommandState } = circularCommands;
   const authoringPreviewLayer = window.AuthoringPreviewRenderer.createLayer({
     renderer: authoringPreview, readMode: () => mode, readPointer: () => drawingPreview.pointer, readTrim: () => drawingPreview.trim,
     lineCommand, rectangleCommand, slotCommand, circularCommands, splineDraft, centerlineCommand, projectPointToCenterlineSupport,
@@ -1621,19 +1620,8 @@
     currentScope: workspace.current, geometryDeletion, canvasSelection, splineEditing, canvasHover,
     guardSketchEdit, elementSketchId, geometryElementKey, geometryInstanceUsesRemovedGeometry,
     rejectReferencedGeometryDeletion, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion, applicationText,
-    endInteraction: () => {
-      geometryDrag.reset();
-      dimensionDrag.reset();
-      annotationDrag.reset();
-      pendingCommandSession.clear();
-      constraintTargetSession.clearCommand();
-      lineCommand.reset();
-      circularCommands.resetCircle();
-      resetArcCommandState();
-      drawingPreview.setPointer(null);
-      mode = "select";
-
-    },
+    resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
+    pendingCommandSession, constraintTargetSession, lineCommand, circularCommands, drawingPreview, selectMode: () => { mode = "select"; },
     solveSketchAndDependents, normalizeArcSweeps,
     refreshView: () => { updateToolbar(); updateUI(); draw(); },
     analysisStable: () => constraintAnalysis.stable, setHint, log, recordHistory,
