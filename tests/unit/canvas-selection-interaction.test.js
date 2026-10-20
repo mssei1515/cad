@@ -6,6 +6,66 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/canvas_selection_interaction.js'), 'utf8'), sandbox);
+const rectangleSandbox = { window: {} }; vm.createContext(rectangleSandbox);
+for (const file of ['src/geometry/geometry_kernel.js', 'src/solver/constraint_solver.js', 'src/editing/selection.js', 'src/editing/canvas_selection_interaction.js']) {
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), rectangleSandbox, { filename: file });
+}
+function rectangleFixture() {
+  const selection = rectangleSandbox.window.CanvasSelection.create(), calls = [];
+  const state = { selected: 'S1', active: 'S1', candidates: {}, failure: null, error: new Error('selection failed'), readSelected: null };
+  function stage(name) { calls.push(name); if (state.failure === name) throw state.error; }
+  const canvasSelection = {
+    set(field, value) { assert.equal(this, canvasSelection); stage('clear'); selection.set(field, value); },
+    applyRectangle(candidates, additive) { assert.equal(this, canvasSelection); stage('apply'); selection.applyRectangle(candidates, additive); },
+  };
+  const reads = [], query = { read(rect, crossing) { assert.equal(this, query); stage('query'); assert.equal(selection.instanceGeometry, null); reads.push({ rect, crossing }); return state.candidates; } };
+  const api = rectangleSandbox.window.CanvasSelectionInteraction.createRectangleSelection({ canvasSelection, query,
+    selectionSketchId: () => { stage('selected'); return state.readSelected ? state.readSelected() : state.selected; },
+    activeSketchId: () => { stage('active'); return state.active; } });
+  assert.deepEqual(calls, []); assert.equal(Object.isFrozen(api), true);
+  return { selection, state, calls, reads, api };
+}
+
+test('rectangle addition rejects another Sketch before any selection change and skips active lookup for an empty selection', () => {
+  const f = rectangleFixture(), internal = { id: 'inside' }, point = { id: 'P1' };
+  f.selection.set('instanceGeometry', internal); f.selection.set('points', [point]); const original = f.selection.points;
+  f.state.selected = 'S2'; assert.equal(f.api.select({}, true, true), undefined);
+  assert.deepEqual(f.calls, ['selected', 'selected', 'active']); assert.equal(f.selection.instanceGeometry, internal); assert.equal(f.selection.points, original); assert.deepEqual(f.reads, []);
+  f.calls.length = 0; f.state.selected = null; f.state.active = 'S3'; f.api.select({}, false, true);
+  assert.deepEqual(f.calls, ['selected', 'clear', 'query', 'apply']); assert.equal(f.selection.points[0], point);
+});
+
+test('rectangle replacement applies all current candidate categories with original item identities and clears selection metadata', () => {
+  const f = rectangleFixture(), rect = { x1: 0, y1: 0, x2: 10, y2: 10 };
+  const fields = ['points', 'lines', 'circles', 'arcs', 'splines', 'blockInstances', 'geometryInstances', 'annotations', 'hatches', 'referenceImages', 'dimensionConstraints'];
+  for (const field of fields) { f.selection.set(field, [{ id: 'old' }]); const item = { id: field }; f.state.candidates[field] = [item, item]; }
+  for (const field of ['instanceGeometry', 'arcEndpoint', 'arcEndpointPair', 'constraint', 'inspection', 'sketchId']) f.selection.set(field, {});
+  assert.equal(f.api.select(rect, true), undefined); assert.deepEqual(f.calls, ['clear', 'query', 'apply']);
+  assert.equal(f.reads[0].rect, rect); assert.equal(f.reads[0].crossing, true);
+  for (const field of fields) { assert.equal(f.selection[field].length, 1); assert.equal(f.selection[field][0], f.state.candidates[field][0]); assert.equal(f.state.candidates[field].length, 2); }
+  for (const field of ['instanceGeometry', 'arcEndpoint', 'arcEndpointPair', 'constraint', 'inspection', 'sketchId']) assert.equal(f.selection[field], null);
+});
+
+test('rectangle addition reads current guards and query each time and deduplicates by object identity rather than ID', () => {
+  const f = rectangleFixture(), point = { id: 'P1' }, sameId = { id: 'P1' };
+  f.selection.set('points', [point]); f.state.candidates = { points: [point, sameId, sameId] };
+  const selectedReads = ['S0', 'S2']; f.state.readSelected = () => selectedReads.shift(); f.state.active = 'S2';
+  f.api.select({}, false, true); assert.deepEqual(f.calls, ['selected', 'selected', 'active', 'clear', 'query', 'apply']);
+  assert.equal(f.selection.points.length, 2); assert.equal(f.selection.points[0], point); assert.equal(f.selection.points[1], sameId);
+  const next = { id: 'P2' }, rect = {}; f.state.readSelected = null; f.state.selected = 'S3'; f.state.active = 'S3'; f.state.candidates = { points: [next] };
+  f.api.select(rect, undefined, true); assert.equal(f.reads[1].rect, rect); assert.equal(f.reads[1].crossing, undefined); assert.equal(f.selection.points[2], next);
+});
+
+test('rectangle guard, clear, query and apply failures retain original partial state and propagate the same error', () => {
+  const order = ['selected', 'selected', 'active', 'clear', 'query', 'apply'];
+  for (const failed of ['selected', 'active', 'clear', 'query', 'apply']) {
+    const f = rectangleFixture(), internal = { id: 'I1' }, point = { id: 'P1' };
+    f.selection.set('instanceGeometry', internal); f.selection.set('points', [point]); const original = f.selection.points; f.state.failure = failed;
+    assert.throws(() => f.api.select({}, true, true), error => error === f.state.error);
+    assert.deepEqual(f.calls, order.slice(0, order.indexOf(failed) + 1)); assert.equal(f.selection.points, original);
+    assert.equal(f.selection.instanceGeometry, ['query', 'apply'].includes(failed) ? null : internal);
+  }
+});
 function fixture() {
   const f = { calls: [], count: 1, top: null };
   const selection = {};

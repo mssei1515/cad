@@ -1634,11 +1634,7 @@
     hatchAppearanceForDisplay, referenceImageBounds, isVisibleValue,
     dimensionSelectionBounds: dimensionSelectionBounds.read,
   });
-  function selectByRect(rect, crossing, additive = false) {
-    if (additive && selectionSketchId() && selectionSketchId() !== activeSketchId()) return;
-    canvasSelection.set("instanceGeometry", null);
-    canvasSelection.applyRectangle(rectangleSelectionQuery.read(rect, crossing), additive);
-  }
+  const { select: selectByRect } = window.CanvasSelectionInteraction.createRectangleSelection({ canvasSelection, selectionSketchId, activeSketchId, query: rectangleSelectionQuery });
 
   function drawBlockInstanceHandles() {
     resetCanvasStrokeState();
