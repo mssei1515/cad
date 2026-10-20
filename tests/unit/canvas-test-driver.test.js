@@ -5,6 +5,50 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/testing/canvas_test_driver.js'), 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/rendering/viewport.js'), 'utf8'), sandbox);
+function displayFixture() {
+  const calls = [], state = { ready: false, rect: { left: 5, top: 7, width: 200, height: 100 }, units: { length: 'mm' }, failure: null };
+  const marker = new Error('display failed'), empty = () => ({ points: [], lines: [], sketches: [{ id: 'S1' }], activeSketchId: 'S1' });
+  state.scope = empty(); const record = (name, ...args) => { assert.equal(state.ready, true); calls.push([name, ...args]); if (state.failure === name) throw marker; };
+  const canvas = { getBoundingClientRect() { record('rect'); return state.rect; } };
+  const viewport = sandbox.window.CanvasViewport.create({ canvasRect: () => canvas.getBoundingClientRect(), initialScale: 1, minZoom: 0.1, maxZoom: 10, minLength: 0.001 });
+  const geometry = { addPoint: function(x, y, fixed, kind) { 'use strict'; assert.equal(this, undefined); record('point', x, y, fixed, kind); const point = { id: `P${state.scope.points.length}`, x, y, fixed, kind }; state.scope.points.push(point); return point; },
+    addLine: function(p1, p2) { 'use strict'; assert.equal(this, undefined); record('line', p1, p2); const line = { id: `L${state.scope.lines.length}`, p1, p2 }; state.scope.lines.push(line); return line; } };
+  const hits = Object.fromEntries(['hitPoint','hitLine','hitCircle','hitArc','hitSpline','hitArcEndpoint','hitDimension'].map(name => [name, () => { record(name); return null; }]));
+  const support = sandbox.window.CanvasTestDriver.createDisplaySupport({ viewport, canvas, geometry, hits,
+    currentScope: () => { record('scope'); return state.scope; }, rootSketchId: 'ROOT', resetModelState: () => { record('reset'); state.scope = empty(); },
+    resizeCanvas: options => record('resize', options), draw: () => record('draw'), updateUI: () => record('ui'),
+    fitAllGeometryToViewport: padding => { record('fit', padding); return true; },
+    allGeometryBounds: () => ({ x1: -5, y1: -5, x2: 5, y2: 5 }), visibleGeometryBounds: () => null, isVisibleSketchId: id => { record('visible', id); return false; },
+    readUnits: () => { record('units'); return state.units; }, cssPxPerMm: 1, snapCandidates: () => [], evaluateSpline: () => null, elementFromPoint: () => canvas,
+  });
+  assert.deepEqual(calls, []); state.ready = true;
+  return { state, calls, marker, viewport, support, api: support.publicAPI, geometry, names: () => calls.map(call => call[0]) };
+}
+
+test('display support shares the existing viewport and coordinate functions without construction reads or rebinding', () => {
+  const f = displayFixture(); assert.ok(Object.isFrozen(f.support)); assert.ok(Object.isFrozen(f.api));
+  assert.equal(f.api.focusWorldForTest, f.support.focus); assert.equal(f.api.worldClientPositionForTest, f.support.clientPosition);
+  const point = { id: 'P', x: 3, y: 4 }; f.state.scope.points.push(point);
+  const zoom = f.api.displayZoomStateForTest(2); assert.equal(f.viewport.scale, 2); assert.notEqual(zoom.units, f.state.units);
+  assert.deepEqual({ ...f.api.geometryClientPositionForTest('point', 'P') }, { ...f.support.clientPosition(point) });
+  f.state.scope = { points: [{ id: 'P', x: 8, y: 9 }] }; assert.deepEqual({ ...f.api.geometryClientPositionForTest('point', 'P') }, { ...f.support.clientPosition(f.state.scope.points[0]) });
+  f.calls.length = 0; f.support.focus({ x: 4, y: 5 }, 20); assert.equal(f.viewport.scale, 10);
+  assert.deepEqual(f.names().slice(0, 3), ['resize', 'draw', 'rect']);
+  f.state.failure = 'draw'; assert.throws(() => f.support.focus({}, 0.5), error => error === f.marker); assert.equal(f.viewport.scale, 0.5);
+});
+
+test('display support preserves fit defaults, live fixture scope and fixed-point client conversion', () => {
+  const f = displayFixture(), old = f.state.scope;
+  f.api.resetForAllGeometryFit(); assert.notEqual(f.state.scope, old); assert.equal(f.state.scope.points.length, 4); assert.equal(old.points.length, 0);
+  assert.equal(f.state.scope.sketches[1].parentSketchId, 'ROOT'); assert.equal(f.state.scope.activeSketchId, 'S2');
+  f.calls.length = 0; assert.equal(f.api.fitAllGeometryForTest(0), true); assert.deepEqual(f.calls, [['fit', 120], ['draw']]);
+  f.calls.length = 0; f.api.resetForMiddleButtonFit(); assert.equal(f.state.scope.activeSketchId, 'S1'); assert.equal(f.state.scope.sketches[1].visible, false);
+  const observed = f.api.middleButtonFitState(); assert.equal(observed.hiddenVisible, false); assert.equal(observed.scale, 0.02);
+  f.calls.length = 0; const fixed = f.api.resetForFixedPointDisplayTest(); assert.equal(f.state.scope.points[0].fixed, true);
+  assert.deepEqual({ ...fixed.point }, { ...f.support.clientPosition(f.state.scope.points[0]) });
+  assert.ok(f.names().indexOf('ui') < f.names().indexOf('fit')); assert.ok(f.names().indexOf('fit') < f.names().indexOf('draw'));
+});
 function fixture() {
   const calls = [], state = { rect: { left: 5, top: 7, width: 200, height: 100 }, center: { x: 3, y: 4 } };
   const viewport = { scale: 1, update: values => { calls.push(['viewport', { ...values }]); Object.assign(viewport, values); } };

@@ -1,6 +1,33 @@
 /* Browser-test viewport focus and world-to-client positions through existing display owners. */
 (() => {
   "use strict";
+  function createDisplaySupport({ viewport, canvas, resizeCanvas, draw, resetModelState, geometry, currentScope, rootSketchId,
+    fitAllGeometryToViewport, allGeometryBounds, visibleGeometryBounds, isVisibleSketchId, updateUI, readUnits, cssPxPerMm,
+    snapCandidates, hits, evaluateSpline, elementFromPoint }) {
+    const { clampZoom, currentCanvasCenterWorld, worldToCanvasScreen, screenBoxForBounds, formatZoom } = viewport;
+    const { addPoint, addLine } = geometry;
+    const allFit = createAllGeometryFitFixture({ resetModelState, addPoint, addLine, currentScope, rootSketchId, viewport,
+      fitAllGeometryToViewport, allGeometryBounds, screenBoxForBounds, canvas });
+    const middleFit = createMiddleButtonFitFixture({ resetModelState, addPoint, addLine, currentScope, rootSketchId, viewport, updateUI, draw, canvas });
+    const fitObservation = createFitObservation({ canvas, viewport, screenBoxForBounds, visibleGeometryBounds, isVisibleSketchId });
+    const fitOperation = createFitOperation({ fitAllGeometryToViewport, draw });
+    const focus = create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
+    const fixedPoint = createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: focus.clientPosition });
+    const snap = createSnapObservation({ viewport, snapCandidates });
+    const selectableLine = createSelectableLinePosition({ currentScope, canvas, hitPoint: hits.hitPoint, hitLine: hits.hitLine,
+      hitDimension: hits.hitDimension, worldToCanvasScreen, elementFromPoint });
+    const hitObservation = createHitObservation(hits);
+    const position = createGeometryPosition({ currentScope, evaluateSpline, clientPosition: focus.clientPosition });
+    const zoom = createZoomObservation({ viewport, clampZoom, readUnits, formatZoom, cssPxPerMm });
+    const publicAPI = Object.freeze({
+      focusWorldForTest: focus.focus, displayZoomStateForTest: zoom.state, worldClientPositionForTest: focus.clientPosition,
+      hitGeometryAtWorldForTest: hitObservation.hit, geometryClientPositionForTest: position.position, snapLabelsAtWorldForTest: snap.labels,
+      selectableLineClientPositionForTest: selectableLine.position, fitAllGeometryForTest: fitOperation.fit,
+      resetForAllGeometryFit: allFit.reset, resetForMiddleButtonFit: middleFit.reset, middleButtonFitState: fitObservation.state,
+      resetForFixedPointDisplayTest: fixedPoint.reset,
+    });
+    return Object.freeze({ focus: focus.focus, clientPosition: focus.clientPosition, publicAPI });
+  }
   function create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen }) {
     function focus(center, scale = 1) {
       viewport.update({ scale: clampZoom(Number(scale) || 1) });
@@ -246,5 +273,5 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation });
+  window.CanvasTestDriver = Object.freeze({ create, createDisplaySupport, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation });
 })();

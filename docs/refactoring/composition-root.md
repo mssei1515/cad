@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas表示テスト支援組立て単位
+
+表示／座標／hit・snap／fit fixtureの11支援の生成と既存12個のAPI名の接続をCanvasTestDriver.createDisplaySupportへ集約した。既存viewport・Geometry生成と現在scopeを共有し、test guard内でのみ生成する。対象factory呼出し11→1、root依存29→23、app.jsは3,026→3,004行（22行減）。旧appとのブラウザ比較でAPI全204名・保存値・表示／fixture結果の一致を確認した。検証詳細と次のfamily境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のCanvas command終了判定単位
 
 command panelの空白判定を既存CanvasHitInteractionへ、tool mode分類を既存DrawOperationLifecycleへ集約した。同じpress／参照／Hatch query、現在command stateと短絡順を維持する。appの早期callbackはstatic分類を使うhoisted入口で維持し、新stateや汎用contextは増やさない。app.jsは3,037→3,026行（11行減）。検証・次のtest支援familyの構築境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
