@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新のDocument編集reset単位
+### 最新の読込codec生成単位
+
+前単位は9976050をdevelopの6a26548へ統合・Push済み。今回はcodex/document-loading-codecsで継続した。開始時は週枠使用17%／残量83%で停止条件には達していない。
+
+DocumentLoading.createWithCodecsへGeometry／Block／Instance読込codecの組立てを統合した。BlockとDocumentの共通の接続・Parameter準備依存を共有し、同じInstance codecの検査・正規化・移行を直接接続してappへの中継依存を除いた。既存のcodec注入APIと通常編集用normalizerのactive Sketch fallback、候補decode→reset→installの順、読込形式と参照同一性を維持する。新file／state／registryは増やさず、不要になった検査用中継関数を削除した。app.jsは3,409→3,396行（13行減）、今回の再開から3,652→3,396行（256行減）。
+
+構文574ファイル・単体1,648件・関連E2E220件（3.1分）が成功（全runner exit 0）。関連はunified-ui／blocks／file-safety／free-instance／sketch-projection／derived-selection-copy／hatching／reference-imagesで、file URL起動、候補拒否、Block／Instance／投影参照・複写、Hatch・画像、Undo／Redoと保存再読込を確認した。追加単体3件は実Block／Geometry／Instance codecと投影ownerによる生成時の遅延、Root／Blockの拘束参照とnamespace独立性、入力無変更、install時の配列／Object同一性と無効化順、同じInstance検査のRoot／Block拒否とDocumentApplicationのreset無実行、共通pattern正規化を確認する。読込では各namespaceの明示Sketch resolverを使い、通常編集時のactive fallbackはappの既存入口に維持する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-document-loading-codecs-{check,unit,related}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量82%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はappに残るnormalizedSketchCopyを、既存Sketchデータownerへ統合できるか分析する。Block編集とClipboardが共有する四種の外観正規化、未知fieldとObject参照を保つshallow copy、空値の既存規則を維持し、UI・採番・履歴へ依存させない。新たな小fileは追加せず、既存SketchHierarchy／Appearanceの責務との整合と読込時の正規化との違いを確認する。Hatch描画は既存境界で維持し、必要な依存整理が見つかった時点で再検討する。
+
+### 前単位のDocument編集reset単位
 
 前単位は2feab48をdevelopの3d8625cへ統合・Push済み。今回はcodex/document-editing-resetで継続した。開始時は週枠使用16%／残量84%で停止条件には達していない。
 
