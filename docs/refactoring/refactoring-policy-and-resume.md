@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のscene query共有単位
+
+sceneHitQueries.createInteractionで構築済みのGeometry／region／dimension／instance／operand queryからpress／hoverを接続する。appの接続に列挙するroot binding参照は25→4（canvasHover、sameArcEndpoint、hitBlockRotationHandle、hitAnnotationTarget）となり、sceneHitQueries自体の依存は別に保持する。新たな大contextを渡すのではなく、既に構築したqueryを同じowner内で共有する。後段の接続位置、既存createのreader直接指定API、注記interactionとpress／hoverの優先順、receiver・遅延読取り・例外伝播を維持する。scope policy／query／hoverの生成し直し、新state／cache／fileはない。不要になったhitGeometryInstance／hitDerivedGeometryForDragのroot委譲二関数を除去した。app.jsは3,072→3,066行（6行減）、今回再開時3,652行から586行減。
+
+正式仕様と実装mapを更新した。構文588ファイル・全単体1,757件・専用単体10件が成功（exit 0）。新単体2件は後段生成の無読取り、同じGeometry参照・scope／可視性変更をpress／hover両方へ反映すること、注記anchor／frame優先・投影除外、外部handle／target callbackの更新、例外時のhover維持を確認した。ASTで引数内のroot参照25→4と新たな未使用bindingなしを確認した。scene owner自体を含めた全依存が4個という意味ではない。
+
+関連E2E233件は232成功・1失敗（4.7分、exit 1）。unified-ui／phase0-characterization／sketch-permissions／sketch-projection／free-instance／unified-annotations／hatching／reference-images／multiple-dimensions／adversarial-authoring-performanceを実行した。失敗は同じ性能caseのview/middle-button-pan 178ms（175ms未満が基準）で、選択・削除・Undo／Redoからpanまで進んだ。既存の変更前比較でもpan超過の履歴があり、直前のscene構築単位の現在版でも199／185msが記録されている。ただし今回の不合格を過去の成功で置き換えず、性能同等や原因解決とは扱わない。期待値・閾値・fixtureは変更していない。全runner終了を回収し、専用serverを終了した。ログは一時directoryのcad-shared-scene-{focused,check,unit,related}.log。
+
+週枠残量93%で開始し停止条件には未到達。mainは5ee5f3fのまま保留し、全体目標は未完了。最新全E2Eは未実行。この共有単位は既存性能問題を明記してCommit／Pushしdevelopへ統合する。次は新しい分離を追加する前に、現在コードのpan処理・描画／UI／hit照会の時間と呼出しを計測し、変更前の同じ経路と比較する。成功するまでの再実行や基準緩和で完了とせず、必要な修正があれば既存仕様内で行う。最終main反映前に最新全体検証を行う。
+
 ### 最新のscene hit構築単位
 
 監査案に従い、既存CanvasHitInteraction.createSceneへscope policyとregion／dimension／instance／基本Geometry／operand queryの構築を集約した。早期policyと後段createQueriesの二段階を維持し、25個の限定依存から各子へ必要なAPIを接続する。既存SketchContextを名前付きで保持して共有し、GeometryReadModel／PointUsage／外観／寸法／Hatch／Block ownerを再生成しない。判定処理・cache・選択規則は既存GeometryHitQuery／OperandHitQueryへ残す。Workspace currentと寸法scopeの違い、owner receiver、可変長引数・既定options・後段callback・呼出し時のscale／mode／scope取得と例外伝播を維持した。新file・script・state・保存形式変更はない。

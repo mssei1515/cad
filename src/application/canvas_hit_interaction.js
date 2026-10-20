@@ -45,7 +45,18 @@
         points: { isExplicitPoint, isPointUsedByPrimitive, isReferencePoint },
         makeConstraintOperand: operandValues.makeConstraintOperand, operandFromReferenceTarget: operandValues.operandFromReferenceTarget,
         hits: geometry });
-      return Object.freeze({ regions, dimensions: dimensionQueries, instances, geometry, operands });
+      function createInteraction({ canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget }) {
+        return create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint, geometry,
+          scene: { hitHatchAt: (...args) => regions.hitHatchAt(...args), hitReferenceImageAt: (...args) => regions.hitReferenceImageAt(...args),
+            hitDimension: (...args) => dimensionQueries.hitDimension(...args), hitBlockRotationHandle,
+            hitBlockInstance: (...args) => instances.hitBlockInstance(...args),
+            hitDerivedGeometryForDrag: (...args) => instances.hitDerivedGeometryForDrag(...args),
+            hitGeometryInstance: (...args) => instances.hitGeometryInstance(...args), hitSketchIdentityElement: geometry.hitSketchIdentityElement,
+            hitAnnotationElement, hitAnnotationTarget, activeSketchId,
+            hitDerivedProjectionOperand: operands.hitDerivedProjectionOperand, hitBlockProjectionOperand: operands.hitBlockProjectionOperand,
+            hitReferenceTarget: operands.hitReferenceTarget } });
+      }
+      return Object.freeze({ regions, dimensions: dimensionQueries, instances, geometry, operands, createInteraction });
     }
     return Object.freeze({ policy, createQueries });
   }
