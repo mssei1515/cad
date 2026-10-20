@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新の寸法表示生成単位
+### 最新の寸法表示traversal単位
+
+前単位は39d998cをdevelopの378a8b5へ統合・Push済み。今回はcodex/dimension-display-traversalで継続した。開始時は週枠使用14%／残量86%で停止条件には達していない。
+
+DimensionDisplay.createTraversalへ寸法のSelection bounds／Layerの生成・接続を統合した。前段で作成した同じplacement／metrics／layout／Painterを使い、後段のhover／drag／pending／export／statusはread portで操作時に読む。通常寸法とAnnotation表示寸法を含むdimensionPresentationScope、active順のsort、解決済み外観の一回受渡し、label・選択境界、PNG時のflags抑制を維持する。新しいstate・cache・fileは増やさない。app.jsは3,443→3,437行（6行減）、今回の再開から3,652→3,437行（215行減）。
+
+構文570ファイル・単体1,638件・関連E2E169件（2.5分）・性能file全12件（48.9秒）が成功（全runner exit 0）。関連はunified-ui／multiple-dimensions／unified-annotations／phase0-characterization／png-export／annotation-display-sizeで、file URL起動、通常／Annotation寸法、矩形選択、既存画面比較、PNG・寸法移動・保存再読込を確認した。パンは147msで元の175ms未満の基準内。追加単体3件は後段組立て時のread遅延、合成scopeのsortとモデル配列／Object同一性、表示寸法ごと一回の外観解決、最新scope／defaults・文字サイズ／bounds・active／hidden短絡、hover／drag／Selection／inspection／編集／PNG flagsとCanvas保存復元を確認する。fixtureは既存CanvasSelection.set APIを使い、製品の選択規則は変更していない。このコードで全E2Eは未実行であり、最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-dimension-traversal-{check,unit,related,performance}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量85%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はAnnotationRendererのColor／本体／Layerの生成・接続を分析する。文字layout・Leader geometry・描画は同じownerを共有し、選択／inspection／hover／PNGによる色・frame・handleの表示規則とアンカー解決を維持する。Annotation dragとcommandは後段に生成されるため、resize可否とpreviewは現在の遅延callbackとして接続し、未初期化constを早期に渡さない。Anchor materializationやモデル編集を表示featureへ混ぜず、表示用state・cacheをもう一組作らない。
+
+### 前単位の寸法表示生成単位
 
 前単位は391d78aをdevelopのe298a50へ統合・Push済み。今回はcodex/dimension-displayで継続した。開始時は週枠使用13%／残量87%で停止条件には達していない。
 
