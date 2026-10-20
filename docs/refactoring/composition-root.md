@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のpan CPU／描画順照会調査単位
+
+pan CPU profileからGeometryPresentationのsortによるSketch照会の反復を特定し、Map案で実fixtureの照会1,050→530を確認した。しかし関連E2Eと固定比較で速度改善を示せず、複雑さに見合う効果がないため採用を見送った。実装・候補単体・正式仕様を08ec689へ戻し、確定変更は調査文書のみ。app.jsは3,066→3,066行（0行差）。全結果と次の構築依存整理は[調査記録](pan-latency-investigation.md)と[再開手順](refactoring-policy-and-resume.md)へ残す。main保留・全体目標未完了。
+
 ### 最新のTree hover描画責務とpan調査単位
 
 pan開始時にTreeを離れる経路の重複描画を、SelectionHighlightの状態所有とTreeControllerの一括更新後の描画へ整理した。観測したCanvas描画は7→5、通常の移動処理4回は維持。app.jsは3,066→3,066行（0行差）。残る時間のばらつきを解決済みとは扱わない。比較・画像／保存内容の一致は[調査記録](pan-latency-investigation.md)、最新検証と再開条件は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

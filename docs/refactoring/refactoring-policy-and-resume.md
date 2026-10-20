@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のpan CPU／描画順照会調査単位（製品変更なし）
+
+pan frameのCPU samplingでSketchの外観正規化とensureの反復を確認し、GeometryPresentation.createSketchStyle.drawOrderBySketchのsort comparatorを調べた。同じObjectのactive照会を一回の呼出し内で共有するMap案を試したが、性能改善を示せず不採用とした。製品にMapや照会契約の変更を追加していない。
+
+08ec689との交互固定3回の診断で、106点×5sortのactive照会は各回1,050→530、sort／Canvas描画は5、通常preview4、Geometry reader21のままだった。Canvas PNG、authoring state、serialized model（savedAtのみ除外）は一致。しかしwallに改善は確認できず、candidateの関連E2E238件は237成功・1失敗（空白矩形252ms、基準250ms未満）。固定3回の既存性能caseは変更前2成功・1失敗（線選択157ms、空白矩形は成功時249ms）、候補3失敗（空白矩形251ms／pan182ms／空白矩形283ms）だった。cacheを追加する複雑さに見合う効果を示せないため撤回した。[調査記録](pan-latency-investigation.md)に全結果と退避先を保持し、成功結果だけを採用しない。
+
+候補の構文588・単体1,763・関連単体40件は成功したが、採用していない。Map実装・追加単体・正式仕様／実装mapを08ec689へ戻し、app／src／tests／spec／index／tools／package／Playwright設定の差分なしを確認した。app.jsは3,066→3,066行（0行差）、確定変更は文書3fileのみ。現在の製品は前単位で構文588・単体1,761・関連E2E233成功を確認したcodeと同じ。今回の文書修正で製品テストの再実行は行わない。
+
+次はCanvasCommandInputsで既存BasicDrawingTools.inputの共有を検討し、rootに列挙する同じownerのcallback依存を狭める。生成順・receiver・既存routerの呼出し契約・互換APIを先に確認し、汎用app contextへ包まない。mainは5ee5f3fのまま保留し、最新全E2Eは未実行、全体目標は未完了。
+
 ### 最新のTree hover描画責務とpan調査単位
 
 pan計測中にTreeを離れる経路で、SelectionHighlightの即時描画→Tree pointerOutの描画→空になったleaveの描画が重複していた。[調査記録](pan-latency-investigation.md)に3版比較と呼出しstack・計測方法を記録した。SelectionHighlightは状態所有と既定の即時描画を維持し、redraw:falseとclearの変更有無を使ってTreeControllerが同じイベントの更新後に一度描画する。no-op leaveは描画しない。object exit／leaveの解除範囲、別の寸法hoverの保護、通常frame描画・scope・選択・Document・保存形式を維持する。

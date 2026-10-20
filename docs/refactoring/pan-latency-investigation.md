@@ -49,3 +49,32 @@ pan移動中のPointerInteractionControllerはCanvasNavigation.movePanで短絡�
 再現の入口は既存の`tests/e2e/adversarial-authoring-performance.spec.js`と`--grep 'selection, deletion'`。証拠は一時directoryのcad-pan-{probe,drawstack-probe,fix-probe,appearance-probe}.{cjs,json,log}、cad-pan-appearance-{main,before-scene,current}.{png,json}、cad-pan-fix-{focused,check,unit,related}.log。診断用serverは各runner終了後に自己作成したprocessだけを終了する。変更前snapshotはGit archiveで作成し、Git worktreeや共有branchを書き換えていない。
 
 次は、残るpan frame内drawのCPU時間とブラウザの入力待機を分けて調べる。無変更の反復で成功を待ったり、描画内容を省いたりしない。必要な修正を行った場合も、同じmodel／Canvas内容、操作完了時点、生成・取消・例外と保存互換性を検証する。
+
+## 後続のCPU／描画順照会調査（08ec689基準、Map案は不採用）
+
+前節のTree修正後、CDP Profilerを500μs sampling intervalで同じpan区間へ追加し、main／e3dece3／現在版を各3回観測した。正規化・SketchHierarchy.ensure／SketchContext.ensureSketchStateがJSの上位にあり、現在版ではnormalizeDimensionAppearanceがself sample 53.8ms、ensureが33.8msだった。これは3profileのsampling重み合計で、Profiler開始・停止や診断によるoverheadもある。通常E2Eの操作時間や厳密なCPU使用時間へ置き換えず、呼出し元を絞る根拠とした。
+
+ensureへ至る経路にはGeometryPresentation.createSketchStyle.drawOrderBySketchのsort comparatorがあった。isActiveSketchElementはelementSketchIdとactiveSketchIdを経由し、それぞれが正規化を行う。同じ要素が何度も比較されるため、描画順照会が同じObjectの所属を繰り返し読む。
+
+drawOrderBySketch内だけにactiveByItemを置き、比較時に初めて読んだ返値をその呼出し内で共有する候補を試した。既存DimensionPresentationのactiveByConstraintと同じ寿命で、visible filter先行・元Objectのkey・Number比較・stable order・入力非変更・比較のない場合の無読取りを維持した。後述の検証から採用を見送り、製品にはこのMapを追加していない。
+
+直前08ec689をarchiveした版とMap案を交互に3回測った。counting callbackだけを診断用scriptへ挿入し、GeometryPresentationのactive照会を数えた。各回の106点×5回のsortで次の結果となった。
+
+| 対象 | active照会（各3回とも） | sort回数／Canvas描画 | wall ms（3回） |
+| --- | ---: | --- | --- |
+| 08ec689 | 1,050 | 5／5 | 141.1／222.3／145.7 |
+| Map案 | 530 | 5／5 | 132.3／227.5／148.3 |
+
+通常previewは4回、profile内Geometry readerは21回、browser例外は0で両版共通。照会削減は確認できたが、wallは両版ともばらつき、速度改善や全性能問題の解消を断定しない。別のround 1終了後Canvas PNGはbyte単位、authoring stateとserialized model（savedAtのみ除外）はdeep equalityで一致した。PNG hashは前節と同じ。
+
+初回のroute.fetchによる診断はlocal HTTPのECONNRESETで2sample後に中断した。終了を確認してから、routeに各固定版の同じsourceをfilesystemから渡す方式へ変更し、別名v2の6sampleを完走した。初回の部分結果を完走した3回比較へ混ぜていない。製品sourceは両診断間で変更していない。
+
+候補版の構文588・単体1,763・関連単体40件は成功した。関連E2E238件は237成功・1失敗（4.8分、exit 1）。panは通過し、その後のselection/blank-rectangleが252msで250ms未満の基準を超えた。unified-ui／phase0-characterization／sketch-permissions／sketch-projection／free-instance／blocks／drawing-order／png-export／selection-zoom-shadow／adversarial-authoring-performanceを実行した。
+
+同じ既存性能caseを変更前と候補で交互に固定3回ずつ比較すると、08ec689は2成功・1失敗（線選択157ms、成功時の空白矩形はいずれも249ms）、Map案は3失敗（空白矩形251ms、pan182ms、空白矩形283ms）だった。小標本でMapが遅延の原因と断定はしないが、照会削減だけでは性能改善を示せず、cacheを追加する保守上の複雑さに見合う利点を確認できなかった。この案は採用しない。閾値変更や成功するまでの再実行は行っていない。
+
+Map実装・追加単体2件・仕様／実装mapへの追記を撤回し、app／src／tests／spec／index／tools／package／Playwright設定が作業開始時08ec689と完全一致することを確認した。app.jsは3,066→3,066行（0行差）。確定変更は調査文書3fileだけで、現在の正式仕様は変更しない。候補の実装・単体は一時directoryのcad-sketch-order-candidate-{geometry_presentation.js,test.js}へ退避した。
+
+現在の製品codeとtestsは前単位で構文588・単体1,761・関連E2E233成功を確認した08ec689と同じであり、候補版の1,763件や237／238結果を現在の最終codeの結果と混同しない。最新全E2Eは未実行で、mainは保留する。次はrootの構築依存整理へ戻り、CanvasCommandInputsで既存BasicDrawingTools.inputの共有により重複するcallback接続を狭められるか確認する。正常な描画を省いたり、無断でmodel正規化の失効条件を変えたりしない。
+
+証拠は一時directoryのcad-pan-cpu-{main,before-scene,current}-{1,2,3}.json、cad-pan-cpu-summary.{cjs,json}、cad-sketch-order-probe-v2.{cjs,json,log}、cad-sketch-order-v2-{before-order,current}.{png,json}、cad-sketch-order-{focused,check,unit,related}.log、cad-sketch-order-compare-{baseline,current}-{1,2,3}.log。以前の計測fileを上書きせず残し、全runnerの終了と自己作成serverの終了を回収した。
