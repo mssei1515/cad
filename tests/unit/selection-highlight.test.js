@@ -29,6 +29,20 @@ test('stale pointer leave does not clear a newer hover and dimension hover clear
   f.highlight.setSidebarHover('geometry', {}, new Set()); const before = f.draws;
   f.highlight.reset(); assert.equal(f.highlight.current, null); assert.equal(f.draws, before);
 });
+
+test('sidebar changes can defer drawing while preserving marker ownership and report whether clearing changed state', () => {
+  const f = fixture(), first = { dimension: true }, second = { dimension: true };
+  f.highlight.setSidebarHover('constraint', first, new Set(), { redraw: false });
+  assert.equal(f.dimension, first); assert.equal(f.highlight.current.item, first); assert.equal(f.draws, 0);
+  assert.equal(f.highlight.clearSidebarHover('geometry', first, { redraw: false }), false);
+  assert.equal(f.highlight.clearSidebarHover('constraint', second, { redraw: false }), false);
+  assert.equal(f.highlight.current.item, first);
+  assert.equal(f.highlight.clearSidebarHover(null, null, { redraw: false }), true);
+  assert.equal(f.highlight.current, null); assert.equal(f.dimension, null); assert.equal(f.draws, 0);
+  assert.equal(f.highlight.clearSidebarHover(), false); assert.equal(f.draws, 0);
+  f.highlight.setSidebarHover('constraint', second, new Set()); assert.equal(f.draws, 1);
+  assert.equal(f.highlight.clearSidebarHover(), true); assert.equal(f.draws, 2);
+});
 test('projection identity survives regenerated objects while ordinary equal ids do not alias', () => {
   const f = fixture(), original = { blockProjection: {}, ref: 'B1/L1' }, regenerated = { blockProjection: {}, ref: 'B1/L1' };
   f.highlight.setSidebarHover('geometry', original, new Set([original]));
