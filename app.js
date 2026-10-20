@@ -2455,45 +2455,16 @@
   });
   canvasContextController.start();
 
-  const annotationCommandInput = window.AnnotationCommandInput.create({
-    getMode: () => mode, getPending: pendingCommandSession.read, getPendingConstraint: () => constraintTargetSession.command,
-    annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
-    startAnchorConstraint: startAnnotationAnchorConstraint,
-    releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
-  });
-  const constraintCommandInput = window.ConstraintCommandInput.create({
-    canDragDimensionGroup: hit => Boolean(selectedDimensionLineGroup(hit.constraint)),
-    getPending: pendingCommandSession.read, getPendingConstraint: () => constraintTargetSession.command, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
-    beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,
-    handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw,
-  });
-
-  const instanceCommandInput = window.InstanceCommandInput.create({
-    getMode: () => mode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
-    hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
-    hitHatch: p => hitHatchAt(p.x, p.y, { activeOnly: false }),
-    capturePointer: id => canvas.setPointerCapture(id),
-    snapForDrawing: point => geometryInstanceCommand.activeInput === "origin"
-      ? drawingSnap.resolve(point, 10 / viewport.scale, snap => Boolean(window.PatternInstanceModel.relationFromSnap(geometryInstanceCommand.pending, snap, geometryRefForItem, resolveGeometryRef)))
-      : snapForDrawing(point),
-    getSnap: () => drawingSnap.active, makeConstraintOperand, setHint, applicationText,
-    releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
-  });
-
-  const pointCommand = window.PointCommand.create({
-    transientAuthoring, snapForDrawing, drawingSnap, addPoint, addPointSnapConstraints, clearSnap, canvasSelection, solveAndRefresh,
-  });
-  const drawingCommandInput = window.DrawingCommandInput.create({
-    getMode: () => mode, rejectRootSketchCreation, pointCommand, handleLineClick, handleCenterlineClick,
-    handleCircleCenterCrossClick, handleRectangleClick, handleSlotClick, handleFilletClick, handleCircleClick,
-    handleArcClick, handleThreePointArcClick, handleSplineClick, executeTrimAt, offsetCommand,
-  });
-
-  const canvasSelectionInteraction = window.CanvasSelectionInteraction.create({
-    canvasSelection, clearSelection, sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner,
-    beginDerivedGeometryDrag, beginBlockDrag, beginDimensionDrag, beginReferenceImageDrag,
-    buildDragSession, geometryDrag, selectionRectangle,
-    capturePointer: id => canvas.setPointerCapture(id), setHint, applicationText, updateGeometrySelectionUI, draw,
+  const canvasCommandInputs = window.CanvasCommandInputs.create({
+    readMode: () => mode, readPending: pendingCommandSession.read, readPendingConstraint: () => constraintTargetSession.command,
+    document, canvas, canvasSelection, clearSelection, canvasHover, draw, updateUI, updateGeometrySelectionUI, setHint, applicationText,
+    annotationCommand, annotationDrag, startAnnotationAnchorConstraint, selectedDimensionLineGroup, isDimensionConstraintCommandActive, beginDimensionDrag,
+    retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint, handleConstraintOperandClick,
+    instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand, hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource,
+    clearSnap, selectionRectangle, hitHatchAt, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing, makeConstraintOperand,
+    transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, handleLineClick, handleCenterlineClick, handleCircleCenterCrossClick,
+    handleRectangleClick, handleSlotClick, handleFilletClick, handleCircleClick, handleArcClick, handleThreePointArcClick, handleSplineClick, executeTrimAt, offsetCommand,
+    sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag,
   });
 
   const canvasPressQuery = window.CanvasPressQuery.create({
@@ -2531,8 +2502,7 @@
       referenceAnnotationAt: point => focusedExpressionInputContext() ? hitAnnotationElement(point.x, point.y, { activeOnly: false }) : null,
       commitHatch: commitHatchAt, calibrateImage: handleReferenceImageCalibrationClick,
       placeFilletRadius: submitFilletRadiusPlacement, placeBlock: handleBlockPlacementClick, blankGesture: blankCanvasGesture,
-      inputs: { instance: instanceCommandInput, annotation: annotationCommandInput, constraint: constraintCommandInput,
-        drawing: drawingCommandInput, selection: canvasSelectionInteraction } },
+      inputs: canvasCommandInputs },
   });
 
   function isDrawToolMode() {
