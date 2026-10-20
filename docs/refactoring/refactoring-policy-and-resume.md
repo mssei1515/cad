@@ -60,7 +60,7 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。特にmodeはtestを含め23箇所で代入されるため、getter／setter容器への移動だけでは完了としない。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
-最後の性能traceは生成ownerのConstraintCommitCommandへ、参照を外す注記コピーの表示値変換は既存ClipboardTransferへ統合済み。共有外観UIの組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線は既存PropertiesDisplayへ集約した。次はcontext menu等の意味のある機能組立ての依存を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
+最後の性能traceは生成ownerのConstraintCommitCommandへ、参照を外す注記コピーの表示値変換は既存ClipboardTransferへ統合済み。共有外観UIの組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線は既存PropertiesDisplayへ集約した。Canvas context menuの操作結線はCanvasContextInteractionへ集約した。次は残る開始準備と操作stateの責務を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
 
 各区切りの履歴・検証は[composition-root.md](composition-root.md)、現在の配置は[implementation-map.md](implementation-map.md)へ記録する。順番・file数・task数を固定せず、再監査の結果から次の責務境界を選ぶ。200〜500行の目標、UI・挙動・互換性・状態owner・全体検証を維持し、現在の中間成果で全体完了とはしない。
 
@@ -92,6 +92,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-20）
+
+### 最新のCanvas context interaction単位
+
+CanvasContextInteractionへTarget selection／Fix照会・Items・CandidateAction・Entry・Actionsの生成と結線、およびhover preview通知を集約した。候補Queryとpresenter、既存UI controllerのsessionは独立したまま使う。appは四つの操作入口へ委譲し、六部品間の一時的な参照を保持しない。早いcallback登録とcloseAppMenusの遅延参照、後段生成→controller.start、選択保持／明示置換・拘束振分け・pointer同一性・guard・履歴順は維持する。新しい操作stateや巨大contextを作らず、既存componentの明示portを接続する。外部依存64項目は残り、単一facade化で全体の依存整理を完了したとは扱わない。新classic script／単体testと四つの読込・検証一覧を同期した。app.jsは3,348→3,331行（17行減）、今回の再開から3,652→3,331行（321行減）。
+
+構文578ファイル・単体1,667件・関連E2E169件（2.4分）が成功（全runner exit 0）。関連はunified-ui／blocks／fixed-command／sketch-permissions／drawing-order／multiple-dimensionsで、file URL起動、候補menu・Fix／寸法整列・描画順・権限、Block、Undo／Redo・保存再読込を確認した。追加単体4件は実Target／Items／Entry／Actions／CanvasSelection／CanvasHoverを接続し、単一対象での選択集合保持と最新Fix表示、重複候補のpreview無変更・明示置換・最新拘束commandへの振分け、取消時のquery省略と拘束時の例外・mode短絡、pointer／item同一性・編集guard・寸法整列のUI／draw／履歴順を検証する。生成時のDOM／Fix／Selection読取りがないことも確認する。新script／testの四一覧を同期した。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-canvas-context-interaction-{focused,check,unit,related}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop 1f83000（前実装a0cf3be）、開始時の週枠残量76%／検証後75%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は拘束・寸法配置の開始準備を分析する。appのConstraintTargetCommand.prepareStartとDimensionPlacementCommand.prepareStartはmode変更とLine／Rectangle／Fillet／Circle／Arc／previewのresetを行い、前者だけPending取消とCenterline／Slotのresetが先行する。既存DrawOperationLifecycleが同じcommand実体を所有しているため、元の順序・reset範囲・途中例外とread時機を保って開始準備を担当できるか検証する。startInstanceAngleDimensionもappに残り、guard／配置中／circular判定→Pending取消→拘束取消→select mode→anchor／拘束target→pending置換→案内／toolbar／drawという独自経路を持つ。既存DimensionPlacementCommandへ統合できるか合わせて確認し、通常の寸法開始と一律に同じresetへ正規化しない。単なるmode getter／setter容器を新設せず、現在の状態ownerと開始・確定・取消の責務を揃える。
 
 ### 最新のProperties Panel組立て単位
 
