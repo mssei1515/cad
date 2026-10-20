@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の編集scope／Solver同期の所有単位
+
+EditingScopeBindingへ従来rootのmodel別名とSolver初期生成、context終了→move reset→Workspace切替→同期済みscope更新→Solver更新→Geometry read／projection無効化の手順を集約した。六つの明示依存とsolver／current／activateの三APIで、状態と更新の所有を揃えた。Workspace・Block session・Solverの計算／capture／restoreを移さず、cloneやscope stackは増やしていない。Block復帰のworkspace.restoreが同期処理より先に実行されるため、終了処理中のWorkspace currentと従来model／Solverの参照差をそのまま保つ。50読取りは同期済みcurrentへ接続し、DocumentApplicationの初期model捕捉、Clipboard targetのmodel property、Document固定参照とWorkspace直読は維持した。root letは9→8、app.jsは3,124→3,118行（6行減）、今回再開時3,652行から534行減。appのactivateEditingScopeは先行callback用hoisted委譲として残す。
+
+最終コードで構文588ファイル・単体1,733件・関連E2E242件（4.0分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／blocks／block-geometry-fixed／free-instance／sketch-projection／file-safety／parameter-dialog-controller／png-export／adversarial-authoring-performanceで、file URL起動、Block入れ子編集・host復元・独立履歴、投影／Instance・拘束・Parameter、Document読込・保存再読込、PNGと既存画面比較を確認した。パンは164msで元の175ms未満の基準内。新単体4件は実Workspace／Solverで同じGeometry参照・単一Solverと生成時遅延、Workspace復元先と同期済みscopeが異なる途中状態、終了／prepare／Solver／read cache／projectionの例外と部分状態、遅延controllerのreceiverとconstructor例外を確認する。既存Workspace／Block feature単体10件も成功。初回AST置換の編集範囲重なりは構文検査で検出し、移管領域を置換対象から除外して再生成した。最終版は逆AST変換で元appを完全再現し、50読取りと切替protocolの移管以外に変更がないことを確認した。root letは9→8、新たな未使用bindingなし。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-scope-binding-{check,unit,related}.log。
+
+基準はdevelop e8537c7（前実装4b94cc6）。開始時週枠残量60%／検証後59%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はappのselectByRectに残る追加選択のSketch整合guard、Instance内部選択解除、矩形query結果のSelection反映を、既存CanvasSelectionInteractionへ集約できるか確認する。RectangleSelectionQueryはGeometry選別、CanvasSelectionは集合更新、UI通知は既存終了処理へ残す。短絡・query前の解除・現在scope／参照・例外時の部分状態を維持し、新しいstateや選択ルールは追加しない。
+
+
 ### 最新のCanvas描画段階の組立て単位
 
 既存CanvasDisplay.createRenderingへinteractive renderer→frame rendererの生成と、共通content（画像→Hatch preview→描画stack）／PNG出力（寸法→注記→点）の接続を集約した。Surfaceのtransform・stroke resetと18段階の対話描画、各rendererの描画内容とstate、PNG frame・read cacheは元ownerに残す。23個の明示portで同じGeometryDisplay・寸法／注記／作図／配置／Offsetを共有し、drawだけを返す。既存のcreate／createWorkspaceの初期生成順、後段PNG command／schedulerの遅延、各ownerのreceiver、現在frameの再照会と短絡・例外・既存のCanvas復元範囲を維持する。新file・state・scriptは追加しない。Babelで参照0になったSpline handle／Annotation描画のroot委譲二入口を確認して除き、他の先行callback／診断に必要な入口は残した。app.jsは3,132→3,124行（8行減）、今回再開時3,652行から528行減。
