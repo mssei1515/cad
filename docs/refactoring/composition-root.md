@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のClipboardテスト支援組立て単位
+
+ClipboardTestDriverで観測とGeometry／Block fixtureを同じsession・Selection・scope・履歴へ接続し、三つの公開APIを返す。生成順と元関数を維持し、新stateや汎用contextは増やさない。対象factory呼出し3→1、root依存35→21、app.jsは3,004→2,990行（14行減）。旧appとの実ブラウザ比較でAPI全204名の順序・fixture／Selection／履歴・保存値が一致した。検証と次の通常Properties／Appearance構築境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のCanvas表示テスト支援組立て単位
 
 表示／座標／hit・snap／fit fixtureの11支援の生成と既存12個のAPI名の接続をCanvasTestDriver.createDisplaySupportへ集約した。既存viewport・Geometry生成と現在scopeを共有し、test guard内でのみ生成する。対象factory呼出し11→1、root依存29→23、app.jsは3,026→3,004行（22行減）。旧appとのブラウザ比較でAPI全204名・保存値・表示／fixture結果の一致を確認した。検証詳細と次のfamily境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

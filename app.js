@@ -80,12 +80,10 @@
     GeometryFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
-    PointVerticalConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     RadiusConstraint,
     DiameterConstraint,
-    EqualRadiusConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
     SplineSplineTangentConstraint,
@@ -2742,22 +2740,12 @@
       nextProjectionId: () => documentIds.allocate("sketchProjection"), nextMirrorId: () => documentIds.allocate("mirror"), nextPatternId: () => documentIds.allocate("pattern"),
       resetHistory, updateUI, draw, readState: derivedInstanceInteraction.state,
     });
-    const clipboardTestObservation = window.ClipboardTestDriver.createObservation({
-      currentScope: workspace.current, serializeModel, isRootSketch, elementSketchId, activeSketchId,
-      readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
-    });
-    const geometryClipboardFixture = window.ClipboardTestDriver.createGeometryFixture({
-      resetModelState, clipboardSession, viewport, currentScope: workspace.current, ROOT_SKETCH_ID, addPoint, addLine, addCircle, addArc,
-      pushModelConstraint, HorizontalConstraint, DistanceConstraint, RadiusConstraint, EqualRadiusConstraint,
-      PointVerticalConstraint, LineFixedConstraint, ArcEndpointFixedConstraint, dimensionFromAnchor, arcEndpointPoint,
-      canvasSelection, resetHistory, updateUI, draw, readState: clipboardTestObservation.state,
-    });
-    const blockClipboardFixture = window.ClipboardTestDriver.createBlockFixture({
-      resetModelState, clipboardSession, viewport, currentScope: workspace.current, ROOT_SKETCH_ID,
-      createEmptyBlockDefinition, Point, Line, HorizontalConstraint, DEFAULT_SKETCH_ID,
+    const clipboardTestSupport = window.ClipboardTestDriver.createSupport({
+      currentScope: workspace.current, serializeModel, sketchContext, readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
+      resetModelState, viewport, geometry: geometryCreation, types: window.GeometrySolver, dimensionFromAnchor, arcEndpointPoint,
+      rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, createEmptyBlockDefinition,
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, canvasSelection, resetHistory, updateUI, draw,
-      readState: clipboardTestObservation.state,
+      invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, resetHistory, updateUI, draw,
     });
     const forcedConstraintCommit = window.ConstraintTestDriver.createForcedCommit({
       resetModelState, addPoint, DistanceConstraint, solver, commitNewConstraint, currentScope: workspace.current, document,
@@ -2840,9 +2828,7 @@
       breakFirstHatchBoundaryForTest: hatchTestDriver.breakBoundary,
       restoreClosedBoundaryForHatchTest: hatchTestDriver.restoreBoundary,
       commitConstraintWithForcedSolveResultForTest: forcedConstraintCommit.commit,
-      resetForGeometryClipboardTest: geometryClipboardFixture.reset,
-      resetForBlockClipboardTest: blockClipboardFixture.reset,
-      clipboardStateForTest: clipboardTestObservation.state,
+      ...clipboardTestSupport,
       documentNameState: documentNameObservation.state,
       fileSystemAccessStateForTest: fileObservation.state,
       serializedModelForTest() {
