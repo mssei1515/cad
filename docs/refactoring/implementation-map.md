@@ -431,6 +431,8 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - `AnnotationCommandInput`（`src/editing/annotation_command_input.js`）: 注記の配置・選択を別入口で扱い、Filletとの入力優先順位を保つ。
 - `ConstraintCommandInput`（`src/editing/constraint_command_input.js`）: 寸法drag・距離配置・数値入力中のクリック・拘束対象指定を調整する。
 
+ConstraintCommandInput.createDimensionContinuationは寸法ドラッグから現在の距離入力へ戻る手順と有効判定を所有する。CanvasHover、canvasPoint、pending session、constraint target session、DimensionPlacementCommand、ConstraintTargetCommandの六つを明示依存として受ける。isActiveはtargetがdistanceのときだけpendingを読み、distance-value中を除く。continueClickはdimension hover解除→座標変換→pending確認の順に進み、distance-placeならretarget成功時に終了し、失敗時に値入力へ進む。それ以外でtargetがdistanceならoperandClickへ渡す。hitsのundefinedは呼出し分岐で新しい空Objectへ、nullはそのまま渡す。元ownerのreceiver、戻り値undefined、例外伝播と部分状態を維持し、独自pending／modeや履歴・modelを持たない。生成時にsession／hover／座標を読まず、各呼出しで現在値を読む。DimensionDragFeatureはcommandInputのisActive／continueClickを共有でき、未指定時は従来の個別callbackを使う。drag session・距離閾値・line group・角度同期と履歴は既存DimensionDragに残す。
+
 - `CanvasPressQuery`（`src/editing/canvas_press_query.js`）: pointerdownのGeometry・scene hit snapshotを読取り専用で構成。
 - PointerInteractionControllerの`down`が各入力ownerを順に呼び出す。appのpointerdown listenerはflushと委譲のみ。press接続は入力専用query／座標／操作APIに限定する。
 

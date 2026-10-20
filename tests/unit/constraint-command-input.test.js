@@ -6,6 +6,58 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/constraint_command_input.js'), 'utf8'), sandbox);
 class Circle {} class Arc {}
+function continuationFixture() {
+  const state = { ready: false, pending: null, target: null, retarget: false, fail: null, error: new Error('continuation failed'), pointer: { x: 8, y: 9 } }, calls = [];
+  const read = (name, ...args) => { assert.equal(state.ready, true); calls.push([name, ...args]); if (state.fail === name) throw state.error; };
+  const hover = { current: { dimension: {}, line: {} }, update(value) { assert.equal(this, hover); read('hover', value); Object.assign(hover.current, value); } };
+  const pending = { get current() { read('pending'); return state.pending; } }, targets = { get command() { read('targets'); return state.target; } };
+  const placement = { retargetDistancePlaceWithOperand(pointer, hits) { assert.equal(this, placement); read('retarget', pointer, hits); return state.retarget; },
+    startDistanceValueInput(pointer) { assert.equal(this, placement); read('value', pointer); } };
+  const constraints = { operandClick(pointer, type, hits) { assert.equal(this, constraints); read('operand', pointer, type, hits); } };
+  const api = sandbox.window.ConstraintCommandInput.createDimensionContinuation({ canvasHover: hover, pending, targets, placement, constraints,
+    canvasPoint: function(event) { 'use strict'; assert.equal(this, undefined); read('point', event); return state.pointer; } });
+  assert.deepEqual(calls, []); state.ready = true;
+  return { api, state, calls, hover, names: () => calls.map(c => c[0]) };
+}
+
+test('dimension continuation reads current command state lazily and keeps predicate short circuits', () => {
+  const f = continuationFixture(); assert.ok(Object.isFrozen(f.api));
+  for (const target of [null, { type: 'horizontal' }]) {
+    f.state.target = target; f.calls.length = 0; assert.equal(f.api.isActive(), false); assert.deepEqual(f.names(), ['targets']);
+  }
+  f.state.target = { type: 'distance' };
+  for (const [pending, expected] of [[null, true], [{ type: 'distance-place' }, true], [{ type: 'distance-value' }, false], [{ type: 'offset-value' }, true]]) {
+    f.state.pending = pending; f.calls.length = 0; assert.equal(f.api.isActive(), expected); assert.deepEqual(f.names(), ['targets', 'pending']);
+  }
+  f.state.fail = 'targets'; assert.throws(() => f.api.isActive(), error => error === f.state.error);
+});
+
+test('dimension continuation clears hover before pointer conversion and preserves placement priority, defaults and live targets', () => {
+  const f = continuationFixture(), event = {}, hits = Object.freeze({ hitP: {} }), line = f.hover.current.line;
+  f.state.pending = { type: 'distance-place' }; f.state.target = { type: 'distance' }; f.state.retarget = true;
+  assert.equal(f.api.continueClick(event, hits), undefined); assert.deepEqual(f.names(), ['hover', 'point', 'pending', 'retarget']);
+  assert.equal(f.calls[3][1], f.state.pointer); assert.equal(f.calls[3][2], hits); assert.equal(f.hover.current.dimension, null); assert.equal(f.hover.current.line, line);
+  f.calls.length = 0; f.state.retarget = false; f.api.continueClick(event);
+  assert.deepEqual(f.names(), ['hover', 'point', 'pending', 'retarget', 'value']); const firstDefault = f.calls[3][2]; assert.deepEqual(Object.keys(firstDefault), []); assert.equal(f.calls[4][1], f.state.pointer);
+  f.calls.length = 0; f.api.continueClick(event); assert.notEqual(f.calls[3][2], firstDefault);
+  f.calls.length = 0; f.api.continueClick(event, null); assert.equal(f.calls[3][2], null);
+  f.state.pending = null; f.calls.length = 0; f.api.continueClick(event, hits);
+  assert.deepEqual(f.names(), ['hover', 'point', 'pending', 'targets', 'operand']); assert.equal(f.calls[4][1], f.state.pointer); assert.equal(f.calls[4][2], 'distance'); assert.equal(f.calls[4][3], hits);
+  f.calls.length = 0; f.api.continueClick(event); assert.deepEqual(Object.keys(f.calls[4][3]), []);
+  f.calls.length = 0; f.api.continueClick(event, null); assert.equal(f.calls[4][3], null);
+  f.state.target = { type: 'horizontal' }; f.calls.length = 0; f.api.continueClick(event, hits); assert.deepEqual(f.names(), ['hover', 'point', 'pending', 'targets']);
+});
+
+test('dimension continuation propagates each failure at its original boundary without clearing other hover fields', () => {
+  for (const [failure, expected] of [['point', ['hover', 'point']], ['pending', ['hover', 'point', 'pending']], ['retarget', ['hover', 'point', 'pending', 'retarget']], ['value', ['hover', 'point', 'pending', 'retarget', 'value']], ['operand', ['hover', 'point', 'pending', 'targets', 'operand']]]) {
+    const f = continuationFixture(), line = f.hover.current.line;
+    f.state.pending = failure === 'operand' ? null : { type: 'distance-place' }; f.state.target = { type: 'distance' }; f.state.fail = failure;
+    assert.throws(() => f.api.continueClick({}, {}), error => error === f.state.error); assert.deepEqual(f.names(), expected);
+    assert.equal(f.hover.current.dimension, null); assert.equal(f.hover.current.line, line);
+    f.state.fail = null; f.calls.length = 0; f.api.continueClick({}, {}); assert.ok(f.names().includes(failure === 'operand' ? 'operand' : 'value'));
+  }
+});
+
 function fixture() {
   const source = {}, candidate = {};
   const state = { pending: { type: 'distance-place', target: { kind: 'line-length' }, operands: [null, source] }, candidate, target: null, valid: true };

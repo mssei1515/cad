@@ -7,7 +7,7 @@ const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/
 for (const file of sources.filter(source => source.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window, { Point, Line, DistanceConstraint, LineAngleConstraint } = w.GeometrySolver;
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
-function fixture() {
+function fixture(extra = {}) {
   const calls = [], viewport = { scale: 2 }, selection = w.CanvasSelection.create();
   const placement = w.DimensionPlacement.create({ viewport });
   const state = { ready: false, scope: { constraints: [] }, editable: true, visible: true, allowed: true, commandActive: false };
@@ -19,7 +19,7 @@ function fixture() {
     guardSketchEdit: id => { assert.equal(id, 'S1'); return state.allowed; }, isDimensionConstraintCommandActive: () => state.commandActive,
     beginPointer: notify('begin'), endPointer: notify('end'), setHint: notify('hint'), clearSnap: notify('snap'), hypot2: Math.hypot,
     continueCommandClick: notify('click'), draw: notify('draw'), updateUI: notify('ui'), updateGeometrySelectionUI: notify('selectionUI'),
-    syncDimensionValueInput: notify('input'), recordHistory: notify('history') });
+    syncDimensionValueInput: notify('input'), recordHistory: notify('history'), ...extra });
   assert.deepEqual(calls, []); state.ready = true;
   function distance(y, offset) {
     const constraint = new DistanceConstraint(new Point(`a${y}`, 0, y), new Point(`b${y}`, 100, y), 100);
@@ -73,6 +73,20 @@ test('permission rejection is inert and command clicks preserve original hits, t
   f.calls.length = 0; const event = { pointerId: 2 }; f.feature.command.finish(event);
   assert.deepEqual(f.calls.map(call => call[0]), ['end', 'click']); assert.equal(f.calls[1][1], event); assert.equal(f.calls[1][2], hits);
   assert.equal(f.selection.dimensionConstraint, null);
+});
+
+test('dimension drag shares the continuation API without rebinding and retains its existing session boundary', () => {
+  let active = true; const calls = [];
+  const commandInput = { isActive: function() { 'use strict'; assert.equal(this, undefined); calls.push(['active']); return active; },
+    continueClick: function(event, hits) { 'use strict'; assert.equal(this, undefined); calls.push(['click', event, hits]); } };
+  const f = fixture({ commandInput, isDimensionConstraintCommandActive: () => { throw Error('legacy predicate used'); }, continueCommandClick: () => { throw Error('legacy continuation used'); } });
+  assert.deepEqual(calls, []); const a = f.distance(0, -20), target = w.DimensionQueries.targetFromConstraint(a), hits = { hitL: {} }, event = { pointerId: 5 };
+  f.state.scope.constraints = [a]; f.feature.command.begin(event, { constraint: a, target, dimension: a.dimension }, { x: 0, y: 0 }, hits);
+  assert.equal(f.feature.command.active, true); active = false; f.calls.length = 0; f.feature.command.finish(event);
+  assert.equal(calls.at(-1)[0], 'click'); assert.equal(calls.at(-1)[1], event); assert.equal(calls.at(-1)[2], hits);
+  assert.deepEqual(f.calls.map(c => c[0]), ['end']); assert.equal(f.feature.command.active, false);
+  const before = calls.length; f.feature.command.begin(event, { constraint: a, target, dimension: a.dimension }, { x: 0, y: 0 });
+  assert.ok(calls.length > before); assert.equal(calls.at(-1)[0], 'active'); f.feature.command.reset();
 });
 
 test('real angle drag shares flip synchronization and respects reference dimensions and reset', () => {

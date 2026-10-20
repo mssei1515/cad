@@ -103,5 +103,23 @@
 
     return Object.freeze({ update });
   }
-  window.ConstraintCommandInput = Object.freeze({ create, createRetargetHover });
+  // Dimension dragging can hand a click back to the current distance command.
+  function createDimensionContinuation({ canvasHover, canvasPoint, pending, targets, placement, constraints }) {
+    function isActive() {
+      return targets.command?.type === "distance" && pending.current?.type !== "distance-value";
+    }
+    function continueClick(event, hits) {
+      canvasHover.update({ dimension: null });
+      const pointer = canvasPoint(event);
+      if (pending.current?.type === "distance-place") {
+        if (hits === undefined) hits = {};
+        if (!placement.retargetDistancePlaceWithOperand(pointer, hits)) placement.startDistanceValueInput(pointer);
+      } else if (targets.command?.type === "distance") {
+        if (hits === undefined) hits = {};
+        constraints.operandClick(pointer, "distance", hits);
+      }
+    }
+    return Object.freeze({ isActive, continueClick });
+  }
+  window.ConstraintCommandInput = Object.freeze({ create, createRetargetHover, createDimensionContinuation });
 })();

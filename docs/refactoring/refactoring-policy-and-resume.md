@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の寸法入力継続単位
+
+appのDimensionDrag用continueCommandClickとisDimensionConstraintCommandActiveを既存ConstraintCommandInput.createDimensionContinuationへ集約した。六つの限定依存（CanvasHover／canvasPoint／pending session／constraint target session／DimensionPlacementCommand／ConstraintTargetCommand）からisActiveとcontinueClickだけを返す。有効判定はtarget→pendingの短絡を維持し、継続clickはhover解除→座標変換→pending読取り→retargetまたはoperand入力の順を維持する。hitsのundefinedだけを呼出し分岐で新しい空Objectへし、nullは保持する。command ownerのreceiver・戻り値undefined・例外と部分状態も維持する。新たなmode／pending／履歴／modelは持たない。
+
+DimensionDragFeatureには同じ専用commandInput APIを共有し、CanvasCommandInputsには必要なisActive一関数を渡す。従来のFeatureの個別callback指定も維持する。新APIはPlacement／Constraint commandの後・DimensionDragの前（app 2,237行目）で生成し、全参照2,244／2,358行目に前方参照がないことをASTで確認した。新たな未使用bindingなし。app.jsは3,063→3,055行（8行減）、今回再開時3,652行から597行減。新file・script・cacheはなく、正式仕様と実装mapを更新した。
+
+構文588・全単体1,769・関連単体20件が成功（exit 0）。追加4件は生成時の無読取り、predicate短絡とlive state、retarget優先・defaults／null・owner receiver、各例外の境界とhover部分状態、既存drag sessionの継続条件と履歴・参照を検証する。変更前appの実際のarrow／predicate／委譲関数を取り出した一時診断で、pending6種×target3種×hits3種×retarget5種と例外6種の276ケースが新APIと一致した。診断scriptは一時directoryのcad-dimension-continuation-equivalence.cjs。
+
+関連E2E183件は182成功・1失敗（4.1分、exit 1）。unified-ui／phase0-characterization／multiple-dimensions／slot-dimension／dimension-prefix／sketch-permissions／command-panel／unified-annotations／adversarial-authoring-performanceを実行した。失敗はselection/line-pointerdown-up 158ms（150ms未満が基準）。変更前08ec689でも同じ線選択157msの失敗を確認しており、pan調査記録に保持する。寸法入力・drag／line group・角度・read-only寸法・式／prefix・優先入力、Root／Sketch権限、既存画面比較・履歴・保存再読込の関連ケースは成功したが、全検証成功とは扱わない。期待値や性能閾値を変えず、成功するまでの反復も行わない。全runner終了と専用server終了を回収済み。ログは一時directoryのcad-dimension-continuation-{focused,check,unit,related}.log。既存性能問題を明記してこの単位をCommit／Pushしdevelopへ統合する。mainは5ee5f3fのまま保留、最新全E2Eは未実行、全体目標は未完了。
+
+次はDimension／Constraint入力の構築で使うDimensionDragFeature・DimensionPlacementCommand・ConstraintTargetCommandの既存APIを確認する。今回取り除いたrootの状態判定／分岐を別のcallback束で再導入せず、各ownerのquery／操作を使って入力familyの構築境界をさらに狭める。個別aliasの移動や巨大contextへの包装だけを目的としない。
+
 ### 最新のInstance入力照会共有単位
 
 CanvasCommandInputsへ既存sceneHitQueriesを共有し、operandsの三つの投影／参照関数を元の値でInstanceCommandInputへ渡す。Hatchは構築時のregions ownerを保持し、呼出し時に同じreceiverへx／y／activeOnly:falseを渡す。共有API未指定時は従来の個別query指定を維持する。生成時のquery／model読取り、scopeやGeometryのcopy、query／command生成し直し、新state／cache／file／scriptはない。
