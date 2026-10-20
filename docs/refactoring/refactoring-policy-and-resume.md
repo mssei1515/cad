@@ -100,7 +100,19 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新のGeometry drag単位
+### 最新の寸法外観受渡し単位
+
+Geometry dragはb6bae17をdevelopの36e4216へ統合・Push済み。比較用worktreeはarchive済みで、C:/dev/cadのみが作業中。今回codex/pan-draw-queriesで継続した。週枠使用6%／残量94%で停止条件には達していない。
+
+寸法外観の解決と描画への受渡しを整理した。DimensionPresentationのlayer／Selection boundsが解決した外観をラベルと線形／角度painterへ渡す。GeometryAppearanceQueryは表示値の整形をdimensionDisplayStateForAppearanceへ分離し、既存のqueryと解決済み外観の両方から共有する。描画間cacheは作らず、次のdraw、Document／Sketchの外観変更、同一IDの別Objectやscope置換を新しく評価する。従来の単独label／painter／previewの呼出しは外観が渡されなければ従来どおり取得する。描画順・可視性短絡・PNG flags・Canvas状態・precision／affix／公差・保存形式は維持する。app.jsは3,591→3,591行（0行変化）。
+
+構文556ファイル・単体1,601件・関連E2E157件（2.2分）・性能file全12件（48.4秒）・固定3回の性能case（9.9秒）が成功（すべてexit 0）。関連はunified-ui／dimension-prefix／png-export／drawing-order／phase0-characterization／unified-annotationsで、既存画面比較も含む。パンは全性能実行で131ms、固定3回は151／150／135msで元の175ms未満の基準内。基準や期待値は変更していない。最新コードで全E2Eは未実行であり、前単位の583成功・1失敗を全成功へ書き換えない。最終main反映前の最新コードで全体検証する。
+
+変更前のCPU診断は同じ選択／削除／Undo／Redo／ツリー展開／zoom後に3回実施し、normalizeDimensionAppearanceの重複解決を主な負荷として観測した。変更後も描画4回を維持し、合計描画時間は変更前47.6／41.7／39msに対して42.5／35.7／36ms。診断全体の時間にはばらつきがあり、Profiler計測をE2E合格の代用にしない。診断scriptとbefore／afterログは一時ディレクトリのcad-pan-fullstate-profile.cjsとcad-pan-fullstate-{before,after}.log。検証ログはcad-dimension-appearance-{check,unit,performance,pan-repeat,related}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。mainは5ee5f3fを維持し、全体目標は未完了。次はapp内のupdateUI／updateGeometrySelectionUIの更新進行を分析し、Annotation選択の同期、Parameter名前空間の準備、解析更新の省略指定、各viewの更新順・Propertiesのinert、profileの種別を保つ所有者へまとめる。DOM表示とmodel編集を混ぜず、巨大contextや一律resetへ統合しない。
+
+### 前単位のGeometry drag
 
 前単位は2b9144fをdevelopの54fbaf1へ統合・Push済み。今回はcodex/geometry-drag-compositionで実装した。週枠使用5%／残量95%で停止条件には達していない。
 
