@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新の寸法外観受渡し単位
+### 最新のUI更新調整単位
+
+前単位は294a03bをdevelopのc1119cfへ統合・Push済み。今回codex/application-refreshで継続した。週枠使用7%／残量93%で停止条件には達していない。
+
+ApplicationRefreshへ通常UI更新、Geometry選択更新、Sketch／Properties更新のprofile境界を集約した。Annotation resize選択の同期、Parameter名前空間の準備、refreshAnalysis省略指定、Document名／Toolbar／Tree／Block／Properties／Status／拘束button／翻訳／寸法入力とProperties inertの順序を保つ。選択更新は解析やTree全再生成を行わず、Block dialogが開いている場合だけBlock表示を更新する。appのhoisted入口から委譲し、後段で生成するview／AnnotationDrag／dimension inputは操作時に読取り、生成時には実行しない。新たなmodel／cache／sessionや共通resetは作らない。app.jsは3,591→3,562行（29行減）、今回の再開から3,652→3,562行（90行減）。
+
+構文558ファイル・単体1,605件・関連E2E163件（2.3分）・性能file全12件（47.9秒）が成功（すべてexit 0）。関連はunified-ui／blocks／sketch-permissions／parameter-dialog-controller／command-panel／annotation-display-sizeで、file URL起動も確認した。パンは149msで元の175ms未満の基準内。新単体4件は生成時の遅延、現在の名前空間と選択の更新、選択更新の範囲／dialog条件、ui／tree／propertiesのprofile包含、DOM不在と例外時の停止境界を確認する。最新コードで全E2Eは未実行。前単位の失敗履歴とその後の関連検証を区別し、最終main反映前には最新コードで全体検証する。ログは一時ディレクトリのcad-application-refresh-{check,unit,related,performance}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。mainは5ee5f3fを維持し、全体目標は未完了。次はGeometryのread側の生成・接続を分析する。BlockCatalog／InstanceProjection／BlockProjection／GeometryReadModelとGeometry／Dimension／Annotation appearance queryの共有依存を確認し、実際のownerのAPIをまとめる方向で検討する。HatchやAnnotationの空間照会・描画依存まで無条件に一体化せず、currentScopeと従来model aliasを読む時機、read cacheの寿命／無効化、既存Object同一性を維持する。巨大なmutable contextへ移すだけの変更を避ける。
+
+### 前単位の寸法外観受渡し
 
 Geometry dragはb6bae17をdevelopの36e4216へ統合・Push済み。比較用worktreeはarchive済みで、C:/dev/cadのみが作業中。今回codex/pan-draw-queriesで継続した。週枠使用6%／残量94%で停止条件には達していない。
 

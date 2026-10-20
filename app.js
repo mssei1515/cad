@@ -240,6 +240,16 @@
   let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
+  const applicationRefresh = window.ApplicationRefresh.create({
+    document, interactionProfiler, profileInteractionWork,
+    syncAnnotationResize: () => annotationDrag.syncResizeSelection(mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
+    prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
+    refreshConstraintAnalysis, updateDocumentName: () => updateDocumentNameUI(), updateToolbar,
+    renderSketch: () => sketchTreeView.render(), updateBlockUI,
+    renderProperties: () => propertiesView.render(selectedPropertiesTarget()), readSketchMoving: () => sketchMoveCommand.active,
+    updateStatusUI, updateConstraintButtons, localizeApplicationUI, syncDimensionInput: () => syncDimensionValueInput(),
+    refreshSketchSelection: () => sketchTreeView.refreshSelection(),
+  });
   const canvasContextController = window.CanvasContextMenu.create({
     document, window, canvas, menu: canvasContextMenu, escapeHtml, applicationText,
     presentCandidate: target => canvasContextCandidatePresentation(target),
@@ -2281,7 +2291,7 @@
     },
     unfixPoint: point => { if (!guardSketchEdit(elementSketchId(point), "constraint")) return; point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
   });
-  const { refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth } = sketchTreeView;
+  const { applyWidth: applySketchTreeWidth } = sketchTreeView;
   sketchContextController = window.CanvasContextMenu.create({
     document, window, canvas: document.getElementById("sketchList"), menu: document.getElementById("sketchContextMenu"),
     escapeHtml, applicationText, ariaLabel: () => applicationText("スケッチメニュー", "Sketch menu"),
@@ -2295,10 +2305,7 @@
 
   function isSidebarHighlightedElement(item) { return sketchTreeController.isHighlightedElement(item); }
 
-  function updateSketchUI() {
-    if (!interactionProfiler.active) return updateSketchUIUnprofiled();
-    return profileInteractionWork("tree", updateSketchUIUnprofiled);
-  }
+  function updateSketchUI() { return applicationRefresh.sketch(); }
 
 
 
@@ -2307,19 +2314,8 @@
 
 
 
-  function updateGeometrySelectionUI() {
-    if (!interactionProfiler.active) return updateGeometrySelectionUIUnprofiled();
-    return profileInteractionWork("ui", updateGeometrySelectionUIUnprofiled);
-  }
+  function updateGeometrySelectionUI() { return applicationRefresh.selection(); }
 
-  function updateGeometrySelectionUIUnprofiled() {
-    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command);
-    updateToolbar();
-    updateConstraintButtons();
-    if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
-    updateSketchTreeSelectionState();
-    updatePropertiesUI();
-  }
 
 
 
@@ -2474,9 +2470,6 @@
     content: propertiesContent.render, prepareAffixInputs,
     onInput: handlePropertiesInput, onChange: handlePropertiesChange, onClick: handlePropertiesClick,
   });
-  function updatePropertiesUIUnprofiled() {
-    propertiesView.render(selectedPropertiesTarget());
-  }
 
 
 
@@ -2499,10 +2492,7 @@
 
 
 
-  function updatePropertiesUI() {
-    if (!interactionProfiler.active) return updatePropertiesUIUnprofiled();
-    return profileInteractionWork("properties", updatePropertiesUIUnprofiled);
-  }
+  function updatePropertiesUI() { return applicationRefresh.properties(); }
 
 
 
@@ -2526,27 +2516,8 @@
 
   function updateStatusUI() { return commandStatusView.update(); }
 
-  function updateUI({ refreshAnalysis = true } = {}) {
-    if (!interactionProfiler.active) return updateUIUnprofiled({ refreshAnalysis });
-    return profileInteractionWork("ui", () => updateUIUnprofiled({ refreshAnalysis }));
-  }
+  function updateUI(options) { return applicationRefresh.refresh(options); }
 
-  function updateUIUnprofiled({ refreshAnalysis = true } = {}) {
-    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command);
-    ensureParameterNamespace(currentParameterNamespace());
-    if (refreshAnalysis) refreshConstraintAnalysis();
-    updateDocumentNameUI();
-    updateToolbar();
-    updateSketchUI();
-    updateBlockUI();
-    updatePropertiesUI();
-    const propertiesPanel = document.getElementById("propertiesPanel");
-    if (propertiesPanel) propertiesPanel.inert = sketchMoveCommand.active;
-    updateStatusUI();
-    updateConstraintButtons();
-    localizeApplicationUI();
-    syncDimensionValueInput();
-  }
 
   const constraintSolvePreparation = window.ConstraintSolvePreparation.create({
     solver, types: { Line, Arc, ArcEndpointOnLineConstraint, ArcEndpointCoincidentConstraint,
