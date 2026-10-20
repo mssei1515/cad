@@ -54,22 +54,15 @@
 
 ## 5. 現在地と残作業
 
-2026-10-08時点、保存読込・描画器・Properties・Sketchツリー・作図command・Instance／Block操作・履歴・ドラッグ・選択・Document適用と正規化を段階的に分離済み。app.jsは10,782行で、入力・操作状態・共通編集・起動接続・診断APIの整理は未完了。最新の検証と再開条件はsection 8を参照する。
+2026-10-20、develop f37edc6のapp.jsは3,387行。非空白2,885行のうち、create系factoryの構築・接続が1,564行、条件付きtest hooksが488行、call一文の関数が261行。集計条件、現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)を参照する。これらを全て単純な移動・削除対象とは扱わない。
 
-各区切りのコミットと検証記録は[composition-root.md](composition-root.md)へ集約する。この文書の「再開地点」は最新の一件に置き換え、過去の未コミット表示や次の候補を積み重ねない。
+Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、mode・最後のpointer・性能trace・現在model別名と、操作固有のcallbackが残る。後段生成用の六つのlet参照は、操作stateの重複とは区別する。
 
-残る主要な領域は以下。順番や個数は固定しない。
+残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。特にmodeはtestを含め23箇所で代入されるため、getter／setter容器への移動だけでは完了としない。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
-- Block履歴adapter。拘束複製と選択候補照会は分離済み。下書き生成・確定・定義操作・依存照会は分離済みで、残る接続の整理を行う。
-- 拘束操作・Selection編集・コピー／削除・Sketch編集の調整。
-- ドラッグsession、hover／hit判定、Canvasとキーボードの入力振分け、共通モード遷移。
-- Annotation／Reference Image／Hatch等の残る操作状態と編集処理。
-- Document操作の進行、履歴adapter、保存読込後のUI・操作状態の同期。
-- 描画前の表示情報取得・preview構成など、既存rendererへ渡す情報の整理。
-- test hookと診断の公開境界。
-- 分離済み機能の組立て方の整理、`app.js`の起動側への収束、全体検証。
+次はConstraintCommitCommandが作る最後の性能traceと、そのDocument reset／test読取りの所有を揃える小さい単位を検討する。その後はClipboardの値変換等の実処理と、Properties／context menu等の意味のある機能組立てを進める。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
 
-「あと何ファイル」や「あと何回」とは見積もらない。まず一つの機能の所有者と依存を揃え、その結果を見て次のまとまりを選ぶ。
+各区切りの履歴・検証は[composition-root.md](composition-root.md)、現在の配置は[implementation-map.md](implementation-map.md)へ記録する。順番・file数・task数を固定せず、再監査の結果から次の責務境界を選ぶ。200〜500行の目標、UI・挙動・互換性・状態owner・全体検証を維持し、現在の中間成果で全体完了とはしない。
 
 ## 6. 実装・検証・履歴の進め方
 
@@ -82,7 +75,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/composition-entry-audit`、`codex/constraint-status-observation`、`codex/dimension-draw-queries`。この区切りでdevelopへ統合済みであり、リリース完了時に削除し、再開時は最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。最新developからcodex/*の作業branchを作成し、現在のbranchはsection 8とGitで確認する。統合・検証・Push後は取り込みを確認して作業branchを整理し、未統合・調査中のbranchは保持する。
 - 通常は作業branchで進める。停止時にこの区切りをdevelop／mainへ統合し、mainを最後に反映する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -100,7 +93,15 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新のSketch正規化copy単位
+### 最新のcomposition root再監査単位
+
+前単位はb6e825fをdevelopのf37edc6へ統合・Push済み。今回はcodex/bootstrap-boundary-auditで監査した。開始時は週枠使用19%／残量81%。実装・テスト・設定は変更していない。
+
+[bootstrap-boundary-audit.md](bootstrap-boundary-audit.md)へ、app.jsのAST集計、十個のletの役割、残るcallbackの実処理、遅延依存、機能単位の構築と起動段階、数百行へ近づけるための判断、次の具体的な実装単位を記録した。section 5を現在の構成へ更新し、Hatchの薄い分割を見送る判断とmainの検証gateを維持する。app.jsは3,387→3,387行（0行変化）。全体目標は未完了。
+
+監査文書の関連local link 7件、ASTの分類と非空白行の合計、十個のletの読取り／代入先、次のtrace生成／reset／観測の呼出し箇所を確認した。app.jsのSHA-256一致と実装・テスト・設定のGit差分なしを確認した。文書のみの変更のため構文・単体・E2Eは再実行していない。同一実装の直前結果は構文574ファイル・単体1,651件・関連E2E163件成功であり、全E2E成功とは扱わない。この監査記録をCommit／Pushしてdevelopへ統合する。週枠残量80%で継続中、mainは5ee5f3fを維持する。次は再監査で特定したConstraintCommitCommandの性能trace生成・最後の結果・Document reset／test読取りの所有を揃える。全体目標は未完了。
+
+### 前単位のSketch正規化copy単位
 
 前単位は499abbaをdevelopの02f580bへ統合・Push済み。今回はcodex/sketch-normalized-copyで継続した。開始時は週枠使用18%／残量82%で停止条件には達していない。
 

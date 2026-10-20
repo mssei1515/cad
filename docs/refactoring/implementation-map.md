@@ -72,7 +72,7 @@
 
 - `index.html`: 固定ワークスペースとコマンドUI
 - `style.css`: レイアウトと状態表現
-- `app.js`: moduleの組合せ、Documentと操作状態、描画、入力、保存読込の進行、履歴adapter、Block、Annotation、Reference Image
+- `app.js`: moduleの構築・接続・起動と、移行中のmode／pointer／性能trace／現在model別名、操作・履歴adapter、test hookの組立て。現在の残存責務と依存は[再監査](bootstrap-boundary-audit.md)を参照する。
 - `src/document/appearance.js`: 外観の初期値・正規化・旧形式変換と明示layerの解決
 - `src/document/drawing_order.js`: scopeとSketchを明示した描画順補完・候補の所有者解決・操作可否・順序変更
 - `src/persistence/document_files.js`: ファイル名、内容signature、保存session状態・排他、handleへの書込み

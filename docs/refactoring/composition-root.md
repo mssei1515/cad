@@ -6,6 +6,11 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### Composition rootの残存責務・依存の再監査
+
+基準はdevelop f37edc6、app.js 3,387行。実装は変更せず、[再監査](bootstrap-boundary-audit.md)へAST分類と初期化依存、state／後段接続参照の区別、残る実処理と機能組立て、次の実装単位を記録した。再開手順section 5を更新し、目標を維持する。app.jsは3,387→3,387行（0行変化）。監査文書の関連local link 7件、ASTの分類と非空白行の合計、十個のletの読取り／代入先、次のtrace生成／reset／観測の呼出し箇所を確認した。app.jsのSHA-256一致と実装・テスト・設定のGit差分なしを確認した。文書のみの変更のため構文・単体・E2Eは再実行していない。同一実装の直前結果は構文574ファイル・単体1,651件・関連E2E163件成功であり、全E2E成功とは扱わない。この監査記録をCommit／Pushしてdevelopへ統合する。週枠残量80%で継続中、mainは5ee5f3fを維持する。次は再監査で特定したConstraintCommitCommandの性能trace生成・最後の結果・Document reset／test読取りの所有を揃える。全体目標は未完了。
+
+
 ### Sketch外観の正規化コピー
 
 normalizedSketchCopyの本体をSketchHierarchy.copyWithNormalizedAppearanceへ統合した。Block clone／apply・Session同期・Block履歴が同じ関数を使う。四種の外観は独立して正規化し、その他のfieldはshallow copyで参照を維持する。ID／親／Root名の補正や読込版移行は行わず、null／未指定の継承用空外観、元Sketchの無変更を維持する。新file・state・依存portは増やさず、appは関数の接続だけを保持する。app.jsは3,396→3,387行（9行減）、今回の再開から3,652→3,387行（265行減）。
