@@ -672,18 +672,7 @@
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
     annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextMetrics,
     nextParameterName: () => parameterNamespace.allocateDimensionParameterName({ ...model, parameters: model.parameters.map(item => ({ ...item })), annotations: [...model.annotations] }),
-    validateParameter: draft => {
-      const name = String(draft.parameterName || "").trim(), expression = expressionFromUserInput(draft.expression);
-      const symbols = parameterNamespace.symbolElementsInNamespace(model);
-      parameterNamespace.validateParameterSymbolNames(model.parameters, [...symbols, { parameterName: name }]);
-      const definitions = [...model.parameters.map(item => ({ ...item, kind: "parameter" })),
-        ...symbols.filter(item => !isReadOnlyDimension(item)).map(item => ({ name: item.parameterName, expression: item.expression, kind: "dimension" })),
-        { name, expression, kind: "dimension" }];
-      const values = new Map(symbols.filter(isReadOnlyDimension).map(item => [item.parameterName, item.evaluatedParameterValue]));
-      const value = window.ParameterEngine.evaluateDefinitions(definitions, values).values.get(name);
-      if (!Number.isFinite(value)) throw new Error(applicationText("値を計算できません", "Value could not be evaluated"));
-      return { expression, value };
-    },
+    validateParameter: draft => parameterNamespace.validateNewDimensionParameter(draft, model),
     commitParameter: item => { ensureDimensionParameter(item, model); parameterNamespace.evaluateParameterNamespace(model); },
     applyStyle: (style, key, value, effective) => appearanceEditing.applyLeaderAppearanceValue(style, key, value, { viewportScale: viewport.scale, effective }),
     parameterErrorText,

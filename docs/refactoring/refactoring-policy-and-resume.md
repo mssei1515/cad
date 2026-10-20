@@ -60,7 +60,7 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。特にmodeは複数のcommandとtestから更新されるため、getter／setter容器への移動だけでは完了としない。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
-最後の性能traceは生成ownerのConstraintCommitCommandへ、参照を外す注記コピーの表示値変換は既存ClipboardTransferへ統合済み。共有外観UIの組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線は既存PropertiesDisplayへ集約した。Canvas context menuの操作結線はCanvasContextInteractionへ集約した。拘束・寸法開始準備はDrawOperationLifecycle、角度間隔寸法開始はDimensionPlacementCommandへ統合した。Geometry削除時の操作終了はGeometryDeletionCommandへ統合した。拘束の共有装飾と保存metadataはConstraintPersistenceへ統合した。次はAnnotation Parameter候補検証等、appに残る実処理の責務を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
+最後の性能traceは生成ownerのConstraintCommitCommandへ、参照を外す注記コピーの表示値変換は既存ClipboardTransferへ統合済み。共有外観UIの組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線は既存PropertiesDisplayへ集約した。Canvas context menuの操作結線はCanvasContextInteractionへ集約した。拘束・寸法開始準備はDrawOperationLifecycle、角度間隔寸法開始はDimensionPlacementCommandへ統合した。Geometry削除時の操作終了はGeometryDeletionCommandへ統合した。拘束の共有装飾と保存metadataはConstraintPersistenceへ統合した。Annotation Parameter候補の読取り検証はParameterNamespaceへ統合した。次はtest hooksのCanvas描画診断group等、残る機能組立ての責務を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
 
 各区切りの履歴・検証は[composition-root.md](composition-root.md)、現在の配置は[implementation-map.md](implementation-map.md)へ記録する。順番・file数・task数を固定せず、再監査の結果から次の責務境界を選ぶ。200〜500行の目標、UI・挙動・互換性・状態owner・全体検証を維持し、現在の中間成果で全体完了とはしない。
 
@@ -92,6 +92,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-20）
+
+### 最新のAnnotation Parameter候補検証単位
+
+AnnotationCommandのvalidateParameter本体を既存ParameterNamespace.validateNewDimensionParameterへ統合した。appは現在modelを明示して依頼し、名前／式／symbols／read-only値／Engine評価の順・一度のsymbol収集・例外・現在言語errorを同じownerで調整する。ensure・採番・target更新を行う通常評価とは別の読取り入口とし、draft／model無変更と有限の0／負数の許可を維持した。確定時のcommitParameterや履歴は変更しない。新file・state・script・保存形式変更はない。app.jsは3,281→3,270行（11行減）、今回の再開から3,652→3,270行（382行減）。
+
+構文578ファイル・単体1,684件・関連E2E162件（2.4分）が成功（全runner exit 0）。関連はunified-ui／unified-annotations／parameter-dialog-controller／blocksで、file URL起動、Annotation Parameter作成・編集と式／依存、Document／Blockの名前空間、Undo／Redo・保存再読込を確認した。追加単体4件はParameter・可変寸法・注記・read-only定数の実Engine評価、symbol一度収集とdraft／model無変更、明示Document／Blockと最新値・0／負数、重複／prefix／未知参照／循環の失敗順序、非有限結果に対する現在言語のerrorを検証する。既存16件のNamespace評価／rename／Clipboard／削除依存等の期待値も維持した。候補検証は採番・target／評価値更新を行わず、appのmodelを明示する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-annotation-parameter-validation-{focused,check,unit,related}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop 40c41f3（前実装e6973ad）、開始時の週枠残量71%／検証後70%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はinstallTestHooks内のCanvas描画診断groupの構築・公開を分析する。既存CanvasRenderTestDriverのDraftDashCases／BlockDashCases→DashIsolationとConstructionHoverFixture／ConstructionLineObservationの五部品間の結線を、同じtesting ownerで閉じられるか検討する。既存三つのブラウザ公開API（canvasDashIsolationCases、constructionLineHoverDisplayCasesForTest、constructionLineRenderingForTest）の名前・関数契約・同じ描画／モデルowner・scene reset／mode変更順を維持する。test hooksの有効条件と生成時のread／副作用を監査し、通常描画の実装をtestingへ移さず、既存helperの組立てだけを担当させる。read／draw layer等の公開APIを必要な範囲で共有し、app全体や可変contextを渡さず、installTestHooks全体を別の巨大closureへ移さない。
 
 ### 最新の拘束保存metadata単位
 
