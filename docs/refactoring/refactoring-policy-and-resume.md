@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のInstance入力照会共有単位
+
+CanvasCommandInputsへ既存sceneHitQueriesを共有し、operandsの三つの投影／参照関数を元の値でInstanceCommandInputへ渡す。Hatchは構築時のregions ownerを保持し、呼出し時に同じreceiverへx／y／activeOnly:falseを渡す。共有API未指定時は従来の個別query指定を維持する。生成時のquery／model読取り、scopeやGeometryのcopy、query／command生成し直し、新state／cache／file／scriptはない。
+
+operand側は実使用を確認し、親子factory間で受け渡すだけだったmakeConstraintOperand依存を除去した。必要なoperandElement一関数を明示したままにし、operandValues全体を包む案は採用しない。appの未使用Hatch委譲関数と投影二関数aliasも除去した。app.jsは3,064→3,063行（1行減）、今回再開時3,652行から589行減。canonical構築引数59→55、引数内のroot binding参照58→54、新たな未使用bindingなしをASTで確認した。正式仕様と実装mapを更新した。
+
+構文588・全単体1,765・関連単体25件が成功（exit 0）。追加2件は生成時の無照会、derived→Block優先、参照／Source mode切替、元item参照とlive query値、Hatchのowner・options・座標、例外の同一性と無変更、legacy query未使用を確認する。既存の個別query指定の単体も維持している。関連E2E203件も全成功（3.2分、exit 0）。unified-ui／phase0-characterization／sketch-permissions／sketch-projection／free-instance／hatching／command-panel／adversarial-authoring-performanceを実行し、性能file全12件を含む。panは121msで元の175ms未満の基準内、空白矩形は201msで250ms未満だった。権限・投影／Instanceのsource／参照指定、Hatchのsourceとhit・保存再読込、優先入力と既存画面比較も確認した。以前の性能失敗を消したり、全性能問題の解消や全E2E成功へ読み替えたりしない。全runner終了と専用server終了を回収済み。ログは一時directoryのcad-instance-input-queries-{focused,check,unit,related}.log。mainは5ee5f3fのまま保留、最新全E2Eは未実行、全体目標は未完了。
+
+次はCanvas入力familyの残る構築契約を見直す。個別aliasだけを小さく移し続けず、Dimension／Constraint入力など既存ownerの複数APIを共有できる箇所と、controller／bindingの生成段階を確認し、意味のある機能組立てへ収束させる。55入口をそのまま別の巨大contextへ包まない。
+
 ### 最新の基本作図入力API共有単位
 
 CanvasCommandInputsが既存BasicDrawingTools.inputのline／rectangle／slot／circle／arc／threePointArcをbasicDrawingInputとして受け、DrawingCommandInputへ元の関数値を渡す。appに保持していた六つの関数aliasを除去し、同じownerのAPIを一度共有する。共有API未指定時は従来の個別callback portを使い、既存呼出しも維持する。lineのpoint・Shift、他の基本作図のpoint引数、receiverを付けない呼出し、Root拒否・入力消費・例外伝播を維持する。snap／Selection／commandの生成し直しや新たなstate・cache・file・scriptはない。

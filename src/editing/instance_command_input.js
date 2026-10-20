@@ -3,7 +3,7 @@
   "use strict";
   function create({ getMode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
     hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, hitHatch = () => null, clearSnap, selectionRectangle,
-    capturePointer, snapForDrawing, getSnap = () => null, makeConstraintOperand, setHint, applicationText, releasePanelFocus }) {
+    capturePointer, snapForDrawing, getSnap = () => null, setHint, applicationText, releasePanelFocus }) {
     function click(e, p, { hitP, hitL, hitC, hitA, hitS, hatchHit }) {
       if (["instance-sources", "sketch-projection"].includes(getMode()) || getMode().startsWith("pattern-placement-")) releasePanelFocus();
       if (getMode() === "instance-sources") {
