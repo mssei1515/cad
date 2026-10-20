@@ -56,7 +56,7 @@
 
 2026-10-20の最新再監査基準（develop 63c886c）ではapp.jsは3,162行。非空白2,665行のうち、create系構築・接続が1,376行、条件付きtest hooksが478行、call一文の関数が264行。root構築214文・複文callback38個、root let9個・mode代入20箇所を確認した。旧f37edc6の数値は履歴として保持し、同じ集計条件で比較した。現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)とsection 8を参照する。全てを単純な移動・削除対象とは扱わない。
 
-Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、mode・最後のpointer・現在model別名と、操作固有のcallbackが残る。現在のletはmode・pointer・model別名と六つの後段接続参照の九つ。後段接続は操作stateの重複とは区別する。
+Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、mode・最後のpointerと、操作固有のcallbackが残る。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。現在のletはmode・pointerと六つの後段接続参照の八つ。後段接続は操作stateの重複とは区別する。
 
 残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。特にmodeは複数のcommandとtestから更新されるため、getter／setter容器への移動だけでは完了としない。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
@@ -92,6 +92,15 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-20）
+
+### 最新の編集scope／Solver同期の所有単位
+
+EditingScopeBindingへ従来rootのmodel別名とSolver初期生成、context終了→move reset→Workspace切替→同期済みscope更新→Solver更新→Geometry read／projection無効化の手順を集約した。六つの明示依存とsolver／current／activateの三APIで、状態と更新の所有を揃えた。Workspace・Block session・Solverの計算／capture／restoreを移さず、cloneやscope stackは増やしていない。Block復帰のworkspace.restoreが同期処理より先に実行されるため、終了処理中のWorkspace currentと従来model／Solverの参照差をそのまま保つ。50読取りは同期済みcurrentへ接続し、DocumentApplicationの初期model捕捉、Clipboard targetのmodel property、Document固定参照とWorkspace直読は維持した。root letは9→8、app.jsは3,124→3,118行（6行減）、今回再開時3,652行から534行減。appのactivateEditingScopeは先行callback用hoisted委譲として残す。
+
+最終コードで構文588ファイル・単体1,733件・関連E2E242件（4.0分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／blocks／block-geometry-fixed／free-instance／sketch-projection／file-safety／parameter-dialog-controller／png-export／adversarial-authoring-performanceで、file URL起動、Block入れ子編集・host復元・独立履歴、投影／Instance・拘束・Parameter、Document読込・保存再読込、PNGと既存画面比較を確認した。パンは164msで元の175ms未満の基準内。新単体4件は実Workspace／Solverで同じGeometry参照・単一Solverと生成時遅延、Workspace復元先と同期済みscopeが異なる途中状態、終了／prepare／Solver／read cache／projectionの例外と部分状態、遅延controllerのreceiverとconstructor例外を確認する。既存Workspace／Block feature単体10件も成功。初回AST置換の編集範囲重なりは構文検査で検出し、移管領域を置換対象から除外して再生成した。最終版は逆AST変換で元appを完全再現し、50読取りと切替protocolの移管以外に変更がないことを確認した。root letは9→8、新たな未使用bindingなし。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-scope-binding-{check,unit,related}.log。
+
+基準はdevelop e8537c7（前実装4b94cc6）。開始時週枠残量60%／検証後59%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はappのselectByRectに残る追加選択のSketch整合guard、Instance内部選択解除、矩形query結果のSelection反映を、既存CanvasSelectionInteractionへ集約できるか確認する。RectangleSelectionQueryはGeometry選別、CanvasSelectionは集合更新、UI通知は既存終了処理へ残す。短絡・query前の解除・現在scope／参照・例外時の部分状態を維持し、新しいstateや選択ルールは追加しない。
+
 
 ### 最新のCanvas描画段階の組立て単位
 
