@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-20の最新再監査基準（develop 63c886c）ではapp.jsは3,162行。非空白2,665行のうち、create系構築・接続が1,376行、条件付きtest hooksが478行、call一文の関数が264行。root構築214文・複文callback38個、root let9個・mode代入20箇所を確認した。旧f37edc6の数値は履歴として保持し、同じ集計条件で比較した。現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)とsection 8を参照する。全てを単純な移動・削除対象とは扱わない。
+2026-10-20の最新再監査基準（develop 46dd77d）ではapp.jsは3,088行。非空白2,595行のうち、create系構築・接続1,354行、条件付きtest hooks478行、call一文の関数248行。root構築216文・複文callback33個・root let8個を確認した。旧63c886cを同条件で再現して比較した。現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)とsection 8を参照する。全てを単純な移動・削除対象とは扱わない。
 
 Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、mode・最後のpointerと、操作固有のcallbackが残る。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。現在のletはmode・pointerと六つの後段接続参照の八つ。後段接続は操作stateの重複とは区別する。
 
@@ -92,6 +92,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-20）
+
+### 最新の構築境界再監査（文書のみ）
+
+develop 46dd77dを基準に構築依存を再集計し、[監査記録](bootstrap-boundary-audit.md)へ比較・次の境界案を記録した。現在はapp.js 3,088行、非空白2,595行、構築1,354行、hooks478行、一文call248行。root構築216文、複文callback33個、root let8個。旧63c886c集計は監査記録に比較基準として保持する。今回のapp.jsは3,088→3,088行（0行差）。hooks／一文callを全て除いても1,869非空白行が残るため、小関数の移動だけでは数百行へ届かない。
+
+次の実装候補は既存CanvasHitInteractionへのscene照会組立ての追加。scope policyを早期、region／dimension／instance／基本hit／operand hitを後段に生成する二段階を維持する。6構築30物理行・62root参照をそのまま大引数factoryにせず、既存canonical ownerと限定callbackを使う25依存案を検討した。これは未実装。Workspace scopeと寸法scopeの違い、receiver・毎回の状態読取り・後段callback・同一ownerと生成順を維持する。TreeとPropertiesは各76／90参照と広く、先に契約整理が必要なため後回しとした。
+
+今回は集計再現・合計・factory bodyのAST・製品source差分なし・Markdown参照を検証する。製品テストは再実行せず、直前の構文588／単体1,751／関連E2E187成功と最新全E2E未実行を区別する。正式仕様・実装の変更はない。週枠残量95%で継続可能。mainは5ee5f3fのまま保留し、最終反映前に最新全体検証を行う。全体目標は未完了。
 
 ### 最新のoperand Sketch関係照会単位
 
