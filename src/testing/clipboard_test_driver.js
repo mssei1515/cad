@@ -1,6 +1,26 @@
 /* Clipboard browser fixtures and observations without duplicate session state. */
 (() => {
   "use strict";
+  function createSupport({ currentScope, serializeModel, sketchContext, readSelected, canvasSelection, clipboardSession, readHistory,
+    resetModelState, viewport, geometry, types, dimensionFromAnchor, arcEndpointPoint, rootSketchId, defaultSketchId,
+    createEmptyBlockDefinition, appendDefinition, nextInstanceId, invalidateBlockProjectionCache, blockProjectionBundle,
+    pushModelConstraint, resetHistory, updateUI, draw }) {
+    const { isRootSketch, elementSketchId, activeSketchId } = sketchContext;
+    const { addPoint, addLine, addCircle, addArc } = geometry;
+    const { Point, Line, HorizontalConstraint, DistanceConstraint, RadiusConstraint, EqualRadiusConstraint,
+      PointVerticalConstraint, LineFixedConstraint, ArcEndpointFixedConstraint } = types;
+    const observation = createObservation({ currentScope, serializeModel, isRootSketch, elementSketchId, activeSketchId,
+      readSelected, canvasSelection, clipboardSession, readHistory });
+    const geometryFixture = createGeometryFixture({ resetModelState, clipboardSession, viewport, currentScope, ROOT_SKETCH_ID: rootSketchId,
+      addPoint, addLine, addCircle, addArc, pushModelConstraint, HorizontalConstraint, DistanceConstraint, RadiusConstraint, EqualRadiusConstraint,
+      PointVerticalConstraint, LineFixedConstraint, ArcEndpointFixedConstraint, dimensionFromAnchor, arcEndpointPoint,
+      canvasSelection, resetHistory, updateUI, draw, readState: observation.state });
+    const blockFixture = createBlockFixture({ resetModelState, clipboardSession, viewport, currentScope, ROOT_SKETCH_ID: rootSketchId,
+      createEmptyBlockDefinition, Point, Line, HorizontalConstraint, DEFAULT_SKETCH_ID: defaultSketchId, appendDefinition, nextInstanceId,
+      invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, canvasSelection, resetHistory, updateUI, draw, readState: observation.state });
+    return Object.freeze({ resetForGeometryClipboardTest: geometryFixture.reset, resetForBlockClipboardTest: blockFixture.reset,
+      clipboardStateForTest: observation.state });
+  }
   function createObservation({ currentScope, serializeModel, isRootSketch, elementSketchId, activeSketchId,
     readSelected, canvasSelection, clipboardSession, readHistory }) {
     function state() {
@@ -106,5 +126,5 @@
     }
     return Object.freeze({ reset });
   }
-  window.ClipboardTestDriver = Object.freeze({ createObservation, createGeometryFixture, createBlockFixture });
+  window.ClipboardTestDriver = Object.freeze({ createSupport, createObservation, createGeometryFixture, createBlockFixture });
 })();

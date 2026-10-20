@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のClipboardテスト支援組立て単位
+
+既存ClipboardTestDriver.createSupportへ観測→Geometry fixture→Block fixtureの生成と三つの公開API名の接続を集約した。ClipboardSession・CanvasSelection・現在scope・履歴、既存GeometryCreation／SketchContextと型namespace等24個の限定依存を受ける。両fixtureのreadStateは同じ観測関数を参照し、session／Selection／モデル／履歴・採番の新たなcopyを持たない。コピー／貼付け本体、commit／rollbackとID発行の時機は既存command／fixtureに残す。従来の個別factoryも維持する。
+
+元factoryは関数宣言と不変APIの生成だけで、同じ位置・生成順で組み立てる。生成時に全callbackとviewport／Selection／ClipboardSessionの読取りを拒否する一時VM診断で無照会を確認し、childの順と両readStateが公開clipboardStateForTestと同じ関数であることも確認した。rootの不要になったPointVerticalConstraint／EqualRadiusConstraint aliasを除去した。対象factory呼出し3→1、引数内の異なるroot binding参照35→21。app.jsは3,004→2,990行（14行減）。新file・汎用context・stateはない。仕様書と実装mapを更新した。
+
+構文588ファイル・全単体1,778件・関連単体29件が成功（exit 0）。関連単体はClipboard command／session／transfer／graph／paste checkpoint。今回は既存fixtureの組立てだけを扱い、同じ実装名を固定するtestは追加していない。型alias削除後のapp個別syntaxも確認した。旧079c1d9と実ブラウザで比較し、公開API全204名の順序、初期Clipboard観測、Geometry／Block fixtureの結果と再観測、Selection・履歴・保存値、BlockからGeometryへの再初期化が一致した（savedAtだけを比較対象外）。診断は一時directoryのcad-clipboard-support-equivalence.cjs／.log。
+
+関連E2E274件が全成功（4.6分、exit 0）。unified-ui／phase0-characterization／derived-selection-copy／blocks／free-instance／sketch-permissions／sketch-projection／unified-annotations／hatching／spline／adversarial-authoring-performanceを実行した。通常Geometry・Block／派生／投影・Hatch／Splineと拘束のコピー／貼付け、Sketch権限、履歴と保存再読込、既存画面比較を確認した。性能file全12件を含み、pan149ms（175ms未満）、空白矩形216ms（250ms未満）だった。全runner終了と専用server停止を確認した。ログは一時directoryのcad-clipboard-support-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。mainは5ee5f3fのまま保留、現在コードの全E2Eは未実行、全体目標は未完了。c3a213cでの全E2E584成功はその時点の基準として保持する。開始時の週枠使用20%・残量80%で停止条件未到達。
+
+次は通常機能のProperties／Appearanceの構築・接続へ戻る。appにはPropertySelection、PropertyEditingFeature、AppearanceUI、PropertiesDisplay.createWithControllerの連続した構築が残る。まず既存SketchContext／GeometryReadServices／外観／Selection等のowner APIを使い、rootの個別callbackを減らせるか確認する。広い引数Objectをそのまま別fileへ包まない。PropertySelection用と表示用のgetOperationは異なるfieldを返し、AppearanceUIのeditingScopeBinding.current readerと他のWorkspace current readerも同一視しない。各ownerの副作用・生成順・遅延callbackを確認してから機能単位の組立てへ進む。test支援の残り、modeの所有とbind／startも未完了であり、200〜500行の目標は維持する。
+
+
 ### 最新のCanvas表示テスト支援組立て単位
 
 CanvasTestDriver.createDisplaySupportへ表示・座標・hit／snap・fit fixtureの11 factoryの生成と既存12個のテストAPI名の接続を集約した。既存viewportとGeometryCreationを共有し、readUnits・現在scope・fit／bounds・hit・snap等の19個の限定依存から各子へ必要な入口だけを渡す。focus／clientPositionは同じ元関数を他driverと公開APIへ共有する。作図sessionを読むAuthoringObservationと表示切替のViewObservationはこの表示支援に混ぜず、従来どおり別に生成する。新file・state・cache・app contextはない。
