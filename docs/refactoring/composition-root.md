@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 共有外観UIの組立て
+
+PropertiesとDocument設定で共有するAppearanceControls／AppearancePalette、および起動時のDocumentAppearanceEditorの生成・接続をAppearanceUIへ集約した。同じAppearanceEditing・選択照会・外観commandを使い、appは外部portとcontrols／openPalette／startだけを接続する。Document設定の生成時機、設定start→Palette.bind、他の起動処理との順序、Palette session・最新scope／既定値・倍率・履歴／UI／drawの動作を維持する。共有componentや編集stateを再生成せず、移動で不要になったaliasを整理した。新classic scriptと単体testをindex／構文一覧／単体一覧／読込期待へ同期した。app.jsは3,375→3,354行（21行減）、今回の再開から3,652→3,354行（298行減）。
+
+構文576ファイル・単体1,660件・関連E2E195件（2.9分）が成功（最終全runner exit 0）。関連はunified-ui／leader-appearance／blocks／hatching／unified-annotationsで、file URL起動、PropertiesとDocument既定値・Palette、使用中色・継承・複数選択、Block／Hatch／注記、Undo／Redo・保存再読込を確認した。追加単体3件は生成時のDOM／選択照会の遅延、Document設定start→Palette.bindの順、同じcontrolsによる全設定group、PropertiesとDocument設定から同じPaletteへの接続、取消・captured ownerと最新scopeの使用中色、置換された既定値と現在倍率、履歴→UI→drawを検証する。新単体の構文一覧への追加を最終確認し、構文・単体を再実行した。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverを非表示で先に起動し、runner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-appearance-ui-{focused,check-final,unit-final,related}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop 25f9124（前実装c595f3b）、開始時の週枠残量78%／検証後77%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は残るPropertySelection・PropertyEditingFeature・PropertiesController・PropertiesDisplayの生成と接続を分析する。geometry／appearance／element／multiple編集のapp内利用はControllerと共有AppearanceUIに集中し、appearanceEditingはAnnotationの編集にも公開される。対象・可視性照会は早いappのhoisted入口からも呼ばれるため、生成順と操作時readを維持する。Panelとして共有選択・編集・表示の結線を閉じられるか、既存のread owner／command APIを使って検討する。外部に必要なappearanceEditing・可視性操作・対象照会・表示更新を明確にし、共有AppearanceUIやDocument既定値をPanel内部で再生成しない。巨大contextやController引数の横流しだけなら境界を見直す。
+
 ### 注記コピーの表示値変換
 
 ClipboardTransferへdetachedAnnotationの実処理を統合し、appは必要な表示照会と現在倍率を渡して同じ関数をClipboardPayloadへ接続する。元のserialize→layout／metrics→anchorPosition→Leader形状／anchor複製→倍率計算の順を維持する。参照を外す判断とmetadata除去はPayload、貼付け移動・再接続はTransfer、表示位置の解決は既存Renderer／Anchor queryが所有する。新file・state・汎用contextを増やさず、Transfer生成は読取り無処理であることと、全portの初期化済みを確認してPayloadより前へ移した。app.jsは3,386→3,375行（11行減）、今回の再開から3,652→3,375行（277行減）。
