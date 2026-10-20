@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新の寸法drag生成単位
+### 最新の寸法表示生成単位
+
+前単位は391d78aをdevelopのe298a50へ統合・Push済み。今回はcodex/dimension-displayで継続した。開始時は週枠使用13%／残量87%で停止条件には達していない。
+
+DimensionDisplayへMetrics／Placement／Layout／Renderer／Painterの生成・接続を集約した。入力・drag・hit・Annotation・テスト支援にも同じmetrics／placement／layoutsを公開し、独自の計算やcacheを増やさない。layoutの省略外観fallback、Painterの解決済み外観受渡し、現在scopeの接続線、Canvas theme／式マークprobe、zoomとlabel配置を維持する。Input Controllerと表示traversalは既存の初期化位置に残す。app.jsは3,452→3,443行（9行減）、今回の再開から3,652→3,443行（209行減）。
+
+構文570ファイル・単体1,635件・関連E2E152件（2.2分）・性能file全12件（48.6秒）が成功（全runner exit 0）。関連はunified-ui／multiple-dimensions／dimension-prefix／phase0-characterization／png-export／annotation-display-sizeで、file URL起動、既存画面比較、寸法表示・移動・編集、PNG・表示倍率・保存再読込を確認した。パンは151msで元の175ms未満の基準内。追加単体3件は生成時のCanvas／scope／外観の遅延、現在scopeの接続線とPoint同一性、最新Document既定外観と明示外観の受渡し、モデル無変更、実Painterの直線／角度描画とscope・zoom変更、式マークprobe・theme flags、編集時label非表示とCanvas save／restoreを確認する。このコードで全E2Eは未実行であり、最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-dimension-display-{check,unit,related,performance}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量86%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は同じDimensionDisplayからDimensionPresentationのSelection bounds／Layerを生成・接続する境界を分析する。寸法labelは先に生成され、Layerは後段のdrag／export／hover／pendingを操作時に読む。初期化順・dimensionPresentationScopeの実体とsort・一回の外観解決・選択境界／描画の同じmetrics／placement／Painterを保ち、別の描画stateや早期読取りを増やさない。入力Controllerの確定処理やモデル編集を表示側へ混ぜない。
+
+### 前単位の寸法drag生成単位
 
 前単位は374ed80をdevelopのd4b6365へ統合・Push済み。今回はcodex/dimension-drag-compositionで継続中。週枠使用13%／残量87%で停止条件には達していない。
 
