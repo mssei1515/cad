@@ -1278,40 +1278,7 @@
 
   function syncOffsetChainSelection() { return canvasSelection.applyOffsetSelection(offsetSelection); }
 
-  function resetModelState() {
-    sketchMoveCommand?.reset();
-    activateEditingScope(documentModel);
-    flushScheduledCanvasPointerMove({ discard: true });
-    mode = "select";
-    lastAuthoringPerformance = null;
-    window.DocumentState.clearContent(documentModel);
-    referenceImageRenderer.clear();
-    invalidateBlockProjectionCache();
-    sketchSolving.clearAll();
-    referenceConstraintState.clear();
-    constraintAnalysis.invalidate();
-    clearSelection();
-    geometryDrag.reset();
-    dimensionDrag.reset();
-    referenceImageInteraction.reset();
-    canvasNavigation.reset();
-    blankCanvasGesture.clearSuppression();
-    drawOperationLifecycle.resetForDocument();
-    pendingCommandSession.clear();
-    constraintTargetSession.reset();
-    constructionCommand.restore(false);
-    documentCanvasReset.reset();
-    geometryIds.reset();
-    documentIds.reset();
-    blockPlacementCommand.reset();
-    blockEditor.reset();
-    window.DocumentState.resetDefaults(documentModel);
-    hatchCommand.reset();
-    hatchGeometryQuery.clear();
-    sketchTreeView.reset();
-    annotationDrag.reset();
-    referenceImageInteraction.reset();
-  }
+  function resetModelState() { return documentEditingReset.reset(); }
 
 
   function reserveGeometryElementSequences(source) {
@@ -3414,6 +3381,15 @@
     ...window.CommandPanel.createRouting({ readMode: () => mode, isAnnotationActive: () => annotationCommand.active,
       derivedPanel, hatchPanel, annotationPanel, pngExportCommand,
     }),
+  });
+
+  const documentEditingReset = window.DocumentEditingReset.create({
+    documentModel, sketchMoveCommand, activateEditingScope, flushPointerMoves: flushScheduledCanvasPointerMove,
+    selectMode: () => { mode = "select"; }, clearAuthoringPerformance: () => { lastAuthoringPerformance = null; },
+    referenceImageRenderer, invalidateBlockProjectionCache, sketchSolving, referenceConstraintState, constraintAnalysis,
+    clearSelection, geometryDrag, dimensionDrag, referenceImageInteraction, canvasNavigation, blankCanvasGesture,
+    drawOperationLifecycle, pendingCommandSession, constraintTargetSession, constructionCommand, documentCanvasReset,
+    geometryIds, documentIds, blockPlacementCommand, blockEditor, hatchCommand, hatchGeometryQuery, sketchTreeView, annotationDrag,
   });
 
   installTestHooks();
