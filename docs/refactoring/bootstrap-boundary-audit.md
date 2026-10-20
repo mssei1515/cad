@@ -8,7 +8,54 @@
 
 ## 監査後の反映
 
-最後の性能traceは生成ownerのConstraintCommitCommandへ統合し、Document reset／test supportへclear／readを直接接続した。続いて注記コピーの表示値変換を既存ClipboardTransferへ統合した。共有外観UIのControls／Paletteと起動時Document設定の組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線も既存PropertiesDisplayへ集約した。Canvas context menuの操作componentの結線はCanvasContextInteractionへ集約した。拘束・寸法開始準備はDrawOperationLifecycle、角度間隔寸法の開始はDimensionPlacementCommandへ統合した。Geometry削除時の操作終了手順もGeometryDeletionCommandへ統合した。拘束の共有装飾とSnapshot用metadataはConstraintPersistenceへ統合した。Annotation Parameter候補の読取り検証はParameterNamespaceへ統合した。Canvas描画診断五部品の組立ても既存CanvasRenderTestDriverへ集約した。Canvas pressの選択事前判断はCanvasSelectionInteractionのidentity選択へ統合した。Canvas表示基盤の六部品の構築はCanvasDisplayへ二段階で集約した。command panel／PNGと通常pointerの振分けはCanvasInputBindingへ統合した。五つのcommand inputの生成結線はCanvasCommandInputsへ集約した。press／hoverのhit結線と注記interaction hit判定はCanvasHitInteractionへ集約した。特殊寸法編集と対象選択の支援は既存DimensionValueCommandへ統合した。PointUsageをGeometryPresentationへ共有し、同factoryのroot binding参照を33→27へ削減した（app行数差0）。command targets／Sketch styleも共有し、同factoryのroot binding参照を27→23へ削減し、未使用の委譲二入口を除いた。GeometryDisplayへ四つの描画構築と点／編集ハンドルの接続を集約した。24個の明示portから各子へ限定APIを接続し、新stateや全app contextを持たない。CanvasDisplay.createRenderingへ共通content／PNG出力／対話描画器の接続も集約し、Surfaceの実行・状態復元と既存rendererの責務は維持した。同期済みscopeとSolver切替手順はEditingScopeBindingへ移管し、Block host復元中のWorkspaceとの参照差も維持した。通常矩形選択のguard・内部選択解除・query結果反映はCanvasSelectionInteractionへ統合した。Instance参照元の矩形入力の候補取得・command選択はInstanceCommandInputへ統合した。三つの固定拘束照会は既存ConstraintReferencesへ統合した。拘束の所属付与とモデル挿入はConstraintCommitCommandへ統合した。operandのSketch関係照会は既存SketchContextへ統合し、表示用のID補完と返却値の違いは維持した。app.jsのletは八つ、行数は3,088行。初回監査の集計・state表はf37edc6を保持し、最新集計は次の63c886c再監査節、以後の変更・検証・次の単位は再開手順section 8を参照する。
+最後の性能traceは生成ownerのConstraintCommitCommandへ統合し、Document reset／test supportへclear／readを直接接続した。続いて注記コピーの表示値変換を既存ClipboardTransferへ統合した。共有外観UIのControls／Paletteと起動時Document設定の組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線も既存PropertiesDisplayへ集約した。Canvas context menuの操作componentの結線はCanvasContextInteractionへ集約した。拘束・寸法開始準備はDrawOperationLifecycle、角度間隔寸法の開始はDimensionPlacementCommandへ統合した。Geometry削除時の操作終了手順もGeometryDeletionCommandへ統合した。拘束の共有装飾とSnapshot用metadataはConstraintPersistenceへ統合した。Annotation Parameter候補の読取り検証はParameterNamespaceへ統合した。Canvas描画診断五部品の組立ても既存CanvasRenderTestDriverへ集約した。Canvas pressの選択事前判断はCanvasSelectionInteractionのidentity選択へ統合した。Canvas表示基盤の六部品の構築はCanvasDisplayへ二段階で集約した。command panel／PNGと通常pointerの振分けはCanvasInputBindingへ統合した。五つのcommand inputの生成結線はCanvasCommandInputsへ集約した。press／hoverのhit結線と注記interaction hit判定はCanvasHitInteractionへ集約した。特殊寸法編集と対象選択の支援は既存DimensionValueCommandへ統合した。PointUsageをGeometryPresentationへ共有し、同factoryのroot binding参照を33→27へ削減した（app行数差0）。command targets／Sketch styleも共有し、同factoryのroot binding参照を27→23へ削減し、未使用の委譲二入口を除いた。GeometryDisplayへ四つの描画構築と点／編集ハンドルの接続を集約した。24個の明示portから各子へ限定APIを接続し、新stateや全app contextを持たない。CanvasDisplay.createRenderingへ共通content／PNG出力／対話描画器の接続も集約し、Surfaceの実行・状態復元と既存rendererの責務は維持した。同期済みscopeとSolver切替手順はEditingScopeBindingへ移管し、Block host復元中のWorkspaceとの参照差も維持した。通常矩形選択のguard・内部選択解除・query結果反映はCanvasSelectionInteractionへ統合した。Instance参照元の矩形入力の候補取得・command選択はInstanceCommandInputへ統合した。三つの固定拘束照会は既存ConstraintReferencesへ統合した。拘束の所属付与とモデル挿入はConstraintCommitCommandへ統合した。operandのSketch関係照会は既存SketchContextへ統合し、表示用のID補完と返却値の違いは維持した。app.jsのletは八つ、行数は3,088行。初回監査の集計・state表はf37edc6を保持し、最新集計は次の46dd77d再監査節、以後の変更・検証・次の単位は再開手順section 8を参照する。
+
+## 最新再監査（2026-10-20、46dd77d）
+
+基準はdevelop `46dd77dd48b54b0f067534416b42a7e2dbc27190`、app.js blob `96a26cd59c4dd23357bf1469f02f6f6cd3f4c88a`。今回は文書のみで、app.jsは3,088→3,088行（0行差）。旧63c886cを同じBabel解析・分類条件で再集計し、旧表を再現した。
+
+| 分類 | 63c886c | 46dd77d | 差 |
+| --- | ---: | ---: | ---: |
+| create系構築（非空白） | 1,376 | 1,354 | -22 |
+| test hooks（非空白） | 478 | 478 | 0 |
+| call一文の関数（非空白） | 264 | 248 | -16 |
+| その他（非空白） | 547 | 515 | -32 |
+| 非空白合計 | 2,665 | 2,595 | -70 |
+| 空白 | 497 | 493 | -4 |
+| 物理行 | 3,162 | 3,088 | -74 |
+
+root構築文214→216、root関数226→213、一文call関数179→171、その他の非test関数46→41（227→196物理行）。構築Object直下のcallback422→421、複文callback38→33、root let9→8。mode代入20箇所、pointer代入4箇所、六つの後段接続各1代入は維持。後段constへの参照121→123回は全て関数内の遅延参照だが、constructorによる即時呼出しの有無は個別確認が必要。
+
+定義元folder別の構築文／非空白行はcommands 41／326、editing 53／283、application 30／282、ui 36／212、その他56／251、合計216／1,354。memberのcreate系を数える旧条件を維持した。ownerを名前付きで保持してからAPIをdestructureするとalias行が構築からその他へ移る場合がある。分類上の減少と実際の削減を混同しない。
+
+hooksと一文callを仮に全て外しても `2595 - 478 - 248 = 1869` 非空白行が残る。小関数の分離だけでは数百行へ収束しない。次は共有ownerを使った機能単位の構築境界を扱う。
+
+### 次の候補と実装案（未実装）
+
+| 構築群 | factory数 | 物理行 | 異なるroot binding参照 | 判断 |
+| --- | ---: | ---: | ---: | --- |
+| Sketch Tree Objects／View／Controller | 3 | 47 | 76 | 契約とlistener／後段menu接続を先に整理 |
+| PropertySelection／PropertyEditingFeature／AppearanceUI／PropertiesDisplay | 4 | 38 | 90 | 既存ownerの照会・操作契約を先に整理 |
+| Geometryのregion／dimension／instance／基本hit | 4 | 19 | 40 | 同じ照会群として構築候補 |
+| scope policy＋上記4種＋operand hit | 6 | 30 | 62 | 二段階生成を維持できる場合の次の実装候補 |
+
+参照数はcallbackと群内の生成物を含む静的和集合で、独立した外部引数数ではない。最後の群のObject直下のproperty総数69も共有・重複を含む。62引数の新factoryへ包む案ではない。
+
+既存 `src/application/canvas_hit_interaction.js` にscene照会の構築入口を追加する案を次に検証する。現行createのpress／hover結線と注記interaction判定は維持し、幾何判定・cache・scope規則はGeometryHitQuery／OperandHitQueryに残す。
+
+1. 現在のscope policy構築位置（app 1,044行目）でpolicyだけを生成し、policyと後段createQueriesを返す。
+2. 現在のregion構築位置（1,399行目）でregion→dimension→instance→基本hit→operand hitを生成する。基本hit終了と現operand生成の間には11個の関数宣言しかなく、実行statementはない。
+3. 既存SketchContextを一度だけ名前付きで保持し、他の共有ownerと渡す。利用名と必要なhoisted wrapper、呼出し時のreaderを維持する。
+
+検討中の限定依存は25個：currentScope、dimensionScope、viewport、pointUsage、sketchContext、geometryAppearance、geometryReads、catalog、projections、hatches、dimensions、effectiveDimensionAppearance、dimensionLabelForConstraint、dimensionUsesExpression、annotationBounds、hitAnnotationElement、hatchAppearanceForDisplay、targetFromConstraint、drawingOrderOwner、referenceImageWorldToLocal、pointInExpandedBox、readMode、readPendingCommand、readConstraintCommand、operandValues。名称は実装前に現物へ合わせる。全app contextや新たな可変state／scope容器は渡さない。
+
+Workspace currentとdimensionPresentationScopeは同一視しない。GeometryAppearance／DimensionDisplayのwrapperと子query間の呼出しはowner receiverを維持する。後段宣言は遅延callbackのままにし、可変長引数、undefined／null／options、毎回のscope／scale評価と例外伝播を維持する。共有ownerの再生成、modelの複製、新cache、選択規則の変更は行わない。
+
+5種のGeometryHitQuery factoryは関数宣言と凍結API返却のみ、OperandHitQuery.createは引数のdestructureと関数宣言・凍結API返却のみで、生成時にquery／model読取りやlistener登録を行わないことをsourceとASTで確認した。実装時には二段階生成の無副作用、変更可能なscope／mode／viewport、参照同一性とreceiver、初期化順と例外を単体で確認する。構文・全単体と、選択、Sketch権限、投影／Instance、拘束operand、注記／寸法／Hatch／画像、保存再読込の関連E2Eを実行する。main前には最新全E2Eが必要。
+
+### 今回の検証と未完了事項
+
+分類合計・空白／物理行の一致、旧基準の再現、factory bodyのAST、製品source差分なしを確認した。診断の初回AST呼出しはfilename引数不足で失敗し、補って成功した。製品コードへの修正はない。今回は文書のみのため製品テストは再実行しない。直前実装の構文588・単体1,751・関連E2E187成功を今回の全体検証とは扱わない。mainは5ee5f3fのまま保留し、全体目標も未完了。
 
 ## 再監査（2026-10-20、63c886c）
 

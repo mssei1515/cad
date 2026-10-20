@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の構築境界再監査
+
+develop 46dd77dを同条件で再監査した。app.jsは3,088→3,088行（0行差）、非空白2,595行中の構築は1,354行。次は既存CanvasHitInteractionでscope policyとscene／operand照会を二段階に組み立てる境界を検討する。25限定依存案・生成順・receiver／scope維持・候補比較は[監査記録](bootstrap-boundary-audit.md)を参照。今回は文書のみで実装案は未実装。製品テストの再実行はなく、最新全E2Eは未実行、main保留・目標未完了。
+
 ### 最新のoperand Sketch関係照会単位
 
 operandRelationForSketchを既存SketchContextへ集約し、表示用sketchRelationToActiveも同じ判定を利用する。operandの未指定ID／該当なしはnull、表示用のfalsy ID補完とinactiveへの変換は分けて維持した。新しい依存port・state・cache・file・scriptはない。appの既存destructure 158行目で取得し、利用494／1,481行目に前方参照がないことをBabelで確認した。hoisted wrapper・新たな未使用root bindingなし。app.jsは3,094→3,088行（6行減）、今回再開時3,652行から564行減。
