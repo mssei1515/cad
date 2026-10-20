@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のInstance入力照会共有単位
+
+CanvasCommandInputsで既存scene queryを共有し、投影／参照とHatch照会を同じownerから接続した。未使用のmakeConstraintOperand受渡しとrootのHatch委譲・投影aliasを除去し、必要なoperandElementは限定portのまま維持する。canonical構築引数59→55、root参照58→54、app.jsは3,064→3,063行（1行減）。正式仕様・実装mapを更新した。検証と次のCanvas構築境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新の基本作図入力API共有単位
 
 CanvasCommandInputsへ既存BasicDrawingTools.inputを共有し、六つのroot関数aliasを除去した。canonical構築引数は64→59、引数内のroot参照は63→58。共有APIと従来の個別callback指定の両方を維持し、snap・モデル・Selectionや生成順は元ownerのまま。app.jsは3,066→3,064行（2行減）。正式仕様・実装mapを更新し、検証と次のowner共有候補は[再開手順](refactoring-policy-and-resume.md)へ記録する。main保留・全体目標未完了。

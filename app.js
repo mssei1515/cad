@@ -1010,7 +1010,6 @@
     return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
   }
 
-  function hitHatchAt(...args) { return regionHitQuery.hitHatchAt(...args); }
   function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
   const referenceImageInteraction = window.ReferenceImageInteraction.create({
@@ -1461,7 +1460,7 @@
 
 
 
-  const { hitConstraintOperand: queryConstraintOperand, hitDerivedProjectionOperand, hitBlockProjectionOperand, hitReferenceTarget } = sceneHitQueries.operands;
+  const { hitConstraintOperand: queryConstraintOperand, hitReferenceTarget } = sceneHitQueries.operands;
 
   function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
     if (!target) return NaN;
@@ -2366,8 +2365,8 @@
     document, canvas, canvasSelection, clearSelection, canvasHover, draw, updateUI, updateGeometrySelectionUI, setHint, applicationText,
     annotationCommand, annotationDrag, startAnnotationAnchorConstraint, selectedDimensionLineGroup, isDimensionConstraintCommandActive, beginDimensionDrag,
     retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint, handleConstraintOperandClick,
-    instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand, hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource,
-    clearSnap, selectionRectangle, hitHatchAt, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing, makeConstraintOperand,
+    instanceSourceCommand, geometryInstanceCommand, sceneQueries: sceneHitQueries, operandElement, toggleSketchProjectionSource,
+    clearSnap, selectionRectangle, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing,
     transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, basicDrawingInput: basicDrawingTools.input, handleCenterlineClick, handleCircleCenterCrossClick,
     handleFilletClick, handleSplineClick, executeTrimAt, offsetCommand,
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag,

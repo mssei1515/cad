@@ -105,6 +105,48 @@ test('legacy primitive ports still route every mode and shared input errors keep
   assert.equal(shared.state.points.length, 0); assert.deepEqual(shared.calls, []);
 });
 
+function sharedQueries() {
+  const calls = [], state = { ready: false, derived: null, block: null, reference: null, hatch: null, error: null };
+  const read = (name, ...args) => { assert.equal(state.ready, true); calls.push([name, ...args]); if (state.error && (!state.errorAt || state.errorAt === name)) throw state.error; };
+  const operands = Object.fromEntries(['derived', 'block', 'reference'].map(name => [
+    { derived: 'hitDerivedProjectionOperand', block: 'hitBlockProjectionOperand', reference: 'hitReferenceTarget' }[name],
+    function(x, y) { 'use strict'; assert.equal(this, undefined); read(name, x, y); return state[name]; },
+  ]));
+  const regions = { hitHatchAt(x, y, options) { assert.equal(this, regions); read('hatch', x, y, options); return state.hatch; } };
+  const source = { instance: { type: 'pattern' }, toggle: item => calls.push(['toggle', item]) }, sceneQueries = { operands, regions };
+  const legacy = Object.fromEntries(['hitReferenceTarget', 'hitDerivedProjectionOperand', 'hitBlockProjectionOperand', 'hitHatchAt'].map(name => [name, () => { throw Error('legacy query used'); }]));
+  const f = fixture({ sceneQueries, instanceSourceCommand: source, ...legacy,
+    operandElement: operand => { read('element', operand); return operand.item; }, toggleSketchProjectionSource: target => calls.push(['projection', target]) });
+  assert.deepEqual(calls, []); state.ready = true; f.state.mode = 'instance-sources';
+  return { ...f, queries: { calls, state, regions, sceneQueries, source }, queryNames: () => calls.map(call => call[0]) };
+}
+
+test('shared scene input preserves projected operand priority, source identity and live reference modes', () => {
+  const f = sharedQueries(), { state, calls, source } = f.queries, first = { id: 'same' }, second = { id: 'same' };
+  state.derived = { item: first }; state.block = { item: second };
+  assert.equal(f.api.instance.click(f.event, f.p, {}), true); assert.deepEqual(f.queryNames(), ['derived', 'element', 'toggle']); assert.equal(calls.at(-1)[1], first);
+  calls.length = 0; state.derived = null; f.api.instance.click(f.event, f.p, {});
+  assert.deepEqual(f.queryNames(), ['derived', 'block', 'element', 'toggle']); assert.equal(calls.at(-1)[1], second);
+  calls.length = 0; const target = { item: first }; state.reference = target; source.instance.type = 'sketchProjection';
+  f.api.instance.click(f.event, f.p, {}); assert.deepEqual(f.queryNames(), ['reference', 'element', 'toggle']); assert.equal(calls.at(-1)[1], first);
+  calls.length = 0; f.state.mode = 'sketch-projection'; f.api.instance.click(f.event, f.p, {});
+  assert.deepEqual(f.queryNames(), ['reference', 'projection']); assert.equal(calls.at(-1)[1], target);
+  calls.length = 0; f.state.mode = 'pattern-placement-linear'; f.command.activeInput = 'sources';
+  f.api.instance.click(f.event, f.p, {}); assert.deepEqual(f.queryNames(), ['derived', 'block', 'element']); assert.equal(f.calls.at(-1)[1], second);
+});
+
+test('shared Hatch input retains its owner, per-call inactive option and exceptions without copying selection or geometry', () => {
+  const f = sharedQueries(), { state, calls, sceneQueries } = f.queries;
+  state.hatch = { id: 'H' }; f.api.instance.click(f.event, f.p, {});
+  assert.deepEqual(f.queryNames(), ['derived', 'block', 'hatch', 'toggle']); assert.equal(calls[2][1], f.p.x); assert.equal(calls[2][2], f.p.y); assert.equal(calls[2][3].activeOnly, false); assert.equal(calls[3][1], state.hatch);
+  sceneQueries.regions = { hitHatchAt() { throw Error('original region owner must be retained'); } };
+  const next = { id: 'H' }; state.hatch = next; calls.length = 0;
+  f.api.instance.click(f.event, { x: 21, y: 34 }, {}); assert.equal(calls[2][1], 21); assert.equal(calls[2][2], 34); assert.equal(calls.at(-1)[1], next);
+  calls.length = 0; state.error = new Error('hit failed'); state.errorAt = 'hatch';
+  assert.throws(() => f.api.instance.click(f.event, f.p, {}), error => error === state.error);
+  assert.equal(calls.at(-1)[0], 'hatch'); assert.equal(f.state.points.length, 0); assert.equal(f.selection.points.length, 0);
+});
+
 test('constraint and selection adapters keep shared selection identity, group drag refusal and live pending input', () => {
   const f = fixture(), line = {}, constraint = {}, hit = { constraint }; f.selection.set('lines', [line]); f.state.group = {};
   assert.equal(f.api.constraint.click(f.event, f.p, { hitD: hit }), true);
