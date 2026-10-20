@@ -116,12 +116,16 @@
       return !["create", "constraint", "structure"].includes(operation) || id === activeSketchId();
     }
 
+    function operandRelationForSketch(sketchId) {
+      if (sketchId === activeSketchId()) return "active";
+      if (descendantSketchIds(activeSketchId()).includes(sketchId)) return "descendant";
+      if (isReferenceSourceSketchId(sketchId)) return "reference";
+      return null;
+    }
+
     function sketchRelationToActive(sketchId) {
       const id = sketchId || activeSketchId();
-      if (id === activeSketchId()) return "active";
-      if (descendantSketchIds(activeSketchId()).includes(id)) return "descendant";
-      if (isReferenceSourceSketchId(id)) return "reference";
-      return "inactive";
+      return operandRelationForSketch(id) || "inactive";
     }
 
     function constraintSketchId(constraint) {
@@ -173,7 +177,7 @@
       ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds,
       activeSketch, activeSketchId, assignSketchId,
       elementSketchId, membershipQuery, sameSketchElements, isEditableSketchId, canEditSketch,
-      sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
+      sketchRelationToActive, operandRelationForSketch, constraintSketchId, isActiveSketchConstraint,
       constraintTargetsAreActive, constraintReferencesSketch, wouldCreateSketchCycle,
       sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
       sketchRelationOfElement,

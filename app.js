@@ -162,7 +162,7 @@
     ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds,
     activeSketch, activeSketchId, assignSketchId,
     elementSketchId, membershipQuery: readSketchMembership, sameSketchElements, isEditableSketchId, canEditSketch,
-    sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
+    sketchRelationToActive, operandRelationForSketch, constraintSketchId, isActiveSketchConstraint,
     constraintTargetsAreActive, constraintReferencesSketch, wouldCreateSketchCycle,
     sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
     sketchRelationOfElement,
@@ -1055,12 +1055,6 @@
   function isVisibleSketchElement(...args) { return geometryAppearance.isVisibleSketchElement(...args); }
 
 
-  function operandRelationForSketch(sketchId) {
-    if (sketchId === activeSketchId()) return "active";
-    if (descendantSketchIds(activeSketchId()).includes(sketchId)) return "descendant";
-    if (isReferenceSourceSketchId(sketchId)) return "reference";
-    return null;
-  }
 
   function isConstraintOperandSelected(...args) { return commandTargetPresentation.isConstraintOperandSelected(...args); }
 

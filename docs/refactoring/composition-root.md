@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のoperand Sketch関係照会単位
+
+operandRelationForSketchを既存SketchContextへ集約し、表示用sketchRelationToActiveも同じ判定を利用する。operandの未指定ID／該当なしはnull、表示用のfalsy ID補完とinactiveへの変換は分けて維持した。新しい依存port・state・cache・file・scriptはない。appの既存destructure 158行目で取得し、利用494／1,481行目に前方参照がないことをBabelで確認した。hoisted wrapper・新たな未使用root bindingなし。app.jsは3,094→3,088行（6行減）、今回再開時3,652行から564行減。
+
+最終コードで構文588ファイル・単体1,751件・関連E2E187件（3.3分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／sketch-permissions／sketch-projection／free-instance／command-panel／adversarial-authoring-performanceで、file URL起動、通常／参照拘束のoperand・Sketch権限／Root・投影とInstance、既存画面比較・履歴・保存再読込を確認した。パンは152msで元の175ms未満の基準内。追加単体2件は未指定／無関係／Rootとactive・ancestor・descendantの返値差、lock／visibilityと別の階層照会、生成時遅延、同IDのDocument／Block切替と階層差替え、scope例外の伝播を確認する。既存6件と合わせたSketchContext単体8件成功。初回新単体1件は派生fieldのvisibleへ直接代入したfixtureにより失敗し、既存正規化に従いappearance.visibleの設定とensure後のsnapshotへ修正した。製品の正規化・期待する関係値は変更していない。変更前のroot operand関数とSketchContextを別VMへ読み、4種類のscope×11種類のID×2入口の一時診断88ケースで返値・scope読取り回数・正規化後状態が完全一致した。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-operand-relation-{check,unit,related}.log。
+
+基準はdevelop 955f82b（前実装3f6a736）。開始時週枠残量98%／検証後97%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は今回までに揃えたowner APIを基にroot構築依存を再監査する。残る小関数の移動だけで数百行へ届くとは見積もらず、現在のfactory群・canonical ownerの再利用・初期化段階・後段callbackを実物から集計し、よりまとまった機能組立てを選ぶ。旧63c886cの集計は同条件の比較基準として保持し、巨大app contextや既存状態の再生成で行数を減らさない。次の実装単位は分析結果から決め、全体目標を縮小しない。
+
+
 ### 最新の拘束所属付与／挿入単位
 
 既存ConstraintCommitCommand.createInsertionへassignConstraintSketchId／pushModelConstraintの所属選択・metadata付与・同期済みscopeへの同一Object追加・現在Parameter namespaceでのparameter確保を集約した。六つの限定依存とassignSketch／pushの二APIで、求解・重複判定・復元・UI／履歴とParameter計算は元ownerへ残す。同期済みscopeとWorkspace namespaceの読取りを別依存のまま保持し、default引数とfallbackの評価時機・nullの受渡し・戻り値・例外時の部分更新を維持する。新file・state・cache・scriptはない。app 216行目で構築し、所属付与の最初の参照2,226行目／pushの721行目に前方参照がないことをBabelで確認した。hoisted wrapper・新たな未使用root bindingなし。app.jsは3,101→3,094行（7行減）、今回再開時3,652行から558行減。
