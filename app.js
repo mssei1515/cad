@@ -562,15 +562,16 @@
     syncDimensionValueInput: () => syncDimensionValueInput(), currentCanvasCenterWorld, applicationText, readLanguage: () => applicationSettings.language,
   });
   const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, DIMENSION_ARROW_MITER_LIMIT } = window.DimensionMetrics;
-  const dimensionMetrics = window.DimensionMetrics.create({ ctx, viewport });
+  const dimensionDisplay = window.DimensionDisplay.create({ ctx, viewport, currentLines: () => workspace.current().lines,
+    minLineLength: MIN_LINE_LENGTH, canvasThemeColor, onExpressionMark: canvasRenderProbe.captureExpressionMark,
+    effectiveDimensionAppearance, activeSketchId });
+  const { metrics: dimensionMetrics, placement: dimensionPlacement, layouts: dimensionLayouts, painter: dimensionPainter } = dimensionDisplay;
   const dimensionInputView = window.DimensionInputView.create({
     input: dimensionValueInput, shell: dimensionValueInputShell, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
     syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
   });
   const { dimensionTextDrawingMetrics, dimensionTextWidth, linearDimensionTerminatorDirections, dimensionStrokeWidth, dimensionArrowheadPoints, dimensionOpenArrowJoinProjection, dimensionOpenArrowheadRenderPoints } = dimensionMetrics;
-  const dimensionPlacement = window.DimensionPlacement.create({ viewport });
   const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
-  const dimensionLayouts = window.DimensionLayout.create({ viewport, placement: dimensionPlacement, metrics: dimensionMetrics, currentLines: () => workspace.current().lines, minLineLength: MIN_LINE_LENGTH });
   const { jisDimensionTextAngle, dimensionTextOffset, angleDimensionLayout } = dimensionLayouts;
   const dimensionInputController = window.DimensionInputController.create({
     displayFactor: appearance => window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
@@ -581,17 +582,7 @@
     submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
   });
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput, updateBufferLabel: updateDistanceBufferLabel } = dimensionInputController;
-  function dimensionLayout(target, dimension, appearance = effectiveDimensionAppearance(dimension)) {
-    return dimensionLayouts.dimensionLayout(target, dimension, appearance);
-  }
-  const dimensionRenderer = window.DimensionRenderer.create({
-    ctx, viewport, metrics: dimensionMetrics, canvasThemeColor,
-    onExpressionMark: canvasRenderProbe.captureExpressionMark,
-  });
-  const dimensionPainter = window.DimensionPresentation.createPainter({
-    renderer: dimensionRenderer, layouts: dimensionLayouts, metrics: dimensionMetrics, dimensionLayout,
-    effectiveDimensionAppearance, activeSketchId, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
-  });
+  function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const commandTargetPresentation = window.GeometryPresentation.createCommandTargets({
     readPanelSelection: () => canvasRefresh.selectedItem, readMode: () => mode, instanceSourceCommand, sketchProjectionCommand,
     geometryInstanceCommand, geometryRefsEqual, geometryRefForItem, readOperands: () => constraintTargetSession.operands, sameArcEndpoint, operandElement,

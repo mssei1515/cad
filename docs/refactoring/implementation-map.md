@@ -258,11 +258,11 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 ### 寸法のCanvas描画
 
-`DimensionRenderer`は直線／角度寸法のCanvas命令とラベル・編集枠・終端記号・数式マークを所有する。`DimensionMetrics`は共有instanceとして接続する。appの描画adapterは外観・layout・描画計画を準備して渡し、rendererにSketchや拘束対象の検索をさせない。寸法配置と移動／編集操作は後続の整理対象。
+`DimensionRenderer`は直線／角度寸法のCanvas命令とラベル・編集枠・終端記号・数式マークを所有する。`DimensionMetrics`は共有instanceとして接続する。DimensionDisplayが共有する計測・配置・描画器を生成し、DimensionPresentationのPainterが外観・layout・描画計画を準備して渡す。rendererにSketchや拘束対象の検索をさせない。寸法配置と移動／編集操作は後続の整理対象。
 
 ### 寸法配置とlayout
 
-`DimensionPlacement`（`src/rendering/dimension_placement.js`）は方向・anchor・相対配置・ラベル位置を担当し、Documentを参照しない。`DimensionLayout`（`src/rendering/dimension_layout.js`）は補助線・hit領域・文字方向・描画計画を担当し、現在scopeの線一覧だけをread portで取得する。appには外観継承を解決するadapterと描画先への接続を残す。既存の角度ラベル補完による寸法更新は明示して維持し、操作側への移行時も更新順序を保つ。
+`DimensionPlacement`（`src/rendering/dimension_placement.js`）は方向・anchor・相対配置・ラベル位置を担当し、Documentを参照しない。`DimensionLayout`（`src/rendering/dimension_layout.js`）は補助線・hit領域・文字方向・描画計画を担当し、現在scopeの線一覧だけをread portで取得する。DimensionDisplayが省略時の外観解決と描画先への接続を所有する。既存の角度ラベル補完による寸法更新は明示して維持し、操作側への移行時も更新順序を保つ。
 
 ### 長穴command
 
@@ -881,7 +881,7 @@ GeometryPresentation.createLineDisplayはviewport／実効外観／画面単位�
 InteractionOverlayRenderer.drawSelectionRectはSelectionRectangleが返すpreviewだけを受取り、crossing／enclosingの色・倍率に応じた線幅／破線・fill→strokeを描画する。preview不在の短絡と既存withCanvasStateによるCanvas状態の隔離を維持する。session進行・矩形範囲の生成／採否・Selection変更・pointer lifecycleは既存SelectionRectangleへ残し、rendererはsessionを参照／変更しない。
 
 
-DimensionPresentation.createPainterは既存Layout／Metrics／Rendererと外観・現在Sketch・dimensionLayout入口・shaft係数の7portを接続し、直線／角度寸法の表示planを構成する。target／dimensionとlayoutの短絡、外観既定値の入口と評価順、RenderPlan／円弧延長／角度span・外側terminatorとshaftの変換・radius下限、既存rendererへ渡す参照／flags／呼出順を維持する。配置／計測の独自実装・モデルやsessionの変更は持たず、appは生成接続と既存callback用のhoisted描画入口を持つ。
+DimensionPresentation.createPainterは既存Layout／Metrics／Rendererと外観・現在Sketch・dimensionLayout入口・shaft係数の7portを接続し、直線／角度寸法の表示planを構成する。target／dimensionとlayoutの短絡、外観既定値の入口と評価順、RenderPlan／円弧延長／角度span・外側terminatorとshaftの変換・radius下限、既存rendererへ渡す参照／flags／呼出順を維持する。配置／計測の独自実装・モデルやsessionの変更は持たず、DimensionDisplayが生成接続し、appは既存callback用のhoisted描画入口を持つ。
 
 
 AuthoringPreviewRenderer.createLayerは現在mode／pointer／trimとLine／Rectangle／Slot／Circular／Spline／Centerlineの既存command一時値、renderer・Centerline投影・Canvas寸法の12portに接続する。modeごとの短絡と現在値／元参照、Line→Centerline→Rectangle→Slot→Circle→Arc→ThreePointArc→Splineの判定／描画順を維持し、trimはBlock／Instance／Offsetの後に別入口で描く。モデル／sessionの更新を持たず、Centerline support不成立時の短絡とpointer不在時の投影省略も維持する。appは描画stageと診断入口を直接接続し、各preview guardと不要な中継関数を除く。
@@ -1126,3 +1126,8 @@ PropertyEditingFeature（src/application/property_editing_feature.js）はGeomet
 ### 寸法ドラッグの生成・接続
 
 DimensionDragFeature（src/application/dimension_drag_feature.js）は同じDimensionPlacementからDimensionLineGroup、選択group照会、角度同期とDimensionDragを生成・接続する。DimensionLineGroup.createは純粋な配置snapshot・移動・整列を保持し、createSelectionは現在scopeへのObject参照による所属、Sketchの編集／可視性、targetの解決と実効寸法外観の可視性を確認してからgroupを返す。選択配列とモデルは照会で変更せず、scope置換や外観変更は呼出しごとに反映する。dragとcontext整列・menu可否・入力振分けは同じ選択group入口を共有する。ドラッグsession、3pxの継続command click判定、display／label offset保持、pointer開始／終了、通知と一回の履歴は既存DimensionDragの順序・範囲を維持する。角度同期は同じDimensionQueriesとreadOnly規則を使い、新しい状態・cache・Solver・保存形式は追加しない。
+
+
+### 寸法表示の生成・接続
+
+DimensionDisplay（src/application/dimension_display.js）は同じctx／viewportでDimensionMetrics、DimensionPlacement、DimensionLayout、DimensionRendererとDimensionPresentationのPainterを生成・接続する。metrics／placement／layoutsは入力・drag・hit・Annotation・テスト支援にも同じObjectを公開し、rendererは内部のPainterへ接続する。layoutは外観が省略された場合だけ既存effectiveDimensionAppearanceへ委譲し、解決済み外観はPainter・Layoutへそのまま渡す。現在のlinesは照会時に取得し、scope置換を反映する。theme補正とCanvasRenderProbeの式マークcallbackは既存入口を共有する。生成時にはCanvas・scope・外観を読まない。既存metricsのcacheは単一ownerに維持し、描画間の外観cache、モデル編集、入力Controllerの所有は追加しない。
