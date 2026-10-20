@@ -213,6 +213,10 @@
   const { solver } = editingScopeBinding;
   function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
+  const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = window.ConstraintCommitCommand.createInsertion({
+    currentScope: () => editingScopeBinding.current, currentParameterNamespace,
+    activeSketchId, isDrawableSketch, firstDrawableSketchId, ensureDimensionParameter,
+  });
   const fileSession = window.DocumentFiles.create();
 
   let mode = "select";
@@ -1049,18 +1053,7 @@
   function isVisibleValue(...args) { return geometryAppearance.isVisibleValue(...args); }
   function isVisibleSketchId(...args) { return geometryAppearance.isVisibleSketchId(...args); }
   function isVisibleSketchElement(...args) { return geometryAppearance.isVisibleSketchElement(...args); }
-  function assignConstraintSketchId(constraint, sketchId = activeSketchId()) {
-    const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
-    if (constraint) constraint.sketchId = targetSketchId || activeSketchId();
-    return constraint;
-  }
 
-  function pushModelConstraint(constraint, sketchId = activeSketchId()) {
-    assignConstraintSketchId(constraint, sketchId);
-    editingScopeBinding.current.constraints.push(constraint);
-    ensureDimensionParameter(constraint, currentParameterNamespace());
-    return constraint;
-  }
 
   function operandRelationForSketch(sketchId) {
     if (sketchId === activeSketchId()) return "active";
