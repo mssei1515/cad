@@ -2338,34 +2338,16 @@
       owningSketchLabel: ownerId ? `${sketchName(ownerId)} (${ownerId})` : null,
       drawingSketchLabel: `${sketchName(activeSketchId())} (${activeSketchId()})` };
   }
-  const geometryPropertyCommand = window.GeometryPropertyCommand.create({
-    currentScope: workspace.current, SplineLineTangentConstraint, SplineSplineTangentConstraint,
-    guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
+  const { geometry: geometryPropertyCommand, appearanceEditing, appearance: appearancePropertyCommand,
+    applyMultiple: applyMultipleProperty, visibility: selectionVisibilityCommand, element: elementPropertyCommand } = window.PropertyEditingFeature.create({
+    currentScope: workspace.current, viewport, guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
     snapshotModelState, restoreModelState, stabilizeActiveParameterNamespace, elementSketchId, recordHistory,
-  });
-  const appearanceEditing = window.AppearanceEditing.create({
-    normalizeAppearance, normalizeAnnotationStyle, normalizeHatchAppearance, normalizeDimensionAppearance,
-    defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE, dimensionNumericRules: DIMENSION_APPEARANCE_NUMERIC_RULES,
+    materializeAnchor: materializeAnnotationAnchor, annotationAppearance,
+    invalidateBlockProjectionCache, updateUI, updatePropertiesUI, draw, propertySelection,
+    isGeometryMode, selectedVisibilityTargets, selectionVisibilityIsHidden, toggleSketchVisibility, guardSelectionEdit,
   });
   const { applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue } = appearanceEditing;
-  const appearancePropertyCommand = window.AppearancePropertyCommand.create({
-    materializeAnchor: materializeAnnotationAnchor,
-    editing: appearanceEditing, viewport, effectiveAnnotationStyle, effectiveLeaderAppearanceForSketch, normalizeHatchAppearance, normalizeAnnotationStyle,
-    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
-  });
   const { owner: appearanceOwnerForPropertiesTarget } = appearancePropertyCommand;
-
-  const { apply: applyMultipleProperty } = window.BulkPropertyCommand.create({
-    appearancePropertyCommand,
-    viewport,
-    guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
-    multiplePropertySupports, applyDimensionAppearanceValue, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
-    invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI,
-  });
-  const selectionVisibilityCommand = window.SelectionVisibilityCommand.create({
-    isGeometryMode, selectedVisibilityTargets, selectionVisibilityIsHidden, toggleSketchVisibility, guardSelectionEdit,
-    applyMultipleProperty, applyAppearance: appearancePropertyCommand.apply, recordHistory, updateUI, draw,
-  });
   const appearanceControls = window.AppearanceControls.create({
     applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance, normalizeDimensionAppearance,
     dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS, defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE,
@@ -2380,7 +2362,6 @@
     normalizeConstructionAppearance, normalizeDimensionAppearance, recordHistory, updateUI, draw,
   });
   const { open: openAppearanceColorPalette, commit: commitColorPaletteValue } = appearancePalette;
-  const elementPropertyCommand = window.ElementPropertyCommand.create({ recordHistory, updateUI, updatePropertiesUI, draw, materializeAnchor: materializeAnnotationAnchor });
   const propertiesController = window.PropertiesController.create({
     HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget, activeSketchId,
     canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
