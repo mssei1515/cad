@@ -3,7 +3,7 @@
   "use strict";
   const MULTIPLE_PROPERTY_MIXED = Symbol("multiple-property-mixed");
   function create({ Point, Line, canvasSelection, getOperation, effectiveSelectedConstraint,
-    selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId, blockProjectionBundle,
+    selectedGeometryItems, blockDefinitionById, sketchById, sketchName, activeSketchId, blockProjectionBundle,
     effectiveAppearanceForElement, documentModel, normalizeAppearance, hatchAppearanceForDisplay,
     normalizeAnnotationStyle, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style), effectiveDimensionAppearance = () => ({}),
     isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance }) {
@@ -81,6 +81,16 @@
       return { kind: "sketch", item: sketchById(activeSketchId()), active: true };
     }
 
+    function selectedDisplayTarget() {
+      const target = selectedPropertiesTarget();
+      const items = target.kind === "multiple" ? target.items.map(entry => entry.item) : [target.item];
+      const locked = items.some(item => sketchById(target.kind === "sketch" ? item?.id : item?.sketchId)?.locked);
+      const ownerId = target.kind === "sketch" ? target.item?.id : items[0]?.sketchId;
+      return { ...target, readOnly: target.readOnly || locked, locked,
+        owningSketchLabel: ownerId ? `${sketchName(ownerId)} (${ownerId})` : null,
+        drawingSketchLabel: `${sketchName(activeSketchId())} (${activeSketchId()})` };
+    }
+
     function multiplePropertyTypeKey(target) {
       if (target.kind === "geometry") return `${target.kind}:${target.item?.constructor?.name || "Geometry"}`;
       if (target.kind === "annotation") return `${target.kind}:${target.item?.type || "annotation"}`;
@@ -137,7 +147,7 @@
       return values.every((value) => Object.is(value, values[0])) ? values[0] : MULTIPLE_PROPERTY_MIXED;
     }
 
-    return Object.freeze({ visibilityTargets, visibilityIsHidden, selectedPropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue });
+    return Object.freeze({ visibilityTargets, visibilityIsHidden, selectedPropertiesTarget, selectedDisplayTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue });
   }
   window.PropertySelection = Object.freeze({ create, mixedValue: MULTIPLE_PROPERTY_MIXED });
 })();

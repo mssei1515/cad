@@ -2323,21 +2323,13 @@
   const propertySelection = window.PropertySelection.create({
     Point, Line, canvasSelection,
     getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
-    effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId,
+    effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, sketchName, activeSketchId,
     blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
     hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveAnnotationStyle, effectiveDimensionAppearance,
     isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance,
   });
-  const { selectedPropertiesTarget: resolvePropertiesTarget, multiplePropertyTypeKey, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
-  function selectedPropertiesTarget() {
-    const target = resolvePropertiesTarget();
-    const items = target.kind === "multiple" ? target.items.map(entry => entry.item) : [target.item];
-    const locked = items.some(item => sketchById(target.kind === "sketch" ? item?.id : item?.sketchId)?.locked);
-    const ownerId = target.kind === "sketch" ? target.item?.id : items[0]?.sketchId;
-    return { ...target, readOnly: target.readOnly || locked, locked,
-      owningSketchLabel: ownerId ? `${sketchName(ownerId)} (${ownerId})` : null,
-      drawingSketchLabel: `${sketchName(activeSketchId())} (${activeSketchId()})` };
-  }
+  const { multiplePropertyTypeKey, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertyValue } = propertySelection;
+  function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
   const { geometry: geometryPropertyCommand, appearanceEditing, appearance: appearancePropertyCommand,
     applyMultiple: applyMultipleProperty, visibility: selectionVisibilityCommand, element: elementPropertyCommand } = window.PropertyEditingFeature.create({
     currentScope: workspace.current, viewport, guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
