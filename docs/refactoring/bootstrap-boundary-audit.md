@@ -12,6 +12,8 @@
 
 ## 最新再監査（2026-10-20、46dd77d）
 
+この監査から選んだscene照会の構築境界は、後続のCanvasHitInteraction.createScene単位で実装した。以下の比較・未実装表記は監査時点の判断を保持する。最新の実装と検証は[再開手順section 8](refactoring-policy-and-resume.md#8-再開地点2026-10-20)を参照する。
+
 基準はdevelop `46dd77dd48b54b0f067534416b42a7e2dbc27190`、app.js blob `96a26cd59c4dd23357bf1469f02f6f6cd3f4c88a`。今回は文書のみで、app.jsは3,088→3,088行（0行差）。旧63c886cを同じBabel解析・分類条件で再集計し、旧表を再現した。
 
 | 分類 | 63c886c | 46dd77d | 差 |

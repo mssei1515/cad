@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のscene hit構築単位
+
+CanvasHitInteraction.createSceneへ、早期scope policyと後段のscene／operand照会構築を集約した。既存ownerと25個の限定依存を使い、判定は既存GeometryHitQuery／OperandHitQueryに残す。異なるscope reader・receiver・遅延参照と生成順を維持し、新state／cache／fileはない。app.jsは3,088→3,072行（16行減）。正式仕様と実装mapを更新し、検証結果と次の再開条件は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新の構築境界再監査
 
 develop 46dd77dを同条件で再監査した。app.jsは3,088→3,088行（0行差）、非空白2,595行中の構築は1,354行。次は既存CanvasHitInteractionでscope policyとscene／operand照会を二段階に組み立てる境界を検討する。25限定依存案・生成順・receiver／scope維持・候補比較は[監査記録](bootstrap-boundary-audit.md)を参照。今回は文書のみで実装案は未実装。製品テストの再実行はなく、最新全E2Eは未実行、main保留・目標未完了。
