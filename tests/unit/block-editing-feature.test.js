@@ -17,8 +17,10 @@ function fixture() {
   const viewport = { snapshot() { assert.equal(this, viewport); assert.equal(state.ready, true);
     events.push('capture-view'); if (state.snapshotError) throw state.snapshotError; return { ...state.viewport }; },
     update(value) { assert.equal(this, viewport); events.push('restore-view'); state.viewport = { ...value }; } };
-  const ids = { peek(kind) { assert.equal(this, ids); assert.equal(state.ready, true); assert.equal(kind, 'hatch'); return state.hatchSeq; },
-    allocate(kind) { assert.equal(this, ids); assert.equal(state.ready, true); assert.equal(kind, 'blockDefinition'); return `BD${state.definitionSeq++}`; } };
+  const ids = { peek(kind) { assert.equal(this, ids); assert.equal(state.ready, true);
+    if (kind === 'blockDefinition') return state.definitionSeq; assert.equal(kind, 'hatch'); return state.hatchSeq; },
+    allocate(kind) { assert.equal(this, ids); assert.equal(state.ready, true);
+      if (kind === 'blockInstance') return 'BI1'; assert.equal(kind, 'blockDefinition'); return `BD${state.definitionSeq++}`; } };
   const catalog = w.BlockCatalog.create({ definitions: () => { assert.equal(state.ready, true); return document.blockDefinitions; } });
   const feature = w.BlockEditingFeature.create({ workspace, documentModel: document, ids, catalog,
     projections: { createBlockProjectionBundle() { throw Error('no nested Block expected in this fixture'); },
@@ -44,6 +46,27 @@ function fixture() {
     definition.constraints.push(Object.assign(new g.DistanceConstraint(a, b, 10), { sketchId: 'S1' })); return a;
   }
   return { state, events, document, workspace, feature, geometry };
+}
+
+function commands(f, overrides = {}) {
+  const selection = w.CanvasSelection.create();
+  return { selection, ...f.feature.createCommands({
+    canStartCreation: () => true, canvasSelection: selection,
+    selectionQuery: { read: () => ({ ...Object.fromEntries(Object.entries(f.workspace.current())
+      .map(([key, value]) => [key, Array.isArray(value) ? [...value] : value])), externalConstraints: [] }), center: () => ({ x: 0, y: 0 }) },
+    guardDimensionSymbolDeletion: () => true, resetBlockEditorHistory: () => f.events.push('reset-history'),
+    clearSelection: selection.clear, setMode: value => { f.state.mode = value; }, closeDefinitions: () => f.events.push('close-definitions'),
+    setEditorActive: value => { f.state.editorActive = value; }, fitAllGeometryToViewport: () => f.events.push('fit'),
+    resetEmptyViewport: () => { f.state.viewport = { x: 0, y: 0, scale: 1 }; }, promptName: () => null,
+    updateBlockUI: () => f.events.push('blocks'), updateUI: () => f.events.push('ui'), draw: () => f.events.push('draw'),
+    recordHistory: () => f.events.push('history'), setHint: (text, kind) => f.events.push(['hint', text, kind]),
+    duplicateBlockElementId: () => null, refreshReferenceConstraintValidity() {}, hasInvalidReferenceConstraints: () => false,
+    solveSketchById: id => { f.events.push(['solve', id]); return { success: true, errorNorm: 0 }; },
+    resultIsAccepted: result => result.success, sketchName: id => id, solveReferenceDependentSketches: () => ({ success: true }),
+    requestChoice: () => Promise.resolve(null), applicationText: (_ja, en) => en, blockLocalGeometryBounds: () => ({ center: { x: 0, y: 0 } }),
+    constraintGraphNodes: () => [], annotationReferencesRemovedGeometry: () => false, acceptError: 1e-4,
+    setSketchSolveOk() {}, setSketchSolveError() {}, log: () => f.events.push('log'), ...overrides,
+  }) };
 }
 
 test('Block composition defers registry, viewport, sequences and history until the corresponding operation', () => {
@@ -99,4 +122,40 @@ test('host capture failure propagates before opening a session, switching scope 
   assert.throws(() => f.feature.session.open(scope('draft')), error => error === failure);
   assert.equal(f.feature.session.current, null); assert.equal(f.workspace.current(), f.document); assert.equal(f.state.history, 0);
   assert.deepEqual(f.events, ['capture-view']);
+});
+
+test('command composition defers operations and creation/cancel share host capture, IDs and the same session', () => {
+  const f = fixture(), c = commands(f); assert.deepEqual(f.events, []); assert.equal(f.state.definitionSeq, 1);
+  f.state.ready = true; c.definition.startCreation();
+  assert.equal(f.feature.session.current.draft.name, 'Block-1'); assert.equal(f.workspace.current().id, 'BD1');
+  assert.equal(f.state.editorActive, true); assert.equal(f.events.filter(e => e === 'capture-view').length, 1);
+  assert.equal(f.state.definitionSeq, 2); c.definition.cancel();
+  assert.equal(f.feature.session.current, null); assert.equal(f.workspace.current(), f.document); assert.equal(f.state.editorActive, false);
+  assert.deepEqual(f.state.viewport, { x: 1, y: 2, scale: 3 }); assert.equal(f.events.includes('history'), false);
+});
+
+test('completion confirmation retains one pending request and restores the shared host before one history commit', async () => {
+  const f = fixture(); f.state.ready = true; let resolveChoice, requests = 0;
+  const c = commands(f, { requestChoice: () => { requests++; return new Promise(resolve => { resolveChoice = resolve; }); } });
+  f.geometry(f.document); c.selection.set('lines', f.document.lines);
+  c.definition.startCreation(); const draft = f.workspace.current();
+  c.completion.complete(); c.completion.complete(); assert.equal(requests, 1); assert.equal(f.workspace.current(), draft);
+  resolveChoice(null); await Promise.resolve(); assert.equal(f.workspace.current(), draft); assert.equal(f.events.includes('history'), false);
+  c.completion.complete(); assert.equal(requests, 2); resolveChoice(true); await Promise.resolve();
+  assert.equal(f.feature.session.current, null); assert.equal(f.workspace.current(), f.document); assert.equal(f.state.editorActive, false);
+  assert.equal(f.document.blockDefinitions[0], draft); assert.equal(f.events.filter(e => e === 'history').length, 1);
+  assert.equal(f.document.blockInstances[0].id, 'BI1'); assert.equal(f.document.blockInstances[0].rotationLocked, true);
+  assert.equal(f.document.lines.length, 0);
+  assert.equal(f.events.indexOf('restore-view') < f.events.indexOf('history'), true);
+});
+
+test('invalid completion and stale confirmation leave the active session and registry unchanged', async () => {
+  const f = fixture(); f.state.ready = true; let resolveChoice;
+  const c = commands(f, { requestChoice: () => new Promise(resolve => { resolveChoice = resolve; }) });
+  c.definition.startCreation(); const draft = f.workspace.current(); c.completion.complete();
+  assert.equal(resolveChoice, undefined); assert.equal(f.workspace.current(), draft); assert.equal(f.document.blockDefinitions.length, 0);
+  c.definition.cancel(); f.geometry(f.document); c.selection.set('lines', f.document.lines);
+  c.definition.startCreation(); c.completion.complete(); c.definition.cancel(); resolveChoice(true); await Promise.resolve();
+  assert.equal(f.workspace.current(), f.document); assert.equal(f.feature.session.current, null);
+  assert.equal(f.document.blockDefinitions.length, 0); assert.equal(f.events.includes('history'), false);
 });

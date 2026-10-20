@@ -378,7 +378,7 @@
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
   });
-  const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = window.BlockEditingFeature.create({
+  const blockEditingFeature = window.BlockEditingFeature.create({
     workspace, documentModel, ids: documentIds, catalog: blockCatalog, projections: blockProjections,
     instances: instanceProjections, rebinding: constraintRebinding, normalizedSketchCopy, normalizeGeometryInstance,
     isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
@@ -386,13 +386,13 @@
     activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences, createHistory: createBlockEditHistory,
     rebuildStoredBlockDefinitionConstraints, rebuildBlockDefinitionConstraintObjects,
   });
+  const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
   const { clone: cloneBlockDefinition, apply: mergeBlockDefinitionDraft,
     fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
   const { blockDefinitionsInCurrentScope, blockDefinitionScopeError,
-    blockDefinitionDependsOn, storedBlockInstancesReferencing, blockDefinitionUsageCount,
-    blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
+    blockDefinitionUsageCount, blockDefinitionEditError } = blockEditingQueries;
 
   const canvasRenderProbe = window.CanvasRenderProbe.create({
     ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
@@ -1261,49 +1261,32 @@
     return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
   }
 
-  const blockDefinitionCommand = window.BlockDefinitionCommand.create({
-    blockEditor, blockDefinitionEditing, blockCatalog, blockEditingQueries, documentModel,
-    currentScope: workspace.current, canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
-    canvasSelection, captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
-    defaultName: () => `Block-${documentIds.peek("blockDefinition")}`, blockSelectionGeometry, blockSelectionBoundsCenter,
-    guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
-    setMode: (value) => { mode = value; }, closeDefinitions: () => blockView.closeDefinitions(),
-    setEditorActive: (active) => blockView.setEditorActive(active), fitAllGeometryToViewport,
-    resetEmptyViewport: () => {
-      const rect = canvas.getBoundingClientRect();
-      viewport.update({ scale: CSS_PX_PER_MM });
-      viewport.update({ x: rect.width / 2 });
-      viewport.update({ y: rect.height / 2 });
-    },
-    promptName: (name) => window.prompt("ブロック名", name), invalidateBlockProjectionCache,
-    updateBlockUI, updateUI, draw, recordHistory, setHint,
-  });
-  const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit,
-    restoreHost: restoreBlockEditorHost, cancel: cancelBlockDefinitionEdit,
-    rename: renameBlockDefinition, remove: deleteBlockDefinition } = blockDefinitionCommand;
-
-
-
-
   function reserveBlockEditorSequences(draft) {
     reserveGeometryElementSequences(draft);
     documentIds.reserveScope(draft, model.nextHatchIndex);
   }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
-  const blockCompletionCommand = window.BlockCompletionCommand.create({
-    blockEditor, blockDefinitionEditing, blockCatalog, documentModel, currentScope: workspace.current,
-    blockDefinitionCyclePath, duplicateBlockElementId, refreshReferenceConstraintValidity,
+  const { definition: blockDefinitionCommand, completion: blockCompletionCommand } = blockEditingFeature.createCommands({
+    canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
+    canvasSelection, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
+    setMode: value => { mode = value; }, closeDefinitions: () => blockView.closeDefinitions(),
+    setEditorActive: active => blockView.setEditorActive(active), fitAllGeometryToViewport,
+    resetEmptyViewport: () => {
+      const rect = canvas.getBoundingClientRect();
+      viewport.update({ scale: CSS_PX_PER_MM });
+      viewport.update({ x: rect.width / 2 });
+      viewport.update({ y: rect.height / 2 });
+    },
+    promptName: name => window.prompt("ブロック名", name), updateBlockUI, updateUI, draw, recordHistory, setHint,
+    duplicateBlockElementId, refreshReferenceConstraintValidity,
     hasInvalidReferenceConstraints: () => referenceConstraintState.errorCount > 0,
     solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
-    requestChoice: (options) => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
-    storedBlockInstancesReferencing, restoreBlockEditorHost, rebuildStoredBlockDefinitionConstraints,
-    nextInstanceId: () => documentIds.allocate("blockInstance"), constraintGraphNodes, annotationReferencesRemovedGeometry,
-    invalidateBlockProjectionCache, blockProjectionBundles, geometryElementKey, blockDefinitionDependsOn,
-    acceptError: CONSTRAINT_ACCEPT_ERROR, setSketchSolveOk, setSketchSolveError,
-    clearSelection, canvasSelection, setMode: (value) => { mode = value; },
-    setHint, log, updateUI, draw, recordHistory,
+    requestChoice: options => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
+    constraintGraphNodes, annotationReferencesRemovedGeometry, acceptError: CONSTRAINT_ACCEPT_ERROR, setSketchSolveOk, setSketchSolveError, log,
   });
+  const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit,
+    cancel: cancelBlockDefinitionEdit, rename: renameBlockDefinition, remove: deleteBlockDefinition } = blockDefinitionCommand;
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
 
   function syncOffsetChainSelection() { return canvasSelection.applyOffsetSelection(offsetSelection); }
