@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新の寸法表示traversal単位
+### 最新の注記表示生成単位
+
+前単位はd641f39をdevelopのc196916へ統合・Push済み。今回はcodex/annotation-displayで継続した。開始時は週枠使用15%／残量85%で停止条件には達していない。
+
+AnnotationDisplayへColor／Renderer／Layerの生成・接続とframe／resize／Leader終端handleの表示規則を集約した。同じSelection／hover／export／実効外観とCanvasSurfaceを共有し、後段のAnnotation drag／commandはresize可否とpreviewの遅延callbackで参照する。アンカー解決、文字layout・Leader geometry、色の優先順位、保存frameのPNG表示、投影／編集不可・active／anchorのhandle抑制を維持する。Anchor materializationとモデル編集は既存ownerに残す。app.jsは3,437→3,433行（4行減）、今回の再開から3,652→3,433行（219行減）。
+
+構文572ファイル・単体1,642件・関連E2E239件（3.8分）が成功（全runner exit 0）。関連はunified-ui／unified-annotations／annotation-anchors／leader-appearance／free-text-input-drag／annotation-display-size／png-export／phase0-characterizationで、file URL起動、選択／hover／投影／read-onlyの表示、frame／resize／Leader、アンカー追従と解除、既存画面比較、PNG・Undo／Redo・保存再読込を確認した。新単体4件は生成時のread遅延、色とframe／handle条件の共有、PNGでも保存frameは維持すること、elementとhover handleの同一性、遅延resize可否、Leaderのactive／投影／anchor／preview条件、アンカーの最新参照・保存座標無変更、通常表示の可視性とpreviewの違いを実Renderer／外観queryで確認する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-annotation-display-{check,unit,related}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量84%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はHatchRendererのcontent／Layerの生成・接続を分析する。境界Geometryの解決は既存HatchGeometryQueryに維持し、Geometry描画器の境界stroke、Sketch alpha、通常／Constructionの選択表示、PNG world bounds・alpha、previewの既存順序を確認する。後段のHatch commandとmode／hover／exportは現在の遅延readerで接続し、境界cacheやauthoring stateをもう一組作らない。静的なGeometry型・Painterと実行時の照会を区別し、単なる巨大contextへの移動を避ける。
+
+### 前単位の寸法表示traversal単位
 
 前単位は39d998cをdevelopの378a8b5へ統合・Push済み。今回はcodex/dimension-display-traversalで継続した。開始時は週枠使用14%／残量86%で停止条件には達していない。
 
