@@ -232,7 +232,7 @@
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
   const selectionScopeQuery = window.CanvasSelection.createScopeQuery({ canvasSelection, selectedGeometryItems });
-  const identitySelection = window.CanvasSelectionInteraction.createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw });
+  const identitySelection = window.CanvasSelectionInteraction.createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw, sketchById, guardSketchEdit });
   const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isSplineOnlyFitPoint, isEditableSplineFitPoint, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isPrimitiveCenterPoint, isStandalonePoint, isSelectableEndpointPoint } = window.PointUsage.create({
     currentScope: workspace.current, constraintReferencesPoint,
     allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
@@ -2541,21 +2541,8 @@
     getPendingConstraintCommand: () => constraintTargetSession.command, setLastPointer: point => { lastPointerWorld = point; },
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
-      selectInactive: (event, identity) => {
-        selectIdentity(identity, event.ctrlKey || event.shiftKey);
-        if (sketchById(identity.sketchId)?.locked) guardSketchEdit(identity.sketchId);
-      },
-      prepareSelection: (event, hits) => {
-        const identity = hits.sketchIdentity;
-        if ((event.ctrlKey || event.shiftKey) && identity && selectionSketchId() && selectionSketchId() !== identity.sketchId) return true;
-        if (identity && sketchById(identity.sketchId)?.locked) {
-          selectIdentity(identity, event.ctrlKey || event.shiftKey);
-          guardSketchEdit(identity.sketchId); return true;
-        }
-        if (canvasSelection.inspection && (event.ctrlKey || event.shiftKey)) return true;
-        if (canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
-        return false;
-      },
+      selectInactive: identitySelection.selectInactive,
+      prepareSelection: identitySelection.prepareSelection,
       activation: { selection: canvasSelection, finalizeSpline: finalizeSplineFromDoubleClick, submitOffset: submitOffsetValue,
         startAnnotationEdit: annotationInputController.start, startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
         constraintDoubleClick: handleConstraintTargetDoubleClick, enterBlock: enterBlockDefinitionEdit, beginSplineEdit: beginSplineEditFromDoubleClick },

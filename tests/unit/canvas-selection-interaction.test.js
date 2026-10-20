@@ -192,3 +192,79 @@ test('document Canvas reset retains phases around pointer, snap and related sele
     ['hover', 'block'], ['set', 'instanceGeometry'], ['hover', 'geometryInstance', 'hatch', 'referenceImage'],
   ]);
 });
+function pressSelectionFixture() {
+  const calls = [], state = { sketchId: null, sketches: new Map(), onDraw: null, clearError: null, guardError: null };
+  const selection = { inspection: null, sketchId: null, lines: [],
+    set(field, value) { calls.push(['set', field, value]); this[field] = value; },
+    toggleById(field, item) { calls.push(['toggle', field, item]); const index = this[field].findIndex(value => value.id === item.id); if (index < 0) this[field].push(item); else this[field].splice(index, 1); } };
+  const api = sandbox.window.CanvasSelectionInteraction.createIdentitySelection({
+    canvasSelection: selection,
+    selectionSketchId: () => { calls.push(['selection-sketch']); return state.sketchId; },
+    clearSelection: () => { calls.push(['clear']); if (state.clearError) throw state.clearError; selection.inspection = selection.sketchId = null; selection.lines = []; },
+    updateGeometrySelectionUI: () => calls.push(['ui']), draw: () => { calls.push(['draw']); state.onDraw?.(); },
+    sketchById: id => { calls.push(['lookup', id]); return state.sketches.get(id); },
+    guardSketchEdit: id => { calls.push(['guard', id]); if (state.guardError) throw state.guardError; return false; },
+  });
+  assert.deepEqual(calls, []);
+  const identity = { kind: 'line', item: { id: 'L1' }, sketchId: 'S1' };
+  return { api, calls, state, selection, identity, names: () => calls.map(call => call[0]) };
+}
+
+test('Canvas press refuses additive cross-Sketch selection before lock lookup and preserves inspection without redraw', () => {
+  for (const modifier of ['ctrlKey', 'shiftKey']) {
+    const f = pressSelectionFixture(); f.state.sketchId = 'S2'; f.state.sketches.set('S1', { locked: true });
+    const inspection = {}; f.selection.inspection = inspection;
+    assert.equal(f.api.prepareSelection({ [modifier]: true }, { sketchIdentity: f.identity }), true);
+    assert.deepEqual(f.names(), ['selection-sketch', 'selection-sketch']); assert.equal(f.selection.inspection, inspection);
+    f.calls.length = 0;
+    assert.equal(f.api.prepareSelection({ [modifier]: true }, {}), true);
+    assert.deepEqual(f.calls, []); assert.equal(f.selection.inspection, inspection);
+  }
+});
+
+test('Canvas press reads the current lock, selects the same identity before guard, and terminates even when guard rejects', () => {
+  for (const modifier of [null, 'ctrlKey', 'shiftKey']) {
+    const f = pressSelectionFixture(); f.state.sketchId = 'S1'; f.state.sketches.set('S1', { locked: true });
+    const event = modifier ? { [modifier]: true } : {};
+    assert.equal(f.api.prepareSelection(event, { sketchIdentity: f.identity }), true);
+    assert.equal(f.selection.lines[0], f.identity.item);
+    assert.deepEqual(f.names(), modifier
+      ? ['selection-sketch', 'selection-sketch', 'lookup', 'selection-sketch', 'selection-sketch', 'toggle', 'ui', 'draw', 'guard']
+      : ['lookup', 'clear', 'set', 'ui', 'draw', 'guard']);
+    assert.equal(f.calls.at(-1)[1], 'S1');
+    f.calls.length = 0; f.state.sketches.set('S1', { locked: false });
+    assert.equal(f.api.prepareSelection({}, { sketchIdentity: f.identity }), false);
+    assert.deepEqual(f.names(), ['lookup']); assert.equal(f.selection.lines[0], f.identity.item);
+  }
+});
+
+test('Canvas press clears inspection or tree selection only when ordinary selection may continue', () => {
+  for (const field of ['inspection', 'sketchId']) {
+    const f = pressSelectionFixture(); f.selection[field] = field === 'inspection' ? {} : 'S1';
+    assert.equal(f.api.prepareSelection({}, {}), false); assert.deepEqual(f.names(), ['clear']); assert.equal(f.selection[field], null);
+  }
+  const f = pressSelectionFixture();
+  assert.equal(f.api.prepareSelection({ ctrlKey: true }, { sketchIdentity: f.identity }), false);
+  assert.deepEqual(f.names(), ['selection-sketch', 'lookup']);
+  f.calls.length = 0; f.selection.sketchId = 'S1';
+  assert.equal(f.api.prepareSelection({ shiftKey: true }, {}), false); assert.deepEqual(f.names(), ['clear']);
+  f.calls.length = 0;
+  assert.equal(f.api.prepareSelection({}, {}), false); assert.deepEqual(f.calls, []);
+});
+
+test('inactive selection checks lock after selection effects and preserves refusal and exception boundaries', () => {
+  const f = pressSelectionFixture();
+  f.state.onDraw = () => f.state.sketches.set('S1', { locked: true });
+  assert.equal(f.api.selectInactive({}, f.identity), undefined);
+  assert.deepEqual(f.names(), ['clear', 'set', 'ui', 'draw', 'lookup', 'guard']); assert.equal(f.selection.lines[0], f.identity.item);
+  f.calls.length = 0; f.state.sketchId = 'S2';
+  assert.equal(f.api.selectInactive({ ctrlKey: true }, f.identity), undefined);
+  assert.deepEqual(f.names(), ['selection-sketch', 'selection-sketch', 'lookup', 'guard']); assert.equal(f.selection.lines[0], f.identity.item);
+  f.calls.length = 0; const error = new Error('clear failed'); f.state.clearError = error;
+  assert.throws(() => f.api.selectInactive({}, f.identity), value => value === error); assert.deepEqual(f.names(), ['clear']);
+  f.calls.length = 0; f.state.clearError = null; f.state.guardError = error;
+  assert.throws(() => f.api.prepareSelection({}, { sketchIdentity: f.identity }), value => value === error);
+  assert.deepEqual(f.names(), ['lookup', 'clear', 'set', 'ui', 'draw', 'guard']);
+  f.calls.length = 0; f.state.sketches.delete('S1'); f.state.onDraw = null;
+  assert.equal(f.api.selectInactive({}, f.identity), undefined); assert.deepEqual(f.names(), ['clear', 'set', 'ui', 'draw', 'lookup']);
+});
