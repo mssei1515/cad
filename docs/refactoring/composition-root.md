@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### Geometry削除時の操作終了
+
+GeometryDeletionCommandへ削除前の限定された操作終了手順を統合した。appのendInteraction callbackを除去し、後段で生成する三種類のdragは遅延reset callback、既に生成済みのSession／Line／Circular／previewは同じowner、modeは既存setterへ接続する。guardと依存／空plan／symbol検査後・実削除前の位置、clearとcancel／resetの違い、operand／trim保持と非対象draft、途中例外・求解／履歴の順序を維持した。不要になったArc reset aliasも除去した。新file・state・scriptや保存形式変更はない。app.jsは3,307→3,295行（12行減）、今回の再開から3,652→3,295行（357行減）。
+
+構文578ファイル・単体1,676件・関連E2E192件（2.8分）が成功（全runner exit 0）。関連はunified-ui／sketch-permissions／derived-selection-copy／multiple-dimensions／blocks／unified-annotationsで、file URL起動、削除・派生参照拒否・権限・寸法／Block／注記、Undo／Redo・保存再読込を確認した。追加単体3件は実PendingCommandSession／ConstraintTargetSession／DrawingPreviewを使い、成功時のclearとcancel／resetの区別、operand配列とtrimの参照保持、選択mode依頼、四種の拒否時の状態無変更、drag／Arc reset例外時の停止を検証する。既存5件のguard・削除／選択整理／求解・履歴の期待順は維持し、操作終了の内訳を別traceで検証できるfixtureへ更新した。後段dragは初期化時に読まないこと、不要なArc reset aliasの参照が残らないことを確認した。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-geometry-deletion-interaction-{focused,check,unit,related}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop dd8e6e2（前実装1f3d954）、開始時の週枠残量74%／検証後73%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はdecorateSerializedConstraintとDocumentSnapshot.constraintDataの保存用metadata生成を分析する。既存ConstraintPersistence／DocumentSnapshotとの責務を確認し、raw codecのserialize／deserialize契約を変えず、readOnlyDimension・parameterName・expression、DocumentとBlockのsketchId、参照flag／referenceSketchIdの既存条件・null／未指定・field順とdata同一性を保持する。Block編集・履歴、Clipboard、test supportにも同じdecorate入口を渡すため、用途別にscope情報を混ぜない。早いBlock機能への登録はhoisted関数を使い、constraintCodecs生成は後段にあるので、新metadata ownerの生成位置と読取り遅延を監査して未初期化constを直接渡さない。新たな小fileや可変contextを増やさず、既存ownerで役割をまとめられるか検証する。
+
 ### 拘束・寸法配置の開始準備
 
 拘束・寸法開始前のreset進行を既存DrawOperationLifecycleのprepareConstraintStart／prepareDimensionStartへ、mode別の拘束取消準備をprepareConstraintCancelへ統合した。Pending／Centerline／Slotの先行処理と共通のreset subsetを区別し、mode条件は各reset直前に読み取る。角度間隔寸法の開始は既存DimensionPlacementCommandへ統合し、通常寸法と異なる取消・select・anchor／target・Pending生成の経路を維持した。開始処理の三つの直接mode書込みを既存selectModeポートへ接続し、mode変数やdraft／sessionの新ownerは作らない。新file・script・保存形式変更はない。app.jsは3,331→3,307行（24行減）、今回の再開から3,652→3,307行（345行減）。

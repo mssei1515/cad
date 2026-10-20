@@ -4,8 +4,21 @@
   function create({ currentScope, geometryDeletion, canvasSelection, splineEditing, canvasHover,
     guardSketchEdit, elementSketchId, geometryElementKey, geometryInstanceUsesRemovedGeometry,
     rejectReferencedGeometryDeletion, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion,
-    applicationText, endInteraction, solveSketchAndDependents, normalizeArcSweeps, refreshView,
-    analysisStable, setHint, log, recordHistory }) {
+    applicationText, solveSketchAndDependents, normalizeArcSweeps, refreshView,
+    analysisStable, setHint, log, recordHistory, resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag,
+    pendingCommandSession, constraintTargetSession, lineCommand, circularCommands, drawingPreview, selectMode }) {
+    function endInteraction() {
+      resetGeometryDrag();
+      resetDimensionDrag();
+      resetAnnotationDrag();
+      pendingCommandSession.clear();
+      constraintTargetSession.clearCommand();
+      lineCommand.reset();
+      circularCommands.resetCircle();
+      circularCommands.resetArcs();
+      drawingPreview.setPointer(null);
+      selectMode();
+    }
     function remove({ points = [], lines = [], circles = [], arcs = [], splines = [], constraints = [] } = {}) {
       if (![...points, ...lines, ...circles, ...arcs, ...splines, ...constraints].every(item => guardSketchEdit(elementSketchId(item)))) return false;
       const ownerIds = [...new Set([...points, ...lines, ...circles, ...arcs, ...splines, ...constraints].map(elementSketchId))];
