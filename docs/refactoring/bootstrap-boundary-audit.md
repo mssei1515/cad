@@ -8,7 +8,7 @@
 
 ## 監査後の反映
 
-最後の性能traceは生成ownerのConstraintCommitCommandへ統合し、Document reset／test supportへclear／readを直接接続した。続いて注記コピーの表示値変換を既存ClipboardTransferへ統合した。共有外観UIのControls／Paletteと起動時Document設定の組立てはAppearanceUIへ集約した。app.jsのletは九つ、行数は3,354行。下記の集計・state表はf37edc6の監査基準を保持しており、最新の変更・検証・次の単位は再開手順section 8を参照する。
+最後の性能traceは生成ownerのConstraintCommitCommandへ統合し、Document reset／test supportへclear／readを直接接続した。続いて注記コピーの表示値変換を既存ClipboardTransferへ統合した。共有外観UIのControls／Paletteと起動時Document設定の組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線も既存PropertiesDisplayへ集約した。app.jsのletは九つ、行数は3,348行。下記の集計・state表はf37edc6の監査基準を保持しており、最新の変更・検証・次の単位は再開手順section 8を参照する。
 
 ## 現在の大きさ
 

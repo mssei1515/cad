@@ -2242,42 +2242,36 @@
     isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance,
   });
   function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
-  const { geometry: geometryPropertyCommand, appearanceEditing, appearance: appearancePropertyCommand,
-    applyMultiple: applyMultipleProperty, visibility: selectionVisibilityCommand, element: elementPropertyCommand } = window.PropertyEditingFeature.create({
+  const propertyEditing = window.PropertyEditingFeature.create({
     currentScope: workspace.current, viewport, guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
     snapshotModelState, restoreModelState, stabilizeActiveParameterNamespace, elementSketchId, recordHistory,
     materializeAnchor: materializeAnnotationAnchor, annotationAppearance,
     invalidateBlockProjectionCache, updateUI, updatePropertiesUI, draw, propertySelection,
     isGeometryMode, selectedVisibilityTargets, selectionVisibilityIsHidden, toggleSketchVisibility, guardSelectionEdit,
   });
+  const { appearanceEditing, appearance: appearancePropertyCommand, applyMultiple: applyMultipleProperty, visibility: selectionVisibilityCommand } = propertyEditing;
   const appearanceUI = window.AppearanceUI.create({
     document, documentModel, currentScope: () => model, propertySelection, appearanceEditing, appearancePropertyCommand, applyMultipleProperty,
     applicationText, escapeHtml, localizeApplicationUI, effectiveLeaderAppearanceForSketch, readViewportScale: () => viewport.scale,
     invalidateBlockProjectionCache, recordHistory, updateUI, draw,
   });
-  const { controls: appearanceControls, openPalette: openAppearanceColorPalette } = appearanceUI;
-  const propertiesController = window.PropertiesController.create({
-    HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget, activeSketchId,
-    canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
-    elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
-    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
-    applicationText, setHint,
-    setPlacementRotationLocked: blockPlacementCommand.setRotationLocked,
-    setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
-    setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
-    startSplineEdit: spline => splineEditing.activate(spline), openAppearanceColorPalette,
-  });
-  const propertiesView = window.PropertiesDisplay.create({
+  const propertiesView = window.PropertiesDisplay.createWithController({
     document, documentModel, currentScope: workspace.current, canvasSelection,
     getOperation: () => ({ mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
     propertySelection, geometryAppearance, dimensionAppearance, annotationAppearance,
-    catalog: blockCatalog, projections: blockProjections, instances: instanceProjections, geometryReads, appearanceControls, controller: propertiesController,
+    catalog: blockCatalog, projections: blockProjections, instances: instanceProjections, geometryReads,
     sketchName, sketchById, isRootSketch, activeSketchId, constraintSketchId, sketchProjectionConstraintForTarget,
     constraintGeometryId, constraintStatusBadge, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
     hatchAppearanceForDisplay, resolvedHatchBoundary, applicationText, escapeHtml, hatchRegionErrorText,
     geometryInstanceTypeLabel, expressionInputValue, numericDimensionExpression, localizedConstraintName,
     localizeApplicationUI, installExpressionInputHighlights,
+    propertyEditing, appearanceUI, HTMLTextAreaElement, HTMLInputElement,
+    canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
+    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw, setHint,
+    setPlacementRotationLocked: blockPlacementCommand.setRotationLocked, setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
+    setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
+    annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
+    startSplineEdit: spline => splineEditing.activate(spline),
   });
 
 

@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### PropertiesのControllerとViewの接続
+
+既存PropertiesDisplayへcreateWithControllerを追加し、ControllerとViewの生成・編集command／選択照会／共有AppearanceUIの結線を集約した。appはPropertyEditingFeatureの結果を一つのAPIとして渡し、個別geometry／element command・controls／Palette入口・Controllerの中継参照を除去した。PropertySelection／EditingFeature／AppearanceUIの生成位置と既存state、選択の遅延照会、権限・preview／commit・操作の戻り値を維持する。新file・state・汎用contextは追加せず、表示専用create APIも維持する。外部actionとread ownerのportはまだ多く、引数を隠すだけで全体を分離済みとはしない。app.jsは3,354→3,348行（6行減）、今回の再開から3,652→3,348行（304行減）。
+
+構文576ファイル・単体1,663件・関連E2E194件（2.9分）が成功（全runner exit 0）。関連はunified-ui／blocks／free-instance／sketch-permissions／unified-annotationsで、file URL起動、Properties編集・Palette・複数選択、配置状態・Block／Instance／注記・権限、Undo／Redo・保存再読込を確認した。追加単体3件は実Controller／View／PropertySelectionをつなぎ、生成時のDOM／scope遅延、描画後の選択変更と外観preview／commit、geometry結果のchecked／更新、element／multiple編集、owning Sketch lockでinput／change／clickを短絡すること、最新配置状態・構造guard・action戻り値と共有Palette接続を検証する。従来表示APIの3件も維持し、既存fixtureのSketch名readerを実APIに合わせて補完した。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-properties-panel-{focused,check,unit,related}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop a6d51fd（前実装395d892）、開始時の週枠残量77%／検証後76%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はCanvas context menuの機能組立てを分析する。Query・Presentation・Targetの選択／Fix照会／候補確定・Items・Entry・Actionsに散る結線を、既存ownerと外部で必要なopen／execute／candidate選択／表示APIに沿って整理する。早いCanvasContextMenu生成のcallbackは後段のpresenter等を操作時に参照し、test supportにも同じpresenterを渡すため、生成順・初期化時read・startの時機を照合する。候補hoverの復元、選択集合の保持／明示置換、拘束command時の候補振分け、mode／pointerと取消を維持し、新たなmenu sessionや任意commandを操作できるcontextを作らない。既存CanvasContextTargetで閉じられる依存と、applicationの機能組立てに属する依存を区別し、薄いwrapperの積み重ねだけで全体完了としない。
+
 ### 共有外観UIの組立て
 
 PropertiesとDocument設定で共有するAppearanceControls／AppearancePalette、および起動時のDocumentAppearanceEditorの生成・接続をAppearanceUIへ集約した。同じAppearanceEditing・選択照会・外観commandを使い、appは外部portとcontrols／openPalette／startだけを接続する。Document設定の生成時機、設定start→Palette.bind、他の起動処理との順序、Palette session・最新scope／既定値・倍率・履歴／UI／drawの動作を維持する。共有componentや編集stateを再生成せず、移動で不要になったaliasを整理した。新classic scriptと単体testをindex／構文一覧／単体一覧／読込期待へ同期した。app.jsは3,375→3,354行（21行減）、今回の再開から3,652→3,354行（298行減）。

@@ -43,5 +43,39 @@
       onInput: controller.input, onChange: controller.change, onClick: controller.click });
     return view;
   }
-  window.PropertiesDisplay = Object.freeze({ create });
+  function createWithController({ document, documentModel, currentScope, canvasSelection, getOperation, propertySelection,
+    geometryAppearance, dimensionAppearance, annotationAppearance, catalog, projections, instances, geometryReads,
+    sketchName, sketchById, isRootSketch, activeSketchId, constraintSketchId,
+    sketchProjectionConstraintForTarget, constraintGeometryId, constraintStatusBadge, constraintStatusOf,
+    snappedBlockRotation, constraintDefiningGeometryEntries, hatchAppearanceForDisplay, resolvedHatchBoundary,
+    applicationText, escapeHtml, hatchRegionErrorText, geometryInstanceTypeLabel, expressionInputValue,
+    numericDimensionExpression, localizedConstraintName, localizeApplicationUI, installExpressionInputHighlights,
+    propertyEditing, appearanceUI, HTMLTextAreaElement, HTMLInputElement, canEditStructure,
+    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw, setHint,
+    setPlacementRotationLocked, setPlacementSketchIds, setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
+    annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit }) {
+    const { Spline } = window.GeometrySolver;
+    const controller = window.PropertiesController.create({
+      HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget: propertySelection.selectedDisplayTarget, activeSketchId,
+      canEditStructure,
+      elementPropertyCommand: propertyEditing.element, appearancePropertyCommand: propertyEditing.appearance,
+      geometryPropertyCommand: propertyEditing.geometry, applyMultipleProperty: propertyEditing.applyMultiple,
+      changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
+      applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
+      setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
+      annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
+      startSplineEdit, openAppearanceColorPalette: appearanceUI.openPalette,
+    });
+    return create({
+      document, documentModel, currentScope, canvasSelection, getOperation,
+      propertySelection, geometryAppearance, dimensionAppearance, annotationAppearance,
+      catalog, projections, instances, geometryReads, appearanceControls: appearanceUI.controls, controller,
+      sketchName, sketchById, isRootSketch, activeSketchId, constraintSketchId, sketchProjectionConstraintForTarget,
+      constraintGeometryId, constraintStatusBadge, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
+      hatchAppearanceForDisplay, resolvedHatchBoundary, applicationText, escapeHtml, hatchRegionErrorText,
+      geometryInstanceTypeLabel, expressionInputValue, numericDimensionExpression, localizedConstraintName,
+      localizeApplicationUI, installExpressionInputHighlights,
+    });
+  }
+  window.PropertiesDisplay = Object.freeze({ create, createWithController });
 })();
