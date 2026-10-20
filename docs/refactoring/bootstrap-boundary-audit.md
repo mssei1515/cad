@@ -6,6 +6,10 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 監査後の反映
+
+最後の性能traceは生成ownerのConstraintCommitCommandへ統合し、Document reset／test supportへclear／readを直接接続した。app.jsのletは九つになり、行数は3,386行。下記の集計・state表はf37edc6の監査基準を保持しており、最新の変更・検証・次の単位は再開手順section 8を参照する。
+
 ## 現在の大きさ
 
 既存Playwright同梱のBabel parserで`app.js`のIIFEを解析した。追加のpackageやparserは導入していない。次の表の非空白行は重複しない。

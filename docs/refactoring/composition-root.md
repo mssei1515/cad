@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 拘束確定の性能traceの所有
+
+ConstraintCommitCommandへ最後の性能traceの保持・読取り・解除を集めた。生成と成功後の公開を同じownerで行い、既存observerの同一Object通知と公開位置、失敗／短絡時の以前のtrace保持、Document resetの無通知null化を維持する。appのlastAuthoringPerformanceと生成／観測／resetの三つの中継callbackを除去し、readPerformance／clearPerformanceを直接接続した。新fileや汎用state容器は追加しない。app.jsは3,387→3,386行（1行減）、今回の再開から3,652→3,386行（266行減）。
+
+構文574ファイル・単体1,654件・関連E2E122件（1.7分）・性能file全12件（48.0秒）が成功（全runner exit 0）。関連はunified-ui／command-panel／fixed-command／file-safety／parameter-dialog-controllerで、file URL起動、拘束確定・Fix／Undo、操作取消、Document reset・保存再読込を確認した。パンは150msで元の175ms未満の基準内。追加単体3件は成功後の公開順とobserverの同一Object、command間の独立、拒否・失敗・参照への切替時の旧trace保持、公開前例外時の旧trace保持、無通知の反復clearを確認する。このコードで全E2Eは未実行であり、最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-constraint-performance-owner-{check,unit,related,performance}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量79%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はClipboardPayload.detachedAnnotationの値変換を既存ClipboardTransferの責務へ統合できるか分析する。現在表示中のanchor／文字layout／Leader geometry・倍率と保存用copyの関係、元Annotationの無変更、参照を持つ項目の扱いを確認する。現在TransferはPayloadより後で生成されるため、必要な読取り依存と生成時の無処理を確認して接続順を整理し、未初期化constを直接渡さない。Materializationやモデル編集と混同せず、新たな小fileや汎用contextを作らない。その後は再監査のProperties／context menu等の意味のある機能組立てへ進む。
+
+
 ### Composition rootの残存責務・依存の再監査
 
 基準はdevelop f37edc6、app.js 3,387行。実装は変更せず、[再監査](bootstrap-boundary-audit.md)へAST分類と初期化依存、state／後段接続参照の区別、残る実処理と機能組立て、次の実装単位を記録した。再開手順section 5を更新し、目標を維持する。app.jsは3,387→3,387行（0行変化）。監査文書の関連local link 7件、ASTの分類と非空白行の合計、十個のletの読取り／代入先、次のtrace生成／reset／観測の呼出し箇所を確認した。app.jsのSHA-256一致と実装・テスト・設定のGit差分なしを確認した。文書のみの変更のため構文・単体・E2Eは再実行していない。同一実装の直前結果は構文574ファイル・単体1,651件・関連E2E163件成功であり、全E2E成功とは扱わない。この監査記録をCommit／Pushしてdevelopへ統合する。週枠残量80%で継続中、mainは5ee5f3fを維持する。次は再監査で特定したConstraintCommitCommandの性能trace生成・最後の結果・Document reset／test読取りの所有を揃える。全体目標は未完了。

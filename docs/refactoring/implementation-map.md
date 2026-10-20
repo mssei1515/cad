@@ -72,7 +72,7 @@
 
 - `index.html`: 固定ワークスペースとコマンドUI
 - `style.css`: レイアウトと状態表現
-- `app.js`: moduleの構築・接続・起動と、移行中のmode／pointer／性能trace／現在model別名、操作・履歴adapter、test hookの組立て。現在の残存責務と依存は[再監査](bootstrap-boundary-audit.md)を参照する。
+- `app.js`: moduleの構築・接続・起動と、移行中のmode／pointer／現在model別名、操作・履歴adapter、test hookの組立て。現在の残存責務と依存は[再監査](bootstrap-boundary-audit.md)を参照する。
 - `src/document/appearance.js`: 外観の初期値・正規化・旧形式変換と明示layerの解決
 - `src/document/drawing_order.js`: scopeとSketchを明示した描画順補完・候補の所有者解決・操作可否・順序変更
 - `src/persistence/document_files.js`: ファイル名、内容signature、保存session状態・排他、handleへの書込み
@@ -573,7 +573,7 @@ OperandHitQueryのhitConstraintOperandはpointer・拘束種別・現在operand�
 ConstraintTargetCommandのoperandClickはAnnotationアンカー→固定切替→空白での線長寸法確定→対象追加→意図解決→寸法配置／拘束確定の振分けを調整する。hitはOperandHitQuery、受入と列更新はConstraintTargetSessionに委ねる。固定では参照／派生投影を拒否し、Block投影またはprimitiveを個別Geometry固定へ渡す。選択解除と同期後に現在commandを捕捉し、固定成功後の選択解除を経て同じcommand参照を復元する既存順序を維持する。対象拒否では案内だけ、意図エラーでは同期後に案内と描画、未完了では選択UIと案内・描画を行う。実際の固定編集、寸法配置・値入力、拘束commitとUI更新は明示した依存へ委譲する。appは生成時の接続とhoisted入口を担当する。
 
 
-ConstraintCommitCommand（src/commands/constraint_commit_command.js）は通常／参照拘束の追加、snapshot捕捉、前処理、求解、Parameter安定化、線退化／重複判定、失敗復元、成功後の分析・表示・履歴を調整する。通常の作成権限と対象scope、参照の先祖／循環ガードは既存の順序を保持する。重複寸法は復元して同じcommandの読取寸法登録へ進む。通常拒否のundefinedと参照拒否のfalseの戻り値差も保持する。参照metadataは同じ拘束Objectへ付与し、診断用markReference入口も同じ所有者へ接続する。既存checkpoint・Solver・退化／重複照会・Parameter・UI／履歴を明示した依存として使用し、現在modelやDOMを直接探索しない。計測時計と通常成功後の性能記録更新はadapterへ接続する。appは生成／接続とhoisted入口を担当し、共有sessionと組立ての調整は継続整理する。
+ConstraintCommitCommand（src/commands/constraint_commit_command.js）は通常／参照拘束の追加、snapshot捕捉、前処理、求解、Parameter安定化、線退化／重複判定、失敗復元、成功後の分析・表示・履歴を調整する。通常の作成権限と対象scope、参照の先祖／循環ガードは既存の順序を保持する。重複寸法は復元して同じcommandの読取寸法登録へ進む。通常拒否のundefinedと参照拒否のfalseの戻り値差も保持する。参照metadataは同じ拘束Objectへ付与し、診断用markReference入口も同じ所有者へ接続する。既存checkpoint・Solver・退化／重複照会・Parameter・UI／履歴を明示した依存として使用し、現在modelやDOMを直接探索しない。計測時計は注入し、通常成功後の性能traceは同commandが保持して任意のobserverへ通知する。appは生成／接続とhoisted入口を担当し、共有sessionと組立ての調整は継続整理する。
 
 
 DimensionConstraintFactory（src/constraints/dimension_constraint_factory.js）は明示した寸法target・値・配置から拘束Objectを生成し、constraintまたは生成拒否理由を返す。Geometry型と平行判定を注入し、点axisの優先、角度のdegree→radian、半径／直径prefixと配置値の同一性／複製範囲を維持する。非平行の線同士は理由を返し、silentかどうかと案内／logの表示は呼出側が判断する。モデル配列やUI・sessionは変更しない。DimensionQueries.targetItemsはtargetに含まれる参照要素を順序と同一性を保って返し、読取寸法のBlock所有判定などから使用する。寸法配置session、読取寸法の仮追加／重複照会、最終commitは操作側に残る。
@@ -1154,3 +1154,8 @@ DocumentLoading.createWithCodecsは既存のGeometryInstancePersistence／BlockD
 ### Sketch外観の正規化コピー
 
 SketchHierarchy.copyWithNormalizedAppearanceはSketchをshallow copyし、appearance／constructionAppearance／dimensionAppearance／leaderAppearanceだけを既存Appearanceの正規化で独立したObjectにする。未知fieldと外観以外のObject参照、ID・名前・親・kind・visible・lockedはそのまま保持し、元Sketchを変更しない。空値は継承用の空外観を返す従来規則を維持し、階層修復・既定ID・描画Sketchの補完や読込版の移行を行わない。BlockDefinitionEditingのclone／applyとBlockEditorSessionの同期、BlockHistorySnapshotのclone経由で同じ入口を共有する。appは同じ関数を既存featureへ渡すだけとし、新しいUI・採番・履歴・stateは追加しない。
+
+
+### 拘束確定の性能traceの所有
+
+ConstraintCommitCommandは通常確定の最後の性能traceを非公開stateとして保持し、readPerformanceで同じObjectを返す。analysis・UI／draw・hint／log・履歴とtotalMs計測の後にだけ更新し、既存recordPerformance observerがあれば同じtraceを通知する。権限拒否・scope拒否・求解／退化／重複拒否、参照寸法登録や公開前の例外では以前のtraceを維持する。clearPerformanceはnullへ戻すだけでobserver・時計・UI・履歴を呼ばない。appは性能用変数を保持せず、DocumentEditingResetとCanvasTestDriverへ同じcommandのclear／readを直接接続する。計測field・時機・時計呼出し数・性能基準は変更しない。

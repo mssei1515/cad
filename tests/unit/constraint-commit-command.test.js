@@ -65,7 +65,7 @@ test('redundant implicit additions replace the current array by identity before 
  assert.equal(candidate.reference, true); assert.equal(candidate.name, '参照 snap');
  assert.equal(f.events.at(-1)[0], 'forget'); assert.equal(f.events.at(-1)[1], candidate);
 });
-function fixture() {
+function fixture(overrides = {}) {
  const events = [], hints = [], model = { constraints: [] }, state = { editable: true, active: true, source: true, cycle: false, dimension: false, collapse: null, duplicate: null, trace: null, target: {}, history: [], measured: 44 };
  const result = { success: true, result: { errorNorm: 0, variableCount: 2, constraintCount: 1, iterations: 3, reason: 'ok' } };
  const constraint = { name: 'test', sketchId: 'S1' }; let time = 0;
@@ -85,6 +85,7 @@ function fixture() {
   sketchName: id => id, now: () => ++time, recordPerformance: trace => { state.trace = trace; events.push('performance'); },
   resolveSelection: type => { events.push('resolve'); state.requestedType=type; return state.resolution; },
   canvasSelection: { set: (field,value) => { assert.equal(field,'arcEndpointPair'); state.arcEndpointPair=value; events.push('selection'); } },
+  ...overrides,
  });
  return { command, model, state, events, hints, result, constraint };
 }
@@ -96,6 +97,48 @@ test('successful ordinary commit preserves constraint identity, solve ordering a
  const f = fixture(); assert.equal(f.command.ordinary('parallel', f.constraint), true); assert.equal(f.model.constraints[0], f.constraint);
  assert.deepEqual(f.events, ['capture', 'push', 'precondition', 'solve', 'clear', 'analysis', 'ui', 'draw', 'hint', 'log', 'history', 'performance']);
  assert.equal(f.state.trace.type, 'parallel'); assert.equal(f.state.trace.solveVariableCount, 2); assert.equal(f.state.trace.solveIterations, 3);
+});
+
+test('performance belongs to the committing command and publishes after history with the original observer identity', () => {
+ let command, previous = null, historyDone = false;
+ const observed = [];
+ const f = fixture({ recordHistory: () => { assert.equal(command.readPerformance(), previous); historyDone = true; },
+  recordPerformance: trace => { assert.equal(historyDone, true); assert.equal(command.readPerformance(), trace); observed.push(trace); } });
+ command = f.command; assert.equal(command.readPerformance(), null);
+ command.ordinary('parallel', f.constraint); previous = command.readPerformance();
+ assert.equal(previous, observed[0]); assert.equal(previous.type, 'parallel'); assert.ok(Number.isFinite(previous.totalMs));
+ historyDone = false; command.ordinary('equal', { name: 'next', sketchId: 'S1' });
+ assert.notEqual(command.readPerformance(), previous); assert.equal(command.readPerformance(), observed[1]);
+ assert.equal(command.readPerformance().type, 'equal');
+ const before = f.events.length; command.clearPerformance(); command.clearPerformance();
+ assert.equal(command.readPerformance(), null); assert.equal(f.events.length, before); assert.equal(observed.length, 2);
+ const withoutObserver = fixture({ recordPerformance: undefined });
+ assert.equal(withoutObserver.command.ordinary('parallel', withoutObserver.constraint), true);
+ assert.equal(withoutObserver.command.readPerformance().type, 'parallel'); assert.equal(command.readPerformance(), null);
+});
+
+test('authority, solve, collapse and redundancy rejection keep the last successful performance', () => {
+ for (const rejected of ['authority', 'scope', 'solve', 'collapse', 'redundancy']) {
+  const f = fixture({ targetFromConstraint: () => ({}) }); f.command.ordinary('parallel', f.constraint);
+  const previous = f.command.readPerformance();
+  if (rejected === 'authority') f.state.editable = false;
+  if (rejected === 'scope') f.state.active = false;
+  if (rejected === 'solve') f.result.success = false;
+  if (rejected === 'collapse') f.state.collapse = { line: { id: 'L1' }, before: 1, after: 0 };
+  if (rejected === 'redundancy') { f.state.duplicate = { redundant: true }; f.state.dimension = true; }
+  f.events.length = 0; f.command.ordinary('distance', { name: 'rejected', sketchId: 'S1' });
+  assert.equal(f.command.readPerformance(), previous, rejected); assert.equal(f.state.trace, previous, rejected);
+  assert.equal(f.events.includes('performance'), false, rejected);
+ }
+});
+
+test('an exception before publication preserves prior performance and observers still receive the same mutable trace', () => {
+ let fail = false; const error = new Error('history failed');
+ const f = fixture({ recordHistory: () => { if (fail) throw error; }, recordPerformance: trace => { trace.observed = true; } });
+ f.command.ordinary('parallel', f.constraint); const previous = f.command.readPerformance();
+ assert.equal(previous.observed, true); fail = true;
+ assert.throws(() => f.command.ordinary('equal', { name: 'next', sketchId: 'S1' }), value => value === error);
+ assert.equal(f.command.readPerformance(), previous);
 });
 test('ordinary solve rejection restores and reports without history, retaining the existing undefined return', () => {
  const f = fixture(); f.result.success = false; assert.equal(f.command.ordinary('parallel', f.constraint), undefined);

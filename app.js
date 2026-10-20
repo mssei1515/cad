@@ -238,7 +238,6 @@
   });
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
-  let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const applicationRefresh = window.ApplicationRefresh.create({
@@ -2373,7 +2372,7 @@
     targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
     clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
     recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
-    sketchName, now: () => performance.now(), recordPerformance: trace => { lastAuthoringPerformance = trace; },
+    sketchName, now: () => performance.now(),
   });
   function commitNewConstraint(...args) { return constraintCommitCommand.ordinary(...args); }
   function markReferenceConstraint(...args) { return constraintCommitCommand.markReference(...args); }
@@ -3025,7 +3024,7 @@
     const snapObservation = window.CanvasTestDriver.createSnapObservation({ viewport, snapCandidates });
     const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
       readMode: () => mode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
-      decorateSerializedConstraint, serializeConstraint, readPerformance: () => lastAuthoringPerformance, readSelectedGeometry: readTestSelectedGeometry,
+      decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
     });
     const selectableLinePosition = window.CanvasTestDriver.createSelectableLinePosition({
       currentScope: workspace.current, canvas, hitPoint, hitLine, hitDimension, worldToCanvasScreen, elementFromPoint: (x, y) => document.elementFromPoint(x, y),
@@ -3363,7 +3362,7 @@
 
   const documentEditingReset = window.DocumentEditingReset.create({
     documentModel, sketchMoveCommand, activateEditingScope, flushPointerMoves: flushScheduledCanvasPointerMove,
-    selectMode: () => { mode = "select"; }, clearAuthoringPerformance: () => { lastAuthoringPerformance = null; },
+    selectMode: () => { mode = "select"; }, clearAuthoringPerformance: constraintCommitCommand.clearPerformance,
     referenceImageRenderer, invalidateBlockProjectionCache, sketchSolving, referenceConstraintState, constraintAnalysis,
     clearSelection, geometryDrag, dimensionDrag, referenceImageInteraction, canvasNavigation, blankCanvasGesture,
     drawOperationLifecycle, pendingCommandSession, constraintTargetSession, constructionCommand, documentCanvasReset,
