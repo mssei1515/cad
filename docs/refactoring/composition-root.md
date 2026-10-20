@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のCanvas描画診断組立て単位
+
+CanvasRenderTestDriver.createRenderingSupportへ、既存の描画診断五部品の生成・接続を集約した。appは同じcommand／preview Layer／scope／Canvasを明示し、三つの既存ブラウザAPIへ接続する。test hooksの有効条件とAPI順・準備／描画／観測の実装は維持し、通常描画や新たなstateをtestingへ持ち込まない。新file・namespace・script・保存形式変更はない。app.jsは3,270→3,260行（10行減）、今回の再開から3,652→3,260行（392行減）。
+
+構文578ファイル・単体1,687件・関連E2E140件（2.1分）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／png-export／annotation-display-sizeで、変更した三つの診断APIの破線・補助線overhang／marker、file URL起動、既存画面比較、PNG出力と注記表示を確認した。追加単体3件は生成時のscene無参照・共有ownerの結線と12case順、mode／reset、現在scope／viewport／外観、Block参照同一性、描画失敗時の停止とCanvas methodの同一参照復元を検証する。既存helperの本体・公開API名／順とtest hooks guardは変更しない。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-canvas-render-test-support-{focused,check,unit,related}.log。
+
+基準はdevelop 4b679b9。週枠残量70%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はPointerInteractionControllerのpressへappが渡す非active identity選択と通常選択の事前処理を分析する。既存CanvasSelectionInteractionのidentity選択と同じSelection／Sketch照会へ責務を揃えられるか確認する。Ctrl／Shiftの異なるSketch拒否、lock時の選択→guard通知、inspection保持／解除、clearの条件と早期returnを維持し、pointer captureやcommand routingを変更しない。既存ownerへまとめられる場合だけ採用し、mode容器・巨大な入力context・新しい小fileは作らない。機能組立ての整理も継続し、細かなcallback抽出だけで200〜500行へ届くとは扱わない。
+
 ### 新規Parameter候補の読取り検証
 
 AnnotationCommandのvalidateParameter本体を既存ParameterNamespace.validateNewDimensionParameterへ統合した。appは現在modelを明示して依頼し、名前／式／symbols／read-only値／Engine評価の順・一度のsymbol収集・例外・現在言語errorを同じownerで調整する。ensure・採番・target更新を行う通常評価とは別の読取り入口とし、draft／model無変更と有限の0／負数の許可を維持した。確定時のcommitParameterや履歴は変更しない。新file・state・script・保存形式変更はない。app.jsは3,281→3,270行（11行減）、今回の再開から3,652→3,270行（382行減）。
