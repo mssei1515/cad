@@ -2,7 +2,7 @@
 
 現在の実装配置を調べるための開発資料。正式仕様や将来の分割設計ではない。仕様と保証内容は[仕様の入口](../../spec/README.md)および[検証対応](../../spec/verification/保証対応.md)を参照する。
 
-現在の構築依存と初期化境界は[composition root再監査](bootstrap-boundary-audit.md)を参照する。63c886c基準の再監査では、広い構築契約をそのまま新fileへ包まず、既存ownerのAPIを用いた依存削減と特殊寸法編集の責務整理を次の判断とした。
+現在の構築依存と初期化境界は[composition root再監査](bootstrap-boundary-audit.md)を参照する。63c886c基準の再監査では、広い構築契約をそのまま新fileへ包まず、既存ownerのAPIを用いて依存を減らす方針とした。特殊寸法編集の支援は既存DimensionValueCommandへ統合済みである。
 
 ## 1. 実装ファイルの責務
 
@@ -1221,3 +1221,6 @@ CanvasCommandInputs（src/application/canvas_command_inputs.js）はPointerInter
 
 
 CanvasHitInteraction（src/application/canvas_hit_interaction.js）は同じGeometry／scene hit readerからCanvasPressQueryとPointerHoverを生成・接続する。共通readerを一度受け、各子factoryにはpress専用／hover専用の引数を分けて渡す。注記のinteraction hitは従来どおりanchor、通常hoverのframe／frame-enable／text bodyを許可し、Block投影をこの優先hitから除外する。通常の本文／投影のhit自体は既存の後段queryに残る。pressは読取りsnapshot、hoverは既存CanvasHoverの表示更新という担当の違いを維持し、Annotation interaction以外の優先順位・active Sketch選別・寸法／projection operand・更新短絡は各既存ownerに残す。生成時にGeometry／scope／hoverを読まず、queryごとに現在値を取得する。返すAPIはpressとhoverだけで、新state・cache・SelectionやDocument編集は持たない。appは同じownerとreaderを明示して接続する。
+
+
+DimensionValueCommand.createEditingSupportは既存の寸法値編集へ接続する対象選択と特殊寸法適用を所有する。Instance角度間隔、Annotation寸法、Annotation anchor距離の適用先・式評価・hint／履歴を11の明示依存で調整し、selectEditedConstraint／submitSpecialDistance／commitSpecialPropertyを返す。submitはinterval→Annotation→anchor→非対象nullの順、Propertiesは既存GeometrySolverのInstanceAngleIntervalConstraint型とproperty→Annotationの順を維持する。Annotation式はnull constraintで現在の評価入口へ渡し、無関係なpropertyでも従来の評価順を保つ。非対象null／拒否false／成功の区別、履歴回数、submitの例外伝播とPropertiesのerror hint化を変更しない。対象選択は同じCanvasSelectionのdimensionConstraint設定→constraint解除→後段drag resetの順で、dragだけを遅延callbackで受ける。生成時に各ownerを読まず、一般createの既存API・pending／入力／UI／求解とrollbackの調整は維持する。新しい操作state、汎用context、保存形式は追加しない。

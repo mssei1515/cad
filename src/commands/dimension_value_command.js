@@ -1,6 +1,35 @@
 /* Begin and apply dimension value edits, preserving selection, rollback and first-dimension framing. */
 (() => {
   "use strict";
+  function createEditingSupport({ synchronizedInstanceEditing, annotationDimensions, annotationAnchorConstraints,
+    expressionFromUserInput, evaluateDimensionExpressionDraft, targetFromConstraint, parameterErrorText,
+    setHint, recordHistory, canvasSelection, resetDimensionDrag }) {
+    function selectEditedConstraint(constraint) {
+      canvasSelection.set("dimensionConstraint", constraint); canvasSelection.set("constraint", null); resetDimensionDrag();
+    }
+    function submitSpecialDistance(pending, value) {
+      if (pending.target?.interval) return synchronizedInstanceEditing.interval(pending, value, expressionFromUserInput(pending.buffer));
+      if (pending.constraint?.annotationOwner) {
+        if (!annotationDimensions.setValue(pending.constraint, value)) { setHint("注記の距離拘束が成立しません", "error"); return false; }
+        recordHistory("注記寸法値変更"); return true;
+      }
+      return pending.target?.annotationAnchor ? annotationAnchorConstraints.submitDistance(value, pending.target.dimensionAxis, pending.dimension) : null;
+    }
+    function commitSpecialProperty(constraint, property, input) {
+      if (constraint instanceof window.GeometrySolver.InstanceAngleIntervalConstraint) {
+        if (property !== "constraint-expression") return null;
+        try { const expression = expressionFromUserInput(input); return synchronizedInstanceEditing.interval({ constraint, target: targetFromConstraint(constraint), dimension: constraint.dimension }, evaluateDimensionExpressionDraft(constraint, expression), expression); }
+        catch (error) { setHint(parameterErrorText(error), "error"); return false; }
+      }
+      if (!constraint.annotationOwner) return null;
+      try {
+        const value = evaluateDimensionExpressionDraft(null, expressionFromUserInput(input));
+        if (property !== "constraint-expression" || !annotationDimensions.setValue(constraint, value)) throw new Error("注記の距離拘束が成立しません");
+        recordHistory("注記寸法値変更"); return true;
+      } catch (error) { setHint(parameterErrorText(error), "error"); return false; }
+    }
+    return Object.freeze({ selectEditedConstraint, submitSpecialDistance, commitSpecialProperty });
+  }
   function create({ canEdit = () => true, renameDimension, getPending, setPending, expressionFromUserInput, evaluateDimensionExpressionDraft,
     applicationText, parameterErrorText, setHint, syncDimensionValueInput, draw, activeSketchId,
     sketchHasDimensionConstraint, captureSketchScreenFootprint, snapshotModelState, restoreModelState,
@@ -118,5 +147,5 @@
 
     return Object.freeze({ startEdit, submit, commitProperty });
   }
-  window.DimensionValueCommand = Object.freeze({ create });
+  window.DimensionValueCommand = Object.freeze({ create, createEditingSupport });
 })();

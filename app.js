@@ -810,6 +810,10 @@
     return geometryInstanceCommand.isPlacing(instance) ? geometryInstanceCommand.changeSetting(key, value)
       : synchronizedInstanceEditing.change(instance, key, value);
   }
+  const dimensionEditingSupport = window.DimensionValueCommand.createEditingSupport({
+    synchronizedInstanceEditing, annotationDimensions, annotationAnchorConstraints, expressionFromUserInput, evaluateDimensionExpressionDraft,
+    targetFromConstraint, parameterErrorText, setHint, recordHistory, canvasSelection, resetDimensionDrag: () => dimensionDrag.reset(),
+  });
   const dimensionValueCommand = window.DimensionValueCommand.create({
     canEdit: (id, operation) => guardSketchEdit(id, operation),
     renameDimension: parameterNamespace.renameDimension,
@@ -821,31 +825,7 @@
     stabilizeActiveParameterNamespace, constraintSketchId, acceptError: CONSTRAINT_ACCEPT_ERROR,
     hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
     targetFromConstraint, isReadOnlyDimension, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput,
-    selectEditedConstraint: constraint => {
-      canvasSelection.set("dimensionConstraint", constraint); canvasSelection.set("constraint", null); dimensionDrag.reset();
-    },
-    addDistanceConstraintFromTarget,
-    submitSpecialDistance: (pending, value) => {
-      if (pending.target?.interval) return synchronizedInstanceEditing.interval(pending, value, expressionFromUserInput(pending.buffer));
-      if (pending.constraint?.annotationOwner) {
-        if (!annotationDimensions.setValue(pending.constraint, value)) { setHint("注記の距離拘束が成立しません", "error"); return false; }
-        recordHistory("注記寸法値変更"); return true;
-      }
-      return pending.target?.annotationAnchor ? annotationAnchorConstraints.submitDistance(value, pending.target.dimensionAxis, pending.dimension) : null;
-    },
-    commitSpecialProperty: (constraint, property, input) => {
-      if (constraint instanceof window.GeometrySolver.InstanceAngleIntervalConstraint) {
-        if (property !== "constraint-expression") return null;
-        try { const expression = expressionFromUserInput(input); return synchronizedInstanceEditing.interval({ constraint, target: targetFromConstraint(constraint), dimension: constraint.dimension }, evaluateDimensionExpressionDraft(constraint, expression), expression); }
-        catch (error) { setHint(parameterErrorText(error), "error"); return false; }
-      }
-      if (!constraint.annotationOwner) return null;
-      try {
-        const value = evaluateDimensionExpressionDraft(null, expressionFromUserInput(input));
-        if (property !== "constraint-expression" || !annotationDimensions.setValue(constraint, value)) throw new Error("注記の距離拘束が成立しません");
-        recordHistory("注記寸法値変更"); return true;
-      } catch (error) { setHint(parameterErrorText(error), "error"); return false; }
-    },
+    ...dimensionEditingSupport, addDistanceConstraintFromTarget,
     restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;

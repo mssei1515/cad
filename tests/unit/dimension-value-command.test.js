@@ -124,3 +124,102 @@ test('annotation distance submission reuses evaluation and input lifecycle witho
     assert.equal(f.pending() === null, accepted);
   }
 });
+
+for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js']) {
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox, { filename: file });
+}
+function supportFixture() {
+  const events = [], state = { ready: false, value: 20, namespace: 'document', accepted: true, intervalResult: true, anchorResult: true, failure: null };
+  const ready = () => assert.equal(state.ready, true);
+  const fail = name => { if (state.failure?.name === name) throw state.failure.error; };
+  const ports = {
+    synchronizedInstanceEditing: { interval(pending, value, expression) { ready(); events.push(['interval', pending, value, expression]); fail('interval'); return state.intervalResult; } },
+    annotationDimensions: { setValue(constraint, value) { ready(); events.push(['annotation', constraint, value]); fail('annotation'); return state.accepted; } },
+    annotationAnchorConstraints: { submitDistance(value, axis, dimension) { ready(); events.push(['anchor', value, axis, dimension]); fail('anchor'); return state.anchorResult; } },
+    expressionFromUserInput: input => { ready(); events.push(['normalize', input]); fail('normalize'); return 'normalized:'+input; },
+    evaluateDimensionExpressionDraft: (constraint, expression, namespace, options) => { ready(); events.push(['evaluate', constraint, expression, state.namespace, namespace, options]); fail('evaluate'); return state.value; },
+    targetFromConstraint: constraint => { ready(); events.push(['target', constraint]); fail('target'); return state.target; },
+    parameterErrorText: error => { ready(); events.push(['error', error]); return error.message; },
+    setHint: (...args) => { ready(); events.push(['hint', ...args]); },
+    recordHistory: label => { ready(); events.push(['history', label]); fail('history'); },
+    canvasSelection: { dimensionConstraint: null, constraint: { id: 'old' }, annotations: [{}], set(field, value) { ready(); assert.equal(this, ports.canvasSelection); events.push(['selection', field, value]); this[field] = value; } },
+    resetDimensionDrag: () => { ready(); events.push(['drag-reset', state.drag]); fail('drag'); },
+  };
+  const support = sandbox.window.DimensionValueCommand.createEditingSupport(ports); assert.deepEqual(events, []); state.ready = true;
+  return { support, state, events, ports, names: () => events.map(event => event[0]) };
+}
+function intervalConstraint() {
+  const G = sandbox.window.GeometrySolver;
+  return new G.InstanceAngleIntervalConstraint(new G.Point('P', 0, 0), .5);
+}
+
+test('editing support is lazy and selection preserves identity and clear-before-live-drag-reset even on failure', () => {
+  const f = supportFixture(), constraint = {}, annotations = f.ports.canvasSelection.annotations; assert.ok(Object.isFrozen(f.support));
+  f.state.drag = {}; f.support.selectEditedConstraint(constraint);
+  assert.deepEqual(f.names(), ['selection','selection','drag-reset']); assert.equal(f.events[2][1], f.state.drag);
+  assert.equal(f.ports.canvasSelection.dimensionConstraint, constraint); assert.equal(f.ports.canvasSelection.constraint, null); assert.equal(f.ports.canvasSelection.annotations, annotations);
+  f.events.length = 0; const error = new Error('reset failed'); f.state.failure = { name: 'drag', error };
+  assert.throws(() => f.support.selectEditedConstraint(constraint), value => value === error); assert.deepEqual(f.names(), ['selection','selection','drag-reset']);
+});
+
+test('special submit keeps interval before annotation before anchor, exact arguments and null versus rejection results', () => {
+  const f = supportFixture(), dimension = {}, constraint = { annotationOwner: {} }, pending = { target: { interval: true, annotationAnchor: true }, constraint, buffer: '=a', dimension };
+  f.state.intervalResult = false; assert.equal(f.support.submitSpecialDistance(pending, -20), false);
+  assert.deepEqual(f.names(), ['normalize','interval']); assert.equal(f.events[1][1], pending); assert.equal(f.events[1][2], -20); assert.equal(f.events[1][3], 'normalized:=a');
+  delete pending.target.interval; f.events.length = 0; f.state.accepted = false; assert.equal(f.support.submitSpecialDistance(pending, 25), false);
+  assert.deepEqual(f.names(), ['annotation','hint']); assert.equal(f.events[0][1], constraint); assert.equal(f.events[1][2], 'error');
+  f.events.length = 0; f.state.accepted = true; assert.equal(f.support.submitSpecialDistance(pending, 25), true); assert.deepEqual(f.names(), ['annotation','history']); assert.equal(f.events[1][1], '注記寸法値変更');
+  f.events.length = 0; delete pending.constraint; pending.target.dimensionAxis = 'y'; const result = {}; f.state.anchorResult = result;
+  assert.equal(f.support.submitSpecialDistance(pending, 15), result); assert.deepEqual(f.events, [['anchor',15,'y',dimension]]);
+  f.events.length = 0; assert.equal(f.support.submitSpecialDistance({ target: {} }, 15), null); assert.deepEqual(f.events, []);
+});
+
+test('special property editing retains type/property guards, target and current expression scope, and annotation null constraint', () => {
+  const f = supportFixture(), constraint = intervalConstraint(); constraint.dimension = {}; f.state.target = { interval: true };
+  assert.equal(f.support.commitSpecialProperty(constraint, 'constraint-parameter-name', 'x'), null); assert.deepEqual(f.events, []);
+  assert.equal(f.support.commitSpecialProperty(constraint, 'constraint-expression', '=x'), true);
+  assert.deepEqual(f.names(), ['normalize','target','evaluate','interval']); assert.equal(f.events[2][1], constraint); assert.equal(f.events[3][1].constraint, constraint); assert.equal(f.events[3][1].target, f.state.target); assert.equal(f.events[3][1].dimension, constraint.dimension);
+  f.events.length = 0; f.state.namespace = 'block'; f.state.value = -30; f.support.commitSpecialProperty(constraint, 'constraint-expression', '=y'); assert.equal(f.events[2][3], 'block'); assert.equal(f.events[3][2], -30);
+  f.events.length = 0; const annotation = { annotationOwner: {} }; assert.equal(f.support.commitSpecialProperty(annotation, 'constraint-expression', '2'), true);
+  assert.deepEqual(f.names(), ['normalize','evaluate','annotation','history']); assert.equal(f.events[1][1], null); assert.equal(f.events[2][1], annotation);
+  f.events.length = 0; assert.equal(f.support.commitSpecialProperty(annotation, 'constraint-parameter-name', 'name'), false);
+  assert.deepEqual(f.names(), ['normalize','evaluate','error','hint']); assert.equal(f.events[2][1].message, '注記の距離拘束が成立しません');
+  f.events.length = 0; assert.equal(f.support.commitSpecialProperty({}, 'constraint-expression', '2'), null); assert.deepEqual(f.events, []);
+});
+
+test('submit errors propagate while Properties errors become one error hint without adding rollback or duplicate history', () => {
+  for (const name of ['normalize','interval','annotation','anchor','history']) {
+    const f = supportFixture(), error = new Error(name); f.state.failure = { name, error };
+    const pending = name === 'normalize' || name === 'interval' ? { target: { interval: true }, buffer: 'x' } : name === 'anchor' ? { target: { annotationAnchor: true } } : { constraint: { annotationOwner: {} } };
+    assert.throws(() => f.support.submitSpecialDistance(pending, 25), value => value === error); assert.ok(!f.names().includes('error')); assert.ok(!f.names().includes('hint'));
+  }
+  for (const name of ['normalize','target','evaluate','interval','annotation','history']) {
+    const f = supportFixture(), error = new Error(name); f.state.failure = { name, error };
+    const constraint = name === 'annotation' || name === 'history' ? { annotationOwner: {} } : intervalConstraint();
+    assert.equal(f.support.commitSpecialProperty(constraint, 'constraint-expression', 'x'), false);
+    assert.deepEqual(f.names().slice(-2), ['error','hint']); assert.equal(f.events.at(-2)[1], error); assert.deepEqual(f.events.at(-1), ['hint',name,'error']);
+    assert.ok(f.names().filter(value => value === 'history').length <= 1);
+  }
+  const f = supportFixture(); f.state.accepted = false;
+  assert.equal(f.support.commitSpecialProperty({ annotationOwner: {} }, 'constraint-expression', 'x'), false);
+  assert.deepEqual(f.names(), ['normalize','evaluate','annotation','error','hint']);
+});
+
+test('composed special submit retains the general permission, evaluation and pending/input lifecycle for success and rejection', () => {
+  for (const interval of [false,true]) for (const accepted of [false,true]) {
+    const f = supportFixture(); f.state.intervalResult = f.state.accepted = accepted;
+    let pending = { type: 'distance-value', target: interval ? { interval: true } : {}, constraint: interval ? intervalConstraint() : { annotationOwner: {} }, buffer: '=x' };
+    const original = pending;
+    const command = sandbox.window.DimensionValueCommand.create({ ...f.ports, ...f.support,
+      canEdit: () => true, getPending: () => pending, setPending: value => { f.events.push(['pending',value]); pending = value; },
+      constraintSketchId: () => 'S', hideDimensionValueInput: () => f.events.push(['hide']), updateUI: () => f.events.push(['ui']), draw: () => f.events.push(['draw']),
+    });
+    command.submit(); assert.equal(pending, accepted ? null : original);
+    assert.deepEqual(f.names().slice(-2), ['ui','draw']); assert.equal(f.names().includes('hide'), accepted);
+    assert.equal(f.names().filter(name => name === 'normalize').length, interval ? 2 : 1); assert.equal(f.names().filter(name => name === 'history').length, !interval && accepted ? 1 : 0);
+    assert.equal(f.events.find(event => event[0] === 'evaluate')[5].signedAngle, interval);
+  }
+  const f = supportFixture(), constraint = intervalConstraint();
+  const denied = sandbox.window.DimensionValueCommand.create({ ...f.ports, ...f.support, canEdit: () => false, constraintSketchId: () => 'S' });
+  assert.equal(denied.commitProperty(constraint, 'constraint-expression', 'x'), false); assert.deepEqual(f.events, []);
+});
