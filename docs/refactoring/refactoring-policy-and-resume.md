@@ -98,7 +98,17 @@
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-10-16）
+## 8. 再開地点（2026-10-20）
+
+週枠使用2%／残量98%への回復を確認し、5ee5f3fでlocal／originのmain・developの同期とcleanを確認してcodex/sketch-projection-interactionで再開した。現在の週枠は使用3%／残量97%。全体目標は未完了で、停止条件には達していない。今回の単位は作業branchをCommit／Pushしdevelopへ統合・Pushする。mainは停止条件到達時の最終検証後に反映する。
+
+SketchProjectionFeatureへ投影元query／commandの生成・接続、矩形候補取得、旧投影拘束の形状編集guardを集約した。shared queriesと読込時editingは従来の初期化位置・所有者を維持する。source factoryはcommandと同時に生成するがscope等を読まず、後段のoperand変換と矩形照会は操作時に委譲する。staged sources、重複・coverage判定、確定時の再照会、取消・履歴、Sketch権限の短絡と共有node判定、文言、保存形式は変更しない。巨大contextや新cacheは追加していない。app.jsは3,652→3,622行（30行減）。
+
+構文554ファイル・単体1,595件・関連E2E140件が成功（全runner exit 0、E2E1.7分）。関連はsketch-projection／sketch-projection-compatibility-driver／sketch-permissions／command-panel／unified-uiであり、file URL起動も含む。このコードで全E2Eは未実行。新単体4件は遅延依存とscope置換、source共有と確定のObject同一性、権限短絡／共有node／稼働判定、確定時coverage再確認／取消を確認する。ログは一時ディレクトリのcad-projection-feature-{check,unit,e2e}.log。
+
+次はGeometry dragのplan／solver／editing／commandの組立て境界を分析する。buildDragSession／prepare／preview／finishはAnnotationやテスト支援にも共有され、profile処理とCanvas pointerの開始終了も接続されている。共有先・初期化順・失敗復元と履歴の所有を保ち、別の巨大contextへまとめない。現在のSketch投影query／旧形式修復を再分離するだけの変更も避ける。
+
+### 前回の停止・リリース（2026-10-16）
 
 週枠使用51%／残量49%を確認し、指定の停止条件に達したため新たな分離を停止する。この区切りのmain反映と同期を完了して目標を一時停止し、クレジット回復後に再開する。全体目標は未完了。app.jsは今回の開始3,949→3,652行（297行減）。直近の所属照会と寸法描画の整理は3,652→3,652行（0行変化）であり、数百行のcomposition rootへ収束したとは扱わない。
 

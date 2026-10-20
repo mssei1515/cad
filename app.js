@@ -311,15 +311,23 @@
     hasSelection: (...args) => hasSelection(...args),
     updateGeometrySelectionUI: (...args) => updateGeometrySelectionUI(...args),
   });
-  const sketchProjectionCommand = window.SketchProjectionCommand.create({
-    selectedGeometryItems, sketchProjectionEntryFromItem, sketchProjectionEntryFromOperand, sketchProjectionSourceIsCovered, sketchProjectionEntriesByRect,
-    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+  const sketchProjectionFeature = window.SketchProjectionFeature.create({
+    currentScope: () => model, queries: sketchProjectionQueries, activeSketchId, geometryRefForItem, geometryRefsEqual,
+    constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem, elementSketchId,
+    isReferenceSourceSketchId, isVisibleSketchElement, operandElement: operand => operandElement(operand), guardSketchEdit,
+    readProjectionRectangle: (...args) => rectangleSelectionQuery.readProjection(...args),
+    geometry: { points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
+      arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches },
+    selectedGeometryItems, cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     clearSelection, getMode: () => mode, setMode: value => { mode = value; }, clearSnap: () => clearSnap(),
-    updateToolbar, setHint, applicationText, updateUI, draw, activeSketchId, normalizeGeometryInstance,
-    nextId: () => documentIds.allocate("sketchProjection"), geometryRefForItem, currentScope: () => model,
-    canvasSelection, refreshConstraintAnalysis, recordHistory,
+    updateToolbar, setHint, applicationText, updateUI, draw, normalizeGeometryInstance,
+    nextId: () => documentIds.allocate("sketchProjection"), canvasSelection, refreshConstraintAnalysis, recordHistory,
     clearHover: () => canvasHover.update({ point: null, line: null, circle: null, arc: null, spline: null, sketchIdentity: null }),
   });
+  const { command: sketchProjectionCommand, sources: sketchProjectionSources, sketchProjectionEntriesByRect,
+    guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
+  const { sketchProjectionSourceKey, sketchProjectionSourceIsCovered, sketchProjectionEntryFromItem,
+    sketchProjectionEntryFromOperand } = sketchProjectionSources;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
     addByRect: addSketchProjectionSourcesByRect, commit: commitSketchProjectionCommand } = sketchProjectionCommand;
   const drawingPreview = window.DrawingPreview.create({ types: { Point, Line, Circle, Arc }, canvasHover,
@@ -500,11 +508,6 @@
   const { sameArcEndpoint, constraintTargetsFromOperands, linesAreParallel } = constraintCandidates;
   const constraintOperandValues = window.ConstraintOperands.create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection, closestSplinePoint: window.SplineGeometry.closestPoint });
   const { operandElement, makeConstraintOperand, operandFromReferenceTarget, referenceTargetFromOperand, sameConstraintOperand } = constraintOperandValues;
-  const sketchProjectionSources = window.SketchProjectionQueries.createSources({
-    currentScope: () => model, activeSketchId, geometryRefForItem, geometryRefsEqual, queries: sketchProjectionQueries,
-    constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem, elementSketchId,
-    isReferenceSourceSketchId, isVisibleSketchElement, operandElement,
-  });
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
@@ -1084,22 +1087,6 @@
     return geometryRefKey(geometryRefForItem(item)) || "";
   }
 
-  function sketchProjectionShapeEditBlockedMessage(action = "") {
-    const prefix = action ? `${action}: ` : "";
-    return applicationText(
-      `${prefix}旧形式の投影拘束を削除してから形状を編集してください`,
-      `${prefix}Delete the legacy sketch projection constraint before editing the shape.`,
-    );
-  }
-
-  function guardSketchProjectionShapeEdit(items, { includeSharedNodes = true, action = "" } = {}) {
-    if (!items.filter(Boolean).every(item => guardSketchEdit(elementSketchId(item)))) return false;
-    if (sketchProjectionConstraintsAffectingItems(items, { includeSharedNodes }).length === 0) return true;
-    setHint(sketchProjectionShapeEditBlockedMessage(action), "error");
-    return false;
-  }
-
-
   function snappedBlockRotation(rotation) {
     const quarterTurns = Math.round((Number(rotation) || 0) / BLOCK_ORTHOGONAL_ROTATION_STEP);
     return ((quarterTurns % 4) + 4) % 4 * BLOCK_ORTHOGONAL_ROTATION_STEP;
@@ -1240,23 +1227,6 @@
   function drawOrderBySketch(...args) { return sketchPresentation.drawOrderBySketch(...args); }
 
   function sketchAlpha(...args) { return sketchPresentation.sketchAlpha(...args); }
-
-  function sketchProjectionSourceKey(...args) { return sketchProjectionSources.sketchProjectionSourceKey(...args); }
-
-  function sketchProjectionSourceIsCovered(...args) { return sketchProjectionSources.sketchProjectionSourceIsCovered(...args); }
-
-  function sketchProjectionEntryFromItem(...args) { return sketchProjectionSources.sketchProjectionEntryFromItem(...args); }
-
-  function sketchProjectionEntryFromOperand(...args) { return sketchProjectionSources.sketchProjectionEntryFromOperand(...args); }
-
-
-  function sketchProjectionEntriesByRect(rect, crossing) {
-    return rectangleSelectionQuery.readProjection(rect, crossing, {
-      points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
-      arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches,
-    }, sketchProjectionEntryFromItem);
-  }
-
 
   function selectedItemsForGeometryInstance() { return instanceSourceSelection.read(); }
 

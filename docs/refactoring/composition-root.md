@@ -4,7 +4,15 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-16）
+## 現在の再開地点（2026-10-20）
+
+SketchProjectionFeatureへ投影元query／commandの生成・接続、矩形候補取得、旧投影拘束の形状編集guardを集約した。shared queriesと読込時editingは従来の初期化位置・所有者を維持する。source factoryはcommandと同時に生成するがscope等を読まず、後段のoperand変換と矩形照会は操作時に委譲する。staged sources、重複・coverage判定、確定時の再照会、取消・履歴、Sketch権限の短絡と共有node判定、文言、保存形式は変更しない。巨大contextや新cacheは追加していない。app.jsは3,652→3,622行（30行減）。
+
+構文554ファイル・単体1,595件・関連E2E140件が成功（全runner exit 0、E2E1.7分）。関連はsketch-projection／sketch-projection-compatibility-driver／sketch-permissions／command-panel／unified-uiであり、file URL起動も含む。このコードで全E2Eは未実行。新単体4件は遅延依存とscope置換、source共有と確定のObject同一性、権限短絡／共有node／稼働判定、確定時coverage再確認／取消を確認する。ログは一時ディレクトリのcad-projection-feature-{check,unit,e2e}.log。
+
+週枠残量97%で継続中。次の境界分析は再開手順section 8を参照する。mainは前回releaseの5ee5f3fを維持し、今回の単位はdevelopまで統合する。
+
+## 前回の再開・停止地点（2026-10-16）
 
 最新の検証済みコードはaa9e3af（develop統合1be84e3）。構文552ファイル・単体1,591件・全E2E584件が成功（全E2E23.7分、exit 0）。app.jsは今回の3,949→3,652行（297行減）、直近の照会整理は3,652→3,652行（0行変化）。週枠残量49%の停止条件に達したため、この記録を保存後mainを最後に反映してdevelopと同期し、一時停止する。数百行への全体目標は未完了。再開時の判断と以前の失敗経緯はrefactoring-policy-and-resume.mdのsection 8を参照する。
 
