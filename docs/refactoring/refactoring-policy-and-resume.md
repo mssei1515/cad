@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のConstraint入力組立て単位
+
+既存ConstraintCommandInput.createFeatureへ寸法継続と通常拘束入力の共通owner接続を集約した。六つの限定依存からdimensionを先に作り、既存DimensionDragFeatureの生成後にcreateInputで通常入力を作る。CanvasCommandInputs内のAnnotation→Constraint→Instance→Point→Drawing→Selectionという生成順を維持する。共有するのは既存session／commandとdragのbegin／selectedLineGroupであり、新たな可変context・state・cache・model・fileはない。Placement／Constraint commandのreceiver、pending.readとdrag関数の非bind呼出し、現在stateの読取り、入力優先順・例外伝播を維持し、従来の個別callback構築も残す。
+
+appの不要になったretarget委譲関数を除去し、DimensionDragFeatureの生成結果を名前で保持した。CanvasCommandInputsへのcanonical構築引数55→52、引数内root参照54→51。app.jsは3,055→3,055行（0行差）。行数を削るための整形は行わず、共有ownerと二段階構築の境界を明示した。ASTで新bindingの生成2,236／2,240行目に対し参照が2,243／2,248／2,358行目以降であり、新たな未使用bindingがないことを確認した。正式仕様と実装mapを更新した。
+
+構文588ファイル・全単体1,772件・関連単体23件が成功（exit 0）。追加3件は二段階生成時の無照会、共通sessionのlive state、retarget優先と値入力、拘束operandと元参照、group選択維持と非group解除、drag関数の非bind、例外伝播、数値入力中のclick消費、実子factoryの生成順とlegacy callback未使用を確認する。
+
+関連E2E183件が全成功（3.4分、exit 0）。unified-ui／phase0-characterization／multiple-dimensions／slot-dimension／dimension-prefix／sketch-permissions／command-panel／unified-annotations／adversarial-authoring-performanceを実行し、性能file全12件、寸法／拘束入力・group drag・式／prefix・read-only・Root／Sketch権限、既存画面比較・履歴・保存再読込を確認した。pan158ms（175ms未満）、空白矩形218ms（250ms未満）だった。過去の線選択157／158msやpan超過の失敗を今回の成功で置き換えず、全性能問題の解消や最新全E2E成功とは扱わない。全runner終了と専用server終了を回収済み。ログは一時directoryのcad-constraint-feature-{focused,check,unit,related}.log。mainは5ee5f3fのまま保留、最新全E2Eは未実行、全体目標は未完了。週枠使用15%・残量85%を確認した。この単位をCommit／Pushしdevelopへ統合する。
+
+次はCanvasの入力構築に残る共有Selection／drag／command ownerと、app全体の構築・起動段階を再確認する。小さなalias置換だけを反復せず、既存owner単位の組立てと操作開始／終了の境界を選ぶ。未使用bindingも実際の参照と公開境界を確認し、不要なroot接続を残さない。main反映には未解決の性能問題と最新全E2Eの確認が残る。
+
+
 ### 最新の寸法入力継続単位
 
 appのDimensionDrag用continueCommandClickとisDimensionConstraintCommandActiveを既存ConstraintCommandInput.createDimensionContinuationへ集約した。六つの限定依存（CanvasHover／canvasPoint／pending session／constraint target session／DimensionPlacementCommand／ConstraintTargetCommand）からisActiveとcontinueClickだけを返す。有効判定はtarget→pendingの短絡を維持し、継続clickはhover解除→座標変換→pending読取り→retargetまたはoperand入力の順を維持する。hitsのundefinedだけを呼出し分岐で新しい空Objectへし、nullは保持する。command ownerのreceiver・戻り値undefined・例外と部分状態も維持する。新たなmode／pending／履歴／modelは持たない。

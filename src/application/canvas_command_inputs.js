@@ -3,7 +3,7 @@
   "use strict";
   function create({ readMode, readPending, readPendingConstraint, document, canvas, canvasSelection, clearSelection, canvasHover, draw, updateUI, updateGeometrySelectionUI, setHint, applicationText,
     annotationCommand, annotationDrag, startAnnotationAnchorConstraint, selectedDimensionLineGroup, isDimensionConstraintCommandActive, beginDimensionDrag,
-    retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint, handleConstraintOperandClick,
+    retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint, handleConstraintOperandClick, constraintInputFeature, dimensionDragging,
     instanceSourceCommand, geometryInstanceCommand, sceneQueries, hitReferenceTarget, hitDerivedProjectionOperand, hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource,
     clearSnap, selectionRectangle, hitHatchAt, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing,
     transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, basicDrawingInput, handleLineClick, handleCenterlineClick, handleCircleCenterCrossClick,
@@ -17,7 +17,9 @@
       startAnchorConstraint: startAnnotationAnchorConstraint,
       releasePanelFocus,
     });
-    const constraintCommandInput = window.ConstraintCommandInput.create({
+    const constraintCommandInput = constraintInputFeature ? constraintInputFeature.createInput({
+      dragging: dimensionDragging, canvasSelection, constraintTargetHint, setHint, updateGeometrySelectionUI, draw,
+    }) : window.ConstraintCommandInput.create({
       canDragDimensionGroup: hit => Boolean(selectedDimensionLineGroup(hit.constraint)),
       getPending: readPending, getPendingConstraint: readPendingConstraint, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
       beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,

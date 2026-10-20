@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のConstraint入力組立て単位
+
+ConstraintCommandInput.createFeatureで寸法継続と通常拘束入力を二段階で組み立て、同じsession／command ownerを共有する。CanvasCommandInputs内の子factory順と既存APIを維持し、新stateや汎用contextは増やさない。canonical構築引数55→52、root参照54→51。app.jsは3,055→3,055行（0行差）。行数ではなく共有ownerと組立て境界を整理した。検証と次の候補は[再開手順](refactoring-policy-and-resume.md)へ記録する。main保留・全体目標未完了。
+
 ### 最新の寸法入力継続単位
 
 Dimension dragから距離入力へ戻る処理と有効判定を、既存ConstraintCommandInputの専用APIへ集約した。六つの限定依存と二操作で分岐を所有し、DimensionDragFeatureへ共有する。rootの状態判定・hover解除／座標変換とcommand振分けの実装を除去し、生成順とdrag session・履歴は維持した。app.jsは3,063→3,055行（8行減）。旧実装との276ケース比較・単体と最新検証は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
