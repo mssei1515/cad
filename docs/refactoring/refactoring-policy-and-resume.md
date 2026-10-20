@@ -60,7 +60,7 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。特にmodeは複数のcommandとtestから更新されるため、getter／setter容器への移動だけでは完了としない。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
-最後の性能traceは生成ownerのConstraintCommitCommandへ、参照を外す注記コピーの表示値変換は既存ClipboardTransferへ統合済み。共有外観UIの組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線は既存PropertiesDisplayへ集約した。Canvas context menuの操作結線はCanvasContextInteractionへ集約した。拘束・寸法開始準備はDrawOperationLifecycle、角度間隔寸法開始はDimensionPlacementCommandへ統合した。Geometry削除時の操作終了はGeometryDeletionCommandへ統合した。拘束の共有装飾と保存metadataはConstraintPersistenceへ統合した。Annotation Parameter候補の読取り検証はParameterNamespaceへ統合した。次はtest hooksのCanvas描画診断group等、残る機能組立ての責務を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
+最後の性能traceは生成ownerのConstraintCommitCommandへ、参照を外す注記コピーの表示値変換は既存ClipboardTransferへ統合済み。共有外観UIの組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線は既存PropertiesDisplayへ集約した。Canvas context menuの操作結線はCanvasContextInteractionへ集約した。拘束・寸法開始準備はDrawOperationLifecycle、角度間隔寸法開始はDimensionPlacementCommandへ統合した。Geometry削除時の操作終了はGeometryDeletionCommandへ統合した。拘束の共有装飾と保存metadataはConstraintPersistenceへ統合した。Annotation Parameter候補の読取り検証はParameterNamespaceへ統合した。Canvas描画診断groupの五部品の組立ては既存CanvasRenderTestDriverへ集約した。次はCanvas pressの選択事前処理と残る機能組立ての責務を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
 
 各区切りの履歴・検証は[composition-root.md](composition-root.md)、現在の配置は[implementation-map.md](implementation-map.md)へ記録する。順番・file数・task数を固定せず、再監査の結果から次の責務境界を選ぶ。200〜500行の目標、UI・挙動・互換性・状態owner・全体検証を維持し、現在の中間成果で全体完了とはしない。
 
@@ -92,6 +92,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-20）
+
+### 最新のCanvas描画診断組立て単位
+
+CanvasRenderTestDriver.createRenderingSupportへ、既存の描画診断五部品の生成・接続を集約した。appは同じcommand／preview Layer／scope／Canvasを明示し、三つの既存ブラウザAPIへ接続する。test hooksの有効条件とAPI順・準備／描画／観測の実装は維持し、通常描画や新たなstateをtestingへ持ち込まない。新file・namespace・script・保存形式変更はない。app.jsは3,270→3,260行（10行減）、今回の再開から3,652→3,260行（392行減）。
+
+構文578ファイル・単体1,687件・関連E2E140件（2.1分）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／png-export／annotation-display-sizeで、変更した三つの診断APIの破線・補助線overhang／marker、file URL起動、既存画面比較、PNG出力と注記表示を確認した。追加単体3件は生成時のscene無参照・共有ownerの結線と12case順、mode／reset、現在scope／viewport／外観、Block参照同一性、描画失敗時の停止とCanvas methodの同一参照復元を検証する。既存helperの本体・公開API名／順とtest hooks guardは変更しない。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-canvas-render-test-support-{focused,check,unit,related}.log。
+
+基準はdevelop 4b679b9。週枠残量70%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はPointerInteractionControllerのpressへappが渡す非active identity選択と通常選択の事前処理を分析する。既存CanvasSelectionInteractionのidentity選択と同じSelection／Sketch照会へ責務を揃えられるか確認する。Ctrl／Shiftの異なるSketch拒否、lock時の選択→guard通知、inspection保持／解除、clearの条件と早期returnを維持し、pointer captureやcommand routingを変更しない。既存ownerへまとめられる場合だけ採用し、mode容器・巨大な入力context・新しい小fileは作らない。機能組立ての整理も継続し、細かなcallback抽出だけで200〜500行へ届くとは扱わない。
 
 ### 最新のAnnotation Parameter候補検証単位
 

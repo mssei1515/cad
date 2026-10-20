@@ -2776,25 +2776,15 @@
     const middleButtonFitFixture = window.CanvasTestDriver.createMiddleButtonFitFixture({ resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, updateUI, draw, canvas });
     const fitObservation = window.CanvasTestDriver.createFitObservation({ canvas, viewport, screenBoxForBounds, visibleGeometryBounds, isVisibleSketchId });
     const testFitOperation = window.CanvasTestDriver.createFitOperation({ fitAllGeometryToViewport, draw });
-    const setTestDrawingMode = value => { mode = value; };
-    const draftDashCases = window.CanvasRenderTestDriver.createDraftDashCases({
-      setMode: setTestDrawingMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
-      drawTemporaryLine: authoringPreviewLayer.drawTemporaryLine, drawRectanglePreview: authoringPreviewLayer.drawRectanglePreview, drawSlotPreview: authoringPreviewLayer.drawSlotPreview, drawCirclePreview: authoringPreviewLayer.drawCirclePreview, drawArcPreview: authoringPreviewLayer.drawArcPreview, drawOffsetPreview: offsetPreviewLayer.draw, drawTrimPreview: authoringPreviewLayer.drawTrimPreview,
-    });
-    const blockDashCases = window.CanvasRenderTestDriver.createBlockDashCases({
-      createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition),
-      setMode: setTestDrawingMode, blockPlacementCommand, drawingPreview, activeSketchId, currentScope: workspace.current, canvasSelection, drawBlockPlacementPreview: placementPreviewLayer.drawBlockPlacementPreview, drawBlockInstanceHandles,
-    });
-    const canvasDashIsolation = window.CanvasRenderTestDriver.createDashIsolation({
-      resetModelState, viewport, drawingPreview, selectionRectangle, setMode: setTestDrawingMode, ctx, drawSelectionRect, draftCases: draftDashCases, blockCases: blockDashCases, drawAnnotationLeader, addLine, addPoint, draw,
+    const canvasRenderingTestSupport = window.CanvasRenderTestDriver.createRenderingSupport({
+      setMode: value => { mode = value; }, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
+      authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), blockPlacementCommand, activeSketchId, currentScope: workspace.current,
+      canvasSelection, drawBlockInstanceHandles, resetModelState, viewport, selectionRectangle, ctx, drawSelectionRect, drawAnnotationLeader, draw,
+      drawLines, canvasHover, invalidateBlockProjectionCache, blockProjectionBundle, allGeometryLines, effectiveAppearanceForElement,
     });
     const sketchDeletionFixture = window.DocumentTestDriver.createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch });
     const strokeStyleCases = window.PropertiesTestDriver.createStrokeStyleCases({ resetModelState, addLine, addPoint, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, geometryStrokeWidth, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA });
-    const constructionHoverFixture = window.CanvasRenderTestDriver.createConstructionHoverFixture({
-      ctx, viewport, drawLines, resetModelState, addLine, addPoint, canvasHover, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), currentScope: workspace.current, invalidateBlockProjectionCache, blockProjectionBundle,
-    });
-    const constructionLineObservation = window.CanvasRenderTestDriver.createConstructionLineObservation({ allGeometryLines, ctx, drawLines, viewport, effectiveAppearanceForElement });
     const subtreeReferenceFixture = window.SketchTreeTestDriver.createSubtreeReferenceFixture({
       resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, refreshReferenceConstraintValidity,
       fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive, sketchIdentityRelationLabel, sketchIdentityRelationColor, document, getComputedStyle: element => getComputedStyle(element), isVisibleSketchId,
@@ -3168,7 +3158,7 @@
       resetForAllGeometryFit: allGeometryFitFixture.reset,
       resetForMiddleButtonFit: middleButtonFitFixture.reset,
       middleButtonFitState: fitObservation.state,
-      canvasDashIsolationCases: canvasDashIsolation.cases,
+      canvasDashIsolationCases: canvasRenderingTestSupport.canvasDashIsolationCases,
       resetForSidebarInspection: sidebarInspectionFixture.reset,
       resetForRootSketchTreeHoverTest: rootHoverFixture.reset,
       resetForFixedPointDisplayTest: fixedPointFixture.reset,
@@ -3179,8 +3169,8 @@
       resetForInactiveDimensionAndBlockHover: inactiveHoverFixture.reset,
       hoverIdentityStateForTest: hoverIdentityObservation.state,
       geometryStrokeStyleCasesForTest: strokeStyleCases.cases,
-      constructionLineHoverDisplayCasesForTest: constructionHoverFixture.cases,
-      constructionLineRenderingForTest: constructionLineObservation.state,
+      constructionLineHoverDisplayCasesForTest: canvasRenderingTestSupport.constructionLineHoverDisplayCasesForTest,
+      constructionLineRenderingForTest: canvasRenderingTestSupport.constructionLineRenderingForTest,
       resetForSiblingSubtreeReference: subtreeReferenceFixture.reset,
       siblingSubtreeVisibilityState: subtreeVisibilityObservation.state,
       moveSiblingSubtreeReferenceLine: referenceLineMove.move,

@@ -233,5 +233,24 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasRenderTestDriver = Object.freeze({ createDraftDashCases, createBlockDashCases, createDashIsolation, createConstructionHoverFixture, createConstructionLineObservation });
+  function createRenderingSupport({ setMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
+    authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer, createEmptyBlockDefinition, Point, Line, defaultSketchId, appendDefinition,
+    blockPlacementCommand, activeSketchId, currentScope, canvasSelection, drawBlockInstanceHandles,
+    resetModelState, viewport, selectionRectangle, ctx, drawSelectionRect, drawAnnotationLeader, draw,
+    drawLines, canvasHover, invalidateBlockProjectionCache, blockProjectionBundle, allGeometryLines, effectiveAppearanceForElement }) {
+    const draftCases = createDraftDashCases({ setMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
+      drawTemporaryLine: authoringPreviewLayer.drawTemporaryLine, drawRectanglePreview: authoringPreviewLayer.drawRectanglePreview,
+      drawSlotPreview: authoringPreviewLayer.drawSlotPreview, drawCirclePreview: authoringPreviewLayer.drawCirclePreview,
+      drawArcPreview: authoringPreviewLayer.drawArcPreview, drawOffsetPreview: offsetPreviewLayer.draw, drawTrimPreview: authoringPreviewLayer.drawTrimPreview });
+    const blockCases = createBlockDashCases({ createEmptyBlockDefinition, Point, Line, defaultSketchId, appendDefinition, setMode,
+      blockPlacementCommand, drawingPreview, activeSketchId, currentScope, canvasSelection,
+      drawBlockPlacementPreview: placementPreviewLayer.drawBlockPlacementPreview, drawBlockInstanceHandles });
+    const dash = createDashIsolation({ resetModelState, viewport, drawingPreview, selectionRectangle, setMode, ctx, drawSelectionRect,
+      draftCases, blockCases, drawAnnotationLeader, addLine, addPoint, draw });
+    const hover = createConstructionHoverFixture({ ctx, viewport, drawLines, resetModelState, addLine, addPoint, canvasHover, createEmptyBlockDefinition,
+      Point, Line, defaultSketchId, appendDefinition, currentScope, invalidateBlockProjectionCache, blockProjectionBundle });
+    const observation = createConstructionLineObservation({ allGeometryLines, ctx, drawLines, viewport, effectiveAppearanceForElement });
+    return Object.freeze({ canvasDashIsolationCases: dash.cases, constructionLineHoverDisplayCasesForTest: hover.cases, constructionLineRenderingForTest: observation.state });
+  }
+  window.CanvasRenderTestDriver = Object.freeze({ createDraftDashCases, createBlockDashCases, createDashIsolation, createConstructionHoverFixture, createConstructionLineObservation, createRenderingSupport });
 })();
