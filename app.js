@@ -1698,10 +1698,6 @@
 
   function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
 
-  function solveFinalDragSession(session) {
-    if (!interactionProfiler.active) return geometryDragEditing.finish(session);
-    return profileInteractionWork("solve", () => geometryDragEditing.finish(session));
-  }
 
   function solveReferenceDependentSketches(...args) { return sketchSolving.solveReferenceDependentSketches(...args); }
   function solveSketchAndDependents(...args) { return sketchSolving.solveSketchAndDependents(...args); }
@@ -2617,54 +2613,27 @@
 
   function addConstraint(type) { return constraintCommitCommand.fromSelection(type); }
 
-  const geometryDragSolver = window.GeometryDragSolver.create({
-    solver, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
+  const geometryDragFeature = window.GeometryDragFeature.create({
+    solver, currentScope: workspace.current, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
     viewScale: () => viewport.scale, arcEndpointPoint, acceptError: CONSTRAINT_ACCEPT_ERROR,
     previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
-  });
-  const geometryDragPlan = window.GeometryDragPlan.create({
-    elementSketchId, isEditableSketchId, activeSketchId, blockDefinitionById, blockLocalGeometryBounds,
-    blockInstanceEnabledSketchSet, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint,
-    findArcEndpointFixedConstraint, arcEndpointPoint, arcEndpointDragValue, hypot2, minimumLength: MIN_ORIENTATION_LENGTH,
-  });
-  const buildDragSession = geometryDragPlan.build;
-  const geometryDragEditing = window.GeometryDragEditing.create({
-    currentScope: workspace.current, solver, plan: geometryDragPlan, dragSolver: geometryDragSolver,
+    elementSketchId, isEditableSketchId, blockDefinitionById, blockLocalGeometryBounds, blockInstanceEnabledSketchSet,
+    blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    arcEndpointDragValue, hypot2, minimumLength: MIN_ORIENTATION_LENGTH,
     contextFromSeeds: localSolveContextFromSeeds, projectionConstraintsForItems: sketchProjectionConstraintsAffectingItems,
-    pointLockedByLineFixed, captureValues: snapshotModelState,
-    enforceMinimumLineLengths, normalizeArcSweeps, invalidateProjection: invalidateBlockProjectionCache,
+    captureValues: snapshotModelState, enforceMinimumLineLengths, normalizeArcSweeps, invalidateBlockProjectionCache,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
-    previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
-  });
-  const attachLocalSolveContext = geometryDragEditing.prepare;
-
-  const geometryDrag = window.GeometryDrag.create({
-    canEdit: id => guardSketchEdit(id),
-    prepareSession: attachLocalSolveContext, dragResultForSession, solveFinalDragSession,
-    currentScope: workspace.current, activeSketchId, viewScale: () => viewport.scale,
+    profileSolve: work => interactionProfiler.active ? profileInteractionWork("solve", work) : work(),
+    canEdit: guardSketchEdit,
     beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
-    projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
-    canvasSelection, restoreModelState, restoreSolverState: (state) => solver.restore(state),
-    solveReferenceDependentSketches, normalizeArcSweeps, clearSketchSolveState, invalidateBlockProjectionCache,
-    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+    canvasSelection, restoreModelState, solveReferenceDependentSketches, clearSketchSolveState,
+    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, applicationText, setHint, updateUI,
+    updateGeometrySelectionUI, draw, recordHistory,
+    geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
   });
-
-
-
-  const { begin: beginDerivedGeometryDrag } = window.GeometryDrag.createDerivedEntry({
-    types: { Point, Line }, canEdit: guardSketchEdit, canvasSelection, geometryInstanceSourceObjects,
-    clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource, buildDragSession, geometryDrag,
-    setHint, applicationText, updateGeometrySelectionUI, updateUI, draw,
-  });
-
-
-
-  function dragResultForSession(session, pointer) {
-    if (!interactionProfiler.active) return geometryDragEditing.preview(session, pointer);
-    return profileInteractionWork("solve", () => geometryDragEditing.preview(session, pointer));
-  }
+  const { command: geometryDrag, build: buildDragSession, prepare: attachLocalSolveContext,
+    preview: dragResultForSession, finish: solveFinalDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
 
   function hasDirectRadiusDimension(primitive) {
     return window.DimensionQueries.hasDirectRadiusDimension(model.constraints, primitive);
@@ -3111,7 +3080,7 @@
     });
     const pointDragTestDriver = window.GeometryDragTestDriver.createPointDriver({
       currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
-      computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), targetConstraintCount: geometryDragSolver.targetConstraintCount, now: () => performance.now(),
+      computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), targetConstraintCount: geometryDragFeature.targetConstraintCount, now: () => performance.now(),
     });
     const annotationTestSupport = window.AnnotationTestDriver.createSupport({
       annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint,
