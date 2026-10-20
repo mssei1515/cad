@@ -6,6 +6,15 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の拘束所属付与／挿入単位
+
+既存ConstraintCommitCommand.createInsertionへassignConstraintSketchId／pushModelConstraintの所属選択・metadata付与・同期済みscopeへの同一Object追加・現在Parameter namespaceでのparameter確保を集約した。六つの限定依存とassignSketch／pushの二APIで、求解・重複判定・復元・UI／履歴とParameter計算は元ownerへ残す。同期済みscopeとWorkspace namespaceの読取りを別依存のまま保持し、default引数とfallbackの評価時機・nullの受渡し・戻り値・例外時の部分更新を維持する。新file・state・cache・scriptはない。app 216行目で構築し、所属付与の最初の参照2,226行目／pushの721行目に前方参照がないことをBabelで確認した。hoisted wrapper・新たな未使用root bindingなし。app.jsは3,101→3,094行（7行減）、今回再開時3,652行から558行減。
+
+最終コードで構文588ファイル・単体1,749件・関連E2E222件（3.8分、性能file全12件を含む）が成功（全runner exit 0）。関連はunified-ui／phase0-characterization／parameter-dialog-controller／sketch-permissions／blocks／free-instance／command-panel／multiple-dimensions／adversarial-authoring-performanceで、file URL起動、通常／暗黙拘束・寸法parameterと所属、Sketch権限・Block／Instance、既存画面比較・履歴・保存再読込を確認した。パンは149msで元の175ms未満の基準内。追加単体4件は生成時遅延、drawable／first／active fallbackとdefault引数の再評価、null受渡し、同じObjectの所属付与→配列追加→現在の別namespace照会とparameter確保、scope／namespace差替え、guard／metadata setter／配列追加／namespace／parameter例外の部分状態、既存implicit commitとの接続と重複拒否を確認する。既存21件と合わせたcommand単体25件も成功。新file・script・保存形式変更はない。この単位で全E2Eは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-constraint-insertion-{check,unit,related}.log。
+
+基準はdevelop 21f5f07（前実装336a861）。週枠残量は開始時／検証後とも98%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はoperandRelationForSketchの階層関係照会を、既存SketchContextへ集約できるか確認する。active→descendant→reference→nullの優先と現在scope／activeの読取りを維持する。既存sketchRelationToActiveはfalsy IDをactiveへ補完し、該当なしをinactiveとするため、単純なaliasへ置換しない。共通判定を同じownerへまとめつつ両入口の相違、正規化／照会時機・例外と既存CanEdit／参照元規則を維持できるか検証する。新file・state・callback容器は増やさない。
+
+
 ### 最新の固定拘束照会単位
 
 既存ConstraintReferences.createFixedStateへ円弧端点固定・線固定の先頭検索と、点が固定線端点かの照会を集約した。既存の型importを共有し、同期済みcurrentScope／表示要素比較の二portから三つの読取りAPIだけを返す。enabled厳密false・型・比較とendpointの短絡順、Block投影の参照比較と点端点のObject同一性の違い、現在配列・返却Object・undefined／boolean・例外を維持する。SelectionHighlight生成後の359行目で構築し、最初の利用は円弧固定580／線固定1,799／point lock583行目であることをBabelで確認した。hoisted wrapperや新file・state・cache・scriptは増やしていない。app.jsは3,107→3,101行（6行減）、今回再開時3,652行から551行減。新たな未使用root bindingなし。

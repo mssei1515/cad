@@ -222,5 +222,19 @@
       ordinary: commitNewConstraint, reference: commitReferenceConstraint, markReference: markReferenceConstraint,
       readPerformance: () => lastPerformance, clearPerformance: () => { lastPerformance = null; } });
   }
-  window.ConstraintCommitCommand = Object.freeze({ create });
+  function createInsertion({ currentScope, currentParameterNamespace, activeSketchId, isDrawableSketch, firstDrawableSketchId, ensureDimensionParameter }) {
+    function assignConstraintSketchId(constraint, sketchId = activeSketchId()) {
+      const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
+      if (constraint) constraint.sketchId = targetSketchId || activeSketchId();
+      return constraint;
+    }
+    function pushModelConstraint(constraint, sketchId = activeSketchId()) {
+      assignConstraintSketchId(constraint, sketchId);
+      currentScope().constraints.push(constraint);
+      ensureDimensionParameter(constraint, currentParameterNamespace());
+      return constraint;
+    }
+    return Object.freeze({ assignSketch: assignConstraintSketchId, push: pushModelConstraint });
+  }
+  window.ConstraintCommitCommand = Object.freeze({ create, createInsertion });
 })();
