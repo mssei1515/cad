@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新のProperties対象context単位
+### 最新の寸法drag生成単位
+
+前単位は374ed80をdevelopのd4b6365へ統合・Push済み。今回はcodex/dimension-drag-compositionで継続中。週枠使用13%／残量87%で停止条件には達していない。
+
+DimensionDragFeatureへDimensionLineGroup、選択group照会、角度同期とDimensionDragの生成・接続を集約した。DimensionLineGroup.createSelectionへ現在scope・Sketch権限／可視性・寸法実効外観の照会を分離し、純粋なgroup配置計算とは別factoryにした。dragとcontext整列・入力／menu判定は同じ入口を使い、既存DimensionDragだけがsessionを所有する。既存配置、pointer capture、継続command click、display／label offset、角度参照値、通知と履歴の順を維持する。app.jsは3,468→3,452行（16行減）、今回の再開から3,652→3,452行（200行減）。
+
+構文568ファイル・単体1,632件・関連E2E165件（2.4分）が成功（全runner exit 0）。関連はunified-ui／multiple-dimensions／dimension-prefix／sketch-permissions／blocksで、file URL起動、複数寸法の移動／整列と非平行時の単独操作、角度寸法、権限、Block scope、Undo／Redo・保存再読込を確認した。新単体4件は生成時の遅延、現在scopeへの所属と権限／可視性・実効外観の更新、Object同一性と選択無変更、実配置によるgroup移動／整列とsnapshot・一回の履歴、guard拒否と元のhits／3px閾値、角度同期・参照値維持とresetを確認する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-dimension-drag-feature-{check,unit,related}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量87%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次は寸法表示のMetrics／Placement／Layout／Renderer／Painterの生成依存を分析する。既存の寸法入力・drag・hit・Annotationと共有する同じ配置／metricsを維持し、描画専用ownerと入力Controllerを区別する。解決済み外観の受渡し、Canvas probe・PNG描画・label配置と単独呼出しのfallbackを保持し、巨大contextや描画間cacheを導入しない。
+
+### 前単位のProperties対象context単位
 
 前単位はc1b89dbをdevelopの17af9feへ統合・Push済み。今回はcodex/property-target-contextで継続中。週枠使用12%／残量88%で停止条件には達していない。
 

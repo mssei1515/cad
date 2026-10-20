@@ -2516,29 +2516,13 @@
     return window.DimensionQueries.hasDirectRadiusDimension(model.constraints, primitive);
   }
 
-  const dimensionLineGroup = window.DimensionLineGroup.create({ placement: dimensionPlacement, Line });
-  function selectedDimensionLineGroup(reference) {
-    const constraints = canvasSelection.dimensionConstraints;
-    if (constraints.some(constraint => !model.constraints.includes(constraint) || !isEditableSketchId(constraintSketchId(constraint))
-      || !isVisibleSketchId(constraintSketchId(constraint)))) return null;
-    const entries = constraints.map(constraint => ({ constraint, target: targetFromConstraint(constraint) }));
-    if (entries.some(({ constraint, target }) => !target || !isVisibleValue(effectiveDimensionAppearance(
-      constraint.dimension || defaultDimensionForTarget(target), constraintSketchId(constraint)).visible))) return null;
-    return dimensionLineGroup.group(entries, reference);
-  }
-
-  const { sync: syncAngleConstraintFromDimension } = window.DimensionDrag.createAngleSynchronization({
-    LineAngleConstraint, isReadOnlyDimension, angleDimensionAngles,
-  });
-  const dimensionDrag = window.DimensionDrag.create({
-    canEdit: item => guardSketchEdit(constraintSketchId(item)),
-    selectedLineGroup: selectedDimensionLineGroup, translateLineGroup: dimensionLineGroup.translate,
-    dimensionAnchor, migrateAngleDimensionLabelPlacement, canvasSelection, angleDimensionLabelOffsets,
-    viewScale: () => viewport.scale, isDimensionConstraintCommandActive, setHint, clearSnap, hypot2,
+  const { command: dimensionDrag, lineGroup: dimensionLineGroup, selectedLineGroup: selectedDimensionLineGroup } = window.DimensionDragFeature.create({
+    placement: dimensionPlacement, viewport, canvasSelection, currentScope: workspace.current,
+    constraintSketchId, isEditableSketchId, isVisibleSketchId, effectiveDimensionAppearance, isVisibleValue,
+    guardSketchEdit, isDimensionConstraintCommandActive, setHint, clearSnap, hypot2,
     beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
-    angleDimensionFromLabelPoint, dimensionWithLabelAt, dimensionFromAnchor, setAngleDimensionLabelOffsets,
-    syncAngleConstraintFromDimension, draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
+    draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
     continueCommandClick: (event, hits) => {
       canvasHover.update({ dimension: null });
       const pointer = canvasPoint(event);
