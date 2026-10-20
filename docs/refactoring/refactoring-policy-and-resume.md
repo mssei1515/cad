@@ -58,9 +58,9 @@
 
 Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、mode・最後のpointer・現在model別名と、操作固有のcallbackが残る。現在のletはmode・pointer・model別名と六つの後段接続参照の九つ。後段接続は操作stateの重複とは区別する。
 
-残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。特にmodeはtestを含め23箇所で代入されるため、getter／setter容器への移動だけでは完了としない。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
+残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。特にmodeは複数のcommandとtestから更新されるため、getter／setter容器への移動だけでは完了としない。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
-最後の性能traceは生成ownerのConstraintCommitCommandへ、参照を外す注記コピーの表示値変換は既存ClipboardTransferへ統合済み。共有外観UIの組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線は既存PropertiesDisplayへ集約した。Canvas context menuの操作結線はCanvasContextInteractionへ集約した。次は残る開始準備と操作stateの責務を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
+最後の性能traceは生成ownerのConstraintCommitCommandへ、参照を外す注記コピーの表示値変換は既存ClipboardTransferへ統合済み。共有外観UIの組立てはAppearanceUIへ集約した。PropertiesのController／Viewの結線は既存PropertiesDisplayへ集約した。Canvas context menuの操作結線はCanvasContextInteractionへ集約した。拘束・寸法開始準備はDrawOperationLifecycle、角度間隔寸法開始はDimensionPlacementCommandへ統合した。次はGeometry削除時の操作終了等の残る操作stateの責務を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
 
 各区切りの履歴・検証は[composition-root.md](composition-root.md)、現在の配置は[implementation-map.md](implementation-map.md)へ記録する。順番・file数・task数を固定せず、再監査の結果から次の責務境界を選ぶ。200〜500行の目標、UI・挙動・互換性・状態owner・全体検証を維持し、現在の中間成果で全体完了とはしない。
 
@@ -92,6 +92,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-20）
+
+### 最新の拘束・寸法開始準備単位
+
+拘束・寸法開始前のreset進行を既存DrawOperationLifecycleのprepareConstraintStart／prepareDimensionStartへ、mode別の拘束取消準備をprepareConstraintCancelへ統合した。Pending／Centerline／Slotの先行処理と共通のreset subsetを区別し、mode条件は各reset直前に読み取る。角度間隔寸法の開始は既存DimensionPlacementCommandへ統合し、通常寸法と異なる取消・select・anchor／target・Pending生成の経路を維持した。開始処理の三つの直接mode書込みを既存selectModeポートへ接続し、mode変数やdraft／sessionの新ownerは作らない。新file・script・保存形式変更はない。app.jsは3,331→3,307行（24行減）、今回の再開から3,652→3,307行（345行減）。
+
+構文578ファイル・単体1,673件・関連E2E133件（1.9分）が成功（全runner exit 0）。関連はunified-ui／command-panel／derived-patterns／circular-authoring／multiple-dimensionsで、file URL起動、作図・拘束／寸法への切替、CommandPanel、円形配列の角度間隔寸法の直接操作・符号付き編集、Undo／Redo・保存再読込を確認した。追加単体6件は二種類の開始reset順・取消のmode別の独立した二回のread・reset例外時の停止、角度間隔寸法の拒否順／既存操作保持、実InstanceAngleIntervalConstraintのanchor／現在angleStepとtarget／pointer同一性、取消／target生成の例外時の途中効果と後続無実行を確認する。既存の関連単体21件も維持した。Centerline／Slot／Arcの旧aliasは同じ閉包resetを指し、isPlacingは同じownerのarrow query、既定pointerは同じplacement serviceであることを確認した。最終差分確認で不要になったCenterline／Slotのreset aliasを除去し、app構文・全単体1,673件・同じ関連E2E133件（1.9分）を再確認した（すべてexit 0）。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-dimension-start-lifecycle-{focused,check,unit,related,unit-final,related-final}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop 5658e62（前実装d10eda4）、開始時の週枠残量75%／検証後74%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はGeometryDeletionCommand.endInteractionのapp側callbackを分析する。現在はGeometry／Dimension／Annotation drag reset→Pending.clear→拘束commandだけclear（operandは保持）→Line／Circle／Arc reset→preview pointerだけnull→select modeという限定的な操作終了を行う。削除commandのguard／依存参照検査後、実削除前に呼ばれる契約を維持し、GeometryDeletionCommand自身が具体的な操作ownerへ依頼する責務を持てるか検討する。cancel／rollbackやresetForDocument／通常寸法開始へ一律置換せず、Rectangle／Slot／Centerline等の未対象draftやoperands保持、拒否時の無変更、途中例外の停止位置を検証する。新しい汎用reset容器や可変app contextを作らず、既存APIの必要な範囲で接続する。
 
 ### 最新のCanvas context interaction単位
 

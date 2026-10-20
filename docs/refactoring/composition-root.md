@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 拘束・寸法配置の開始準備
+
+拘束・寸法開始前のreset進行を既存DrawOperationLifecycleのprepareConstraintStart／prepareDimensionStartへ、mode別の拘束取消準備をprepareConstraintCancelへ統合した。Pending／Centerline／Slotの先行処理と共通のreset subsetを区別し、mode条件は各reset直前に読み取る。角度間隔寸法の開始は既存DimensionPlacementCommandへ統合し、通常寸法と異なる取消・select・anchor／target・Pending生成の経路を維持した。開始処理の三つの直接mode書込みを既存selectModeポートへ接続し、mode変数やdraft／sessionの新ownerは作らない。新file・script・保存形式変更はない。app.jsは3,331→3,307行（24行減）、今回の再開から3,652→3,307行（345行減）。
+
+構文578ファイル・単体1,673件・関連E2E133件（1.9分）が成功（全runner exit 0）。関連はunified-ui／command-panel／derived-patterns／circular-authoring／multiple-dimensionsで、file URL起動、作図・拘束／寸法への切替、CommandPanel、円形配列の角度間隔寸法の直接操作・符号付き編集、Undo／Redo・保存再読込を確認した。追加単体6件は二種類の開始reset順・取消のmode別の独立した二回のread・reset例外時の停止、角度間隔寸法の拒否順／既存操作保持、実InstanceAngleIntervalConstraintのanchor／現在angleStepとtarget／pointer同一性、取消／target生成の例外時の途中効果と後続無実行を確認する。既存の関連単体21件も維持した。Centerline／Slot／Arcの旧aliasは同じ閉包resetを指し、isPlacingは同じownerのarrow query、既定pointerは同じplacement serviceであることを確認した。最終差分確認で不要になったCenterline／Slotのreset aliasを除去し、app構文・全単体1,673件・同じ関連E2E133件（1.9分）を再確認した（すべてexit 0）。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-dimension-start-lifecycle-{focused,check,unit,related,unit-final,related-final}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop 5658e62（前実装d10eda4）、開始時の週枠残量75%／検証後74%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はGeometryDeletionCommand.endInteractionのapp側callbackを分析する。現在はGeometry／Dimension／Annotation drag reset→Pending.clear→拘束commandだけclear（operandは保持）→Line／Circle／Arc reset→preview pointerだけnull→select modeという限定的な操作終了を行う。削除commandのguard／依存参照検査後、実削除前に呼ばれる契約を維持し、GeometryDeletionCommand自身が具体的な操作ownerへ依頼する責務を持てるか検討する。cancel／rollbackやresetForDocument／通常寸法開始へ一律置換せず、Rectangle／Slot／Centerline等の未対象draftやoperands保持、拒否時の無変更、途中例外の停止位置を検証する。新しい汎用reset容器や可変app contextを作らず、既存APIの必要な範囲で接続する。
+
 ### Canvas context interactionの組立て
 
 CanvasContextInteractionへTarget selection／Fix照会・Items・CandidateAction・Entry・Actionsの生成と結線、およびhover preview通知を集約した。候補Queryとpresenter、既存UI controllerのsessionは独立したまま使う。appは四つの操作入口へ委譲し、六部品間の一時的な参照を保持しない。早いcallback登録とcloseAppMenusの遅延参照、後段生成→controller.start、選択保持／明示置換・拘束振分け・pointer同一性・guard・履歴順は維持する。新しい操作stateや巨大contextを作らず、既存componentの明示portを接続する。外部依存64項目は残り、単一facade化で全体の依存整理を完了したとは扱わない。新classic script／単体testと四つの読込・検証一覧を同期した。app.jsは3,348→3,331行（17行減）、今回の再開から3,652→3,331行（321行減）。

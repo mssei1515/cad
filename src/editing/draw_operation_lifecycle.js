@@ -3,7 +3,27 @@
   "use strict";
   function create({ canStart = () => true, instances, instanceSources, centerline, line, rectangle, slot, fillet, circular,
     spline, splineEditing, projection, preview, offset, hatch, transient,
-    clearSnap, clearSelection, selectMode, updateToolbar, setHint, updateUI, draw, cancelConstraintTargetCommand, setMode, clearTrimHover }) {
+    clearSnap, clearSelection, selectMode, updateToolbar, setHint, updateUI, draw, cancelConstraintTargetCommand, setMode, clearTrimHover,
+    cancelPendingCommand, readMode }) {
+    function prepareDimensionStart() {
+      selectMode();
+      line.reset();
+      rectangle.reset();
+      fillet.reset();
+      circular.resetCircle();
+      circular.resetArcs();
+      preview.reset();
+    }
+    function prepareConstraintStart() {
+      cancelPendingCommand("");
+      centerline.reset();
+      slot.reset();
+      prepareDimensionStart();
+    }
+    function prepareConstraintCancel() {
+      if (readMode() === "centerline") centerline.reset();
+      if (readMode() === "slot") slot.reset();
+    }
     const startHints = {
       "select": "選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。",
       "point": "キャンバスをクリックして点を追加します。",
@@ -148,7 +168,8 @@
     }
 
 
-    return Object.freeze({ start, prepare, resetInputs, resetInputsForSketchChange, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
+    return Object.freeze({ start, prepare, prepareDimensionStart, prepareConstraintStart, prepareConstraintCancel,
+      resetInputs, resetInputsForSketchChange, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
   window.DrawOperationLifecycle = Object.freeze({ create });
 })();
