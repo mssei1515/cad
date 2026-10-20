@@ -1,0 +1,21 @@
+/* Compose expanded geometry and appearance reads around their existing cache owners. */
+(() => {
+  "use strict";
+  function create({ document, currentScope, currentSketches, prepareBlocks, elementSketchId, applicationText,
+    hatchGeometryQuery, sketchById, isRootSketch, activeSketchId, showHiddenElements, profileRead }) {
+    const instances = window.InstanceProjection.create({ elementSketchId, applicationText,
+      resolveHatch: (hatch, elements) => hatchGeometryQuery.resolvedHatchBoundary(hatch, elements) });
+    const catalog = window.BlockCatalog.create({ definitions: () => document.blockDefinitions });
+    const projections = window.BlockProjection.create({ blockCatalog: catalog,
+      geometryInstanceBundlesForScope: instances.geometryInstanceBundlesForScope, emptyGeometryInstanceBundle: instances.emptyGeometryInstanceBundle,
+      hatchPrimitivesFromElements: hatchGeometryQuery.hatchPrimitivesFromElements, hatchPrimitivesForScope: hatchGeometryQuery.hatchPrimitivesForScope });
+    const reads = window.GeometryReadModel.create({ currentScope, prepareBlocks, blockProjections: projections,
+      instanceProjections: instances, hasBlockHatches: catalog.hasHatches, profileRead });
+    const geometryAppearance = window.GeometryAppearanceQuery.create({ document, readAppearance: reads.readAppearance,
+      cacheAppearance: reads.cacheAppearance, sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements });
+    const dimensionAppearance = window.GeometryAppearanceQuery.createDimension({ document, currentSketches, activeSketchId, isRootSketch });
+    const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document, currentSketches });
+    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance });
+  }
+  window.GeometryReadServices = Object.freeze({ create });
+})();

@@ -173,22 +173,23 @@
   });
 
   const { geometryKindForItem, geometryRefForItem, addGeometryBundleToMaps } = window.GeometryObjects;
-  const instanceProjections = window.InstanceProjection.create({ elementSketchId, applicationText,
-    resolveHatch: (hatch, elements) => resolvedHatchBoundary(hatch, elements),
-  });
-  const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
-  const blockCatalog = window.BlockCatalog.create({ definitions: () => documentModel.blockDefinitions });
-  const { blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const hatchGeometryQuery = window.HatchGeometryQuery.create({
     currentScope: workspace.current, activeSketchId, effectiveAppearanceForElement, applicationText,
     boundaryGeometry: () => [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()],
     defaultLineWidth: () => Number(documentModel.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth, viewportScale: () => viewport.scale,
   });
   const { hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems, hatchBoundaryHitExclusionScreenPx, hatchContainsSelectablePoint } = hatchGeometryQuery;
-  const blockProjections = window.BlockProjection.create({
-    blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope,
+  const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
+    geometryAppearance, dimensionAppearance, annotationAppearance } = window.GeometryReadServices.create({
+    document: documentModel, currentScope: workspace.current, currentSketches: () => model.sketches, prepareBlocks: ensureBlockState,
+    elementSketchId, applicationText, hatchGeometryQuery, sketchById, isRootSketch, activeSketchId,
+    showHiddenElements: () => viewState.showHiddenElements,
+    profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
+  const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
+  const { blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const { blockProjectionId, blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
+  const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
   const { annotationBounds, pointInAnnotationTextBox, hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
     viewportScale: () => viewport.scale, annotationTextWorldHeight: style => annotationTextWorldHeight(style),
     formatDisplayNumber, annotationTextLayout: element => annotationTextLayout(element), annotationLeaderDisplayGeometry: element => annotationLeaderDisplayGeometry(element), effectiveAnnotationStyle, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
@@ -257,30 +258,16 @@
     onOpen: openCanvasContextMenu, onSelect: selectCanvasContextCandidate, onAction: executeCanvasContextAction,
   });
   const closeCanvasContextMenu = canvasContextController.close;
-  const geometryReads = window.GeometryReadModel.create({
-    currentScope: workspace.current, prepareBlocks: ensureBlockState, blockProjections, instanceProjections,
-    hasBlockHatches: blockCatalog.hasHatches,
-    profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
-  });
-  const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
   const { resolve: resolveDerivedDragSource, sourceObjects: geometryInstanceSourceObjects } = window.InstanceProjection.createDragSourceQuery({
     geometryInstanceSourcePoints, geometryInstanceDependencyRefs, resolveGeometryRef,
   });
   const instanceSourceSelection = window.InstanceProjection.createSourceSelection({
     currentScope: () => model, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
   });
-  const geometryAppearance = window.GeometryAppearanceQuery.create({
-    document: documentModel, readAppearance: geometryReads.readAppearance, cacheAppearance: geometryReads.cacheAppearance,
-    sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements: () => viewState.showHiddenElements,
-  });
-  const dimensionAppearance = window.GeometryAppearanceQuery.createDimension({
-    document: documentModel, currentSketches: () => model.sketches, activeSketchId, isRootSketch,
-  });
   const dimensionLabels = window.DimensionPresentation.createLabel({
     isReadOnlyDimension, measuredDimensionValue, angleDegrees, dimensionDisplayState, constraintSketchId,
     formatDimensionLabel, formatMeasuredDimensionLabel,
   });
-  const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document: documentModel, currentSketches: () => model.sketches });
   const { hitAnnotationTarget, annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
     isReferenceSourceSketchId,
     selectedGeometryItems, elementSketchId, activeSketchId, resolveGeometryRef,
