@@ -100,7 +100,17 @@
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新のBlockコマンド生成単位
+### 最新のProperties表示生成単位
+
+前単位は776d458をdevelopの39068c5へ統合・Push済み。今回はcodex/properties-displayで継続した。週枠使用11%／残量89%で停止条件には達していない。
+
+PropertiesDisplayへPropertyRows／PropertyPresentation／PropertiesContent／PropertiesViewの生成・接続を集約した。PropertySelection、Geometry／Dimension／Annotation外観、Block／Instance投影とGeometryReadModelの同じownerを使う。対象決定とモデル編集は移さず、共有AppearanceControlsはpalette／Document設定にも使うため外で生成する。Controllerの元のinput／change／click関数をそのままViewへ渡し、eventのreceiverを維持する。section開閉とDOM lifecycleは同じPropertiesViewが所有し、Contentからのsection callbackは生成後のrender時に解決する。app.jsは3,516→3,495行（21行減）、今回の再開から3,652→3,495行（157行減）。
+
+構文564ファイル・単体1,621件・関連E2E205件（3.0分）・性能file全12件（47.9秒）が成功（全runner exit 0）。関連はunified-ui／blocks／free-instance／unified-annotations／dimension-prefix／hatching／reference-imagesで、file URL起動、Properties編集、型別表示、継承、参照画像、保存再読込を確認した。パンは135msで元の175ms未満の基準内。新単体3件は生成時のDOM／data遅延、実際のRow／Presentation／Content／Viewとread ownerによる最新外観／scope置換／HTML escape、モデル無変更、Controllerの同じ関数とreceiver、実PropertySelectionの混在値・read-only、section開閉の継続とDOM不在の短絡を確認する。このコードで全E2Eは未実行であり、最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-properties-display-{check,unit,related,performance}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。mainは5ee5f3fを維持し、全体目標は未完了。次はGeometryPropertyCommand／AppearanceEditing／AppearancePropertyCommand／BulkPropertyCommand／SelectionVisibilityCommand／ElementPropertyCommandの生成・接続を分析する。Properties表示とは分け、Toolbarにも使われる可視性変更、Document設定にも使う値変換、Annotation anchorの具体化、元のsnapshot／復元／Parameter安定化／履歴／通知範囲を保つ。PropertySelectionと既存read owner・editing ownerを共有し、DOM表示・選択状態・編集checkpointをもう一組作らず、巨大contextへ移すだけの変更を避ける。
+
+### 前単位のBlockコマンド生成
 
 前単位はd1c182aをdevelopのbab5b44へ統合・Push済み。今回はcodex/block-command-compositionで継続した。週枠使用10%／残量90%で停止条件には達していない。
 

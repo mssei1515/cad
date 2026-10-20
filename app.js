@@ -2328,7 +2328,7 @@
     hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveAnnotationStyle, effectiveDimensionAppearance,
     isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance,
   });
-  const { selectedPropertiesTarget: resolvePropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
+  const { selectedPropertiesTarget: resolvePropertiesTarget, multiplePropertyTypeKey, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
   function selectedPropertiesTarget() {
     const target = resolvePropertiesTarget();
     const items = target.kind === "multiple" ? target.items.map(entry => entry.item) : [target.item];
@@ -2371,15 +2371,6 @@
     dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS, defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE,
   });
   const { defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility, prepareAffixInputs } = appearanceControls;
-  const propertyRows = window.PropertyRows.create({
-    Point, Line, Circle, Arc, Spline, applicationText, escapeHtml, formatDisplayNumber,
-    multiplePropertySameType, multiplePropertySupports, multiplePropertyValue, multiplePropertyAppearance,
-    mixedValue: MULTIPLE_PROPERTY_MIXED, colorPickerValue, sketchProjectionConstraintForTarget, sketchName,
-    constraintGeometryId, constraintStatusBadge, constraintStatusOf, angleDegrees,
-    blockInstanceEnabledSketchSet, blockDefinitionSketchRows, snappedBlockRotation,
-    constraintDefiningGeometryEntries, normalizeAnnotationStyle, effectiveAnnotationStyle, leaderAppearancePropertyRows: appearanceControls.leaderAppearancePropertyRows
-  });
-
   const appearancePalette = window.AppearancePalette.create({
     document, documentModel, currentScope: () => model, applicationText, escapeHtml,
     colorPickerValue, localizeApplicationUI, selectedPropertiesTarget, multiplePropertyValue,
@@ -2402,29 +2393,17 @@
     annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
     startSplineEdit: spline => splineEditing.activate(spline), openAppearanceColorPalette,
   });
-  const { input: handlePropertiesInput, change: handlePropertiesChange, click: handlePropertiesClick } = propertiesController;
-  const propertyPresentation = window.PropertyPresentation.create({
-    currentScope: workspace.current, documentModel, canvasSelection,
+  const propertiesView = window.PropertiesDisplay.create({
+    document, documentModel, currentScope: workspace.current, canvasSelection,
     getOperation: () => ({ mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
-    effectiveAppearanceForElement, sketchName, hatchAppearanceForDisplay, resolvedHatchBoundary,
-    blockDefinitionById, blockProjectionBundle, normalizeAppearance, emptyGeometryInstanceBundle,
-    geometryInstanceBundle, activeSketchId, targetFromConstraint, dimensionDisplayState,
-    constraintSketchId, isReadOnlyDimension, measuredDimensionValue, angleDegrees,
-    sketchById, isRootSketch, effectiveAppearanceForSketch, effectiveConstructionAppearanceForSketch,
-    effectiveDimensionAppearanceForSketch, effectiveLeaderAppearanceForSketch, blockDefinitionSketchRows,
+    propertySelection, geometryAppearance, dimensionAppearance, annotationAppearance,
+    catalog: blockCatalog, projections: blockProjections, instances: instanceProjections, geometryReads, appearanceControls, controller: propertiesController,
+    sketchName, sketchById, isRootSketch, activeSketchId, constraintSketchId, sketchProjectionConstraintForTarget,
+    constraintGeometryId, constraintStatusBadge, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
+    hatchAppearanceForDisplay, resolvedHatchBoundary, applicationText, escapeHtml, hatchRegionErrorText,
+    geometryInstanceTypeLabel, expressionInputValue, numericDimensionExpression, localizedConstraintName,
+    localizeApplicationUI, installExpressionInputHighlights,
   });
-  const propertiesContent = window.PropertiesContent.create({
-    presentation: propertyPresentation, rows: propertyRows, appearanceControls, Line, SketchProjectionConstraint,
-    applicationText, escapeHtml, formatDisplayNumber, hatchRegionErrorText, geometryInstanceTypeLabel,
-    geometryRefId, expressionInputValue, numericDimensionExpression, sketchName, localizedConstraintName,
-    collapsibleSketchAppearanceSection: (...args) => propertiesView.collapsibleSketchAppearanceSection(...args),
-  });
-  const propertiesView = window.PropertiesView.create({
-    document, applicationText, localizeApplicationUI, installExpressionInputHighlights,
-    content: propertiesContent.render, prepareAffixInputs,
-    onInput: handlePropertiesInput, onChange: handlePropertiesChange, onClick: handlePropertiesClick,
-  });
-
 
 
 
