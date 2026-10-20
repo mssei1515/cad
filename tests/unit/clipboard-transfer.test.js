@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
-for (const file of ['src/geometry/pattern_instance_model.js', 'src/constraints/rebinding.js', 'src/editing/clipboard_transfer.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
+for (const file of ['src/document/appearance.js', 'src/document/annotations.js', 'src/geometry/pattern_instance_model.js', 'src/constraints/rebinding.js', 'src/editing/clipboard_transfer.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
 const plain = value => JSON.parse(JSON.stringify(value));
 const create = bundle => sandbox.window.ClipboardTransfer.create({ blockProjectionBundle: instance => { assert.equal(instance.id, 'new'); return bundle; }, blockProjectionLocalId: item => item.localId });
 
@@ -153,4 +153,45 @@ test('free copies with hatch seed sources use that seed when no geometry points 
     geometryInstanceSourcePoints: () => [], geometryInstanceBundle: () => ({ valid: true, points: [], lines: [], circles: [], arcs: [], splines: [] }) });
   api.reconnectDerivedInstances([source], [instance], new Map(), new Map(), new Map());
   assert.deepEqual(plain(instance.anchor.fallbackPosition), { x: 6, y: 8 });
+});
+
+
+test('detached text copies current layout or metrics without touching the annotation or reading Leader state', () => {
+ const source = { id: 'AN1', type: 'text', sketchId: 'S1', x: 1, y: 2, text: 'value', expression: 'p1', parameterName: 'note', parameterEnabled: true, rotation: 0.4, style: { textAlign: 'right' } };
+ const before = structuredClone(source), layout = { anchorX: 40, anchorY: 50 }, metrics = { anchorX: 70, anchorY: 80 };
+ let current = layout, metricCalls = 0, styleCalls = 0;
+ const unexpected = () => { throw Error('unexpected Leader or scale read'); };
+ const api = sandbox.window.ClipboardTransfer.create({ annotationTextLayout: note => { assert.equal(note, source); return current; },
+  annotationTextMetrics: (note, geometry) => { assert.equal(note, source); assert.equal(geometry, source); metricCalls++; return metrics; },
+  effectiveAnnotationStyle: note => { assert.equal(note, source); styleCalls++; return { textAlign: 'right' }; },
+  annotationLeaderDisplayGeometry: unexpected, annotationLeaderAnchor: unexpected, readViewportScale: unexpected });
+ assert.equal(styleCalls, 0); assert.equal(metricCalls, 0);
+ const copy = api.detachedAnnotation(source);
+ assert.equal(copy.x, 40); assert.equal(copy.y, 50); assert.equal(copy.anchorPosition, 'right-middle');
+ assert.equal(copy.expression, 'p1'); assert.equal(copy.parameterName, 'note'); assert.equal(copy.parameterEnabled, true); assert.equal(copy.rotation, 0.4);
+ assert.notEqual(copy.style, source.style); copy.style.textAlign = 'left'; assert.deepEqual(source, before);
+ current = null; source.anchorPosition = 'left-top';
+ const fallback = api.detachedAnnotation(source);
+ assert.equal(fallback.x, 70); assert.equal(fallback.y, 80); assert.equal(fallback.anchorPosition, 'left-top');
+ assert.equal(metricCalls, 1); assert.equal(styleCalls, 1);
+});
+
+test('detached Leader copies resolved points and current scale while keeping attachment policy outside the transform', () => {
+ const source = { id: 'AN2', type: 'leader', x: 1, y: 2, anchorPosition: 'left-middle', style: {},
+  start: { x: 1, y: 2 }, elbow: { x: 3, y: 4 }, end: { x: 5, y: 6 }, geometryRef: { kind: 'point', path: ['P1'] }, attachment: { t: 0.5 } };
+ const before = structuredClone(source), geometry = { elbow: { x: 30, y: 40 }, end: { x: 50, y: 60 } }, anchor = { x: 10, y: 20 };
+ let scale = 6, style = { fixedDisplaySize: true }, ready = false;
+ const api = sandbox.window.ClipboardTransfer.create({ annotationTextLayout: () => { assert.equal(ready, true); return null; },
+  annotationTextMetrics: (note, value) => { assert.equal(note, source); assert.equal(value, geometry); return { anchorX: 90, anchorY: 100 }; },
+  annotationLeaderDisplayGeometry: () => geometry, annotationLeaderAnchor: () => anchor,
+  effectiveAnnotationStyle: () => style, readViewportScale: () => scale });
+ ready = true;
+ const copy = api.detachedAnnotation(source);
+ assert.equal(copy.x, 90); assert.equal(copy.y, 100); assert.equal(copy.textPlacement, 'anchor'); assert.equal(copy.shelfReferenceScale, 6);
+ for (const [key, point] of [['start', anchor], ['elbow', geometry.elbow], ['end', geometry.end]]) { assert.deepEqual(plain(copy[key]), point); assert.notEqual(copy[key], point); }
+ assert.deepEqual(plain(copy.geometryRef), source.geometryRef); assert.deepEqual(plain(copy.attachment), source.attachment);
+ copy.start.x = -1; copy.elbow.x = -2; copy.end.x = -3; assert.equal(anchor.x, 10); assert.equal(geometry.elbow.x, 30); assert.equal(geometry.end.x, 50); assert.deepEqual(source, before);
+ scale = 12; style = { fixedDisplaySize: false, displayScale: 2 };
+ assert.ok(Math.abs(api.detachedAnnotation(source).shelfReferenceScale - 2 * 96 / 25.4) < 1e-12);
+ assert.deepEqual(source, before);
 });

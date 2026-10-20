@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 注記コピーの表示値変換
+
+ClipboardTransferへdetachedAnnotationの実処理を統合し、appは必要な表示照会と現在倍率を渡して同じ関数をClipboardPayloadへ接続する。元のserialize→layout／metrics→anchorPosition→Leader形状／anchor複製→倍率計算の順を維持する。参照を外す判断とmetadata除去はPayload、貼付け移動・再接続はTransfer、表示位置の解決は既存Renderer／Anchor queryが所有する。新file・state・汎用contextを増やさず、Transfer生成は読取り無処理であることと、全portの初期化済みを確認してPayloadより前へ移した。app.jsは3,386→3,375行（11行減）、今回の再開から3,652→3,375行（277行減）。
+
+構文574ファイル・単体1,657件・関連E2E170件（4.7分）が成功（全runner exit 0）。関連はunified-ui／annotation-anchors／annotation-display-size／derived-selection-copyで、file URL起動、単独注記と参照先を含むコピー、Leader表示形状・倍率、派生参照、Undo／Redo・保存再読込を確認した。追加単体3件はlayout／metrics fallbackと明示anchor、生成時の遅延読取り、現在外観／倍率、解決pointの独立copy、元注記・表示geometryの無変更、実TransferとPayloadの接続による参照保持／除去を確認する。変換本体はserialize呼出先と倍率readerへの置換を除き移動前と一致した。この単位で全E2E・性能fileは未実行。最終main反映前に最新コードで全体検証する。E2E全170件の成功表示後、worker不在とこのrunが起動したserverを確認し、終了待ちの専用server（port8784）だけを終了して同じrunnerのexit 0を回収した。E2Eの再起動・既存テストの期待値変更はしていない。ログは一時ディレクトリのcad-clipboard-annotation-copy-{focused,check,unit,related}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop 11c6b16、開始時の週枠残量79%／検証後78%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はPropertiesの機能組立てを分析する。AppearanceControlsとPaletteはPropertiesだけでなくDocumentAppearanceEditorにも共有され、AppearanceEditingも同じ実体を使う。PropertySelection／PropertyEditingFeature／PropertiesDisplay／Controllerとの共用依存と、create・操作時read・bind／startの順序を照合し、重複する接続を同じownerで閉じる。共有部品をProperties専用に再生成せず、現在scopeとDocument既定値・Palette sessionを維持し、外部に必要なAPIだけを公開する。大量callbackの単なる横流しや新しい巨大contextになれば境界を見直す。未使用aliasは実際の利用先を確認して同単位で整理する。
+
 ### 拘束確定の性能traceの所有
 
 ConstraintCommitCommandへ最後の性能traceの保持・読取り・解除を集めた。生成と成功後の公開を同じownerで行い、既存observerの同一Object通知と公開位置、失敗／短絡時の以前のtrace保持、Document resetの無通知null化を維持する。appのlastAuthoringPerformanceと生成／観測／resetの三つの中継callbackを除去し、readPerformance／clearPerformanceを直接接続した。新fileや汎用state容器は追加しない。app.jsは3,387→3,386行（1行減）、今回の再開から3,652→3,386行（266行減）。

@@ -7,13 +7,13 @@ const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const { Point, Line, GeometryFixedConstraint, SketchProjectionConstraint } = sandbox.window.GeometrySolver;
 const arrays = ['points','lines','circles','arcs','splines','blockInstances','geometryInstances','annotations','hatches','referenceImages'];
-function fixture() {
+function fixture(overrides = {}) {
   const model = Object.fromEntries([...arrays, 'constraints'].map(key => [key, []]));
   const selection = Object.fromEntries(arrays.map(key => [key, []]));
   const state = { target: null, serialized: [] }, bundle = { points: [], lines: [], circles: [], arcs: [], splines: [] };
   const builder = sandbox.window.ClipboardPayload.create({ geometryInstanceBundle: () => bundle, serializeGeometryInstance: sandbox.window.DocumentSnapshot.serializeGeometryInstance, blockProjectionBundle: () => bundle, blockProjectionLocalId: item => item.localId,
     resolveGeometryRef: () => state.target, constraintGraphNodes: c => c.nodes,
-    serializeConstraint: c => { state.serialized.push(c); return { tag: c.tag }; }, applicationText: (_ja, en) => en });
+    serializeConstraint: c => { state.serialized.push(c); return { tag: c.tag }; }, applicationText: (_ja, en) => en, ...overrides });
   return { model, selection, state, bundle, canOfferCopy: builder.canOfferCopy, build: scope => builder.build(model, selection, scope) };
 }
 
@@ -107,4 +107,23 @@ test('copy menu query requires every selected Hatch boundary reference and leave
   assert.equal(f.canOfferCopy(f.model, f.selection), true);
   assert.equal(JSON.stringify({ model: f.model, selection: f.selection }), before);
   assert.deepEqual(f.state.serialized, []);
+});
+
+
+test('payload detaches displayed copies only when referenced targets are missing and keeps source annotations intact', () => {
+ let transforms = 0;
+ const transfer = sandbox.window.ClipboardTransfer.create({ annotationTextLayout: () => { transforms++; return { anchorX: 50, anchorY: 60 }; },
+  effectiveAnnotationStyle: () => ({ textAlign: 'left' }), annotationLeaderDisplayGeometry: () => ({ elbow: { x: 30, y: 40 }, end: { x: 50, y: 60 } }),
+  annotationLeaderAnchor: () => ({ x: 10, y: 20 }), readViewportScale: () => 6 });
+ const f = fixture({ detachedAnnotation: transfer.detachedAnnotation }), target = new Point('P1', 100, 200); f.state.target = target;
+ const note = { id: 'AN1', type: 'leader', x: 5, y: 6, anchorPosition: 'left-middle', textPlacement: 'shelf', geometryRef: { kind: 'point', path: ['P1'] }, attachment: { t: 0.5 },
+  start: { x: 1, y: 2 }, elbow: { x: 3, y: 4 }, end: { x: 5, y: 6 }, evaluatedParameterValue: 123,
+  anchorConstraints: [{ type: 'coincident', geometryRef: { kind: 'point', path: ['P1'] } }] };
+ f.model.points = [target]; f.model.annotations = [note]; f.selection.annotations = [note];
+ const before = JSON.stringify(note), detached = f.build().payload.annotations[0];
+ assert.equal(detached.x, 50); assert.equal(detached.y, 60); assert.equal(detached.textPlacement, 'anchor'); assert.equal(detached.parameterValue, 123);
+ assert.equal(detached.geometryRef, null); assert.equal('attachment' in detached, false); assert.equal('anchorConstraints' in detached, false); assert.equal(transforms, 1);
+ f.selection.points = [target]; const attached = f.build().payload.annotations[0];
+ assert.equal(attached.x, 5); assert.equal(attached.y, 6); assert.equal(attached.anchorConstraints[0].geometryRef.path[0], 'P1'); assert.equal(attached.geometryRef.path[0], 'P1'); assert.equal(attached.textPlacement, 'shelf'); assert.equal(transforms, 1);
+ assert.equal(JSON.stringify(note), before);
 });
