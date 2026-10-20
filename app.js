@@ -378,34 +378,18 @@
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
   });
-  const blockDefinitionEditing = window.BlockDefinitionEditing.create({
-    normalizedSketchCopy, cloneConstraintForBlock: constraintRebinding.cloneForBlock, blockDefinitionById, createBlockProjectionBundle,
-    geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, normalizeGeometryInstance,
-    hatchSequence: () => documentIds.peek("hatch"), nextDefinitionId: () => documentIds.allocate("blockDefinition"),
+  const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = window.BlockEditingFeature.create({
+    workspace, documentModel, ids: documentIds, catalog: blockCatalog, projections: blockProjections,
+    instances: instanceProjections, rebinding: constraintRebinding, normalizedSketchCopy, normalizeGeometryInstance,
     isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
+    activeSketchId, blockProjectionBundles, geometryElementKey, readViewport: () => viewport,
+    activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences, createHistory: createBlockEditHistory,
+    rebuildStoredBlockDefinitionConstraints, rebuildBlockDefinitionConstraintObjects,
   });
-  const { clone: cloneBlockDefinition,
-    apply: mergeBlockDefinitionDraft, fromSelection: createBlockDefinitionFromSelection,
-    empty: createEmptyBlockDefinition } = blockDefinitionEditing;
-  const blockEditor = window.BlockEditorSession.create({
-    currentScope: workspace.current, documentModel, hatchSequence: () => documentIds.peek("hatch"),
-    normalizedSketchCopy, activeSketchId, blockProjectionBundles, geometryElementKey,
-    captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
-    restoreHostState: (original) => {
-      activateEditingScope(workspace.restore(original));
-      viewport.update(original.viewport);
-    },
-    activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences,
-    cloneBlockDefinition, createHistory: createBlockEditHistory, mergeBlockDefinitionDraft,
-    rebuildStoredBlockDefinitionConstraints, invalidateBlockProjectionCache,
-    blockDefinitionOwnedSubtreeIds, rebuildBlockDefinitionConstraintObjects,
-  });
+  const { clone: cloneBlockDefinition, apply: mergeBlockDefinitionDraft,
+    fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
-  const blockEditingQueries = window.BlockEditingQueries.create({
-    definitions: () => documentModel.blockDefinitions, currentScope: workspace.current,
-    editor: blockEditor, catalog: blockCatalog,
-  });
   const { blockDefinitionsInCurrentScope, blockDefinitionScopeError,
     blockDefinitionDependsOn, storedBlockInstancesReferencing, blockDefinitionUsageCount,
     blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
