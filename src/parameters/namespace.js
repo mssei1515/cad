@@ -192,6 +192,19 @@
       }
     }
 
+    function validateNewDimensionParameter(draft, namespace) {
+      const name = String(draft.parameterName || "").trim(), expression = expressionFromUserInput(draft.expression);
+      const symbols = symbolElementsInNamespace(namespace);
+      validateParameterSymbolNames(namespace.parameters, [...symbols, { parameterName: name }]);
+      const definitions = [...namespace.parameters.map(item => ({ ...item, kind: "parameter" })),
+        ...symbols.filter(item => !isReadOnlyDimension(item)).map(item => ({ name: item.parameterName, expression: item.expression, kind: "dimension" })),
+        { name, expression, kind: "dimension" }];
+      const values = new Map(symbols.filter(isReadOnlyDimension).map(item => [item.parameterName, item.evaluatedParameterValue]));
+      const value = evaluateParameterDefinitions(definitions, values).values.get(name);
+      if (!Number.isFinite(value)) throw new Error(applicationText("値を計算できません", "Value could not be evaluated"));
+      return { expression, value };
+    }
+
     function evaluateParameterNamespace(namespace, options = {}) {
       ensureParameterNamespace(namespace);
       validateParameterSymbolNames(namespace.parameters, symbolElementsInNamespace(namespace));
@@ -331,7 +344,7 @@
       dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
       rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, symbolElementsInNamespace, allocateDimensionParameterName,
       prepareCopiedSymbols, rewriteCopiedConstraintSymbol, ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
-      referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
+      referenceDimensionValues, validateParameterSymbolNames, validateNewDimensionParameter, evaluateParameterNamespace,
       validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents, symbolDeletionDependents,
     });
   }

@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 新規Parameter候補の読取り検証
+
+AnnotationCommandのvalidateParameter本体を既存ParameterNamespace.validateNewDimensionParameterへ統合した。appは現在modelを明示して依頼し、名前／式／symbols／read-only値／Engine評価の順・一度のsymbol収集・例外・現在言語errorを同じownerで調整する。ensure・採番・target更新を行う通常評価とは別の読取り入口とし、draft／model無変更と有限の0／負数の許可を維持した。確定時のcommitParameterや履歴は変更しない。新file・state・script・保存形式変更はない。app.jsは3,281→3,270行（11行減）、今回の再開から3,652→3,270行（382行減）。
+
+構文578ファイル・単体1,684件・関連E2E162件（2.4分）が成功（全runner exit 0）。関連はunified-ui／unified-annotations／parameter-dialog-controller／blocksで、file URL起動、Annotation Parameter作成・編集と式／依存、Document／Blockの名前空間、Undo／Redo・保存再読込を確認した。追加単体4件はParameter・可変寸法・注記・read-only定数の実Engine評価、symbol一度収集とdraft／model無変更、明示Document／Blockと最新値・0／負数、重複／prefix／未知参照／循環の失敗順序、非有限結果に対する現在言語のerrorを検証する。既存16件のNamespace評価／rename／Clipboard／削除依存等の期待値も維持した。候補検証は採番・target／評価値更新を行わず、appのmodelを明示する。この単位で全E2Eと性能fileは未実行。最終main反映前に最新コードで全体検証する。専用serverはrunner終了後にPID／command lineを照合して終了した。ログは一時ディレクトリのcad-annotation-parameter-validation-{focused,check,unit,related}.log。
+
+この単位をCommit／Pushしてdevelopへ統合する。基準はdevelop 40c41f3（前実装e6973ad）、開始時の週枠残量71%／検証後70%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はinstallTestHooks内のCanvas描画診断groupの構築・公開を分析する。既存CanvasRenderTestDriverのDraftDashCases／BlockDashCases→DashIsolationとConstructionHoverFixture／ConstructionLineObservationの五部品間の結線を、同じtesting ownerで閉じられるか検討する。既存三つのブラウザ公開API（canvasDashIsolationCases、constructionLineHoverDisplayCasesForTest、constructionLineRenderingForTest）の名前・関数契約・同じ描画／モデルowner・scene reset／mode変更順を維持する。test hooksの有効条件と生成時のread／副作用を監査し、通常描画の実装をtestingへ移さず、既存helperの組立てだけを担当させる。read／draw layer等の公開APIを必要な範囲で共有し、app全体や可変contextを渡さず、installTestHooks全体を別の巨大closureへ移さない。
+
 ### 拘束保存metadataの所有
 
 ConstraintPersistence.createMetadataへ共有decorateとDocumentSnapshot用snapshotDataを統合した。raw codecを変更せず、null／未指定・data同一性・field順、read-only／式fallback、Document／BlockのSketch IDと参照情報の扱いを維持する。metadata ownerは早いBlock機能より前に生成し、raw codecの後段初期化はhoisted serializerの遅延呼出しで保つ。装飾のhoisted入口はBlock履歴・Clipboard・test support向けに残し、Snapshotには同じownerの保存用methodを直接接続する。新file・state・script・保存形式変更はない。app.jsは3,295→3,281行（14行減）、今回の再開から3,652→3,281行（371行減）。
