@@ -6,6 +6,14 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の構築依存再監査単位
+
+develop 63c886c（app blob 881fd70a4785a78445236016d0c6b64d705a118a）を基準に構築依存を再監査した。旧f37edc6の集計を同条件で再現し、root構築232→214文／1,564→1,376非空白行、test hooks488→478行、call一文261→264行、複文callback47→38個を確認した。stateはroot let9個、mode代入20箇所（通常19＋test1）、pointer代入4箇所。test hooks／一文callを仮に全て外しても非空白1,923行が残る。今回のapp.jsは3,162→3,162行（0行差）で、実装・UI・保存形式・正式仕様は変更していない。
+
+監査の分類合計・Git blob・state更新元・初期化順を現物照合した。Geometry描画六構築は24物理行でもroot参照67種類を持つため、これを平坦な67依存の新factoryへ包む案は採用しない。既存のPointUsage／command targets／Sketch style／GeometryReadServices等のAPIを使う契約削減を先に検討する。後段constの静的参照121回は全てcallback内だが、constructorが即呼出ししない保証とは区別する。CanvasDisplayの二段階生成、DimensionDisplay.createTraversal、BlockEditingFeature.createCommands、DOM登録／startの既存順を維持する。詳しい数値・比較条件・採用基準は[再監査](bootstrap-boundary-audit.md)を参照する。
+
+基準コードは前単位で構文584ファイル・単体1,708件・関連E2E189件が成功済み。この文書のみの監査で再実行した結果ではなく、全E2Eの代用にしない。開始時の週枠残量66%／監査後65%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はDimensionValueCommand.createのsubmitSpecialDistance／commitSpecialPropertyと対象選択callbackを分析する。Instance角度間隔、Annotation寸法、Annotation anchor距離の分岐・式評価・hint／履歴を既存の寸法値編集ownerへ集められるか確認する。非対象null／拒否false／成功、propertyによる短絡、現在scopeとAnnotationのnull constraint評価、履歴回数、submitとProperties編集で異なる例外境界、一般command側のpending／入力／UI更新の順を維持する。単なるcallback file・汎用context・モードsetter容器を作らず、状態所有と契約を整理してから上位の描画／入力／編集構築をまとめる。
+
 ### 最新のCanvas hit組立て単位
 
 CanvasHitInteractionへpress query／hoverの共通hit入口の結線と注記interaction hit判定を集約した。Geometry／scene readerを共有しながら各子の依存は限定し、press読取りと既存CanvasHover更新を区別した。active SketchとGeometry／寸法／投影／注記の優先順位・参照・短絡・例外は既存ownerに維持する。classic scriptと構文・単体・E2E読込一覧を同期し、新state・cache・保存形式変更はない。app.jsは3,170→3,162行（8行減）、今回の再開から3,652→3,162行（490行減）。

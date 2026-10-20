@@ -2,6 +2,8 @@
 
 現在の実装配置を調べるための開発資料。正式仕様や将来の分割設計ではない。仕様と保証内容は[仕様の入口](../../spec/README.md)および[検証対応](../../spec/verification/保証対応.md)を参照する。
 
+現在の構築依存と初期化境界は[composition root再監査](bootstrap-boundary-audit.md)を参照する。63c886c基準の再監査では、広い構築契約をそのまま新fileへ包まず、既存ownerのAPIを用いた依存削減と特殊寸法編集の責務整理を次の判断とした。
+
 ## 1. 実装ファイルの責務
 
 - `src/constraints/operand_hit_query.js`: 参照SketchとBlock／派生Geometryの拘束対象hit。Sketch関係と探索優先順を扱う。
