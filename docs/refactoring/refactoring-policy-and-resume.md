@@ -54,13 +54,13 @@
 
 ## 5. 現在地と残作業
 
-2026-10-20、develop f37edc6のapp.jsは3,387行。非空白2,885行のうち、create系factoryの構築・接続が1,564行、条件付きtest hooksが488行、call一文の関数が261行。集計条件、現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)を参照する。これらを全て単純な移動・削除対象とは扱わない。
+2026-10-20の再監査基準（develop f37edc6）ではapp.jsは3,387行。最新の行数と検証はsection 8を参照する。非空白2,885行のうち、create系factoryの構築・接続が1,564行、条件付きtest hooksが488行、call一文の関数が261行。集計条件、現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)を参照する。これらを全て単純な移動・削除対象とは扱わない。
 
-Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、mode・最後のpointer・性能trace・現在model別名と、操作固有のcallbackが残る。後段生成用の六つのlet参照は、操作stateの重複とは区別する。
+Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、mode・最後のpointer・現在model別名と、操作固有のcallbackが残る。現在のletはmode・pointer・model別名と六つの後段接続参照の九つ。後段接続は操作stateの重複とは区別する。
 
 残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。特にmodeはtestを含め23箇所で代入されるため、getter／setter容器への移動だけでは完了としない。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
-次はConstraintCommitCommandが作る最後の性能traceと、そのDocument reset／test読取りの所有を揃える小さい単位を検討する。その後はClipboardの値変換等の実処理と、Properties／context menu等の意味のある機能組立てを進める。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
+最後の性能traceは生成ownerのConstraintCommitCommandへ統合済み。次はClipboardの値変換等の実処理と、Properties／context menu等の意味のある機能組立ての依存を分析する。Hatchの既存content／Layerを包むだけの分割は見送る。小関数の移動だけで数百行へ届くとは見積もらない。
 
 各区切りの履歴・検証は[composition-root.md](composition-root.md)、現在の配置は[implementation-map.md](implementation-map.md)へ記録する。順番・file数・task数を固定せず、再監査の結果から次の責務境界を選ぶ。200〜500行の目標、UI・挙動・互換性・状態owner・全体検証を維持し、現在の中間成果で全体完了とはしない。
 
@@ -93,7 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
-### 最新のcomposition root再監査単位
+### 最新の拘束確定performance owner単位
+
+前単位はfab4473をdevelopのc99da9aへ統合・Push済み。今回はcodex/constraint-performance-ownerで継続中。週枠使用20%／残量80%で停止条件には達していない。
+
+ConstraintCommitCommandへ最後の性能traceの保持・読取り・解除を集めた。生成と成功後の公開を同じownerで行い、既存observerの同一Object通知と公開位置、失敗／短絡時の以前のtrace保持、Document resetの無通知null化を維持する。appのlastAuthoringPerformanceと生成／観測／resetの三つの中継callbackを除去し、readPerformance／clearPerformanceを直接接続した。新fileや汎用state容器は追加しない。app.jsは3,387→3,386行（1行減）、今回の再開から3,652→3,386行（266行減）。
+
+構文574ファイル・単体1,654件・関連E2E122件（1.7分）・性能file全12件（48.0秒）が成功（全runner exit 0）。関連はunified-ui／command-panel／fixed-command／file-safety／parameter-dialog-controllerで、file URL起動、拘束確定・Fix／Undo、操作取消、Document reset・保存再読込を確認した。パンは150msで元の175ms未満の基準内。追加単体3件は成功後の公開順とobserverの同一Object、command間の独立、拒否・失敗・参照への切替時の旧trace保持、公開前例外時の旧trace保持、無通知の反復clearを確認する。このコードで全E2Eは未実行であり、最終main反映前に最新コードで全体検証する。ログは一時ディレクトリのcad-constraint-performance-owner-{check,unit,related,performance}.log。全runnerの終了を回収済み。
+
+この単位をCommit／Pushしてdevelopへ統合する。週枠残量79%で継続中。mainは5ee5f3fを維持し、全体目標は未完了。次はClipboardPayload.detachedAnnotationの値変換を既存ClipboardTransferの責務へ統合できるか分析する。現在表示中のanchor／文字layout／Leader geometry・倍率と保存用copyの関係、元Annotationの無変更、参照を持つ項目の扱いを確認する。現在TransferはPayloadより後で生成されるため、必要な読取り依存と生成時の無処理を確認して接続順を整理し、未初期化constを直接渡さない。Materializationやモデル編集と混同せず、新たな小fileや汎用contextを作らない。その後は再監査のProperties／context menu等の意味のある機能組立てへ進む。
+
+### 前単位のcomposition root再監査単位
 
 前単位はb6e825fをdevelopのf37edc6へ統合・Push済み。今回はcodex/bootstrap-boundary-auditで監査した。開始時は週枠使用19%／残量81%。実装・テスト・設定は変更していない。
 
