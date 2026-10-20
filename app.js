@@ -807,21 +807,11 @@
     applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand,
   });
   const { update: updateFilletRadiusPlacement, submit: submitFilletRadiusPlacement, click: handleFilletClick } = filletCommand;
-  const geometryInstancePersistence = window.GeometryInstancePersistence.create({ applicationText });
-  const blockDefinitionPersistence = window.BlockDefinitionPersistence.create({ applicationText, serializedGeometryInstanceListError });
-  const blockConnectionsPersistence = window.BlockConnectionsPersistence.create({
-    createBlockProjectionBundle, geometryInstanceBundlesForScope, elementSketchId, deserializeConstraint, constraintSketchId,
-    separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace, applicationText,
-  });
-  const documentGeometryPersistence = window.DocumentGeometryPersistence.create({
+  const { loading: documentLoading, geometryInstances: geometryInstancePersistence } = window.DocumentLoading.createWithCodecs({
     createBlockProjectionBundle, geometryInstanceBundlesForScope, elementSketchId, deserializeConstraint, constraintSketchId,
     separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace,
-    isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint, applicationText,
-  });
-  const documentLoading = window.DocumentLoading.create({
-    blockDefinitionPersistence, blockConnectionsPersistence, documentGeometryPersistence, geometryInstancePersistence,
-    serializedGeometryInstanceListError, normalizeGeometryInstance, defaultUnits: DEFAULT_DOCUMENT_UNITS,
-    applicationText, invalidateProjection: invalidateBlockProjectionCache, normalizeArcSweeps,
+    isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint,
+    defaultUnits: DEFAULT_DOCUMENT_UNITS, applicationText, invalidateProjection: invalidateBlockProjectionCache, normalizeArcSweeps,
   });
   const blockConfigurationCommand = window.BlockConfigurationCommand.create({
     currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, createBlockProjectionBundle,
@@ -1409,9 +1399,6 @@
     return constraintCodecs.deserialize(...args);
   }
 
-  function serializedGeometryInstanceListError(instances) {
-    return geometryInstancePersistence.listError(instances);
-  }
 
   const documentApplication = window.DocumentApplication.create({
     documentLoading, document: documentModel, model, resetEditingState: resetModelState,
