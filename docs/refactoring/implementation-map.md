@@ -42,6 +42,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 - `src/parameters/stabilization.js`: 式評価・参照寸法の収束反復と、目標値変更の段階的求解／再試行。操作全体の復元と履歴は持たない。
 
 - `src/constraints/constraint_analysis.js`: 拘束状態の解析対象・図形分類・cache・遅延評価と無効化。描画色と表示文言は含まない。
+- ConstraintAnalysis.createWithRedundancyは同じscope／Solver／scopeQuery／許容差で既存の重複診断→分類ownerを生成・接続する。元の変数照会・重複refresh関数とprofile hookを共有し、生成時にモデル／Solver／profileを実行しない。返すanalysis／redundancyは同じ既存APIで、各cache・Map／countと独立invalidate、refresh順・例外時の途中状態を維持する。旧各createも独立APIとして残す。
 
 - `src/constraints/constraint_redundancy.js`: 重複拘束の個別解析・全Sketch集計、接線維持の例外、非公開の結果Mapと件数照会。
 

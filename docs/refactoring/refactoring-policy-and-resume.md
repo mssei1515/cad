@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の拘束分類／重複診断の組立て単位
+
+基準はdevelop aeadad9。ConstraintAnalysis.createWithRedundancyへ既存ConstraintRedundancy→ConstraintAnalysisの生成・接続を集約した。共通currentScope・Solver・scopeQuery・許容差を共有し、Redundancyの変数照会はscopeQueryの同じsketchSolveVariables、分類からの重複refreshも元の同じ関数を渡す。profile hookは包み直さず、生成時にscope・Solver・参照有効性・profileを実行しない。返すanalysis／redundancyは既存各ownerで、分類cacheと重複Map／countを統合・複製しない。旧各createは独立APIのまま残し、新file・state・contextは追加しない。
+
+分類invalidateは重複状態を消さず、候補probe／forgetConstraintとcountの更新時機は既存Redundancyに残す。参照更新→所属照会→分類計算とcache設定→重複refreshの順、各段階の例外とprofile呼出しを維持する。重複refreshで例外が出た場合にも、新しい分類cacheと以前の重複状態が残る元の境界を保ち、一括rollbackを加えない。Rootの不要なrefreshConstraintRedundancy aliasを除去した。
+
+対象構築は2→1、引数合計24→19、引数内の異なるroot binding参照22→20。app.jsは2,929→2,926行（3行減）、root未使用bindingは0。構文588ファイル・全単体1,796件・関連単体15件が成功（exit 0）。追加2件は旧二factoryでの組立てと比較し、生成時無照会、遅延cache／同じ診断owner・count、forget後／invalidate後の診断、事前計算結果の再利用、scope切替、参照／Solver／重複の例外時のcacheと診断の部分更新・後続短絡を確認する。旧aeadad9のappと現在module群の実ブラウザ比較では、支持状態／Sidebar／Block／参照subtree／派生作図の5図面と各再読込後の10状態が一致した。分類の反復refresh・解析値・展開Tree HTML・model・historyを比較し、savedAtだけ除外した。診断は一時directoryのcad-analysis-assembly-equivalence.cjs／.log。関連E2E246件が全成功（6.7分、exit 0）。unified-ui／phase0-characterization／blocks／free-instance／derived-patterns／sketch-permissions／sketch-projection／parameter-dialog-controller／view-visibility／adversarial-authoring-performance／adversarial-drag-fixture／geometry-drag-smoothnessを実行した。通常・支持・派生／Blockの分類、参照／重複拘束・追加拒否と回復、Parameter／scope切替、実drag・保存再読込と既存画面を確認した。性能全12件を含み、pan140ms（175ms未満）・空白矩形216ms（250ms未満）。既存期待値／基準や計算処理は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-analysis-assembly-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、現行コードの全E2Eは未実行。c3a213cの全E2E584成功と前単位の関連252成功は過去の基準として保持する。開始時週枠使用33%／残量67%で停止条件未到達。次は分類／重複が使うSketchContext・GeometryReadServicesの既存照会を共有できるか確認する。membershipQueryはrefreshごとの取得、Sketch所属／Root・編集可否とbundle照会は現在のowner・元の引数／receiverを保つ。scopeQueryの注記drag補助scopeと、currentScopeのDocument／Block modelを無断で統一しない。計算規則やcache・許容差を変えず、単なる大きなcallback集合にせず依存を絞る。mode・他の通常構築・test支援も残り、200〜500行の全体目標は未完了。
+
 ### 最新のTree View／Controller組立て単位
 
 基準はdevelop 08b030c。SketchTreeController.createWithViewで既存View→Controller→menuの生成と相互callbackを集約した。同じCanvasSelectionから選択Sketch、同じObjectsから対象解決、SketchContextからRoot／active照会、ApplicationSettingsから翻訳、SketchMoveCommandから現在state／activeと元のchoose／commit／cancelを接続する。Controller固有の限定portは既存createWithContextMenuへ渡し、全app context・別の編集stateは作らない。旧View.create／Controller.create／createWithContextMenuも独立APIとして残す。

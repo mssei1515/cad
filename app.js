@@ -496,18 +496,15 @@
     isVisibleSketchElement, constraintIsOperational, constraintGraphNodes: constraint => constraint.annotationGeometryNodes || constraintGraphNodes(constraint), geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
   });
   const { connectedComponentFromSeeds, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = solveScopeQuery;
-  const constraintRedundancy = window.ConstraintRedundancy.create({
-    currentScope: workspace.current, solver, sketchSolveVariables, constraintSketchId,
-    constraintIsOperational, isRootSketch, acceptError: CONSTRAINT_ACCEPT_ERROR,
-  });
-  const { redundantConstraintInfo, refreshConstraintRedundancy, constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
-  const constraintAnalysis = window.ConstraintAnalysis.create({
+  const { analysis: constraintAnalysis, redundancy: constraintRedundancy } = window.ConstraintAnalysis.createWithRedundancy({
+    constraintSketchId, constraintIsOperational, isRootSketch,
     currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, readMembership: readSketchMembership, descendantSketchIds, elementSketchId,
     geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
-    refreshReferenceConstraintValidity, refreshConstraintRedundancy, sketchHasSolveError,
+    refreshReferenceConstraintValidity, sketchHasSolveError,
     isEditableSketchElement, isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
     profileAnalysis: work => interactionProfiler.active ? profileInteractionWork("analysis", work) : work(),
   });
+  const { redundantConstraintInfo, constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
   const { viewport, navigation: canvasNavigation, zoomControl: canvasZoomControl, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,

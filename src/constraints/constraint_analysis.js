@@ -3,6 +3,14 @@
   "use strict";
   const { Point, Line, Circle, Arc, vectorNorm, variableDeltaInBasis } = window.GeometrySolver;
   const { lineSupportNormal } = window.GeometryKernel;
+  function createWithRedundancy({ currentScope, solver, scopeQuery, constraintSketchId, constraintIsOperational, isRootSketch, acceptError,
+    ...analysisOptions }) {
+    const redundancy = window.ConstraintRedundancy.create({ currentScope, solver, sketchSolveVariables: scopeQuery.sketchSolveVariables,
+      constraintSketchId, constraintIsOperational, isRootSketch, acceptError });
+    const analysis = create({ ...analysisOptions, currentScope, solver, scopeQuery, acceptError,
+      refreshConstraintRedundancy: redundancy.refreshConstraintRedundancy });
+    return Object.freeze({ analysis, redundancy });
+  }
   function create({ currentScope, solver, scopeQuery, readMembership, descendantSketchIds, elementSketchId,
     geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
     refreshReferenceConstraintValidity, refreshConstraintRedundancy, sketchHasSolveError,
@@ -232,5 +240,5 @@
       get stable() { return constraintAnalysisState?.analysis?.stable; },
     });
   }
-  window.ConstraintAnalysis = Object.freeze({ create });
+  window.ConstraintAnalysis = Object.freeze({ create, createWithRedundancy });
 })();
