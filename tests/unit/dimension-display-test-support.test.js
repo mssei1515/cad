@@ -2,7 +2,7 @@ const assert = require('node:assert/strict'); const fs = require('node:fs');
 const path = require('node:path'); const vm = require('node:vm'); const test = require('node:test');
 const sandbox = { window: {}, structuredClone }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/testing/dimension_test_driver.js'), 'utf8'), sandbox);
-function fixture() {
+function fixture(build = sandbox.window.DimensionTestDriver.createDisplaySupport) {
   const calls = [], selected = {}, hovered = {}, state = { doc: { defaultDimensionAppearance: { terminatorSize: 1, prefix: 'old' }, defaultTerminatorAppearance: { terminatorSize: 2 }, blockDefinitions: [] }, scope: { constraints: [], sketches: [{ id:'S2', dimensionAppearance:{} }] }, failure: null };
   const selection = { dimensionConstraint: selected, constraint: selected, set(key,value) { assert.equal(this,selection); this[key] = value; } };
   const hover = { current: { dimension: hovered }, update(patch) { assert.equal(this,hover); Object.assign(this.current,patch); } };
@@ -16,9 +16,17 @@ function fixture() {
     canvasSelection:selection, canvasHover:hover, ctx,
     drawDimensions: () => { assert.equal(selection.dimensionConstraint,null); assert.equal(hover.current.dimension,null); ctx.strokeStyle='RED'; ctx.stroke(); if(state.failure) throw state.failure; },
   };
-  const support = sandbox.window.DimensionTestDriver.createDisplaySupport(ports); assert.deepEqual(calls, []);
+  const support = build(ports); assert.deepEqual(calls, []);
   return { support, state, calls, ports, selected, hovered };
 }
+
+test('shared dimension display retains rendering owners and restores them when the original renderer fails',()=>{
+  const f=fixture(ports=>sandbox.window.DimensionTestDriver.createSupport(ports).createDisplay({...ports,ctx:null,canvasSelection:null,drawDimensions:()=>assert.fail('shared renderer must be retained')}));
+  const stroke=f.ports.ctx.stroke;assert.equal(f.support.appearance.drawnDimensionColorsForTest()[0],'red');
+  const marker=new Error('render failed');f.state.failure=marker;
+  assert.throws(()=>f.support.appearance.drawnDimensionColorsForTest(),error=>error===marker);
+  assert.equal(f.ports.canvasSelection.dimensionConstraint,f.selected);assert.equal(f.ports.canvasHover.current.dimension,f.hovered);assert.equal(f.ports.ctx.stroke,stroke);
+});
 
 test('display support keeps eight API names in their ordered groups without eager measurements', () => {
   const f = fixture();

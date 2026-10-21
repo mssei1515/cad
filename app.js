@@ -2358,12 +2358,15 @@
       resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas,
       screenToWorld, hitAnnotationElement, readDragState: () => annotationDrag.inspect()
     });
-    const dimensionFixtureSupport = window.DimensionTestDriver.createFixtureSupport({
+    const dimensionTestSupport = window.DimensionTestDriver.createSupport({
       resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope: workspace.current,
-      isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
-      constraintTargetSession, pendingCommandSession, startDistanceValueInput, dimensionValueInput, dimensionWithLabelAt,
-      angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, serializeDimension,
-      rootSketchId: ROOT_SKETCH_ID, ctx, drawDimensions, sketchById, constraintSketchId, isVisibleSketchId
+      isDimensionConstraint, dimensionLayout, hypot2, targetFromConstraint, serializeModel, constraintTargetSession, pendingCommandSession,
+      dimensionValueInput, ctx, drawDimensions, constraintSketchId, canvasSelection, viewport,
+    });
+    const dimensionFixtureSupport = dimensionTestSupport.createFixtures({
+      isReadOnlyDimension, dimensionLabelForConstraint, defaultDimensionForTarget, startDistanceValueInput, dimensionWithLabelAt,
+      angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint,
+      serializeDimension, rootSketchId: ROOT_SKETCH_ID, sketchById, isVisibleSketchId,
     });
     const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint, currentScope: workspace.current,
@@ -2424,13 +2427,11 @@
     const sidebarHoverKeyObservation = window.PropertiesTestDriver.createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey });
     const blockDimensionFixture = window.BlockTestDriver.createReadOnlyDimensionFixture({ currentScope: workspace.current, blockProjectionBundle, defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint });
     const blockExternalFixture = window.BlockTestDriver.createExternalConstraintFixture({ currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
-    const dimensionInteractionSupport = window.DimensionTestDriver.createInteractionSupport({
-      currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput,
-      clearSelection, canvasSelection, updateUI, draw, resetModelState, addPoint, addLine, addCircle, addArc,
-      addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, fitAllGeometryToViewport,
-      startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, viewport, dimensionAnchor, serializeModel,
-      LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, signedPointLineDistance,
-      vectorNorm, hypot2, solveSketchAndDependents, snapshotModelState, refreshConstraintAnalysis, dimensionValueInput, dimensionDrag
+    const dimensionInteractionSupport = dimensionTestSupport.createInteraction({
+      clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput, clearSelection, updateUI, draw, addCircle, addArc,
+      fitAllGeometryToViewport, startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, dimensionAnchor,
+      LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, signedPointLineDistance, vectorNorm, solveSketchAndDependents,
+      snapshotModelState, refreshConstraintAnalysis, dimensionDrag,
     });
     const themeObservation = window.PropertiesTestDriver.createThemeObservation({ applicationSettings, readDefaultGeometryColor: () => DEFAULT_APPEARANCE.color, canvasThemeColor, CanvasThemeColors: window.CanvasThemeColors });
     const documentNameObservation = window.DocumentTestDriver.createNameObservation({ readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document });
@@ -2545,12 +2546,13 @@
       currentScope: workspace.current, clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection,
       blockSelectionBoundsCenter, dimensionConstraintsInNamespace, deleteElements, document,
     });
-    const dimensionDisplaySupport = window.DimensionTestDriver.createDisplaySupport({
-      Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, circlePointAtAngle, viewport, hypot2, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
-      outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, canvasSelection, canvasHover, ctx, drawDimensions,
-      currentScope: workspace.current, readDocument: () => documentModel, isDimensionConstraint, constraintSketchId, activeSketchId, normalizeDimensionAppearance,
-      effectiveDimensionAppearanceForSketch, dimensionDisplayState, targetFromConstraint, effectiveDimensionAppearance, displayFactor: window.Appearance.annotationDisplayFactor,
-      formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle, dimensionTextOffset
+    const dimensionDisplaySupport = dimensionTestSupport.createDisplay({
+      Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, circlePointAtAngle,
+      screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
+      fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, canvasHover, readDocument: () => documentModel, normalizeDimensionAppearance,
+      effectiveDimensionAppearanceForSketch, dimensionDisplayState, effectiveDimensionAppearance,
+      displayFactor: window.Appearance.annotationDisplayFactor, formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle,
+      dimensionTextOffset,
     });
     const referenceImageTestObservation = window.ReferenceImageTestDriver.createObservation({
       canvasSelection, currentScope: workspace.current, serializeReferenceImage, isEditingBlock: () => Boolean(blockEditor.current),

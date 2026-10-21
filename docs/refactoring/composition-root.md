@@ -6,6 +6,11 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 寸法テスト支援の共有接続（2026-10-21）
+
+DimensionTestDriver.createSupportが共通20 capabilityを受け、fixture／interaction／displayの各専用依存14／21／20個を元の生成位置で接続する。モデル／操作の実装や公開APIを移さず、test条件・遅延照会・参照／復元境界を保持した。明示引数100→75、異なる入力75は不変、構築3→4。app.jsは2,803→2,805行（2行増）で、共有段階の費用と依存重複の削減を区別する。検証と通常構築の再監査は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
+
 ### pointer入力状態の所有（2026-10-21）
 
 PointerInteractionController.createSessionを早期生成し、既存位置で入力依存をbindする。最後の生world座標と入力処理を同じownerへ集め、context menu更新とDocument／Sketch解除、各command／描画の照会を共有する。DrawingPreviewのsnap済み／仮表示座標とは区別し、pan／右中button・leaveと失敗時の座標保存時機を維持する。app.jsは2,803→2,803行（変化0）、元の7参照・4書込みを接続しroot letは7→6（全て後段接続）。検証と次のdriver境界検討は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
