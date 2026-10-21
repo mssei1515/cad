@@ -6,6 +6,11 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### modeと作図Lifecycleの状態所有（2026-10-21）
+
+DrawOperationLifecycle.createSessionを早期生成し、後段で既存command群をbindする。modeと開始／取消／終了・resetを同じownerへ集め、各command・表示・診断は同じ限定APIを共有する。既存遷移本体とdraft所有、modeを維持する取消／selectへ戻す終了、部分失敗と各reset範囲を保持した。app.jsは2,803→2,803行（変化0）、元の34参照・17書込みを接続しroot letは8→7。検証と再開地点は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
+
 ### Offset／Filletの共有依存接続（2026-10-21）
 
 authoringTools.createOffset／createFilletが共有Geometry・ID・Selection／preview・snapと通知を接続する。Offset独自の編集scope、Filletの実checkpoint／stabilizeと遅延Lifecycle準備、各featureの計算／取消・履歴を維持する。構築引数56→28、root参照41→25。app.jsは2,805→2,803行（2行減）。旧appとの13状態でmodel・mode／pending・履歴・選択・HintとAPI204 key順が一致。検証と次のmode所有監査は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

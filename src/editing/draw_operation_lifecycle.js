@@ -1,4 +1,4 @@
-/* Coordinate draw-operation exit and cancellation without owning command drafts. */
+/* Own drawing mode and coordinate transitions without owning command drafts. */
 (() => {
   "use strict";
   const DRAW_TOOL_MODES = Object.freeze(["instance-sources", "line", "centerline", "circle-center-cross", "point", "rectangle", "slot",
@@ -174,5 +174,29 @@
     return Object.freeze({ start, prepare, prepareDimensionStart, prepareConstraintStart, prepareConstraintCancel,
       resetInputs, resetInputsForSketchChange, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
-  window.DrawOperationLifecycle = Object.freeze({ create, isToolMode });
+  // Mode is needed while commands are being constructed. Bind their operations afterwards.
+  function createSession() {
+    let mode = "select", operations;
+    function setMode(value) { mode = value; }
+    function readMode() { return mode; }
+    function selectMode() { setMode("select"); }
+    function bind(dependencies) {
+      operations = create({ ...dependencies, readMode, setMode, selectMode });
+      return session;
+    }
+    const session = Object.freeze({
+      get mode() { return mode; }, readMode, setMode, selectMode, bind, isToolMode: () => isToolMode(mode),
+      start: (...args) => operations.start(...args), prepare: (...args) => operations.prepare(...args),
+      prepareDimensionStart: (...args) => operations.prepareDimensionStart(...args),
+      prepareConstraintStart: (...args) => operations.prepareConstraintStart(...args),
+      prepareConstraintCancel: (...args) => operations.prepareConstraintCancel(...args),
+      resetInputs: (...args) => operations.resetInputs(...args),
+      resetInputsForSketchChange: (...args) => operations.resetInputsForSketchChange(...args),
+      resetForDocument: (...args) => operations.resetForDocument(...args),
+      exitLine: (...args) => operations.exitLine(...args), exit: (...args) => operations.exit(...args),
+      active: (...args) => operations.active(...args), cancel: (...args) => operations.cancel(...args),
+    });
+    return session;
+  }
+  window.DrawOperationLifecycle = Object.freeze({ create, createSession, isToolMode });
 })();
