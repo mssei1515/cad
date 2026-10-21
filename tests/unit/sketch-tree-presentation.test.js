@@ -6,7 +6,7 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 sandbox.window.GeometrySolver = {};
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/selection.js'), 'utf8'), sandbox);
-for (const file of ['canvas_context_menu', 'sketch_tree_objects', 'sketch_tree_controller']) {
+for (const file of ['canvas_context_menu', 'sketch_tree_view', 'sketch_tree_objects', 'sketch_tree_controller']) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui', `${file}.js`), 'utf8'), sandbox);
 }
 function objectFixture({ sharedOwners = false, ...overrides } = {}) {
@@ -155,42 +155,80 @@ test('dimension category separates constraint and reference dimensions while ret
   assert.deepEqual(Array.from(groups.constraint, entry => entry.modelIndex), [1]);
 });
 
-function menuFixture() {
-  const calls = [], domReads = [], selection = sandbox.window.CanvasSelection.create();
-  const state = { ready: false, active: 'S1', moving: false, language: 'en', failure: null };
+function menuFixture({ withView = false } = {}) {
+  const calls = [], domReads = [], setup = [], scopeReads = [], selection = sandbox.window.CanvasSelection.create();
+  const state = { ready: false, active: 'S1', moving: false, language: 'en', failure: null, key: 'document', moveState: null };
   const sketches = [{ id: 'ROOT', kind: 'root' }, { id: 'S1' }, { id: 'S2', locked: true }];
-  const surface = () => { const listeners = new Map(); return {
-    addEventListener(type, handler) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(handler); },
+  const surface = name => { const listeners = new Map(); return {
+    addEventListener(type, handler) { setup.push(['listen', name, type]); if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(handler); },
     removeEventListener(type, handler) { listeners.get(type)?.delete(handler); },
     fire(type, event) { for (const handler of listeners.get(type) || []) handler(event); },
     count: () => [...listeners.values()].reduce((total, rows) => total + rows.size, 0),
   }; };
-  const document = surface(), windowTarget = surface(), canvas = surface(), menuElement = surface(), attributes = {};
+  const document = surface('document'), windowTarget = surface('window'), canvas = surface('canvas'), menuElement = surface('menu'), attributes = {}, activeLabel = {};
   Object.assign(menuElement, { hidden: true, innerHTML: '', style: {}, classList: { add() {}, remove() {} },
     setAttribute: (name, value) => { attributes[name] = value; }, getBoundingClientRect: () => ({ width: 100, height: 60 }),
     querySelector: () => null, querySelectorAll: () => [], contains: value => value === menuElement });
   canvas.closest = () => null;
-  document.getElementById = id => { domReads.push(id); return id === 'sketchList' ? canvas : menuElement; };
-  const feature = sandbox.window.SketchTreeController.createWithContextMenu({ document, window: windowTarget,
-    sketchContext: { sketchById: id => { assert.equal(state.ready, true); return sketches.find(s => s.id === id); }, isRootSketch: sketch => sketch?.kind === 'root' },
+  Object.assign(canvas, { contains: () => false, querySelectorAll: () => [], querySelector: () => null });
+  document.getElementById = id => { setup.push(['dom', id]); domReads.push(id); return id === 'sketchList' ? canvas : id === 'activeSketchLabel' ? activeLabel : menuElement; };
+  const activeSketchId = () => { assert.equal(state.ready, true); return state.active; };
+  const ports = { document, window: windowTarget,
+    sketchContext: { sketchById: id => { assert.equal(state.ready, true); return sketches.find(s => s.id === id); }, isRootSketch: sketch => sketch?.kind === 'root', activeSketchId },
     applicationSettings: { applicationText: (ja, en) => state.language === 'en' ? en : ja }, escapeHtml: String,
     closeCanvasContextMenu: () => calls.push('close-canvas'),
-    currentScope: () => { assert.equal(state.ready, true); return { sketches }; },
-    activeSketchId: () => { assert.equal(state.ready, true); return state.active; },
+    currentScope: () => { assert.equal(state.ready, true); scopeReads.push('controller'); return { sketches }; }, activeSketchId,
     setActiveSketch: id => { assert.equal(menuElement.hidden, true); state.active = id; calls.push(['activate', id]); },
     clearSelection: () => { calls.push('clear'); selection.clear(); }, canvasSelection: selection,
-    updateUI: () => calls.push('ui'), draw: () => calls.push('draw'), move: { active: () => state.moving },
+    updateUI: () => calls.push('ui'), updateSketchUI: () => calls.push('sketch-ui'), draw: () => calls.push('draw'), move: { active: () => state.moving },
     renameSketch: function(id) { 'use strict'; assert.equal(this, undefined); assert.equal(menuElement.hidden, true);
       calls.push(['rename', id]); if (state.failure) throw state.failure; },
-  });
+  };
+  const viewScope = { sketches: [{ id: 'ROOT', kind: 'root', name: 'Root' }, { id: 'S1', name: 'View Sketch', parentSketchId: 'ROOT' }] };
+  const overlay = { style: {}, parentElement: { getBoundingClientRect: () => { setup.push(['bounds']); return { width: 500 }; } } };
+  const handle = Object.assign(surface('resize'), { setAttribute() {} });
+  const moveCommand = { get active() { assert.equal(state.ready, true); return state.moving; },
+    state() { assert.equal(this, moveCommand); assert.equal(state.ready, true); return state.moveState; },
+    choose: function(id) { assert.equal(this.choose, moveCommand.choose); calls.push(['choose', id]); }, commit() {}, cancel() {} };
+  const objects = { index: () => new Map(), row: () => '', summary: () => '', selected: () => false, hovered: () => false, resolveSelectionEntry: () => null };
+  if (withView) { delete ports.activeSketchId; delete ports.move; }
+  const feature = withView ? sandbox.window.SketchTreeController.createWithView({ ...ports, sketchOverlay: overlay,
+    sketchOverlayResizeHandle: handle, getScopeKey: () => state.key, viewScope: () => { assert.equal(state.ready, true); scopeReads.push('view'); return viewScope; },
+    ensureSketchState() {}, objects, moveCommand, sketchHasSolveError: () => false, referenceConstraintErrorCountForSketch: () => 0, constraintDuplicateCountForSketch: () => 0,
+  }) : sandbox.window.SketchTreeController.createWithContextMenu(ports);
   const event = (id, child = false) => ({ clientX: 20, clientY: 30, preventDefault: () => calls.push('prevent'),
     target: { closest: selector => selector === '.sketch-item' ? { dataset: { id } } : child ? {} : null } });
   const action = (name, disabled = false) => menuElement.fire('click', { target: {
     closest: selector => selector === '[data-context-action]' ? { dataset: { contextAction: name }, disabled } : null,
   } });
-  return { ...feature, canvas, document, windowTarget, menuElement, attributes, state, calls, domReads, selection, sketches, event, action,
+  return { ...feature, canvas, document, windowTarget, menuElement, attributes, state, calls, domReads, setup, scopeReads, overlay, handle, activeLabel, selection, sketches, event, action,
     listeners: () => [menuElement, canvas, document, windowTarget].reduce((total, target) => total + target.count(), 0) };
 }
+
+test('Tree assembly preserves View setup order and distinct live display and Controller scopes over one Selection', () => {
+  const f = menuFixture({ withView: true }); assert.deepEqual(f.calls, []); assert.deepEqual(f.scopeReads, []);
+  assert.deepEqual(f.setup, ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture','keydown'].map(type => ['listen','resize',type])
+    .concat([['bounds'],['dom','sketchList'],['dom','sketchContextMenu']]));
+  assert.equal(f.overlay.style.width, '320px'); assert.equal(f.listeners(), 0); f.state.ready = true;
+  f.view.render(); assert.match(f.canvas.innerHTML, /View Sketch/); assert.doesNotMatch(f.canvas.innerHTML, /data-id="S2"/);
+  assert.deepEqual(f.scopeReads, ['view']);
+  f.selection.set('sketchId', 'S1'); f.view.render(); assert.match(f.canvas.innerHTML, /aria-current="true" aria-pressed="true"/);
+  f.scopeReads.length = 0; f.canvas.onclick(f.event('S2')); assert.deepEqual(f.scopeReads, ['controller','controller']);
+  assert.equal(f.selection.sketchId, 'S2'); assert.equal(f.state.active, 'S1');
+  f.canvas.ondblclick(f.event('S2')); assert.equal(f.state.active, 'S2');
+  f.menu.start(); f.canvas.fire('contextmenu', f.event('ROOT')); assert.equal(f.selection.sketchId, 'ROOT'); assert.equal(f.menuElement.hidden, true); f.menu.dispose();
+});
+
+test('Tree assembly shares View expansion state with Controller and forwards the live move command without changing destination', () => {
+  const f = menuFixture({ withView: true }); f.state.ready = true; f.view.render(); f.state.key = 'block:B1';
+  const expand = { dataset: { id: 'S1' }, classList: { contains: name => name === 'sketchExpandBtn' }, getAttribute: () => 'false', closest: () => null };
+  f.canvas.onclick({ target: { closest: selector => selector === 'button' ? expand : null } });
+  assert.equal(f.view.capture().sketches.get('block:B1|S1'), true);
+  assert.equal(f.view.capture().sketches.has('document|S1'), false);
+  f.state.moving = true; f.state.moveState = { count: 1, targetId: 'S1', canCommit: false, reason: '', destinations: new Map() };
+  f.view.render(); assert.match(f.canvas.innerHTML, /Move 1 objects/); f.calls.length = 0;
+  f.canvas.onclick(f.event('S1')); assert.deepEqual(f.calls, [['choose','S1']]); assert.equal(f.state.active, 'S1');
+});
 
 test('Tree menu assembly defers start, keeps Root and current lock rules, and closes before dispatching existing actions', () => {
   const f = menuFixture(); assert.deepEqual(f.calls, []); assert.equal(f.listeners(), 0);

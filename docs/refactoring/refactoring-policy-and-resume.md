@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のTree View／Controller組立て単位
+
+基準はdevelop 08b030c。SketchTreeController.createWithViewで既存View→Controller→menuの生成と相互callbackを集約した。同じCanvasSelectionから選択Sketch、同じObjectsから対象解決、SketchContextからRoot／active照会、ApplicationSettingsから翻訳、SketchMoveCommandから現在state／activeと元のchoose／commit／cancelを接続する。Controller固有の限定portは既存createWithContextMenuへ渡し、全app context・別の編集stateは作らない。旧View.create／Controller.create／createWithContextMenuも独立APIとして残す。
+
+viewScope＝editingScopeBinding.currentの遅延readerと、ControllerのcurrentScope＝dimensionPresentationScopeを別に渡す。getScopeKeyは同じBlock Editorの現在draft IDに基づくreaderのままとし、Document／Blockの開閉stateを混同しない。View生成時のresize listener6個の登録→幅設定→menu用二つのDOM取得、初回render時の行event設定、appの外部close入口への接続後のmenu.startを元の順に維持する。生成時にはscope／モデル／移動状態を読まず、move.stateのreceiverとControllerへ渡す元methodを保つ。返すview／controller／menuは同じ各ownerで、幅・開閉、選択・hover、移動／menu sessionを複製しない。新file・global／stateはない。
+
+対象構築は2→1、引数合計49→38、引数内の異なるroot binding参照47→42。app.jsは2,940→2,929行（11行減）、root未使用bindingは0。構文588ファイル・全単体1,794件・関連単体38件が成功（exit 0）。追加2件は実View／Controller／menuを使い、生成時のresize／DOM処理順とscope無照会、表示と操作で異なるmodel／scope、同じSelectionの最新値、ControllerとViewの同じ開閉Map、Document／Block key、移動中のstate表示と選択先通知・作図先不変を確認する。旧08b030cのappと現在module群の実ブラウザ比較でも初期／Sidebar／複数／Block／寸法／非表示／lockとメニューの12状態でHTML・model・historyが一致した（savedAtだけ除外）。診断は一時directoryのcad-tree-view-equivalence.cjs／.log。関連E2E252件が全成功（4.3分、exit 0）。unified-ui／phase0-characterization／sketch-edit／sketch-move／sketch-permissions／sketch-tree-delete／sketch-tree-visibility／sketch-projection／blocks／command-panel／view-visibility／adversarial-authoring-performanceを実行した。Treeの選択・hover・編集／menu・開閉、移動の指定／取消、Point固定解除と作図先制限、lock・可視性、Block編集中のscopeと既存画面・履歴／保存再読込を確認した。性能全12件を含み、pan125ms（175ms未満）・空白矩形199ms（250ms未満）。既存期待値や基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-tree-view-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、現行コードの全E2Eは未実行。c3a213cの全E2E584成功と前単位の関連252成功は過去の基準として保持する。開始時週枠使用32%／残量68%で停止条件未到達。Treeの二つの構築境界は既存queryとUI機能として維持し、さらに単なる包装を増やす案は優先しない。次は通常のConstraintRedundancy／ConstraintAnalysisの生成・共有ownerを確認する。前者は重複状態、後者は分類cacheを持ち、scope／Solverと変数照会が重なる。状態／count・初期化／refresh順、scopeQuery・参照有効性と例外、profile hookを保持した組立てにできるかを先に検討する（未実装）。mode・他の通常構築・test支援も残り、200〜500行の全体目標は未完了。
+
 ### 最新のTree Point固定解除の編集owner単位
 
 基準はdevelop 77c3f08。TreeのunfixPoint callbackにあった所属照会→constraint guard→Point.fixed=false→solveAndRefresh(label)を既存FixedToggleCommand.createOperandのunfixPointへ集約した。新しいcommand instance・state・global／contextは追加せず、同commandのguard／所属照会を共有し、求解通知だけを既存portとして加えた。Pointは同じObject、拒否時の無変更とundefined、既に解除済みの対象でも求解すること、一引数label・求解結果を返さないこと、lookup／guard例外の無変更と求解例外時の更新済みflagを維持する。新しいrollbackや履歴・対象Sketch指定を加えず、既定active Sketchの求解・解析／UI／履歴は既存SolveRefreshCommandに残す。

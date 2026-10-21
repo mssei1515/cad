@@ -356,6 +356,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `SketchTreeController`（`src/ui/sketch_tree_controller.js`）: ツリーのクリックを展開・選択・Sketch変更・削除・固定解除へ振り分ける。Viewと既存の編集APIへ接続する。createWithContextMenuは既存ControllerとCanvasContextMenuの生成・Root／active／lockによる項目表示・名前変更／編集通知を所有する。既存Controller引数と共有SketchContext／ApplicationSettings等を受け、同じcontroller／menuを返す。生成時は二つのDOM参照だけを取得し、listener登録やscope照会を行わない。appの外部close用aliasへの接続と明示startは維持する。選択・移動guard、menu session、例外と閉じてからの操作順を各既存ownerへ委譲し、旧createも残す。
 
 - `SelectionHighlight`（`src/editing/selection_highlight.js`）: サイドバーhover状態、投影図形の表示上の同一性、選択図形／拘束の参照集合を所有・照会する。Canvas選択と投影／拘束照会、寸法hover接続だけを受け取り、DOMに依存しない。
+- SketchTreeController.createWithViewが既存Objects・Selection・SketchContext・ApplicationSettings・移動commandを共有してView→Controller→menuを生成する。viewScopeとControllerのcurrentScopeは別readerのまま、同じViewの開閉／幅stateとControllerの操作・hoverを接続する。View生成時のresize登録／幅設定、render時の行event接続、appの外部close入口への接続後のmenu.startは維持する。生成時にscope／モデル／移動状態を照会せず、旧各factoryも独立APIとして残す。
 - ツリー行のclass更新は`SketchTreeView.refreshSelection`へ、行データの対象解決は`SketchTreeObjects.resolveSelectionEntry`へ統合した。呼出し元もDOM生成も存在しない旧一覧向けイベント登録・選択処理は削除した。
 
 - `AppearanceUI`（`src/application/appearance_ui.js`）: PropertiesとDocument設定が共有するcontrols／Paletteと起動時設定の接続。実編集とPalette sessionは既存ownerを使用する。
