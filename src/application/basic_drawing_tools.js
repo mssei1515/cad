@@ -102,7 +102,16 @@
         selection, sameSketchElements: sketchContext.sameSketchElements, activeSketchId: sketchContext.activeSketchId, isActiveSketchElement,
         applicationText, minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool });
+    function createLifecycle({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
+      return window.DrawOperationLifecycle.create({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover,
+        line: tools.line, rectangle: tools.rectangle, slot: tools.slot, circular: tools.circular, spline: spline.draft,
+        splineEditing: { reset: resetEditing }, projection, preview,
+        transient: { clearPoint: transientAuthoring.clearTransientPointRollback,
+          clearLineCompletion: transientAuthoring.clearTransientLineCompletionRollback, rollbackLineStart: transientAuthoring.rollbackTransientLineStart },
+        clearSnap: snap.clear, clearSelection, selectMode: () => { setMode("select"); }, updateToolbar, setHint, updateUI, draw,
+        cancelConstraintTargetCommand, cancelPendingCommand, setMode });
+    }
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createLifecycle });
   }
   window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring });
 })();

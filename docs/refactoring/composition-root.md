@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の作図owner／Lifecycle接続単位
+
+authoringTools.createLifecycleが同じcommand／draft・snap／preview／transientと通知を共有し、後段9依存で既存DrawOperationLifecycleを生成する。処理本体・状態の所有、終了／取消／Sketch限定reset／Document破棄の差、mode・通知／例外順を維持した。引数28→9、root参照30→12。app.jsは2,810→2,805行（5行減）。旧appとの48状態で作図・Escape取消／終了・Document置換のmodel／mode／履歴・選択とAPI204 key順が一致した。検証と次の単位は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新の基本作図二段階組立て単位
 
 BasicDrawingTools.createAuthoringでsnap／Spline／snap拘束／primitive toolsetを構成し、Centerlineは同じGeometry・ID・snapと限定3依存で後段生成する。実draft・command・Selection／checkpointを共有し、scaleの毎入力取得と生成順、各取消／復元境界を維持した。構築5→2、引数93→39、root参照55→41。app.jsは2,822→2,810行（12行減）。旧appとの28状態で各作図途中／完成のmodel／履歴・選択とAPI204 key順が一致した。検証と次のLifecycle接続は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
