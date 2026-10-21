@@ -154,21 +154,26 @@ function authoringFixture() {
  const sandbox={window:{}};
  for(const name of names) sandbox.window[name]={create(ports){
   events.push(name);const owner={name,active:null,clear:()=>{}};
+  owner.reset=()=>events.push(name+'.reset');owner.cancel=()=>events.push(name+'.cancel');owner.targets=[];owner.points=[];
+  for(const method of ['resetCircle','resetArcs','resetCenterArc'])owner[method]=()=>events.push(name+'.'+method);
+  if(name==='DrawingSnap')owner.clear=()=>events.push('snap');
   owner.resolve=function(point,tolerance){assert.equal(this,owner);events.push(['resolve',point,tolerance]);owner.active=state.snap;return state.snapped;};
   for(const method of ['click','clickCircle','clickArc','clickThreePointArc'])owner[method]=function(...args){assert.equal(this,owner);events.push([name,method,...args]);};
   if(name==='SnapConstraints')for(const key of ['addPointSnapConstraints','addArcEndpointSnapConstraints','addCircularBoundarySnapConstraints','addLineBoundarySnapConstraints'])owner[key]=()=>{};
   created[name]={ports,owner};return owner;
  }};
  vm.runInNewContext(fs.readFileSync('src/application/basic_drawing_tools.js','utf8'),sandbox);
+ vm.runInNewContext(fs.readFileSync('src/editing/draw_operation_lifecycle.js','utf8'),sandbox);
  const noop=()=>{},never=()=>{throw Error('no eager query or operation');};
  const sketchContext=Object.fromEntries(['isActiveSketchElement','elementSketchId','isReferenceSourceSketchId','sketchName','sameSketchElements','activeSketchId'].map(key=>[key,never]));
  const pointUsage=Object.fromEntries(['isSplineOnlyFitPoint','isReferencePoint','isPrimitiveCenterPoint','isEndpointPoint','isPointUsedByPrimitive','isExplicitPoint'].map(key=>[key,never]));
  const selection={set(key,items){assert.equal(this,selection);state.selected={key,items};events.push('selected');}};
  const ports={currentScope:never,ids:{},geometry:Object.fromEntries(['addPoint','addLine','addCircle','addArc','addSpline'].map(key=>[key,noop])),endpointAt:noop,samePosition:noop,
-  sketchContext,pointUsage,geometryReads:{},isVisibleSketchElement:never,annotationAnchors:never,scale:()=>state.scale,transientAuthoring:{},pushModelConstraint:noop,addConstraintIfMissing:noop,
-  minLineLength:4,minArcLength:6,selection,preview:{setPointer:noop},checkpoint:{capture:never,restore:never},cancelConstraintTargetCommand:noop,cancelPendingCommand:noop,
-  canCreateInActiveSketch:never,rejectRootSketchCreation:noop,setMode:value=>{state.mode=value;events.push('mode');},resetEditing:never,resetBlankCandidate:never,updateToolbar:noop,
-  projection:{reset:noop},clearSelection:noop,solveAndRefresh:noop,recordHistory:noop,applicationText:(_ja,en)=>en,setHint:noop,updateUI:noop,draw:noop,log:noop};
+  sketchContext,pointUsage,geometryReads:{},isVisibleSketchElement:never,annotationAnchors:never,scale:()=>state.scale,
+  transientAuthoring:{clearTransientPointRollback:()=>events.push('clearPoint'),clearTransientLineCompletionRollback:()=>events.push('clearCompletion'),rollbackTransientLineStart:()=>events.push('rollbackLine')},pushModelConstraint:noop,addConstraintIfMissing:noop,
+  minLineLength:4,minArcLength:6,selection,preview:{setPointer:()=>events.push('pointer'),reset:()=>events.push('preview')},checkpoint:{capture:never,restore:never},cancelConstraintTargetCommand:()=>events.push('cancelConstraint'),cancelPendingCommand:()=>events.push('cancelPending'),
+  canCreateInActiveSketch:never,rejectRootSketchCreation:noop,setMode:value=>{state.mode=value;events.push('mode');},resetEditing:()=>events.push('editing'),resetBlankCandidate:never,updateToolbar:()=>events.push('toolbar'),
+  projection:{reset:()=>events.push('projection')},clearSelection:()=>events.push('clear'),solveAndRefresh:noop,recordHistory:noop,applicationText:(_ja,en)=>en,setHint:()=>events.push('hint'),updateUI:()=>events.push('ui'),draw:()=>events.push('draw'),log:noop};
  const feature=sandbox.window.BasicDrawingTools.createAuthoring(ports);
  return {created,events,state,ports,feature};
 }
@@ -199,4 +204,34 @@ test('shared authoring snap reads scale on every input and preserves post-resolu
  assert.equal(value.point,f.state.snapped);assert.equal(value.snap,f.state.snap);assert.deepEqual(f.events,[['resolve',pointer,2]]);
  const spline={id:'SP1'};f.events.length=0;f.created.SplineCommand.ports.selectCreatedSpline(spline);
  assert.equal(f.state.selected.key,'splines');assert.equal(f.state.selected.items[0],spline);assert.equal(f.state.mode,'select');assert.deepEqual(f.events,['selected','mode']);
+});
+
+function lifecycleFixture() {
+ const f=authoringFixture(),external={};
+ for(const name of ['instances','instanceSources','centerline','fillet','offset']){
+  const owner={reset(){assert.equal(this,owner);f.events.push(name);},clearSources(){assert.equal(this,owner);f.events.push('sources');}};
+  external[name]=owner;
+ }
+ external.centerline.targets=[];external.offset.entries=[];
+ const stage={...external,canStart:()=>true,hatch:{reset:()=>f.state.hatch.reset()},readMode:()=>f.state.mode,clearTrimHover:()=>f.events.push('trimHover')};
+ f.events.length=0;const lifecycle=f.feature.createLifecycle(stage);assert.deepEqual(f.events,[]);
+ f.state.hatch={reset(){assert.equal(this,f.state.hatch);f.events.push('hatch');}};
+ return {...f,lifecycle,external};
+}
+
+test('authoring Lifecycle reuses the created drafts and preserves distinct Sketch reset, cancel and exit effects',()=>{
+ const f=lifecycleFixture();assert.equal(f.lifecycle.active(),false);assert.deepEqual(f.events,[]);
+ f.lifecycle.resetInputsForSketchChange();assert.deepEqual(f.events,['LineCommand.reset','RectangleCommand.reset','fillet','CircularCommands.resetCircle','CircularCommands.resetArcs','preview','offset']);
+ f.events.length=0;f.state.mode='spline';f.lifecycle.cancel();assert.equal(f.state.mode,'spline');
+ assert.deepEqual(f.events,['centerline','rollbackLine','clearPoint','clearCompletion','LineCommand.reset','RectangleCommand.reset','SlotCommand.reset','fillet','CircularCommands.resetCircle','CircularCommands.resetArcs','SplineDraft.cancel','editing','projection','preview','offset','hatch','snap','clear','hint','ui','draw']);
+ f.events.length=0;f.lifecycle.exit();assert.equal(f.state.mode,'select');assert.equal(f.events.includes('SplineDraft.reset'),true);
+ assert.equal(f.events.includes('SplineDraft.cancel'),false);assert.equal(f.events.includes('rollbackLine'),false);assert.deepEqual(f.events.slice(-5),['mode','toolbar','hint','ui','draw']);
+});
+
+test('authoring Lifecycle retains Document discard boundaries and stops at a failed reset after selecting mode',()=>{
+ const f=lifecycleFixture();f.lifecycle.resetForDocument();
+ assert.deepEqual(f.events,['LineCommand.reset','centerline','clearPoint','clearCompletion','RectangleCommand.reset','SlotCommand.reset','fillet','CircularCommands.resetCircle','CircularCommands.resetArcs','SplineDraft.reset','projection','sources','instanceSources','editing','pointer','offset']);
+ f.events.length=0;f.state.mode='slot';const marker=new Error('circle reset failed');f.created.CircularCommands.owner.resetCircle=()=>{throw marker;};
+ assert.throws(()=>f.lifecycle.prepareConstraintStart(),error=>error===marker);
+ assert.equal(f.state.mode,'select');assert.deepEqual(f.events,['cancelPending','centerline','SlotCommand.reset','mode','LineCommand.reset','RectangleCommand.reset','fillet']);
 });

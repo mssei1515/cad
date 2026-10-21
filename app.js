@@ -516,7 +516,7 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { clearTransientLineCompletionRollback, rollbackTransientLineCompletion, clearTransientPointRollback, rollbackTransientPoint, rollbackTransientLineStart } = transientAuthoring;
+  const { rollbackTransientLineCompletion, rollbackTransientPoint } = transientAuthoring;
   const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout } = createCanvasWorkspace({
     ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
@@ -1221,15 +1221,10 @@
     return isActiveSketchElement(item) && isVisibleSketchElement(item);
   }
 
-  const drawOperationLifecycle = window.DrawOperationLifecycle.create({
+  const drawOperationLifecycle = authoringTools.createLifecycle({
     canStart: nextMode => nextMode === "select" || guardSketchEdit(activeSketchId(), "create") && (nextMode !== "trim" || guardSelectionEdit("structure")),
     instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, centerline: centerlineCommand,
-    line: lineCommand, rectangle: rectangleCommand, slot: slotCommand, fillet: filletCommand,
-    circular: circularCommands,
-    spline: splineDraft, splineEditing, projection: sketchProjectionCommand, preview: drawingPreview, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() },
-    transient: { clearPoint: clearTransientPointRollback, clearLineCompletion: clearTransientLineCompletionRollback, rollbackLineStart: rollbackTransientLineStart },
-    clearSnap, clearSelection, selectMode: () => { mode = "select"; }, updateToolbar, setHint, updateUI, draw,
-    cancelConstraintTargetCommand, cancelPendingCommand, readMode: () => mode, setMode: value => { mode = value; },
+    fillet: filletCommand, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() }, readMode: () => mode,
     clearTrimHover: () => canvasHover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null }),
   });
   function exitDrawMode() { return drawOperationLifecycle.exit(); }

@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の作図owner／Lifecycle接続単位
+
+基準はdevelop ce47479。authoringTools.createLifecycleが、既に生成したprimitive command／Spline draft・snap／preview／projection・transientと共通通知を、既存DrawOperationLifecycleへ接続する。後段の9依存（開始guard・Instance／参照元編集・Centerline／Fillet／Offset／Hatch・mode reader・trim hover解除）だけをappから渡す。親のresetEditing callbackと後段Hatchは操作時に呼び、実ownerのreceiverを維持する。select modeは同じ共有setModeを使い、新たなmode／draft／Lifecycle stateや可変bind容器を作らない。
+
+Lifecycle生成は元の位置のまま、生成時にHatch・編集session・mode等を照会しない。core DrawOperationLifecycle.createと全処理本体は変更せず、開始・準備／終了・取消・Sketch切替・Document置換で異なるreset対象とrollback、現在modeの読取り、UI／履歴の有無、例外時の途中反映を維持する。InstanceやFillet等の開始／確定や求解を親へ移管せず、各command／featureの責務として保持する。
+
+app.jsは2,810→2,805行（5行減）。対象構築引数28→9、異なるroot binding参照30→12、不要になったtransient別名3個を除きroot未使用bindingは0。構文590ファイル・全単体1,817件・関連単体29件が成功（exit 0）。追加2件は実DrawOperationLifecycleと境界用commandで生成時無照会、同じ生成済みdraft／外部ownerのreceiver、Sketch限定reset、Spline取消とresetの違い、transient rollback／clear、modeと通知順、Document破棄の範囲、reset失敗時の選択mode・後続短絡を確認する。既存Lifecycle／実Spline／Centerlineの動作テストも成功。新file・script順変更はない。
+
+旧ce47479のappと現在module群の実ブラウザ比較では、基本作図8種の入力／完成28状態、線・矩形・円・円弧・長穴・Splineの入力途中／Escape取消／終了18状態、Spline作図中のDocument置換前後2状態の計48状態でmodel・mode・履歴・選択とtest API204 key順が一致した（savedAtのみ除外）。Splineの仮点取消と置換後の点数、各図形の生成件数も確認した。診断は一時directoryのcad-authoring-lifecycle-equivalence.cjs／.log。関連E2E282件が全成功（4.7分、exit 0）。unified-ui／phase0-characterization／spline／centerline／blocks／sketch-permissions／sketch-edit／sketch-projection／free-instance／derived-patterns／command-panel／hatching／file-safety／adversarial-authoring-performanceを実行した。作図とSpline／Centerline・Block／派生／Hatchの取消・確定、Sketch切替とlock、Document置換／読込失敗時保持、Undo／Redo・保存再読込と既存画面を確認した。性能全12件を含みpan142ms（175ms未満）、空白矩形217ms（250ms未満）。既存期待値・性能基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-authoring-lifecycle-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功を過去の基準として保持する。開始時週枠使用42%／残量58%で停止条件未到達。次はOffsetFeature／FilletFeatureの構築と現在の作図ownerが共有するGeometry・ID・snap／Selection／preview／通知・Lifecycle準備を確認する。Offsetの同期済み編集scopeと基本作図のWorkspace scope、Filletの独立checkpoint／stabilize、後段Lifecycle.prepareの遅延callbackとcommit／Parameter／UIの時機を同一視しない。数値処理・rollbackを既存featureに残し、共有capabilityで接続を絞れるかを先に検討する。異なる開始／取消を無理に統一せず、全app contextや別の巨大root、modeのget／set容器だけへの移動を避ける。200〜500行、mode・test hooks・他の通常構築の全体目標は未完了。
+
 ### 最新の基本作図二段階組立て単位
 
 基準はdevelop ce82291。既存BasicDrawingTools.createAuthoringがDrawingSnap→SplineDraft／SplineCommand→SnapConstraints→Line／Rectangle／Circular／Slot toolsetを生成・接続する。SketchContext・PointUsage・Geometry read、同じGeometry／ID・Selection／preview／checkpointと限定操作を共有し、各子へ必要な元の関数だけを渡す。返すsnap・Spline draft／command・snapConstraints・toolsは同じ実体で、新しい操作state／scope／cacheやGeometryを複製しない。
