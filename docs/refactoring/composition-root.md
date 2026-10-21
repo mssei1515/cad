@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の採番予約／Block重複ID照会単位
+
+DocumentIds.createReservationへ同じGeometry／Document allocatorの予約順と現在Hatch値の遅延取得、BlockCatalogへDefinition内の重複ID照会を集約した。counter／scopeを複製せず、旧8 collectionと走査／変換順・空ID、Commandの明示checker優先と拒否時のHint／drawを維持した。app.jsは2,837→2,822行（15行減）。旧appとの14状態で再読込後の新規採番を含むmodel／履歴・Block editorとAPI204 key順が一致した。検証と次の構築境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のHint／log表示owner単位
 
 ApplicationFeedbackへHint／logのDOM出力、Hint計測と求解結果の表示接続を集約した。4依存から同じ純粋なConstraintFeedbackを生成・共有し、翻訳・計測・文言のownerと操作時照会、例外時の部分反映を維持した。script／構文／単体／E2E読込期待も同期した。app.jsは2,853→2,837行（16行減）。旧appとの15状態でHint／log・言語切替とmodel／履歴、API204 key順が一致した。検証と次の単位は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の採番予約／Block重複ID照会単位
+
+基準はdevelop 09d38c6。DocumentIds.createReservationは同じGeometryIds／DocumentIdsと現在Hatch採番readerの3依存で、Geometry→添付要素の予約と、その後の現在Hatch値→Block scope予約を所有する。生成時にscope／counterを照会せず、新しい採番状態やrollbackを持たない。元のallocator receiverとsource、readerの実行時機、undefined返却、各段階の例外と既反映counterを保持する。DocumentSequencesは読込後の純粋な復元計算に残し、予約手順をcodecへ持ち込まない。
+
+duplicateBlockElementIdは複製・採番ではなく重複検査だったため、同じ本体をBlockCatalog.duplicateElementIdへ移管した。対象8 collectionの順と一括展開後のID走査、String(item?.id || "")、最初の重複・空文字列／null、検査しないcollectionを維持する。registry・ID状態やモデルを変更せず、BlockCompletionCommandは既存catalogの照会を既定値として使い、明示checkerとnullをundefined以外で優先する。拒否判断・Hint／drawと確定／履歴はCommandに残す。appからcollection規則とchecker portを除き、予約は既存入口から限定APIへ接続した。
+
+app.jsは2,837→2,822行（15行減）、root未使用bindingは0。構文590ファイル・全単体1,813件・関連単体14件が成功（exit 0）。追加4件は実allocatorの共有／high watermarkとGeometryのみ／Block scopeの予約差、各receiver・添付予約後のHatch読取りと途中失敗、registry無照会・8 collectionの先行展開／変換順・除外対象／空ID、catalog既定checkerと明示関数／null・重複拒否時のsession／未採番を確認する。初回は追加した拒否テストが既存drawを期待に含めず1件失敗した。元のCommandのHint→draw→returnを確認して新テストだけ訂正し、既存期待値と製品の拒否挙動は変えていない。新file・script順変更はない。
+
+旧09d38c6のappと現在module群の実ブラウザ比較では、Document／Blockの変更・Undo／Redo・取消／確定・再読込と再読込後の新規採番の14状態でmodel内ID・履歴・Block editor・選択とボタンが一致した。test API204 key順も一致し、savedAtだけ除外した。診断は一時directoryのcad-id-reservation-equivalence.cjs／.log。関連E2E266件が全成功（4.4分、exit 0）。unified-ui／phase0-characterization／file-safety／blocks／free-instance／derived-patterns／sketch-projection／hatching／derived-selection-copy／command-panel／adversarial-authoring-performanceを実行した。Block／子Block編集と取消／確定、Geometry／Hatch／派生のcopy／paste・Block化、保存済み状態と旧形式移行／再読込、既存画面・Undo／Redoを確認した。性能全12件を含みpan144ms（175ms未満）・空白矩形219ms（250ms未満）。既存期待値・性能基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-id-reservation-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功を過去の基準として保持する。開始時週枠使用40%／残量60%で停止条件未到達。次は小さい単独helperだけを追わず、通常機能の構築境界へ戻る。BasicDrawingTools周辺のGeometry生成／endpoint／DrawingSnap／Spline／SnapConstraints／primitive toolsetと後段Centerlineを確認し、現在scope・同じGeometry／snap／draft・checkpoint／取消を共有する機能組立てとして集約できるか検討する。交差して生成するSketchProjectionEditing／Offset／求解への依存と後段reader、生成時の副作用を現物から確認し、全app contextや別の巨大rootへ移す案は避ける。200〜500行、mode・test hooks・他の通常構築の全体目標は未完了。
+
 ### 最新のHint／log表示owner単位
 
 基準はdevelop e5972ab。src/ui/application_feedback.jsへApplicationFeedbackを追加し、DOMのdocument・ApplicationSettings・InteractionProfiler・重複件数readerの4依存でHint／logのDOM出力、Hint計測とSolver結果の表示接続を所有する。既存ConstraintFeedbackを一つ生成し、同じ純粋なformatterをTree／Properties／拘束入力へも返す。文言・判定はConstraintFeedback、翻訳／再翻訳はApplicationSettings、計測はInteractionProfilerのまま。モデル・Solver・履歴や独自のHint／言語／error stateを持ち込まない。
