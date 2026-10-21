@@ -1,4 +1,4 @@
-/* Compose primitive drawing commands around shared geometry, snap and preview owners. */
+/* Compose drawing features around shared geometry, snap and preview owners. */
 (() => {
   "use strict";
   function create({ geometry, ids, currentScope, snap, snapConstraints, snapForDrawing, endpointAt, samePosition,
@@ -111,7 +111,22 @@
         clearSnap: snap.clear, clearSelection, selectMode: () => { setMode("select"); }, updateToolbar, setHint, updateUI, draw,
         cancelConstraintTargetCommand, cancelPendingCommand, setMode });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createLifecycle });
+    function createOffset({ currentScope: offsetScope, placement, sourceSelection, pending, valueInput, viewport, ctx,
+      withCanvasState, drawDimension, readMode, commitNewConstraint, offsetChainErrorText, prepareStart, updateGeometrySelectionUI, invalidateAnalysis }) {
+      return window.OffsetFeature.create({ currentScope: offsetScope, geometry, ids, placement, sourceSelection, selection, pending, preview,
+        valueInput, viewport, ctx, withCanvasState, drawDimension, readMode, minLineLength, minArcLength, commitNewConstraint, offsetChainErrorText,
+        applicationText, cancelConstraintTargetCommand, cancelPendingCommand, clearSnap: snap.clear, clearSelection, prepareStart,
+        setHint, updateUI, draw, updateToolbar, updateGeometrySelectionUI, invalidateAnalysis });
+    }
+    function createFillet({ defaultDimensionForTarget, syncLineOrientationHints, pending, readPointer, prepareStart,
+      guardSketchProjectionShapeEdit, valueInput, checkpoint: filletCheckpoint, stabilize, acceptError, invalidateAnalysis,
+      refreshConstraintAnalysis, updateGeometrySelectionUI }) {
+      return window.FilletFeature.create({ geometry, minLineLength, defaultDimensionForTarget, syncLineOrientationHints, pushModelConstraint,
+        pending, selection, readPointer, prepareStart, clearSnap: snap.clear, updateToolbar, guardSketchProjectionShapeEdit, valueInput,
+        checkpoint: filletCheckpoint, clearSelection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
+        applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand });
+    }
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createLifecycle, createOffset, createFillet });
   }
   window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring });
 })();
