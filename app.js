@@ -497,11 +497,9 @@
   });
   const { connectedComponentFromSeeds, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = solveScopeQuery;
   const { analysis: constraintAnalysis, redundancy: constraintRedundancy } = window.ConstraintAnalysis.createWithRedundancy({
-    constraintSketchId, constraintIsOperational, isRootSketch,
-    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, readMembership: readSketchMembership, descendantSketchIds, elementSketchId,
-    geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
+    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, sketchContext, readServices: geometryReadServices, constraintIsOperational,
     refreshReferenceConstraintValidity, sketchHasSolveError,
-    isEditableSketchElement, isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
     profileAnalysis: work => interactionProfiler.active ? profileInteractionWork("analysis", work) : work(),
   });
   const { redundantConstraintInfo, constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;

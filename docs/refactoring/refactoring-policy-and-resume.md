@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の拘束解析の照会owner共有単位
+
+基準はdevelop 5425e7c。ConstraintAnalysis.createWithRedundancyがSketchContextのmembershipQuery・子孫／所属・Root／編集可否と、GeometryReadServicesのInstance／Block bundle・参照元Pointの9関数を共有する。個別引数はundefinedだけ同じ関数で補い、明示関数とnullを優先する。所有者Objectを各子へそのまま横流しせず、従来の限定関数を取り出して渡す。生成時のqueryは追加せず、元の引数とraw receiver、membershipのrefreshごと取得を維持する。
+
+Document／Block modelのcurrentScope、注記dragの補助scopeを使うscopeQuery、readServicesの読取りscopeを別のまま明示し、モデルやqueryを複製・cache／snapshot化しない。通常／重複・Block／派生の計算、profile／許容差とcache・例外境界は変えない。旧各createと個別接続のAPIを維持し、新file・global／stateはない。
+
+対象構築の引数19→12、引数内の異なるroot binding参照20→13。app.jsは2,926→2,924行（2行減）、root未使用bindingは0。構文588ファイル・全単体1,797件・関連単体16件が成功（exit 0）。既存の二組立て方式と共有owner方式で遅延cache・重複state／count・scope切替・前計算再利用・例外時の部分更新を比較し、新規1件で明示membershipの優先／refreshごとの呼出し・raw receiver、明示nullが既存TypeErrorと未更新stateを保つことを確認した。旧5425e7cのappと現在module群の実ブラウザ比較でも、5図面と各再読込後の10状態で分類の反復照会・解析・展開Tree・model・historyが一致した（savedAtのみ除外）。診断は一時directoryのcad-analysis-owners-equivalence.cjs／.log。関連E2E246件が全成功（6.7分、exit 0）。unified-ui／phase0-characterization／blocks／free-instance／derived-patterns／sketch-permissions／sketch-projection／parameter-dialog-controller／view-visibility／adversarial-authoring-performance／adversarial-drag-fixture／geometry-drag-smoothnessを実行した。分類・重複／支持状態と参照、Block／派生、Parameter・scope切替、実drag、保存再読込・既存画面を確認した。性能全12件を含み、pan140ms（175ms未満）・空白矩形220ms（250ms未満）。既存期待値・基準と計算処理は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-analysis-owners-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、現行コードの全E2Eは未実行。c3a213cの全E2E584成功と前単位の関連246成功は過去の基準として保持する。開始時週枠使用35%／残量65%で停止条件未到達。分類／重複診断のcanonical接続は12引数の境界として保持し、さらに小さいwrapperを増やすだけの変更は優先しない。次は現行appの通常構築・test hooks・起動とmode接続を再監査する。直近のTree／Properties／解析等の機能境界を基準に、残る構築量・共有依存・後段const参照と生成／bind／startの段階を現物から集計し、よりまとまった分離単位を選ぶ。単なるcallback集合の移動や空行削減で数値を達成せず、200〜500行の全体目標を維持する。
+
 ### 最新の拘束分類／重複診断の組立て単位
 
 基準はdevelop aeadad9。ConstraintAnalysis.createWithRedundancyへ既存ConstraintRedundancy→ConstraintAnalysisの生成・接続を集約した。共通currentScope・Solver・scopeQuery・許容差を共有し、Redundancyの変数照会はscopeQueryの同じsketchSolveVariables、分類からの重複refreshも元の同じ関数を渡す。profile hookは包み直さず、生成時にscope・Solver・参照有効性・profileを実行しない。返すanalysis／redundancyは既存各ownerで、分類cacheと重複Map／countを統合・複製しない。旧各createは独立APIのまま残し、新file・state・contextは追加しない。
