@@ -2,7 +2,7 @@ const assert = require('node:assert/strict'); const fs = require('node:fs');
 const path = require('node:path'); const vm = require('node:vm'); const test = require('node:test');
 const sandbox = { window: {}, structuredClone }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/testing/dimension_test_driver.js'), 'utf8'), sandbox);
-function fixture() {
+function fixture(build = sandbox.window.DimensionTestDriver.createInteractionSupport) {
   const events = [], state = { ready:false, scope:{ constraints:[] } }, selection = { dimensionConstraints:[], lines:[],
     get dimensionConstraint(){ return this.dimensionConstraints.length===1 ? this.dimensionConstraints[0] : null; },
     set(key,value){ assert.equal(this,selection); assert.equal(key,'dimensionConstraint'); this.dimensionConstraints=value?[value]:[]; events.push('select'); } };
@@ -13,9 +13,23 @@ function fixture() {
     viewport:{ update:value=>events.push(['viewport',JSON.parse(JSON.stringify(value))]) },
     pendingCommandSession:{current:null}, constraintTargetSession:{command:null}, dimensionValueInput:{hidden:true}, dimensionDrag:{active:false}, dimensionAnchor:(target,dimension)=>({x:target.value,y:dimension.y}),
   };
-  const support=sandbox.window.DimensionTestDriver.createInteractionSupport(ports); assert.deepEqual(events,[]); state.ready=true;
+  const support=build(ports); assert.deepEqual(events,[]); state.ready=true;
   return {support,state,ports,events,selection};
 }
+
+test('shared dimension support defers each role and retains the live scope and selection capabilities',()=>{
+  const f=fixture(ports=>{
+    const shared=sandbox.window.DimensionTestDriver.createSupport(ports);
+    assert.equal(Object.isFrozen(shared),true);
+    assert.equal(typeof shared.createFixtures({}).angleDimensionLabelFollowCase,'function');
+    assert.equal(typeof shared.createDisplay({}).appearance.drawnDimensionColorsForTest,'function');
+    return shared.createInteraction({...ports,currentScope:()=>assert.fail('shared scope must be retained'),canvasSelection:null});
+  });
+  const first={dimensional:true,target:12,dimension:{y:3}};f.state.scope={constraints:[first]};
+  assert.equal(f.support.selection.selectDimensionForPropertiesForTest(),true);assert.equal(f.selection.dimensionConstraint,first);
+  f.state.scope={constraints:[]};f.events.length=0;assert.equal(f.support.selection.selectDimensionForPropertiesForTest(),false);assert.deepEqual(f.events,[]);
+  f.support.selection.fitForMultipleDimensionsForTest();assert.deepEqual(f.events,[['viewport',{scale:2,x:350,y:250}],['ui',null],'draw']);
+});
 
 test('dimension interaction support retains twelve entry points in placement and selection groups',()=>{
   const f=fixture(); assert.deepEqual(Object.keys({...f.support.placement,...f.support.selection}),[

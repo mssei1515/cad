@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の寸法テスト支援共有接続単位
+
+基準はdevelop d4f9e9e。既存DimensionTestDriver.createSupportがfixture／interaction／displayで共通の20 capabilityを共有し、各createFixtures／createInteraction／createDisplayへ専用依存14／21／20個を渡す。旧createFixtureSupport／createInteractionSupport／createDisplaySupportの実体を元の生成位置で作り、各操作・観測の処理と返却する公開名／key順を保持する。test条件外では生成しない。通常機能をtest ownerへ移さず、scope／モデル／Selection／session／Canvasの独立コピーや新stateを持たない。
+
+app.jsは2,803→2,805行（2行増）。構築入口3→4と共有段階を増やす費用があり、行数削減とは扱わない。明示引数合計は100→75へ重複25個を除き、異なる入力種類75個は変わらない。個別の責務と生成時機を保ちながら、共通capabilityを一度だけ接続する単位である。全テストAPI127項目／140行／91入力の丸ごとの移動案は引き続き採用しない。
+
+全単体1,827件・関連単体13件が成功（exit 0）。追加2件で三つの段階の生成時無照会、親で共有したlive scope／Selection／viewportと各専用入力の区別、実寸法選択・fitの通知順、同じCanvas rendererと選択／hover／strokeの失敗時復元を確認した。既存fixture／interaction／displayの全テストも維持した。AST診断で元の100引数すべてが同じ式から接続され、既存driverの処理本体が改行形式を除き全文一致することを確認した（一時directoryのcad-dimension-testing-audit.cjs、cad-dimension-testing-ports.json）。新file・script順変更はない。
+
+構文590ファイルが成功（exit 0）。旧d4f9e9eのappと現在module群の実ブラウザ比較では、寸法表示精度／角度・引出線／角度label追従、読取専用寸法、外観／描画metrics／terminator／色、Sketch可視、click配置／Line-Circle／drag、位置／選択／fit／式編集の22状態で返却値・model・mode・履歴・選択とAPI204 key順が一致した。返却model内も含めsavedAtだけを除外し、元の寸法結果を維持した。診断は一時directoryのcad-dimension-testing-equivalence.cjs／.log。関連E2E347件が全成功（6.5分、exit 0）。公開25 APIの全利用先14ファイル（blocks／bolt-diameter／annotation-display-size／annotation-anchors／adversarial-authoring-performance／leader-appearance／free-text-input-drag／dimension-prefix／sketch-tree-visibility／slot-dimension／multiple-dimensions／unified-annotations／view-visibility／unified-ui）とphase0-characterizationを実行した。実行前の一覧で15ファイル347件を確認し、Windows path区切りの指定によって起動検証21件だけ実行された最初のrunとは区別する。寸法の値入力／配置・読取専用・ドラッグ／整列、注記／引出線・精度／外観、Sketch可視とBlock・保存再読込／Undo／Redoを確認した。性能全12件を含みpan142ms（175ms未満）、空白矩形218ms（250ms未満）。既存期待値・性能基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-dimension-testing-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功は過去の基準と区別する。開始時週枠使用46%／残量54%、検証後使用47%／残量53%で停止条件未到達。次は通常機能の構築・bind／startとhoisted委譲を含む全体依存の再監査へ戻る。rootの操作stateは前単位までで既存ownerへ移り、六つのletは後段接続用。test driver内だけの小さい集約を続けても200〜500行に届かないため、共通サービスを共有する通常機能の生成・接続で残る結合を確認する。予備監査ではroot構築の明示引数はCanvasContextInteraction64、CanvasCommandInputs52、GeometryDragFeature49、PropertiesDisplay45、SketchTreeController38、ConstraintCommitCommand38、SketchProjectionFeature36だった（一時directoryのcad-root-construction-candidates.cjs）。いずれも既存の集約済境界なので、さらに一枚で包むだけでなく、同じowner APIの共有とconsumerの必要能力を基準に再検討する。単なる移動、巨大な別root／app context、必要な遅延参照の安易な解消を避ける。全体目標と全体検証は未完了。
+
+
 ### 最新のpointer入力状態所有単位
 
 基準はdevelop 0aad34b。PointerInteractionController.createSessionが最後の生world座標と実down／move／doubleClick／leave／finishを所有する。appの旧lastPointerWorld初期化位置で生成し、既存位置のbindで入力・command・drag／hover依存を接続する。context menuの更新とDocument／Sketch resetの解除、Block配置・Fillet・寸法／拘束・Hatch・keyboard・ラベル描画の読取りを同じ限定APIへ接続した。生の座標参照を保持し、snapやpreview消去を伴うDrawingPreview.pointerとは統一しない。
