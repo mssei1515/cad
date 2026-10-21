@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の基本作図二段階組立て単位
+
+基準はdevelop ce82291。既存BasicDrawingTools.createAuthoringがDrawingSnap→SplineDraft／SplineCommand→SnapConstraints→Line／Rectangle／Circular／Slot toolsetを生成・接続する。SketchContext・PointUsage・Geometry read、同じGeometry／ID・Selection／preview／checkpointと限定操作を共有し、各子へ必要な元の関数だけを渡す。返すsnap・Spline draft／command・snapConstraints・toolsは同じ実体で、新しい操作state／scope／cacheやGeometryを複製しない。
+
+Centerlineは後段createCenterlineへcommit／parallelTolerance／invalidateの3依存だけを渡し、既存の三部品を元の後段で生成する。共有snap解決は毎回10/scaleを読み、解決後の同じactive snapを使用する。Geometry生成／endpointと交差するSketchProjectionEditing、Offset／求解は独立した既存ownerに残す。Spline編集・checkpointの後段const参照は従来どおりcallbackのまま。実factoryのcreate直下の呼出しがObject.freezeのみで、生成時にscope・モデル・checkpoint・入力／DOMを操作しないことを確認した。reset／取消／復元・履歴を統一せず、旧create／createSpline／createCenterlineも維持する。
+
+app.jsは2,822→2,810行（12行減）。対象構築5→2、明示引数合計93→39（前段36／後段3）、異なるroot binding参照55→41。未参照になったPointUsage別名2個を除きroot未使用bindingは0、app単体構文も再確認した。構文590ファイル・全単体1,815件・関連単体19件が成功（exit 0）。追加2件は境界用factoryで生成順／後段Centerlineの遅延、同じ返却owner・Geometry／ID／Selection／checkpoint関数、最新scaleとsnap解決後の値／receiver、作成Splineの同じ選択参照→select modeを確認する。既存の実Spline／Centerlineのguard・取消・失敗復元と実snap／拘束付与のテストも成功した。新file・script順変更はない。
+
+旧ce82291のappと現在module群の実ブラウザ比較では、線・矩形・円・円弧・3点円弧・長穴・Splineの各クリック途中／完成、Centerlineの開始／初点／完成の28状態でmodel・履歴・選択とtest API204 key順が一致した（savedAtのみ除外）。各図形の生成件数も確認し、両版が何も生成しないだけの一致ではない。診断は一時directoryのcad-basic-authoring-equivalence.cjs／.log。関連E2E268件が全成功（4.5分、exit 0）。unified-ui／phase0-characterization／spline／centerline／blocks／sketch-permissions／sketch-projection／free-instance／derived-patterns／command-panel／hatching／adversarial-authoring-performanceを実行した。各基本作図とsnap／拘束付与、Spline／Centerlineの開始・取消・失敗復元、Block／投影／派生・権限と既存画面・保存再読込を確認した。性能全12件を含みpan141ms（175ms未満）、空白矩形218ms（250ms未満）。既存期待値・性能基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-basic-authoring-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功は過去の基準として保持する。開始時週枠使用41%／残量59%で停止条件未到達。次は同じ作図ownerを終了・reset・取消へ接続するDrawOperationLifecycleの組立てを確認する。親の共通snap／preview／draft／Geometryと、後段のCenterline・Instance／参照元編集・Fillet／Offset／Hatch等を必要な時機で接続し、Lifecycle自身のstart／exit／cancel／Sketch変更／Document置換の異なるreset対象とrollbackを維持する。modeをgetter／setter容器へ移すだけの案、全app context、別の巨大rootは避ける。200〜500行、mode・test hooks・他の通常構築の全体目標は未完了。
+
 ### 最新の採番予約／Block重複ID照会単位
 
 基準はdevelop 09d38c6。DocumentIds.createReservationは同じGeometryIds／DocumentIdsと現在Hatch採番readerの3依存で、Geometry→添付要素の予約と、その後の現在Hatch値→Block scope予約を所有する。生成時にscope／counterを照会せず、新しい採番状態やrollbackを持たない。元のallocator receiverとsource、readerの実行時機、undefined返却、各段階の例外と既反映counterを保持する。DocumentSequencesは読込後の純粋な復元計算に残し、予約手順をcodecへ持ち込まない。

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の基本作図二段階組立て単位
+
+BasicDrawingTools.createAuthoringでsnap／Spline／snap拘束／primitive toolsetを構成し、Centerlineは同じGeometry・ID・snapと限定3依存で後段生成する。実draft・command・Selection／checkpointを共有し、scaleの毎入力取得と生成順、各取消／復元境界を維持した。構築5→2、引数93→39、root参照55→41。app.jsは2,822→2,810行（12行減）。旧appとの28状態で各作図途中／完成のmodel／履歴・選択とAPI204 key順が一致した。検証と次のLifecycle接続は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新の採番予約／Block重複ID照会単位
 
 DocumentIds.createReservationへ同じGeometry／Document allocatorの予約順と現在Hatch値の遅延取得、BlockCatalogへDefinition内の重複ID照会を集約した。counter／scopeを複製せず、旧8 collectionと走査／変換順・空ID、Commandの明示checker優先と拒否時のHint／drawを維持した。app.jsは2,837→2,822行（15行減）。旧appとの14状態で再読込後の新規採番を含むmodel／履歴・Block editorとAPI204 key順が一致した。検証と次の構築境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

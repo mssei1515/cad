@@ -76,5 +76,33 @@
     });
   }
 
-  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline });
+  function createAuthoring({ currentScope, ids, geometry, endpointAt, samePosition, sketchContext, pointUsage, geometryReads,
+    isVisibleSketchElement, annotationAnchors, scale, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
+    minLineLength, minArcLength, selection, preview, checkpoint, cancelConstraintTargetCommand, cancelPendingCommand,
+    canCreateInActiveSketch, rejectRootSketchCreation, setMode, resetEditing, resetBlankCandidate, updateToolbar,
+    projection, clearSelection, solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw, log }) {
+    const { isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, sketchName } = sketchContext;
+    const { isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint } = pointUsage;
+    const snap = window.DrawingSnap.create({ annotationAnchors, geometryReads, isVisibleSketchElement, isActiveSketchElement,
+      isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint,
+      sketchName, elementSketchId, applicationText });
+    function snapForDrawing(point) { return snap.resolve(point, 10 / scale()); }
+    const spline = createSpline({ currentScope, ids, endpointAt, samePosition, isPointUsedByPrimitive, addSpline: geometry.addSpline,
+      snapForDrawing, scale, cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+      setMode, resetEditing, resetBlankCandidate, updateToolbar, projection, preview, snap, clearSelection, selection,
+      solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw });
+    const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId,
+      addPoint: geometry.addPoint, addConstraintIfMissing });
+    const tools = create({ geometry, ids, currentScope, snap, snapConstraints, snapForDrawing, endpointAt, samePosition,
+      transientAuthoring, pushModelConstraint, addConstraintIfMissing, minLineLength, minArcLength, selection, preview, checkpoint,
+      clearSelection, setHint, updateUI, draw, solveAndRefresh, log });
+    function createCenterlineTool({ commitNewConstraint, parallelTolerance, invalidateAnalysis }) {
+      return createCenterline({ currentScope, geometry, ids, snapConstraints, commitNewConstraint, parallelTolerance,
+        cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar,
+        selection, sameSketchElements: sketchContext.sameSketchElements, activeSketchId: sketchContext.activeSketchId, isActiveSketchElement,
+        applicationText, minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw });
+    }
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool });
+  }
+  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring });
 })();

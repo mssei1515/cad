@@ -147,3 +147,56 @@ test('Centerline start refuses a disallowed drawing target after existing comman
  const f=centerlineFixture();f.state.allowed=false;f.command.start();assert.deepEqual(f.events,['constraintCancel','pendingCancel','reject']);
  assert.equal(f.selection.points[0],f.sources[0]);assert.equal(f.state.mode,'select');assert.equal(f.command.targets.length,0);
 });
+
+function authoringFixture() {
+ const created={},events=[],state={scale:2,snapped:{x:3,y:4},snap:{id:'snap'},selected:null,mode:'select'};
+ const names=['DrawingSnap','SplineDraft','SplineCommand','SnapConstraints','LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand','CenterlineGeometry','CenterlineConstruction','CenterlineCommand'];
+ const sandbox={window:{}};
+ for(const name of names) sandbox.window[name]={create(ports){
+  events.push(name);const owner={name,active:null,clear:()=>{}};
+  owner.resolve=function(point,tolerance){assert.equal(this,owner);events.push(['resolve',point,tolerance]);owner.active=state.snap;return state.snapped;};
+  for(const method of ['click','clickCircle','clickArc','clickThreePointArc'])owner[method]=function(...args){assert.equal(this,owner);events.push([name,method,...args]);};
+  if(name==='SnapConstraints')for(const key of ['addPointSnapConstraints','addArcEndpointSnapConstraints','addCircularBoundarySnapConstraints','addLineBoundarySnapConstraints'])owner[key]=()=>{};
+  created[name]={ports,owner};return owner;
+ }};
+ vm.runInNewContext(fs.readFileSync('src/application/basic_drawing_tools.js','utf8'),sandbox);
+ const noop=()=>{},never=()=>{throw Error('no eager query or operation');};
+ const sketchContext=Object.fromEntries(['isActiveSketchElement','elementSketchId','isReferenceSourceSketchId','sketchName','sameSketchElements','activeSketchId'].map(key=>[key,never]));
+ const pointUsage=Object.fromEntries(['isSplineOnlyFitPoint','isReferencePoint','isPrimitiveCenterPoint','isEndpointPoint','isPointUsedByPrimitive','isExplicitPoint'].map(key=>[key,never]));
+ const selection={set(key,items){assert.equal(this,selection);state.selected={key,items};events.push('selected');}};
+ const ports={currentScope:never,ids:{},geometry:Object.fromEntries(['addPoint','addLine','addCircle','addArc','addSpline'].map(key=>[key,noop])),endpointAt:noop,samePosition:noop,
+  sketchContext,pointUsage,geometryReads:{},isVisibleSketchElement:never,annotationAnchors:never,scale:()=>state.scale,transientAuthoring:{},pushModelConstraint:noop,addConstraintIfMissing:noop,
+  minLineLength:4,minArcLength:6,selection,preview:{setPointer:noop},checkpoint:{capture:never,restore:never},cancelConstraintTargetCommand:noop,cancelPendingCommand:noop,
+  canCreateInActiveSketch:never,rejectRootSketchCreation:noop,setMode:value=>{state.mode=value;events.push('mode');},resetEditing:never,resetBlankCandidate:never,updateToolbar:noop,
+  projection:{reset:noop},clearSelection:noop,solveAndRefresh:noop,recordHistory:noop,applicationText:(_ja,en)=>en,setHint:noop,updateUI:noop,draw:noop,log:noop};
+ const feature=sandbox.window.BasicDrawingTools.createAuthoring(ports);
+ return {created,events,state,ports,feature};
+}
+
+test('authoring assembly shares actual snap, draft, geometry and checkpoint ports and defers Centerline construction',()=>{
+ const f=authoringFixture();assert.deepEqual(f.events,['DrawingSnap','SplineDraft','SplineCommand','SnapConstraints','LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand']);
+ assert.equal(f.feature.snap,f.created.DrawingSnap.owner);assert.equal(f.feature.spline.draft,f.created.SplineDraft.owner);assert.equal(f.feature.spline.command,f.created.SplineCommand.owner);
+ assert.equal(f.feature.snapConstraints,f.created.SnapConstraints.owner);assert.equal(f.feature.tools.line,f.created.LineCommand.owner);
+ assert.equal(f.created.DrawingSnap.ports.geometryReads,f.ports.geometryReads);assert.equal(f.created.DrawingSnap.ports.annotationAnchors,f.ports.annotationAnchors);
+ assert.equal(f.created.DrawingSnap.ports.isActiveSketchElement,f.ports.sketchContext.isActiveSketchElement);
+ for(const key of Object.keys(f.ports.pointUsage))assert.equal(f.created.DrawingSnap.ports[key],f.ports.pointUsage[key]);
+ assert.equal(f.created.SplineDraft.ports.currentScope,f.ports.currentScope);assert.equal(f.created.SplineCommand.ports.addSpline,f.ports.geometry.addSpline);
+ assert.equal(f.created.SnapConstraints.ports.addPoint,f.ports.geometry.addPoint);assert.equal(f.created.SlotConstruction.ports.snapshotGeometryMutationState,f.ports.checkpoint.capture);
+ assert.equal(f.created.SlotConstruction.ports.restoreGeometryMutationState,f.ports.checkpoint.restore);
+ const commit=()=>{},invalidate=()=>{};const center=f.feature.createCenterline({commitNewConstraint:commit,parallelTolerance:0.125,invalidateAnalysis:invalidate});
+ assert.deepEqual(f.events.slice(-3),['CenterlineGeometry','CenterlineConstruction','CenterlineCommand']);assert.equal(center,f.created.CenterlineCommand.owner);
+ assert.equal(f.created.CenterlineConstruction.ports.geometry,f.ports.geometry);assert.equal(f.created.CenterlineConstruction.ports.ids,f.ports.ids);
+ assert.equal(f.created.CenterlineConstruction.ports.addPointSnapConstraints,f.feature.snapConstraints.addPointSnapConstraints);assert.equal(f.created.CenterlineConstruction.ports.commitNewConstraint,commit);
+ assert.equal(f.created.CenterlineCommand.ports.selection,f.ports.selection);assert.equal(f.created.CenterlineCommand.ports.minLineLength,4);
+ assert.equal(f.created.CenterlineCommand.ports.activeSketchId,f.ports.sketchContext.activeSketchId);assert.equal(f.created.CenterlineCommand.ports.invalidateAnalysis,invalidate);
+});
+
+test('shared authoring snap reads scale on every input and preserves post-resolution snap and selected Spline identity',()=>{
+ const f=authoringFixture(),pointer={x:10,y:20};f.events.length=0;
+ f.feature.tools.input.rectangle(pointer);assert.deepEqual(f.events,[['resolve',pointer,5],['RectangleCommand','click',f.state.snapped,f.state.snap]]);
+ f.state.scale=5;f.state.snap={id:'new'};f.events.length=0;f.feature.createCenterline({commitNewConstraint:()=>{},parallelTolerance:0.1,invalidateAnalysis:()=>{}});
+ f.events.length=0;const value=f.created.CenterlineCommand.ports.snapForDrawing(pointer);
+ assert.equal(value.point,f.state.snapped);assert.equal(value.snap,f.state.snap);assert.deepEqual(f.events,[['resolve',pointer,2]]);
+ const spline={id:'SP1'};f.events.length=0;f.created.SplineCommand.ports.selectCreatedSpline(spline);
+ assert.equal(f.state.selected.key,'splines');assert.equal(f.state.selected.items[0],spline);assert.equal(f.state.mode,'select');assert.deepEqual(f.events,['selected','mode']);
+});
