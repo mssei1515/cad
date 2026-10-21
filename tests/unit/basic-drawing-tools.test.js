@@ -175,7 +175,7 @@ function authoringFixture() {
   canCreateInActiveSketch:never,rejectRootSketchCreation:noop,setMode:value=>{state.mode=value;events.push('mode');},resetEditing:()=>events.push('editing'),resetBlankCandidate:never,updateToolbar:()=>events.push('toolbar'),
   projection:{reset:()=>events.push('projection')},clearSelection:()=>events.push('clear'),solveAndRefresh:noop,recordHistory:noop,applicationText:(_ja,en)=>en,setHint:()=>events.push('hint'),updateUI:()=>events.push('ui'),draw:()=>events.push('draw'),log:noop};
  const feature=sandbox.window.BasicDrawingTools.createAuthoring(ports);
- return {created,events,state,ports,feature};
+ return {created,events,state,ports,feature,createLifecycleSession:sandbox.window.DrawOperationLifecycle.createSession};
 }
 
 test('authoring assembly shares actual snap, draft, geometry and checkpoint ports and defers Centerline construction',()=>{
@@ -218,6 +218,16 @@ function lifecycleFixture() {
  f.state.hatch={reset(){assert.equal(this,f.state.hatch);f.events.push('hatch');}};
  return {...f,lifecycle,external};
 }
+
+test('authoring assembly binds its actual commands to an early Lifecycle session without a second mode owner',()=>{
+ const f=lifecycleFixture(),session=f.createLifecycleSession();session.setMode('spline');f.events.length=0;
+ const result=f.feature.createLifecycle({lifecycle:session,...f.external,canStart:()=>true,hatch:{reset:()=>f.state.hatch.reset()},clearTrimHover:()=>f.events.push('trimHover')});
+ assert.equal(result,session);assert.equal(session.mode,'spline');assert.deepEqual(f.events,[]);
+ session.cancel();assert.equal(session.mode,'spline');assert.equal(f.events.includes('SplineDraft.cancel'),true);assert.equal(f.events.includes('rollbackLine'),true);
+ f.events.length=0;session.exit();assert.equal(session.mode,'select');assert.equal(f.events.includes('mode'),false);
+ assert.equal(f.events.includes('SplineDraft.reset'),true);assert.equal(f.events.includes('SplineDraft.cancel'),false);
+ assert.equal(session.start('line'),true);assert.equal(session.mode,'line');assert.equal(f.state.mode,'select');
+});
 
 test('authoring Lifecycle reuses the created drafts and preserves distinct Sketch reset, cancel and exit effects',()=>{
  const f=lifecycleFixture();assert.equal(f.lifecycle.active(),false);assert.deepEqual(f.events,[]);

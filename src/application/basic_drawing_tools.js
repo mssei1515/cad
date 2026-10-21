@@ -102,8 +102,9 @@
         selection, sameSketchElements: sketchContext.sameSketchElements, activeSketchId: sketchContext.activeSketchId, isActiveSketchElement,
         applicationText, minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw });
     }
-    function createLifecycle({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
-      return window.DrawOperationLifecycle.create({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover,
+    function createLifecycle({ lifecycle, canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
+      const construct = lifecycle ? lifecycle.bind : window.DrawOperationLifecycle.create;
+      return construct({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover,
         line: tools.line, rectangle: tools.rectangle, slot: tools.slot, circular: tools.circular, spline: spline.draft,
         splineEditing: { reset: resetEditing }, projection, preview,
         transient: { clearPoint: transientAuthoring.clearTransientPointRollback,

@@ -23,6 +23,41 @@ function fixture() {
   deps.cancelPendingCommand = message => { assert.equal(message, ""); calls.push("pendingCancel"); }; deps.readMode = () => state.mode;
   return { deps, calls, state, controller: sandbox.window.DrawOperationLifecycle.create(deps) };
 }
+
+test('session owns live mode before binding and uses it for actual transitions after binding', () => {
+  const f = fixture(), session = sandbox.window.DrawOperationLifecycle.createSession();
+  const read = session.readMode, write = session.setMode, select = session.selectMode;
+  assert.equal(read(), 'select'); assert.equal(session.mode, 'select');
+  assert.equal(write('offset'), undefined); assert.equal(session.isToolMode(), true);
+  assert.deepEqual(f.calls, []);
+  assert.equal(session.bind(f.deps), session); assert.deepEqual(f.calls, []);
+  assert.equal(session.mode, 'offset');
+  assert.equal(session.start('line'), true); assert.equal(read(), 'line');
+  assert.deepEqual(f.calls, ['cancelConstraint', 'line', 'rectangle', 'fillet', 'circle', 'arcs', 'pointer', 'clearSnap', 'updateToolbar', 'setHint', 'draw']);
+  f.calls.length = 0; session.cancel(); assert.equal(read(), 'line');
+  assert.ok(f.calls.includes('rollbackLine')); assert.ok(f.calls.includes('splineCancel'));
+  f.calls.length = 0; session.exit(); assert.equal(read(), 'select');
+  assert.equal(f.calls.includes('selectMode'), false); assert.equal(f.calls.includes('rollbackLine'), false);
+  write('block-place'); assert.equal(session.isToolMode(), false); assert.equal(select(), undefined); assert.equal(read(), 'select');
+  assert.equal(f.state.mode, 'select'); // The legacy fixture's external state is not the session's mode.
+});
+
+test('session preserves reset subsets, start guards and partially applied transitions on failure', () => {
+  const f = fixture(), session = sandbox.window.DrawOperationLifecycle.createSession();
+  f.deps.instances.clearSources = () => f.calls.push('clearSources');
+  session.bind({ ...f.deps, canStart: () => false });
+  session.setMode('slot'); assert.equal(session.start('line'), false); assert.deepEqual(f.calls, []);
+  session.prepareConstraintCancel(); assert.deepEqual(f.calls, ['slot']);
+  f.calls.length = 0; session.resetInputsForSketchChange(); assert.equal(session.mode, 'slot');
+  assert.deepEqual(f.calls, ['line', 'rectangle', 'fillet', 'circle', 'arcs', 'preview', 'offset']);
+  f.calls.length = 0; session.resetForDocument(); assert.equal(session.mode, 'slot');
+  assert.equal(f.calls.includes('rollbackLine'), false); assert.equal(f.calls.includes('splineCancel'), false);
+  f.calls.length = 0; const marker = new Error('line reset failed'); f.deps.line.reset = () => { throw marker; };
+  assert.throws(() => session.prepare('offset'), error => error === marker);
+  assert.equal(session.mode, 'offset'); assert.deepEqual(f.calls, []);
+  assert.throws(() => session.prepareDimensionStart(), error => error === marker);
+  assert.equal(session.mode, 'select'); assert.deepEqual(f.calls, []);
+});
 test('exit resets drafts and selects normal mode without rolling geometry back', () => {
   const f = fixture(); f.controller.exit();
   assert.deepEqual(f.calls, ['instances', 'instanceSources', 'centerline', 'line', 'clearPoint', 'clearCompletion', 'rectangle', 'slot', 'fillet', 'circle', 'arcs', 'spline', 'splineEditing', 'projection', 'preview', 'offset', 'hatch', 'clearSnap', 'selectMode', 'updateToolbar', 'setHint', 'updateUI', 'draw']);
