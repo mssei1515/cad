@@ -2871,32 +2871,13 @@
     };
   }
 
-  derivedPanel = window.DerivedCommandPanel.create({
-    formatDisplayNumber,
-    getMode: () => mode, projectionSources: () => sketchProjectionCommand.sources,
-    geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand,
-    resolveGeometryRef, sketchName, activeSketchId, elementSketchId, geometryRefForItem, applicationText,
-    finishProjection: commitSketchProjectionCommand,
-    removeProjectionSource: sketchProjectionCommand.remove,
-    cancel: () => {
-      if (mode === "instance-sources") return finishInstanceSourceEdit(false);
-      exitDrawMode();
-      updateUI({ refreshAnalysis: false });
-      setHint(applicationText("コマンドをキャンセルしました", "Command canceled."));
-      draw();
-    },
-    changeFreeProperty: changeFreeInstanceProperty,
-    refresh: () => { updatePropertiesUI(); draw(); },
-  });
-  const hatchPanel = window.HatchCommandPanel.create({ command: hatchCommand, getMode: () => mode, applicationText, formatDisplayNumber,
-    cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
-  });
-  const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText, effectiveStyle: item => effectiveAnnotationStyle({ ...item, sketchId: activeSketchId() }) });
-  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement,
-    ...window.CommandPanel.createRouting({ readMode: () => mode, isAnnotationActive: () => annotationCommand.active,
-      derivedPanel, hatchPanel, annotationPanel, pngExportCommand,
-    }),
-  });
+  ({ derivedPanel, commandPanel } = window.CommandPanel.createFeature({
+    document, host: canvas.parentElement, readMode: () => mode, sketchContext, projectionCommand: sketchProjectionCommand,
+    geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand, resolveGeometryRef, geometryRefForItem, applicationText, formatDisplayNumber,
+    finishProjection: commitSketchProjectionCommand, finishSourceEdit: finishInstanceSourceEdit, exitDrawMode,
+    changeFreeProperty: changeFreeInstanceProperty, hatchCommand, annotationCommand, effectiveAnnotationStyle, pngExportCommand,
+    updateUI, updatePropertiesUI, setHint, draw,
+  }));
 
   const documentEditingReset = window.DocumentEditingReset.create({
     documentModel, sketchMoveCommand, activateEditingScope, flushPointerMoves: flushScheduledCanvasPointerMove,

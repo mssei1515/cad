@@ -8,6 +8,8 @@
 
 ## 再監査（2026-10-21、caf19a0）
 
+この監査から選んだCommandPanelの構築境界は後続のcreateFeature単位で実装した。以下の数値と候補比較は監査時点の記録として保持し、最新実装・検証・次の単位は[再開手順section 8](refactoring-policy-and-resume.md#8-再開地点2026-10-20)を参照する。
+
 基準はdevelop／origin/develop `caf19a04fee6d38d5190ee987b12aea1f5ba151c`、app.js blob `34f86fb8ebd97c5de904e808bcaf29a8ca07d000`。今回の監査では製品コードを変更していない。直近のTree／Properties／拘束解析等の整理後を、46dd77dと同じBabel ASTの条件で再集計し、旧表の全数値を再現した。
 
 | 分類 | 46dd77d | caf19a0 | 差 |

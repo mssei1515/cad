@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の共通コマンドパネル組立て単位
+
+基準はdevelop 520f329。既存CommandPanel.createFeatureがDerived→Hatch→Annotation→routing→DOMの5 factoryを生成・接続する。SketchContextから名称／active／所属の元の関数を取り出し、既存commandと23個の限定依存を各子へ接続する。新file・global／draft／rollbackはない。二つの実panelを返し、appの前段からの遅延照会と同じ位置での構築を維持する。生成時はmode／commandを照会せず、DOMのsection追加と4 listener登録、mode／Annotation外観のactive Sketchの操作時取得を保つ。
+
+Derivedの参照元編集取消はfinish(false)の結果を即returnし、他のDerivedはexit→解析を更新しないUI更新→取消hint→draw、Hatchは同順で追加hintなし、refreshはProperties→draw。共通cancelDrawingは通知手順だけを共有し、commandの取消／復元を再実装しない。途中例外と後続の短絡、旧create／createRouting、PNG／Annotation／Hatchの優先と既存DOM／入力保持を維持する。
+
+app.jsは2,924→2,905行（19行減）。対象factory呼出し5→1、構築Objectの明示property合計32→23、引数内の異なるroot binding参照27→22、root未使用bindingは0。構文588ファイル・全単体1,799件・関連単体21件が成功（exit 0）。追加2件は実adapter／共通DOMで生成時無照会・登録順、同じderivedPanel実体、選択／解除／確定とProperties更新、active Sketch変更時の外観・元draft無変更、PNG優先、取消の分岐・返却値・raw receiver・UI例外時の途中状態を確認する。最初の単体実行は補助関数のrest引数内のuse strictが構文エラーとなり、fixture外側のstrictへ直して成功した。製品コード・既存期待値を変えて成功させたものではない。
+
+旧520f329のappと現在module群の実ブラウザ比較では、投影の未選択／選択／確定、参照元編集／取消、Hatch選択／取消、Annotation開始／取消、PNG開始／取消の11状態でpanel HTMLとfield値、model・選択・履歴が一致した。test API204 keyの順序も一致し、savedAtだけ除外した。初回診断はAnnotation継続中にPNG開始を試み、旧版でも開始拒否されたためcancelボタン待ちでtimeoutした。AnnotationをEscapeで終了してPNG表示を確認する診断手順へ訂正し、初回ログも保持した。製品コード・E2E本体・期待値は変更していない。診断は一時directoryのcad-panel-assembly-equivalence.cjs／.logとequivalence-initial.log。関連E2E246件が全成功（4.3分、exit 0）。unified-ui／phase0-characterization／command-panel／png-export／unified-annotations／hatching／free-instance／derived-patterns／sketch-projection／sketch-permissions／adversarial-authoring-performanceを実行した。panel行の選択・解除・確定／取消、PNGの解像度・描画復元と出力、Annotation入力／外観、Hatch領域、投影・派生／Instance参照元編集、Sketch権限、既存画面・履歴／保存再読込を確認した。性能全12件を含み、pan122ms（175ms未満）・空白矩形199ms（250ms未満）。既存期待値・性能基準を変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-panel-assembly-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fのまま保留、最新全E2Eは未実行。c3a213cの全584成功は過去の基準であり、今回の関連検証とは区別する。開始時週枠使用36%／残量64%で停止条件未到達。次はDocument／Block履歴のcapture・record／restore・通知の構築境界を既存HistoryController／HistoryRestoration／Snapshot／UIの役割と照合する。documentHistoryの早期生成と後段のsnapshot／restoration、Block編集中のactive history、復元中のrecord抑制・finally通知、Document名の保存外／履歴外の扱いとprofile時の戻り値を維持し、DOMをediting ownerへ持ち込まず、単なる全依存contextへの包装を避ける。documentHistoryはTransientAuthoringのdiscard／Name UIのcurrentSnapshotにも使われるため、Controller内部へ隠すだけの案は採らず、同じ実historyを共有する。EditHistoryはsnapshot方針を呼出し側へ委ね、HistoryRestorationはDocumentとBlockで異なる復元を所有する現行契約を基準に、機能の組立てと各ownerの責務を区別して検討する。200〜500行の全体目標、mode・test hooks・他の構築の課題は未完了。
+
 ### 最新の構築境界再監査（2026-10-21）
 
 develop caf19a0の現物を再集計し、[再監査](bootstrap-boundary-audit.md)に残存責務・候補の依存と次の実装案を記録した。app.jsは2,924→2,924行（0行差）、今回は文書のみ。旧46dd77dからは164行減、構築216→209文／1,354→1,266非空白行、test hooks478→438行。modeの20代入と二つの操作state＋六つの後段接続は残る。後段const参照117回は全て関数内だが、生成時に呼ばれない証明とは区別する。hooksを全移動しても数百行へ届かず、通常機能の構築境界を引き続き整理する。

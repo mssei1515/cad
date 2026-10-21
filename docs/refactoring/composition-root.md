@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の共通コマンドパネル組立て単位
+
+CommandPanel.createFeatureへ既存3 adapter／routing／DOMの5 factoryの生成と結線を集約した。実panelとmode／styleの操作時照会、DOM登録順、参照元編集取消の即return・Derived／Hatchのhint差と通知／例外を維持した。factory呼出し5→1、構築引数32→23、root参照27→22。app.jsは2,924→2,905行（19行減）。旧appとの11状態のpanel／model・選択・履歴とtest API204 key順序が一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 構築境界の再監査（2026-10-21）
 
 develop caf19a0を再集計し、app.jsは2,924行、構築・接続1,266非空白行、test hooks438行、一文call237行、その他492行と確認した。旧46dd77dから164行減だが、modeの20代入と大半の構築は残る。今回は文書のみで2,924→2,924行（0行差）。次は共通CommandPanelの5 factoryの生成・接続を既存ownerへ集約する。候補比較・生成順・取消差と次の検証は[再監査](bootstrap-boundary-audit.md)および[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
