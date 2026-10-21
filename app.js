@@ -116,7 +116,7 @@
     refreshViews: (options) => updateUI(options),
     redrawCanvas: () => draw(), refreshVersion: () => runtimeVersionView.render(),
   });
-  const { applicationText, translatedExactText, translatedHintText, localizeApplicationUI,
+  const { applicationText, translatedExactText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
@@ -235,6 +235,10 @@
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
+  const applicationFeedback = window.ApplicationFeedback.create({
+    document, settings: applicationSettings, interactionProfiler, readDuplicateCount: () => constraintRedundancy.count,
+  });
+  const { constraints: constraintFeedback } = applicationFeedback;
   const applicationRefresh = window.ApplicationRefresh.create({
     document, interactionProfiler, profileInteractionWork,
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
@@ -846,30 +850,10 @@
     btn.dataset.tooltip = btn.getAttribute("aria-label");
   }
 
-  function log(msg) {
-    const el = document.getElementById("log");
-    if (!el) return;
-    el.textContent = `${msg}\n` + el.textContent;
-  }
-
-  function setHint(msg, kind = "normal") {
-    if (!interactionProfiler.active) return setHintUnprofiled(msg, kind);
-    return profileInteractionWork("ui", () => setHintUnprofiled(msg, kind));
-  }
-
-  function setHintUnprofiled(msg, kind = "normal") {
-    const el = document.getElementById("hint");
-    el.dataset.hintSource = String(msg);
-    el.textContent = translatedHintText(msg);
-    el.classList.toggle("error", kind === "error");
-  }
-
-  const constraintFeedback = window.ConstraintFeedback.create({ applicationText, readLanguage: () => applicationSettings.language });
+  function log(msg) { return applicationFeedback.log(msg); }
+  function setHint(msg, kind = "normal") { return applicationFeedback.hint(msg, kind); }
   const { localizedConstraintName } = constraintFeedback;
-  function setSolveResultHint(label, solved, analysis, dependent) {
-    const hint = constraintFeedback.resultHint(label, solved, analysis, dependent, constraintRedundancy.count);
-    setHint(hint.message, hint.kind);
-  }
+  function setSolveResultHint(label, solved, analysis, dependent) { return applicationFeedback.solveResult(label, solved, analysis, dependent); }
 
   function effectiveDocumentName() {
     return effectiveDocumentNameFromValue(documentModel.documentName);

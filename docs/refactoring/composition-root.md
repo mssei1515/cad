@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のHint／log表示owner単位
+
+ApplicationFeedbackへHint／logのDOM出力、Hint計測と求解結果の表示接続を集約した。4依存から同じ純粋なConstraintFeedbackを生成・共有し、翻訳・計測・文言のownerと操作時照会、例外時の部分反映を維持した。script／構文／単体／E2E読込期待も同期した。app.jsは2,853→2,837行（16行減）。旧appとの15状態でHint／log・言語切替とmodel／履歴、API204 key順が一致した。検証と次の単位は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のDocument準備と保存writer単位
 
 DocumentApplication.createPreparationへunits／Sketch／外観／Block／描画順／Parameterの準備手順、DocumentSnapshot.createWriterへ準備後の保存元とmetadataを使う候補生成を集約した。各normalizeとcodec・scopeの所有、実行順／現在値と例外境界を維持した。準備6依存・writer7依存とし、app本体の暗黙依存を明示するため構築引数は6→13。app.jsは2,866→2,853行（13行減）。旧appとの13状態のmodel／履歴・Block editor／選択とボタン、API204 key順が一致した。検証と次の単位は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
