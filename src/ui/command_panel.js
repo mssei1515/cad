@@ -246,5 +246,34 @@
       onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : currentPanel().onSetting(key, value),
     });
   }
-  window.CommandPanel = Object.freeze({ create, createRouting });
+  function createFeature({ document, host, readMode, sketchContext, projectionCommand, geometryCommand, sourceCommand,
+    resolveGeometryRef, geometryRefForItem, applicationText, formatDisplayNumber, finishProjection, finishSourceEdit,
+    exitDrawMode, changeFreeProperty, hatchCommand, annotationCommand, effectiveAnnotationStyle, pngExportCommand,
+    updateUI, updatePropertiesUI, setHint, draw }) {
+    const { sketchName, activeSketchId, elementSketchId } = sketchContext;
+    function cancelDrawing(showHint) {
+      exitDrawMode();
+      updateUI({ refreshAnalysis: false });
+      if (showHint) setHint(applicationText("コマンドをキャンセルしました", "Command canceled."));
+      draw();
+    }
+    const derivedPanel = window.DerivedCommandPanel.create({
+      formatDisplayNumber, getMode: readMode, projectionSources: () => projectionCommand.sources,
+      geometryCommand, sourceCommand, resolveGeometryRef, sketchName, activeSketchId, elementSketchId, geometryRefForItem, applicationText,
+      finishProjection, removeProjectionSource: projectionCommand.remove,
+      cancel: () => readMode() === "instance-sources" ? finishSourceEdit(false) : cancelDrawing(true),
+      changeFreeProperty, refresh: () => { updatePropertiesUI(); draw(); },
+    });
+    const hatchPanel = window.HatchCommandPanel.create({
+      command: hatchCommand, getMode: readMode, applicationText, formatDisplayNumber, cancel: () => cancelDrawing(false),
+    });
+    const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText,
+      effectiveStyle: item => effectiveAnnotationStyle({ ...item, sketchId: activeSketchId() }),
+    });
+    const commandPanel = create({ document, host,
+      ...createRouting({ readMode, isAnnotationActive: () => annotationCommand.active, derivedPanel, hatchPanel, annotationPanel, pngExportCommand }),
+    });
+    return Object.freeze({ derivedPanel, commandPanel });
+  }
+  window.CommandPanel = Object.freeze({ create, createRouting, createFeature });
 })();

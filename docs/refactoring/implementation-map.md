@@ -961,7 +961,7 @@ CanvasSelectionInteraction.createIdentitySelectionはCanvas pressのselectInacti
 
 - src/commands/sketch_command.js: renameの編集guardとtoggleLockの状態更新／UI・描画・履歴を所有する。appは権限照会と専用の取消準備callbackを接続し、Sketch切替の全体resetとは別の順序を維持する。
 
-- src/ui/command_panel.js: createRoutingはPNG／注記／Hatch／派生の表示先選択とイベント振分けを6依存で担当する。row選択・削除のoptional性とPNGを経由しない経路、receiver・引数・結果を維持し、appは個別panelとviewを接続する。
+- src/ui/command_panel.js: createFeatureは23依存で既存Derived／Hatch／Annotation adapter→routing→DOMを生成・接続し、実際のderivedPanel／commandPanelを返す。SketchContextの照会と各commandを限定APIへ接続し、mode／styleの操作時取得、取消の早期return・hint差／通知順と例外を維持する。appは二つの実体を前段の遅延照会へ接続する。旧createRoutingはPNG／注記／Hatch／派生の表示先選択とイベント振分けを6依存で担当し、row選択・削除のoptional性とPNGを経由しない経路、receiver・引数・結果を維持する。旧createも独立APIとして維持する。
 
 - src/editing/canvas_selection_interaction.js: createClearingはSelection・拘束operand・hoverの限定した参照・強調表示の解除を4 ownerのAPIで調整する。拘束command本体や他のhover参照・snapを保ち、UI／履歴／model更新は担当しない。
 
