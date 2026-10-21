@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のDocument準備と保存writer単位
+
+DocumentApplication.createPreparationへunits／Sketch／外観／Block／描画順／Parameterの準備手順、DocumentSnapshot.createWriterへ準備後の保存元とmetadataを使う候補生成を集約した。各normalizeとcodec・scopeの所有、実行順／現在値と例外境界を維持した。準備6依存・writer7依存とし、app本体の暗黙依存を明示するため構築引数は6→13。app.jsは2,866→2,853行（13行減）。旧appとの13状態のmodel／履歴・Block editor／選択とボタン、API204 key順が一致した。検証と次の単位は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のDocument／Block履歴機能組立て単位
 
 HistoryController.createFeatureへDocument／Block履歴の生成方針、既存Controller／Block snapshot／Restorationの接続、Document履歴metadata除外とrecord計測を集約した。stack／flag／復元のowner、Document履歴の共有実体、生成時無照会、scope切替・例外／通知順を維持し、DOMはUI adapterに残した。factory呼出し5→1、構築引数30→16、root参照21→17。app.jsは2,905→2,866行（39行減）。旧appとの13状態のmodel・履歴／Block editor／選択とボタン状態、API204 key順が一致した。検証と次の単位は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

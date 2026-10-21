@@ -15,7 +15,7 @@
     normalizeHatchAppearance,
   } = window.Appearance;
   const {
-    ensureDrawingOrderState, drawingOrderOwner,
+    drawingOrderOwner,
   } = window.DrawingOrder;
   const {
     fileNameStem,
@@ -899,24 +899,15 @@
   function effectiveDimensionAppearance(...args) { return dimensionAppearance.effectiveDimensionAppearance(...args); }
 
   function ensureAppearanceState() {
-    window.DocumentState.normalizeAppearanceState(documentModel, editingScopeBinding.current, { blockEditing: Boolean(blockEditor.current) });
+    return documentPreparation.appearance();
   }
 
-  const blockState = window.BlockState.create({
-    blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, isDrawableSketch, firstDrawableSketchId,
+  const documentPreparation = window.DocumentApplication.createPreparation({
+    document: documentModel, currentScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
+    sketchContext, parameterNamespace, blockCatalog,
   });
   function ensureBlockState() {
-    blockState.normalize(documentModel, editingScopeBinding.current, blockEditor.current?.draft?.id || null);
-  }
-
-  function ensureModelState() {
-    documentModel.units = { ...DEFAULT_DOCUMENT_UNITS };
-    ensureSketchState();
-    ensureAppearanceState();
-    ensureBlockState();
-    ensureDrawingOrderState(editingScopeBinding.current);
-    for (const definition of documentModel.blockDefinitions) ensureDrawingOrderState(definition);
-    ensureParameterNamespace(editingScopeBinding.current);
+    return documentPreparation.blocks();
   }
 
 
@@ -1173,7 +1164,9 @@
     return constraintCodecs.serialize(c);
   }
 
-  const documentSnapshot = window.DocumentSnapshot.create({
+  const documentWriter = window.DocumentSnapshot.createWriter({
+    workspace, prepare: documentPreparation.prepare, version: CURRENT_JSON_VERSION,
+    documentName: effectiveDocumentName, nextHatchIndex: () => documentIds.peek("hatch"),
     geometryMetadata: (item) => ({
       sketchId: elementSketchId(item),
       kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined,
@@ -1181,13 +1174,7 @@
     constraintData: constraintMetadata.snapshotData,
   });
 
-  function serializeModel() {
-    ensureModelState();
-    return documentSnapshot.serialize(workspace.snapshotSource(), {
-      version: CURRENT_JSON_VERSION, savedAt: new Date().toISOString(),
-      documentName: effectiveDocumentName(), nextHatchIndex: documentIds.peek("hatch"),
-    });
-  }
+  function serializeModel() { return documentWriter.serialize(); }
 
   function historySnapshot() { return historyFeature.captureDocument(); }
 

@@ -86,7 +86,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 - `src/document/annotations.js`、`src/document/hatches.js`、`src/document/reference_images.js`: 各補助要素の値の正規化、保存fieldと保存値検証
 - `src/persistence/constraints.js`: 具体的なConstraint保存形式、scopeごとの参照復元、寸法metadataの復元
 - `src/persistence/geometry.js`: Document／BlockのローカルGeometry復元と参照Map
-- `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値
+- `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値。createWriterは明示prepare→Workspace snapshotSource→時刻／名前／採番metadata→既存codecの順で保存候補を生成する。codecのcreateは維持し、scope／metadataをcacheしない。
 - `src/editing/block_definition_editing.js`: Block定義の複製・座標移動・選択からの下書き生成・Object同一性を維持するdraft反映
 - `src/editing/block_selection_query.js`: Block作成候補の参照整合・内部／外部拘束分類と配置中心の読取り
 - `src/editing/block_editing_queries.js`: 編集範囲・編集中定義・参照Instance・draftを優先する依存循環の読取り
@@ -505,7 +505,7 @@ CanvasInputBinding.createCommandRoutingは通常pointer controllerに共通comma
 
 - src/editing/history_restoration.js: Document／Blockの復元調整。モデル読込・draft所有・履歴抑止は各既存所有者へ依頼する。
 
-- src/editing/document_application.js: 復号済みDocumentの編集状態への適用順と補正結果を所有。decode／installはDocumentLoading、reset・ID予約・既定値補正は既存adapterへ委譲し、ファイルUIや履歴は持たない。
+- src/editing/document_application.js: 復号済みDocumentの編集状態への適用順と補正結果を所有。createPreparationはDocument・現在scope／Block session照会・SketchContext・ParameterNamespace・BlockCatalogの6依存から既存BlockStateを構成し、外観／Block正規化と保存前準備を公開する。units→Sketch→外観→Block→現在scope／全定義の描画順→Parameterの順を維持し、各段階でscopeを再取得する。decode／installはDocumentLoading、reset・ID予約・既定値補正は既存adapterへ委譲し、ファイルUIや履歴は持たない。
 
 - src/document/state.js: 初期化・resetに加え、Document／Block scopeの外観正規化を所有。旧Root外観の引継ぎ先は明示したblockEditing値で選び、編集sessionは参照しない。
 
