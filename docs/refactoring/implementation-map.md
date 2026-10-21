@@ -385,6 +385,8 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 - `InstanceSourceCommand`（`src/commands/instance_source_command.js`）: 参照元編集対象と候補、追加時投影検証、確定時の順序／legacy ID維持・削除保護・関連拘束と注記の整理。表示はcurrent、CanvasはincludesRef、取消はresetを利用する。
 
+InstanceSourceCommand.startForInstanceはProperties等からInstanceの参照元編集を開始する入口である。placementがfalsyなら従来のstartへ渡し、同一Objectの所属確認とlegacy source sessionを維持する。placementがtruthyの場合はinstance.sketchId→現在active Sketchの比較、構造編集guardの順に確認し、成功したときだけ注入されたGeometryInstanceCommand.startEdit(instance,"sources")へ元Objectを渡す。配置付きdraftに新たなmodel所属条件を追加せず、guard前に取消・Selection解除・session更新や履歴を行わない。元の戻り値、owner receiver、例外と途中状態をそのまま保持する。配置draftはGeometryInstanceCommand、従来source候補はInstanceSourceCommandが引き続き所有する。従来のstartは独立したAPIとして維持し、新入口が状態を複製しない。appは二つの既存ownerとguardを接続し、PropertiesControllerへ開始操作だけを渡す。
+
 - `GeometryInstanceCommand`（`src/commands/geometry_instance_command.js`）: Free／Mirror／Pattern作成の参照元候補・配置Instance、開始／確定／preview。Propertiesと変換編集はpending／isPlacing、各取消経路はclearPlacement／clearSources／resetを使う。
 
 - `InstanceTransformCommand`（`src/commands/instance_transform_command.js`）: Freeの共有元を固定した回転・反転、Blockの表示中心を保つ直交回転とロック変更。各経路のSolver・復元・履歴・通知を調整し、DOMを受け取らない。

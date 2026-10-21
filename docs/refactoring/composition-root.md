@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のInstance参照元編集開始単位
+
+参照元編集の配置有無判定・現在Sketch／guardと開始委譲を既存InstanceSourceCommandへ集約した。旧startの所属確認・sessionと配置commandのdraft・mode・取消／確定は維持し、新stateは持たない。app.jsは2,978→2,973行（5行減）。元app関数との48ケース比較が一致した。検証と次のProperties表示／actionのowner接続は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のProperties編集／AppearanceUI組立て単位
 
 PropertiesDisplay.createEditingで既存の編集command群と共用AppearanceUIを生成し、Checkpoint・Parameter安定化・選択と二つのscopeを明示して接続する。生成順・start・Paletteと状態ownerは維持した。対象の構築2→1、引数38→23、root依存30→22、app.jsは2,984→2,978行（6行減）。旧appとの実ブラウザ比較でbulk編集・Document既定値・PaletteのHTML／model／historyが一致した。検証と次の表示Controllerのowner接続は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

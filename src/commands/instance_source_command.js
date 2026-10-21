@@ -1,7 +1,7 @@
 /* Own candidate sources and commit validated changes to a derived instance. */
 (() => {
   "use strict";
-  function create({ currentScope, activeSketchId, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
+  function create({ currentScope, activeSketchId, placementCommand, guardSketchEdit, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
     clearSelection, canvasSelection, getMode, setMode, updateToolbar, updateUI, updatePropertiesUI,
     applicationText, setHint, draw, geometryRefForItem, isVisibleSketchElement, geometryRefsEqual,
     sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered, elementSketchId,
@@ -9,6 +9,11 @@
     constraintGraphNodes, guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry,
     clearSketchSolveState, recordHistory }) {
     let instanceSourceEdit = null;
+    function startForInstance(instance) {
+      if (!instance.placement) return startInstanceSourceEdit(instance);
+      if (instance.sketchId !== activeSketchId() || !guardSketchEdit(instance.sketchId, "structure")) return false;
+      return placementCommand.startEdit(instance, "sources");
+    }
     function startInstanceSourceEdit(instance) {
       const model = currentScope();
       if (!model.geometryInstances.includes(instance) || instance.sketchId !== activeSketchId()) return false;
@@ -115,7 +120,7 @@
       if (changed) { updatePropertiesUI(); draw(); }
     }
     function includesRef(ref) { return Boolean(instanceSourceEdit?.sources.some(source => geometryRefsEqual(source, ref))); }
-    return Object.freeze({ start: startInstanceSourceEdit, toggle: toggleInstanceSource, addSources, remove, finish: finishInstanceSourceEdit, reset, includesRef,
+    return Object.freeze({ start: startInstanceSourceEdit, startForInstance, toggle: toggleInstanceSource, addSources, remove, finish: finishInstanceSourceEdit, reset, includesRef,
       get instance() { return instanceSourceEdit?.instance || null; },
       get current() { return instanceSourceEdit ? { instance: instanceSourceEdit.instance, sources: [...instanceSourceEdit.sources] } : null; },
     });

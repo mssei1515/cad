@@ -414,7 +414,7 @@
   });
   const { start: startGeometryInstanceCommand } = geometryInstanceCommand;
   const instanceSourceCommand = window.InstanceSourceCommand.create({
-    currentScope: workspace.current, activeSketchId, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
+    currentScope: workspace.current, activeSketchId, placementCommand: geometryInstanceCommand, guardSketchEdit, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
     clearSelection, canvasSelection, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI, updatePropertiesUI,
     applicationText, setHint, draw, geometryRefForItem, isVisibleSketchElement, geometryRefsEqual,
     sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered, elementSketchId,
@@ -422,12 +422,7 @@
     constraintGraphNodes, guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry,
     clearSketchSolveState, recordHistory,
   });
-  const { start: startProjectionSourceEdit, finish: finishInstanceSourceEdit } = instanceSourceCommand;
-  function startInstanceSourceEdit(instance) {
-    if (!instance.placement) return startProjectionSourceEdit(instance);
-    if (instance.sketchId !== activeSketchId() || !guardSketchEdit(instance.sketchId, "structure")) return false;
-    return geometryInstanceCommand.startEdit(instance, "sources");
-  }
+  const { finish: finishInstanceSourceEdit } = instanceSourceCommand;
   const blockPlacementCommand = window.BlockPlacementCommand.create({
     isGeometryMode, canCreateInActiveSketch, blockDefinitionById, blockDefinitionScopeError,
     blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, snappedBlockRotation,
@@ -2059,7 +2054,7 @@
     changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw, setHint,
     setPlacementRotationLocked: blockPlacementCommand.setRotationLocked, setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
+    annotationCommand, startInstanceSourceEdit: instanceSourceCommand.startForInstance, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
     startSplineEdit: spline => splineEditing.activate(spline),
   });
 
