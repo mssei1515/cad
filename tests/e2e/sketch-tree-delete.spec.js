@@ -26,6 +26,56 @@ async function fixture(page, category, locked = false) {
   await page.locator(`.sketch-group-row[data-sketch-id="S1"][data-category="${category}"]`).click();
 }
 
+async function pointUnfixFixture(page, { inactive = false, locked = false } = {}) {
+  await openTestDocument(page);
+  const ids = await page.evaluate(() => window.__jot2dTest.resetForSidebarInspection());
+  const data = await state(page), owner = data.points.find(point => point.id === ids.fixedPoint).sketchId;
+  data.sketches.find(sketch => sketch.id === owner).locked = locked;
+  if (inactive && !data.sketches.some(sketch => sketch.id === 'S2')) data.sketches.push({ id: 'S2', name: 'Other', kind: 'sketch', parentSketchId: 'ROOT' });
+  data.activeSketchId = inactive ? 'S2' : owner;
+  expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'point-unfix.jot2d', { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
+  const row = page.locator(`.sketch-item[data-id="${owner}"]`);
+  if (await row.getAttribute('aria-expanded') !== 'true') await row.locator('.sketchExpandBtn').click();
+  const group = page.locator(`.sketch-group-row[data-sketch-id="${owner}"][data-category="constraint"]`);
+  if (await group.getAttribute('aria-expanded') !== 'true') await group.click();
+  return { ids, button: page.locator(`.sketch-object-row[data-fixed-point-id="${ids.fixedPoint}"] .removeFixedPointBtn`) };
+}
+
+test('Tree point unfix preserves drawing destination, one Undo step and reload for its active owner', async ({ page }) => {
+  const { ids, button } = await pointUnfixFixture(page);
+  const before = await state(page), history = await page.evaluate(() => window.__jot2dTest.historyState());
+  await button.click();
+  const after = await state(page);
+  expect(after.points.find(point => point.id === ids.fixedPoint).fixed).toBe(false);
+  expect(after.activeSketchId).toBe(before.activeSketchId);
+  expect(after.constraints).toHaveLength(before.constraints.length);
+  expect((await page.evaluate(() => window.__jot2dTest.historyState())).undoCount).toBe(history.undoCount + 1);
+  await expect(button).toHaveCount(0);
+  await page.keyboard.press('Control+z'); expect(await state(page)).toEqual(before);
+  await page.keyboard.press('Control+y'); expect(await state(page)).toEqual(after);
+  expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), after)).toMatchObject({ success: true });
+  expect((await state(page)).points.find(point => point.id === ids.fixedPoint).fixed).toBe(false);
+});
+
+test('Tree point unfix outside the drawing sketch preserves model and history and requests an explicit destination change', async ({ page }) => {
+  const { button } = await pointUnfixFixture(page, { inactive: true });
+  const before = await state(page), history = await page.evaluate(() => window.__jot2dTest.historyState());
+  await button.click();
+  expect(await state(page)).toEqual(before);
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(history);
+  await expect(button).toBeVisible();
+  await expect(page.locator('#hint')).toContainText('所属スケッチを作図先に指定してください');
+});
+
+test('Tree point unfix is disabled and rejects manually dispatched clicks for a locked owner', async ({ page }) => {
+  const { button } = await pointUnfixFixture(page, { inactive: true, locked: true });
+  const before = await state(page), history = await page.evaluate(() => window.__jot2dTest.historyState());
+  await expect(button).toBeDisabled();
+  await button.evaluate(element => element.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  expect(await state(page)).toEqual(before);
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(history);
+});
+
 for (const [category, field, buttonClass] of [['block', 'blockInstances', 'removeBlockBtn'], ['hatch', 'hatches', 'removeHatchBtn'], ['instance', 'geometryInstances', 'removeInstanceBtn']]) {
   test(`${category} tree delete preserves sources and drawing destination and supports Undo/Redo`, async ({ page }) => {
     await fixture(page, category);

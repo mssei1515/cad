@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のTree Point固定解除の編集owner単位
+
+FixedToggleCommandの既存operand commandへPoint固定flagの解除と既存求解への通知を集約した。同commandをTree生成前に構築し、Treeは同じunfixPoint APIを直接受け取る。guard・求解先の既定値・戻り値／例外と更新順を維持し、新state／command instanceは増やさない。app.jsは2,940→2,940行（0行差）。行数よりUI内のモデル直接更新の解消を優先した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のTree Controller／Context menu結線単位
 
 SketchTreeController.createWithContextMenuが既存Controller→CanvasContextMenuの生成と、Root／active／lockによる項目表示・名前変更／編集通知を所有する。同じControllerとmenuを返し、appの外部close入口への接続と明示startは維持した。構築2→1、引数36→32、異なるroot参照39→36、app.jsは2,953→2,940行（13行減）。旧appとの実ブラウザ比較でメニューを含む12状態のHTML・model・historyが一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

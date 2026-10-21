@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のTree Point固定解除の編集owner単位
+
+基準はdevelop 77c3f08。TreeのunfixPoint callbackにあった所属照会→constraint guard→Point.fixed=false→solveAndRefresh(label)を既存FixedToggleCommand.createOperandのunfixPointへ集約した。新しいcommand instance・state・global／contextは追加せず、同commandのguard／所属照会を共有し、求解通知だけを既存portとして加えた。Pointは同じObject、拒否時の無変更とundefined、既に解除済みの対象でも求解すること、一引数label・求解結果を返さないこと、lookup／guard例外の無変更と求解例外時の更新済みflagを維持する。新しいrollbackや履歴・対象Sketch指定を加えず、既定active Sketchの求解・解析／UI／履歴は既存SolveRefreshCommandに残す。
+
+operand commandの生成は入力依存が確立した後、Tree生成前へ移した。createOperand本体は関数構築とfreezeだけで、guard／scope／求解を実行しない。ASTで新位置より後のconst直接捕捉が0、最初の利用より前の宣言であることを確認した。Treeは同じraw unfixPoint関数を直接受け取り、後段commandを読む新しい遅延wrapperは残さない。既存toggleGeometryFixedOperandのhoisted接続とSelection commandの生成位置は維持する。
+
+app.jsは2,940→2,940行（0行差）、root未使用bindingは0。固定解除のUI引数内のroot binding参照は3→1で、UI内のPoint flag代入を撤去した。構文588ファイル・全単体1,792件・関連単体25件が成功（exit 0）。訂正後の関連E2E結果は次段に記載する。追加単体2件は現在所属／guard拒否と同一Point更新、求解label・引数数／receiver・戻り値破棄、既に解除済みの再求解と例外時の更新境界を確認する。E2Eへactive ownerでの固定解除・一回のUndo／Redo・保存再読込、非activeでの拒否と案内・モデル／履歴不変、lock時の手動click拒否の3ケースを追加した。既存テストの期待値や性能基準は変更していない。
+
+初回関連E2E252件は251成功・1失敗（4.3分、exit 1）。追加した非activeの固定解除ケースが許可を期待していたが、既存SketchContext.canEditSketchのconstraint操作は作図先限定であり、正式な[所属と編集可否契約](../../spec/contracts/所属と編集可否.md)も既存の固定図形の直接編集制限を維持する。旧77c3f08と現在appの実ブラウザ比較でも非activeの固定flag／モデル・履歴は変わらず、同じ拒否だった。製品コードを変更せず、新規ケースの前提を既存契約に沿う拒否・案内へ訂正した。初回ログはcad-point-unfix-related-initial.logとして保持する。旧版比較には非activeのモデル／履歴不変とactiveのflag解除の明示assertも加え、8状態のTree／Properties HTML・モデル・履歴が一致した（savedAtのみ除外）。診断は一時directoryのcad-point-unfix-equivalence.cjs／.log。訂正後の関連E2E252件が全成功（4.2分、exit 0）。unified-ui／phase0-characterization／sketch-edit／sketch-move／sketch-permissions／sketch-tree-delete／sketch-tree-visibility／sketch-projection／blocks／command-panel／view-visibility／adversarial-authoring-performanceを実行した。追加3ケース、既存固定／拘束・Block、Tree／Canvas操作、権限・移動、既存画面比較・保存再読込を確認した。性能全12件を含み、pan150ms（175ms未満）・空白矩形224ms（250ms未満）。初回結果を隠さず、初回E2E以降の製品コードや既存期待／性能基準を変えず、新規テストの契約上の前提を訂正した再検証として記録する。runner終了と専用server停止を確認済み。ログは一時directoryのcad-point-unfix-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、現行コードの全E2Eは未実行。c3a213cの全E2E584成功と前単位の関連249成功は過去の基準として保持する。開始時週枠使用30%／残量70%で停止条件未到達。次はTree View／Controllerの共有ownerと構築段階を確認する。Point操作の直接APIを維持し、View listener登録、表示scope／Controller scopeの違いと後段menuのstart、選択／hoverの所有を揃えられる機能境界を検討する。単純な関数移動や巨大なcallback集合で数百行へ到達したことにせず、mode・他の通常構築・test支援も含めて200〜500行の目標を維持する。
+
 ### 最新のTree Controller／Context menu結線単位
 
 基準はdevelop a11426a。既存SketchTreeController.createWithContextMenuへ、Controller→CanvasContextMenuの生成と相互callback、Root／active／lockからの編集／名前変更項目表示、メニュー確定の通知を集約した。旧Controllerの限定引数はそのまま既存createへ渡し、共有SketchContext／ApplicationSettingsとdocument／window・escapeHtml・Canvas menuのclose通知を接続する。自由に探索できるapp contextは追加しない。従来createは独立APIのまま維持する。
