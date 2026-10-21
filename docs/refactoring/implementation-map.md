@@ -516,6 +516,7 @@ CanvasInputBinding.createCommandRoutingは通常pointer controllerに共通comma
 - src/constraints/operands.js: 拘束対象の生成・参照target／subject変換・同一性判定。Sketch関係は注入した照会で都度解決し、選択・コマンド状態には依存しない。
 
 - src/ui/constraint_feedback.js: 求解案内・拘束状態ラベル・集計文面。状態を参照せず、呼出側が渡す結果と件数からmessage／kindまたは文字列を返す。
+- src/ui/application_feedback.js: Hint／logのDOM出力とHint計測、求解結果の表示接続。4依存から既存ConstraintFeedbackを一つ生成し、同じformatterを他のUIへ共有する。生成時は照会せず、要素・言語・profile状態と重複件数は出力時に取得する。原文保存／翻訳／error classの順と例外の部分更新、log不在の短絡、非bind workの結果を維持し、モデル・履歴や独自表示stateは持たない。
 
 - src/geometry/appearance_query.js: 有効外観の継承と可視性照会。描画と選択で共用し、キャッシュの期間管理はGeometryReadModelに残す。
 

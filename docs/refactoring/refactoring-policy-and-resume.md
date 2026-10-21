@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のHint／log表示owner単位
+
+基準はdevelop e5972ab。src/ui/application_feedback.jsへApplicationFeedbackを追加し、DOMのdocument・ApplicationSettings・InteractionProfiler・重複件数readerの4依存でHint／logのDOM出力、Hint計測とSolver結果の表示接続を所有する。既存ConstraintFeedbackを一つ生成し、同じ純粋なformatterをTree／Properties／拘束入力へも返す。文言・判定はConstraintFeedback、翻訳／再翻訳はApplicationSettings、計測はInteractionProfilerのまま。モデル・Solver・履歴や独自のHint／言語／error stateを持ち込まない。
+
+formatter生成をprofiler直後へ早めたが、生成時はDOM・言語・active・重複件数を読まず、後段のConstraintRedundancyは限定readerで遅延参照する。log要素は操作時に取得し、不在ならmessage変換を短絡する。HintはhintSourceのString代入→元messageの翻訳→textContent→error classとし、途中失敗の既反映値と例外を保持する。profile非activeは直接出力、activeは元の非bind workのui phaseと返却値を維持し、Solver結果表示自体はundefinedを返す。appのhoisted三入口は既存操作へ接続する。
+
+app.jsは2,853→2,837行（16行減）、root未使用bindingは0。構文590ファイル・全単体1,809件・関連単体12件が成功（exit 0）。追加4件は実ConstraintFeedbackを使い、生成時無照会、log要素の再取得と不在時無変換、Hintの順序と最新言語、raw profileと返却値、最新重複件数と渡された結果の無変更、翻訳／profile／DOM不在の例外・部分反映を確認した。index.html、構文一覧、単体一覧、unified-uiのscript順期待を同じ位置へ同期し、先行ConstraintFeedback→ApplicationFeedback→appを確認した。既存sourceの役割とロード方式は変えず、起動ごとのqueryも維持する。
+
+旧e5972abのappと現在module群の実ブラウザ比較では、Document／Block編集・Undo／Redo・取消／確定／再読込と日英切替の15状態でHint本文／原文／error class／log、model・履歴・Block editor・選択とボタン、test API204 key順が一致した（savedAtだけ除外）。診断は一時directoryのcad-application-feedback-equivalence.cjs／.log。関連E2E249件が全成功（4.2分、exit 0）。unified-ui／phase0-characterization／file-safety／blocks／command-panel／derived-patterns／sketch-permissions／sketch-projection／unified-annotations／parameter-dialog-controller／adversarial-authoring-performanceを実行した。script読込順・起動とfile URL、日英切替、求解／拘束／権限・Parameterの案内、Block／派生の操作・取消と履歴、既存画面・保存再読込を確認した。性能全12件を含みpan141ms（175ms未満）・空白矩形234ms（250ms未満）。E2E本体／期待値・性能基準は変えず、unified-uiは新script読込期待だけ同期した。runner終了と専用server停止を確認済み。ログは一時directoryのcad-application-feedback-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功は過去の基準として保持する。開始時週枠使用39%／残量61%で停止条件未到達。次はappに残るBlock編集／Geometry複製の採番・ID予約と既存GeometryIds／DocumentSequencesの境界を確認する。reserveBlockEditorSequences／reserveGeometryElementSequences／duplicateBlockElementIdの呼出し元と型分岐、元のscope・ID共有／予約時機を追い、重複する採番状態や新しいID規則を加えず既存ownerへ集められるか検討する。200〜500行、mode・test hooks・通常構築の全体目標は未完了。
+
 ### 最新のDocument準備と保存writer単位
 
 基準はdevelop 09ab703。DocumentApplication.createPreparationが6依存（Document固定参照・現在scope／Block session照会・SketchContext・ParameterNamespace・BlockCatalog）から既存BlockStateを構成し、appearance／blocks／prepareを公開する。準備はunits→Sketch→外観→Block→現在scopeと全定義の描画順→Parameterの既存順とし、scopeやBlock編集判定／draft IDを各段階で再取得する。読込後の個別正規化も同じAPIへ接続し、Workspaceと同期済み編集scopeの区間差を統一しない。
