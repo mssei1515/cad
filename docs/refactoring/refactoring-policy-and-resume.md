@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のTree Controller／Context menu結線単位
+
+基準はdevelop a11426a。既存SketchTreeController.createWithContextMenuへ、Controller→CanvasContextMenuの生成と相互callback、Root／active／lockからの編集／名前変更項目表示、メニュー確定の通知を集約した。旧Controllerの限定引数はそのまま既存createへ渡し、共有SketchContext／ApplicationSettingsとdocument／window・escapeHtml・Canvas menuのclose通知を接続する。自由に探索できるapp contextは追加しない。従来createは独立APIのまま維持する。
+
+生成時にはSketch用DOM二参照を元の順で取得するだけで、scope／active／lock／言語の照会やlistener登録を行わない。Viewは元の時機で生成し、遅延callbackで同じControllerを参照する。メニュー表示時の行選択→Canvas menuのclose→RootならSketch menuをclose、他は項目表示の順を維持する。名前変更は同じraw関数、編集は同じController.editSketchへ、既存menuが閉じてから通知する。移動中・子rowの抑止、元の例外・途中状態、最新言語／lockとactiveを維持する。appには他の操作から閉じるためのsketchContextController aliasと、その接続後の明示startを残す。menu session／選択・hover stateは元ownerのまま、新file・state・contextを持たない。
+
+対象構築は2→1、引数合計36→32、引数内の異なるroot binding参照39→36。app.jsは2,953→2,940行（13行減）、root未使用bindingは0。構文588ファイル・全単体1,790件・関連単体36件が成功（exit 0）。追加2件は実Controller／CanvasContextMenuを使い、生成時の無照会／無startとDOM取得順、listenerの重複防止／dispose・再start、Root／active／lockの項目と選択、最新言語、閉じてからのraw rename／編集、移動中／子row短絡と例外伝播を確認する。旧a11426aのappと現在module群の実ブラウザ比較で、前単位の7状態にlocked／Root／別Sketch menu・編集後／blur後の5状態を加えた12状態が一致した。Sketch menuのHTML／hidden／aria-label、展開TreeとProperties HTML・model・historyを比較し、savedAtだけ除外した。診断は一時directoryのcad-tree-menu-equivalence.cjs／.log。関連E2E249件が全成功（4.2分、exit 0）。unified-ui／phase0-characterization／sketch-edit／sketch-move／sketch-permissions／sketch-tree-delete／sketch-tree-visibility／sketch-projection／blocks／command-panel／view-visibility／adversarial-authoring-performanceを実行した。Sketch menuを直接使う既存三fileを含め、Root／active／lock、別Sketchの選択・明示編集、移動・削除／可視性、Canvas menuとcommand取消、Block編集中のUI、履歴／保存再読込と既存画面を確認した。性能全12件を含み、pan126ms（175ms未満）・空白矩形219ms（250ms未満）。基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-tree-menu-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、現行コードの全E2Eは未実行。c3a213cの全E2E584成功と前単位の関連286成功は過去の基準として保持する。開始時週枠使用29%／残量71%で停止条件未到達。次はTreeの固定解除callbackと既存FixedToggleCommandの責務を確認する。単なる1行wrapperを別fileへ置くのでなく、guard・モデル更新・求解／履歴と既存の固定切替の違いを先に確認する。View／Controllerの組立て、mode、他の通常構築・test支援も残り、200〜500行の全体目標は未完了。
+
 ### 最新のTree行分類／照会owner共有単位
 
 基準はdevelop d7ff210。SketchTreeObjectsへTree category→可視性照会対象kind／元Objectの分類を集約した。行表示時だけisHiddenへ同じ対象arrayを渡し、Point／Line／Circle／Arc／Spline→geometry、instance→geometryInstance、dimension行を既存rowでconstraintへ正規化して元の拘束を照会する。従来のobjectVisibleを優先し、新たにisHiddenを指定しない旧APIの既定表示も維持する。後段生成のPropertySelectionはrootの同じ遅延照会入口から読むため、create時に未初期化ownerへアクセスしない。

@@ -353,7 +353,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `SketchTreeView`（`src/ui/sketch_tree_view.js`）: 階層・カテゴリDOM、開閉Map、幅・リサイズセッションを所有。再読込はcapture／restore、初期化はresetへ接続する。図形行の情報生成・編集／選択・hoverの操作は明示した依存先へ委譲する。
 
 - `SketchTreeObjects`（`src/ui/sketch_tree_objects.js`）: Sketch別索引、図形／拘束行、拘束状態集計を生成。現在スコープと照会関数を受け取り、DOM・編集状態を所有しない。GeometryReadServices・SketchContext・ConstraintFeedback・ApplicationSettingsを共有でき、個別引数はundefinedのfieldだけ補完する。Tree categoryから可視性対象kind／元Objectへの分類も同moduleが所有し、行表示時だけisHiddenへ依頼する。従来objectVisibleの明示指定を優先する。後段のPropertySelectionを生成時に読まず、表示用scopeと編集scope、言語の最新値・元の関数と例外を維持する。
-- `SketchTreeController`（`src/ui/sketch_tree_controller.js`）: ツリーのクリックを展開・選択・Sketch変更・削除・固定解除へ振り分ける。Viewと既存の編集APIへ接続する。
+- `SketchTreeController`（`src/ui/sketch_tree_controller.js`）: ツリーのクリックを展開・選択・Sketch変更・削除・固定解除へ振り分ける。Viewと既存の編集APIへ接続する。createWithContextMenuは既存ControllerとCanvasContextMenuの生成・Root／active／lockによる項目表示・名前変更／編集通知を所有する。既存Controller引数と共有SketchContext／ApplicationSettings等を受け、同じcontroller／menuを返す。生成時は二つのDOM参照だけを取得し、listener登録やscope照会を行わない。appの外部close用aliasへの接続と明示startは維持する。選択・移動guard、menu session、例外と閉じてからの操作順を各既存ownerへ委譲し、旧createも残す。
 
 - `SelectionHighlight`（`src/editing/selection_highlight.js`）: サイドバーhover状態、投影図形の表示上の同一性、選択図形／拘束の参照集合を所有・照会する。Canvas選択と投影／拘束照会、寸法hover接続だけを受け取り、DOMに依存しない。
 - ツリー行のclass更新は`SketchTreeView.refreshSelection`へ、行データの対象解決は`SketchTreeObjects.resolveSelectionEntry`へ統合した。呼出し元もDOM生成も存在しない旧一覧向けイベント登録・選択処理は削除した。
