@@ -6,6 +6,11 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### Offset／Filletの共有依存接続（2026-10-21）
+
+authoringTools.createOffset／createFilletが共有Geometry・ID・Selection／preview・snapと通知を接続する。Offset独自の編集scope、Filletの実checkpoint／stabilizeと遅延Lifecycle準備、各featureの計算／取消・履歴を維持する。構築引数56→28、root参照41→25。app.jsは2,805→2,803行（2行減）。旧appとの13状態でmodel・mode／pending・履歴・選択・HintとAPI204 key順が一致。検証と次のmode所有監査は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
+
 ### 最新の作図owner／Lifecycle接続単位
 
 authoringTools.createLifecycleが同じcommand／draft・snap／preview／transientと通知を共有し、後段9依存で既存DrawOperationLifecycleを生成する。処理本体・状態の所有、終了／取消／Sketch限定reset／Document破棄の差、mode・通知／例外順を維持した。引数28→9、root参照30→12。app.jsは2,810→2,805行（5行減）。旧appとの48状態で作図・Escape取消／終了・Document置換のmodel／mode／履歴・選択とAPI204 key順が一致した。検証と次の単位は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

@@ -695,13 +695,12 @@
   const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
   const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, rectangle: rectangleCommand, circular: circularCommands, slot: slotCommand } = basicDrawingTools;
-  const offsetFeature = window.OffsetFeature.create({
-    currentScope: () => editingScopeBinding.current, geometry: geometryCreation, ids: geometryIds, placement: dimensionPlacement, sourceSelection: offsetSelection,
-    selection: canvasSelection, pending: pendingCommandSession, preview: drawingPreview, valueInput: dimensionInputController,
-    viewport, ctx, withCanvasState, drawDimension, readMode: () => mode, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
-    commitNewConstraint, offsetChainErrorText, applicationText, cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection,
+  const offsetFeature = authoringTools.createOffset({
+    currentScope: () => editingScopeBinding.current, placement: dimensionPlacement, sourceSelection: offsetSelection,
+    pending: pendingCommandSession, valueInput: dimensionInputController, viewport, ctx, withCanvasState, drawDimension, readMode: () => mode,
+    commitNewConstraint, offsetChainErrorText,
     prepareStart: () => drawOperationLifecycle.prepare("offset"),
-    setHint, updateUI, draw, updateToolbar, updateGeometrySelectionUI, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
+    updateGeometrySelectionUI, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, createGeometry: createOffsetGeometry, chainDraft: offsetChainDraft } = offsetFeature;
   const { offsetDistanceFromPointer } = offsetFeature.plans;
@@ -734,15 +733,14 @@
   const solveRefreshCommand = window.SolveRefreshCommand.create({
     activeSketchId, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
   });
-  const filletCommand = window.FilletFeature.create({
-    geometry: geometryCreation, minLineLength: MIN_LINE_LENGTH, defaultDimensionForTarget,
-    syncLineOrientationHints: () => solver.syncLineOrientationHints?.(), pushModelConstraint,
-    pending: pendingCommandSession, selection: canvasSelection, readPointer: () => lastPointerWorld,
-    prepareStart: () => drawOperationLifecycle.prepare("fillet"), clearSnap, updateToolbar, guardSketchProjectionShapeEdit,
-    valueInput: dimensionInputController, checkpoint: editingCheckpoint, clearSelection,
+  const filletCommand = authoringTools.createFillet({
+    defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
+    pending: pendingCommandSession, readPointer: () => lastPointerWorld,
+    prepareStart: () => drawOperationLifecycle.prepare("fillet"), guardSketchProjectionShapeEdit,
+    valueInput: dimensionInputController, checkpoint: editingCheckpoint,
     stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
-    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand,
+    updateGeometrySelectionUI,
   });
   const { update: updateFilletRadiusPlacement, submit: submitFilletRadiusPlacement, click: handleFilletClick } = filletCommand;
   const { loading: documentLoading, geometryInstances: geometryInstancePersistence } = window.DocumentLoading.createWithCodecs({

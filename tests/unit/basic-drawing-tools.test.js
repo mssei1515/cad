@@ -150,7 +150,7 @@ test('Centerline start refuses a disallowed drawing target after existing comman
 
 function authoringFixture() {
  const created={},events=[],state={scale:2,snapped:{x:3,y:4},snap:{id:'snap'},selected:null,mode:'select'};
- const names=['DrawingSnap','SplineDraft','SplineCommand','SnapConstraints','LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand','CenterlineGeometry','CenterlineConstruction','CenterlineCommand'];
+ const names=['DrawingSnap','SplineDraft','SplineCommand','SnapConstraints','LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand','CenterlineGeometry','CenterlineConstruction','CenterlineCommand','OffsetFeature','FilletFeature'];
  const sandbox={window:{}};
  for(const name of names) sandbox.window[name]={create(ports){
   events.push(name);const owner={name,active:null,clear:()=>{}};
@@ -234,4 +234,31 @@ test('authoring Lifecycle retains Document discard boundaries and stops at a fai
  f.events.length=0;f.state.mode='slot';const marker=new Error('circle reset failed');f.created.CircularCommands.owner.resetCircle=()=>{throw marker;};
  assert.throws(()=>f.lifecycle.prepareConstraintStart(),error=>error===marker);
  assert.equal(f.state.mode,'select');assert.deepEqual(f.events,['cancelPending','centerline','SlotCommand.reset','mode','LineCommand.reset','RectangleCommand.reset','fillet']);
+});
+
+test('authoring Offset shares capabilities while retaining a distinct live scope and delayed Lifecycle preparation',()=>{
+ const f=authoringFixture();f.events.length=0;let current={id:'offset-scope'},lifecycle=null;
+ const never=()=>{throw Error('no eager operation');};
+ const options={currentScope:()=>current,placement:{},sourceSelection:{},pending:{},valueInput:{},viewport:{},ctx:{},withCanvasState:never,drawDimension:never,
+  readMode:never,commitNewConstraint:never,offsetChainErrorText:never,prepareStart:()=>lifecycle.prepare('offset'),updateGeometrySelectionUI:never,invalidateAnalysis:never};
+ const result=f.feature.createOffset(options),child=f.created.OffsetFeature;
+ assert.equal(result,child.owner);assert.deepEqual(f.events,['OffsetFeature']);
+ for(const key of Object.keys(options))assert.equal(child.ports[key],options[key],key);
+ for(const key of ['geometry','ids','selection','preview','minLineLength','minArcLength','applicationText','cancelConstraintTargetCommand','cancelPendingCommand','clearSelection','setHint','updateUI','draw','updateToolbar'])assert.equal(child.ports[key],f.ports[key],key);
+ assert.equal(child.ports.clearSnap,f.feature.snap.clear);assert.notEqual(child.ports.currentScope,f.ports.currentScope);
+ current={id:'new-offset-scope'};assert.equal(child.ports.currentScope(),current);
+ lifecycle={prepare(mode){assert.equal(this,lifecycle);f.events.push(mode);}};child.ports.prepareStart();assert.deepEqual(f.events,['OffsetFeature','offset']);
+});
+
+test('authoring Fillet retains its own checkpoint and raw stabilize, pointer and failure callbacks',()=>{
+ const f=authoringFixture();f.events.length=0;const marker=new Error('stabilization failed'),checkpoint={captureGeometry:()=>{},restoreGeometry:()=>{}};let pointer={x:1,y:2},lifecycle=null;
+ const options={defaultDimensionForTarget:()=>{},syncLineOrientationHints:()=>{},pending:{},readPointer:()=>pointer,prepareStart:()=>lifecycle.prepare('fillet'),
+  guardSketchProjectionShapeEdit:()=>{},valueInput:{},checkpoint,stabilize:()=>{throw marker;},acceptError:0.0125,invalidateAnalysis:()=>{},refreshConstraintAnalysis:()=>{},updateGeometrySelectionUI:()=>{}};
+ const result=f.feature.createFillet(options),child=f.created.FilletFeature;assert.equal(result,child.owner);assert.deepEqual(f.events,['FilletFeature']);
+ for(const key of Object.keys(options))assert.equal(child.ports[key],options[key],key);
+ for(const key of ['geometry','minLineLength','pushModelConstraint','selection','updateToolbar','clearSelection','applicationText','setHint','updateUI','draw','recordHistory','cancelConstraintTargetCommand'])assert.equal(child.ports[key],f.ports[key],key);
+ assert.equal(child.ports.clearSnap,f.feature.snap.clear);assert.notEqual(child.ports.checkpoint,f.ports.checkpoint);
+ pointer={x:3,y:4};assert.equal(child.ports.readPointer(),pointer);
+ lifecycle={prepare(mode){assert.equal(this,lifecycle);f.events.push(mode);}};child.ports.prepareStart();
+ assert.throws(()=>child.ports.stabilize(),error=>error===marker);assert.deepEqual(f.events,['FilletFeature','fillet']);
 });

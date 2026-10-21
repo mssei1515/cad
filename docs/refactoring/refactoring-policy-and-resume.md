@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のOffset／Fillet共有capability接続単位
+
+基準はdevelop d9d04e7。既存BasicDrawingTools.createAuthoringのcreateOffset／createFilletへ、同じGeometry・ID・Selection／preview・snap解除・通知を共有する組立てを集約した。Offsetの同期済み編集scope、Filletの実EditingCheckpoint・pointer reader・stabilize、後段Lifecycle.prepareは個別依存のまま保持する。元の生成位置と実featureを維持し、数値処理・求解・取消／復元・履歴の所有者を変更しない。新file・script順変更、新たな操作state／scopeはない。
+
+app.jsは2,805→2,803行（2行減）。対象構築引数56→28（Offset30→15、Fillet26→13）、異なるroot binding参照41→25、root未使用bindingは0。構文590ファイル・全単体1,819件・関連単体22件が成功（exit 0）。追加2件で共有参照、Offsetの独立したlive scope、Filletの実checkpoint、生成時無操作、遅延Lifecycleとpointerの最新値、元の例外伝播を確認した。
+
+旧d9d04e7のappと現在module群を実ブラウザで比較し、Offsetの開始／入力／完成／undo／redo／取消とFilletの初選択／半径／完成／undo／redo／再読込／取消の13状態でmodel・mode／pending・履歴・選択・Hintとtest API204 key順が一致した（savedAtのみ除外）。実際の生成件数も確認した。診断は一時directoryのcad-offset-fillet-authoring-equivalence.cjs／.log。関連E2E270件が全成功（5.3分、exit 0）。unified-ui／phase0-characterization／blocks／free-instance／derived-patterns／sketch-permissions／sketch-projection／centerline／spline／command-panel／hatching／adversarial-authoring-performance／adversarial-drag-fixtureを実行した。Offset／Filletの作図・取消・寸法編集、既存図形・Block／派生／投影と権限、Undo／Redo・保存再読込を確認した。性能全12件を含みpan141ms（175ms未満）、空白矩形216ms（250ms未満）。既存期待値・性能基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-offset-fillet-authoring-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功は過去の基準と区別する。週枠使用44%／残量56%で停止条件未到達。次はmodeの所有とDrawOperationLifecycleの開始・終了／取消・resetの境界を監査する。早期に必要なmodeと後段commandの初期化順を確認し、状態と実際の遷移処理を同じownerへ集められるか検討する。get／set容器だけへの移動、巨大app context、単純な別rootへの移動は採らない。200〜500行、mode・test hooks・他の通常構築の全体目標は未完了。
+
+
 ### 最新の作図owner／Lifecycle接続単位
 
 基準はdevelop ce47479。authoringTools.createLifecycleが、既に生成したprimitive command／Spline draft・snap／preview／projection・transientと共通通知を、既存DrawOperationLifecycleへ接続する。後段の9依存（開始guard・Instance／参照元編集・Centerline／Fillet／Offset／Hatch・mode reader・trim hover解除）だけをappから渡す。親のresetEditing callbackと後段Hatchは操作時に呼び、実ownerのreceiverを維持する。select modeは同じ共有setModeを使い、新たなmode／draft／Lifecycle stateや可変bind容器を作らない。
