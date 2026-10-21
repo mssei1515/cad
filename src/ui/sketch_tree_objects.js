@@ -1,15 +1,27 @@
 /* Present sketch-owned objects and constraint summaries without owning UI or edit state. */
 (() => {
   "use strict";
-  function create({ sidebarGeometryItem, currentScope, getLanguage, ensureAnalysis, types,
-    isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
-    constraintStatusOf, blockProjectionBundle, applicationText, escapeHtml, formatDisplayNumber,
+  function visibilityQuery(isHidden) {
+    return (category, entry) => !isHidden([{
+      kind: category === "constraint" ? "constraint" : ["point", "line", "circle", "arc", "spline"].includes(category) ? "geometry"
+        : category === "instance" ? "geometryInstance" : category,
+      item: category === "constraint" ? entry.constraint : entry,
+    }]);
+  }
+  function create({ readServices, sketchContext, applicationSettings, constraintFeedback,
+    sidebarGeometryItem = readServices?.reads?.scopeGeometryItem, currentScope,
+    getLanguage = applicationSettings && (() => applicationSettings.language), ensureAnalysis, types,
+    isExplicitPoint, isPointUsedByLine, elementSketchId = sketchContext?.elementSketchId, constraintSketchId = sketchContext?.constraintSketchId,
+    constraintStatusOf, blockProjectionBundle = readServices?.projections?.blockProjectionBundle,
+    applicationText = applicationSettings?.applicationText, escapeHtml, formatDisplayNumber,
     toolbarSvgMarkup, constraintToolbarIcon, sketchTreeGutter, isSketchProjectedGeometry,
-    findLineFixedConstraint, blockDefinitionById, geometryInstanceTypeLabel, geometryInstanceBundle,
+    findLineFixedConstraint, blockDefinitionById = readServices?.catalog?.blockDefinitionById, geometryInstanceTypeLabel,
+    geometryInstanceBundle = readServices?.reads?.geometryInstanceBundle,
     resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
-    isDimensionConstraint = () => false, localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
+    isDimensionConstraint = () => false, localizedConstraintName = constraintFeedback?.localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
     constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected, readCanvasHover, readSidebarHover,
-    constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements, activeSketchId, objectVisible = () => true }) {
+    constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements, activeSketchId = sketchContext?.activeSketchId,
+    isHidden, objectVisible = isHidden === undefined ? () => true : visibilityQuery(isHidden) }) {
     const { ParallelLinesCenterlineConstraint, PointPairCenterlineConstraint, SketchProjectionConstraint } = types;
     function sketchTreeObjectHovered(category, entry) {
       if (category === "hatch") return readCanvasHover().hatch === entry;

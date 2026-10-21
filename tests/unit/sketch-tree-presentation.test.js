@@ -9,11 +9,11 @@ vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/selec
 for (const file of ['sketch_tree_objects', 'sketch_tree_controller']) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui', `${file}.js`), 'utf8'), sandbox);
 }
-function objectFixture() {
+function objectFixture({ sharedOwners = false, ...overrides } = {}) {
   const state = { canvasHover: {}, sidebarHover: null }, reads = [];
   const model = { sketches: [{ id: 'S1' }, { id: 'S2' }], points: [], lines: [], circles: [], arcs: [], splines: [], hatches: [], referenceImages: [], blockInstances: [], geometryInstances: [], constraints: [], annotations: [] };
   const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-  const objects = sandbox.window.SketchTreeObjects.create({ currentScope: () => model, getLanguage: () => 'en', ensureAnalysis() {}, types: {},
+  const ports = { currentScope: () => model, getLanguage: () => 'en', ensureAnalysis() {}, types: {},
     isExplicitPoint: item => item.explicit, isPointUsedByLine: item => item.used, elementSketchId: item => item.sketchId,
     constraintSketchId: item => item.sketchId, constraintStatusOf: item => item.status,
     blockProjectionBundle: instance => instance.bundle, applicationText: (_ja, en) => en, escapeHtml: escape,
@@ -21,9 +21,77 @@ function objectFixture() {
     toolbarSvgMarkup: () => '<svg></svg>', sketchTreeGutter: () => '',
     sketchTreeObjectSelected: () => true,
     readCanvasHover: () => { reads.push('canvas'); return state.canvasHover; },
-    readSidebarHover: () => { reads.push('sidebar'); return state.sidebarHover; } });
-  return { model, objects, state, reads };
+    readSidebarHover: () => { reads.push('sidebar'); return state.sidebarHover; } };
+  Object.assign(ports, overrides);
+  const settings = { language: 'en', applicationText: ports.applicationText };
+  if (sharedOwners) {
+    ports.readServices = { reads: { scopeGeometryItem: ports.sidebarGeometryItem, geometryInstanceBundle: ports.geometryInstanceBundle },
+      projections: { blockProjectionBundle: ports.blockProjectionBundle }, catalog: { blockDefinitionById: ports.blockDefinitionById } };
+    ports.sketchContext = { elementSketchId: ports.elementSketchId, constraintSketchId: ports.constraintSketchId, activeSketchId: ports.activeSketchId };
+    ports.applicationSettings = settings; ports.constraintFeedback = { localizedConstraintName: ports.localizedConstraintName };
+    for (const key of ['sidebarGeometryItem','geometryInstanceBundle','blockProjectionBundle','blockDefinitionById',
+      'elementSketchId','constraintSketchId','activeSketchId','applicationText','getLanguage','localizedConstraintName']) delete ports[key];
+  }
+  const objects = sandbox.window.SketchTreeObjects.create(ports);
+  return { model, objects, state, reads, settings };
 }
+
+test('Tree visibility classification preserves row markup, lazy queries, original targets and current locks', () => {
+  const results = [];
+  for (const sharedOwners of [false, true]) {
+    const calls = [], targetsByEntry = new Map(); let hidden = false, ready = false;
+    const isHidden = targets => { assert.equal(ready, true); calls.push(targets); return hidden; };
+    const classify = (_category, entry) => !isHidden([targetsByEntry.get(entry)]);
+    class Constraint {}
+    const f = objectFixture({ sharedOwners, ...(sharedOwners ? { isHidden } : { objectVisible: classify }),
+      types: { SketchProjectionConstraint: Constraint, PointPairCenterlineConstraint: Constraint, ParallelLinesCenterlineConstraint: Constraint },
+      formatDisplayNumber: String, isSketchProjectedGeometry: () => false, findLineFixedConstraint: () => null,
+      blockDefinitionById: () => ({ name: 'block' }), geometryInstanceTypeLabel: String, geometryInstanceBundle: () => ({ valid: true }),
+      resolvedHatchBoundary: () => ({ ok: true }), hatchPatternTypeLabel: String, hatchAppearanceForDisplay: () => ({ patternType: 'lines' }),
+      localizedConstraintName: String, isReadOnlyDimension: () => false, constraintIsRedundant: () => false,
+      referenceConstraintErrorInfo: () => null, constraintToolbarIcon: () => '',
+      constraintDirectlyReferencesCanvasSelection: () => false, selectedConstraintReferenceElements: () => [] });
+    assert.deepEqual(calls, []); ready = true;
+    const point = { id: 'P1', x: 1, y: 2 }, center = { id: 'PC' };
+    const entries = [point, { id: 'L1', p1: point, p2: point, length: () => 2 },
+      { id: 'C1', center, radius: () => 3 }, { id: 'A1', center, radius: () => 3 },
+      { id: 'SP1', fitPoints: [point] }, { id: 'H1' }, { id: 'B1', definitionId: 'BD1' },
+      { id: 'GI1', type: 'pattern' }, { constraint: { name: 'distance', dimension: {} }, modelIndex: 0 }];
+    const categories = ['point','line','circle','arc','spline','hatch','block','instance','dimension'];
+    const kinds = ['geometry','geometry','geometry','geometry','geometry','hatch','block','geometryInstance','constraint'];
+    entries.forEach((entry, index) => targetsByEntry.set(entry, { kind: kinds[index], item: index === 8 ? entry.constraint : entry }));
+    const html = [];
+    for (const [index, category] of categories.entries()) {
+      const entry = entries[index], before = JSON.stringify(entry); hidden = false;
+      html.push(f.objects.row(category, entry, [], 'S1')); assert.match(html.at(-1), /aria-pressed="true"/);
+      assert.equal(calls.at(-1)[0].item, targetsByEntry.get(entry).item);
+      assert.equal(calls.at(-1)[0].kind, targetsByEntry.get(entry).kind);
+      hidden = true; html.push(f.objects.row(category, entry, [], 'S1')); assert.match(html.at(-1), /aria-pressed="false"/);
+      assert.equal(JSON.stringify(entry), before);
+    }
+    f.model.sketches[0].locked = true; html.push(f.objects.row('point', point, [], 'S1')); assert.match(html.at(-1), /<button disabled /);
+    results.push(html);
+    if (sharedOwners) { f.settings.language = 'ja'; assert.match(f.objects.summary('S1', { point: [], line: [], circle: [], arc: [], spline: [] }, []), /完全拘束/); }
+  }
+  assert.deepEqual(results[0], results[1]);
+});
+
+test('shared readers retain raw query calls and explicit visibility and language overrides take precedence', () => {
+  const item = { id: 'L1' }, calls = [];
+  const f = objectFixture({ sharedOwners: true, sidebarGeometryItem: function(category, id) {
+    'use strict'; assert.equal(this, undefined); calls.push([category, id]); return item;
+  } });
+  assert.deepEqual(calls, []);
+  assert.equal(f.objects.resolveSelectionEntry({ objectKind: 'line', id: 'L1' }), item);
+  assert.deepEqual(calls, [['line', 'L1']]);
+  const marker = new Error('visibility failed');
+  const overridden = objectFixture({ applicationSettings: { language: 'ja', applicationText: () => { throw marker; } },
+    isHidden: () => { throw marker; }, objectVisible: () => false, formatDisplayNumber: String, isSketchProjectedGeometry: () => false });
+  assert.match(overridden.objects.row('point', { id: 'P1', x: 1, y: 2 }, [], 'S1'), /aria-pressed="false"/);
+  assert.match(overridden.objects.summary('S1', { point: [], line: [], circle: [], arc: [], spline: [] }, []), /Fully constrained/);
+  const failing = objectFixture({ isHidden: () => { throw marker; }, formatDisplayNumber: String, isSketchProjectedGeometry: () => false });
+  assert.throws(() => failing.objects.row('point', { id: 'P1', x: 1, y: 2 }, [], 'S1'), error => error === marker);
+});
 
 test('Tree hover reads only the current Canvas source for attachments and instances and keeps object identity', () => {
  const f = objectFixture(); assert.deepEqual(f.reads, []);

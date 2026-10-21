@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のTree行分類／照会owner共有単位
+
+基準はdevelop d7ff210。SketchTreeObjectsへTree category→可視性照会対象kind／元Objectの分類を集約した。行表示時だけisHiddenへ同じ対象arrayを渡し、Point／Line／Circle／Arc／Spline→geometry、instance→geometryInstance、dimension行を既存rowでconstraintへ正規化して元の拘束を照会する。従来のobjectVisibleを優先し、新たにisHiddenを指定しない旧APIの既定表示も維持する。後段生成のPropertySelectionはrootの同じ遅延照会入口から読むため、create時に未初期化ownerへアクセスしない。
+
+GeometryReadServicesのscope図形検索・Instance bundle・Block投影・定義照会、SketchContextの所属／active、ConstraintFeedbackの拘束名、ApplicationSettingsの翻訳／現在言語を共有した。個別引数はundefinedだけ補完し、同じ関数のreceiverをbindし直さず、設定言語は表示時の最新値を読む。dimensionPresentationScopeは明示readerのままとし、Workspace／editingScopeBindingへ置き換えない。新file・state・context・可視性編集は追加していない。
+
+app.jsは2,957→2,953行（4行減）、対象構築の引数38→32、引数内の異なるroot binding参照36→30、root未使用bindingは0。構文588ファイル・全単体1,788件・関連単体26件が成功（exit 0）。追加2件は9種類の可視性行のmarkup・元Objectと対象kind・無変更、最新hidden／lockと設定言語、生成時の無照会、raw readerの引数／receiver、明示objectVisible／翻訳／言語の優先と例外伝播を確認する。旧d7ff210のappと現在module群を使う実ブラウザ比較でも初期／Sidebar／複数選択／Block／寸法／非表示／lockの7状態で、展開TreeとProperties HTML・model・historyが一致した（savedAtだけ除外）。診断は一時directoryのcad-tree-owners-equivalence.cjs／.log。関連E2E286件が全成功（4.7分、exit 0）。unified-ui／phase0-characterization／sketch-tree-visibility／sketch-tree-delete／sketch-permissions／sketch-edit／sketch-move／sketch-projection／blocks／derived-patterns／derived-selection-copy／hatching／view-visibility／adversarial-authoring-performanceを実行した。9種類のTree可視性・削除、他Sketchの選択／lock・移動、Block編集中scopeと投影・派生、既存画面比較、履歴／保存再読込を確認した。性能全12件を含み、pan158ms（175ms未満）・空白矩形216ms（250ms未満）。基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-tree-owners-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、現行コードの全E2Eは未実行。c3a213cの全E2E584成功と、直前のdrag支援単位の関連181成功は過去の基準として保持する。開始時週枠使用28%／残量72%で停止条件未到達。次はTree ControllerとContext menuの結線・固定解除操作の既存ownerを確認する。View生成時のlistener登録、後段Controller／menuの遅延接続、選択とhover・guardを維持し、大きなcallback集合を別fileへ移すだけの案は採用しない。mode・他の通常構築・test支援の整理も残り、200〜500行の目標は未完了。
+
 ### 最新のdrag実行テスト支援組立て単位
 
 基準はdevelop f6caae7。Propertiesに残るBlock操作は既存commandの直接接続であり、さらに単なるwrapperへ包む分離は見送った。Geometry／Point dragの実行テスト入口は同じGeometryDragFeatureのbuild／prepare／preview／finishとSolverを重複して接続していたため、既存GeometryDragTestDriver.createExecutionSupportへ組立てを集約した。同じfeatureとSolver、現在scope・正規化・誤差計算・時計・拘束観測の九つを明示して受け、Geometry→Pointの順に生成する。featureの同じ関数を渡し、誤差計算は元のSolver receiverで呼ぶ。生成時のscope／Solver／drag／時計読取りはない。
