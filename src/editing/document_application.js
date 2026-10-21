@@ -39,5 +39,28 @@
     }
     return Object.freeze({ load, get blockConstraintRepairMessage() { return lastLoadBlockConstraintRepairMessage; } });
   }
-  window.DocumentApplication = Object.freeze({ create });
+  function createPreparation({ document, currentScope, readBlockEditor, sketchContext, parameterNamespace, blockCatalog }) {
+    const { ensureSketchState, isDrawableSketch, firstDrawableSketchId } = sketchContext;
+    const { ensureParameterNamespace } = parameterNamespace;
+    const { ensureDrawingOrderState } = window.DrawingOrder;
+    const blockState = window.BlockState.create({
+      blockDefinitionDrawableSketchIds: blockCatalog.blockDefinitionDrawableSketchIds,
+      blockDefinitionGeometrySketchIds: blockCatalog.blockDefinitionGeometrySketchIds, isDrawableSketch, firstDrawableSketchId,
+    });
+    function appearance() {
+      window.DocumentState.normalizeAppearanceState(document, currentScope(), { blockEditing: Boolean(readBlockEditor()) });
+    }
+    function blocks() { blockState.normalize(document, currentScope(), readBlockEditor()?.draft?.id || null); }
+    function prepare() {
+      document.units = { ...window.DocumentState.DEFAULT_DOCUMENT_UNITS };
+      ensureSketchState();
+      appearance();
+      blocks();
+      ensureDrawingOrderState(currentScope());
+      for (const definition of document.blockDefinitions) ensureDrawingOrderState(definition);
+      ensureParameterNamespace(currentScope());
+    }
+    return Object.freeze({ appearance, blocks, prepare });
+  }
+  window.DocumentApplication = Object.freeze({ create, createPreparation });
 })();

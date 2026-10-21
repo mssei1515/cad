@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のDocument準備と保存writer単位
+
+基準はdevelop 09ab703。DocumentApplication.createPreparationが6依存（Document固定参照・現在scope／Block session照会・SketchContext・ParameterNamespace・BlockCatalog）から既存BlockStateを構成し、appearance／blocks／prepareを公開する。準備はunits→Sketch→外観→Block→現在scopeと全定義の描画順→Parameterの既存順とし、scopeやBlock編集判定／draft IDを各段階で再取得する。読込後の個別正規化も同じAPIへ接続し、Workspaceと同期済み編集scopeの区間差を統一しない。
+
+DocumentSnapshot.createWriterは7依存でprepare→Workspace snapshotSource→ISO時刻／名前／Hatch採番→既存codecを接続する。生成時はモデル・scope／session・metadata／fieldを照会せず、準備・直列化を実行しない。codecのcreate・保存fieldとversionは維持し、新file／state／snapshot cacheや独自normalizeは加えない。新入口は準備の副作用を明示して受け取り、例外では既反映値を保持して後続を短絡し、次回は準備から再実行する。
+
+app.jsは2,866→2,853行（13行減）、root未使用bindingは0、両構築の後段const直接参照は0。構築引数は従来BlockState／codecの6個から準備6＋writer7の計13個へ増えるが、app本体に暗黙だった準備・保存metadataの依存を二つの責務境界で明示したもので、引数削減とは扱わない。準備手順と保存候補生成はappから除き、既存normalize／codecは各ownerに残した。構文588ファイル・全単体1,805件・関連単体17件が成功（exit 0）。追加4件は生成時無照会、各工程で変わるscopeとBlock編集状態、unitsの新Objectと順序／途中失敗、準備後の保存元とmetadata時機、旧codecとの保存値一致、失敗時の短絡と次回の再実行を確認する。
+
+旧09ab703のappと現在module群の実ブラウザ比較では、Documentの初期／変更／undo／redo、Block開始／変更／undo／redo／取消、確定／確定undo／redoと再読込の13状態でmodel、履歴、Block editor、選択、ボタンとtest API204 key順が一致した（savedAtだけ除外）。診断は一時directoryのcad-document-preparation-equivalence.cjs／.log。関連E2E273件が全成功（4.6分、exit 0）。unified-ui／phase0-characterization／file-safety／blocks／free-instance／derived-patterns／sketch-projection／unified-annotations／hatching／parameter-dialog-controller／adversarial-authoring-performanceを実行した。DocumentとBlock編集中の保存元・旧形式移行／byte-shape、保存済み状態と失敗時保持、Undo／Redo・取消／確定、派生／参照・Hatch／Annotation／Parameter、既存画面と再読込を確認した。性能全12件を含みpan142ms（175ms未満）、空白矩形203ms（250ms未満）。既存期待値・性能基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-document-preparation-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功は過去の基準として保持する。開始時週枠使用38%／残量62%で停止条件未到達。次はappに残るlog／HintのDOM出力と計測、Solver結果の表示接続をUI責務としてまとめる。ConstraintFeedback／AuthoringFeedbackは純粋な文言生成、ApplicationSettingsは翻訳と設定、ToolbarViewはcontrol／command statusとして維持し、Hint／logのDOM寿命・出力を扱う限定ownerが必要か検討する。log要素不在の短絡、hintSource代入→翻訳→error class、profile非active／active時の元workと戻り値、重複件数の操作時取得、例外の途中反映を維持する。通常機能をtest ownerへ移さず、単なるget／set容器や全app contextにしない。200〜500行、mode・test hooks・他の構築の全体目標は未完了。
+
 ### 最新のDocument／Block履歴機能組立て単位
 
 基準はdevelop 423dadd。既存HistoryController.createFeatureがDocument履歴→core Controller→BlockHistorySnapshot→HistoryRestorationを生成・接続し、Block履歴は要求ごとに独立生成する。履歴snapshotからsavedAt／documentNameを除く方針とrecord計測も同入口へ集約した。EditHistoryのstack／signature、Block snapshotの複製、RestorationのDocument／Block別復元とControllerの抑止flagは既存ownerのまま。document引数はname／loadのadapterであり、DOMをeditingへ持ち込まない。モデル・scope・履歴・flagやglobalを複製しない。

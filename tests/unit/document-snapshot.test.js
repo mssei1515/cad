@@ -16,6 +16,38 @@ const scope = () => ({
   parameters: [{ name: "width", expression: "25", evaluatedValue: 25 }], nextDimensionParameterIndex: 2,
 });
 
+function writerFixture() {
+  'use strict';
+  const events = [], state = { source: scope(), name: 'First', counter: 3, time: 'T1', fail: null, error: new Error('writer failed') };
+  const emit = name => { events.push(name); if (state.fail === name) throw state.error; };
+  const workspace = { snapshotSource() { assert.equal(this, workspace); emit('source'); return state.source; } };
+  const ports = { workspace, prepare: function() { assert.equal(this, undefined); emit('prepare'); if (state.nextSource) state.source = state.nextSource; },
+    geometryMetadata: item => { emit('geometry'); return { sketchId: item.sketchId, kind: 'explicit' }; }, constraintData: () => null,
+    version: 26, documentName: () => { emit('name'); return state.name; }, nextHatchIndex: () => { emit('counter'); return state.counter; }, savedAt: () => { emit('time'); return state.time; } };
+  return { writer: snapshot.createWriter(ports), state, events, ports };
+}
+
+test('document writer prepares before reading the live snapshot and metadata and preserves the existing codec result', () => {
+  const f = writerFixture(); assert.deepEqual(f.events, []);
+  const replacement = scope(); replacement.points[0].x = 42; f.state.nextSource = replacement;
+  const data = f.writer.serialize(); assert.deepEqual(f.events.slice(0, 6), ['prepare','source','time','name','counter','geometry']);
+  const codec = snapshot.create(f.ports);
+  assert.deepEqual(data, codec.serialize(replacement, { version: 26, savedAt: 'T1', documentName: 'First', nextHatchIndex: 3 }));
+  f.events.length = 0; f.state.time = 'T2'; f.state.name = 'Second'; f.state.counter = 9; f.state.nextSource = scope();
+  const second = f.writer.serialize(); assert.equal(second.savedAt, 'T2'); assert.equal(second.documentName, 'Second'); assert.equal(second.nextHatchIndex, 9);
+  assert.equal(data.points[0].x, 42); assert.equal(second.points[0].x, 1);
+});
+
+test('document writer preserves failure order without caching a source, metadata or failed serialization', () => {
+  for (const fail of ['prepare','source','time','name','counter','geometry']) {
+    const f = writerFixture(); f.state.fail = fail;
+    assert.throws(() => f.writer.serialize(), error => error === f.state.error);
+    assert.equal(f.events.at(-1), fail); assert.equal(f.events.filter(event => event === fail).length, 1);
+    f.state.fail = null; f.events.length = 0; f.state.time = 'Recovered';
+    assert.equal(f.writer.serialize().savedAt, 'Recovered'); assert.equal(f.events[0], 'prepare');
+  }
+});
+
 test("snapshot shares field writers while preserving local scope metadata and allocation counters", () => {
   const doc = scope(), definition = { ...scope(), id: "B1", name: "Part", revision: 3, nextHatchIndex: 9 };
   doc.blockDefinitions.push(definition);

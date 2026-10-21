@@ -123,5 +123,16 @@
     return Object.freeze({ serialize });
   }
 
-  window.DocumentSnapshot = Object.freeze({ create, serializeGeometryInstance });
+  function createWriter({ workspace, prepare, geometryMetadata, constraintData, version, documentName, nextHatchIndex,
+    savedAt = () => new Date().toISOString() }) {
+    const snapshot = create({ geometryMetadata, constraintData });
+    function serialize() {
+      prepare();
+      return snapshot.serialize(workspace.snapshotSource(), {
+        version, savedAt: savedAt(), documentName: documentName(), nextHatchIndex: nextHatchIndex(),
+      });
+    }
+    return Object.freeze({ serialize });
+  }
+  window.DocumentSnapshot = Object.freeze({ create, createWriter, serializeGeometryInstance });
 })();
