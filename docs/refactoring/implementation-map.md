@@ -92,7 +92,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 - `src/editing/block_editing_queries.js`: 編集範囲・編集中定義・参照Instance・draftを優先する依存循環の読取り
 - `src/editing/block_editor_session.js`: Block編集session連鎖、draft同期・差替え、親scope復帰、子定義の仮移動・復元記録引継ぎと取消
 - `src/editing/block_history_snapshot.js`: Block履歴の復元用コピーと変更検出signatureの生成
-- `src/editing/history_controller.js`: 現在scopeへの履歴操作振分け、復元中の記録抑止と変更通知
+- `src/editing/history_controller.js`: 現在scopeへの履歴操作振分け、復元中の記録抑止と変更通知。createFeatureがDocument／Block履歴の生成方針と既存Snapshot／Restorationの接続、savedAt／nameを除外したDocument capture、record計測を集約する。16依存で各子へ限定APIを接続し、同じDocument履歴をTransientAuthoring／Name UIへ共有する。生成時はモデル／session無照会、Block履歴は要求ごとに独立生成、profileは操作時のactive状態と元の非bind workを使う。DOM更新はUI adapterに残し、旧createと各子のstack／signature／復元境界を維持する。
 - `src/editing/edit_history.js`: 履歴stack操作
 - `src/diagnostics/interaction_profiler.js`: 同期処理の時間・実行回数計測
 - `src/ui/block_view.js`: Block一覧・編集パネルのDOM表示とイベント接続。状態変更は操作コールバックへ委譲
