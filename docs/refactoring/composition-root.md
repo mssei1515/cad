@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の拘束分類／重複診断の組立て単位
+
+ConstraintAnalysis.createWithRedundancyで同じscope／Solver／scopeQuery／許容差を使う既存Redundancy→Analysisを生成し、元のrefresh関数を接続する。各cache・診断Map／count、遅延評価・例外境界とprofileは維持した。構築2→1、引数24→19、異なるroot参照22→20、app.jsは2,929→2,926行（3行減）。旧appとの10状態の分類・解析・Tree・保存値／履歴比較が一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のTree View／Controller組立て単位
 
 SketchTreeController.createWithViewが同じObjects・Selection・SketchContext・ApplicationSettings・移動commandを使い、View→Controller→menuを生成・接続する。表示と操作のscope、Viewのresize登録／幅設定・render時の行event、appの明示menu startは維持した。構築2→1、引数49→38、異なるroot参照47→42、app.jsは2,940→2,929行（11行減）。旧appとの12状態のメニュー／Tree／Properties HTML・モデル・履歴比較が一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
