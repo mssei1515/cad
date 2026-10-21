@@ -3,11 +3,17 @@
   "use strict";
   const { Point, Line, Circle, Arc, vectorNorm, variableDeltaInBasis } = window.GeometrySolver;
   const { lineSupportNormal } = window.GeometryKernel;
-  function createWithRedundancy({ currentScope, solver, scopeQuery, constraintSketchId, constraintIsOperational, isRootSketch, acceptError,
+  function createWithRedundancy({ currentScope, solver, scopeQuery, sketchContext, readServices,
+    constraintSketchId = sketchContext?.constraintSketchId, isRootSketch = sketchContext?.isRootSketch,
+    readMembership = sketchContext?.membershipQuery, descendantSketchIds = sketchContext?.descendantSketchIds,
+    elementSketchId = sketchContext?.elementSketchId, isEditableSketchElement = sketchContext?.isEditableSketchElement,
+    geometryInstanceBundles = readServices?.reads?.geometryInstanceBundles, blockProjectionBundles = readServices?.reads?.blockProjectionBundles,
+    geometryInstanceSourcePoints = readServices?.instances?.geometryInstanceSourcePoints, constraintIsOperational, acceptError,
     ...analysisOptions }) {
     const redundancy = window.ConstraintRedundancy.create({ currentScope, solver, sketchSolveVariables: scopeQuery.sketchSolveVariables,
       constraintSketchId, constraintIsOperational, isRootSketch, acceptError });
     const analysis = create({ ...analysisOptions, currentScope, solver, scopeQuery, acceptError,
+      readMembership, descendantSketchIds, elementSketchId, isEditableSketchElement, geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
       refreshConstraintRedundancy: redundancy.refreshConstraintRedundancy });
     return Object.freeze({ analysis, redundancy });
   }

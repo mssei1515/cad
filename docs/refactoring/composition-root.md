@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新の拘束解析の照会owner共有単位
+
+分類／重複診断はSketchContextとGeometryReadServicesから必要な9関数を共有し、各子へ限定APIを渡す。個別引数を優先し、membership取得時機と各scope・cache／例外境界は維持した。構築引数19→12、異なるroot参照20→13、app.jsは2,926→2,924行（2行減）。旧appとの10状態の分類・解析・Tree・保存値／履歴比較が一致した。検証と次の監査は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新の拘束分類／重複診断の組立て単位
 
 ConstraintAnalysis.createWithRedundancyで同じscope／Solver／scopeQuery／許容差を使う既存Redundancy→Analysisを生成し、元のrefresh関数を接続する。各cache・診断Map／count、遅延評価・例外境界とprofileは維持した。構築2→1、引数24→19、異なるroot参照22→20、app.jsは2,929→2,926行（3行減）。旧appとの10状態の分類・解析・Tree・保存値／履歴比較が一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

@@ -9,7 +9,7 @@ for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geom
 }
 const G = sandbox.window.GeometrySolver;
 const analysis = () => ({ stable: true, variableFreedom: new Map(), variableIndex: new Map(), nullspaceBasis: [], variables: [] });
-function fixture(assembly = 'analysis') {
+function fixture(assembly = 'analysis', overrides = {}) {
   const state = { scope: { points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], sketches: [{ id: 'ROOT', kind: 'root' }, { id: 'S1' }] }, active: 'S1', descendants: [],
     instances: [], blocks: [], analyses: new Map([['S1', analysis()]]), errors: new Set(), events: [], sample: item => [item.p1, item.p2] };
   state.redundancies = new Map(); state.failure = null;
@@ -34,7 +34,17 @@ function fixture(assembly = 'analysis') {
     const shared = { ...ports, constraintSketchId: c => c.sketchId, constraintIsOperational: c => c.enabled !== false,
       isRootSketch: sketch => sketch.kind === 'root' };
     delete shared.refreshConstraintRedundancy;
-    if (assembly === 'composed') ({ analysis: service, redundancy } = sandbox.window.ConstraintAnalysis.createWithRedundancy(shared));
+    if (assembly === 'shared') {
+      shared.sketchContext = { constraintSketchId: shared.constraintSketchId, isRootSketch: shared.isRootSketch,
+        membershipQuery: shared.readMembership, descendantSketchIds: shared.descendantSketchIds, elementSketchId: shared.elementSketchId,
+        isEditableSketchElement: shared.isEditableSketchElement };
+      shared.readServices = { reads: { geometryInstanceBundles: shared.geometryInstanceBundles, blockProjectionBundles: shared.blockProjectionBundles },
+        instances: { geometryInstanceSourcePoints: shared.geometryInstanceSourcePoints } };
+      for (const key of ['constraintSketchId','isRootSketch','readMembership','descendantSketchIds','elementSketchId','isEditableSketchElement',
+        'geometryInstanceBundles','blockProjectionBundles','geometryInstanceSourcePoints']) delete shared[key];
+    }
+    Object.assign(shared, overrides);
+    if (assembly === 'composed' || assembly === 'shared') ({ analysis: service, redundancy } = sandbox.window.ConstraintAnalysis.createWithRedundancy(shared));
     else {
       redundancy = sandbox.window.ConstraintRedundancy.create({ ...shared, sketchSolveVariables: shared.scopeQuery.sketchSolveVariables });
       service = sandbox.window.ConstraintAnalysis.create({ ...ports, refreshConstraintRedundancy: redundancy.refreshConstraintRedundancy });
@@ -45,7 +55,7 @@ function fixture(assembly = 'analysis') {
 const point = (id, x = 0, y = 0) => new G.Point(id, x, y);
 test('composed classification and redundancy preserve lazy caches, live scope, precomputed diagnostics and refresh order', () => {
   const results = [];
-  for (const assembly of ['legacy', 'composed']) {
+  for (const assembly of ['legacy', 'composed', 'shared']) {
     const { state, service, redundancy } = fixture(assembly), p = point('P1'), constraint = { id: 'K1', sketchId: 'S1' };
     p.explicit = true; state.scope.points.push(p); state.scope.constraints.push(constraint);
     state.redundancies.set('S1', { stable: true, byConstraint: new Map([[constraint, { redundant: true, rankBefore: 1, rankAfter: 1 }]]) });
@@ -65,11 +75,12 @@ test('composed classification and redundancy preserve lazy caches, live scope, p
     results.push({ summary: service.summary(), previousSummary: refreshed.summary, count: redundancy.count, events: state.events.map(event => event[0]) });
   }
   assert.deepEqual(results[0], results[1]);
+  assert.deepEqual(results[0], results[2]);
 });
 
 test('composed refresh keeps the existing partial cache and diagnostic state when reference, solver or redundancy work fails', () => {
   const results = [];
-  for (const assembly of ['legacy', 'composed']) for (const failAt of ['references','solve','redundancy']) {
+  for (const assembly of ['legacy', 'composed', 'shared']) for (const failAt of ['references','solve','redundancy']) {
     const { state, service, redundancy } = fixture(assembly), marker = new Error('refresh failed'), constraint = { sketchId: 'S1' };
     state.scope.points = [Object.assign(point('before'), { explicit: true })]; state.scope.constraints = [constraint];
     state.redundancies.set('S1', { stable: true, byConstraint: new Map([[constraint, { redundant: true, rankBefore: 1, rankAfter: 1 }]]) });
@@ -81,7 +92,23 @@ test('composed refresh keeps the existing partial cache and diagnostic state whe
     const before = state.events.length; service.ensure(); assert.equal(state.events.length, before);
     results.push({ failAt, events: state.events.map(event => event[0]), stable: service.stable, count: redundancy.count, summary: service.summary() });
   }
-  assert.deepEqual(results.slice(0, 3), results.slice(3));
+  assert.deepEqual(results.slice(0, 3), results.slice(3, 6));
+  assert.deepEqual(results.slice(0, 3), results.slice(6));
+});
+
+test('shared query defaults retain explicit membership overrides, raw receiver and null failures', () => {
+  let calls = 0;
+  const { state, service } = fixture('shared', { readMembership: function() {
+    'use strict'; assert.equal(this, undefined); calls++;
+    return { activeSketchId: 'S2', elementSketchId: item => item.sketchId };
+  } });
+  const p1 = point('P1'), p2 = point('P2'); p1.sketchId = 'S1'; p2.sketchId = 'S2'; state.scope.points.push(p1, p2);
+  assert.equal(calls, 0);
+  const first = service.refresh(); assert.equal(calls, 1); assert.equal(first.statuses.has(p2), true); assert.equal(first.statuses.has(p1), false);
+  service.ensure(); assert.equal(calls, 1); service.invalidate(); service.ensure(); assert.equal(calls, 2);
+  const explicitNull = fixture('shared', { geometryInstanceBundles: null });
+  assert.throws(() => explicitNull.service.refresh(), error => error.name === 'TypeError');
+  assert.equal(explicitNull.redundancy.count, 0); assert.equal(explicitNull.service.stable, undefined);
 });
 
 test('shared basis lookup handles missing objects, properties and zero-valued entries', () => {
