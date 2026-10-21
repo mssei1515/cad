@@ -6,6 +6,11 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### Clipboard機能の生成・接続（2026-10-21）
+
+ClipboardFeatureが既存のTransfer／Payload／Session／Geometry／PasteCheckpoint／Graph／Commandを元の順序で構築する。実session／commandとコピー候補のbuild／照会を公開し、現在editing scope／Block namespaceとID／Parameter、通知／復元の時機を保持する。内部処理・stateの所有は各既存ownerのまま。構築7→1、明示引数60→45、群外root参照45→45。app.jsは2,805→2,765行（40行減）。旧appとのコピー／連続貼付け・Undo／Redo／再読込／Cutの21状態でmodel・clipboard・mode・履歴／選択・HintとAPI204 key順が一致。script／検証と再開地点は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
+
 ### 寸法テスト支援の共有接続（2026-10-21）
 
 DimensionTestDriver.createSupportが共通20 capabilityを受け、fixture／interaction／displayの各専用依存14／21／20個を元の生成位置で接続する。モデル／操作の実装や公開APIを移さず、test条件・遅延照会・参照／復元境界を保持した。明示引数100→75、異なる入力75は不変、構築3→4。app.jsは2,803→2,805行（2行増）で、共有段階の費用と依存重複の削減を区別する。検証と通常構築の再監査は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

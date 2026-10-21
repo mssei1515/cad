@@ -93,6 +93,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のClipboard機能組立て単位
+
+基準はdevelop cbc981d。通常構築の再監査から、連続しているClipboardの生成・接続を独立した機能境界として選んだ。新しいsrc/application/clipboard_feature.jsがTransfer→Payload→Session→Geometry→PasteCheckpoint→Graph→Commandの七つを元の順序で生成する。返却は同じ実session／commandとcopyableSelectionPayload／canOfferCopyに限定した。appはscope・共有query／codec・ID・Parameter・UI・求解を明示して渡す。Payload、Geometry複製／転送、Graph追加、保持state、復元と操作の七既存ownerの処理本体は変更しない。
+
+コピー候補の現在Block scope取得→同期済みediting scope取得→namespace付きbuild→error hint→payload返却を機能側へ集めた。Parameter targetのBlock scopeは従来どおり条件と値で別々に読む。現在viewport倍率、Document／Blockの採番と既存checkpoint列、Cut通知→削除、貼付けselect→solve、失敗時の復元→projection無効化→Selection→UI→drawを維持する。拒否Cutのpayload保持と、solve失敗時に貼付け回数／modeを戻さない既存の限定復元を拡張しない。新しいclipboard／model／ID状態、保存形式やUI操作は加えない。
+
+app.jsは2,805→2,765行（40行減）。root構築7→1、明示引数合計60→45、群外root binding参照45→45（種類の削減ではなく共有接続と内部生成の移管）。root未使用bindingは0。全単体1,831件・関連単体17件が成功（exit 0）。追加4件で生成順・同じowner／Geometry／ID／session／checkpoint、生成時無操作、live scopeとnamespace／倍率、serializer順、採番receiver、拒否Cut、guard、成功とappend／solve失敗時のmodel／採番・回数／modeの境界を確認した。AST診断は一時directoryのcad-clipboard-feature-audit.cjs。
+
+新しいclassic scriptと単体fileを追加し、index.html・tools/check-syntax.js・tools/run-unit-tests.js・unified-uiのscript順期待値を同期した。ClipboardFeatureは依存七scriptより後、appより前へ配置する。構文592ファイルが成功し、読込順の調整後は変更したsyntax manifest／E2E fileも単独構文確認した。実file URL Help／script読込E2E1件も成功（2.2秒、exit 0）。生成直下は七factoryとObject.freezeだけであることをASTで確認した（cad-clipboard-feature-loader-audit.cjs）。
+
+旧cbc981dのappと現在module群の実ブラウザ比較では、Geometry／Blockのコピー・Sketch間の連続貼付け・Undo／Redo・保存再読込とCut／貼付け・取消履歴の21状態でmodel・clipboard・mode・履歴・選択・HintとAPI204 key順が一致した（savedAtだけ除外）。貼付け回数、Cutによる元Geometry削除とUndo復元も確認した。診断は一時directoryのcad-clipboard-feature-equivalence.cjs／.log。関連E2E372件が全成功（7.0分、exit 0）。adversarial-authoring-performance／adversarial-drag-fixture／annotation-anchors／blocks／document-bookmarks／derived-selection-copy／file-safety／free-instance／hatching／phase0-characterization／reference-images／sketch-move／sketch-permissions／sketch-projection／sketch-tree-delete／sketch-tree-visibility／spline／unified-uiを実行した。各Geometry・Block／派生／Hatch／Spline／注記／画像のコピー・転送、Cut／貼付けと取消／Undo／Redo、Sketch権限／参照・Document置換／保存再読込と既存UIを確認した。性能全12件を含みpan128ms（175ms未満）、空白矩形199ms（250ms未満）。既存期待値・性能基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-clipboard-feature-{focused,check,unit,loader,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功は過去の基準と区別する。開始時週枠使用48%／残量52%、検証後使用49%／残量51%で停止条件未到達。通常構築全体の200〜500行への収束は未完了であり、今回のClipboard集約だけで完了とはしない。次は残る通常構築を同じ尺度で再監査し、既存ownerの生成・接続を機能として閉じられる群を選ぶ。巨大な別root／可変app contextや、引数を名前付きObjectに包むだけの集約を避ける。停止条件に到達した場合は新しい分離を始めず、最新コードの全体検証・develop先行／main最後の反映と両者同期を行う。
+
+
 ### 最新の寸法テスト支援共有接続単位
 
 基準はdevelop d4f9e9e。既存DimensionTestDriver.createSupportがfixture／interaction／displayで共通の20 capabilityを共有し、各createFixtures／createInteraction／createDisplayへ専用依存14／21／20個を渡す。旧createFixtureSupport／createInteractionSupport／createDisplaySupportの実体を元の生成位置で作り、各操作・観測の処理と返却する公開名／key順を保持する。test条件外では生成しない。通常機能をtest ownerへ移さず、scope／モデル／Selection／session／Canvasの独立コピーや新stateを持たない。
