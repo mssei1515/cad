@@ -1,6 +1,25 @@
-/* Compose Properties read presentation, rows, markup and view; editing stays with the controller. */
+/* Assemble Properties queries, editing commands, shared appearance UI and display around existing owners. */
 (() => {
   "use strict";
+  function createEditing({ document, documentModel, currentScope, appearanceScope, viewport, propertySelection, readServices, sketchContext,
+    checkpoint, parameterStabilization, guardSketchProjectionShapeEdit, synchronizeSketchProjectionMetadata, materializeAnchor,
+    isGeometryMode, toggleSketchVisibility, guardSelectionEdit, applicationSettings, escapeHtml,
+    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw }) {
+    const { applicationText, localizeApplicationUI } = applicationSettings;
+    const { annotationAppearance } = readServices;
+    const editing = window.PropertyEditingFeature.create({ currentScope, viewport, guardSketchProjectionShapeEdit, applicationText,
+      synchronizeSketchProjectionMetadata, snapshotModelState: checkpoint.captureValues, restoreModelState: checkpoint.restoreValues,
+      stabilizeActiveParameterNamespace: (...args) => parameterStabilization.stabilize(...args), elementSketchId: sketchContext.elementSketchId,
+      recordHistory, materializeAnchor, annotationAppearance, invalidateBlockProjectionCache, updateUI, updatePropertiesUI, draw,
+      propertySelection, isGeometryMode, selectedVisibilityTargets: () => propertySelection.visibilityTargets(),
+      selectionVisibilityIsHidden: targets => propertySelection.visibilityIsHidden(targets), toggleSketchVisibility, guardSelectionEdit });
+    const appearanceUI = window.AppearanceUI.create({ document, documentModel, currentScope: appearanceScope, propertySelection,
+      appearanceEditing: editing.appearanceEditing, appearancePropertyCommand: editing.appearance, applyMultipleProperty: editing.applyMultiple,
+      applicationText, escapeHtml, localizeApplicationUI,
+      effectiveLeaderAppearanceForSketch: sketch => annotationAppearance.effectiveLeaderAppearanceForSketch(sketch), readViewportScale: () => viewport.scale,
+      invalidateBlockProjectionCache, recordHistory, updateUI, draw });
+    return Object.freeze({ editing, appearanceUI });
+  }
   function createSelection({ canvasSelection, getOperation, documentModel, readServices, sketchContext, hatchAppearanceForDisplay }) {
     const { Point, Line } = window.GeometrySolver;
     const { normalizeAppearance, normalizeAnnotationStyle, resolveGeometryAppearance } = window.Appearance;
@@ -95,5 +114,5 @@
       localizeApplicationUI, installExpressionInputHighlights,
     });
   }
-  window.PropertiesDisplay = Object.freeze({ create, createSelection, createWithController });
+  window.PropertiesDisplay = Object.freeze({ create, createSelection, createEditing, createWithController });
 })();

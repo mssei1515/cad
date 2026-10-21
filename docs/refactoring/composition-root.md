@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のProperties編集／AppearanceUI組立て単位
+
+PropertiesDisplay.createEditingで既存の編集command群と共用AppearanceUIを生成し、Checkpoint・Parameter安定化・選択と二つのscopeを明示して接続する。生成順・start・Paletteと状態ownerは維持した。対象の構築2→1、引数38→23、root依存30→22、app.jsは2,984→2,978行（6行減）。旧appとの実ブラウザ比較でbulk編集・Document既定値・PaletteのHTML／model／historyが一致した。検証と次の表示Controllerのowner接続は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のProperties共通reader構築単位
 
 PropertiesDisplayが既存PropertySelectionの結線を所有し、選択と表示で同じGeometryReadServices／SketchContextを共有する。編集層の判定実装や各scope・operation readerは維持し、新context／stateは増やさない。対象二構築の引数81→55、root依存71→47、app.jsは2,990→2,984行（6行減）。旧appとの実ブラウザ比較で六つの選択scenarioのHTML・保存値が一致した。検証と次の編集／AppearanceUIの接続境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

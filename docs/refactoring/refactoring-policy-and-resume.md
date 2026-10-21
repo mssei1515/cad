@@ -93,6 +93,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のProperties編集／AppearanceUI組立て単位
+
+PropertiesDisplay.createEditingへPropertyEditingFeature→AppearanceUIの生成と共有APIの接続を集約した。Checkpoint・ParameterStabilization・SketchContext・readServices・ApplicationSettings等の既存ownerと限定callback、計23個の依存から各子へ必要な入口を渡す。Checkpointの元のcaptureValues／restoreValuesを使い、Parameter安定化とLeader外観は元のreceiver・引数で呼ぶ。可視性の照会は同じPropertySelectionへ委譲し、query／編集・復元・commit・Palette stateは既存ownerに残す。
+
+編集のcurrentScopeと、使用色を読むappearanceScopeを明示して別々に渡す。Document既定値は固定Document ownerの最新fieldを使い、同じAppearanceEditing／Controls／PaletteをPropertiesとDocument設定で共有する。編集command群→Controls→Paletteという生成順とappearanceUI.startの時機・Document設定→Palette bind順は維持する。appの早期Annotation callback等が読むappearanceEditing aliasはhelper直後に確立し、内部UI構築では生成済みeditingの同じAPIを直接使う。生成時にDOM／scope／query／通知callbackやstartを呼ばないことを単体と実起動で確認した。新file・汎用context・stateはない。不要になったrootのLeader外観委譲と二つのAPI aliasを除去した。
+
+対象構築は2呼出し→1、canonical引数38→23、引数内の異なるroot binding参照30→22。app.jsは2,984→2,978行（6行減）、root未使用bindingは0。前の共通reader単位の前（aa596a9）と同じ条件でPropertiesの全構築を比較すると、4呼出し・119引数・90 root参照から、3呼出し・78引数・60 root参照になった。これは個別引数の広いconfig移動ではなく、既存のquery／編集ownerと生成段階を使った結線整理である。仕様書と実装mapを更新した。
+
+構文588ファイル・全単体1,781件・関連単体16件が成功（exit 0）。追加1件は実編集／UI部品を使い、生成時の無照会・無bind、求解失敗時のCheckpoint復元と履歴なし、成功時の確定、ParameterStabilizationのreceiver、編集scopeとPalette scopeの分離、同じPaletteの登録順と色確定、Documentの置換済み既定値／現在viewportの表示scaleを確認する。既存の独立factoryの検証も維持した。旧b5aff45との実ブラウザ比較で初期Properties／複数選択／bulk編集／Document既定値／Palette使用色と確定後のHTML・model・historyが一致した（savedAtだけを比較対象外）。診断は一時directoryのcad-properties-editing-equivalence.cjs／.log。
+
+関連E2E293件が全成功（5.0分、exit 0）。unified-ui／phase0-characterization／blocks／free-instance／sketch-permissions／sketch-projection／unified-annotations／leader-appearance／multiple-dimensions／hatching／parameter-dialog-controller／spline／adversarial-authoring-performanceを実行した。単独／複数Properties、PaletteとDocument既定値・継承外観、Spline編集、寸法／注記・Block／Instance・Hatch、lock／権限、式とParameter、既存画面比較・履歴・保存再読込を確認した。性能file全12件を含み、pan142ms（175ms未満）、空白矩形215ms（250ms未満）だった。全runner終了と専用server停止を確認した。ログは一時directoryのcad-properties-editing-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。mainは5ee5f3fのまま保留、現在コードの全E2Eは未実行、全体目標は未完了。c3a213cでの全E2E584成功は過去の基準として保持する。開始時の週枠使用23%・残量77%で停止条件未到達。
+
+次はPropertiesDisplay.createWithControllerに残るconstraint表示情報・Parameter式・編集action等の元ownerを確認し、読取りと操作を分けて同じ既存ownerを共有できるか検討する。今回の選択→編集／AppearanceUI→表示という三段階を維持し、各scope／operationとPaletteの共有・startを混同しない。単なるraw callback集合の包装やapp context化を避け、Propertiesの構築境界をさらに狭める。modeの所有・他の通常構築群・test支援も未完了であり、200〜500行の目標は維持する。
+
+
 ### 最新のProperties共通reader構築単位
 
 通常機能のProperties選択queryと表示へ、同じ既存GeometryReadServices／SketchContextを共有した。PropertiesDisplay.createSelectionはCanvasSelection・getOperation・Document・readServices・SketchContext・Hatch外観の六つから、既存PropertySelection.createへ必要な個別依存を渡す。queryの対象優先順位・混在値・参照・可視性／lock等の実装はediting層のPropertySelectionに残し、application層が型・正規化・read ownerとの結線だけを所有する。外観は元のreceiverと引数を維持するadapterを使い、静的namespaceの型／正規化／寸法種別queryも元の値を使う。
