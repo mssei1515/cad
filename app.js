@@ -1670,7 +1670,6 @@
   function drawDimensions() { return dimensionLayer.draw(); }
 
 
-  function effectiveLeaderAppearanceForSketch(sketch) { return annotationAppearance.effectiveLeaderAppearanceForSketch(sketch); }
   function effectiveAnnotationStyle(element) { return annotationAppearance.effectiveAnnotationStyle(element); }
 
 
@@ -2039,19 +2038,14 @@
     getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
   });
   function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
-  const propertyEditing = window.PropertyEditingFeature.create({
-    currentScope: workspace.current, viewport, guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
-    snapshotModelState, restoreModelState, stabilizeActiveParameterNamespace, elementSketchId, recordHistory,
-    materializeAnchor: materializeAnnotationAnchor, annotationAppearance,
-    invalidateBlockProjectionCache, updateUI, updatePropertiesUI, draw, propertySelection,
-    isGeometryMode, selectedVisibilityTargets, selectionVisibilityIsHidden, toggleSketchVisibility, guardSelectionEdit,
+  const { editing: propertyEditing, appearanceUI } = window.PropertiesDisplay.createEditing({
+    document, documentModel, currentScope: workspace.current, appearanceScope: () => editingScopeBinding.current, viewport, propertySelection,
+    readServices: geometryReadServices, sketchContext, checkpoint: editingCheckpoint, parameterStabilization,
+    guardSketchProjectionShapeEdit, synchronizeSketchProjectionMetadata, materializeAnchor: materializeAnnotationAnchor,
+    isGeometryMode, toggleSketchVisibility, guardSelectionEdit, applicationSettings, escapeHtml,
+    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
   });
-  const { appearanceEditing, appearance: appearancePropertyCommand, applyMultiple: applyMultipleProperty, visibility: selectionVisibilityCommand } = propertyEditing;
-  const appearanceUI = window.AppearanceUI.create({
-    document, documentModel, currentScope: () => editingScopeBinding.current, propertySelection, appearanceEditing, appearancePropertyCommand, applyMultipleProperty,
-    applicationText, escapeHtml, localizeApplicationUI, effectiveLeaderAppearanceForSketch, readViewportScale: () => viewport.scale,
-    invalidateBlockProjectionCache, recordHistory, updateUI, draw,
-  });
+  const { appearanceEditing, visibility: selectionVisibilityCommand } = propertyEditing;
   const propertiesView = window.PropertiesDisplay.createWithController({
     document, documentModel, currentScope: workspace.current, canvasSelection,
     getOperation: () => ({ mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
