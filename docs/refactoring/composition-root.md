@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 構築境界の再監査（2026-10-21）
+
+develop caf19a0を再集計し、app.jsは2,924行、構築・接続1,266非空白行、test hooks438行、一文call237行、その他492行と確認した。旧46dd77dから164行減だが、modeの20代入と大半の構築は残る。今回は文書のみで2,924→2,924行（0行差）。次は共通CommandPanelの5 factoryの生成・接続を既存ownerへ集約する。候補比較・生成順・取消差と次の検証は[再監査](bootstrap-boundary-audit.md)および[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新の拘束解析の照会owner共有単位
 
 分類／重複診断はSketchContextとGeometryReadServicesから必要な9関数を共有し、各子へ限定APIを渡す。個別引数を優先し、membership取得時機と各scope・cache／例外境界は維持した。構築引数19→12、異なるroot参照20→13、app.jsは2,926→2,924行（2行減）。旧appとの10状態の分類・解析・Tree・保存値／履歴比較が一致した。検証と次の監査は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
