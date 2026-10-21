@@ -2180,8 +2180,7 @@
     updateGeometrySelectionUI, draw, recordHistory,
     geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
   });
-  const { command: geometryDrag, build: buildDragSession, prepare: attachLocalSolveContext,
-    preview: dragResultForSession, finish: solveFinalDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
+  const { command: geometryDrag, build: buildDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
 
   function hasDirectRadiusDimension(primitive) {
     return window.DimensionQueries.hasDirectRadiusDimension(editingScopeBinding.current.constraints, primitive);
@@ -2482,13 +2481,9 @@
     const blockConstraintInsertion = window.ConstraintTestDriver.createBlockConstraintInsertion({
       blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, readAnalysis: constraintAnalysisObservation.analysis, readBlockState: blockConstraintObservation.state, serializeModel,
     });
-    const geometryDragTestDriver = window.GeometryDragTestDriver.createGeometryDriver({
-      currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints, arcEndpointPoint,
-      computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
-    });
-    const pointDragTestDriver = window.GeometryDragTestDriver.createPointDriver({
-      currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
-      computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), targetConstraintCount: geometryDragFeature.targetConstraintCount, now: () => performance.now(),
+    const dragExecutionSupport = window.GeometryDragTestDriver.createExecutionSupport({
+      feature: geometryDragFeature, solver, currentScope: workspace.current, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
+      arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
     });
     const annotationTestSupport = window.AnnotationTestDriver.createSupport({
       annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint,
@@ -2845,9 +2840,7 @@
       ...canvasTestDriver.publicAPI,
       hoverDisplayStateForTest: hoverDisplayObservation.state,
       authoringStateForTest: authoringObservation.state,
-      guidedPointDragForTest: pointDragTestDriver.drag,
-      guidedPointDragPathForTest: pointDragTestDriver.path,
-      geometryDragPathForTest: geometryDragTestDriver.path,
+      ...dragExecutionSupport,
       constraintStatusesForTest: readTestConstraintStatuses,
       constraintAnalysisForTest: constraintAnalysisObservation.analysis,
       blockConstraintStatusForTest: blockConstraintObservation.state,

@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のdrag実行テスト支援組立て単位
+
+基準はdevelop f6caae7。Propertiesに残るBlock操作は既存commandの直接接続であり、さらに単なるwrapperへ包む分離は見送った。Geometry／Point dragの実行テスト入口は同じGeometryDragFeatureのbuild／prepare／preview／finishとSolverを重複して接続していたため、既存GeometryDragTestDriver.createExecutionSupportへ組立てを集約した。同じfeatureとSolver、現在scope・正規化・誤差計算・時計・拘束観測の九つを明示して受け、Geometry→Pointの順に生成する。featureの同じ関数を渡し、誤差計算は元のSolver receiverで呼ぶ。生成時のscope／Solver／drag／時計読取りはない。
+
+guidedPointDragForTest／guidedPointDragPathForTest／geometryDragPathForTestの三つの名前と登録順を同じownerが公開し、appはtest query内で登録する。旧二factoryは維持し、製品のsession・Solver・正規化／測定・履歴・計測処理を変更せず、通常起動からtestingへ依存させない。rootで不要になったprepare／preview／finishの三つのaliasを除去した。新file・state・汎用contextはない。
+
+app.jsは2,964→2,957行（7行減）、対象構築2→1、引数合計23→9、引数内の異なるroot binding参照11→7。root未使用bindingは0。構文588ファイル・全単体1,786件・関連単体8件が成功（exit 0）。追加1件は旧組立てとの三経路の全結果と呼出し順、対象Object／sessionの共有、現在scope切替、対象／sessionなし、preview例外で後続finalを実行しないことを確認する。旧f6caae7のappと現在module群の実ブラウザ比較でもAPI全204名の順序と三経路の結果・model・historyが一致した（保存時刻savedAtと実測elapsedMsだけ除外）。診断は一時directoryのcad-drag-execution-equivalence.cjs／.log。関連E2E181件が全成功（18.4分、exit 0）。変更した三つの公開drag入口を使う既存六file（adversarial-drag-fixture／constraint-drag-regressions／blocks／drag-smoothness／geometry-drag-smoothness／unified-ui）と性能file全12件を実行した。拘束drag回帰fileは12.4分、航空機は7.4分・1,872preview、Offset10,296／Fillet3,744／連成線5,304previewはいずれも失敗0。航空機の最大previewは275.2ms。性能fileのpan137ms（175ms未満）／空白矩形217ms（250ms未満）と区別し、航空機の全previewが250ms未満とは扱わない。基準の変更や成功までの再実行はしていない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-drag-execution-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留し、現行コードの全E2Eは未実行、c3a213cの全E2E584成功は過去の基準として保持する。開始時週枠使用26%／残量74%で停止条件未到達。mode・通常機能の構築・残るtest支援の整理と200〜500行の全体目標は未完了。小関数の移動やtest専用部の削減だけで到達できるとは見積もらない。
+
+次はSketch TreeのObjects／View／Controllerの生成と既存owner共有を確認する。appにはcategory→可視性対象kindの分類、Context menuの組立て、Point固定解除の操作も残る。Block表示用dimensionPresentationScopeと編集用editingScopeBinding.currentの違い、View生成時のlistener登録、後段Controller／Context menuへの遅延参照、hover／選択／構造guardを維持する。多数のcallbackを新contextへまとめるだけの案は採用せず、各照会・操作ownerへ寄せられる境界から整理する。この候補は未実装で、開始前に現行コード／仕様／テストを確認する。
+
 ### 最新のProperties表示owner共有／Geometry ID変換単位
 
 基準はdevelop cb17f56。PropertiesDisplay.createWithControllerでParameterNamespaceの式入力／寸法式、ConstraintFeedbackの拘束名／badge、ApplicationSettingsの翻訳／localize、BlockPlacementCommandの回転lock／Sketch指定を共有した。従来の個別引数を優先しundefinedだけ同じ関数で補完する。receiverをbindし直さず、式評価・配置state・設定更新の所有は元のownerに残す。選択→編集／AppearanceUI→表示の生成段階、各scope／operation readerとstart時機を維持する。

@@ -1,6 +1,16 @@
 /* Browser-test drag execution delegates session state and solving to product owners. */
 (() => {
   "use strict";
+  function createExecutionSupport({ feature, solver, currentScope, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
+    arcEndpointPoint, now, readConstraintStatuses }) {
+    const shared = { currentScope, buildDragSession: feature.build, attachLocalSolveContext: feature.prepare,
+      dragResultForSession: feature.preview, solveFinalDragSession: feature.finish,
+      normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
+      computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), now };
+    const geometry = createGeometryDriver({ ...shared, arcEndpointPoint, readConstraintStatuses });
+    const point = createPointDriver({ ...shared, targetConstraintCount: feature.targetConstraintCount });
+    return Object.freeze({ guidedPointDragForTest: point.drag, guidedPointDragPathForTest: point.path, geometryDragPathForTest: geometry.path });
+  }
   function createPointDriver({ currentScope, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, computeErrorVector, sketchSolveConstraints, targetConstraintCount, now }) {
     function drag(id, dx, dy) {
       const point = currentScope().points.find((item) => item.id === id);
@@ -239,5 +249,5 @@
     return Object.freeze({ reset });
   }
 
-  window.GeometryDragTestDriver = Object.freeze({ createPointDriver, createGeometryDriver, createResponsiveFixture });
+  window.GeometryDragTestDriver = Object.freeze({ createExecutionSupport, createPointDriver, createGeometryDriver, createResponsiveFixture });
 })();
