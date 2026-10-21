@@ -1902,20 +1902,16 @@
 
 
   const sketchTreeObjects = window.SketchTreeObjects.create({
-    sidebarGeometryItem, activeSketchId,
-    objectVisible: (category, entry) => !selectionVisibilityIsHidden([{
-      kind: category === "constraint" ? "constraint" : ["point", "line", "circle", "arc", "spline"].includes(category) ? "geometry"
-        : category === "instance" ? "geometryInstance" : category,
-      item: category === "constraint" ? entry.constraint : entry,
-    }]),
-    currentScope: dimensionPresentationScope, getLanguage: () => applicationSettings.language,
+    readServices: geometryReadServices, sketchContext, applicationSettings, constraintFeedback,
+    isHidden: selectionVisibilityIsHidden,
+    currentScope: dimensionPresentationScope,
     ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
-    isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
-    constraintStatusOf, blockProjectionBundle, applicationText, escapeHtml, formatDisplayNumber,
+    isExplicitPoint, isPointUsedByLine,
+    constraintStatusOf, escapeHtml, formatDisplayNumber,
     toolbarSvgMarkup, constraintToolbarIcon, sketchTreeGutter: window.SketchTreeView.gutter, isSketchProjectedGeometry,
-    findLineFixedConstraint, blockDefinitionById, geometryInstanceTypeLabel, geometryInstanceBundle,
+    findLineFixedConstraint, geometryInstanceTypeLabel,
     resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
-    isDimensionConstraint, localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
+    isDimensionConstraint, constraintGeometryId, isReadOnlyDimension,
     constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected,
     readCanvasHover: () => canvasHover.current, readSidebarHover: () => selectionHighlight.current,
     constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements,

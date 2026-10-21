@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のTree行分類／照会owner共有単位
+
+SketchTreeObjectsがTree categoryから可視性照会対象への分類を所有し、GeometryReadServices・SketchContext・ConstraintFeedback・ApplicationSettingsを共有する。表示scope、個別引数の互換性と後段PropertySelectionの遅延照会は維持した。構築引数38→32、異なるroot参照36→30、app.jsは2,957→2,953行（4行減）。旧appとの実ブラウザ比較で、7状態の展開Tree／Properties HTML・model・historyが一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のdrag実行テスト支援組立て単位
 
 既存GeometryDragTestDriverが同じGeometryDragFeature／Solverを使う二つの実行driverの組立てと三つの公開APIの接続を所有する。製品の状態・求解・計測手順は維持した。構築2→1、引数23→9、異なるroot参照11→7、app.jsは2,964→2,957行（7行減）。旧appとの実ブラウザ比較では公開API全204名の順序と三経路の結果・model・historyが一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
