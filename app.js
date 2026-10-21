@@ -1383,61 +1383,21 @@
   });
   function deleteCurrentSelection() { return selectionDeletionCommand.remove(); }
 
-  const clipboardTransfer = window.ClipboardTransfer.create({
+  const clipboardFeature = window.ClipboardFeature.create({
     blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText,
-    annotationTextLayout, annotationTextMetrics, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle, readViewportScale: () => viewport.scale,
+    annotationTextLayout, annotationTextMetrics, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle, viewport,
+    serializeGeometryInstance, constraintGraphNodes, serializeConstraint, decorateSerializedConstraint,
+    currentScope: () => editingScopeBinding.current, canvasSelection, blockScopeId: currentBlockDefinitionScopeId, setHint,
+    pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX, imageClipboard, updateToolbar, deleteSelection: deleteCurrentSelection,
+    geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById, documentIds, normalizeGeometryInstance,
+    parameters: parameterNamespace, deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache,
+    isGeometryMode, blockDefinitionScopeError, canCreateInActiveSketch, guardSketchEdit, activeSketchId, currentParameterNamespace,
+    clearSelection, selectMode: drawOperationLifecycle.selectMode, solveAndRefresh, updateUI, draw, sketchName,
   });
-  const clipboardPayload = window.ClipboardPayload.create({
-    geometryInstanceBundle, geometryInstanceSourcePoints, serializeGeometryInstance, blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, constraintGraphNodes, applicationText,
-    detachedAnnotation: clipboardTransfer.detachedAnnotation,
-    serializeConstraint: constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint),
-  });
-  function copyableSelectionPayload() {
-    const scopeId = currentBlockDefinitionScopeId();
-    const result = clipboardPayload.build(editingScopeBinding.current, canvasSelection, scopeId ? `block:${scopeId}` : "document");
-    if (result.error) setHint(result.error, "error");
-    return result.payload;
-  }
-
-  const clipboardSession = window.ClipboardSession.create({
-    pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX,
-    onCopyStored: () => { imageClipboard.markCopy(); updateToolbar(); },
-    deleteSelection: deleteCurrentSelection,
-  });
-
+  const { session: clipboardSession, command: clipboardCommand } = clipboardFeature;
+  function copyableSelectionPayload() { return clipboardFeature.copyableSelectionPayload(); }
   function copySelectionToClipboard(options = {}) { return clipboardCommand.copy(options); }
 
-  const clipboardGeometry = window.ClipboardGeometry.create({
-    geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById,
-    allocateBlockInstanceId: () => documentIds.allocate("blockInstance"),
-    allocateGeometryInstanceId: type => type === "sketchProjection" ? documentIds.allocate("sketchProjection") : type === "mirror" ? documentIds.allocate("mirror") : documentIds.allocate("pattern"),
-    normalizeGeometryInstance, copiedGeometryInstance: clipboardTransfer.copiedGeometryInstance, applicationText,
-  });
-
-  const clipboardPasteCheckpoint = window.ClipboardPasteCheckpoint.create({
-    geometryIds,
-    captureSequences: () => documentIds.snapshot(["annotation", "hatch", "referenceImage", "sketchProjection", "mirror", "pattern", "free", "blockInstance"]),
-    restoreSequences: documentIds.restore,
-  });
-
-  const clipboardGraph = window.ClipboardGraph.create({
-    geometry: clipboardGeometry, transfer: clipboardTransfer, parameters: parameterNamespace,
-    elementIds: { hatch: () => documentIds.allocate("hatch"), annotation: () => documentIds.allocate("annotation"),
-      image: () => documentIds.allocate("referenceImage"), nextHatchIndex: () => documentIds.peek("hatch") },
-    deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache, applicationText,
-  });
-
-  const clipboardCommand = window.ClipboardCommand.create({
-    session: clipboardSession, graph: clipboardGraph, checkpoint: clipboardPasteCheckpoint, selection: canvasSelection,
-    isGeometryMode, buildCopyPayload: copyableSelectionPayload, blockDefinitionScopeError,
-    canCreate: () => { if (canCreateInActiveSketch()) return true; guardSketchEdit(activeSketchId(), "create"); return false; },
-    currentTarget: () => ({ model: editingScopeBinding.current, sketchId: activeSketchId(), scale: viewport.scale }),
-    parameterTarget: () => ({ namespace: currentParameterNamespace(),
-      namespaceKey: currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document" }),
-    clearSelection, finishPaste: () => { drawOperationLifecycle.setMode("select"); solveAndRefresh("貼り付け"); },
-    recoverView: () => { invalidateBlockProjectionCache(); clearSelection(); updateUI(); draw(); },
-    sketchName, setHint, updateToolbar,
-  });
   function pasteGeometryClipboard() { return clipboardCommand.paste(); }
 
   function ensureDimensionDefaults() { return window.DocumentState.normalizeDimensionState(editingScopeBinding.current, targetFromConstraint, (target, dimension) => dimensionPlacement.normalizeDimension(target, dimension)); }
@@ -2137,7 +2097,7 @@
   function hasCancellableCanvasCommand() { return canvasCommandCancellation.hasCancellable(); }
   function cancelCanvasCommandFromContextMenu() { return canvasCommandCancellation.cancel(); }
 
-  function hasCopyableCanvasSelection() { return clipboardPayload.canOfferCopy(editingScopeBinding.current, canvasSelection); }
+  function hasCopyableCanvasSelection() { return clipboardFeature.canOfferCopy(); }
 
   const { topmostOwner: topmostDrawingOrderOwner, state: drawingOrderCommandState, reorder: reorderSelectedDrawingObjects } = window.DrawingOrderCommand.create({
     currentScope: () => editingScopeBinding.current, canvasSelection, activeSketchId, selectionSketchId, ordinarySelectionMode,
