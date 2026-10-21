@@ -7,9 +7,19 @@
     addReadOnlyDimensionConstraint, activeSketchId, syncSelectionFromConstraintOperands,
     makeConstraintOperand, hitConstraintOperand, sameConstraintOperand, resolveConstraintIntent,
     hideDimensionValueInput, syncDimensionValueInput, focusDimensionValueInput,
-    applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw }) {
+    applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
+    guardSketchEdit, isPlacingInstance, geometryInstanceBundle, targetFromConstraint, cancelPendingCommand, cancelConstraintTargetCommand }) {
     const { defaultDimensionForTarget, dimensionFromAnchor, dimensionWithLabelAt,
       applyDefaultCircleDimensionLabelOffset, dimensionAnchor } = placement;
+    function startInstanceAngleDimension(instance) {
+      if (!guardSketchEdit(instance.sketchId) || isPlacingInstance(instance) || instance.placement?.kind !== "circular") return false;
+      cancelPendingCommand(""); cancelConstraintTargetCommand(""); selectMode();
+      const anchor = geometryInstanceBundle(instance).controlPoints.find(point => point.instanceControl === "anchor");
+      const c = new window.GeometrySolver.InstanceAngleIntervalConstraint(anchor, instance.placement.angleStep);
+      const target = targetFromConstraint(c);
+      setPending({ type: "distance-place", target, pointer: defaultDimensionForTarget(target), sketchId: instance.sketchId });
+      setHint("角度間隔寸法の表示位置をクリックしてください"); updateToolbar(); draw(); return true;
+    }
     function startDistanceCommand() {
       if (!canStart()) return;
       if (constraintTargetSession.operands.length === 0) constraintTargetSession.replaceOperands(constraintOperandsFromSelection());
@@ -171,7 +181,7 @@
       return true;
     }
 
-    return Object.freeze({ targetDoubleClick, startDistanceCommand, startPrimitiveDimensionCommand,
+    return Object.freeze({ targetDoubleClick, startDistanceCommand, startPrimitiveDimensionCommand, startInstanceAngleDimension,
       startDistanceValueInput, retargetDistancePlaceWithOperand, startDistanceResolution });
   }
   window.DimensionPlacementCommand = Object.freeze({ create });

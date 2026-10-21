@@ -5,6 +5,38 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/pointer_interaction_controller.js'), 'utf8'), sandbox);
+
+test('pointer session shares raw coordinates before binding and preserves pan precedence and move failure state',()=>{
+  const session=sandbox.window.PointerInteractionController.createSession(),read=session.readLastPointer,set=session.setLastPointer,clear=session.clearLastPointer;
+  assert.equal(read(),null);const initial={x:1,y:2};assert.equal(set(initial),undefined);assert.equal(session.lastWorld,initial);
+  initial.x=3;assert.equal(read().x,3);
+  let pan=true,mode='pattern-placement-mirror';const calls=[],marker=new Error('mode read failed');
+  assert.equal(session.bind({canvasNavigation:{movePan(){calls.push('pan');return pan;}},getMode(){if(mode==='fail')throw marker;return mode;},
+    setLastPointer:()=>assert.fail('session owns the pointer'),drawingPreview:{updateFreeInstance(point){calls.push(point);}}}),session);
+  assert.deepEqual(calls,[]);assert.equal(read(),initial);
+  const point={x:5,y:6};session.move({},point,false);assert.equal(read(),initial);assert.deepEqual(calls,['pan']);
+  pan=false;calls.length=0;session.move({},point,false);assert.equal(read(),point);assert.deepEqual(calls,['pan',point]);
+  mode='fail';const next={x:7,y:8};assert.throws(()=>session.move({},next,false),error=>error===marker);assert.equal(read(),next);
+  assert.equal(clear(),undefined);assert.equal(read(),null);
+});
+
+test('pointer press records the same world point before hit queries while right and middle buttons retain it',()=>{
+  const session=sandbox.window.PointerInteractionController.createSession(),calls=[],point={x:11,y:12},marker=new Error('hit query failed');
+  session.bind({canvasNavigation:{beginPan:()=>calls.push('pan')},press:{closeContextMenu:()=>calls.push('close'),worldPoint:()=>{calls.push('world');return point;},query:{read(value){assert.equal(value,point);assert.equal(session.lastWorld,point);throw marker;}}}});
+  const previous={x:1,y:2};session.setLastPointer(previous);
+  session.down({button:2,preventDefault:()=>calls.push('prevent')});assert.equal(session.lastWorld,previous);assert.deepEqual(calls,['prevent']);
+  calls.length=0;session.down({button:1});assert.equal(session.lastWorld,previous);assert.deepEqual(calls,['close','pan']);
+  calls.length=0;assert.throws(()=>session.down({button:0}),error=>error===marker);assert.equal(session.lastWorld,point);assert.deepEqual(calls,['close','world']);
+});
+
+test('pointer leave clears hover and pending movement without discarding the remembered raw world position',()=>{
+  const session=sandbox.window.PointerInteractionController.createSession(),point={x:2,y:3},calls=[];
+  session.setLastPointer(point);const geometry={active:true};
+  session.bind({geometryDrag:geometry,dimensionDrag:{active:false},annotationDrag:{active:false},selectionRectangle:{active:false},canvasNavigation:{panning:false},
+    press:{discardMove:()=>calls.push('discard')},canvasHover:{clear:()=>calls.push('hover')},draw:()=>calls.push('draw')});
+  session.leave();assert.deepEqual(calls,[]);assert.equal(session.lastWorld,point);
+  geometry.active=false;session.leave();assert.deepEqual(calls,['discard','hover','draw']);assert.equal(session.lastWorld,point);
+});
 function fixture() {
   const f={calls:[],mode:'select',pan:false,authoring:false,ordinary:true,constraint:true,pending:null,pendingConstraint:null,last:null,dimensionHit:null,identity:null};
   const record=name=>(...args)=>{f.calls.push(name);};

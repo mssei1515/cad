@@ -12,6 +12,36 @@ const { Point, Line, Circle, Spline } = sandbox.window.GeometrySolver;
 const create = sandbox.window.SketchContext.create;
 const scope = name => ({ sketches: [{ id: "S1", name, parentSketchId: "ROOT" }], activeSketchId: "S1" });
 
+test('operand relations retain hierarchy and null results separately from display fallback and inactive labels', () => {
+  const document = scope('Parent'); document.sketches.push({ id: 'S2', parentSketchId: 'S1' }, { id: 'S3', parentSketchId: 'ROOT' }, { id: 'S4', parentSketchId: 'S2' });
+  document.activeSketchId = 'S2'; let reads = 0;
+  const context = create({ currentScope: () => { reads++; return document; }, constraintGraphNodes: () => [] });
+  assert.equal(reads, 0);
+  for (const [id, expected] of [['S2', 'active'], ['S1', 'reference'], ['S4', 'descendant'], ['S3', null], ['ROOT', null], ['missing', null]]) {
+    assert.equal(context.operandRelationForSketch(id), expected); assert.equal(context.sketchRelationToActive(id), expected || 'inactive');
+  }
+  for (const id of [undefined, null, '', false, 0]) { assert.equal(context.operandRelationForSketch(id), null); assert.equal(context.sketchRelationToActive(id), 'active'); }
+  context.sketchById('S1').locked = true; context.sketchById('S4').appearance.visible = false; context.ensureSketchState();
+  const before = JSON.stringify(document);
+  assert.equal(context.operandRelationForSketch('S1'), 'reference'); assert.equal(context.operandRelationForSketch('S4'), 'descendant');
+  assert.equal(context.canEditSketch('S1', 'constraint'), false); assert.equal(JSON.stringify(document), before);
+});
+
+test('operand and display relations follow current Document or Block scope and hierarchy changes and propagate scope failures', () => {
+  const document = scope('Document'); document.sketches.push({ id: 'S2', parentSketchId: 'S1' }); document.activeSketchId = 'S2';
+  const block = scope('Block'); block.sketches.push({ id: 'S2', parentSketchId: 'S1' });
+  const workspace = sandbox.window.EditingWorkspace.create(document); let failure = null;
+  const context = create({ currentScope: () => { if (failure) throw failure; return workspace.current(); }, constraintGraphNodes: () => [] });
+  assert.equal(context.operandRelationForSketch('S1'), 'reference'); const before = JSON.stringify(document);
+  workspace.activate(block); assert.equal(context.operandRelationForSketch('S1'), 'active'); assert.equal(context.operandRelationForSketch('S2'), 'descendant');
+  assert.equal(context.sketchRelationToActive('S2'), 'descendant'); assert.equal(JSON.stringify(document), before);
+  workspace.activate(document); assert.equal(context.operandRelationForSketch('S2'), 'active');
+  context.sketchById('S2').parentSketchId = 'ROOT'; assert.equal(context.operandRelationForSketch('S1'), null); assert.equal(context.sketchRelationToActive('S1'), 'inactive');
+  const failedState = JSON.stringify(document), error = new Error('scope lookup failed'); failure = error;
+  for (const invoke of [() => context.operandRelationForSketch('S2'), () => context.operandRelationForSketch(), () => context.sketchRelationToActive('S2'), () => context.sketchRelationToActive()]) assert.throws(invoke, value => value === error);
+  assert.equal(JSON.stringify(document), failedState);
+});
+
 test("Sketch context follows explicit scope changes even when Document and Block reuse IDs", () => {
   const document = scope("Document Sketch"), block = scope("Block Sketch");
   const workspace = sandbox.window.EditingWorkspace.create(document);

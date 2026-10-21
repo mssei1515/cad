@@ -1,9 +1,32 @@
-/* Coordinate draw-operation exit and cancellation without owning command drafts. */
+/* Own drawing mode and coordinate transitions without owning command drafts. */
 (() => {
   "use strict";
+  const DRAW_TOOL_MODES = Object.freeze(["instance-sources", "line", "centerline", "circle-center-cross", "point", "rectangle", "slot",
+    "fillet", "trim", "offset", "circle", "arc", "three-point-arc", "spline", "sketch-projection", "hatch", "hatch-repair"]);
+  function isToolMode(mode) { return DRAW_TOOL_MODES.includes(mode); }
   function create({ canStart = () => true, instances, instanceSources, centerline, line, rectangle, slot, fillet, circular,
     spline, splineEditing, projection, preview, offset, hatch, transient,
-    clearSnap, clearSelection, selectMode, updateToolbar, setHint, updateUI, draw, cancelConstraintTargetCommand, setMode, clearTrimHover }) {
+    clearSnap, clearSelection, selectMode, updateToolbar, setHint, updateUI, draw, cancelConstraintTargetCommand, setMode, clearTrimHover,
+    cancelPendingCommand, readMode }) {
+    function prepareDimensionStart() {
+      selectMode();
+      line.reset();
+      rectangle.reset();
+      fillet.reset();
+      circular.resetCircle();
+      circular.resetArcs();
+      preview.reset();
+    }
+    function prepareConstraintStart() {
+      cancelPendingCommand("");
+      centerline.reset();
+      slot.reset();
+      prepareDimensionStart();
+    }
+    function prepareConstraintCancel() {
+      if (readMode() === "centerline") centerline.reset();
+      if (readMode() === "slot") slot.reset();
+    }
     const startHints = {
       "select": "選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。",
       "point": "キャンバスをクリックして点を追加します。",
@@ -148,7 +171,32 @@
     }
 
 
-    return Object.freeze({ start, prepare, resetInputs, resetInputsForSketchChange, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
+    return Object.freeze({ start, prepare, prepareDimensionStart, prepareConstraintStart, prepareConstraintCancel,
+      resetInputs, resetInputsForSketchChange, resetForDocument, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
-  window.DrawOperationLifecycle = Object.freeze({ create });
+  // Mode is needed while commands are being constructed. Bind their operations afterwards.
+  function createSession() {
+    let mode = "select", operations;
+    function setMode(value) { mode = value; }
+    function readMode() { return mode; }
+    function selectMode() { setMode("select"); }
+    function bind(dependencies) {
+      operations = create({ ...dependencies, readMode, setMode, selectMode });
+      return session;
+    }
+    const session = Object.freeze({
+      get mode() { return mode; }, readMode, setMode, selectMode, bind, isToolMode: () => isToolMode(mode),
+      start: (...args) => operations.start(...args), prepare: (...args) => operations.prepare(...args),
+      prepareDimensionStart: (...args) => operations.prepareDimensionStart(...args),
+      prepareConstraintStart: (...args) => operations.prepareConstraintStart(...args),
+      prepareConstraintCancel: (...args) => operations.prepareConstraintCancel(...args),
+      resetInputs: (...args) => operations.resetInputs(...args),
+      resetInputsForSketchChange: (...args) => operations.resetInputsForSketchChange(...args),
+      resetForDocument: (...args) => operations.resetForDocument(...args),
+      exitLine: (...args) => operations.exitLine(...args), exit: (...args) => operations.exit(...args),
+      active: (...args) => operations.active(...args), cancel: (...args) => operations.cancel(...args),
+    });
+    return session;
+  }
+  window.DrawOperationLifecycle = Object.freeze({ create, createSession, isToolMode });
 })();

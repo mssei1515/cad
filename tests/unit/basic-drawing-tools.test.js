@@ -147,3 +147,128 @@ test('Centerline start refuses a disallowed drawing target after existing comman
  const f=centerlineFixture();f.state.allowed=false;f.command.start();assert.deepEqual(f.events,['constraintCancel','pendingCancel','reject']);
  assert.equal(f.selection.points[0],f.sources[0]);assert.equal(f.state.mode,'select');assert.equal(f.command.targets.length,0);
 });
+
+function authoringFixture() {
+ const created={},events=[],state={scale:2,snapped:{x:3,y:4},snap:{id:'snap'},selected:null,mode:'select'};
+ const names=['DrawingSnap','SplineDraft','SplineCommand','SnapConstraints','LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand','CenterlineGeometry','CenterlineConstruction','CenterlineCommand','OffsetFeature','FilletFeature'];
+ const sandbox={window:{}};
+ for(const name of names) sandbox.window[name]={create(ports){
+  events.push(name);const owner={name,active:null,clear:()=>{}};
+  owner.reset=()=>events.push(name+'.reset');owner.cancel=()=>events.push(name+'.cancel');owner.targets=[];owner.points=[];
+  for(const method of ['resetCircle','resetArcs','resetCenterArc'])owner[method]=()=>events.push(name+'.'+method);
+  if(name==='DrawingSnap')owner.clear=()=>events.push('snap');
+  owner.resolve=function(point,tolerance){assert.equal(this,owner);events.push(['resolve',point,tolerance]);owner.active=state.snap;return state.snapped;};
+  for(const method of ['click','clickCircle','clickArc','clickThreePointArc'])owner[method]=function(...args){assert.equal(this,owner);events.push([name,method,...args]);};
+  if(name==='SnapConstraints')for(const key of ['addPointSnapConstraints','addArcEndpointSnapConstraints','addCircularBoundarySnapConstraints','addLineBoundarySnapConstraints'])owner[key]=()=>{};
+  created[name]={ports,owner};return owner;
+ }};
+ vm.runInNewContext(fs.readFileSync('src/application/basic_drawing_tools.js','utf8'),sandbox);
+ vm.runInNewContext(fs.readFileSync('src/editing/draw_operation_lifecycle.js','utf8'),sandbox);
+ const noop=()=>{},never=()=>{throw Error('no eager query or operation');};
+ const sketchContext=Object.fromEntries(['isActiveSketchElement','elementSketchId','isReferenceSourceSketchId','sketchName','sameSketchElements','activeSketchId'].map(key=>[key,never]));
+ const pointUsage=Object.fromEntries(['isSplineOnlyFitPoint','isReferencePoint','isPrimitiveCenterPoint','isEndpointPoint','isPointUsedByPrimitive','isExplicitPoint'].map(key=>[key,never]));
+ const selection={set(key,items){assert.equal(this,selection);state.selected={key,items};events.push('selected');}};
+ const ports={currentScope:never,ids:{},geometry:Object.fromEntries(['addPoint','addLine','addCircle','addArc','addSpline'].map(key=>[key,noop])),endpointAt:noop,samePosition:noop,
+  sketchContext,pointUsage,geometryReads:{},isVisibleSketchElement:never,annotationAnchors:never,scale:()=>state.scale,
+  transientAuthoring:{clearTransientPointRollback:()=>events.push('clearPoint'),clearTransientLineCompletionRollback:()=>events.push('clearCompletion'),rollbackTransientLineStart:()=>events.push('rollbackLine')},pushModelConstraint:noop,addConstraintIfMissing:noop,
+  minLineLength:4,minArcLength:6,selection,preview:{setPointer:()=>events.push('pointer'),reset:()=>events.push('preview')},checkpoint:{capture:never,restore:never},cancelConstraintTargetCommand:()=>events.push('cancelConstraint'),cancelPendingCommand:()=>events.push('cancelPending'),
+  canCreateInActiveSketch:never,rejectRootSketchCreation:noop,setMode:value=>{state.mode=value;events.push('mode');},resetEditing:()=>events.push('editing'),resetBlankCandidate:never,updateToolbar:()=>events.push('toolbar'),
+  projection:{reset:()=>events.push('projection')},clearSelection:()=>events.push('clear'),solveAndRefresh:noop,recordHistory:noop,applicationText:(_ja,en)=>en,setHint:()=>events.push('hint'),updateUI:()=>events.push('ui'),draw:()=>events.push('draw'),log:noop};
+ const feature=sandbox.window.BasicDrawingTools.createAuthoring(ports);
+ return {created,events,state,ports,feature,createLifecycleSession:sandbox.window.DrawOperationLifecycle.createSession};
+}
+
+test('authoring assembly shares actual snap, draft, geometry and checkpoint ports and defers Centerline construction',()=>{
+ const f=authoringFixture();assert.deepEqual(f.events,['DrawingSnap','SplineDraft','SplineCommand','SnapConstraints','LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand']);
+ assert.equal(f.feature.snap,f.created.DrawingSnap.owner);assert.equal(f.feature.spline.draft,f.created.SplineDraft.owner);assert.equal(f.feature.spline.command,f.created.SplineCommand.owner);
+ assert.equal(f.feature.snapConstraints,f.created.SnapConstraints.owner);assert.equal(f.feature.tools.line,f.created.LineCommand.owner);
+ assert.equal(f.created.DrawingSnap.ports.geometryReads,f.ports.geometryReads);assert.equal(f.created.DrawingSnap.ports.annotationAnchors,f.ports.annotationAnchors);
+ assert.equal(f.created.DrawingSnap.ports.isActiveSketchElement,f.ports.sketchContext.isActiveSketchElement);
+ for(const key of Object.keys(f.ports.pointUsage))assert.equal(f.created.DrawingSnap.ports[key],f.ports.pointUsage[key]);
+ assert.equal(f.created.SplineDraft.ports.currentScope,f.ports.currentScope);assert.equal(f.created.SplineCommand.ports.addSpline,f.ports.geometry.addSpline);
+ assert.equal(f.created.SnapConstraints.ports.addPoint,f.ports.geometry.addPoint);assert.equal(f.created.SlotConstruction.ports.snapshotGeometryMutationState,f.ports.checkpoint.capture);
+ assert.equal(f.created.SlotConstruction.ports.restoreGeometryMutationState,f.ports.checkpoint.restore);
+ const commit=()=>{},invalidate=()=>{};const center=f.feature.createCenterline({commitNewConstraint:commit,parallelTolerance:0.125,invalidateAnalysis:invalidate});
+ assert.deepEqual(f.events.slice(-3),['CenterlineGeometry','CenterlineConstruction','CenterlineCommand']);assert.equal(center,f.created.CenterlineCommand.owner);
+ assert.equal(f.created.CenterlineConstruction.ports.geometry,f.ports.geometry);assert.equal(f.created.CenterlineConstruction.ports.ids,f.ports.ids);
+ assert.equal(f.created.CenterlineConstruction.ports.addPointSnapConstraints,f.feature.snapConstraints.addPointSnapConstraints);assert.equal(f.created.CenterlineConstruction.ports.commitNewConstraint,commit);
+ assert.equal(f.created.CenterlineCommand.ports.selection,f.ports.selection);assert.equal(f.created.CenterlineCommand.ports.minLineLength,4);
+ assert.equal(f.created.CenterlineCommand.ports.activeSketchId,f.ports.sketchContext.activeSketchId);assert.equal(f.created.CenterlineCommand.ports.invalidateAnalysis,invalidate);
+});
+
+test('shared authoring snap reads scale on every input and preserves post-resolution snap and selected Spline identity',()=>{
+ const f=authoringFixture(),pointer={x:10,y:20};f.events.length=0;
+ f.feature.tools.input.rectangle(pointer);assert.deepEqual(f.events,[['resolve',pointer,5],['RectangleCommand','click',f.state.snapped,f.state.snap]]);
+ f.state.scale=5;f.state.snap={id:'new'};f.events.length=0;f.feature.createCenterline({commitNewConstraint:()=>{},parallelTolerance:0.1,invalidateAnalysis:()=>{}});
+ f.events.length=0;const value=f.created.CenterlineCommand.ports.snapForDrawing(pointer);
+ assert.equal(value.point,f.state.snapped);assert.equal(value.snap,f.state.snap);assert.deepEqual(f.events,[['resolve',pointer,2]]);
+ const spline={id:'SP1'};f.events.length=0;f.created.SplineCommand.ports.selectCreatedSpline(spline);
+ assert.equal(f.state.selected.key,'splines');assert.equal(f.state.selected.items[0],spline);assert.equal(f.state.mode,'select');assert.deepEqual(f.events,['selected','mode']);
+});
+
+function lifecycleFixture() {
+ const f=authoringFixture(),external={};
+ for(const name of ['instances','instanceSources','centerline','fillet','offset']){
+  const owner={reset(){assert.equal(this,owner);f.events.push(name);},clearSources(){assert.equal(this,owner);f.events.push('sources');}};
+  external[name]=owner;
+ }
+ external.centerline.targets=[];external.offset.entries=[];
+ const stage={...external,canStart:()=>true,hatch:{reset:()=>f.state.hatch.reset()},readMode:()=>f.state.mode,clearTrimHover:()=>f.events.push('trimHover')};
+ f.events.length=0;const lifecycle=f.feature.createLifecycle(stage);assert.deepEqual(f.events,[]);
+ f.state.hatch={reset(){assert.equal(this,f.state.hatch);f.events.push('hatch');}};
+ return {...f,lifecycle,external};
+}
+
+test('authoring assembly binds its actual commands to an early Lifecycle session without a second mode owner',()=>{
+ const f=lifecycleFixture(),session=f.createLifecycleSession();session.setMode('spline');f.events.length=0;
+ const result=f.feature.createLifecycle({lifecycle:session,...f.external,canStart:()=>true,hatch:{reset:()=>f.state.hatch.reset()},clearTrimHover:()=>f.events.push('trimHover')});
+ assert.equal(result,session);assert.equal(session.mode,'spline');assert.deepEqual(f.events,[]);
+ session.cancel();assert.equal(session.mode,'spline');assert.equal(f.events.includes('SplineDraft.cancel'),true);assert.equal(f.events.includes('rollbackLine'),true);
+ f.events.length=0;session.exit();assert.equal(session.mode,'select');assert.equal(f.events.includes('mode'),false);
+ assert.equal(f.events.includes('SplineDraft.reset'),true);assert.equal(f.events.includes('SplineDraft.cancel'),false);
+ assert.equal(session.start('line'),true);assert.equal(session.mode,'line');assert.equal(f.state.mode,'select');
+});
+
+test('authoring Lifecycle reuses the created drafts and preserves distinct Sketch reset, cancel and exit effects',()=>{
+ const f=lifecycleFixture();assert.equal(f.lifecycle.active(),false);assert.deepEqual(f.events,[]);
+ f.lifecycle.resetInputsForSketchChange();assert.deepEqual(f.events,['LineCommand.reset','RectangleCommand.reset','fillet','CircularCommands.resetCircle','CircularCommands.resetArcs','preview','offset']);
+ f.events.length=0;f.state.mode='spline';f.lifecycle.cancel();assert.equal(f.state.mode,'spline');
+ assert.deepEqual(f.events,['centerline','rollbackLine','clearPoint','clearCompletion','LineCommand.reset','RectangleCommand.reset','SlotCommand.reset','fillet','CircularCommands.resetCircle','CircularCommands.resetArcs','SplineDraft.cancel','editing','projection','preview','offset','hatch','snap','clear','hint','ui','draw']);
+ f.events.length=0;f.lifecycle.exit();assert.equal(f.state.mode,'select');assert.equal(f.events.includes('SplineDraft.reset'),true);
+ assert.equal(f.events.includes('SplineDraft.cancel'),false);assert.equal(f.events.includes('rollbackLine'),false);assert.deepEqual(f.events.slice(-5),['mode','toolbar','hint','ui','draw']);
+});
+
+test('authoring Lifecycle retains Document discard boundaries and stops at a failed reset after selecting mode',()=>{
+ const f=lifecycleFixture();f.lifecycle.resetForDocument();
+ assert.deepEqual(f.events,['LineCommand.reset','centerline','clearPoint','clearCompletion','RectangleCommand.reset','SlotCommand.reset','fillet','CircularCommands.resetCircle','CircularCommands.resetArcs','SplineDraft.reset','projection','sources','instanceSources','editing','pointer','offset']);
+ f.events.length=0;f.state.mode='slot';const marker=new Error('circle reset failed');f.created.CircularCommands.owner.resetCircle=()=>{throw marker;};
+ assert.throws(()=>f.lifecycle.prepareConstraintStart(),error=>error===marker);
+ assert.equal(f.state.mode,'select');assert.deepEqual(f.events,['cancelPending','centerline','SlotCommand.reset','mode','LineCommand.reset','RectangleCommand.reset','fillet']);
+});
+
+test('authoring Offset shares capabilities while retaining a distinct live scope and delayed Lifecycle preparation',()=>{
+ const f=authoringFixture();f.events.length=0;let current={id:'offset-scope'},lifecycle=null;
+ const never=()=>{throw Error('no eager operation');};
+ const options={currentScope:()=>current,placement:{},sourceSelection:{},pending:{},valueInput:{},viewport:{},ctx:{},withCanvasState:never,drawDimension:never,
+  readMode:never,commitNewConstraint:never,offsetChainErrorText:never,prepareStart:()=>lifecycle.prepare('offset'),updateGeometrySelectionUI:never,invalidateAnalysis:never};
+ const result=f.feature.createOffset(options),child=f.created.OffsetFeature;
+ assert.equal(result,child.owner);assert.deepEqual(f.events,['OffsetFeature']);
+ for(const key of Object.keys(options))assert.equal(child.ports[key],options[key],key);
+ for(const key of ['geometry','ids','selection','preview','minLineLength','minArcLength','applicationText','cancelConstraintTargetCommand','cancelPendingCommand','clearSelection','setHint','updateUI','draw','updateToolbar'])assert.equal(child.ports[key],f.ports[key],key);
+ assert.equal(child.ports.clearSnap,f.feature.snap.clear);assert.notEqual(child.ports.currentScope,f.ports.currentScope);
+ current={id:'new-offset-scope'};assert.equal(child.ports.currentScope(),current);
+ lifecycle={prepare(mode){assert.equal(this,lifecycle);f.events.push(mode);}};child.ports.prepareStart();assert.deepEqual(f.events,['OffsetFeature','offset']);
+});
+
+test('authoring Fillet retains its own checkpoint and raw stabilize, pointer and failure callbacks',()=>{
+ const f=authoringFixture();f.events.length=0;const marker=new Error('stabilization failed'),checkpoint={captureGeometry:()=>{},restoreGeometry:()=>{}};let pointer={x:1,y:2},lifecycle=null;
+ const options={defaultDimensionForTarget:()=>{},syncLineOrientationHints:()=>{},pending:{},readPointer:()=>pointer,prepareStart:()=>lifecycle.prepare('fillet'),
+  guardSketchProjectionShapeEdit:()=>{},valueInput:{},checkpoint,stabilize:()=>{throw marker;},acceptError:0.0125,invalidateAnalysis:()=>{},refreshConstraintAnalysis:()=>{},updateGeometrySelectionUI:()=>{}};
+ const result=f.feature.createFillet(options),child=f.created.FilletFeature;assert.equal(result,child.owner);assert.deepEqual(f.events,['FilletFeature']);
+ for(const key of Object.keys(options))assert.equal(child.ports[key],options[key],key);
+ for(const key of ['geometry','minLineLength','pushModelConstraint','selection','updateToolbar','clearSelection','applicationText','setHint','updateUI','draw','recordHistory','cancelConstraintTargetCommand'])assert.equal(child.ports[key],f.ports[key],key);
+ assert.equal(child.ports.clearSnap,f.feature.snap.clear);assert.notEqual(child.ports.checkpoint,f.ports.checkpoint);
+ pointer={x:3,y:4};assert.equal(child.ports.readPointer(),pointer);
+ lifecycle={prepare(mode){assert.equal(this,lifecycle);f.events.push(mode);}};child.ports.prepareStart();
+ assert.throws(()=>child.ports.stabilize(),error=>error===marker);assert.deepEqual(f.events,['FilletFeature','fillet']);
+});

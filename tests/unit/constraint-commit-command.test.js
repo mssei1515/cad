@@ -4,6 +4,73 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync('src/commands/constraint_commit_command.js', 'utf8'), sandbox);
+function insertionFixture() {
+ const events = [], state = { scope: { constraints: [] }, namespace: { parameters: [] }, active: 'S1', first: 'S1', drawable: new Set(['S1', 'S2']), failure: null, error: new Error('insertion failed') };
+ function stage(name, ...args) { events.push([name, ...args]); if(state.failure === name) throw state.error; }
+ const api = sandbox.window.ConstraintCommitCommand.createInsertion({
+  currentScope: () => { stage('scope'); state.onScope?.(); return state.scope; },
+  currentParameterNamespace: () => { stage('namespace'); state.onNamespace?.(); return state.namespace; },
+  activeSketchId: () => { stage('active'); return state.activeValues ? state.activeValues.shift() : state.active; },
+  isDrawableSketch: id => { stage('drawable', id); return state.drawable.has(id); },
+  firstDrawableSketchId: () => { stage('first'); return state.first; },
+  ensureDimensionParameter: (constraint, namespace) => { stage('parameter', constraint, namespace); namespace.parameters.push(constraint); },
+ });
+ assert.deepEqual(events, []); assert.equal(Object.isFrozen(api), true);
+ return { api, state, events, names: () => events.map(e => e[0]) };
+}
+
+test('insertion assignment preserves drawable fallback, nullable inputs and default argument read timing', () => {
+ const f = insertionFixture(), constraint = {};
+ assert.equal(f.api.assignSketch(constraint, 'S2'), constraint); assert.equal(constraint.sketchId, 'S2'); assert.deepEqual(f.names(), ['drawable']);
+ f.events.length = 0; f.state.first = 'S2'; f.api.assignSketch(constraint, 'ROOT');
+ assert.equal(constraint.sketchId, 'S2'); assert.deepEqual(f.names(), ['drawable', 'first']);
+ f.events.length = 0; f.state.first = null; f.state.active = 'S1'; f.api.assignSketch(constraint, 'ROOT');
+ assert.equal(constraint.sketchId, 'S1'); assert.deepEqual(f.names(), ['drawable', 'first', 'active']);
+ f.events.length = 0; assert.equal(f.api.assignSketch(null, 'ROOT'), null); assert.deepEqual(f.names(), ['drawable', 'first']);
+ f.events.length = 0; f.state.activeValues = [undefined, undefined, 'S2'];
+ assert.equal(f.api.push(constraint), constraint); assert.equal(constraint.sketchId, 'S2');
+ assert.deepEqual(f.names(), ['active', 'active', 'drawable', 'first', 'active', 'scope', 'namespace', 'parameter']);
+});
+
+test('insertion writes the bound scope before reading the current separate Parameter namespace and follows replacements', () => {
+ const f = insertionFixture(), constraint = {}, scope = f.state.scope, originalNamespace = f.state.namespace, nextNamespace = { parameters: [] };
+ f.state.onScope = () => { assert.equal(constraint.sketchId, 'S2'); f.state.namespace = nextNamespace; };
+ f.state.onNamespace = () => assert.equal(scope.constraints[0], constraint);
+ assert.equal(f.api.push(constraint, 'S2'), constraint); assert.equal(scope.constraints[0], constraint);
+ assert.equal(nextNamespace.parameters[0], constraint); assert.equal(originalNamespace.parameters.length, 0);
+ assert.deepEqual(f.names(), ['drawable', 'scope', 'namespace', 'parameter']);
+ f.state.onScope = null; f.state.onNamespace = null; f.state.scope = { constraints: [] }; f.state.namespace = { parameters: [] };
+ const next = {}; f.api.push(next, 'S1'); assert.equal(f.state.scope.constraints[0], next); assert.equal(f.state.namespace.parameters[0], next); assert.equal(scope.constraints.length, 1);
+ assert.equal(f.api.push(null, 'S1'), null); assert.equal(f.state.scope.constraints[1], null); assert.equal(f.state.namespace.parameters[1], null);
+});
+
+test('insertion failures retain original metadata and array mutation boundaries without adding rollback', () => {
+ for(const failure of ['active', 'drawable', 'first', 'scope', 'namespace', 'parameter']) {
+  const f = insertionFixture(), constraint = { sketchId: 'old' }; f.state.failure = failure;
+  const target = failure === 'active' ? undefined : failure === 'first' ? 'ROOT' : 'S2';
+  assert.throws(() => f.api.push(constraint, target), value => value === f.state.error);
+  assert.equal(constraint.sketchId, ['scope', 'namespace', 'parameter'].includes(failure) ? 'S2' : 'old');
+  assert.equal(f.state.scope.constraints.length, ['namespace', 'parameter'].includes(failure) ? 1 : 0);
+  if(f.state.scope.constraints.length) assert.equal(f.state.scope.constraints[0], constraint);
+  assert.equal(f.state.namespace.parameters.length, 0); assert.equal(f.names().at(-1), failure);
+ }
+ const f = insertionFixture(), frozen = Object.freeze({ sketchId: 'old' });
+ assert.throws(() => f.api.push(frozen, 'S1'), value => value.name === 'TypeError'); assert.equal(f.state.scope.constraints.length, 0); assert.ok(!f.names().includes('scope'));
+ f.events.length = 0; f.state.scope.constraints = Object.freeze([]); const constraint = {};
+ assert.throws(() => f.api.push(constraint, 'S1'), value => value.name === 'TypeError'); assert.equal(constraint.sketchId, 'S1'); assert.ok(!f.names().includes('namespace'));
+});
+
+test('implicit commit composes with insertion while duplicate rejection leaves incoming metadata and parameters untouched', () => {
+ const f = insertionFixture();
+ const command = sandbox.window.ConstraintCommitCommand.create({ currentScope: () => f.state.scope, activeSketchId: () => f.state.active,
+  pushModelConstraint: f.api.push, constraintSketchId: c => c.sketchId, redundantConstraintInfo: () => null });
+ const constraint = { kind: 'distance' }, matches = item => item.kind === 'distance';
+ assert.equal(command.ifMissing(constraint, matches), true); assert.equal(constraint.sketchId, 'S1');
+ assert.equal(f.state.scope.constraints[0], constraint); assert.equal(f.state.namespace.parameters[0], constraint);
+ f.events.length = 0; const duplicate = { kind: 'distance' };
+ assert.equal(command.ifMissing(duplicate, matches), false); assert.deepEqual(duplicate, { kind: 'distance' }); assert.deepEqual(f.events, []);
+ assert.equal(f.state.scope.constraints.length, 1); assert.equal(f.state.namespace.parameters.length, 1);
+});
 function implicitFixture() {
  const events = [], state = { scope: { constraints: [] }, active: 'S1', source: true, cycle: false, redundant: false };
  const command = sandbox.window.ConstraintCommitCommand.create({
@@ -65,7 +132,7 @@ test('redundant implicit additions replace the current array by identity before 
  assert.equal(candidate.reference, true); assert.equal(candidate.name, '参照 snap');
  assert.equal(f.events.at(-1)[0], 'forget'); assert.equal(f.events.at(-1)[1], candidate);
 });
-function fixture() {
+function fixture(overrides = {}) {
  const events = [], hints = [], model = { constraints: [] }, state = { editable: true, active: true, source: true, cycle: false, dimension: false, collapse: null, duplicate: null, trace: null, target: {}, history: [], measured: 44 };
  const result = { success: true, result: { errorNorm: 0, variableCount: 2, constraintCount: 1, iterations: 3, reason: 'ok' } };
  const constraint = { name: 'test', sketchId: 'S1' }; let time = 0;
@@ -85,6 +152,7 @@ function fixture() {
   sketchName: id => id, now: () => ++time, recordPerformance: trace => { state.trace = trace; events.push('performance'); },
   resolveSelection: type => { events.push('resolve'); state.requestedType=type; return state.resolution; },
   canvasSelection: { set: (field,value) => { assert.equal(field,'arcEndpointPair'); state.arcEndpointPair=value; events.push('selection'); } },
+  ...overrides,
  });
  return { command, model, state, events, hints, result, constraint };
 }
@@ -96,6 +164,48 @@ test('successful ordinary commit preserves constraint identity, solve ordering a
  const f = fixture(); assert.equal(f.command.ordinary('parallel', f.constraint), true); assert.equal(f.model.constraints[0], f.constraint);
  assert.deepEqual(f.events, ['capture', 'push', 'precondition', 'solve', 'clear', 'analysis', 'ui', 'draw', 'hint', 'log', 'history', 'performance']);
  assert.equal(f.state.trace.type, 'parallel'); assert.equal(f.state.trace.solveVariableCount, 2); assert.equal(f.state.trace.solveIterations, 3);
+});
+
+test('performance belongs to the committing command and publishes after history with the original observer identity', () => {
+ let command, previous = null, historyDone = false;
+ const observed = [];
+ const f = fixture({ recordHistory: () => { assert.equal(command.readPerformance(), previous); historyDone = true; },
+  recordPerformance: trace => { assert.equal(historyDone, true); assert.equal(command.readPerformance(), trace); observed.push(trace); } });
+ command = f.command; assert.equal(command.readPerformance(), null);
+ command.ordinary('parallel', f.constraint); previous = command.readPerformance();
+ assert.equal(previous, observed[0]); assert.equal(previous.type, 'parallel'); assert.ok(Number.isFinite(previous.totalMs));
+ historyDone = false; command.ordinary('equal', { name: 'next', sketchId: 'S1' });
+ assert.notEqual(command.readPerformance(), previous); assert.equal(command.readPerformance(), observed[1]);
+ assert.equal(command.readPerformance().type, 'equal');
+ const before = f.events.length; command.clearPerformance(); command.clearPerformance();
+ assert.equal(command.readPerformance(), null); assert.equal(f.events.length, before); assert.equal(observed.length, 2);
+ const withoutObserver = fixture({ recordPerformance: undefined });
+ assert.equal(withoutObserver.command.ordinary('parallel', withoutObserver.constraint), true);
+ assert.equal(withoutObserver.command.readPerformance().type, 'parallel'); assert.equal(command.readPerformance(), null);
+});
+
+test('authority, solve, collapse and redundancy rejection keep the last successful performance', () => {
+ for (const rejected of ['authority', 'scope', 'solve', 'collapse', 'redundancy']) {
+  const f = fixture({ targetFromConstraint: () => ({}) }); f.command.ordinary('parallel', f.constraint);
+  const previous = f.command.readPerformance();
+  if (rejected === 'authority') f.state.editable = false;
+  if (rejected === 'scope') f.state.active = false;
+  if (rejected === 'solve') f.result.success = false;
+  if (rejected === 'collapse') f.state.collapse = { line: { id: 'L1' }, before: 1, after: 0 };
+  if (rejected === 'redundancy') { f.state.duplicate = { redundant: true }; f.state.dimension = true; }
+  f.events.length = 0; f.command.ordinary('distance', { name: 'rejected', sketchId: 'S1' });
+  assert.equal(f.command.readPerformance(), previous, rejected); assert.equal(f.state.trace, previous, rejected);
+  assert.equal(f.events.includes('performance'), false, rejected);
+ }
+});
+
+test('an exception before publication preserves prior performance and observers still receive the same mutable trace', () => {
+ let fail = false; const error = new Error('history failed');
+ const f = fixture({ recordHistory: () => { if (fail) throw error; }, recordPerformance: trace => { trace.observed = true; } });
+ f.command.ordinary('parallel', f.constraint); const previous = f.command.readPerformance();
+ assert.equal(previous.observed, true); fail = true;
+ assert.throws(() => f.command.ordinary('equal', { name: 'next', sketchId: 'S1' }), value => value === error);
+ assert.equal(f.command.readPerformance(), previous);
 });
 test('ordinary solve rejection restores and reports without history, retaining the existing undefined return', () => {
  const f = fixture(); f.result.success = false; assert.equal(f.command.ordinary('parallel', f.constraint), undefined);

@@ -106,5 +106,22 @@
     }
     return Object.freeze({ decode, install });
   }
-  window.DocumentLoading = Object.freeze({ create });
+  function createWithCodecs({ createBlockProjectionBundle, geometryInstanceBundlesForScope, elementSketchId,
+    deserializeConstraint, constraintSketchId, separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace,
+    isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint,
+    defaultUnits, applicationText, invalidateProjection, normalizeArcSweeps }) {
+    const geometryInstances = window.GeometryInstancePersistence.create({ applicationText });
+    const blockDefinitionPersistence = window.BlockDefinitionPersistence.create({ applicationText,
+      serializedGeometryInstanceListError: geometryInstances.listError });
+    const connectionPorts = { createBlockProjectionBundle, geometryInstanceBundlesForScope, elementSketchId,
+      deserializeConstraint, constraintSketchId, separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace, applicationText };
+    const blockConnectionsPersistence = window.BlockConnectionsPersistence.create(connectionPorts);
+    const documentGeometryPersistence = window.DocumentGeometryPersistence.create({ ...connectionPorts,
+      isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint });
+    const loading = create({ blockDefinitionPersistence, blockConnectionsPersistence, documentGeometryPersistence,
+      geometryInstancePersistence: geometryInstances, serializedGeometryInstanceListError: geometryInstances.listError,
+      normalizeGeometryInstance: geometryInstances.normalize, defaultUnits, applicationText, invalidateProjection, normalizeArcSweeps });
+    return Object.freeze({ loading, geometryInstances });
+  }
+  window.DocumentLoading = Object.freeze({ create, createWithCodecs });
 })();

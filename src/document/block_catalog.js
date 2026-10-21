@@ -3,6 +3,15 @@
   "use strict";
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
   function create({ definitions }) {
+    function duplicateElementId(definition) {
+      const seen = new Set();
+      for (const item of [...(definition?.points || []), ...(definition?.lines || []), ...(definition?.circles || []), ...(definition?.arcs || []), ...(definition?.splines || []), ...(definition?.hatches || []), ...(definition?.referenceImages || []), ...(definition?.blockInstances || [])]) {
+        const id = String(item?.id || "");
+        if (seen.has(id)) return id;
+        seen.add(id);
+      }
+      return null;
+    }
     function blockDefinitionById(id) {
       return definitions().find((definition) => definition.id === id) || null;
     }
@@ -73,7 +82,7 @@
       return definitions().some(definition => (definition.hatches?.length || 0) > 0);
     }
 
-    return Object.freeze({ blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, hasHatches, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet });
+    return Object.freeze({ duplicateElementId, blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, hasHatches, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet });
   }
   window.BlockCatalog = Object.freeze({ create });
 })();

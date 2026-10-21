@@ -10,6 +10,75 @@ for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geom
 }
 const { Point, Line, Arc, Spline, DistanceConstraint, ArcEndpointCoincidentConstraint, PointOnSplineConstraint, SketchProjectionConstraint, OffsetChainConstraint } = sandbox.window.GeometrySolver;
 const create = sandbox.window.ConstraintReferences.create;
+for (const file of ["src/geometry/geometry_ref.js", "src/geometry/objects.js", "src/editing/selection_highlight.js"]) {
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
+}
+const { LineFixedConstraint, ArcEndpointFixedConstraint } = sandbox.window.GeometrySolver;
+function fixedStateFixture() {
+  const state = { scope: { constraints: [] }, reads: 0, compares: [], readFailure: null, compareFailure: null };
+  const highlight = sandbox.window.SelectionHighlight.create({ types: sandbox.window.GeometrySolver,
+    geometryRefForItem: sandbox.window.GeometryObjects.geometryRefForItem, geometryRefsEqual: sandbox.window.GeometryRef.equals });
+  const api = sandbox.window.ConstraintReferences.createFixedState({
+    currentScope: () => { state.reads++; if (state.readFailure) throw state.readFailure; return state.scope; },
+    sameConstraintDisplayElement: (a, b) => { state.compares.push([a, b]); if (state.compareFailure) throw state.compareFailure; return highlight.sameConstraintDisplayElement(a, b); } });
+  assert.equal(state.reads, 0); assert.deepEqual(state.compares, []); assert.equal(Object.isFrozen(api), true);
+  return { state, api };
+}
+
+test('fixed queries use current constraints, strict enabled flags and actual types and return the first original match', () => {
+  const f = fixedStateFixture(), p = new Point('P1', 0, 0), q = new Point('P2', 10, 0), line = new Line('L1', p, q);
+  const disabled = new LineFixedConstraint(line), first = new LineFixedConstraint(line), second = new LineFixedConstraint(line);
+  disabled.enabled = false; f.state.scope.constraints = [{ line }, disabled, first, second]; const original = f.state.scope.constraints;
+  for (const enabled of [true, undefined, null, 0, 'false']) {
+    first.enabled = enabled; f.state.compares.length = 0;
+    assert.equal(f.api.findLineFixedConstraint(line), first); assert.deepEqual(f.state.compares, [[line, line]]);
+  }
+  assert.equal(f.api.findLineFixedConstraint(new Line('L1', p, q)), undefined); assert.equal(f.state.scope.constraints, original);
+  f.state.scope.constraints = [second]; assert.equal(f.api.findLineFixedConstraint(line), second);
+  f.state.scope = { constraints: [] }; assert.equal(f.api.findLineFixedConstraint(line), undefined); assert.equal(f.api.pointLockedByLineFixed(p), false);
+});
+
+test('fixed display queries share real projected identity while arc endpoints retain comparison before endpoint filtering', () => {
+  const f = fixedStateFixture(), p = new Point('P1', 0, 0), q = new Point('P2', 10, 0);
+  const projected = Object.assign(new Line('B1@L1', p, q), { blockProjection: true });
+  const replacement = Object.assign(new Line('B1@L1', p, q), { blockProjection: true }), fixed = new LineFixedConstraint(projected);
+  f.state.scope.constraints = [fixed]; assert.equal(f.api.findLineFixedConstraint(replacement), fixed);
+  assert.equal(f.api.findLineFixedConstraint(Object.assign(new Line('B2@L1', p, q), { blockProjection: true })), undefined);
+  assert.equal(f.api.findLineFixedConstraint(new Line('B1@L1', p, q)), undefined);
+  const arc = Object.assign(new Arc('B1@A1', p, 10, 0, Math.PI), { blockProjection: true });
+  const regenerated = Object.assign(new Arc('B1@A1', p, 10, 0, Math.PI), { blockProjection: true });
+  const end = new ArcEndpointFixedConstraint(arc, 'end', -10, 0), start = new ArcEndpointFixedConstraint(arc, 'start', 10, 0);
+  f.state.scope.constraints = [fixed, end, start]; f.state.compares.length = 0;
+  assert.equal(f.api.findArcEndpointFixedConstraint(regenerated, 'start'), start); assert.deepEqual(f.state.compares, [[arc, regenerated], [arc, regenerated]]);
+  assert.equal(f.api.findArcEndpointFixedConstraint(regenerated, 'end'), end);
+  assert.equal(f.api.findArcEndpointFixedConstraint(regenerated, 'START'), undefined);
+  start.enabled = false; assert.equal(f.api.findArcEndpointFixedConstraint(regenerated, 'start'), undefined);
+});
+
+test('fixed-line point locks use raw endpoint identity without display comparisons and follow replaced scopes', () => {
+  const f = fixedStateFixture(), p = new Point('P1', 0, 0), q = new Point('P2', 10, 0), line = new Line('L1', p, q), fixed = new LineFixedConstraint(line);
+  f.state.scope.constraints = [fixed]; f.state.compareFailure = new Error('point lock must not compare display references');
+  assert.equal(f.api.pointLockedByLineFixed(p), true); assert.equal(f.api.pointLockedByLineFixed(q), true);
+  assert.equal(f.api.pointLockedByLineFixed(new Point('P1', 0, 0)), false); assert.deepEqual(f.state.compares, []);
+  fixed.enabled = false; assert.equal(f.api.pointLockedByLineFixed(p), false);
+  fixed.enabled = true; f.state.scope.constraints = [fixed, null]; assert.equal(f.api.pointLockedByLineFixed(p), true);
+  f.state.scope = { constraints: [new LineFixedConstraint(new Line('L1', new Point('P1', 0, 0), new Point('P2', 10, 0)))] };
+  assert.equal(f.api.pointLockedByLineFixed(p), false); assert.equal(line.p1, p); assert.equal(line.p2, q);
+});
+
+test('fixed queries retain read, comparison and malformed-constraint error boundaries without filtering or mutation', () => {
+  const f = fixedStateFixture(), error = new Error('query failed'), p = new Point('P1', 0, 0), q = new Point('P2', 10, 0), line = new Line('L1', p, q);
+  f.state.readFailure = error;
+  for (const invoke of [() => f.api.findLineFixedConstraint(line), () => f.api.findArcEndpointFixedConstraint({}, 'start'), () => f.api.pointLockedByLineFixed(p)]) assert.throws(invoke, value => value === error);
+  assert.deepEqual(f.state.compares, []); f.state.readFailure = null;
+  const disabled = new LineFixedConstraint(line); disabled.enabled = false; f.state.scope.constraints = [disabled, { line }]; f.state.compareFailure = error;
+  assert.equal(f.api.findLineFixedConstraint(line), undefined); assert.deepEqual(f.state.compares, []);
+  const fixed = new LineFixedConstraint(line); f.state.scope.constraints = [fixed];
+  assert.throws(() => f.api.findLineFixedConstraint(line), value => value === error); assert.equal(f.state.scope.constraints[0], fixed); assert.equal(fixed.line, line);
+  f.state.compareFailure = null; f.state.scope.constraints = [null];
+  assert.throws(() => f.api.findLineFixedConstraint(line), value => value.name === 'TypeError');
+  assert.throws(() => f.api.pointLockedByLineFixed(p), value => value.name === 'TypeError'); assert.equal(f.state.scope.constraints[0], null);
+});
 
 test("line dependencies preserve point identity and recognize either distance endpoint order", () => {
   const queries = create({ resolveGeometryRef: () => null });

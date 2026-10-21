@@ -860,5 +860,55 @@
     });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
+  // Share only capabilities used by more than one dimension test role.
+  function createSupport({
+    resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope,
+    isDimensionConstraint, dimensionLayout, hypot2, targetFromConstraint, serializeModel, constraintTargetSession, pendingCommandSession,
+    dimensionValueInput, ctx, drawDimensions, constraintSketchId, canvasSelection, viewport,
+  }) {
+    function createFixtures({
+      isReadOnlyDimension, dimensionLabelForConstraint, defaultDimensionForTarget, startDistanceValueInput, dimensionWithLabelAt,
+      angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint,
+      serializeDimension, rootSketchId, sketchById, isVisibleSketchId,
+    }) {
+      return createFixtureSupport({
+        resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope,
+        isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint,
+        defaultDimensionForTarget, serializeModel, constraintTargetSession, pendingCommandSession, startDistanceValueInput, dimensionValueInput,
+        dimensionWithLabelAt, angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets,
+        angleDimensionFromLabelPoint, serializeDimension, rootSketchId, ctx, drawDimensions, sketchById, constraintSketchId, isVisibleSketchId,
+      });
+    }
+    function createInteraction({
+      clientPosition, startDimensionEditInput, clearSelection, updateUI, draw, addCircle, addArc, fitAllGeometryToViewport,
+      startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, dimensionAnchor, LineCircleDistanceConstraint,
+      ConcentricRadiusDifferenceConstraint, signedPointLineDistance, vectorNorm, solveSketchAndDependents, snapshotModelState,
+      refreshConstraintAnalysis, dimensionDrag,
+    }) {
+      return createInteractionSupport({
+        currentScope, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition, startDimensionEditInput, clearSelection,
+        canvasSelection, updateUI, draw, resetModelState, addPoint, addLine, addCircle, addArc, addDistanceConstraintFromTarget,
+        dimensionFromAnchor, activeSketchId, constraintTargetSession, fitAllGeometryToViewport, startDistanceCommand, constraintGraphNodes,
+        worldToCanvasScreen, canvas, viewport, dimensionAnchor, serializeModel, LineCircleDistanceConstraint,
+        ConcentricRadiusDifferenceConstraint, pendingCommandSession, signedPointLineDistance, vectorNorm, hypot2, solveSketchAndDependents,
+        snapshotModelState, refreshConstraintAnalysis, dimensionValueInput, dimensionDrag,
+      });
+    }
+    function createDisplay({
+      Point, Arc, placement, layouts, metrics, circlePointAtAngle, screenPxPerMm, outsideShaftLengthFactor, fitMarginFactor, canvasHover,
+      readDocument, normalizeDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState, effectiveDimensionAppearance,
+      displayFactor, formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle, dimensionTextOffset,
+    }) {
+      return createDisplaySupport({
+        Point, Arc, placement, layouts, metrics, circlePointAtAngle, viewport, hypot2, screenPxPerMm, outsideShaftLengthFactor, fitMarginFactor,
+        canvasSelection, canvasHover, ctx, drawDimensions, currentScope, readDocument, isDimensionConstraint, constraintSketchId,
+        activeSketchId, normalizeDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState, targetFromConstraint,
+        effectiveDimensionAppearance, displayFactor, formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle,
+        dimensionTextOffset,
+      });
+    }
+    return Object.freeze({ createFixtures, createInteraction, createDisplay });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
 })();

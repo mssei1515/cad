@@ -6,10 +6,10 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/rendering/geometry_presentation.js'), 'utf8'), sandbox);
 class Point {}
-function fixture() {
+function fixture(pointUsage, legacyUsage, policies = {}) {
   const selection = { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], geometryInstances: [] };
   const hover = { current: {} }, view = { geometryIds: false, constraintStatus: false };
-  const presentation = sandbox.window.GeometryPresentation.create({ Point, canvasSelection: selection, canvasHover: hover, viewState: view, isExporting: () => !!view.exporting,
+  const presentation = sandbox.window.GeometryPresentation.create({ Point, pointUsage, canvasSelection: selection, canvasHover: hover, viewState: view, isExporting: () => !!view.exporting,
     effectiveAppearanceForElement: item => item.appearance || { color: 'normal', lineWidth: 1.5 },
     isEditableSketchElement: item => !item.inactive, isConstraintOperandSelected: item => !!item.operand,
     isPendingReferenceTarget: item => !!item.reference, isSidebarHighlightedElement: item => !!item.tree,
@@ -26,8 +26,8 @@ function fixture() {
       isReferencePoint: p => !!p.referencePoint, isAnyLineEndpoint: p => !!p.lineEnd,
       isEndpointPoint: p => p.kind === 'endpoint', isDraggingPoint: p => !!p.dragging,
       isDraggingCenter: p => !!p.draggingCenter, sidebarHoveredItem: () => hover.sidebarItem,
-      pointLockedByLineFixed: p => !!p.fixedByLine,
-    } });
+      pointLockedByLineFixed: p => !!p.fixedByLine, ...legacyUsage,
+    }, ...policies });
   return { presentation, selection, hover, view };
 }
 test('export paints document appearance without interaction highlights or editing points', () => {
@@ -244,4 +244,116 @@ test('Sketch draw ordering filters visibility, retains item identity/stable orde
   const items = [active1, inactive1, hidden, active2, inactive2], before = [...items]; let result = h.api.drawOrderBySketch(items);
   assert.deepEqual(Array.from(result), [inactive1, inactive2, active1, active2]); assert.deepEqual(items, before);
   inactive1.visible = false; inactive2.active = true; result = h.api.drawOrderBySketch(items); assert.deepEqual(Array.from(result), [active1, active2, inactive2]); assert.deepEqual(items, before);
+});
+
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/point_usage.js'), 'utf8'), sandbox);
+function sharedUsageFixture() {
+  const empty = () => ({ lines: [], circles: [], arcs: [], splines: [], constraints: [] });
+  const calls = [], state = { ready: false, scope: empty(), expanded: empty(), edited: [], failure: null };
+  const read = name => { assert.equal(state.ready, true); calls.push(name); if (state.failure) throw state.failure; };
+  const usage = sandbox.window.PointUsage.create({ currentScope: () => { read('scope'); return state.scope; },
+    allGeometryLines: () => { read('lines'); return state.expanded.lines; }, allGeometryCircles: () => { read('circles'); return state.expanded.circles; },
+    allGeometryArcs: () => { read('arcs'); return state.expanded.arcs; }, allGeometrySplines: () => { read('splines'); return state.expanded.splines; },
+    editedFitPoints: () => { read('edited'); return state.edited; }, constraintReferencesPoint: (constraint, point) => constraint.point === point,
+  });
+  const f = fixture(usage); assert.deepEqual(calls, []); state.ready = true;
+  return { ...f, state, usage, calls, empty };
+}
+
+test('shared PointUsage follows current scope and exact point references without eager reads or point/selection mutation', () => {
+  const f = sharedUsageFixture(), point = Object.assign(new Point(), { id: 'P', kind: 'endpoint' }), other = Object.assign(new Point(), { id: 'P', kind: 'endpoint' });
+  const line = { p1: point, p2: {} }; f.state.scope.lines.push(line); f.selection.points.push(point);
+  assert.ok(f.presentation.pointPaintState(point)); assert.equal(f.presentation.pointPaintState(other), null); assert.equal(f.usage.isPointUsedByLine(point), true);
+  f.state.scope = f.empty(); assert.equal(f.presentation.pointPaintState(point), null); assert.equal(f.usage.isPointUsedByLine(point), false);
+  f.state.scope.constraints.push({ point }); assert.ok(f.presentation.pointPaintState(point));
+  f.state.scope.constraints[0].enabled = false; assert.equal(f.presentation.pointPaintState(point), null);
+  assert.equal(f.selection.points[0], point); assert.deepEqual({ ...point }, { id: 'P', kind: 'endpoint' }); assert.equal(line.p1, point);
+  const error = new Error('scope unavailable'); f.state.failure = error; assert.throws(() => f.presentation.pointPaintState(point), value => value === error);
+});
+
+test('shared PointUsage reads current spline edit membership and projection collections by reference', () => {
+  const f = sharedUsageFixture(), point = Object.assign(new Point(), { id: 'P', kind: 'endpoint' });
+  f.state.scope.splines.push({ fitPoints: [point] }); f.selection.points.push(point);
+  assert.equal(f.presentation.pointPaintState(point), null); f.state.edited = [point]; assert.ok(f.presentation.pointPaintState(point));
+  f.state.edited = [{ id: 'P' }]; assert.equal(f.presentation.pointPaintState(point), null);
+  const projected = Object.assign(new Point(), { kind: 'endpoint', blockProjection: true }); f.selection.points.push(projected);
+  f.state.expanded.splines.push({ fitPoints: [projected] }); assert.equal(f.presentation.pointPaintState(projected), null);
+  f.state.edited = [projected]; assert.ok(f.presentation.pointPaintState(projected)); assert.ok(f.calls.includes('splines'));
+  assert.equal(f.state.scope.splines[0].fitPoints[0], point); assert.equal(f.state.expanded.splines[0].fitPoints[0], projected);
+});
+
+test('shared point classification leaves dragging, center and sidebar presentation queries live and separate', () => {
+  const f = sharedUsageFixture(), point = Object.assign(new Point(), { kind: 'endpoint' }); f.state.scope.lines.push({ p1: point, p2: {} });
+  assert.equal(f.presentation.pointPaintState(point), null); point.dragging = true; assert.ok(f.presentation.pointPaintState(point).showId);
+  point.dragging = false; assert.equal(f.presentation.pointPaintState(point), null);
+  f.state.scope = f.empty(); f.state.scope.circles.push({ center: point }); f.hover.sidebarItem = { center: point }; assert.ok(f.presentation.pointPaintState(point));
+  f.hover.sidebarItem = null; assert.equal(f.presentation.pointPaintState(point), null); point.draggingCenter = true; assert.ok(f.presentation.pointPaintState(point));
+  point.draggingCenter = false; f.hover.current.point = point; point.fixedByLine = true;
+  assert.equal(f.presentation.pointPaintState(point).color, '#dc2626');
+});
+
+test('legacy pointQueries and shared PointUsage produce identical paint policy for selection, hover, status, fixed points and export', () => {
+  const modern = sharedUsageFixture(), legacy = fixture(undefined, modern.usage), point = Object.assign(new Point(), { kind: 'endpoint', fixed: true });
+  modern.state.scope.lines.push({ p1: point, p2: {} });
+  for (const config of [{}, { selected: true }, { hovered: true }, { constraintStatus: true }, { exporting: true }, { selected: true, exporting: true }, { hovered: true, geometryIds: true }]) {
+    for (const f of [modern, legacy]) {
+      f.selection.points.length = 0; if (config.selected) f.selection.points.push(point);
+      f.hover.current.point = config.hovered ? point : null;
+      f.view.constraintStatus = Boolean(config.constraintStatus); f.view.exporting = Boolean(config.exporting); f.view.geometryIds = Boolean(config.geometryIds);
+    }
+    assert.deepEqual(modern.presentation.pointPaintState(point), legacy.presentation.pointPaintState(point));
+  }
+});
+
+test('shared presentation owners are lazy and override legacy ports while retaining panel precedence and selection identity', () => {
+  const c = commandTargetFixture(), s = sketchStyleFixture(), fail = () => { throw Error('legacy policy must not run'); };
+  const f = fixture(undefined, undefined, { commandTargets: c.api, sketchStyle: s.api, isConstraintOperandSelected: fail, isPendingReferenceTarget: fail, isReferenceHoverElement: fail, sketchAlpha: fail, sketchStrokeWidth: fail, constraintStatusColor: fail });
+  assert.deepEqual(c.calls, []); assert.deepEqual(s.calls, []);
+  c.state.mode = 'instance-sources'; c.state.panel = { id: 'other' }; c.state.operands = [{ item: c.item }];
+  assert.equal(f.presentation.geometryPaintState(c.item, 'lines').selected, false); assert.ok(!c.calls.includes('sources')); assert.ok(!c.calls.includes('operands'));
+  c.calls.length = 0; c.state.panel = c.selected;
+  assert.equal(f.presentation.geometryPaintState(c.item, 'lines').selected, true); assert.ok(!c.calls.includes('sources')); assert.deepEqual(f.selection.lines, []);
+  const error = new Error('target query failed'); s.calls.length = 0;
+  const throwing = fixture(undefined, undefined, { commandTargets: { ...c.api, isConstraintOperandSelected: () => { throw error; } }, sketchStyle: s.api });
+  assert.throws(() => throwing.presentation.geometryPaintState(c.item, 'lines'), value => value === error); assert.deepEqual(s.calls, []); assert.deepEqual(throwing.selection.lines, []);
+});
+
+test('shared Sketch style reads current status, solve errors and relation for paint color, alpha and fallback stroke width', () => {
+  const c = commandTargetFixture(), s = sketchStyleFixture(), f = fixture(undefined, undefined, { commandTargets: c.api, sketchStyle: s.api });
+  f.view.constraintStatus = true;
+  for (const [status,color] of [['under','#f59e0b'],['full','#111827'],['conflict','#dc2626']]) {
+    s.state.status = status; assert.equal(f.presentation.geometryPaintState(c.item, 'lines').color, 'theme:'+color);
+  }
+  s.state.error = true; assert.equal(f.presentation.geometryPaintState(c.item, 'lines').color, 'theme:#dc2626');
+  s.state.error = false; s.state.relation = 'reference'; assert.equal(f.presentation.geometryPaintState(c.item, 'lines').color, 'theme:#cbd5e1');
+  assert.equal(f.presentation.geometryStrokeWidth(c.item, { construction: true }), .9);
+  s.state.relation = 'active'; assert.equal(f.presentation.geometryStrokeWidth(c.item, { construction: true }), 1.1);
+  s.state.relation = 'other'; assert.equal(f.presentation.geometryPaintState(c.item, 'lines').alpha, 0);
+});
+
+test('shared command targets retain current pending reference and inactive hover checks and forward arc endpoint options', () => {
+  const c = commandTargetFixture(), s = sketchStyleFixture(), f = fixture(undefined, undefined, { commandTargets: c.api, sketchStyle: s.api });
+  c.item.inactive = true; f.hover.current.line = c.item; c.state.command = { type: 'distance', referenceTarget: { kind: 'line', line: c.item } };
+  let paint = f.presentation.geometryPaintState(c.item, 'lines'); assert.equal(paint.selected, true); assert.equal(paint.hovered, true);
+  c.state.command = null; c.state.pending = { referenceTarget: { kind: 'line', line: c.item } };
+  paint = f.presentation.geometryPaintState(c.item, 'lines'); assert.equal(paint.selected, true); assert.equal(paint.hovered, false);
+  c.state.pending = null; assert.equal(f.presentation.geometryPaintState(c.item, 'lines').selected, false);
+  c.state.command = {}; c.state.reference = false; assert.equal(f.presentation.geometryPaintState(c.item, 'lines').hovered, false);
+  const arc = { start: { x: 1, y: 2 } }; c.state.operands = [{ kind: 'arc-endpoint', arc, endpoint: 'start' }]; f.hover.current.arcEndpoint = { arc, endpoint: 'start' };
+  assert.equal(f.presentation.arcEndpointPaintState(arc, 'start').radius, 7); assert.equal(c.state.operands[0].arc, arc);
+});
+
+test('legacy function ports and shared policy owners return identical paint and width through selection, status and export', () => {
+  const c = commandTargetFixture(), s = sketchStyleFixture(), modern = fixture(undefined, undefined, { commandTargets: c.api, sketchStyle: s.api });
+  const legacy = fixture(undefined, undefined, { ...c.api, ...s.api });
+  for (const config of [{}, { selected: true }, { hovered: true }, { panel: true }, { pending: true }, { status: true, relation: 'reference' }, { status: true, error: true }, { exporting: true, selected: true }, { construction: true }]) {
+    c.state.panel = config.panel ? c.selected : null; c.state.pending = config.pending ? { referenceTarget: { kind: 'line', line: c.item } } : null;
+    s.state.relation = config.relation || 'active'; s.state.error = Boolean(config.error); c.item.construction = Boolean(config.construction);
+    for (const f of [modern,legacy]) {
+      f.selection.lines.length = 0; if (config.selected) f.selection.lines.push(c.item);
+      f.hover.current.line = config.hovered ? c.item : null; f.view.exporting = Boolean(config.exporting); f.view.constraintStatus = Boolean(config.status);
+    }
+    assert.deepEqual(modern.presentation.geometryPaintState(c.item, 'lines'), legacy.presentation.geometryPaintState(c.item, 'lines'));
+    assert.equal(modern.presentation.geometryStrokeWidth(c.item, { construction: true }), legacy.presentation.geometryStrokeWidth(c.item, { construction: true }));
+  }
 });

@@ -1,4 +1,4 @@
-/* Compose primitive drawing commands around shared geometry, snap and preview owners. */
+/* Compose drawing features around shared geometry, snap and preview owners. */
 (() => {
   "use strict";
   function create({ geometry, ids, currentScope, snap, snapConstraints, snapForDrawing, endpointAt, samePosition,
@@ -76,5 +76,58 @@
     });
   }
 
-  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline });
+  function createAuthoring({ currentScope, ids, geometry, endpointAt, samePosition, sketchContext, pointUsage, geometryReads,
+    isVisibleSketchElement, annotationAnchors, scale, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
+    minLineLength, minArcLength, selection, preview, checkpoint, cancelConstraintTargetCommand, cancelPendingCommand,
+    canCreateInActiveSketch, rejectRootSketchCreation, setMode, resetEditing, resetBlankCandidate, updateToolbar,
+    projection, clearSelection, solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw, log }) {
+    const { isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, sketchName } = sketchContext;
+    const { isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint } = pointUsage;
+    const snap = window.DrawingSnap.create({ annotationAnchors, geometryReads, isVisibleSketchElement, isActiveSketchElement,
+      isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint,
+      sketchName, elementSketchId, applicationText });
+    function snapForDrawing(point) { return snap.resolve(point, 10 / scale()); }
+    const spline = createSpline({ currentScope, ids, endpointAt, samePosition, isPointUsedByPrimitive, addSpline: geometry.addSpline,
+      snapForDrawing, scale, cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+      setMode, resetEditing, resetBlankCandidate, updateToolbar, projection, preview, snap, clearSelection, selection,
+      solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw });
+    const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId,
+      addPoint: geometry.addPoint, addConstraintIfMissing });
+    const tools = create({ geometry, ids, currentScope, snap, snapConstraints, snapForDrawing, endpointAt, samePosition,
+      transientAuthoring, pushModelConstraint, addConstraintIfMissing, minLineLength, minArcLength, selection, preview, checkpoint,
+      clearSelection, setHint, updateUI, draw, solveAndRefresh, log });
+    function createCenterlineTool({ commitNewConstraint, parallelTolerance, invalidateAnalysis }) {
+      return createCenterline({ currentScope, geometry, ids, snapConstraints, commitNewConstraint, parallelTolerance,
+        cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar,
+        selection, sameSketchElements: sketchContext.sameSketchElements, activeSketchId: sketchContext.activeSketchId, isActiveSketchElement,
+        applicationText, minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw });
+    }
+    function createLifecycle({ lifecycle, canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
+      const construct = lifecycle ? lifecycle.bind : window.DrawOperationLifecycle.create;
+      return construct({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover,
+        line: tools.line, rectangle: tools.rectangle, slot: tools.slot, circular: tools.circular, spline: spline.draft,
+        splineEditing: { reset: resetEditing }, projection, preview,
+        transient: { clearPoint: transientAuthoring.clearTransientPointRollback,
+          clearLineCompletion: transientAuthoring.clearTransientLineCompletionRollback, rollbackLineStart: transientAuthoring.rollbackTransientLineStart },
+        clearSnap: snap.clear, clearSelection, selectMode: () => { setMode("select"); }, updateToolbar, setHint, updateUI, draw,
+        cancelConstraintTargetCommand, cancelPendingCommand, setMode });
+    }
+    function createOffset({ currentScope: offsetScope, placement, sourceSelection, pending, valueInput, viewport, ctx,
+      withCanvasState, drawDimension, readMode, commitNewConstraint, offsetChainErrorText, prepareStart, updateGeometrySelectionUI, invalidateAnalysis }) {
+      return window.OffsetFeature.create({ currentScope: offsetScope, geometry, ids, placement, sourceSelection, selection, pending, preview,
+        valueInput, viewport, ctx, withCanvasState, drawDimension, readMode, minLineLength, minArcLength, commitNewConstraint, offsetChainErrorText,
+        applicationText, cancelConstraintTargetCommand, cancelPendingCommand, clearSnap: snap.clear, clearSelection, prepareStart,
+        setHint, updateUI, draw, updateToolbar, updateGeometrySelectionUI, invalidateAnalysis });
+    }
+    function createFillet({ defaultDimensionForTarget, syncLineOrientationHints, pending, readPointer, prepareStart,
+      guardSketchProjectionShapeEdit, valueInput, checkpoint: filletCheckpoint, stabilize, acceptError, invalidateAnalysis,
+      refreshConstraintAnalysis, updateGeometrySelectionUI }) {
+      return window.FilletFeature.create({ geometry, minLineLength, defaultDimensionForTarget, syncLineOrientationHints, pushModelConstraint,
+        pending, selection, readPointer, prepareStart, clearSnap: snap.clear, updateToolbar, guardSketchProjectionShapeEdit, valueInput,
+        checkpoint: filletCheckpoint, clearSelection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
+        applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand });
+    }
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createLifecycle, createOffset, createFillet });
+  }
+  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring });
 })();

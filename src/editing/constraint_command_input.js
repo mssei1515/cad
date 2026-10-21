@@ -103,5 +103,40 @@
 
     return Object.freeze({ update });
   }
-  window.ConstraintCommandInput = Object.freeze({ create, createRetargetHover });
+  // Dimension dragging can hand a click back to the current distance command.
+  function createDimensionContinuation({ canvasHover, canvasPoint, pending, targets, placement, constraints }) {
+    function isActive() {
+      return targets.command?.type === "distance" && pending.current?.type !== "distance-value";
+    }
+    function continueClick(event, hits) {
+      canvasHover.update({ dimension: null });
+      const pointer = canvasPoint(event);
+      if (pending.current?.type === "distance-place") {
+        if (hits === undefined) hits = {};
+        if (!placement.retargetDistancePlaceWithOperand(pointer, hits)) placement.startDistanceValueInput(pointer);
+      } else if (targets.command?.type === "distance") {
+        if (hits === undefined) hits = {};
+        constraints.operandClick(pointer, "distance", hits);
+      }
+    }
+    return Object.freeze({ isActive, continueClick });
+  }
+  // Share command owners before drag construction; assemble ordinary input afterwards.
+  function createFeature({ canvasHover, canvasPoint, pending, targets, placement, constraints }) {
+    const dimension = createDimensionContinuation({ canvasHover, canvasPoint, pending, targets, placement, constraints });
+    function createInput({ dragging, canvasSelection, constraintTargetHint, setHint, updateGeometrySelectionUI, draw }) {
+      const { selectedLineGroup } = dragging;
+      return create({
+        getPending: pending.read, getPendingConstraint: () => targets.command, canvasSelection, canvasHover,
+        isDimensionConstraintCommandActive: dimension.isActive,
+        canDragDimensionGroup: hit => Boolean(selectedLineGroup(hit.constraint)), beginDimensionDrag: dragging.command.begin,
+        retargetDistancePlaceWithOperand: (pointer, hits = {}) => placement.retargetDistancePlaceWithOperand(pointer, hits),
+        startDistanceValueInput: pointer => placement.startDistanceValueInput(pointer),
+        handleConstraintOperandClick: (pointer, type, hits = {}) => constraints.operandClick(pointer, type, hits),
+        constraintTargetHint, setHint, updateGeometrySelectionUI, draw,
+      });
+    }
+    return Object.freeze({ dimension, createInput });
+  }
+  window.ConstraintCommandInput = Object.freeze({ create, createRetargetHover, createDimensionContinuation, createFeature });
 })();

@@ -1,6 +1,38 @@
 /* Bind native canvas events to input controllers and preserve flush boundaries. */
 (() => {
   "use strict";
+  function createCommandRouting({ pointer, readCommandPanel, readPngExportCommand, blankCanvasGesture,
+    canvasScreenPoint, canvasPoint, isBlankCommandPanelPoint, screenToWorld, navigation }) {
+    return Object.freeze({
+      ...pointer,
+      down: e => {
+        if (e.button === 0 && readCommandPanel()?.active) {
+          if (readCommandPanel().canvasPress(canvasScreenPoint(e), isBlankCommandPanelPoint(canvasPoint(e)))) {
+            blankCanvasGesture.suppressNext();
+            e.preventDefault();
+            return;
+          }
+        }
+        if (readPngExportCommand()?.active && e.button === 0) readPngExportCommand().pick(screenToWorld({ x: e.offsetX, y: e.offsetY }));
+        else pointer.down(e);
+      },
+      move: (screen, world, shift) => {
+        readCommandPanel()?.canvasMove(screen);
+        if (readPngExportCommand()?.active) { if (!navigation.movePan(screen)) readPngExportCommand().move(world); }
+        else pointer.move(screen, world, shift);
+      },
+      finish: e => { if (!readPngExportCommand()?.active || e.button !== 0) pointer.finish(e); },
+      doubleClick: e => {
+        if (blankCanvasGesture.takeSuppression()) { e.preventDefault(); return; }
+        if (readCommandPanel()?.active) {
+          readCommandPanel().canvasDoubleClick(isBlankCommandPanelPoint(canvasPoint(e)));
+          e.preventDefault();
+          return;
+        }
+        if (!readPngExportCommand()?.active) pointer.doubleClick(e);
+      },
+    });
+  }
   function create({ canvas, pointer, scheduler, navigation, profileCommit, closeContextMenu, afterZoom,
     screenToWorld, formatCoordinate, coordinateStatus }) {
     function processMove(e) {
@@ -32,5 +64,5 @@
     }
     return Object.freeze({ bind, processMove });
   }
-  window.CanvasInputBinding = Object.freeze({ create });
+  window.CanvasInputBinding = Object.freeze({ create, createCommandRouting });
 })();

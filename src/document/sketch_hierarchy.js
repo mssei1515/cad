@@ -7,6 +7,16 @@
   const DEFAULT_SKETCH_ID = "S1";
   const DEFAULT_SKETCH_NAME = "Sketch-1";
 
+  function copyWithNormalizedAppearance(sketch) {
+    return {
+      ...sketch,
+      appearance: normalizeAppearance(sketch?.appearance),
+      constructionAppearance: normalizeConstructionAppearance(sketch?.constructionAppearance),
+      dimensionAppearance: normalizeDimensionAppearance(sketch?.dimensionAppearance),
+      leaderAppearance: window.Appearance.normalizeLeaderAppearance(sketch?.leaderAppearance),
+    };
+  }
+
   function isRootSketch(sketch) {
     return sketch?.kind === "root" || sketch?.id === ROOT_SKETCH_ID;
   }
@@ -196,6 +206,6 @@
 
   window.SketchHierarchy = Object.freeze({
     ROOT_SKETCH_ID, ROOT_SKETCH_NAME, DEFAULT_SKETCH_ID, DEFAULT_SKETCH_NAME,
-    ensure, decode, isRootSketch, sketchById, parentSketchOf, childSketchesOf, descendantSketchIds, ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds, sketchDepth, wouldCreateSketchCycle, orderedSketches, sketchTreeRows,
+    ensure, decode, copyWithNormalizedAppearance, isRootSketch, sketchById, parentSketchOf, childSketchesOf, descendantSketchIds, ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds, sketchDepth, wouldCreateSketchCycle, orderedSketches, sketchTreeRows,
   });
 })();

@@ -1,0 +1,60 @@
+/* Compose Block drafts, nested editing sessions and queries over the same owners. */
+(() => {
+  "use strict";
+  function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding,
+    normalizedSketchCopy, normalizeGeometryInstance, isDimensionConstraint, isReadOnlyDimension,
+    numericDimensionExpression, ensureParameterNamespace, activeSketchId, blockProjectionBundles, geometryElementKey,
+    readViewport, activateScope, reserveScopeSequences, createHistory,
+    rebuildStoredBlockDefinitionConstraints, rebuildBlockDefinitionConstraintObjects }) {
+    const editing = window.BlockDefinitionEditing.create({
+      normalizedSketchCopy, cloneConstraintForBlock: rebinding.cloneForBlock, blockDefinitionById: catalog.blockDefinitionById,
+      createBlockProjectionBundle: projections.createBlockProjectionBundle,
+      geometryInstanceBundlesForScope: instances.geometryInstanceBundlesForScope, emptyGeometryInstanceBundle: instances.emptyGeometryInstanceBundle,
+      normalizeGeometryInstance, hatchSequence: () => ids.peek("hatch"), nextDefinitionId: () => ids.allocate("blockDefinition"),
+      isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
+    });
+    function captureHost() { return { ...workspace.capture(), viewport: readViewport().snapshot() }; }
+    const session = window.BlockEditorSession.create({
+      currentScope: workspace.current, documentModel, hatchSequence: () => ids.peek("hatch"),
+      normalizedSketchCopy, activeSketchId, blockProjectionBundles, geometryElementKey,
+      captureHost,
+      restoreHostState: original => { activateScope(workspace.restore(original)); readViewport().update(original.viewport); },
+      activateScope, reserveScopeSequences, cloneBlockDefinition: editing.clone, createHistory, mergeBlockDefinitionDraft: editing.apply,
+      rebuildStoredBlockDefinitionConstraints, invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache,
+      blockDefinitionOwnedSubtreeIds: catalog.blockDefinitionOwnedSubtreeIds, rebuildBlockDefinitionConstraintObjects,
+    });
+    const queries = window.BlockEditingQueries.create({ definitions: () => documentModel.blockDefinitions,
+      currentScope: workspace.current, editor: session, catalog });
+    function createCommands({ canStartCreation, canvasSelection, selectionQuery, guardDimensionSymbolDeletion,
+      resetBlockEditorHistory, clearSelection, setMode, closeDefinitions, setEditorActive, fitAllGeometryToViewport,
+      resetEmptyViewport, promptName, updateBlockUI, updateUI, draw, recordHistory, setHint,
+      duplicateBlockElementId, refreshReferenceConstraintValidity, hasInvalidReferenceConstraints,
+      solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches, requestChoice,
+      applicationText, blockLocalGeometryBounds, constraintGraphNodes, annotationReferencesRemovedGeometry,
+      acceptError, setSketchSolveOk, setSketchSolveError, log }) {
+      const definition = window.BlockDefinitionCommand.create({
+        blockEditor: session, blockDefinitionEditing: editing, blockCatalog: catalog, blockEditingQueries: queries,
+        documentModel, currentScope: workspace.current, canStartCreation, canvasSelection, captureHost,
+        defaultName: () => `Block-${ids.peek("blockDefinition")}`,
+        blockSelectionGeometry: selectionQuery.read, blockSelectionBoundsCenter: selectionQuery.center,
+        guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection, setMode, closeDefinitions, setEditorActive,
+        fitAllGeometryToViewport, resetEmptyViewport, promptName, invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache,
+        updateBlockUI, updateUI, draw, recordHistory, setHint,
+      });
+      const completion = window.BlockCompletionCommand.create({
+        blockEditor: session, blockDefinitionEditing: editing, blockCatalog: catalog, documentModel, currentScope: workspace.current,
+        blockDefinitionCyclePath: queries.blockDefinitionCyclePath, duplicateBlockElementId, refreshReferenceConstraintValidity,
+        hasInvalidReferenceConstraints, solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
+        requestChoice, applicationText, blockLocalGeometryBounds, storedBlockInstancesReferencing: queries.storedBlockInstancesReferencing,
+        restoreBlockEditorHost: definition.restoreHost, rebuildStoredBlockDefinitionConstraints,
+        nextInstanceId: () => ids.allocate("blockInstance"), constraintGraphNodes, annotationReferencesRemovedGeometry,
+        invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache, blockProjectionBundles, geometryElementKey,
+        blockDefinitionDependsOn: queries.blockDefinitionDependsOn, acceptError, setSketchSolveOk, setSketchSolveError,
+        clearSelection, canvasSelection, setMode, setHint, log, updateUI, draw, recordHistory,
+      });
+      return Object.freeze({ definition, completion });
+    }
+    return Object.freeze({ editing, session, queries, createCommands });
+  }
+  window.BlockEditingFeature = Object.freeze({ create });
+})();

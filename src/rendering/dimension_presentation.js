@@ -14,7 +14,7 @@
       const layout = dimensionLayout(target, dimension, appearance);
       if (!layout) return null;
       const metrics = dimensionTextDrawingMetrics(appearance);
-      const label = dimensionLabelForConstraint(constraint, target, dimension);
+      const label = dimensionLabelForConstraint(constraint, target, dimension, appearance);
       const width = dimensionTextWidth(label, appearance, dimensionUsesExpression(constraint));
       const top = -metrics.gap - metrics.height * (1 + (String(label).split(/\r\n|\r|\n/).length - 1) * 1.2);
       const angle = Number(layout.textAngle) || 0;
@@ -39,13 +39,14 @@
         if (!target) continue;
         const dimension = c.dimension || defaultDimensionForTarget(target);
         const sketchId = constraintSketchId(c);
-        if (!isVisibleValue(effectiveDimensionAppearance(dimension, sketchId).visible)) continue;
+        const appearance = effectiveDimensionAppearance(dimension, sketchId);
+        if (!isVisibleValue(appearance.visible)) continue;
         const highlighted = canvasSelection.inspectionContains(c) || c === readHoverDimension() || canvasSelection.constraintSelectedInCanvas(c) || c === readDraggedDimension();
-        const label = dimensionLabelForConstraint(c, target, dimension);
+        const label = dimensionLabelForConstraint(c, target, dimension, appearance);
         const editing = readPending()?.type === "distance-value" && readPending().constraint === c;
         const colorOverride = !readExportFrame() && readConstraintStatus() && !active(c) ? inactiveColor : null;
         ctx.save();
-        drawDimension(target, dimension, label, false, !readExportFrame() && (highlighted || editing), !readExportFrame() && editing ? { hidden: true } : null, colorOverride, sketchId, !readExportFrame() && dimensionUsesExpression(c));
+        drawDimension(target, dimension, label, false, !readExportFrame() && (highlighted || editing), !readExportFrame() && editing ? { hidden: true } : null, colorOverride, sketchId, !readExportFrame() && dimensionUsesExpression(c), appearance);
         ctx.restore();
       }
     }
@@ -54,10 +55,10 @@
   function createPainter({ renderer, layouts, metrics, dimensionLayout, effectiveDimensionAppearance, activeSketchId, outsideShaftLengthFactor }) {
     const { linearDimensionRenderPlan, arcRadiusDimensionExtensionSegment, angleDimensionLayout, angleDimensionExtensionSegments } = layouts;
     const { shouldPlaceDimensionTerminatorsOutside, dimensionMillimetersToWorld } = metrics;
-    function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false) {
+    function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false, resolvedAppearance) {
       if (!target || !dimension) return;
-      if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId, expressionMark);
-      const appearance = effectiveDimensionAppearance(dimension, sketchId);
+      if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId, expressionMark, resolvedAppearance);
+      const appearance = resolvedAppearance || effectiveDimensionAppearance(dimension, sketchId);
       const layout = dimensionLayout(target, dimension, appearance);
       if (!layout) return;
       const renderPlan = linearDimensionRenderPlan(target, layout, label, appearance, dimension, expressionMark);
@@ -65,10 +66,10 @@
       renderer.drawLinear({ layout, renderPlan, arcExtension, appearance, label, preview, highlighted, editState, colorOverride, expressionMark });
     }
 
-    function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false) {
+    function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false, resolvedAppearance) {
       const layout = angleDimensionLayout(target, dimension);
       if (!layout) return;
-      const appearance = effectiveDimensionAppearance(dimension, sketchId);
+      const appearance = resolvedAppearance || effectiveDimensionAppearance(dimension, sketchId);
       const extensions = angleDimensionExtensionSegments(layout, appearance);
       const outside = shouldPlaceDimensionTerminatorsOutside(Math.abs(layout.signed) * layout.radius, label, appearance, dimension, expressionMark);
       const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize * outsideShaftLengthFactor, appearance) / Math.max(layout.radius, 1e-12) : 0;
@@ -78,11 +79,13 @@
   }
   function createLabel({ isReadOnlyDimension, measuredDimensionValue, angleDegrees, dimensionDisplayState, constraintSketchId,
     formatDimensionLabel, formatMeasuredDimensionLabel }) {
-    function dimensionLabelForConstraint(constraint, target, dimension) {
+    function dimensionLabelForConstraint(constraint, target, dimension, resolvedAppearance) {
       const readOnly = isReadOnlyDimension(constraint);
       const value = readOnly ? measuredDimensionValue(target, dimension) : target.interval ? constraint.target * 180 / Math.PI : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
       const formatLabel = readOnly ? formatMeasuredDimensionLabel : formatDimensionLabel;
-      const display = dimensionDisplayState(dimension, constraintSketchId(constraint));
+      const display = resolvedAppearance
+        ? window.GeometryAppearanceQuery.dimensionDisplayStateForAppearance(resolvedAppearance)
+        : dimensionDisplayState(dimension, constraintSketchId(constraint));
       const number = display.precision == null ? formatLabel(value) : Number(value).toFixed(display.precision);
       const unit = target.kind === "angle" ? "°" : "";
       const tolerance = display.toleranceUpper !== "" || display.toleranceLower !== ""

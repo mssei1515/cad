@@ -8,7 +8,8 @@
     targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
     clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
     recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
-    sketchName, now, recordPerformance, resolveSelection, canvasSelection, currentScope, forgetConstraint }) {
+    sketchName, now, recordPerformance = () => {}, resolveSelection, canvasSelection, currentScope, forgetConstraint }) {
+    let lastPerformance = null;
     function addConstraintIfMissing(constraint, matches, options = {}) {
       if (!constraint) return false;
       if (currentScope().constraints.some((c) => c.enabled !== false && matches(c))) return false;
@@ -94,6 +95,7 @@
       log(`拘束を追加しました: ${type}\n自動solve: success=${solved.success}, error=${result.errorNorm.toExponential(3)}`);
       recordHistory(`拘束追加: ${type}`);
       performanceTrace.totalMs = now() - performanceTrace.startedAt;
+      lastPerformance = performanceTrace;
       recordPerformance(performanceTrace);
       return true;
     }
@@ -217,7 +219,22 @@
     }
 
     return Object.freeze({ ifMissing: addConstraintIfMissing, fromSelection: applySelection, readOnly: addReadOnlyDimensionConstraint, resolution: commitConstraintResolution, dimension: addDistanceConstraintFromTarget,
-      ordinary: commitNewConstraint, reference: commitReferenceConstraint, markReference: markReferenceConstraint });
+      ordinary: commitNewConstraint, reference: commitReferenceConstraint, markReference: markReferenceConstraint,
+      readPerformance: () => lastPerformance, clearPerformance: () => { lastPerformance = null; } });
   }
-  window.ConstraintCommitCommand = Object.freeze({ create });
+  function createInsertion({ currentScope, currentParameterNamespace, activeSketchId, isDrawableSketch, firstDrawableSketchId, ensureDimensionParameter }) {
+    function assignConstraintSketchId(constraint, sketchId = activeSketchId()) {
+      const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
+      if (constraint) constraint.sketchId = targetSketchId || activeSketchId();
+      return constraint;
+    }
+    function pushModelConstraint(constraint, sketchId = activeSketchId()) {
+      assignConstraintSketchId(constraint, sketchId);
+      currentScope().constraints.push(constraint);
+      ensureDimensionParameter(constraint, currentParameterNamespace());
+      return constraint;
+    }
+    return Object.freeze({ assignSketch: assignConstraintSketchId, push: pushModelConstraint });
+  }
+  window.ConstraintCommitCommand = Object.freeze({ create, createInsertion });
 })();

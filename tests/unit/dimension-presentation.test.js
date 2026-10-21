@@ -174,3 +174,55 @@ test('dimension traversal shares active queries within a draw and refreshes them
   scope = { constraints: [replacement] }; drawn.length = 0; layer.draw();
   assert.equal(reads.get(replacement), 1); assert.deepEqual(drawn, [[replacement, 'inactive']]);
 });
+
+test('dimension traversal resolves one appearance for visibility, labels and linear/angle painting and refreshes each draw', () => {
+  const context = { window: { GeometrySolver: {} } };
+  for (const file of ['src/document/appearance.js', 'src/geometry/appearance_query.js',
+    'src/ui/number_display.js', 'src/rendering/dimension_presentation.js']) {
+    vm.runInNewContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
+  }
+  const w = context.window, document = { defaultDimensionAppearance: { color: '#123456' } };
+  let sketches = [{ id: 'S1', dimensionAppearance: { prefix: 'S', precision: 1 } }], reads = 0;
+  const query = w.GeometryAppearanceQuery.createDimension({ document, currentSketches: () => sketches,
+    activeSketchId: () => 'S1', isRootSketch: sketch => sketch.id === 'root' });
+  const resolve = (...args) => { reads++; return Object.freeze(query.effectiveDimensionAppearance(...args)); };
+  const labels = w.DimensionPresentation.createLabel({ isReadOnlyDimension: () => false,
+    measuredDimensionValue() {}, angleDegrees: value => Math.abs(value * 180 / Math.PI),
+    constraintSketchId: c => c.sketchId, dimensionDisplayState: () => { throw Error('appearance must be supplied by traversal'); },
+    formatDimensionLabel: String, formatMeasuredDimensionLabel: String });
+  const payloads = [], layout = { signed: Math.PI / 2, radius: 10 };
+  const painter = w.DimensionPresentation.createPainter({
+    renderer: { drawLinear: payload => payloads.push(payload), drawAngle: payload => payloads.push(payload) },
+    effectiveDimensionAppearance: () => { throw Error('appearance must be supplied by traversal'); },
+    activeSketchId: () => 'S1', dimensionLayout: (_target, _dimension, appearance) => { assert.equal(Object.isFrozen(appearance), true); return layout; },
+    layouts: { linearDimensionRenderPlan: () => ({}), arcRadiusDimensionExtensionSegment: () => null,
+      angleDimensionLayout: () => layout, angleDimensionExtensionSegments: () => [] },
+    metrics: { shouldPlaceDimensionTerminatorsOutside: () => false, dimensionMillimetersToWorld: () => 0 },
+    outsideShaftLengthFactor: 1.5,
+  });
+  const a = { id: 'same', target: 1.25, sketchId: 'S1', kind: 'distance', dimension: { display: { prefix: 'A\n', precision: 2 } } };
+  const b = { id: 'same', target: Math.PI / 2, sketchId: 'S1', kind: 'angle', dimension: { display: { suffix: 'mm' } } };
+  let scope = { constraints: [a, b] };
+  const layer = w.DimensionPresentation.createLayer({ ctx: { save() {}, restore() {} }, currentScope: () => scope,
+    isActiveSketchConstraint: () => true, isVisibleSketchId: () => true, constraintSketchId: c => c.sketchId,
+    targetFromConstraint: c => ({ kind: c.kind }), defaultDimensionForTarget: () => ({}),
+    effectiveDimensionAppearance: resolve, isVisibleValue: value => value !== false,
+    canvasSelection: { inspectionContains: () => false, constraintSelectedInCanvas: () => false },
+    readHoverDimension: () => null, readDraggedDimension: () => null, readPending: () => null,
+    readExportFrame: () => null, readConstraintStatus: () => false, inactiveColor: 'inactive',
+    dimensionLabelForConstraint: labels.label, drawDimension: painter.drawDimension, dimensionUsesExpression: () => false,
+  });
+  layer.draw(); assert.equal(reads, 2);
+  assert.deepEqual(payloads.map(p => p.label), ['A\n1.25', 'S90.0°mm']);
+  assert.equal(payloads[0].appearance.color, '#123456'); assert.equal(payloads[1].appearance.color, '#123456');
+  document.defaultDimensionAppearance.color = '#654321'; sketches = [{ id: 'S1', dimensionAppearance: { prefix: 'N', precision: 3 } }];
+  a.dimension.display.prefix = 'changed'; payloads.length = 0;
+  layer.draw(); assert.equal(reads, 4);
+  assert.deepEqual(payloads.map(p => p.label), ['changed1.25', 'N90.000°mm']);
+  assert.equal(payloads[0].appearance.color, '#654321');
+  const replacement = { ...a, dimension: { display: { prefix: 'replacement' } } };
+  scope = { constraints: [replacement] }; payloads.length = 0; layer.draw();
+  assert.equal(reads, 5); assert.equal(payloads[0].label, 'replacement1.250');
+  replacement.dimension.display.visible = false; payloads.length = 0; layer.draw();
+  assert.equal(reads, 6); assert.equal(payloads.length, 0);
+});

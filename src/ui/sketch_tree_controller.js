@@ -1,6 +1,51 @@
 /* Route sketch tree actions to selection, editing commands and expansion state. */
 (() => {
   "use strict";
+  function createWithView({ document, window: windowTarget, sketchContext, applicationSettings, escapeHtml,
+    sketchOverlay, sketchOverlayResizeHandle, getScopeKey, viewScope, ensureSketchState, objects, moveCommand,
+    sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch, canvasSelection,
+    ...controllerOptions }) {
+    const { isRootSketch, activeSketchId } = sketchContext;
+    const { applicationText } = applicationSettings;
+    let controller;
+    const view = window.SketchTreeView.create({ document, sketchOverlay, sketchOverlayResizeHandle, getScopeKey,
+      currentScope: viewScope, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
+      objects, selectedSketchId: () => canvasSelection.sketchId, moveState: () => moveCommand.state(),
+      sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
+      actions: { click: event => controller.click(event), doubleClick: event => controller.doubleClick(event),
+        keyDown: event => controller.keyDown(event), pointerOver: event => controller.pointerOver(event), pointerOut: event => controller.pointerOut(event),
+        leave: () => controller.leave() },
+    });
+    const interaction = createWithContextMenu({ ...controllerOptions, document, window: windowTarget, sketchContext, applicationSettings, escapeHtml,
+      activeSketchId, canvasSelection, sketchTreeView: view, resolveSelectionEntry: objects.resolveSelectionEntry,
+      move: { active: () => moveCommand.active, choose: moveCommand.choose, commit: moveCommand.commit, cancel: moveCommand.cancel },
+    });
+    controller = interaction.controller;
+    return Object.freeze({ view, controller, menu: interaction.menu });
+  }
+  function createWithContextMenu({ document, window: windowTarget, sketchContext, applicationSettings, escapeHtml,
+    closeCanvasContextMenu, ...controllerOptions }) {
+    const { isRootSketch, sketchById } = sketchContext;
+    const { applicationText } = applicationSettings;
+    const { renameSketch, activeSketchId } = controllerOptions;
+    let menu;
+    const controller = create({ ...controllerOptions, openContextMenu: (event, id) => {
+      closeCanvasContextMenu();
+      if (isRootSketch(sketchById(id))) { menu.close(); return; }
+      menu.open({ event, target: { id }, items: [{ action: "sketch-edit", label: applicationText("作図先", "Drawing sketch"), disabled: id === activeSketchId() },
+        { action: "sketch-rename", label: applicationText("名前変更", "Rename"), disabled: Boolean(sketchById(id)?.locked) }] });
+    } });
+    menu = window.CanvasContextMenu.create({ document, window: windowTarget,
+      canvas: document.getElementById("sketchList"), menu: document.getElementById("sketchContextMenu"),
+      escapeHtml, applicationText, ariaLabel: () => applicationText("スケッチメニュー", "Sketch menu"),
+      onOpen: event => controller.contextMenu(event),
+      onAction: (action, target) => {
+        if (action === "sketch-rename") renameSketch(target.id);
+        else if (action === "sketch-edit") controller.editSketch(target.id);
+      },
+    });
+    return Object.freeze({ controller, menu });
+  }
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility, unfixPoint,
@@ -184,13 +229,13 @@
         else if (category === "annotation") canvasHover.update({ annotation: currentScope().annotations.find((item) => item.id === objectRow.dataset.id) || null });
         else if (objectRow.dataset.fixedPointId) {
           const point = currentScope().points.find((item) => item.id === objectRow.dataset.fixedPointId);
-          setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point));
+          setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point), { redraw: false });
         } else if (category === "constraint") {
           const constraint = currentScope().constraints[Number(objectRow.dataset.constraintIndex)];
-          setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint));
+          setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint), { redraw: false });
         } else {
           const item = sidebarGeometryItem(category, objectRow.dataset.id);
-          setSidebarHover("geometry", item, sidebarHoverElementsForItem(item));
+          setSidebarHover("geometry", item, sidebarHoverElementsForItem(item), { redraw: false });
         }
         draw();
         return;
@@ -203,20 +248,22 @@
     }
 
     function handleSketchTreePointerOut(event) {
+      let changed = false;
       const objectRow = event.target.closest(".sketch-object-row");
       if (objectRow && !objectRow.contains(event.relatedTarget)) {
-        clearSidebarHover();
+        const canvasChanged = ["block", "geometryInstance", "annotation", "hatch", "referenceImage"].some(key => canvasHover.current?.[key] != null);
+        changed = Boolean(clearSidebarHover(null, null, { redraw: false })) || canvasChanged;
         canvasHover.update({
           block: null, geometryInstance: null, annotation: null,
           hatch: null, referenceImage: null,
         });
-        draw();
       }
       const sketchRow = event.target.closest(".sketch-item");
       if (sketchRow && !sketchRow.contains(event.relatedTarget) && hoveredSketchTreeId === sketchRow.dataset.id) {
         hoveredSketchTreeId = null;
-        draw();
+        changed = true;
       }
+      if (changed) draw();
     }
 
     function isSidebarHighlightedElement(item) {
@@ -228,9 +275,12 @@
 
     function clearHoverSketch() { hoveredSketchTreeId = null; }
     function leave() {
-      clearHoverSketch(); clearSidebarHover();
+      const sketchChanged = hoveredSketchTreeId !== null;
+      clearHoverSketch();
+      const sidebarChanged = clearSidebarHover(null, null, { redraw: false });
+      const canvasChanged = ["block", "annotation", "hatch", "referenceImage"].some(key => canvasHover.current?.[key] != null);
       canvasHover.update({ block: null, annotation: null, hatch: null, referenceImage: null });
-      draw();
+      if (sketchChanged || sidebarChanged || canvasChanged) draw();
     }
     return Object.freeze({ pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut, isHighlightedElement: isSidebarHighlightedElement, clearHoverSketch, leave, click: handleSketchTreeClick, doubleClick: activateRow, keyDown, contextMenu, editSketch, activateObject: activateSketchTreeObject });
   }
@@ -255,5 +305,5 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.SketchTreeController = Object.freeze({ create, createMoveInputBinding });
+  window.SketchTreeController = Object.freeze({ create, createWithView, createWithContextMenu, createMoveInputBinding });
 })();

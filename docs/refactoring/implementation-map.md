@@ -1,6 +1,10 @@
 # 実装対応表
 
+app.jsのローカルaliasと委譲関数は、実際の接続またはテスト公開で参照するものだけを保持する。既存ownerへ移管済みの機能を未使用のローカル名として重複公開しない。ownerの生成と必要な初期化は省略せず、Selection／command／描画／保存読込の公開APIは各ownerに残す。
+
 現在の実装配置を調べるための開発資料。正式仕様や将来の分割設計ではない。仕様と保証内容は[仕様の入口](../../spec/README.md)および[検証対応](../../spec/verification/保証対応.md)を参照する。
+
+現在の構築依存と初期化境界は[composition root再監査](bootstrap-boundary-audit.md)を参照する。63c886c基準の再監査では、広い構築契約をそのまま新fileへ包まず、既存ownerのAPIを用いて依存を減らす方針とした。特殊寸法編集の支援は既存DimensionValueCommandへ統合済みである。
 
 ## 1. 実装ファイルの責務
 
@@ -38,6 +42,8 @@
 - `src/parameters/stabilization.js`: 式評価・参照寸法の収束反復と、目標値変更の段階的求解／再試行。操作全体の復元と履歴は持たない。
 
 - `src/constraints/constraint_analysis.js`: 拘束状態の解析対象・図形分類・cache・遅延評価と無効化。描画色と表示文言は含まない。
+- createWithRedundancyはSketchContextのrefreshごとの所属情報・子孫／所属／Root・編集可否、GeometryReadServicesのInstance／Block bundle・参照元Pointを共有できる。個別引数はundefinedだけ補い明示値を優先する。生成時は照会せず、各子へ元の限定関数を渡す。currentScope・scopeQuery・readServicesの各scopeと関数の呼出し契約／例外、各ownerのcacheは維持する。
+- ConstraintAnalysis.createWithRedundancyは同じscope／Solver／scopeQuery／許容差で既存の重複診断→分類ownerを生成・接続する。元の変数照会・重複refresh関数とprofile hookを共有し、生成時にモデル／Solver／profileを実行しない。返すanalysis／redundancyは同じ既存APIで、各cache・Map／countと独立invalidate、refresh順・例外時の途中状態を維持する。旧各createも独立APIとして残す。
 
 - `src/constraints/constraint_redundancy.js`: 重複拘束の個別解析・全Sketch集計、接線維持の例外、非公開の結果Mapと件数照会。
 
@@ -72,7 +78,7 @@
 
 - `index.html`: 固定ワークスペースとコマンドUI
 - `style.css`: レイアウトと状態表現
-- `app.js`: moduleの組合せ、Documentと操作状態、描画、入力、保存読込の進行、履歴adapter、Block、Annotation、Reference Image
+- `app.js`: moduleの構築・接続・起動と、移行中のmode／pointer、操作・履歴adapter、test hookの組立て。現在の残存責務と依存は[再監査](bootstrap-boundary-audit.md)を参照する。
 - `src/document/appearance.js`: 外観の初期値・正規化・旧形式変換と明示layerの解決
 - `src/document/drawing_order.js`: scopeとSketchを明示した描画順補完・候補の所有者解決・操作可否・順序変更
 - `src/persistence/document_files.js`: ファイル名、内容signature、保存session状態・排他、handleへの書込み
@@ -80,13 +86,13 @@
 - `src/document/annotations.js`、`src/document/hatches.js`、`src/document/reference_images.js`: 各補助要素の値の正規化、保存fieldと保存値検証
 - `src/persistence/constraints.js`: 具体的なConstraint保存形式、scopeごとの参照復元、寸法metadataの復元
 - `src/persistence/geometry.js`: Document／BlockのローカルGeometry復元と参照Map
-- `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値
+- `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値。createWriterは明示prepare→Workspace snapshotSource→時刻／名前／採番metadata→既存codecの順で保存候補を生成する。codecのcreateは維持し、scope／metadataをcacheしない。
 - `src/editing/block_definition_editing.js`: Block定義の複製・座標移動・選択からの下書き生成・Object同一性を維持するdraft反映
 - `src/editing/block_selection_query.js`: Block作成候補の参照整合・内部／外部拘束分類と配置中心の読取り
 - `src/editing/block_editing_queries.js`: 編集範囲・編集中定義・参照Instance・draftを優先する依存循環の読取り
 - `src/editing/block_editor_session.js`: Block編集session連鎖、draft同期・差替え、親scope復帰、子定義の仮移動・復元記録引継ぎと取消
 - `src/editing/block_history_snapshot.js`: Block履歴の復元用コピーと変更検出signatureの生成
-- `src/editing/history_controller.js`: 現在scopeへの履歴操作振分け、復元中の記録抑止と変更通知
+- `src/editing/history_controller.js`: 現在scopeへの履歴操作振分け、復元中の記録抑止と変更通知。createFeatureがDocument／Block履歴の生成方針と既存Snapshot／Restorationの接続、savedAt／nameを除外したDocument capture、record計測を集約する。16依存で各子へ限定APIを接続し、同じDocument履歴をTransientAuthoring／Name UIへ共有する。生成時はモデル／session無照会、Block履歴は要求ごとに独立生成、profileは操作時のactive状態と元の非bind workを使う。DOM更新はUI adapterに残し、旧createと各子のstack／signature／復元境界を維持する。
 - `src/editing/edit_history.js`: 履歴stack操作
 - `src/diagnostics/interaction_profiler.js`: 同期処理の時間・実行回数計測
 - `src/ui/block_view.js`: Block一覧・編集パネルのDOM表示とイベント接続。状態変更は操作コールバックへ委譲
@@ -95,7 +101,7 @@
 - `src/solver/constraint_solver.js`: GeometryとConstraintのsolver
 - `src/geometry/geometry_ref.js`: 直接GeometryとBlock Projectionの参照codec
 - `src/geometry/objects.js`: Geometryの型、canonical参照、bundleのMap登録
-- `src/document/block_catalog.js`: 現在のDefinition registry・所有子孫・Sketch表示行の照会と有効Sketchの判定
+- `src/document/block_catalog.js`: 現在のDefinition registry・所有子孫・Sketch表示行の照会と有効Sketchの判定。duplicateElementIdは指定Definition内の既存8 collectionを元の順で走査する純粋照会で、registryや採番状態を読まない。BlockCompletionCommandは同じcatalogの照会を既定値として使用し、明示checkerを優先する。
 - `src/geometry/block_projection.js`: 入れ子BlockのGeometry・Annotation・Hatch投影と永続cache
 - `src/geometry/instance_projection.js`: 派生InstanceのGeometry読取りviewとscope内の依存解決
 - `src/geometry/read_model.js`: 現在scopeと投影を合わせた一覧・参照解決、同期読出し中のGeometry／外観cache
@@ -246,7 +252,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 ### 注記と参照画像の描画
 
-`AnnotationRenderer`は注記文字・引出線・終端記号、`ReferenceImageRenderer`は参照画像のURL cache・画像本体・選択枠・較正markerを所有する。Annotationの描画入力と参照点解決はappが接続する。ReferenceImageの表示入力は同rendererのcreateLayerが読取り専用の照会から構成する。
+`AnnotationRenderer`は注記文字・引出線・終端記号、`ReferenceImageRenderer`は参照画像のURL cache・画像本体・選択枠・較正markerを所有する。Annotationの描画入力と参照点解決はAnnotationDisplayが共有readerへ接続する。ReferenceImageの表示入力は同rendererのcreateLayerが読取り専用の照会から構成する。
 
 ### Canvas surface
 
@@ -258,11 +264,11 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 ### 寸法のCanvas描画
 
-`DimensionRenderer`は直線／角度寸法のCanvas命令とラベル・編集枠・終端記号・数式マークを所有する。`DimensionMetrics`は共有instanceとして接続する。appの描画adapterは外観・layout・描画計画を準備して渡し、rendererにSketchや拘束対象の検索をさせない。寸法配置と移動／編集操作は後続の整理対象。
+`DimensionRenderer`は直線／角度寸法のCanvas命令とラベル・編集枠・終端記号・数式マークを所有する。`DimensionMetrics`は共有instanceとして接続する。DimensionDisplayが共有する計測・配置・描画器を生成し、DimensionPresentationのPainterが外観・layout・描画計画を準備して渡す。rendererにSketchや拘束対象の検索をさせない。寸法配置と移動／編集操作は後続の整理対象。
 
 ### 寸法配置とlayout
 
-`DimensionPlacement`（`src/rendering/dimension_placement.js`）は方向・anchor・相対配置・ラベル位置を担当し、Documentを参照しない。`DimensionLayout`（`src/rendering/dimension_layout.js`）は補助線・hit領域・文字方向・描画計画を担当し、現在scopeの線一覧だけをread portで取得する。appには外観継承を解決するadapterと描画先への接続を残す。既存の角度ラベル補完による寸法更新は明示して維持し、操作側への移行時も更新順序を保つ。
+`DimensionPlacement`（`src/rendering/dimension_placement.js`）は方向・anchor・相対配置・ラベル位置を担当し、Documentを参照しない。`DimensionLayout`（`src/rendering/dimension_layout.js`）は補助線・hit領域・文字方向・描画計画を担当し、現在scopeの線一覧だけをread portで取得する。DimensionDisplayが省略時の外観解決と描画先への接続を所有する。既存の角度ラベル補完による寸法更新は明示して維持し、操作側への移行時も更新順序を保つ。
 
 ### 長穴command
 
@@ -348,16 +354,18 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 - `SketchTreeView`（`src/ui/sketch_tree_view.js`）: 階層・カテゴリDOM、開閉Map、幅・リサイズセッションを所有。再読込はcapture／restore、初期化はresetへ接続する。図形行の情報生成・編集／選択・hoverの操作は明示した依存先へ委譲する。
 
-- `SketchTreeObjects`（`src/ui/sketch_tree_objects.js`）: Sketch別索引、図形／拘束行、拘束状態集計を生成。現在スコープと照会関数を受け取り、DOM・編集状態を所有しない。
-- `SketchTreeController`（`src/ui/sketch_tree_controller.js`）: ツリーのクリックを展開・選択・Sketch変更・削除・固定解除へ振り分ける。Viewと既存の編集APIへ接続する。
+- `SketchTreeObjects`（`src/ui/sketch_tree_objects.js`）: Sketch別索引、図形／拘束行、拘束状態集計を生成。現在スコープと照会関数を受け取り、DOM・編集状態を所有しない。GeometryReadServices・SketchContext・ConstraintFeedback・ApplicationSettingsを共有でき、個別引数はundefinedのfieldだけ補完する。Tree categoryから可視性対象kind／元Objectへの分類も同moduleが所有し、行表示時だけisHiddenへ依頼する。従来objectVisibleの明示指定を優先する。後段のPropertySelectionを生成時に読まず、表示用scopeと編集scope、言語の最新値・元の関数と例外を維持する。
+- `SketchTreeController`（`src/ui/sketch_tree_controller.js`）: ツリーのクリックを展開・選択・Sketch変更・削除・固定解除へ振り分ける。Viewと既存の編集APIへ接続する。createWithContextMenuは既存ControllerとCanvasContextMenuの生成・Root／active／lockによる項目表示・名前変更／編集通知を所有する。既存Controller引数と共有SketchContext／ApplicationSettings等を受け、同じcontroller／menuを返す。生成時は二つのDOM参照だけを取得し、listener登録やscope照会を行わない。appの外部close用aliasへの接続と明示startは維持する。選択・移動guard、menu session、例外と閉じてからの操作順を各既存ownerへ委譲し、旧createも残す。
 
 - `SelectionHighlight`（`src/editing/selection_highlight.js`）: サイドバーhover状態、投影図形の表示上の同一性、選択図形／拘束の参照集合を所有・照会する。Canvas選択と投影／拘束照会、寸法hover接続だけを受け取り、DOMに依存しない。
+- SketchTreeController.createWithViewが既存Objects・Selection・SketchContext・ApplicationSettings・移動commandを共有してView→Controller→menuを生成する。viewScopeとControllerのcurrentScopeは別readerのまま、同じViewの開閉／幅stateとControllerの操作・hoverを接続する。View生成時のresize登録／幅設定、render時の行event接続、appの外部close入口への接続後のmenu.startは維持する。生成時にscope／モデル／移動状態を照会せず、旧各factoryも独立APIとして残す。
 - ツリー行のclass更新は`SketchTreeView.refreshSelection`へ、行データの対象解決は`SketchTreeObjects.resolveSelectionEntry`へ統合した。呼出し元もDOM生成も存在しない旧一覧向けイベント登録・選択処理は削除した。
 
+- `AppearanceUI`（`src/application/appearance_ui.js`）: PropertiesとDocument設定が共有するcontrols／Paletteと起動時設定の接続。実編集とPalette sessionは既存ownerを使用する。
 - `AppearanceControls`（`src/ui/appearance_controls.js`）: 図形／寸法外観の入力欄と継承値表示。Document非依存でPropertiesとDocument設定が共用する。
 - `AppearancePalette`（`src/ui/appearance_palette.js`）: 色選択session、標準色／使用中色、確定と取消を所有。各対象への適用と履歴は既存APIへ接続する。
 
-- `PropertySelection`（`src/editing/property_selection.js`）: Properties対象と共通値・対応項目の解決。操作状態とCanvas選択を読み、表示と編集の判断を共通化する。
+- `PropertySelection`（`src/editing/property_selection.js`）: Properties対象と共通値・対応項目の解決。selectedDisplayTargetは元の対象にlock／readOnlyと所有・作図Sketch labelを付けて照会し、モデルやraw対象を変更しない。操作状態とCanvas選択を読み、表示と編集の判断を共通化する。
 - `AppearanceEditing`（`src/editing/appearance_editing.js`）: 外観入力の正規化と指定対象への反映。DOM・Selection・履歴非依存。
 - `BulkPropertyCommand`（`src/commands/bulk_property_command.js`）: 一括適用の事前確認・同期・履歴・更新。入力プレビューと確定を区別する。
 
@@ -380,6 +388,8 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 - `InstanceSourceCommand`（`src/commands/instance_source_command.js`）: 参照元編集対象と候補、追加時投影検証、確定時の順序／legacy ID維持・削除保護・関連拘束と注記の整理。表示はcurrent、CanvasはincludesRef、取消はresetを利用する。
 
+InstanceSourceCommand.startForInstanceはProperties等からInstanceの参照元編集を開始する入口である。placementがfalsyなら従来のstartへ渡し、同一Objectの所属確認とlegacy source sessionを維持する。placementがtruthyの場合はinstance.sketchId→現在active Sketchの比較、構造編集guardの順に確認し、成功したときだけ注入されたGeometryInstanceCommand.startEdit(instance,"sources")へ元Objectを渡す。配置付きdraftに新たなmodel所属条件を追加せず、guard前に取消・Selection解除・session更新や履歴を行わない。元の戻り値、owner receiver、例外と途中状態をそのまま保持する。配置draftはGeometryInstanceCommand、従来source候補はInstanceSourceCommandが引き続き所有する。従来のstartは独立したAPIとして維持し、新入口が状態を複製しない。appは二つの既存ownerとguardを接続し、PropertiesControllerへ開始操作だけを渡す。
+
 - `GeometryInstanceCommand`（`src/commands/geometry_instance_command.js`）: Free／Mirror／Pattern作成の参照元候補・配置Instance、開始／確定／preview。Propertiesと変換編集はpending／isPlacing、各取消経路はclearPlacement／clearSources／resetを使う。
 
 - `InstanceTransformCommand`（`src/commands/instance_transform_command.js`）: Freeの共有元を固定した回転・反転、Blockの表示中心を保つ直交回転とロック変更。各経路のSolver・復元・履歴・通知を調整し、DOMを受け取らない。
@@ -394,9 +404,11 @@ SketchTreeControllerは行hoverの所有、pointer入出力とCanvasHover／side
 
 SelectionHighlightが拘束の定義図形role・表示ラベル・端点除外による強調集合も所有する。GeometryReadModel.scopeGeometryItemは現在scopeの通常図形ID検索を提供し、SketchTreeObjects／Controllerが共有する。
 
+SelectionHighlightのsetSidebarHover／clearSidebarHoverは既定で従来どおり即時描画し、redraw:falseを指定した場合は状態だけを更新する。clearSidebarHoverは対象なし／型・参照不一致でfalse、実際の解除でtrueを返し、自身が設定した寸法hoverだけを解除する。SketchTreeControllerは同じイベント内のsidebar／Canvas／Sketch hover更新をまとめてから一度描画する。pointerOut後のleaveなどで対象状態が既に空なら描画しない。object exitがgeometryInstanceを解除し、tree leave単独では従来のblock／annotation／hatch／referenceImageだけを解除する差は維持する。選択・作図先・Document・保存形式は変更しない。
+
 - `GeometryPresentation`（`src/rendering/geometry_presentation.js`）: GeometryRenderer、点描画、診断へ共通の描画状態・所有Instance選択／hover・色／線幅照会を提供する。状態更新、DOM、Canvas描画を持たない。
 
-GeometryPresentationは点の可視性・中心表示・強調・ID／固定表示も判断し、GeometryRenderer.drawPointsはその状態から描画する。appのdrawPointsは整列済み点一覧の接続のみ。
+GeometryPresentationは点の可視性・中心表示・強調・ID／固定表示も判断し、GeometryRenderer.drawPointsはその状態から描画する。GeometryDisplayが現在点一覧とSketch描画順を接続し、appのdrawPointsはその公開入口へ委譲する。
 
 GeometryPresentationはarcEndpointPaintState／splineHandleStateを提供し、GeometryRendererが編集ハンドルを描く。編集中Splineとドラッグは遅延照会、所属確認は現在scopeを使う。
 
@@ -426,6 +438,10 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - `AnnotationCommandInput`（`src/editing/annotation_command_input.js`）: 注記の配置・選択を別入口で扱い、Filletとの入力優先順位を保つ。
 - `ConstraintCommandInput`（`src/editing/constraint_command_input.js`）: 寸法drag・距離配置・数値入力中のクリック・拘束対象指定を調整する。
 
+ConstraintCommandInput.createDimensionContinuationは寸法ドラッグから現在の距離入力へ戻る手順と有効判定を所有する。CanvasHover、canvasPoint、pending session、constraint target session、DimensionPlacementCommand、ConstraintTargetCommandの六つを明示依存として受ける。isActiveはtargetがdistanceのときだけpendingを読み、distance-value中を除く。continueClickはdimension hover解除→座標変換→pending確認の順に進み、distance-placeならretarget成功時に終了し、失敗時に値入力へ進む。それ以外でtargetがdistanceならoperandClickへ渡す。hitsのundefinedは呼出し分岐で新しい空Objectへ、nullはそのまま渡す。元ownerのreceiver、戻り値undefined、例外伝播と部分状態を維持し、独自pending／modeや履歴・modelを持たない。生成時にsession／hover／座標を読まず、各呼出しで現在値を読む。DimensionDragFeatureはcommandInputのisActive／continueClickを共有でき、未指定時は従来の個別callbackを使う。drag session・距離閾値・line group・角度同期と履歴は既存DimensionDragに残す。
+
+ConstraintCommandInput.createFeatureは同じ六つのownerからdimension継続APIを先に生成し、DimensionDragFeatureの生成後にcreateInputで通常の拘束入力を組み立てる。通常入力と継続入力でpending／target session、Placement／Constraint commandを共有し、状態を複製しない。createInputへはdraggingのcommand.begin／selectedLineGroup、CanvasSelection、hintと表示通知だけを渡す。group照会とdrag開始の関数は再bindせず、Placement／Constraint操作は元ownerのreceiverで呼ぶ。CanvasCommandInputsはAnnotation入力の直後にcreateInputを呼び、既存の子入力生成順を保つ。従来のcreate／createDimensionContinuationとCanvasCommandInputsの個別callback指定は維持する。新state・cache・model・履歴を持たず、構築時にはsession／sceneを照会しない。
+
 - `CanvasPressQuery`（`src/editing/canvas_press_query.js`）: pointerdownのGeometry・scene hit snapshotを読取り専用で構成。
 - PointerInteractionControllerの`down`が各入力ownerを順に呼び出す。appのpointerdown listenerはflushと委譲のみ。press接続は入力専用query／座標／操作APIに限定する。
 
@@ -449,7 +465,7 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 
 - RectangleSelectionQuery.readProjection: 投影元の矩形照会を統合。通常選択と幾何判定を共有し、投影元の適格性・候補providerは分ける。
 
-- DrawOperationLifecycle: 複数作図コマンドの終了／取消／進行中判定の調整。draft所有は各コマンドに残る。
+- DrawOperationLifecycle: 複数作図コマンドの開始準備／終了／取消／進行中判定の調整。draft所有は各コマンドに残る。
 
 - DrawOperationLifecycle.start: 基本9モードの開始を統合。Slot／Trimの初期化差分を明示し、ToolbarはDOM接続だけにする。
 
@@ -458,6 +474,8 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - ConstructionCommand: 選択図形の補助作図切替と未来の作図設定を所有。DrawOperationLifecycle.resetInputsは既に設定済みのmodeに対するdraft初期化だけを担当する。
 
 - CanvasInputBinding: Canvas DOM入力接続と座標表示。CanvasNavigation.zoom: pointer中心の倍率変更。操作判断と状態は既存controllerへ委譲。
+
+CanvasInputBinding.createCommandRoutingは通常pointer controllerに共通command panelとPNG範囲選択の入力優先順位を接続する。pointer・panel／PNGのreader・blank gesture・座標変換・blank判定・navigationの9入口だけを受け、後段panel／PNGを生成時には読まない。左押下はactive panel→PNG→通常controller、移動はinactiveを含むpanel通知→現在PNGとpan優先→通常controller、終了はPNGの左buttonだけ通常処理を抑制する。double clickは一回のsuppression→active panel→PNG guard→通常controllerとし、preventDefault・world／screen座標・同じevent／receiver・例外の停止範囲を維持する。panel／pan操作の後に切り替わったPNGもその都度読む。gesture state・panel command・編集／取消は各既存ownerが保持し、bindingのschedule／flush・計測・座標statusは既存createに残す。appは遅延readerと操作を接続する。
 
 - KeyboardInteractionController.createCancellation: Escの一段取消と優先順位。状態は各commandから照会し、appはcommandとpending／selectionの限定APIを接続する。
 
@@ -487,7 +505,7 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 
 - src/editing/history_restoration.js: Document／Blockの復元調整。モデル読込・draft所有・履歴抑止は各既存所有者へ依頼する。
 
-- src/editing/document_application.js: 復号済みDocumentの編集状態への適用順と補正結果を所有。decode／installはDocumentLoading、reset・ID予約・既定値補正は既存adapterへ委譲し、ファイルUIや履歴は持たない。
+- src/editing/document_application.js: 復号済みDocumentの編集状態への適用順と補正結果を所有。createPreparationはDocument・現在scope／Block session照会・SketchContext・ParameterNamespace・BlockCatalogの6依存から既存BlockStateを構成し、外観／Block正規化と保存前準備を公開する。units→Sketch→外観→Block→現在scope／全定義の描画順→Parameterの順を維持し、各段階でscopeを再取得する。decode／installはDocumentLoading、reset・ID予約・既定値補正は既存adapterへ委譲し、ファイルUIや履歴は持たない。
 
 - src/document/state.js: 初期化・resetに加え、Document／Block scopeの外観正規化を所有。旧Root外観の引継ぎ先は明示したblockEditing値で選び、編集sessionは参照しない。
 
@@ -498,6 +516,7 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/constraints/operands.js: 拘束対象の生成・参照target／subject変換・同一性判定。Sketch関係は注入した照会で都度解決し、選択・コマンド状態には依存しない。
 
 - src/ui/constraint_feedback.js: 求解案内・拘束状態ラベル・集計文面。状態を参照せず、呼出側が渡す結果と件数からmessage／kindまたは文字列を返す。
+- src/ui/application_feedback.js: Hint／logのDOM出力とHint計測、求解結果の表示接続。4依存から既存ConstraintFeedbackを一つ生成し、同じformatterを他のUIへ共有する。生成時は照会せず、要素・言語・profile状態と重複件数は出力時に取得する。原文保存／翻訳／error classの順と例外の部分更新、log不在の短絡、非bind workの結果を維持し、モデル・履歴や独自表示stateは持たない。
 
 - src/geometry/appearance_query.js: 有効外観の継承と可視性照会。描画と選択で共用し、キャッシュの期間管理はGeometryReadModelに残す。
 
@@ -546,7 +565,7 @@ ClipboardCommand（src/commands/clipboard_command.js）はコピー／切取り�
 GeometryDeletion（src/editing/geometry_deletion.js）は明示したmodelと削除候補から、点／図形／拘束の削除対象集合を計算し、別のapply APIで対象をモデルへ適用する。planはPointUsageと拘束参照判定を注入し、共有endpointと実オブジェクトの同一性を保持する非破壊照会である。applyは既存と同じ順序で配列を置換し、削除ID／Geometry keyを参照する注記も除く。権限／派生参照／Parameter保護と操作状態終了は適用前に呼出側で行い、求解・履歴・表示も呼出側が調整する。CanvasSelectionはdiscardDeletedGeometryとdiscardDeletedConstraintsで選択を整理する。両者の間にSpline編集状態の解除を挟む既存順序を維持するため、二つの更新APIを持つ。hoverの解除はその所有者側で行う。Sketch削除は異なる階層ルールを持つため今回は統合しない。
 
 
-GeometryDeletionCommand（src/commands/geometry_deletion_command.js）はプリミティブ／拘束の削除操作を調整する。権限→削除計画→派生参照保護→空判定→Parameter保護→操作終了→削除適用→選択／Spline／hover整理→入力候補のownerごとの求解→円弧正規化→表示→案内／履歴の既存順序を所有する。GeometryDeletion、CanvasSelection、SplineEditing、CanvasHoverの既存所有者を使用し、現在scopeはガード後に照会する。共通modeとpending command／dragの終了、表示同期、analysis安定性の照会は限定したadapterで接続する。求解不成功でも削除を記録する既存挙動を維持し、新しいrollbackは導入しない。appのdeleteElementsは早期接続を保つhoisted wrapperとなる。Annotation／Hatch／Instance等を含むdeleteCurrentSelectionの調整はまだapp側に残る。
+GeometryDeletionCommand（src/commands/geometry_deletion_command.js）はプリミティブ／拘束の削除操作を調整する。権限→削除計画→派生参照保護→空判定→Parameter保護→操作終了→削除適用→選択／Spline／hover整理→入力候補のownerごとの求解→円弧正規化→表示→案内／履歴の既存順序を所有する。GeometryDeletion、CanvasSelection、SplineEditing、CanvasHoverの既存所有者を使用し、現在scopeはガード後に照会する。操作終了の順序は同commandが所有し、既存のSession／command実体と後段dragの遅延reset、mode変更・表示同期・analysis安定性の限定portへ接続する。求解不成功でも削除を記録する既存挙動を維持し、新しいrollbackは導入しない。appのdeleteElementsは早期接続を保つhoisted wrapperとなる。Annotation／Hatch／Instance等を含む混在選択の削除は既存SelectionDeletionCommandが調整する。
 
 
 GeometryDeletionのplanDerivedInstances／planBlockInstancesは、投影bundleから削除ID・Geometry key・依存拘束を非破壊で計算する。拘束の再生成された投影はkeyで対応し、Blockのみowner自体を参照する拘束も対象に含める。派生Instanceのfalsy key除外とBlockのkey保持、古いBlock bundleのsplines省略を維持する。applyInstancesは拘束→注記→指定Instance配列を更新し、別種類のInstance配列や投影元Geometryは変更しない。派生参照／Parameterのガード、Block投影cache無効化、選択・求解・履歴は呼出側が所有し、既存順序で接続する。
@@ -573,7 +592,7 @@ OperandHitQueryのhitConstraintOperandはpointer・拘束種別・現在operand�
 ConstraintTargetCommandのoperandClickはAnnotationアンカー→固定切替→空白での線長寸法確定→対象追加→意図解決→寸法配置／拘束確定の振分けを調整する。hitはOperandHitQuery、受入と列更新はConstraintTargetSessionに委ねる。固定では参照／派生投影を拒否し、Block投影またはprimitiveを個別Geometry固定へ渡す。選択解除と同期後に現在commandを捕捉し、固定成功後の選択解除を経て同じcommand参照を復元する既存順序を維持する。対象拒否では案内だけ、意図エラーでは同期後に案内と描画、未完了では選択UIと案内・描画を行う。実際の固定編集、寸法配置・値入力、拘束commitとUI更新は明示した依存へ委譲する。appは生成時の接続とhoisted入口を担当する。
 
 
-ConstraintCommitCommand（src/commands/constraint_commit_command.js）は通常／参照拘束の追加、snapshot捕捉、前処理、求解、Parameter安定化、線退化／重複判定、失敗復元、成功後の分析・表示・履歴を調整する。通常の作成権限と対象scope、参照の先祖／循環ガードは既存の順序を保持する。重複寸法は復元して同じcommandの読取寸法登録へ進む。通常拒否のundefinedと参照拒否のfalseの戻り値差も保持する。参照metadataは同じ拘束Objectへ付与し、診断用markReference入口も同じ所有者へ接続する。既存checkpoint・Solver・退化／重複照会・Parameter・UI／履歴を明示した依存として使用し、現在modelやDOMを直接探索しない。計測時計と通常成功後の性能記録更新はadapterへ接続する。appは生成／接続とhoisted入口を担当し、共有sessionと組立ての調整は継続整理する。
+ConstraintCommitCommand（src/commands/constraint_commit_command.js）は通常／参照拘束の追加、snapshot捕捉、前処理、求解、Parameter安定化、線退化／重複判定、失敗復元、成功後の分析・表示・履歴を調整する。通常の作成権限と対象scope、参照の先祖／循環ガードは既存の順序を保持する。重複寸法は復元して同じcommandの読取寸法登録へ進む。通常拒否のundefinedと参照拒否のfalseの戻り値差も保持する。参照metadataは同じ拘束Objectへ付与し、診断用markReference入口も同じ所有者へ接続する。既存checkpoint・Solver・退化／重複照会・Parameter・UI／履歴を明示した依存として使用し、現在modelやDOMを直接探索しない。計測時計は注入し、通常成功後の性能traceは同commandが保持して任意のobserverへ通知する。appは生成／接続とhoisted入口を担当し、共有sessionと組立ての調整は継続整理する。
 
 
 DimensionConstraintFactory（src/constraints/dimension_constraint_factory.js）は明示した寸法target・値・配置から拘束Objectを生成し、constraintまたは生成拒否理由を返す。Geometry型と平行判定を注入し、点axisの優先、角度のdegree→radian、半径／直径prefixと配置値の同一性／複製範囲を維持する。非平行の線同士は理由を返し、silentかどうかと案内／logの表示は呼出側が判断する。モデル配列やUI・sessionは変更しない。DimensionQueries.targetItemsはtargetに含まれる参照要素を順序と同一性を保って返し、読取寸法のBlock所有判定などから使用する。寸法配置session、読取寸法の仮追加／重複照会、最終commitは操作側に残る。
@@ -677,11 +696,15 @@ ConstraintTestDriver.createForcedCommit（src/testing/constraint_test_driver.js�
 
 ClipboardTestDriver（src/testing/clipboard_test_driver.js）はブラウザテストのClipboard状態照会・通常図形fixture・Block fixtureをcreateObservation／createGeometryFixture／createBlockFixtureとして独立して生成する。観測は現在scope・保存・Sketch種別／所有Sketch・activeSketch・選択照会・Selection／ClipboardSession・履歴照会の九つの依存だけで動き、fixtureの型・ID採番・描画依存を持たない。保存値取得後に現在scopeからSketch別Geometryを照会し、選択→payload統計→履歴の順で既存結果を返す。各fixtureはモデル初期化→ClipboardSession.clear→viewport→固定Geometry／拘束とSelection→履歴→UI→draw→共通readStateの順を保持する。Block fixtureは定義追加とInstance IDの採番を既存app入口へ委譲し、projection cache無効化と投影拘束の追加を維持する。現在scopeを各旧model access時に読み、独自Clipboard／モデル／seq／Selectionを所有しない。thisによるhook相互参照は明示したreadState／readSelected／readHistoryへ置き換える。app内の共有test選択readerは既存selectedGeometryIdsForTest APIにも接続し、他機能のテスト結果を維持する。test query時だけappが生成し、既存の三つのAPI名を直接接続する。
 
+ClipboardTestDriver.createSupportは同じClipboardSession・CanvasSelection・現在scopeと履歴観測から観測→Geometry fixture→Block fixtureの順に既存三支援を生成する。24個の限定依存から各子へ必要な入口だけを渡し、GeometryCreation／SketchContextの元の関数と明示した型namespaceを共有する。両fixtureのreadStateは同じ観測関数を指し、既存の三つの公開API名を持つ不変Objectを返す。生成時にmodel／session照会・fixture実行・viewport／Selection変更を行わず、新たなClipboard／model／履歴・採番状態を持たない。appはtest指定時だけ生成して公開APIを接続し、通常のコピー／貼付けと履歴確定は既存commandに残す。従来の個別factoryも維持する。
+
 
 DerivedInstanceTestDriver（src/testing/derived_instance_test_driver.js）は派生Instanceのブラウザテスト支援をcreateFixture（投影／Mirror／PatternとHatchの準備）とcreateInteraction（保存状態／投影結果の照会、読込、source／Instance削除）として独立して生成する。fixtureは固定Geometryと参照関係、S2へのactiveSketch切替、Projection→Mirror→PatternのID採番順、Hatch領域生成、履歴→UI→draw→観測を維持する。IDはそれぞれの既存app採番入口を呼び、独自seqを持たない。interactionは保存値のclone後に現在scopeのInstanceを既存projection bundleから観測し、元の種別別Geometry／拘束状態色・Selection・Hatch妥当性・Tree／Properties情報を同じ順に返す。読込はclone→既存load→UI→draw→state、削除は既存deleteElements／deleteCurrentSelection→state→hintを保持する。thisによるtest hook相互参照はDriver内stateと明示したreadStateに置換する。モデル・projection cache・Selection・履歴は既存所有者に保持し、現在scopeを各旧model access時に照会する。test query時だけappが生成し、既存の五つのAPI名を直接接続する。作図commandの別fixtureはcreateCommandFixtureで分離する。Sketch ProjectionのBlock関連fixtureは専用の生成入口で分離する。
 
 
 CanvasTestDriver（src/testing/canvas_test_driver.js）はブラウザテストの表示中心／倍率設定とworldからclient座標への変換を所有する。viewport・clampZoom・resizeCanvas・draw・Canvas・現在中心・座標変換の七つの依存を明示して受け取り、独自viewport状態を持たない。focusは既存のNumber／fallback→clamp→viewport更新→中心指定resize→draw→Canvas rectangle／現在中心照会の順を維持する。clientPositionは現在rectangleを読み、既存数値変換を行って座標変換へ委譲し、drawを行わない。test query時だけappが生成し、既存focusWorldForTest／worldClientPositionForTestを直接接続する。DerivedInstanceTestDriver.createCommandFixtureはInstance作図用のsource／axis／directionの準備を所有し、明示したfocus／clientPosition入口を受け取る。初期化→Geometry生成→focus→履歴→UI→draw→軸／方向のclient位置照会を維持し、thisによるtest hook object依存を持たない。既存resetForGeometryInstanceCommandTest APIを直接接続する。
+
+CanvasTestDriver.createDisplaySupportは表示・座標・hit／snap照会・fit fixtureの11支援factoryを同じviewport／Geometry生成／現在scopeへ接続する。19個の限定依存から各子へ必要なAPIだけを渡し、focus／clientPositionと既存12個のテストAPI名のpublicAPIを返す。Viewportの関数とGeometry生成関数は元の非bind値で共有し、独自viewport／Geometry／sessionを持たない。子factoryは関数宣言と不変APIの生成だけであり、まとめて早期生成してもモデル読取り・fixture実行・DOM照会・描画・listener登録は行わない。appはtest指定時だけこの表示支援を作り、作図state観測・表示切替の観測は別の支援として維持する。公開名・引数・戻り値と他driverへ共有するfocus／clientPositionを維持する。従来の個別factoryも残す。
 
 
 SketchProjectionTestDriver（src/testing/sketch_projection_test_driver.js）はSketch Projectionのブラウザテスト支援をcreateObservation（投影Geometry／拘束／外観／保存／履歴／Tree・Propertiesの照会）とcreateGeometryFixture（通常Geometryと投影先Sketchの準備）として独立して生成する。観測は呼出し時のmode／command件数／投影拘束／scopeを明示したreaderで照会し、Geometryの型別状態・外観と描画色・拘束状態・冗長性→保存値のclone→履歴→Sketch階層→DOMの既存順を保持する。生成型を除くGeometry作成・Solver・表示更新の依存を持たない。fixtureは既存Geometry生成入口とscope所有者へ委譲し、共有Point参照・Construction・ID／座標・activeSketch切替・focus→履歴→UI→draw→client位置照会の順を保持する。CanvasTestDriverのfocus／clientPositionを明示して受け取り、SplineGeometryの評価は生成時に接続する。モデル／seq／Selection／履歴／投影cacheを複製しない。appはtest query時だけ生成し、既存resetForSketchProjectionTest／sketchProjectionStateForTest APIを直接接続する。rectangle／shared kindsの旧形式再現はcreateCompatibilityFixtureで分離する。Block編集・Block投影fixtureは独立した生成入口で分離し、製品のmigrationとは統合しない。
@@ -740,6 +763,8 @@ GeometryDragTestDriver.createPointDriver（src/testing/geometry_drag_test_driver
 
 GeometryDragTestDriver.createGeometryDriverはPoint／Line／Circle／Arc／Arc端点の開始位置、previewとfinalのsnapshot・計測を観測し、既存のsession生成・local context・ドラッグ更新・最終求解・円弧正規化・所属Sketchの誤差照会へ委譲する。fractionのfinite判定／clamp、Arc端点wrapper、初期位置基準、snapshot時機、対象なしのnullとsessionなしの初期状態、既存結果のboolean／0 fallbackを保持する。拘束状態はinspectConstraints時だけ明示したreadConstraintStatusesを呼び、app内の従来照会本体を共有する。公開test hook同士のthis参照を持たず、独自Solver／session／拘束状態／履歴を持たない。appはtest query時だけ生成し、既存geometryDragPathForTestを接続する。
 
+createExecutionSupportは同じ製品GeometryDragFeature／Solverと現在scope等の九つの限定依存を共有し、上記のGeometry／Point実行driverを元の順序で生成する。featureの同じ関数とSolverのreceiverを維持し、生成時にはscope・drag・時計を実行しない。既存三つの公開API名と順序を所有し、appはその公開APIをtest query内で登録する。旧factoryと製品のstate／計測／求解手順は維持する。
+
 
 ConstraintTestDriverは拘束診断とBlock投影支援を用途別に生成する。createStatusObservationは既存refresh結果から現在Sketchの状態を返し、createAnalysisObservationは既存求解scope／Solver解析と拘束errorを照会して閾値1e-8・降順・上位12件と所属Geometry数を返す。createBlockObservationは既存refresh後にInstanceで投影bundleを絞り、同一Geometry参照のstatus・浅いsummaryコピーを観測する。createBlockConstraintInsertionは既存投影からPoint／Lineを解決して既存commitへ委譲し、解析→Block状態→保存値の順で観測する。対象なしの理由とcommitのliteral true判定を保持する。状態／解析／Block投影／編集は既存所有者へ接続し、独自Solver／拘束状態／履歴を持たない。appはtest query時だけ生成して既存四API名とGeometryドラッグへ同じ観測入口を渡し、公開hook同士のthis依存を持たない。
 
@@ -769,6 +794,8 @@ DimensionTestDriver.createSketchVisibilityFixtureは二つのSketchの固定寸�
 
 
 CanvasRenderTestDriver（src/testing/canvas_render_test_driver.js）はdash isolationのテスト支援を作図preview準備（createDraftDashCases）、Block準備（createBlockDashCases）、観測手順（createDashIsolation）に分ける。作図／Block準備は既存command・previewと生成型／Definition追加／scopeへ接続し、modeはappのテスト用入口で設定する。観測は元のreset→viewport→preview／Selection reset→mode→setup→dash設定→draw→dash照会と12case順を保持する。固定入力・同一参照・Block ID・Sketch所属と例外時の元の実行範囲を維持する。全アプリcontextを渡さず、Block生成を作図側・作図commandをBlock側へ渡さない。独自mode／command状態・Definition／seq・renderer／履歴を持たず、appはtest query時だけ生成して既存canvasDashIsolationCasesへ接続する。
+
+CanvasRenderTestDriver.createRenderingSupportは既存の作図preview／Block準備、dash観測、補助線Hover fixture、補助線描画観測の五部品を生成・接続する。通常描画を所有せず、同じauthoring／offset／placement Layerとcommand・scope・Canvasを明示的に受け取る。内部の準備／観測依存は各既存factoryへ限定して渡し、公開はcanvasDashIsolationCases、constructionLineHoverDisplayCasesForTest、constructionLineRenderingForTestの三関数に絞る。appのtest hooks有効条件と公開名・順序は維持する。生成時はモデル／Canvasを読書きせず、診断実行時のreset／mode変更・12case順・例外伝播・Canvas method復元を維持する。独自state・renderer・アプリ全体のcontextは追加しない。
 
 
 PropertiesTestDriver.createInspectionFixtureは固定Geometry／reference・read-only拘束を既存生成型／編集へ委譲して準備し、UI→fit→draw→現在Canvas位置／IDを観測する。SketchTreeTestDriver（src/testing/sketch_tree_test_driver.js）はRoot／子孫Sketchのhover用Geometry／Block（createRootHoverFixture）とBlockの線／explicit Pointのhover fixture（createBlockHoverFixture）を役割別に生成する。現在scope・既存生成型／cache・UI／fit／draw／投影へ接続し、Definition追加／Instance採番はappのcallbackに留め、Block位置は既存CanvasTestDriverの変換を使う。固定座標／ID・所属／active Sketchの切替・constraintのreference／read-only設定と呼出し順を保持する。独自scope／採番／定義・Selection／hoverルール／履歴を持たず、appはtest query時だけ生成して既存三API名へ接続する。
@@ -825,7 +852,7 @@ DocumentTestDriver.createNameObservationは呼出し時のDocument名・既存�
 DocumentTestDriver.createHistoryObservationは呼出し時のactiveEditHistoryを照会し、Undo／Redo件数・Block編集・button disabledとConstruction状態／button表示を返す。CanvasSelectionTestDriver.createIdObservationは既存Selectionの六種類のGeometry IDを同じ配列順でコピーして返す。GeometryDragTestDriver.createResponsiveFixtureは既存sample生成→fit→draw→履歴reset→保存値取得を同じ引数と順で実行する。既存公開APIと各test driverへ渡す共通照会入口を維持し、最新値・null／boolean・DOM要素なしのundefinedと同じ参照元を保持する。独自履歴／Selection・モデル／viewport・Geometry生成／求解規則を持たず、appはtest query時だけ生成して接続する。
 
 
-CanvasContextTarget（src/editing/canvas_context_target.js）はcontext targetと既存Selection／拘束hit／Fix照会のadapterを所有する。createSelectionは対象の種類・同一参照／Arc端点・寸法の選択照会、既選択集合の保持またはclear→対象設定、拘束operand向けhit構成を提供する。既存hitがあればその参照を優先し、端点計算はfallback時だけ既存Geometry入口へ委譲する。createFixObservationは既存batch／固定拘束照会と現在Selectionからmenuのenabled／fixedを返し、batch優先・種類別の条件／nullと短絡順を保持する。Selection状態はCanvasSelection、拘束／batch規則は既存照会所有者へ留め、独自Selection／拘束・履歴・DOM／描画・menu表示／action実行を持たない。候補収集／順位はCanvasContextQuery、表示はCanvasContextPresentation／CanvasContextMenu、項目構成はCanvasContextPresentation.createItems、action調整はCanvasContextActionsが担う。appは役割別の四port／六portで生成し既存利用箇所へ接続する。
+CanvasContextTarget（src/editing/canvas_context_target.js）はcontext targetと既存Selection／拘束hit／Fix照会のadapterを所有する。createSelectionは対象の種類・同一参照／Arc端点・寸法の選択照会、既選択集合の保持またはclear→対象設定、拘束operand向けhit構成を提供する。既存hitがあればその参照を優先し、端点計算はfallback時だけ既存Geometry入口へ委譲する。createFixObservationは既存batch／固定拘束照会と現在Selectionからmenuのenabled／fixedを返し、batch優先・種類別の条件／nullと短絡順を保持する。Selection状態はCanvasSelection、拘束／batch規則は既存照会所有者へ留め、独自Selection／拘束・履歴・DOM／描画・menu表示／action実行を持たない。候補収集／順位はCanvasContextQuery、表示はCanvasContextPresentation／CanvasContextMenu、項目構成はCanvasContextPresentation.createItems、action調整はCanvasContextActionsが担う。CanvasContextInteractionが役割別の四port／六portで生成し、同じSelectionを項目構成・候補確定・Entryへ接続する。
 
 
 CanvasContextPresentation.createItemsはcommand／空白／対象別のmenu項目データ構成を所有する。呼出し時のmode・既存command／Selection／Spline編集状態、編集／生成可否・read-only寸法／配置group・Block編集error・Fix／Construction／Geometry／Drawing Order・copy可否／選択とUndo／Redo button表示を明示した照会／所有者へ接続し、action ID・ラベル／shortcut・disabled／danger・group／separator順を返す。commandと空白の短絡、編集中fit pointの操作抑制、Block errorと生成可否の短絡・照会順を維持する。候補ラベルのcreateとは独立したfactoryと依存で生成し、Selection更新・action実行・履歴・menu session／DOM描画を持たない。CanvasContextMenuは表示／session、CanvasContextTargetはtarget／SelectionとFix照会を引き続き所有する。appは生成と既存menu呼出しへの接続を担い、action調整はCanvasContextActionsへ委譲する。
@@ -834,10 +861,12 @@ CanvasContextPresentation.createItemsはcommand／空白／対象別のmenu項�
 CanvasContextActions（src/commands/canvas_context_actions.js）はCanvas context actionの編集guardと既存操作への振分けを所有する。Selection／対象Sketchの編集guard→対象またはSelection／active Sketchの構造guardという順と短絡を維持し、command取消／実行・履歴・clipboard／既存button click・Properties・Block／寸法／Sketch／Hatch／Drawing Order／Spline／viewport操作を明示した既存入口へ委譲する。寸法整列が成功した場合だけUI→draw→履歴→hintを行い、fit結果ごとのhint後にdrawする。既存hit／target／pointer／Spline参照・必要引数の判定・method receiver・void paste／未定義returnと例外伝播を保持する。新しいSelection／command／model・履歴／求解規則・menu sessionは持たない。appは所有者を接続し、早いmenu生成時のcallback参照を保つ薄い委譲関数を残す。項目構成はCanvasContextPresentation、targetとFix照会はCanvasContextTarget、menu表示／sessionはCanvasContextMenuが所有する。
 
 
-CanvasContextMenu.createEntryはCanvas context menu開始時の進行を所有する。menu有無／Geometry mode→native event抑制→既存menu終了→Canvas座標／last pointer更新→command照会→候補取得／表示分岐→単一対象選択／UI→draw→項目構成／既存sessionのopenという順と短絡を維持する。通常commandでは候補照会を省略し、拘束commandと重複候補では候補表示を優先する。pointer更新はappのsetterへ、候補／Selection・command・項目・表示sessionは既存所有者へ委譲し、新しいsession／操作状態を持たない。CanvasContextTarget.createCandidateActionは現在拘束commandがあれば既存hit構成→operand処理へ、それ以外は明示的な対象置換→UI→drawへ進める。pointerなしの原点fallback・同一target／pointer参照・未定義returnと例外伝播を保持する。appは両factoryを生成・接続し、早いmenu callback登録を保つ薄い委譲関数を残す。後で初期化されるmenu終了入口は操作時のcallbackで照会する。
+CanvasContextMenu.createEntryはCanvas context menu開始時の進行を所有する。menu有無／Geometry mode→native event抑制→既存menu終了→Canvas座標／last pointer更新→command照会→候補取得／表示分岐→単一対象選択／UI→draw→項目構成／既存sessionのopenという順と短絡を維持する。通常commandでは候補照会を省略し、拘束commandと重複候補では候補表示を優先する。pointer更新はappのsetterへ、候補／Selection・command・項目・表示sessionは既存所有者へ委譲し、新しいsession／操作状態を持たない。CanvasContextTarget.createCandidateActionは現在拘束commandがあれば既存hit構成→operand処理へ、それ以外は明示的な対象置換→UI→drawへ進める。pointerなしの原点fallback・同一target／pointer参照・未定義returnと例外伝播を保持する。CanvasContextInteractionは両factoryを生成・接続し、appは早いmenu callback登録を保つ薄い委譲関数を残す。後で初期化されるmenu終了入口は操作時のcallbackで照会する。
 
 
 FixedToggleCommand（src/commands/fixed_toggle_command.js）は固定状態切替のoperand経路（createOperand）とSelection経路（createSelection）を独立した依存で生成する。operandは既存Sketch／投影shape guard後にLine／Arc端点／Geometryの固定拘束を照会し、同じ対象参照で既存delete／commitへ委譲する。Selectionは既存guard後、単一Instanceまたは同一Instanceだけの投影選択・Arc端点・Point／Line batchの優先順で切り替える。Instanceの更新／表示／履歴、端点commit失敗時のsnapshot復元、batchの固定拘束追加／逆順除去→依存求解→主／依存失敗または許容誤差超過時の復元と表示、成功時の解析→hint→UI→draw→log→履歴の順を維持する。現在scopeはgetter、許容誤差・型／参照照合・batch判定・snapshot／restore・求解／履歴は明示した既存所有者へ接続し、独自モデル／Selection・拘束型／Solver／snapshot形式／履歴を持たない。無関係な拘束・同一参照・既存enabled判定・boolean／return／例外伝播を保持する。appは二factoryを生成し、早いConstraintTargetCommand callback登録を維持する薄い委譲関数と既存button経路へ接続する。
+
+FixedToggleCommand.createOperandのunfixPointは、Treeから渡された同じPointの固定flag解除を所有する。elementSketchId(point)→guardSketchEdit(id, "constraint")の順に照会し、拒否時は無変更でundefinedを返す。許可時はfixed=falseを設定してからsolveAndRefreshへ「固定解除 Point ID」のlabelだけを渡し、その戻り値は公開しない。既に解除済みのPointも同じ求解経路へ渡す。所属／guard例外ではflagを変更せず、求解例外は更新済みflagのまま伝播する従来の境界を維持し、独自rollback・追加履歴や対象Sketch指定を加えない。constraint guardの作図先限定規則を維持し、他Sketchでは作図先の明示変更を案内する。求解対象の既定値・UI／解析／履歴は既存SolveRefreshCommandが担当する。operand commandは入力依存の初期化後かつTree生成前に構築し、Treeは同じunfixPoint関数を直接受け取る。生成時にguard・scope・求解を実行せず、Selection切替／固定拘束のtoggleとは別の明示操作とする。
 
 
 ConstraintControlCommand（src/commands/constraint_control_command.js）は拘束button入力のcommand判断を所有する。activateは同じcommand再click取消→Annotation anchor優先→Symmetry開始→選択へ適用可能なら既存取消／距離開始またはpending取消→command置換→Toolbar／拘束button更新→拘束追加、それ以外は対象選択開始の順を維持する。activateFixedはGeometry mode確認→Annotation anchor優先→同じ固定command取消→Selectionなしの対象選択／Selectionありの既存FixedToggle切替を行う。両経路の優先順を統一せず、既存session／選択判定・各commandとUI通知へ明示したportで委譲し、独自mode／pending／Selection／拘束・求解／履歴を持たない。ConstraintControlsView.createBindingは拘束／menu／Fix buttonのclick登録と解除を所有し、datasetを操作時に読み、menuは元button click→details閉じの順を維持する。bindは二重登録せず、disposeで登録したlistenerだけを除去し再bindできる。状態表示のcreateとは独立した依存で生成し、command判断／モデルを持たない。appは二factoryを接続してbindする。
@@ -881,7 +910,7 @@ GeometryPresentation.createLineDisplayはviewport／実効外観／画面単位�
 InteractionOverlayRenderer.drawSelectionRectはSelectionRectangleが返すpreviewだけを受取り、crossing／enclosingの色・倍率に応じた線幅／破線・fill→strokeを描画する。preview不在の短絡と既存withCanvasStateによるCanvas状態の隔離を維持する。session進行・矩形範囲の生成／採否・Selection変更・pointer lifecycleは既存SelectionRectangleへ残し、rendererはsessionを参照／変更しない。
 
 
-DimensionPresentation.createPainterは既存Layout／Metrics／Rendererと外観・現在Sketch・dimensionLayout入口・shaft係数の7portを接続し、直線／角度寸法の表示planを構成する。target／dimensionとlayoutの短絡、外観既定値の入口と評価順、RenderPlan／円弧延長／角度span・外側terminatorとshaftの変換・radius下限、既存rendererへ渡す参照／flags／呼出順を維持する。配置／計測の独自実装・モデルやsessionの変更は持たず、appは生成接続と既存callback用のhoisted描画入口を持つ。
+DimensionPresentation.createPainterは既存Layout／Metrics／Rendererと外観・現在Sketch・dimensionLayout入口・shaft係数の7portを接続し、直線／角度寸法の表示planを構成する。target／dimensionとlayoutの短絡、外観既定値の入口と評価順、RenderPlan／円弧延長／角度span・外側terminatorとshaftの変換・radius下限、既存rendererへ渡す参照／flags／呼出順を維持する。配置／計測の独自実装・モデルやsessionの変更は持たず、DimensionDisplayが生成接続し、appは既存callback用のhoisted描画入口を持つ。
 
 
 AuthoringPreviewRenderer.createLayerは現在mode／pointer／trimとLine／Rectangle／Slot／Circular／Spline／Centerlineの既存command一時値、renderer・Centerline投影・Canvas寸法の12portに接続する。modeごとの短絡と現在値／元参照、Line→Centerline→Rectangle→Slot→Circle→Arc→ThreePointArc→Splineの判定／描画順を維持し、trimはBlock／Instance／Offsetの後に別入口で描く。モデル／sessionの更新を持たず、Centerline support不成立時の短絡とpointer不在時の投影省略も維持する。appは描画stageと診断入口を直接接続し、各preview guardと不要な中継関数を除く。
@@ -899,7 +928,7 @@ GeometryPresentation.createCommandTargetsはpanel選択snapshot／現在mode／I
 GeometryPresentation.createSketchStyleはsolve error／Sketch ID・関係／拘束status／可視性／activeの6照会portから色・線幅・alpha・描画順を返す。選択→Hover→solve error→非active→拘束statusの色優先、各Sketch関係の線幅／alpha、visible filter→stable inactive／active順と元item参照を維持する。表示色定義はGeometryPresentationが持ち、寸法で共有する非active色はINACTIVE_CONSTRAINT_STATUS_COLORを参照する。Solver・Sketch・Selectionの状態は照会のみで、元arrayやモデルを変更せず、appは既存callback用hoisted入口と接続を持つ。
 
 
-SketchProjectionQueries.createSourcesは現在model／active Sketch、Geometry ref・種類・key／同一性、既存投影拘束query／operational／Sketch・参照元／可視性、operand変換の13portでsource coverageと候補entryを照会する。Instance優先→従来拘束、Point constraintのObject同一性／string ID、他Geometryのkind／source key・target Sketch・operational条件と候補guard順を維持する。currentScope adapterは元model aliasをcall時に読み、既存拘束queryのscopeとcacheを変更しない。新cache／重複規則・モデル／session更新を持たず、appのhoisted入口は初期command callback登録を維持する。
+SketchProjectionQueries.createSourcesは現在model／active Sketch、Geometry ref・種類・key／同一性、既存投影拘束query／operational／Sketch・参照元／可視性、operand変換の13portでsource coverageと候補entryを照会する。Instance優先→従来拘束、Point constraintのObject同一性／string ID、他Geometryのkind／source key・target Sketch・operational条件と候補guard順を維持する。currentScope adapterはEditingScopeBinding.currentをcall時に読み、既存拘束queryのscopeとcacheを変更しない。新cache／重複規則・モデル／session更新を持たず、appのhoisted入口は初期command callback登録を維持する。
 
 
 SketchProjectionTestDriver.createLegacyTargetConstructionは従来の投影拘束fixture用にPoint／Line／Circle／Arc／Splineのtargetを作る。既存addPointToSketch／addLine／addCircle／addArc／addSplineの5portに委譲し、座標・Sketch／point kind・construction／closed・radius／angleとpoint生成→geometry生成順、元source無変更と例外時の既存部分割当を維持する。現在この入口はcompatibility／source-editingのテスト支援だけで使用され、test query有効時だけ組み立てる。製品commandやGeometryCreationのID／モデル編集の所有へは移さず、appはtest factory接続のみを持つ。
@@ -914,10 +943,12 @@ DocumentState.normalizeDimensionStateは明示scopeの拘束を既存target解�
 SolveRefreshCommandはactive Sketch／既存ParameterStabilization・ConstraintAnalysis／hint／UI／draw／Historyと履歴記録の8入口に接続し、求解後の操作を調整する。求解→分析→hint→UI(refreshAnalysis:false)→描画→成功かつ現在restoringではない場合だけhistory確定の順とraw result参照、default Sketch評価・引数、各段階の例外伝播／後続省略を維持する。新しい求解／snapshot／回復規則や状態を持たず、モデル回復は既存ParameterStabilizationへ残す。appは生成接続と既存callback用のhoisted入口を持つ。
 
 
-InstanceProjection.createSourceSelectionは現在model／選択Geometry・CanvasSelection／Block・派生bundle／Sketch ID・active／refの8照会入口でInstance source候補を構成する。選択Geometry→model内Hatch→Block bundle→派生bundleの順、Blockのlocal kind explicit／派生のPoint source explicit、SetによるObject同一性の重複除去とactive／ref filterを維持する。元model aliasと現在selectionをcall時に読み、独自cacheやID重複規則・Selection／session変更を持たない。appのhoisted入口は早期Instance commandのcallback登録を維持する。
+InstanceProjection.createSourceSelectionは現在model／選択Geometry・CanvasSelection／Block・派生bundle／Sketch ID・active／refの8照会入口でInstance source候補を構成する。選択Geometry→model内Hatch→Block bundle→派生bundleの順、Blockのlocal kind explicit／派生のPoint source explicit、SetによるObject同一性の重複除去とactive／ref filterを維持する。EditingScopeBinding.currentと現在selectionをcall時に読み、独自cacheやID重複規則・Selection／session変更を持たない。appのhoisted入口は早期Instance commandのcallback登録を維持する。
 
 
-CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入口からcategory順・重複／元参照を維持したselectionItemsと、先頭itemのSketch→inspection→nullのselectionSketchIdを返す。CanvasSelectionInteraction.createIdentitySelectionはSelection／Sketch照会／clear／UI／drawの5入口でidentity選択を行う。Block→derived ownerの優先、additive時のSketch拒否／ID toggle、non-additive clear→kind判定→set、UI→drawと結果を維持し、identityを変更しない。照会と状態更新を分け、appは早期callback用のhoisted入口と生成接続を持つ。
+CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入口からcategory順・重複／元参照を維持したselectionItemsと、先頭itemのSketch→inspection→nullのselectionSketchIdを返す。CanvasSelectionInteraction.createIdentitySelectionはSelection／所属Sketch照会／clear／UI／drawを用いてidentity選択を行い、press準備にはSketch照会／guardも受け取る。Block→derived ownerの優先、additive時のSketch拒否／ID toggle、non-additive clear→kind判定→set、UI→drawと結果を維持し、identityを変更しない。照会と状態更新を分け、appは早期callback用のhoisted入口と生成接続を持つ。
+
+CanvasSelectionInteraction.createIdentitySelectionはCanvas pressのselectInactive／prepareSelectionも所有する。現在のSelection所属とSketchのlockを操作時に読み、Ctrl／Shiftの別Sketch拒否→lock対象の選択とguard→inspectionの追加選択保持→inspection／Tree選択の解除という既存優先順を維持する。selectInactiveは選択の結果にかかわらずその後の最新lockを照会し、選択時の例外は後続guardを停止する。guard拒否でもprepareSelectionは処理済みを返す。PointerInteractionControllerは従来のmode／pending条件でこの入口を呼び、pointer capture・command routing・通常dragを引き続き担当する。appは同じSelectionとSketch照会・guardを明示して接続し、新たな選択stateや汎用contextは作らない。
 
 - src/commands/sketch_command.js: createEditAccessは既存SketchContextの編集可否に基づく拒否通知、選択所属のguard、作図拒否のpreview cleanupを担当。権限規則とSelection／preview状態の所有は各既存moduleに残し、appは生成・接続を担当する。
 
@@ -931,7 +962,7 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 - src/commands/sketch_command.js: renameの編集guardとtoggleLockの状態更新／UI・描画・履歴を所有する。appは権限照会と専用の取消準備callbackを接続し、Sketch切替の全体resetとは別の順序を維持する。
 
-- src/ui/command_panel.js: createRoutingはPNG／注記／Hatch／派生の表示先選択とイベント振分けを6依存で担当する。row選択・削除のoptional性とPNGを経由しない経路、receiver・引数・結果を維持し、appは個別panelとviewを接続する。
+- src/ui/command_panel.js: createFeatureは23依存で既存Derived／Hatch／Annotation adapter→routing→DOMを生成・接続し、実際のderivedPanel／commandPanelを返す。SketchContextの照会と各commandを限定APIへ接続し、mode／styleの操作時取得、取消の早期return・hint差／通知順と例外を維持する。appは二つの実体を前段の遅延照会へ接続する。旧createRoutingはPNG／注記／Hatch／派生の表示先選択とイベント振分けを6依存で担当し、row選択・削除のoptional性とPNGを経由しない経路、receiver・引数・結果を維持する。旧createも独立APIとして維持する。
 
 - src/editing/canvas_selection_interaction.js: createClearingはSelection・拘束operand・hoverの限定した参照・強調表示の解除を4 ownerのAPIで調整する。拘束command本体や他のhover参照・snapを保ち、UI／履歴／model更新は担当しない。
 
@@ -957,7 +988,7 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 
 - src/editing/canvas_selection_interaction.js: createDocumentResetはDocument置換時のhover／highlight／pointer／snapと明示Selection fieldのresetを5依存で調整する。通常clear、早期Selection解除、pending／constraint session、Document／採番の初期化は統合せず既存の順序を維持する。
 
-- src/editing/document_ids.js: 11個のDocument採番状態を所有し、生成・preview照会・予約・reset・checkpoint復元を集約。Block編集の番号予約とclipboardの8種類だけのrollbackを維持。GeometryIdsは基本形状、persistence/DocumentSequencesは読込時の復元計算に専念する。
+- src/editing/document_ids.js: 11個のDocument採番状態を所有し、生成・preview照会・予約・reset・checkpoint復元を集約。createReservationは同じGeometryIds／DocumentIdsと現在Hatch採番readerの3依存で予約順を接続し、新たな採番状態を持たない。Geometry→添付要素、Block scopeではその後に現在Hatch値→scope予約とする。Block編集の番号予約とclipboardの8種類だけのrollbackを維持。GeometryIdsは基本形状、persistence/DocumentSequencesは読込時の復元計算に専念する。
 
 - src/application/reference_image_input.js: 参照画像の準備／配置／Clipboard生成接続とfile input登録を担当。bindClipboard／bindControlsで起動順を保持し、disposeで自分のlistenerだけを解除する。画像変換はReferenceImageImport、現在scopeへの配置はReferenceImageCommand、Geometry／画像／text入力判定はImageClipboardへ委譲。appは明示portと従来の起動タイミングを接続する。
 
@@ -993,7 +1024,15 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/parameters/stabilization.js: ParameterStabilization.createStoredDefinitionは保存済みBlock定義のParameter安定化に必要な編集scope切替を担当する。currentScope／activateScope／nextHatchIndex／drawableSketchIds／stabilizeNamespaceの五つの依存を受け、現在scopeを同じ参照で保持→定義へ切替→定義のactive Sketchと描画Sketch一覧で安定化する。評価中の成功・失敗結果・例外にかかわらずfinallyで定義のnextHatchIndexを現在採番と既存値（Number変換と1既定）の最大へ更新してから元scopeへ戻す。返値と例外はそのまま伝播する。別のscopeスタックや採番器は持たず、切替に伴う既存UI／Solver／cache更新はactivateScopeへ委譲する。
 
 
-- src/application/basic_drawing_tools.js: BasicDrawingTools（src/application/basic_drawing_tools.js）はLine／Rectangle／Circle・Arc／Slotの機能組立てを担当する。既存LineCommand・RectangleCommand・CircularConstruction／CircularCommands・SlotConstruction／SlotCommandを生成し、geometry生成、snap拘束、Selection、preview、checkpointと通知を明示的なcapabilityとして接続する。四つのcommandは同じ参照を公開し、Lineのclickは元メソッド、他の五つの入力はsnap解決後のactive snapと同じ点を各commandへ渡す。各draft・reset・取消・求解・履歴は既存ownerのままで統一しない。Circular／Slotの生成が早まるが、生成時にモデル操作やscope／checkpoint照会を行わず、appのcheckpoint portは後続constを操作時に読むcallbackとする。SplineとCenterlineは独立したcreateSpline／createCenterline入口とし、Offset等の異なる開始・取消責務を無理に含めない。modeや新しいモデル／操作状態は所有しない。
+- src/application/basic_drawing_tools.js: BasicDrawingTools（src/application/basic_drawing_tools.js）はLine／Rectangle／Circle・Arc／Slotの機能組立てを担当する。既存LineCommand・RectangleCommand・CircularConstruction／CircularCommands・SlotConstruction／SlotCommandを生成し、geometry生成、snap拘束、Selection、preview、checkpointと通知を明示的なcapabilityとして接続する。四つのcommandは同じ参照を公開し、Lineのclickは元メソッド、他の五つの入力はsnap解決後のactive snapと同じ点を各commandへ渡す。各draft・reset・取消・求解・履歴は既存ownerのままで統一しない。Circular／Slotの生成が早まるが、生成時にモデル操作やscope／checkpoint照会を行わず、appのcheckpoint portは後続constを操作時に読むcallbackとする。SplineとCenterlineの個別createSpline／createCenterline入口も維持し、Offset等の異なる開始・取消責務を無理に含めない。modeや新しいモデル／操作状態は所有しない。
+
+BasicDrawingTools.createAuthoringは同じGeometry／ID・SketchContext／PointUsage・Geometry read・Selection／preview／checkpointと限定操作を共有し、DrawingSnap→Spline draft／command→SnapConstraints→primitive toolsetの順に生成する。各子へ元の限定APIだけを渡し、scope／モデル／snapを複製しない。返すsnap・Spline・snapConstraints・toolsは同じ既存実体で、snapForDrawingは毎回のscaleから10/scaleの許容値を取得し、解決後のactive snapを使う。後段createCenterlineはcommit／parallelTolerance／invalidateの3依存だけを受け、共有capabilityから既存Centerline三部品を元の後段で生成する。生成時はscope・Geometry・checkpoint・snap解決やDOM操作を実行しない。Geometry生成／endpointと交差するSketchProjectionEditingと求解は独立した既存ownerに残す。各commandのreset／cancel／失敗復元・履歴は統一せず、Spline編集とcheckpointの後段constは操作時callbackで参照する。旧create／createSpline／createCenterlineも保持する。
+
+createAuthoringの後段createLifecycleは開始guard、Instance／参照元編集、Centerline／Fillet／Offset／Hatch、mode readerとtrim hover解除の9依存を受け、生成済みのline／rectangle／slot／circular／Spline draft・snap／preview／projection・transientと共通通知を既存DrawOperationLifecycleへ接続する。独自のmode／draft／Lifecycle stateは持たず、元のLifecycle実体を返す。Spline編集のresetと後段Hatchは操作時callbackで呼び、実ownerのreceiverを保つ。select modeは既存の共有setModeを使用する。終了・取消・Sketch切替・Document置換の処理本体と異なるreset／rollback範囲・通知／例外順はDrawOperationLifecycleに残す。
+
+DrawOperationLifecycle.createSessionは現在modeと作図の遷移APIを一つのownerとして公開する。appは旧mode初期化位置でsessionを作り、readMode／setMode／selectModeを各既存command・表示・診断へ渡す。後段のBasicDrawingTools.createAuthoring.createLifecycleはlifecycleを受け、bindで生成済みcommand群を接続し同じsessionを返す。bindは初期化時の依存接続であり、操作時にmodel／scopeを読み直す可変app contextではない。modeの初期値select、外部commandの直接遷移、開始guard、取消時mode維持・終了時select、reset順と例外時の途中反映を保持する。command draftは各ownerに残す。既存createは外部mode portを受ける従来APIとして維持し、sessionはその遷移本体を利用する。session生成とbindではcommand・DOM・scopeを操作せず、遷移APIはbind後に使う。
+
+createAuthoringの後段createOffset／createFilletは共有Geometry・ID・Selection／preview・snap解除と通知を既存OffsetFeature／FilletFeatureへ接続する。appからはOffset固有15依存、Fillet固有13依存を受け、元の位置で同じfeature実体を返す。Offsetには同期済み編集scopeのreaderを別途渡し、基本作図のWorkspace scopeと混同しない。Filletは独立したEditingCheckpoint・pointer reader・stabilizeと許容誤差を保持する。Lifecycle.prepareは後段ownerへの操作時callbackのままとし、生成時の操作・照会、新しいmode／draft／scope状態を追加しない。数値計算・求解・取消／rollback・履歴は各既存featureの責務に残す。
 
 
 - src/application/basic_drawing_tools.js: BasicDrawingTools.createSplineはSplineDraftとSplineCommandを独立して生成接続し、draftとcommandを同じ参照で公開する。下書きの点・rollbackはSplineDraft、作図先guard／開始／確定／ダブルクリックの判定はSplineCommandが所有する。投影入力reset・preview更新・作成Spline選択→select modeのadapterを組立て側へ集約する。draftをcommand生成時に生成し、scope／採番は操作時だけ照会する。後に生成するSpline編集と空白gestureのresetはappから遅延callbackで受け取る。描画とDrawOperationLifecycleは公開draftを共有し、resetとcancelを統一しない。
@@ -1077,3 +1116,197 @@ CanvasSelection.createScopeQueryは現在CanvasSelection／選択Geometryの2入
 - src/editing/sketch_context.js: membershipQueryが正規化と所属の読取りを分ける。同じ所属resolverを共有し、現在Sketchへのfallbackを同期照会単位で捕捉する。src/constraints/constraint_analysis.jsは参照更新後、src/testing/constraint_test_driver.jsは解析更新後に取得し、appはreadSketchMembershipを両者へ接続する。Queryをscope切替後まで保存しない。
 
 - src/rendering/dimension_presentation.js: createLayer.drawはその描画内だけActive判定を共有し、sort comparatorと非active色判定でのSketch照会の重複を減らす。次の描画へ判定を保持せず、既存配列と安定した描画順を維持する。
+
+
+### Sketch投影の操作組立て
+
+SketchProjectionFeature（src/application/sketch_projection_feature.js）は投影操作のsource queryとSketchProjectionCommandの生成・接続、矩形候補の取得、旧投影拘束による形状編集の拒否を担当する。draft・開始／確定／取消は既存command、投影の所属・coverageは既存queryが引き続き所有する。共有SketchProjectionQueriesと読込時のSketchProjectionEditingは別に生成し、同じqueryを渡す。source queryの生成はcommandと同時へ移したが、factoryはscope／operand／矩形を読まない。後段で初期化するoperand変換とRectangleSelectionQueryは操作時に委譲し、現在modelとactive Sketchを使う。編集guardはSketch権限の短絡、共有nodeの指定、稼働中の旧拘束だけを拒否する順序と既存文言を維持する。新たなmodel、cache、session、保存形式は導入しない。
+
+
+### Geometryドラッグの機能組立て
+
+GeometryDragFeature（src/application/geometry_drag_feature.js）はGeometryDragSolver／GeometryDragPlan／GeometryDragEditing／GeometryDragと派生Instance用entryの生成・接続を担当する。数値進行はsolverのsession別WeakMap、入力sessionと確定／復元／履歴はcommand、準備snapshotとpreview／finishはeditingが引き続き所有する。appはcommandとbuild／prepare／preview／finish／beginDerived／targetConstraintCountの狭い入口を利用し、内部solverやplanのinstanceを再配線しない。Annotation／Block／テスト支援も同じ入口を使う。preview／finishは操作時のprofileSolveで包み、active時だけsolve計測し、返り値と例外を透過する。Canvas pointerの開始終了と現在scope／倍率は注入し、生成時に実行しない。初期化順、可視移動の閾値、投影編集拒否、失敗時の復元優先順、onEndとhistory、求解アルゴリズム・許容誤差・保存形式を変更しない。
+
+
+### 寸法外観の解決と描画への受渡し
+
+DimensionPresentationのlayer／Selection boundsが解決済みの寸法外観をlabel／painterへ渡す。可視性・ラベル・線形／角度描画の同一寸法の解決を重複せず、次のdrawやscope／Sketch／Document外観の変更では新しく取得する。frameをまたぐcacheやmodel状態は追加しない。GeometryAppearanceQuery.dimensionDisplayStateForAppearanceは既存の表示値整形を純粋な変換として共有し、従来のdimensionDisplayStateも同じ変換を使う。単独label／painter／preview呼出しは外観引数がなければ従来どおり解決する。可視性の短絡、描画順、PNG flags、Canvas保存復元、precision／改行affix／公差、既定Sketch評価の順序と返り値、保存形式は維持する。
+
+
+### 通常表示と選択表示の更新進行
+
+ApplicationRefresh（src/application/application_refresh.js）は通常UI更新とGeometry選択更新の進行、Sketch／Properties更新のprofile境界を所有する。通常更新はAnnotation resize選択の同期→現在Parameter名前空間の準備→指定時のみ拘束解析→Document名／Toolbar／Sketch／Block／Properties→移動中Propertiesのinert→Status／拘束button／翻訳／寸法入力の順序を維持する。選択更新は名前空間や解析を準備せず、Toolbar／拘束button、開いているBlock dialog、Tree選択class、Propertiesだけを従来順に更新する。profileのui／tree／propertiesの包含と例外の停止位置を維持し、新しいmodel／cache／session／resetを持たない。appのhoisted入口はこのAPIへ委譲し、後段のview／AnnotationDrag／入力controllerは生成時に読まず操作時のcallbackで接続する。
+
+
+### Geometry readサービスの生成・接続
+
+GeometryReadServices（src/application/geometry_read_services.js）はBlockCatalog／InstanceProjection／BlockProjection／GeometryReadModelとGeometry・Dimension・AnnotationのAppearance queryの生成・接続を所有する。既存ownerを返す固定containerだけを公開し、modelやcacheを複製しない。Block投影cacheはBlockProjection、同期read窓と外観memoはGeometryReadModelが引き続き所有し、scope切替ではEditingScopeBindingが従来のclearReadCache／invalidateBlockProjectionCacheを呼ぶ。Geometryはworkspace.current、Dimension／AnnotationのSketch一覧は同期済みEditingScopeBinding.current（従来のmodel別名）を読むcurrentSketches、Block registryはDocumentを操作時に参照する。Hatchの解決とprimitive照会は既存HatchGeometryQueryを注入し、空間照会・Annotation描画・入力状態は取り込まない。factoryを早めてもscope／registry／view／profileを生成時に読まず、後段依存はcallbackのまま保持する。既存GeometryのObject同一性、投影IDと参照、入れ子read窓、scope／定義差替えの無効化、外観継承と非表示要素の一時表示、保存形式を維持する。
+
+
+### Block下書き・Session・照会の生成・接続
+
+BlockEditingFeature（src/application/block_editing_feature.js）はBlockDefinitionEditing／BlockEditorSession／BlockEditingQueriesを同じcatalog・投影・Instance・constraint rebinding・ID ownerへ接続する。編集Geometryと下書きの変換は既存editing、入れ子Sessionとrollbackは既存Sessionが所有し、queryはその同じSessionを参照する。host捕捉はworkspace.captureの後にviewport.snapshot、復元はworkspace.restore→既存activateEditingScope→viewport.updateの順で接続する。同期済みscope／Solverの切替とread cache無効化はEditingScopeBindingが所有し、appのactivateEditingScopeは既存hoisted委譲として残す。viewportは後段生成のため操作時getterで受け、Document IDのpeek／allocate、現在scope／registry、historyも生成時に実行しない。採番・revision・元GeometryのObject同一性・共有点／拘束参照・入れ子の独立履歴・既存の取消と例外の復元範囲、保存形式を維持し、共有ConstraintRebindingやmodel切替の所有を変更しない。
+
+
+### Block開始・取消・確定の組立て
+
+BlockEditingFeature.createCommandsは生成済みediting／Session／queryを共有してBlockDefinitionCommandとBlockCompletionCommandを接続する。早期のmodel側生成と、choiceDialog準備後のcommand生成を分け、後段BlockViewはcallbackのまま利用する。host捕捉とID ownerを共有し、開始／取消／rename／deleteと検証／確認／確定は元のcommandに所有させる。確定のhost復帰は同じDefinitionCommand.restoreHostへ接続し、Session復帰後のEditor表示も維持する。選択範囲query、確認dialogと多重要求抑制、取消・別Sessionへの切替後の古い応答無視、scope復帰／定義反映／求解／履歴の順と既存復元範囲を変更しない。各commandは一度だけappから生成し、追加Sessionやmodelを作らない。
+
+
+### Properties表示の生成・接続
+
+PropertiesDisplay（src/application/properties_display.js）はPropertyRows／PropertyPresentation／PropertiesContent／PropertiesViewの生成・接続を所有する。選択共通値は既存PropertySelection、Geometry／Dimension／Annotation外観・投影・registryは既存read ownerを使い、モデルを編集しない。PropertiesControllerのinput／change／clickは元の関数をそのままViewへ渡し、編集commandの所有とDOM eventのreceiverを変えない。共有AppearanceControlsはpaletteとDocument設定にも使うため外で生成して受け取る。sectionの開閉状態とDOM lifecycleは同じPropertiesView instanceに残し、Contentのsection callbackはView生成後のrender時に解決する。対象や外観の変更、HTML escape、混在値、read-only control、式highlight・affix入力の準備、表示／保存仕様を維持する。
+
+### Properties編集の生成・接続
+
+PropertyEditingFeature（src/application/property_editing_feature.js）はGeometryPropertyCommand／AppearanceEditing／AppearancePropertyCommand／BulkPropertyCommand／SelectionVisibilityCommand／ElementPropertyCommandの生成・接続を所有する。外観の値変換は単一のAppearanceEditing、複数編集と可視性変更は同一のAppearancePropertyCommandを共有する。選択対象と権限の照会は注入し、DOM・Selection・checkpointを所有しない。現在scopeは操作時に取得し、snapshot／復元／Parameter安定化／投影metadata同期／cache無効化と履歴・通知は既存commandの順序と範囲を維持する。Toolbarの可視性変更、PropertiesController、palette、Document外観設定には既存と同じ編集入口を公開する。ElementPropertyCommandは同じanchor具体化処理を使い、生成時にモデルやDOMを読まない。
+
+
+### 寸法ドラッグの生成・接続
+
+DimensionDragFeature（src/application/dimension_drag_feature.js）は同じDimensionPlacementからDimensionLineGroup、選択group照会、角度同期とDimensionDragを生成・接続する。DimensionLineGroup.createは純粋な配置snapshot・移動・整列を保持し、createSelectionは現在scopeへのObject参照による所属、Sketchの編集／可視性、targetの解決と実効寸法外観の可視性を確認してからgroupを返す。選択配列とモデルは照会で変更せず、scope置換や外観変更は呼出しごとに反映する。dragとcontext整列・menu可否・入力振分けは同じ選択group入口を共有する。ドラッグsession、3pxの継続command click判定、display／label offset保持、pointer開始／終了、通知と一回の履歴は既存DimensionDragの順序・範囲を維持する。角度同期は同じDimensionQueriesとreadOnly規則を使い、新しい状態・cache・Solver・保存形式は追加しない。
+
+
+### 寸法表示の生成・接続
+
+DimensionDisplay（src/application/dimension_display.js）は同じctx／viewportでDimensionMetrics、DimensionPlacement、DimensionLayout、DimensionRendererとDimensionPresentationのPainterを生成・接続する。metrics／placement／layoutsは入力・drag・hit・Annotation・テスト支援にも同じObjectを公開し、rendererは内部のPainterへ接続する。layoutは外観が省略された場合だけ既存effectiveDimensionAppearanceへ委譲し、解決済み外観はPainter・Layoutへそのまま渡す。現在のlinesは照会時に取得し、scope置換を反映する。theme補正とCanvasRenderProbeの式マークcallbackは既存入口を共有する。生成時にはCanvas・scope・外観を読まない。既存metricsのcacheは単一ownerに維持し、描画間の外観cache、モデル編集、入力Controllerの所有は追加しない。
+
+
+DimensionDisplay.createTraversalは生成済みの同じplacement／metrics／layout／PainterへDimensionPresentationのSelection boundsとLayerを接続する。表示用scope、Sketch可視性／active判定、label、hover／drag／pending／export／statusのread portは後段の組立て時に受け、生成時に評価しない。appのdimensionPresentationScopeをそのままLayerへ渡し、通常寸法とAnnotationの表示寸法を含む配列のsort・Object同一性・一回の外観解決を維持する。boundsは同じ外観・label・文字計測を使い、LayerはPainterへ解決済み外観と既存flagsを渡す。Model／Selection／入力の変更は追加せず、PNG時のhighlight／editing／status色／式mark抑制は既存Layerに維持する。
+
+
+### 注記表示の生成・接続
+
+AnnotationDisplay（src/application/annotation_display.js）はAnnotationRendererのColor／本体／Layerの生成・接続と、選択・inspection・hover・PNGに応じたframe／resize／Leader終端handleの表示条件を所有する。全て同じCanvasSelectionとhover／export reader、実効外観、rendererのlayout・Leader geometryを使い、状態を複製しない。現在のresize可否とcommand previewは遅延callbackで受け取り、後段のdrag／commandを生成時に読まない。アンカー表示位置は既存AnnotationAnchorConstraints.resolveと同じGeometry参照解決へ委譲し、materialization・拘束編集・採番・履歴を持たない。色の優先順位、保存frameのexport表示、投影／編集不可のresize拒否、active Sketch・anchorによるLeader handle抑制、previewの可視性とstart座標の扱いを維持する。appには共用geometry／描画入口と編集側の接続を残す。
+
+
+### Document編集状態の初期化
+
+DocumentEditingReset（src/application/document_editing_reset.js）は新規Document／読込に共通する編集初期化の順序を調整する。Sketch移動reset→Document scope復帰→保留pointer破棄→select modeと性能記録解除→DocumentState.clearContent→描画／解析cacheとSelection・操作sessionのreset→採番とBlock編集のreset→DocumentState.resetDefaults→Hatch／Tree／Annotation／画像操作のresetを既存順で実行する。各stateの所有は既存component、Documentの配列・既定値の更新はDocumentStateに維持する。画像操作の前後二回のreset、activateEditingScope内部のresetとcache更新を省略せず、例外時はその位置から伝播して後続を実行しない。新たなcancel・rollback・history・drawは追加しない。後段のGeometry／Dimension drag等を早期に捕捉しないよう、appは全owner生成後・test hooksと起動resetの前に組み立て、既存hoisted入口を委譲として維持する。
+
+
+### 読込codecの生成・接続
+
+DocumentLoading.createWithCodecsは既存のGeometryInstancePersistence／BlockDefinitionPersistence／BlockConnectionsPersistence／DocumentGeometryPersistenceを構成して同じcreateのdecode／installへ接続する。BlockとDocumentの接続・Parameter準備portを共有し、単一のInstance codecのlistError／normalize／migrateLegacyを直接渡す。読込では各namespaceのSketch正規化関数とindexを明示し、appのactive Sketch fallbackを経由しない。返すgeometryInstancesは他機能の明示的なnormalizerにも同じObjectを供給し、app側の通常編集用fallbackは維持する。codec注入用のcreateも維持する。生成時にモデル／projectionを読まず、現在DocumentのresetはDocumentApplicationが候補検証成功後に行い、codecと互換性・installの配列／Object同一性とcache無効化順は変更しない。
+
+
+### Sketch外観の正規化コピー
+
+SketchHierarchy.copyWithNormalizedAppearanceはSketchをshallow copyし、appearance／constructionAppearance／dimensionAppearance／leaderAppearanceだけを既存Appearanceの正規化で独立したObjectにする。未知fieldと外観以外のObject参照、ID・名前・親・kind・visible・lockedはそのまま保持し、元Sketchを変更しない。空値は継承用の空外観を返す従来規則を維持し、階層修復・既定ID・描画Sketchの補完や読込版の移行を行わない。BlockDefinitionEditingのclone／applyとBlockEditorSessionの同期、BlockHistorySnapshotのclone経由で同じ入口を共有する。appは同じ関数を既存featureへ渡すだけとし、新しいUI・採番・履歴・stateは追加しない。
+
+
+### 拘束確定の性能traceの所有
+
+ConstraintCommitCommandは通常確定の最後の性能traceを非公開stateとして保持し、readPerformanceで同じObjectを返す。analysis・UI／draw・hint／log・履歴とtotalMs計測の後にだけ更新し、既存recordPerformance observerがあれば同じtraceを通知する。権限拒否・scope拒否・求解／退化／重複拒否、参照寸法登録や公開前の例外では以前のtraceを維持する。clearPerformanceはnullへ戻すだけでobserver・時計・UI・履歴を呼ばない。appは性能用変数を保持せず、DocumentEditingResetとCanvasTestDriverへ同じcommandのclear／readを直接接続する。計測field・時機・時計呼出し数・性能基準は変更しない。
+
+
+### 注記コピーの表示値変換
+
+ClipboardTransfer.detachedAnnotationは、参照を外すコピーの現在表示anchorとLeader形状を独立した保存値へ変換する。既存AnnotationDataのserializeを用い、layoutがなければ文字metricsへfallbackし、明示anchorPositionを優先する。Leaderは解決済みstart・表示elbow／endを複製してtextPlacementをanchorとし、現在の外観とviewport倍率からshelfReferenceScaleを計算する。layout・metrics・Leader形状／anchor・外観・倍率は狭い読取り依存として注入し、生成時には読まない。元のAnnotation・表示geometry・Selection・sessionを変更しない。参照先の同時選択判定とanchorConstraints／geometryRef／attachmentの除去はClipboardPayloadが引き続き所有し、同時コピーできる参照は通常serialize経路で保持する。appはTransferをPayloadより先に生成して同じ関数を接続する。
+
+
+### 共有外観UIの組立て
+
+AppearanceUI（src/application/appearance_ui.js）はPropertiesとDocument設定が共用する外観UIの生成・接続を担当する。AppearanceControlsとAppearancePaletteを一つずつ生成し、既存PropertySelectionの対象・共通値と、同じAppearanceEditing／AppearancePropertyCommand／複数編集APIをPaletteへ接続する。公開するのはcontrols・openPalette・startであり、Palette session・編集値・Selectionの別stateは持たない。DOM・現在scope・選択対象・既定値・倍率を生成時に読み取らず、操作時の既存readerを維持する。startはアプリ起動時に一度呼び、同じcontrols／editingをDocumentAppearanceEditorへ渡して生成し、Document設定start→Palette.bindの順で登録する。Documentの既定値は固定Document ownerの最新fieldを読み書きし、使用中色は現在編集scopeから収集する。PropertiesController／PropertiesDisplayとDocument設定は同じPalette入口／controlsを共有し、各View・command・Paletteの実処理と状態の所有は変えない。
+
+
+### PropertiesのControllerとViewの接続
+
+PropertiesDisplay.createWithControllerは注入されたPropertyEditingFeatureの同じgeometry／appearance／element／applyMultipleをPropertiesControllerへ接続し、同じPropertySelectionのselectedDisplayTargetと既存AppearanceUIのcontrols／openPaletteをControllerとViewで共有する。Controllerを生成して既存createでViewを構築し、戻り値は同じView APIとする。個別command・Controller・Paletteの別stateやDOMを作らない。選択は操作時に読み、権限／lock・構造guard、preview／commit、拒否時の更新、actionの戻り値とPaletteの振分けは既存Controllerに委譲する。外部から必要な編集actionは明示portとして接続し、自由に探索できるapp contextや汎用service locatorは渡さない。従来のcreateはControllerとcontrolsを注入する表示専用APIとして維持する。
+
+同じ組立てはParameterNamespaceの式表示、ConstraintFeedbackの拘束表示、ApplicationSettingsの翻訳、BlockPlacementCommandの配置操作を共有する。従来の個別引数を優先しundefinedだけ補完する。操作stateは各ownerに残し、新しいbindやcontextを追加しない。図形Objectから共通ID／keyへの変換はGeometryObjects.geometryIdForItem／geometryKeyForItemが所有し、Properties以外の保存・Treeにも同じ関数を接続する。投影HatchのID正規化と無効ID=null／key=空文字を維持する。
+
+PropertiesDisplay.createSelectionはProperties用の選択queryの組立てを所有し、CanvasSelection・getOperation・Document・GeometryReadServices・SketchContext・Hatch外観照会の六つを受けて既存PropertySelection.createへ限定依存を渡す。型・正規化・寸法種別判定は既存namespace、registry／投影／bundleと実効外観は既存read ownerを共有する。Geometry／Dimension外観は元の可変長引数とreceiver、Annotation外観は元の一引数とreceiverで呼ぶ。PropertySelectionの対象優先順位・混在値・lock／read-only・参照同一性は変更しない。createWithControllerもreadServices／sketchContextを共有でき、従来の個別指定を優先しundefinedのfieldだけを同じownerから補う。生成時のモデル／DOM／operation読取りと新state／cacheは追加しない。Properties選択用と表示用のgetOperation、AppearanceUI用の編集scopeと他のWorkspace scopeは別readerのまま維持する。
+
+PropertiesDisplay.createEditingはPropertyEditingFeature→AppearanceUIの順に既存の編集command群と共用外観UIを生成し、同じeditingとappearanceUIを返す。23個の限定依存としてCheckpoint・ParameterStabilization・SketchContext・readServices・ApplicationSettings等の既存ownerを共有し、選択可視性の照会は同じPropertySelectionへ委譲する。CheckpointのcaptureValues／restoreValuesは元の関数、Parameter安定化とLeader外観は元のreceiverと引数で呼ぶ。編集用currentScopeと使用色収集用appearanceScopeは別readerであり、Document既定値は固定Documentの最新値を使う。生成時にquery／DOM読取りやcallback呼出し、bind／startを行わず、新stateや復元規則を持たない。Properties／DocumentのAppearanceControls・Palette・AppearanceEditingは同じ実体を共有し、appearanceUI.startの時機とDocument設定→Palette登録の順も維持する。従来のPropertyEditingFeature.createとAppearanceUI.createも独立したAPIとして残す。
+
+
+### Canvas context interactionの組立て
+
+CanvasContextInteraction（src/application/canvas_context_interaction.js）はSelection／Fix照会・項目構成・候補確定・Entry・Actionsの六つの既存componentを生成・接続し、open／selectCandidate／execute／previewを公開する。項目とEntry／候補確定は同じTarget selectionを使い、Fix表示は同じCanvasSelectionから操作時に照会する。previewは既存CanvasHoverへ通知して描画するだけとし、hover snapshotと復元・候補一覧／DOM／focusは既存CanvasContextMenuが所有する。候補空間照会と候補presenterはappが独立して生成し、test supportにも同じpresenterを接続する。独自のmenu／Selection／command stateは持たず、既存componentのguard・順序・戻り値・同一参照を変更しない。外部の選択・command・UI操作依存64項目を明示し、任意のapp contextやservice locatorで隠さない。appは後段でInteractionを生成してから既存controllerをstartし、早いcallbackはhoisted委譲関数から操作時に参照する。closeAppMenusとpointer書込みも従来どおり操作時のadapterを維持する。
+
+
+### 拘束・寸法配置の開始準備
+
+DrawOperationLifecycle.prepareDimensionStartは選択mode→Line→Rectangle→Fillet→Circle→Arc→previewの順で既存commandをresetする。prepareConstraintStartはPending取消（空message）→Centerline→Slotを先行して同じ準備へ進む。両者はsnap・Selection・他draft・UI・履歴を追加操作せず、reset例外があればその場で伝播して後続に進まない。prepareConstraintCancelはCenterline／Slotの各判定直前に現在modeを個別に読み、該当commandだけをresetする。各準備処理で独立したmodeやdraftは作らず、sessionのselectMode／readModeと同じcommand実体へ接続する（従来createでは外部portを使用する）。
+
+DrawOperationLifecycle.isToolMode(mode)は既存の作図tool modeの分類を所有する純粋な照会であり、進行中の下書きを読むactiveとは区別する。modeを引数で受け取り、内部modeやdraft・UI・履歴を持たず、未知の値を文字列へ変換しない。Lifecycleインスタンスの生成前にも使える。appの初期段階から参照されるisDrawToolModeは、sessionのisToolModeを呼ぶhoisted入口として維持する。
+
+DimensionPlacementCommand.startInstanceAngleDimensionは対象Sketchの既存編集guard→配置中判定→circular kind判定で拒否し、拒否時は取消も行わずfalseを返す。受入時はPending取消→拘束command取消→selectMode→現在bundleのanchor取得→InstanceAngleIntervalConstraint生成→target／既定pointer→distance-placeのPending置換→案内／toolbar／drawの順でtrueを返す。通常寸法のprepareStartは呼ばず、Line等の一律resetを追加しない。anchor・instance・target・pointerの参照、現在angleStep、例外時の途中効果と停止位置を維持し、求解・履歴・保存形式は変更しない。
+
+
+### Geometry削除時の操作終了
+
+GeometryDeletionCommandは削除を受け入れた後、実削除前の操作終了手順も所有する。Geometry drag→Dimension drag→Annotation dragのreset、PendingCommandSession.clear、ConstraintTargetSession.clearCommand、Line.reset、Circle／Arc reset、preview.setPointer(null)、selectModeの順に既存ownerへ依頼する。Pendingのcancelや拘束session.reset、preview.resetへ置き換えず、operand配列とtrim preview、Rectangle／Slot／Centerline等の非対象draftを保持する。拒否・空planでは開始せず、途中例外は伝播して後続reset・削除適用・求解・履歴へ進まない。三種類のdragは削除commandより後で構築されるため、appはresetGeometryDrag／resetDimensionDrag／resetAnnotationDragという遅延callbackを接続する。他のSession／command／previewは同じ実体を渡し、mode変更は既存setterへ依頼する。旧endInteraction callbackは廃止し、自由なapp contextや汎用reset容器は渡さない。
+
+
+### 拘束保存metadataの所有
+
+ConstraintPersistence.createMetadataは拘束の保存用metadataを所有し、decorateとsnapshotDataを返す。decorateは渡されたdataを同じObjectのまま装飾し、readOnlyDimension、寸法parameterName（空値はnull）、非read-only寸法のexpression（空値時だけ既存数値式reader）を従来順に付与する。read-only時に既存data.expressionを削除せず、非寸法／null dataの扱いとfield順を維持する。snapshotDataは既存raw serializer→同じdecorate→sketchId→参照metadataの順で生成し、DocumentだけconstraintSketchId readerを使い、Blockではconstraint.sketchIdをそのまま付ける。scope引数は従来どおり使用せず、未指定とnullを新たに正規化しない。raw serialize／deserialize／typesとcodec registryは変更しない。
+
+metadata ownerはSketchContextの後、早いBlock機能の前に生成する。raw serializerはhoisted関数を注入し、factory生成時には数値式・Sketch・raw codecを読み取らない。appのdecorateSerializedConstraintはhoisted委譲として維持し、Block編集／履歴・Clipboard・test supportが同じdecorateを使う。DocumentSnapshotにはsnapshotDataを直接渡し、共有装飾だけの用途へDocumentのscope／参照metadataを混ぜない。モデルは変更せず、例外は同じ位置で伝播する。
+
+
+### 新規Parameter候補の読取り検証
+
+ParameterNamespace.validateNewDimensionParameter(draft, namespace)は、明示した名前空間に追加する寸法／注記Parameter候補の読取り検証を所有する。名前trim・式入力の正規化→symbolを一度収集→既存Parameter／symbolと候補の名前検証→Parameter／可変symbol／新候補のdefinitionsとread-only値Map→既存ParameterEngine評価→有限値検査の順を維持し、{ expression, value }を返す。採番・symbol追加・target／evaluated値の更新やensureは行わず、入力draftとnamespaceを変更しない。有限の0・負数も従来どおり受け入れ、名前重複・式prefix・未知参照・循環のEngine例外はそのまま伝播する。非有限の結果は現在言語の既存errorを投げる。appはAnnotationCommandのvalidateParameterから現在modelを明示して同じNamespaceへ依頼し、DocumentとBlockのscopeを暗黙に切り替えない。commitParameterの登録・評価は既存経路に残し、モデル更新を伴うevaluateParameterNamespaceで候補検証を代替しない。
+
+
+CanvasDisplay（src/application/canvas_display.js）は共有viewportと表示基盤の二段階の構築を所有する。createでCanvasViewport／CanvasNavigation／CanvasZoomControlを生成し、同じviewportを捕捉するcreateWorkspaceでCanvasSurface／CanvasExport renderer／CanvasWorkspaceLayoutを生成する。二段階の間にあるTransientAuthoringはappに残し、既存の生成順を変えない。ズームはpointer flush→同じnavigationで倍率適用→寸法入力同期、surface resizeはdraw→最新pending照会→入力同期を維持する。倍率入力のDOM listenerは従来の生成時に接続し、layout controls／windowのbindとsurface.startはappの既存の時機に残す。viewport・navigation・zoom controlとsurface・export renderer・layoutを明示的に返し、座標／gesture／DPR／export frame・DOM表示の実装とstateは各既存ownerだけに置く。createWorkspaceは生成時にCanvasサイズ・pending・Geometryを読まず、Observerも開始しない。後段で生成される寸法入力同期とTree幅適用はappから遅延callbackで接続し、初期化前のconstを直接渡さない。Document編集や履歴・アプリ全体のcontextは受け取らない。
+
+
+CanvasCommandInputs（src/application/canvas_command_inputs.js）はPointerInteractionController.press.inputsへ渡すInstance／Annotation／Constraint／Drawing／Selectionの生成・接続を所有する。Annotation→Constraint→Instance→PointCommand→Drawing→Selectionの既存生成順を保ち、PointCommandはDrawing専用として内部へ閉じる。mode／pending／拘束pendingの同じreaderとSelection・Hover・command・snap・drag・UI通知を基本作図とsceneの共有APIを含む55の明示依存として受け、各子factoryには従来の必要な引数だけを渡す。panel focus解除とpointer captureは共通のprivate callbackへまとめる。生成時にDOM／model／scopeを読まず、原点指定のsnap許可判定は現在command.sourcesとviewport倍率を操作時に取得する。五つの入力APIだけを不変Objectとして返し、優先順位はpointer controller、各commandの確定／取消とrollbackは元のownerに維持する。独自mode・pending・Selectionやapp全体の可変contextは作らない。55入口の構築契約は依然広いため、これを最終的な数百行のcomposition root達成とは扱わず、上位機能の公開API整理を継続する。
+
+CanvasCommandInputsはsceneQueriesとして既存sceneHitQueriesを共有し、operandsの投影／参照照会を元の関数値でInstanceCommandInputへ渡す。regionsは構築時の同じownerを保持し、Hatch照会ではreceiverを維持して毎回point.x／point.yとactiveOnly:falseを渡す。共有API未指定時は従来の個別query portを用いる。query／scope／候補やGeometryを再生成・copy・cacheせず、生成時には照会を実行しない。operand変換は必要なoperandElementだけを受け、実際に使っていなかったmakeConstraintOperandのparent／child間の受渡しは持たない。Instanceの優先順、snap・rectangle・capture・取消は既存ownerに残す。
+
+CanvasCommandInputsはbasicDrawingInputとして既存BasicDrawingTools.inputのline／rectangle／slot／circle／arc／threePointArcを共有できる。子DrawingCommandInputには元の関数値をそのまま渡し、receiverを付けたりsnap／Selection／commandを生成し直したりしない。lineのpoint・shift、他の基本作図のpoint引数と例外伝播・Root拒否を維持する。共有API未指定時は従来のhandleLineClick等の個別portを使用し、共有指定時はその一組を使用する。関数は子router構築時に取得し、操作時のmode／pending・snap状態は元ownerで評価する。appは六つの関数aliasを保持せず、同じBasicDrawingTools.inputを接続する。
+
+
+CanvasHitInteraction（src/application/canvas_hit_interaction.js）は同じGeometry／scene hit readerからCanvasPressQueryとPointerHoverを生成・接続する。共通readerを一度受け、各子factoryにはpress専用／hover専用の引数を分けて渡す。注記のinteraction hitは従来どおりanchor、通常hoverのframe／frame-enable／text bodyを許可し、Block投影をこの優先hitから除外する。通常の本文／投影のhit自体は既存の後段queryに残る。pressは読取りsnapshot、hoverは既存CanvasHoverの表示更新という担当の違いを維持し、Annotation interaction以外の優先順位・active Sketch選別・寸法／projection operand・更新短絡は各既存ownerに残す。生成時にGeometry／scope／hoverを読まず、queryごとに現在値を取得する。createが返すAPIはpressとhoverで、新state・cache・SelectionやDocument編集は持たない。appは同じownerとreaderを明示して接続する。
+
+CanvasHitInteraction.createSceneは、既存SketchContext／PointUsage／GeometryReadModel／外観／寸法／Hatch／Block照会と限定callbackを受け、早期のscope policyと後段のcreateQueriesを分ける。createQueriesはregion→dimension→instance→基本Geometry→operandの順で既存queryを生成し、凍結APIを返す。policy生成時もquery構築時もモデル読取り・hit判定・listener登録は行わない。Workspace currentとdimensionPresentationScopeは別readerのまま維持し、倍率・mode・command・可視性・権限は呼出し時に評価する。共有ownerを再生成せず、receiver・参照同一性・既定optionsと例外伝播を維持する。GeometryHitQuery／OperandHitQueryが判定を所有し、この組立てには新たなstate・cache・モデル編集を持ち込まない。
+
+CanvasHitInteraction.createSceneのcreateInteractionへblankCanvasGesture／instanceSourceCommand／hatchCommandを指定すると、同じpressとscene readerを使うisBlankCommandPanelPointも返す。press snapshotのblankAnnotationHitをannotationHitとして既存blank判定へ渡し、非空白なら直ちに終了する。次に現在modeがSketch投影、または投影のsource編集なら参照対象を除外し、その後Hatch／修復modeだけで現在includeConstructionを使うface照会が成功した領域を除外する。参照hitは元の関数を非bindで呼び、Hatch照会は元ownerのreceiverを保つ。判定はhover・Selection・モデルやgesture sessionを書き換えず、短絡順と例外伝播を維持する。追加owner未指定の従来createInteractionはpress／hoverだけを返す。
+
+scene query APIのcreateInteractionは、構築済みのGeometry／region／dimension／instance／operand queryを共有して既存createへ接続する。appからはcanvasHover・sameArcEndpoint・hitBlockRotationHandle・hitAnnotationTargetの四つだけを後段で渡す。scope policyやqueryを再生成せず、press／hoverの優先順と注記interaction判定は既存ownerへ残す。生成時にhitやhoverを読まず、query methodのreceiverと可変長引数、外部callbackの呼出し時評価を維持する。既存createのreader直接指定APIも維持する。
+
+
+DimensionValueCommand.createEditingSupportは既存の寸法値編集へ接続する対象選択と特殊寸法適用を所有する。Instance角度間隔、Annotation寸法、Annotation anchor距離の適用先・式評価・hint／履歴を11の明示依存で調整し、selectEditedConstraint／submitSpecialDistance／commitSpecialPropertyを返す。submitはinterval→Annotation→anchor→非対象nullの順、Propertiesは既存GeometrySolverのInstanceAngleIntervalConstraint型とproperty→Annotationの順を維持する。Annotation式はnull constraintで現在の評価入口へ渡し、無関係なpropertyでも従来の評価順を保つ。非対象null／拒否false／成功の区別、履歴回数、submitの例外伝播とPropertiesのerror hint化を変更しない。対象選択は同じCanvasSelectionのdimensionConstraint設定→constraint解除→後段drag resetの順で、dragだけを遅延callbackで受ける。生成時に各ownerを読まず、一般createの既存API・pending／入力／UI／求解とrollbackの調整は維持する。新しい操作state、汎用context、保存形式は追加しない。
+
+
+GeometryPresentation.createは点分類の既存PointUsage ownerをpointUsageとして受けられる。Spline-only／編集中fit point／explicit／primitive使用／reference／line endpoint／endpointの七つの分類を同じownerの関数から取得し、drag点／center・sidebar hover対象・固定線の四つのpointQueriesとは分ける。pointUsage未指定時は従来のpointQueriesを分類元に使い、既存呼出しを維持する。PointUsageを再生成したりscope／投影／編集点をコピー・cacheしたりしない。appは既存PointUsage生成結果を保持して共有し、他の利用箇所の関数aliasは維持する。描画で直接渡すroot bindingは33→27となり、不要になったisEditableSplineFitPointのroot aliasだけを除いた。PointUsageとruntime queryの遅延・Object同一性・描画条件・例外は変更しない。
+
+
+GeometryPresentation.createは既存commandTargetsとsketchStyleのAPIを受けられる。commandTargetsからoperand選択／pending reference target／reference hover、sketchStyleからalpha／stroke width／constraint status colorを取得する。各ownerを指定しなければ従来の個別関数portを使い、同時指定時はownerの三関数を採用する。関数を生成時に取得するだけでqueryは実行せず、評価時のpanel snapshot優先・predicate短絡・同じSelection／scope／status・solve error／Sketch relationを維持する。Hatchやtest支援で引き続き使うappの委譲入口は維持し、sidebar／dragの後段ownerは従来のcallbackで読む。独自policy state、cache、Document編集、DOM処理を持たない。
+
+
+- `GeometryDisplay`（`src/application/geometry_display.js`）: GeometryDisplay（src/application/geometry_display.js）はGeometryPresentation本体→line display→GeometryRenderer本体→Layerを既存順に生成する機能組立てである。同じPointUsage・command targets・Sketch style・CanvasSurfaceとGeometryReadModelの五つの一覧APIを共有する。24個の明示port（handleQueries／pointQueriesを含む）を受け、各子へ必要なAPIだけを渡す。点の現在一覧→Sketch描画順、円弧の現在一覧→可視filter、Spline編集状態→ハンドル描画の接続も所有する。返すのは四種類の図形描画・点／円弧端点／Splineハンドル描画・色／線幅照会・Spline pathの10入口である。明示itemsのfilterと既定一覧の整列、options、同じObject参照、現在viewport／SurfaceのDPR、export・後段drag／Spline／sidebarの遅延照会、例外伝播と既存Canvas復元を維持する。描画policy・Canvas命令・モデルstateは既存ownerに残し、独自state・cache・アプリ全体の可変contextを持たない。appのhoisted描画入口は先行callback登録のため維持する。
+
+
+CanvasDisplay.createRenderingは、描画器の生成後に同じCanvas／viewport／Surface／zoom controlとGeometryDisplay・寸法／注記／作図／配置／Offsetの限定APIを受け、Surfaceのinteractive renderer→frame rendererを既存順で生成する。23個の明示portで、共通contentを画像→Hatch（空の明示items、includePreview:true）→描画stack、PNG出力を寸法→注記→点へ結線する。対話描画の18段階はSurface、各図形の描画内容は既存renderer、描画計測とread cache・PNG frameは各既存ownerに残す。返すのはframe rendererのdrawだけで、新たな描画state・モデル変更・全app contextを持たない。生成時は描画・frame照会を行わず、描画時のzoom同期・現在frameの再照会、同じowner receiver・viewport／DPR・後段PNG操作overlayの遅延、短絡順と例外・既存の復元範囲を維持する。create／createWorkspaceの初期構築順とbind／startは変更しない。appには必要なhoisted描画入口と個別ownerの接続を残す。
+
+
+EditingScopeBinding（src/application/editing_scope_binding.js）はWorkspaceと既存ConstraintSolverの接続を所有する。六つの依存（workspace／Solver型／Sketch context終了／Sketch move reset／Geometry read clear／projection無効化）から初期scopeでSolverを一つ生成し、solver・同期済みcurrent・activateを公開する。activateはcontext終了→move reset→workspace.activate→current更新→solver.model更新→read clear→projection無効化の順に実行する。currentは従来root model別名を移管した同じObject参照で、clone・新しいscope stack・任意setterは持たない。Blockのhost復元はworkspace.restoreが先に実行されるため、終了処理中のWorkspace currentと同期済みcurrent／Solverが異なる区間を意図せず統一しない。生成後に変わる二つの終了ownerとcache APIはcallbackで遅延参照し、各段階の例外と部分反映をそのまま伝播する。WorkspaceはDocumentとscope値、Block sessionはcapture／restore、Solverは計算を引き続き所有する。appは従来model別名の50読取りをcurrentへ接続し、DocumentApplicationへ生成時に渡すmodelとClipboard targetのmodelというproperty名、Document固定参照とworkspace.currentを使う既存APIは維持する。先行callbackのためactivateEditingScopeのhoisted委譲を残す。
+
+
+CanvasSelectionInteraction.createRectangleSelectionは通常の矩形選択の適用手順を所有する。CanvasSelection／選択中Sketch ID／現在active Sketch ID／RectangleSelectionQueryの四つの限定APIを受け、生成時には照会・選択変更を行わない。selectは追加指定がある時だけ選択Sketchの存在とactiveとの整合を元の短絡順・照会回数で確認し、不一致なら無変更で終了する。許可時はInstance内部選択を解除→現在矩形query→CanvasSelection.applyRectangleの順で実行する。rect参照・crossing・additive・queryとSelectionのreceiver、undefined戻り値、各段階の例外と既存の部分変更を維持する。Geometryの包含／交差・可視性・active条件はRectangleSelectionQuery、集合の置換／追加とObject同一性はCanvasSelection、矩形gestureとUI更新はSelectionRectangleの既存終了処理に残す。独自state・cache・履歴・UI通知は追加しない。appはquery生成後にselectByRectとしてselectを直接接続し、前方参照がないためhoisted wrapperは置かない。
+
+
+InstanceCommandInput.createRectangleSourcesはInstance参照元へ矩形候補を追加する入力手順を所有する。現在mode、既存InstanceSourceCommand／GeometryInstanceCommand、RectangleSelectionQuery、GeometryReadModel、SketchProjectionの矩形entry query、所属Sketch／active Sketch／可視性の九つの明示依存を受け、addだけを返す。instance-sourcesかつ対象がSketchProjection型の場合は投影entryのitemを元の順序・重複・Object参照で同じcommandへ渡す。その他はPoint／Line／Circle／Arc／Spline／Hatchの六一覧を既存readProjectionへ渡し、所属Sketch＝現在activeかつ実効可視のpredicateで選別する。provider Objectは呼出しごとに生成し、一覧functionは同じGeometryReadModelのAPIを共有する。query後の現在modeでInstanceSourceCommand／GeometryInstanceCommandの追加先を決め、modeの取得時機を早めたり新しい拒否条件を足したりしない。返却候補arrayとcommandのreceiver・rect／crossing・undefined戻り値、例外と後続短絡を維持し、独自state・cache・Selection変更・UI通知・履歴は追加しない。通常矩形選択と投影専用の矩形追加は別の既存入口へ残し、gesture／終了時UI更新はSelectionRectangleが引き続き所有する。
+
+
+ConstraintReferences.createFixedStateは現在の固定拘束の三照会を所有する。同期済みcurrentScopeとsameConstraintDisplayElementの二portを受け、生成時にはscope／constraints／比較を読まず、findArcEndpointFixedConstraint・findLineFixedConstraint・pointLockedByLineFixedを返す。各照会で現在constraintsを一度取得し、enabled!==false→実拘束型→表示要素比較→円弧端点種別の元の短絡順を維持する。findは同じ拘束Objectの先頭一致かundefined、point lockはLineFixedのp1／p2のObject同一性によるbooleanであり、表示ID比較へ置換しない。再生成されたBlock投影の表示照会では既存SelectionHighlightの純粋な比較APIを共有し、固定解除・求解・履歴・UI通知は各既存commandに残す。scope／配列をcopy・cacheせず、無効値や比較／scope例外の既存の伝播・短絡を維持する。appではEditingScopeBindingとSelectionHighlight生成後に接続し、三照会の全利用が宣言後であるためhoisted wrapperは置かない。
+
+
+ConstraintCommitCommand.createInsertionは拘束の所属metadataとモデル登録の前半手順を所有する。同期済みcurrentScope、現在Parameter namespace、active Sketch／drawable判定／最初のdrawable、寸法parameter確保の六portを受け、assignSketch／pushを返す。assignSketchはdefault引数のactive読取り→drawable判定→first drawable fallback→必要時のactive fallbackの順で同じ拘束へsketchIdを付ける。pushは所属付与→currentScopeのconstraintsへ同じObjectを追加→現在Parameter namespaceの照会→同じensureDimensionParameterの順を維持する。同期済みscopeとWorkspaceの現在Parameter namespaceを同じ値へ統一せず、それぞれ従来のgetterで操作時に読む。戻り値は同じconstraintで、null等の既存の受渡し、default引数の再評価、metadata／array追加後の例外と部分更新を保ち、独自rollbackを足さない。新state・scope stack・UI／履歴通知は持たず、求解・重複判定・失敗復元・履歴は既存createや各commandに残す。appは初期依存が揃った段階で構築してassignConstraintSketchId／pushModelConstraintとして接続し、全利用が宣言後であるためhoisted wrapperは置かない。createの既存pushModelConstraint portも維持する。
+
+
+SketchContext.operandRelationForSketchは拘束operand用の現在Sketch関係を所有する。active→descendant→reference→nullの判定を同じcurrentScopeと既存階層APIで行う。表示用sketchRelationToActiveはfalsy IDをactiveへ補完してから共通の判定を使い、該当なしをinactiveへ変換する。operand側にはID補完やinactiveへの変換を足さず、二つの入口の違いを保持する。生成時照会・依存port・state・cache・正規化処理は追加せず、既存の参照元／Root除外・lock／CanEdit・可視性の規則は変更しない。appは既存SketchContext生成結果から同名APIを取得してConstraintOperandsとOperandHitQueryへ接続し、前方参照がないためhoisted wrapperを置かない。
+
+PointerInteractionController.createSessionは最後に受け取った生のworld座標とdown／move／doubleClick／leave／finishの入力APIを一つのownerに集める。appは旧lastPointerWorld初期化位置で生成し、後段のbindで既存入力依存を接続する。readLastPointer／setLastPointer／clearLastPointerは同じ参照を扱い、コピー・snap・座標正規化を加えない。pressはworld座標取得後・hit照会前、moveはpan消費後・各mode処理前に更新する。右／中buttonのdown、pan消費、pointerleaveは従来どおり座標を保持する。context menuの座標更新、Document／Sketch resetの明示解除も同じownerへ接続する。DrawingPreview.pointerはsnapやpreview消去を伴う別状態として維持する。生成／bindは入力・DOM・scopeを照会せず、bind後に操作APIを使う。既存createの入力優先順・通知と例外時の途中反映を変更せず、外部setLastPointerを受ける旧APIも維持する。
+
+DimensionTestDriver.createSupportはfixture／interaction／displayのうち複数で使う20のcapability（現在scope、Geometry生成、dimension layout／変換、Selection／pending／constraint session、Canvasと表示）を共有する。返すcreateFixtures／createInteraction／createDisplayは各専用依存14／21／20個だけを受け、既存createFixtureSupport／createInteractionSupport／createDisplaySupportへ限定した引数を接続する。appはtest条件内だけで共有入口と三段階を生成し、元の生成位置と公開APIのkey順を保つ。factoryを一つ増やす代わりに重複する明示引数を100→75へ減らす（異なる入力種類は75のまま）。scope／モデル／Selection／描画の所有は既存ownerに残り、新state・snapshot・可変app contextや操作処理の複製を持たない。各旧入口は保持し、生成時のscope／DOM／Canvas照会は行わず、操作時の最新値・参照同一性・通知順と失敗時復元を維持する。
+
+ClipboardFeature（src/application/clipboard_feature.js）はcopy／cut／pasteに必要なClipboardTransfer→ClipboardPayload→ClipboardSession→ClipboardGeometry→ClipboardPasteCheckpoint→ClipboardGraph→ClipboardCommandを順に生成・接続する。45の明示依存を各子の限定APIへ渡し、同じsession・commandとcopyableSelectionPayload／canOfferCopyだけを返す。Payload構築・Geometry複製／ID再接続・Parameter追加・checkpoint・保持状態と操作の実装は既存ownerに残し、モデル／clipboard／採番の独立コピーを持たない。生成時はscope・Selection・採番・DOMを照会しない。同期済みediting scope、Block namespaceとParameter target、viewport倍率は操作時に読み、Document固定参照や別scopeへ置き換えない。copy候補のerror通知、image copy時刻→Toolbar、採番種別とcheckpoint列、貼付けのselect→solve、失敗時のprojection無効化→Selection解除→UI→drawを元の順序で接続する。拒否されたCutのpayload保持、solve失敗時に貼付け回数とmodeを戻さない既存の限定rollbackも変更しない。
+
+DeletionFeature（src/application/deletion_feature.js）はGeometryDeletion→GeometryDeletionCommand→SelectionDeletionCommandの生成・接続と、削除候補を参照する派生Instanceの判定／拒否通知を共有する。47の明示依存を各既存ownerへ限定して渡し、remove／removeSelection／rejectReferencesだけを公開する。PointUsageの同じ四照会を使い、新しい削除計画・モデル・Selection・履歴・rollback stateは持たない。currentScopeは従来のWorkspace readerで、計画・削除・求解・履歴と途中反映の順序は各既存commandのまま。Geometry削除の表示更新はToolbar→UI→draw、混在Selectionの更新はUI→drawという差を保持する。後段のGeometry／Dimension／Annotation drag resetは操作時callbackのままとし、生成時に参照しない。注記拘束除去と実command.removeは元ownerのreceiverを保って呼ぶ。拒否時は元のID順・文言でHint→logを行い、空候補は照会／通知しない。同じrejectReferencesをGeometryInstanceLifecycleへも接続する。

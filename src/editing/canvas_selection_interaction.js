@@ -198,7 +198,7 @@
     }
     return Object.freeze({ begin });
   }
-  function createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw }) {
+  function createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw, sketchById, guardSketchEdit }) {
     function selectIdentity(identity, additive = false) {
       let item = identity.item, kind = identity.kind;
       if (item.blockInstance) { item = item.blockInstance; kind = "block"; }
@@ -212,7 +212,30 @@
       if (additive) canvasSelection.toggleById(field, item); else canvasSelection.set(field, [item]);
       updateGeometrySelectionUI(); draw(); return true;
     }
-    return Object.freeze({ selectIdentity });
+    function selectInactive(event, identity) {
+      selectIdentity(identity, event.ctrlKey || event.shiftKey);
+      if (sketchById(identity.sketchId)?.locked) guardSketchEdit(identity.sketchId);
+    }
+    function prepareSelection(event, hits) {
+      const identity = hits.sketchIdentity;
+      if ((event.ctrlKey || event.shiftKey) && identity && selectionSketchId() && selectionSketchId() !== identity.sketchId) return true;
+      if (identity && sketchById(identity.sketchId)?.locked) {
+        selectIdentity(identity, event.ctrlKey || event.shiftKey);
+        guardSketchEdit(identity.sketchId); return true;
+      }
+      if (canvasSelection.inspection && (event.ctrlKey || event.shiftKey)) return true;
+      if (canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
+      return false;
+    }
+    return Object.freeze({ selectIdentity, selectInactive, prepareSelection });
+  }
+  function createRectangleSelection({ canvasSelection, selectionSketchId, activeSketchId, query }) {
+    function select(rect, crossing, additive = false) {
+      if (additive && selectionSketchId() && selectionSketchId() !== activeSketchId()) return;
+      canvasSelection.set("instanceGeometry", null);
+      canvasSelection.applyRectangle(query.read(rect, crossing), additive);
+    }
+    return Object.freeze({ select });
   }
   // Clear selection-related presentation through its existing owners, without canceling a command.
   function createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight }) {
@@ -260,5 +283,5 @@
     }
     return Object.freeze({ reset });
   }
-  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection, createClearing, createDocumentReset });
+  window.CanvasSelectionInteraction = Object.freeze({ create, createIdentitySelection, createRectangleSelection, createClearing, createDocumentReset });
 })();

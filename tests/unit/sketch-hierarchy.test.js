@@ -11,6 +11,45 @@ for (const file of ["src/document/appearance.js", "src/document/sketch_hierarchy
 const hierarchy = sandbox.window.SketchHierarchy;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+test("Sketch appearance copy normalizes four layers independently without mutating the source", () => {
+  const source = Object.freeze({ id: "S2", name: "Copied", parentSketchId: "S1", visible: false, locked: true,
+    appearance: Object.freeze({ color: "#123456", lineWidth: 100 }),
+    constructionAppearance: Object.freeze({ color: "#654321", lineWidth: "2" }),
+    dimensionAppearance: Object.freeze({ prefix: "  D ", precision: "2", dimensionTextHeight: "4" }),
+    leaderAppearance: Object.freeze({ textHeight: "5", frameVisible: true }) });
+  const before = JSON.stringify(source), first = hierarchy.copyWithNormalizedAppearance(source), second = hierarchy.copyWithNormalizedAppearance(source);
+  assert.notEqual(first, source); assert.equal(first.appearance.lineWidth, 10); assert.equal(first.constructionAppearance.lineWidth, 2);
+  assert.equal(first.dimensionAppearance.precision, 2); assert.equal(first.dimensionAppearance.dimensionTextHeight, 4);
+  assert.equal(first.dimensionAppearance.prefix, "  D "); assert.equal(first.leaderAppearance.textHeight, 5); assert.equal(first.leaderAppearance.frameVisible, true);
+  for (const key of ["appearance", "constructionAppearance", "dimensionAppearance", "leaderAppearance"]) {
+    assert.notEqual(first[key], source[key]); assert.notEqual(first[key], second[key]);
+  }
+  first.appearance.color = "#abcdef"; first.dimensionAppearance.prefix = "changed";
+  assert.equal(second.appearance.color, "#123456"); assert.equal(second.dimensionAppearance.prefix, "  D ");
+  assert.equal(JSON.stringify(source), before); assert.equal(first.id, "S2"); assert.equal(first.parentSketchId, "S1");
+  assert.equal(first.visible, false); assert.equal(first.locked, true);
+});
+
+test("Sketch appearance copy keeps opaque fields and references and does not apply hierarchy repair", () => {
+  const metadata = Object.freeze({ note: "shared" }), children = Object.freeze(["child"]);
+  const source = { id: 42, name: "Root name", kind: "root", parentSketchId: "missing", metadata, children, customFlag: false };
+  const copy = hierarchy.copyWithNormalizedAppearance(source);
+  assert.equal(copy.metadata, metadata); assert.equal(copy.children, children); assert.equal(copy.id, 42);
+  assert.equal(copy.name, "Root name"); assert.equal(copy.parentSketchId, "missing"); assert.equal(copy.customFlag, false);
+  assert.equal(Object.hasOwn(source, "appearance"), false);
+  assert.deepEqual(plain(copy.appearance), {}); assert.deepEqual(plain(copy.constructionAppearance), {});
+  assert.deepEqual(plain(copy.dimensionAppearance), {}); assert.deepEqual(plain(copy.leaderAppearance), {});
+});
+
+test("empty Sketch appearance copies retain inheritance and avoid schema or ID defaults", () => {
+  for (const source of [null, undefined, {}, { appearance: null, constructionAppearance: null, dimensionAppearance: null, leaderAppearance: null }]) {
+    const copy = hierarchy.copyWithNormalizedAppearance(source);
+    assert.deepEqual(Object.keys(copy).sort(), ["appearance", "constructionAppearance", "dimensionAppearance", "leaderAppearance"]);
+    for (const value of Object.values(copy)) assert.deepEqual(plain(value), {});
+    assert.equal(Object.hasOwn(copy, "id"), false);
+  }
+});
+
 test("runtime normalization preserves identity and does not create a drawable Sketch", () => {
   const root = { id: "old", kind: "root", name: "Custom" };
   const scope = { sketches: [root, { id: "ROOT", kind: "root" }], activeSketchId: "missing" };

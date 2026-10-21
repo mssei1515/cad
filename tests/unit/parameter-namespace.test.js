@@ -262,3 +262,54 @@ test('symbol deletion query uses an explicitly supplied Block namespace instead 
   const api = create(() => document), result = api.symbolDeletionDependents([d], block);
   assert.deepEqual(Array.from(result.dependents), ['Local']); assert.equal(document.parameters.length, 0);
 });
+
+
+test('new dimension candidate evaluates parameters, editable symbols, annotations and read-only values without writing to its namespace', () => {
+  const d = Object.assign(dimension(), { parameterName: 'd1', expression: '"width"*2', evaluatedParameterValue: 777 });
+  const reference = Object.assign(dimension(), { parameterName: 'd9', readOnlyDimension: true, expression: '"missing"', evaluatedParameterValue: 7 });
+  const note = { parameterEnabled: true, parameterName: 'Label', expression: '"d1"+1', evaluatedParameterValue: 999 };
+  const counts = { constraints: 0, annotations: 0 }, ns = { parameters: [{ name: 'width', expression: '2', evaluatedValue: 123 }], nextDimensionParameterIndex: 1,
+    get constraints() { counts.constraints++; return [d, reference]; }, get annotations() { counts.annotations++; return [note]; } };
+  const api = create(() => { throw Error('explicit namespace required'); }), draft = { parameterName: ' d2 ', expression: ' = "width" + "Label" + "d9" ' };
+  const before = JSON.stringify(ns), draftBefore = JSON.stringify(draft); counts.constraints = counts.annotations = 0;
+  const result = api.validateNewDimensionParameter(draft, ns);
+  assert.equal(result.expression, '"width" + "Label" + "d9"'); assert.equal(result.value, 14);
+  assert.deepEqual(counts, { constraints: 1, annotations: 1 }); assert.equal(JSON.stringify(ns), before); assert.equal(JSON.stringify(draft), draftBefore);
+});
+
+test('new candidate validation uses the explicit live Document or Block namespace and keeps finite zero and negative values valid', () => {
+  const doc = namespace([]), block = namespace([]); doc.parameters = [{ name: 'width', expression: '2' }]; block.parameters = [{ name: 'width', expression: '5' }];
+  const api = create(() => doc), draft = { parameterName: 'd1', expression: '= "width"+1' };
+  assert.equal(api.validateNewDimensionParameter(draft, doc).value, 3); assert.equal(api.validateNewDimensionParameter(draft, block).value, 6);
+  block.parameters[0].expression = '8'; assert.equal(api.validateNewDimensionParameter(draft, block).value, 9);
+  for (const value of ['0', '-3']) assert.equal(api.validateNewDimensionParameter({ parameterName: 'd1', expression: value }, block).value, Number(value));
+  assert.equal(doc.nextDimensionParameterIndex, 1); assert.equal(block.nextDimensionParameterIndex, 1); assert.equal('annotations' in block, false); assert.equal(block.constraints.length, 0);
+});
+
+test('candidate name, expression, unknown-reference and cycle failures preserve draft and model state and evaluation ordering', () => {
+  for (const [parameterName, expression, code] of [
+    ['width', '1', 'DUPLICATE_IDENTIFIER'], ['d1', '1', 'DUPLICATE_IDENTIFIER'], ['Label', '1', 'DUPLICATE_IDENTIFIER'],
+    ['d2', '"width"+1', 'EXPRESSION_PREFIX_REQUIRED'], ['d2', '= "missing"', 'UNKNOWN_IDENTIFIER'], ['d2', '= "d2"+1', 'CYCLE'],
+  ]) {
+    const ns = namespace([Object.assign(dimension(), { parameterName: 'd1', expression: '"width"' })]);
+    ns.parameters = [{ name: 'width', expression: '2' }]; ns.annotations = [{ parameterEnabled: true, parameterName: 'Label', expression: '3' }];
+    if (code === 'DUPLICATE_IDENTIFIER') ns.constraints[0].expression = '"missing"';
+    const draft = { parameterName, expression }, before = JSON.stringify(ns), draftBefore = JSON.stringify(draft), api = create(() => ns);
+    assert.throws(() => api.validateNewDimensionParameter(draft, ns), error => error.code === code);
+    assert.equal(JSON.stringify(ns), before); assert.equal(JSON.stringify(draft), draftBefore);
+  }
+  let reads = 0; const ns = { parameters: [], get constraints() { reads++; return []; }, annotations: [] };
+  assert.throws(() => create(() => ns).validateNewDimensionParameter({ parameterName: 'd1', expression: 'missing + 1' }, ns), error => error.code === 'EXPRESSION_PREFIX_REQUIRED');
+  assert.equal(reads, 0);
+});
+
+test('nonfinite evaluator output uses the current language without committing values or allocating symbols', () => {
+  const isolated = { window: { ...sandbox.window, ParameterEngine: { ...sandbox.window.ParameterEngine, evaluateDefinitions: () => ({ values: new Map([['d1', Infinity]]) }) } } };
+  vm.createContext(isolated); vm.runInContext(fs.readFileSync(path.join(root, 'src/parameters/namespace.js'), 'utf8'), isolated);
+  let language = 'ja'; const ns = namespace([]), draft = { parameterName: ' d1 ', expression: '3' };
+  const api = isolated.window.ParameterNamespace.create({ currentParameterNamespace: () => ns, applicationText: (ja,en) => language === 'ja' ? ja : en });
+  const before = JSON.stringify(ns), draftBefore = JSON.stringify(draft);
+  assert.throws(() => api.validateNewDimensionParameter(draft, ns), error => error.message === '値を計算できません');
+  language = 'en'; assert.throws(() => api.validateNewDimensionParameter(draft, ns), error => error.message === 'Value could not be evaluated');
+  assert.equal(JSON.stringify(ns), before); assert.equal(JSON.stringify(draft), draftBefore);
+});

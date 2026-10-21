@@ -321,5 +321,17 @@
       constraintGraphNodes, geometryInstanceDependencyRefs,
     });
   }
-  window.ConstraintReferences = Object.freeze({ create });
+  function createFixedState({ currentScope, sameConstraintDisplayElement }) {
+    function findArcEndpointFixedConstraint(arc, endpoint) {
+      return currentScope().constraints.find((c) => c.enabled !== false && c instanceof ArcEndpointFixedConstraint && sameConstraintDisplayElement(c.arc, arc) && c.endpoint === endpoint);
+    }
+    function findLineFixedConstraint(line) {
+      return currentScope().constraints.find((c) => c.enabled !== false && c instanceof LineFixedConstraint && sameConstraintDisplayElement(c.line, line));
+    }
+    function pointLockedByLineFixed(point) {
+      return currentScope().constraints.some((c) => c.enabled !== false && c instanceof LineFixedConstraint && (c.line.p1 === point || c.line.p2 === point));
+    }
+    return Object.freeze({ findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed });
+  }
+  window.ConstraintReferences = Object.freeze({ create, createFixedState });
 })();

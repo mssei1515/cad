@@ -3,7 +3,33 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
+sandbox.window.SketchHierarchy = { ROOT_SKETCH_ID: 'ROOT', DEFAULT_SKETCH_ID: 'S1' };
+vm.runInContext(fs.readFileSync('src/document/block_catalog.js', 'utf8'), sandbox);
 for (const file of ['src/geometry/geometry_ref.js', 'src/commands/block_completion_command.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
+
+test('Block duplicate lookup preserves collection and conversion order without consulting the registry or excluded collections', () => {
+  const catalog = sandbox.window.BlockCatalog.create({ definitions: () => { throw new Error('must not query registry'); } });
+  assert.equal(catalog.duplicateElementId(null), null);
+  assert.equal(catalog.duplicateElementId({ points: [{ id: 'P1' }], annotations: [{ id: 'P1' }], geometryInstances: [{ id: 'P1' }] }), null);
+  assert.equal(catalog.duplicateElementId({ points: [{ id: 'later' }], lines: [{ id: 'first' }], circles: [{ id: 'first' }], hatches: [{ id: 'later' }] }), 'first');
+  assert.equal(catalog.duplicateElementId({ points: [{ id: 1 }], blockInstances: [{ id: '1' }] }), '1');
+  assert.equal(catalog.duplicateElementId({ points: [null, { id: 0 }] }), '');
+  const reads = [], definition = {}, collections = ['points','lines','circles','arcs','splines','hatches','referenceImages','blockInstances'];
+  for (const key of collections) Object.defineProperty(definition, key, { get() { reads.push(key); return key === 'points'
+    ? Object.freeze([Object.freeze({ get id() { reads.push('id'); return 'P1'; } }), Object.freeze({ id: 'P1' })]) : []; } });
+  Object.freeze(definition); assert.equal(catalog.duplicateElementId(definition), 'P1'); assert.deepEqual(reads, [...collections, 'id']);
+});
+test('completion defaults to the catalog checker while explicit checker and null retain priority', () => {
+  const catalog = sandbox.window.BlockCatalog.create({ definitions: () => [] });
+  const f = fixture({ overrides: { blockCatalog: catalog, duplicateBlockElementId: undefined } });
+  f.draft.hatches.push({ id: 'P1' }); f.command.complete();
+  assert.deepEqual(f.calls, ['sync','draw']); assert.match(f.hints[0].text, /内部図形ID P1/); assert.equal(f.editor.current, f.session); assert.equal(f.allocated(), 0);
+  const custom = fixture({ overrides: { blockCatalog: catalog, duplicateBlockElementId: () => 'CUSTOM' } }); custom.command.complete();
+  assert.match(custom.hints[0].text, /内部図形ID CUSTOM/); assert.deepEqual(custom.calls, ['sync','draw']);
+  const explicitNull = fixture({ overrides: { blockCatalog: catalog, duplicateBlockElementId: null } });
+  assert.throws(() => explicitNull.command.complete(), error => error.name === 'TypeError'); assert.deepEqual(explicitNull.calls, ['sync']);
+});
+
 function scope() {
   return { points: [{ id: 'P1' }], lines: [{ id: 'L1' }], circles: [], arcs: [], splines: [], annotations: [], hatches: [], blockInstances: [], geometryInstances: [], constraints: [], activeSketchId: 'S1' };
 }

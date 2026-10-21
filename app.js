@@ -10,14 +10,12 @@
 
   const {
     CSS_PX_PER_MM, DEFAULT_APPEARANCE,
-    DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
-    DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES,
-    normalizeAppearance, normalizeConstructionAppearance, normalizeDimensionAppearance,
-    normalizeHatchAppearance, normalizeAnnotationStyle,
-    resolveGeometryAppearance,
+    DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
+    normalizeAppearance, normalizeDimensionAppearance,
+    normalizeHatchAppearance,
   } = window.Appearance;
   const {
-    ensureDrawingOrderState, drawingOrderOwner,
+    drawingOrderOwner,
   } = window.DrawingOrder;
   const {
     fileNameStem,
@@ -81,12 +79,10 @@
     GeometryFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
-    PointVerticalConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     RadiusConstraint,
     DiameterConstraint,
-    EqualRadiusConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
     SplineSplineTangentConstraint,
@@ -101,7 +97,7 @@
   } = constraintReferences;
 
   const {
-    targetFromConstraint, offsetPairSign, angleDegrees,
+    targetFromConstraint, angleDegrees,
     measuredDimensionValue,
     angleDimensionAngles,
     isReadOnlyDimension, isDimensionConstraint,
@@ -120,10 +116,10 @@
     refreshViews: (options) => updateUI(options),
     redrawCanvas: () => draw(), refreshVersion: () => runtimeVersionView.render(),
   });
-  const { applicationText, translatedExactText, translatedHintText, localizeApplicationUI,
+  const { applicationText, translatedExactText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText } = window.AuthoringFeedback.create({ applicationText });
-  const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
+  const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
   const { DEFAULT_DOCUMENT_UNITS } = window.DocumentState;
   const documentModel = window.DocumentState.create();
   const workspace = window.EditingWorkspace.create(documentModel);
@@ -134,19 +130,17 @@
     readLanguage: () => applicationSettings.language, setHint, log,
   });
   const {
-    evaluateDimensionExpressionDraft: evaluateNamedDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
+    evaluateDimensionExpressionDraft: evaluateNamedDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
-    dimensionConstraintsInNamespace, allocateDimensionParameterName,
-    ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
-    referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
-    validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
+    dimensionConstraintsInNamespace, ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
+    validateParameterNamespace, prepareLoadedParameterNamespace,
   } = parameterNamespace;
   function evaluateDimensionExpressionDraft(constraint, expression, namespace, options) {
     return evaluateNamedDimensionExpressionDraft(constraint?.annotationOwner ? null : constraint, expression, namespace, options);
   }
   const parameterEditor = window.ParameterEditor.create({
     document, window, InputElement: HTMLInputElement, Event,
-    namespace: parameterNamespace, currentScope: () => model,
+    namespace: parameterNamespace, currentScope: () => editingScopeBinding.current,
     readDefinitions: () => documentModel.blockDefinitions, readBlockEditor: () => blockEditor.current,
     applicationText, language: () => applicationSettings.language,
     formatting: { escapeHtml, formatDisplayNumber, formatParameterReference, parameterErrorText, defaultSketchId: DEFAULT_SKETCH_ID },
@@ -155,41 +149,46 @@
   });
   const { draft: parameterDraft, setParameterDialogError, insertIdentifierIntoExpressionInput,
     syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
+  const sketchContext = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
   const {
     ensureSketchState, isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
     orderedSketches, childSketchesOf, descendantSketchIds,
-    ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds,
+    isReferenceSourceSketchId,
     activeSketch, activeSketchId, assignSketchId,
     elementSketchId, membershipQuery: readSketchMembership, sameSketchElements, isEditableSketchId, canEditSketch,
-    sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
-    constraintTargetsAreActive, constraintReferencesSketch, wouldCreateSketchCycle,
-    sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
+    sketchRelationToActive, operandRelationForSketch, constraintSketchId, isActiveSketchConstraint,
+    constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
     sketchRelationOfElement,
-  } = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
+  } = sketchContext;
+  const constraintMetadata = window.ConstraintPersistence.createMetadata({
+    serializeConstraint, numericDimensionExpression, constraintSketchId,
+  });
   const sketchEditAccess = window.SketchCommand.createEditAccess({
     activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId, isGeometryMode,
     setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), draw,
   });
 
-  const { geometryKindForItem, geometryRefForItem, addGeometryBundleToMaps } = window.GeometryObjects;
-  const instanceProjections = window.InstanceProjection.create({ elementSketchId, applicationText,
-    resolveHatch: (hatch, elements) => resolvedHatchBoundary(hatch, elements),
-  });
-  const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
-  const blockCatalog = window.BlockCatalog.create({ definitions: () => documentModel.blockDefinitions });
-  const { blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
+  const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
   const hatchGeometryQuery = window.HatchGeometryQuery.create({
     currentScope: workspace.current, activeSketchId, effectiveAppearanceForElement, applicationText,
     boundaryGeometry: () => [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()],
     defaultLineWidth: () => Number(documentModel.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth, viewportScale: () => viewport.scale,
   });
-  const { hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems, hatchBoundaryHitExclusionScreenPx, hatchContainsSelectablePoint } = hatchGeometryQuery;
-  const blockProjections = window.BlockProjection.create({
-    blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope,
+  const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems, hatchContainsSelectablePoint } = hatchGeometryQuery;
+  const geometryReadServices = window.GeometryReadServices.create({
+    document: documentModel, currentScope: workspace.current, currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
+    elementSketchId, applicationText, hatchGeometryQuery, sketchById, isRootSketch, activeSketchId,
+    showHiddenElements: () => viewState.showHiddenElements,
+    profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
-  const { blockProjectionId, blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
-  const { annotationBounds, pointInAnnotationTextBox, hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
+  const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
+    geometryAppearance, dimensionAppearance, annotationAppearance } = geometryReadServices;
+  const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
+  const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
+  const { blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
+  const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
+  const { annotationBounds, hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
     viewportScale: () => viewport.scale, annotationTextWorldHeight: style => annotationTextWorldHeight(style),
     formatDisplayNumber, annotationTextLayout: element => annotationTextLayout(element), annotationLeaderDisplayGeometry: element => annotationLeaderDisplayGeometry(element), effectiveAnnotationStyle, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
     annotationLeaderAnchor: element => annotationLeaderAnchor(element),
@@ -201,45 +200,55 @@
   });
   let sketchMoveCommand = null;
   let sketchContextController = null;
-  let model = workspace.current();
-  const solver = new ConstraintSolver(model);
+  const editingScopeBinding = window.EditingScopeBinding.create({
+    workspace, Solver: ConstraintSolver,
+    closeSketchContext: () => sketchContextController?.close(), resetSketchMove: () => sketchMoveCommand?.reset(),
+    clearGeometryReads: () => geometryReads.clearReadCache(), invalidateProjection: invalidateBlockProjectionCache,
+  });
+  const { solver } = editingScopeBinding;
+  function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
-  // Temporary binding for legacy commands; new services receive explicit scopes.
-  function activateEditingScope(scope) {
-    sketchContextController?.close();
-    sketchMoveCommand?.reset();
-    model = workspace.activate(scope);
-    solver.model = model;
-    geometryReads.clearReadCache();
-    invalidateBlockProjectionCache();
-    return model;
-  }
-
+  const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = window.ConstraintCommitCommand.createInsertion({
+    currentScope: () => editingScopeBinding.current, currentParameterNamespace,
+    activeSketchId, isDrawableSketch, firstDrawableSketchId, ensureDimensionParameter,
+  });
   const fileSession = window.DocumentFiles.create();
 
-  let mode = "select";
+  const drawOperationLifecycle = window.DrawOperationLifecycle.createSession();
   const canvasSelection = window.CanvasSelection.create();
   const {
-    selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection,
-    hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
-    togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
-    toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
+    selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, effectiveSelectedConstraint, selectedPrimitives,
+    toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
     trimConstraintSelection, sketchTreeObjectSelected,
-    constraintSelectedInCanvas, hasSelection,
+    hasSelection,
   } = canvasSelection;
   const selectionScopeQuery = window.CanvasSelection.createScopeQuery({ canvasSelection, selectedGeometryItems });
-  const identitySelection = window.CanvasSelectionInteraction.createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw });
-  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isSplineOnlyFitPoint, isEditableSplineFitPoint, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isPrimitiveCenterPoint, isStandalonePoint, isSelectableEndpointPoint } = window.PointUsage.create({
+  const identitySelection = window.CanvasSelectionInteraction.createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw, sketchById, guardSketchEdit });
+  const pointUsage = window.PointUsage.create({
     currentScope: workspace.current, constraintReferencesPoint,
     allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
     allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines(),
     editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
   });
+  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isSelectableEndpointPoint } = pointUsage;
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
-  let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
+  const applicationFeedback = window.ApplicationFeedback.create({
+    document, settings: applicationSettings, interactionProfiler, readDuplicateCount: () => constraintRedundancy.count,
+  });
+  const { constraints: constraintFeedback } = applicationFeedback;
+  const applicationRefresh = window.ApplicationRefresh.create({
+    document, interactionProfiler, profileInteractionWork,
+    syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
+    prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
+    refreshConstraintAnalysis, updateDocumentName: () => updateDocumentNameUI(), updateToolbar,
+    renderSketch: () => sketchTreeView.render(), updateBlockUI,
+    renderProperties: () => propertiesView.render(selectedPropertiesTarget()), readSketchMoving: () => sketchMoveCommand.active,
+    updateStatusUI, updateConstraintButtons, localizeApplicationUI, syncDimensionInput: () => syncDimensionValueInput(),
+    refreshSketchSelection: () => sketchTreeView.refreshSelection(),
+  });
   const canvasContextController = window.CanvasContextMenu.create({
     document, window, canvas, menu: canvasContextMenu, escapeHtml, applicationText,
     presentCandidate: target => canvasContextCandidatePresentation(target),
@@ -247,31 +256,17 @@
     onOpen: openCanvasContextMenu, onSelect: selectCanvasContextCandidate, onAction: executeCanvasContextAction,
   });
   const closeCanvasContextMenu = canvasContextController.close;
-  const geometryReads = window.GeometryReadModel.create({
-    currentScope: workspace.current, prepareBlocks: ensureBlockState, blockProjections, instanceProjections,
-    hasBlockHatches: blockCatalog.hasHatches,
-    profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
-  });
-  const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
   const { resolve: resolveDerivedDragSource, sourceObjects: geometryInstanceSourceObjects } = window.InstanceProjection.createDragSourceQuery({
     geometryInstanceSourcePoints, geometryInstanceDependencyRefs, resolveGeometryRef,
   });
   const instanceSourceSelection = window.InstanceProjection.createSourceSelection({
-    currentScope: () => model, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
-  });
-  const geometryAppearance = window.GeometryAppearanceQuery.create({
-    document: documentModel, readAppearance: geometryReads.readAppearance, cacheAppearance: geometryReads.cacheAppearance,
-    sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements: () => viewState.showHiddenElements,
-  });
-  const dimensionAppearance = window.GeometryAppearanceQuery.createDimension({
-    document: documentModel, currentSketches: () => model.sketches, activeSketchId, isRootSketch,
+    currentScope: () => editingScopeBinding.current, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
   });
   const dimensionLabels = window.DimensionPresentation.createLabel({
     isReadOnlyDimension, measuredDimensionValue, angleDegrees, dimensionDisplayState, constraintSketchId,
     formatDimensionLabel, formatMeasuredDimensionLabel,
   });
-  const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document: documentModel, currentSketches: () => model.sketches });
-  const { hitAnnotationTarget, annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
+  const { hitAnnotationTarget, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
     isReferenceSourceSketchId,
     selectedGeometryItems, elementSketchId, activeSketchId, resolveGeometryRef,
     viewportScale: () => viewport.scale, isVisibleSketchElement, isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint,
@@ -285,9 +280,9 @@
   const sketchProjectionQueries = window.SketchProjectionQueries.create({
     currentScope: workspace.current, constraintIsOperational,
   });
-  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsForTarget, isSketchProjectedGeometry, sketchProjectionPointPairs, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
+  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, isSketchProjectedGeometry, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
   const blankCanvasGesture = window.BlankCanvasGesture.create({
-    getMode: () => mode, getPending: () => pendingCommandSession.current, getPendingConstraint: () => constraintTargetSession.command,
+    getMode: drawOperationLifecycle.readMode, getPending: () => pendingCommandSession.current, getPendingConstraint: () => constraintTargetSession.command,
     getSplineEditSession: () => splineEditing.current, getLineCommand: () => lineCommand, getTransientAuthoring: () => transientAuthoring,
     getTime: () => performance.now(), hypot2, clearPreview: () => drawingPreview.setPointer(null),
     finalizeSplineFromDoubleClick: (...args) => finalizeSplineFromDoubleClick(...args),
@@ -311,15 +306,23 @@
     hasSelection: (...args) => hasSelection(...args),
     updateGeometrySelectionUI: (...args) => updateGeometrySelectionUI(...args),
   });
-  const sketchProjectionCommand = window.SketchProjectionCommand.create({
-    selectedGeometryItems, sketchProjectionEntryFromItem, sketchProjectionEntryFromOperand, sketchProjectionSourceIsCovered, sketchProjectionEntriesByRect,
-    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    clearSelection, getMode: () => mode, setMode: value => { mode = value; }, clearSnap: () => clearSnap(),
-    updateToolbar, setHint, applicationText, updateUI, draw, activeSketchId, normalizeGeometryInstance,
-    nextId: () => documentIds.allocate("sketchProjection"), geometryRefForItem, currentScope: () => model,
-    canvasSelection, refreshConstraintAnalysis, recordHistory,
+  const sketchProjectionFeature = window.SketchProjectionFeature.create({
+    currentScope: () => editingScopeBinding.current, queries: sketchProjectionQueries, activeSketchId, geometryRefForItem, geometryRefsEqual,
+    constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem, elementSketchId,
+    isReferenceSourceSketchId, isVisibleSketchElement, operandElement: operand => operandElement(operand), guardSketchEdit,
+    readProjectionRectangle: (...args) => rectangleSelectionQuery.readProjection(...args),
+    geometry: { points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
+      arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches },
+    selectedGeometryItems, cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+    clearSelection, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode, clearSnap: () => clearSnap(),
+    updateToolbar, setHint, applicationText, updateUI, draw, normalizeGeometryInstance,
+    nextId: () => documentIds.allocate("sketchProjection"), canvasSelection, refreshConstraintAnalysis, recordHistory,
     clearHover: () => canvasHover.update({ point: null, line: null, circle: null, arc: null, spline: null, sketchIdentity: null }),
   });
+  const { command: sketchProjectionCommand, sources: sketchProjectionSources, sketchProjectionEntriesByRect,
+    guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
+  const { sketchProjectionSourceKey, sketchProjectionSourceIsCovered, sketchProjectionEntryFromItem,
+    sketchProjectionEntryFromOperand } = sketchProjectionSources;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
     addByRect: addSketchProjectionSourcesByRect, commit: commitSketchProjectionCommand } = sketchProjectionCommand;
   const drawingPreview = window.DrawingPreview.create({ types: { Point, Line, Circle, Arc }, canvasHover,
@@ -340,11 +343,11 @@
   const constraintTargetSession = window.ConstraintTargetSession.create({
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
-  let lastPointerWorld = null;
+  const pointerInteractionController = window.PointerInteractionController.createSession();
   const constructionCommand = window.ConstructionCommand.create({
     cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
     synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), setHint, clearSelection, updateUI, draw, recordHistory,
-    setLineMode: () => { mode = "line"; }, resetLineInputs: () => drawOperationLifecycle.resetInputs("line"),
+    setLineMode: () => { drawOperationLifecycle.setMode("line"); }, resetLineInputs: () => drawOperationLifecycle.resetInputs("line"),
     clearSnap: () => clearSnap(), updateToolbar,
   });
   const selectionHighlight = window.SelectionHighlight.create({
@@ -354,13 +357,16 @@
     setHoveredDimension: value => { canvasHover.update({ dimension: value }); }, draw,
   });
   const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
+  const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
+    currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
+  });
   const selectionClearing = window.CanvasSelectionInteraction.createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight });
   const documentCanvasReset = window.CanvasSelectionInteraction.createDocumentReset({
-    canvasSelection, canvasHover, selectionHighlight, clearPointer: () => { lastPointerWorld = null; },
+    canvasSelection, canvasHover, selectionHighlight, clearPointer: pointerInteractionController.clearLastPointer,
     clearSnap: () => clearSnap(),
   });
   const offsetSelection = window.OffsetSelection.create({
-    getModel: () => model, activeSketchId, elementSketchId, constraintSketchId,
+    getModel: () => editingScopeBinding.current, activeSketchId, elementSketchId, constraintSketchId,
     Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint, OffsetChainConstraint,
     onSelectionChanged: syncOffsetChainSelection,
@@ -369,41 +375,25 @@
   const geometryIds = window.GeometryIds.create();
   const { nextSeq } = window.GeometryIds;
   const documentIds = window.DocumentIds.create();
+  const idReservation = window.DocumentIds.createReservation({ geometryIds, documentIds, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex });
   const constraintRebinding = window.ConstraintRebinding.create({
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
   });
-  const blockDefinitionEditing = window.BlockDefinitionEditing.create({
-    normalizedSketchCopy, cloneConstraintForBlock: constraintRebinding.cloneForBlock, blockDefinitionById, createBlockProjectionBundle,
-    geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, normalizeGeometryInstance,
-    hatchSequence: () => documentIds.peek("hatch"), nextDefinitionId: () => documentIds.allocate("blockDefinition"),
+  const blockEditingFeature = window.BlockEditingFeature.create({
+    workspace, documentModel, ids: documentIds, catalog: blockCatalog, projections: blockProjections,
+    instances: instanceProjections, rebinding: constraintRebinding, normalizedSketchCopy, normalizeGeometryInstance,
     isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
+    activeSketchId, blockProjectionBundles, geometryElementKey, readViewport: () => viewport,
+    activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences, createHistory: createBlockEditHistory,
+    rebuildStoredBlockDefinitionConstraints, rebuildBlockDefinitionConstraintObjects,
   });
-  const { clone: cloneBlockDefinition,
-    apply: mergeBlockDefinitionDraft, fromSelection: createBlockDefinitionFromSelection,
-    empty: createEmptyBlockDefinition } = blockDefinitionEditing;
-  const blockEditor = window.BlockEditorSession.create({
-    currentScope: workspace.current, documentModel, hatchSequence: () => documentIds.peek("hatch"),
-    normalizedSketchCopy, activeSketchId, blockProjectionBundles, geometryElementKey,
-    captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
-    restoreHostState: (original) => {
-      activateEditingScope(workspace.restore(original));
-      viewport.update(original.viewport);
-    },
-    activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences,
-    cloneBlockDefinition, createHistory: createBlockEditHistory, mergeBlockDefinitionDraft,
-    rebuildStoredBlockDefinitionConstraints, invalidateBlockProjectionCache,
-    blockDefinitionOwnedSubtreeIds, rebuildBlockDefinitionConstraintObjects,
-  });
+  const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
+  const { clone: cloneBlockDefinition, fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
-  const blockEditingQueries = window.BlockEditingQueries.create({
-    definitions: () => documentModel.blockDefinitions, currentScope: workspace.current,
-    editor: blockEditor, catalog: blockCatalog,
-  });
   const { blockDefinitionsInCurrentScope, blockDefinitionScopeError,
-    blockDefinitionDependsOn, storedBlockInstancesReferencing, blockDefinitionUsageCount,
-    blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
+    blockDefinitionUsageCount, blockDefinitionEditError } = blockEditingQueries;
 
   const canvasRenderProbe = window.CanvasRenderProbe.create({
     ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
@@ -413,7 +403,7 @@
   let commandPanel = null;
   let derivedPanel = null;
   const canvasRefresh = window.CanvasRefresh.create({
-    readPngCommand: () => pngExportCommand, readPending: () => pendingCommandSession.current, readMode: () => mode,
+    readPngCommand: () => pngExportCommand, readPending: () => pendingCommandSession.current, readMode: drawOperationLifecycle.readMode,
     readCommandPanel: () => commandPanel, syncAnnotationInput: () => annotationInputController.sync(), readDerivedPanel: () => derivedPanel,
     interactionProfiler, profileInteractionWork, withGeometryReadCache, drawCanvas,
   });
@@ -422,27 +412,22 @@
     selectedItemsForGeometryInstance, geometryRefForItem, geometryRefsEqual, isVisibleSketchElement, clearSelection, normalizeGeometryInstance,
     previewFreeId: type => type === "mirror" ? `MI${documentIds.peek("mirror")}` : `PI${documentIds.peek("pattern")}`,
     nextInstanceId: type => type === "mirror" ? documentIds.allocate("mirror") : documentIds.allocate("pattern"),
-    activeSketchId, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI,
+    activeSketchId, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode, updateToolbar, updateUI,
     applicationText, setHint, draw, currentScope: workspace.current, canvasSelection, recordHistory,
     Line, lineHasDirection, elementSketchId,
     resolveGeometryRef, createGeometryInstanceBundle, commitDraft: (...args) => synchronizedInstanceEditing.commit(...args),
   });
-  const { start: startGeometryInstanceCommand, placeFree: placeFreeInstance } = geometryInstanceCommand;
+  const { start: startGeometryInstanceCommand } = geometryInstanceCommand;
   const instanceSourceCommand = window.InstanceSourceCommand.create({
-    currentScope: workspace.current, activeSketchId, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
-    clearSelection, canvasSelection, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI, updatePropertiesUI,
+    currentScope: workspace.current, activeSketchId, placementCommand: geometryInstanceCommand, guardSketchEdit, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
+    clearSelection, canvasSelection, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode, updateToolbar, updateUI, updatePropertiesUI,
     applicationText, setHint, draw, geometryRefForItem, isVisibleSketchElement, geometryRefsEqual,
     sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered, elementSketchId,
     geometryInstanceBundlesForScope, blockProjectionBundles, geometryElementKey, geometryInstanceBundle,
     constraintGraphNodes, guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry,
     clearSketchSolveState, recordHistory,
   });
-  const { start: startProjectionSourceEdit, toggle: toggleInstanceSource, finish: finishInstanceSourceEdit } = instanceSourceCommand;
-  function startInstanceSourceEdit(instance) {
-    if (!instance.placement) return startProjectionSourceEdit(instance);
-    if (instance.sketchId !== activeSketchId() || !guardSketchEdit(instance.sketchId, "structure")) return false;
-    return geometryInstanceCommand.startEdit(instance, "sources");
-  }
+  const { finish: finishInstanceSourceEdit } = instanceSourceCommand;
   const blockPlacementCommand = window.BlockPlacementCommand.create({
     isGeometryMode, canCreateInActiveSketch, blockDefinitionById, blockDefinitionScopeError,
     blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, snappedBlockRotation,
@@ -450,22 +435,19 @@
     nextInstanceId: () => documentIds.allocate("blockInstance"), clearSelection, canvasSelection, invalidateBlockProjectionCache,
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
     setPropertiesPanelCollapsed, getPointerPreview: () => drawingPreview.pointer,
-    setPointerPreview: value => { drawingPreview.setPointer(value); }, getLastPointerWorld: () => lastPointerWorld,
-    setMode: value => { mode = value; }, setHint, updateUI, draw, solveAndRefresh, recordHistory,
+    setPointerPreview: value => { drawingPreview.setPointer(value); }, getLastPointerWorld: pointerInteractionController.readLastPointer,
+    setMode: drawOperationLifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory,
   });
   const { start: startBlockPlacement, commit: commitBlockPlacement, click: handleBlockPlacementClick,
     restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;
-  const documentHistory = window.EditHistory.create({
-    capture: historySnapshot,
-    signature: (snapshot) => snapshot,
-    restore: (snapshot, label) => { restoreHistorySnapshot(snapshot, label); return true; },
-    limit: HISTORY_LIMIT,
-    recordLabel: "履歴に追加しました", undoLabel: "戻る", redoLabel: "進む",
+  const historyFeature = window.HistoryController.createFeature({
+    serializeDocument: serializeModel, document: { getName: () => documentModel.documentName,
+      setName: name => { documentModel.documentName = name; }, load: loadModelData },
+    blockEditor, liveBlockDefinition: liveBlockEditorDefinition, cloneBlockDefinition, serializeConstraint, decorateSerializedConstraint,
+    constructionCommand, invalidateBlockProjectionCache, clearInteractionForSketchChange, solveAndRefresh, setHint,
+    changed: updateHistoryButtons, log, limit: HISTORY_LIMIT, interactionProfiler,
   });
-  const historyController = window.HistoryController.create({
-    documentHistory, currentBlockHistory: () => blockEditor.current?.history,
-    changed: updateHistoryButtons, log,
-  });
+  const { documentHistory, controller: historyController } = historyFeature;
   const CURRENT_JSON_VERSION = 26;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
@@ -499,12 +481,7 @@
   });
   const { sameArcEndpoint, constraintTargetsFromOperands, linesAreParallel } = constraintCandidates;
   const constraintOperandValues = window.ConstraintOperands.create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection, closestSplinePoint: window.SplineGeometry.closestPoint });
-  const { operandElement, makeConstraintOperand, operandFromReferenceTarget, referenceTargetFromOperand, sameConstraintOperand } = constraintOperandValues;
-  const sketchProjectionSources = window.SketchProjectionQueries.createSources({
-    currentScope: () => model, activeSketchId, geometryRefForItem, geometryRefsEqual, queries: sketchProjectionQueries,
-    constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem, elementSketchId,
-    isReferenceSourceSketchId, isVisibleSketchElement, operandElement,
-  });
+  const { operandElement, makeConstraintOperand, referenceTargetFromOperand, sameConstraintOperand } = constraintOperandValues;
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
@@ -520,73 +497,43 @@
     geometryReads, activeSketchId, elementSketchId, constraintSketchId,
     isVisibleSketchElement, constraintIsOperational, constraintGraphNodes: constraint => constraint.annotationGeometryNodes || constraintGraphNodes(constraint), geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
   });
-  const { connectedComponentFromSeeds, localSolveVariables, localSolveConstraints, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = solveScopeQuery;
-  const constraintRedundancy = window.ConstraintRedundancy.create({
-    currentScope: workspace.current, solver, sketchSolveVariables, constraintSketchId,
-    constraintIsOperational, isRootSketch, acceptError: CONSTRAINT_ACCEPT_ERROR,
-  });
-  const { redundantConstraintInfo, refreshConstraintRedundancy, constraintRedundancyInfo,
-    constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
-  const constraintAnalysis = window.ConstraintAnalysis.create({
-    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, readMembership: readSketchMembership, descendantSketchIds, elementSketchId,
-    geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
-    refreshReferenceConstraintValidity, refreshConstraintRedundancy, sketchHasSolveError,
-    isEditableSketchElement, isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
+  const { connectedComponentFromSeeds, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = solveScopeQuery;
+  const { analysis: constraintAnalysis, redundancy: constraintRedundancy } = window.ConstraintAnalysis.createWithRedundancy({
+    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, sketchContext, readServices: geometryReadServices, constraintIsOperational,
+    refreshReferenceConstraintValidity, sketchHasSolveError,
+    isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
     profileAnalysis: work => interactionProfiler.active ? profileInteractionWork("analysis", work) : work(),
   });
+  const { redundantConstraintInfo, constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
-  const viewport = window.CanvasViewport.create({
-    canvasRect: () => canvas.getBoundingClientRect(), initialScale: CSS_PX_PER_MM,
-    minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
+  const { viewport, navigation: canvasNavigation, zoomControl: canvasZoomControl, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
+    canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
+    draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
-  const { currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds } = viewport;
-  const canvasNavigation = window.CanvasNavigation.create({
-    canvas, viewport, draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport,
-  });
-  const canvasZoomControl = window.CanvasZoomControl.create({
-    button: document.getElementById("statusZoom"), input: document.getElementById("statusZoomInput"),
-    readPercent: () => viewport.scale / CSS_PX_PER_MM * 100,
-    format: () => formatZoom(viewport.scale),
-    applyPercent: percent => {
-      pointerMoveScheduler.flush();
-      const applied = canvasNavigation.setScale(percent / 100 * CSS_PX_PER_MM);
-      syncDimensionValueInput();
-      return applied;
-    },
-  });
+  const { clampZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, visibleWorldBounds } = viewport;
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { beginTransientLineStartRollback, clearTransientLineStartRollback, beginTransientLineCompletionRollback,
-    clearTransientLineCompletionRollback, rollbackTransientLineCompletion, beginTransientPointRollback,
-    clearTransientPointRollback, rollbackTransientPoint, rollbackTransientLineStart } = transientAuthoring;
-  const canvasSurface = window.CanvasSurface.create({
-    canvas, ctx, viewport, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver,
-    onResize: () => {
-      draw();
-      if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput();
-    },
-  });
-  const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
-  const pngRendering = window.CanvasExport.createRenderer({ viewport, withGeometryReadCache, drawCanvas, syncCanvasBitmapSize, draw });
-  const canvasWorkspaceLayout = window.CanvasWorkspaceLayout.create({
-    window, updatePropertiesUI, setHint, closeContextMenu: closeCanvasContextMenu,
-    canvas, document, viewport, syncCanvasBitmapSize, applySketchTreeWidth: () => applySketchTreeWidth(), draw,
+  const { rollbackTransientLineCompletion, rollbackTransientPoint } = transientAuthoring;
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout } = createCanvasWorkspace({
+    ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
-    syncDimensionValueInput: () => syncDimensionValueInput(), currentCanvasCenterWorld, applicationText, readLanguage: () => applicationSettings.language,
+    window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
+    applicationText, readLanguage: () => applicationSettings.language,
   });
-  const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, DIMENSION_ARROW_MITER_LIMIT } = window.DimensionMetrics;
-  const dimensionMetrics = window.DimensionMetrics.create({ ctx, viewport });
+  const { resetCanvasStrokeState, withCanvasState } = canvasSurface;
+  const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR } = window.DimensionMetrics;
+  const dimensionDisplay = window.DimensionDisplay.create({ ctx, viewport, currentLines: () => workspace.current().lines,
+    minLineLength: MIN_LINE_LENGTH, canvasThemeColor, onExpressionMark: canvasRenderProbe.captureExpressionMark,
+    effectiveDimensionAppearance, activeSketchId });
+  const { metrics: dimensionMetrics, placement: dimensionPlacement, layouts: dimensionLayouts, painter: dimensionPainter } = dimensionDisplay;
   const dimensionInputView = window.DimensionInputView.create({
     input: dimensionValueInput, shell: dimensionValueInputShell, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
     syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
   });
-  const { dimensionTextDrawingMetrics, dimensionTextWidth, linearDimensionTerminatorDirections, dimensionStrokeWidth, dimensionArrowheadPoints, dimensionOpenArrowJoinProjection, dimensionOpenArrowheadRenderPoints } = dimensionMetrics;
-  const dimensionPlacement = window.DimensionPlacement.create({ viewport });
   const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
-  const dimensionLayouts = window.DimensionLayout.create({ viewport, placement: dimensionPlacement, metrics: dimensionMetrics, currentLines: () => workspace.current().lines, minLineLength: MIN_LINE_LENGTH });
   const { jisDimensionTextAngle, dimensionTextOffset, angleDimensionLayout } = dimensionLayouts;
   const dimensionInputController = window.DimensionInputController.create({
     displayFactor: appearance => window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
@@ -596,43 +543,31 @@
     cancelPendingCommand, startDistanceValueInput, defaultDimensionForTarget,
     submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
   });
-  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput, updateBufferLabel: updateDistanceBufferLabel } = dimensionInputController;
-  function dimensionLayout(target, dimension, appearance = effectiveDimensionAppearance(dimension)) {
-    return dimensionLayouts.dimensionLayout(target, dimension, appearance);
-  }
-  const dimensionRenderer = window.DimensionRenderer.create({
-    ctx, viewport, metrics: dimensionMetrics, canvasThemeColor,
-    onExpressionMark: canvasRenderProbe.captureExpressionMark,
-  });
-  const dimensionPainter = window.DimensionPresentation.createPainter({
-    renderer: dimensionRenderer, layouts: dimensionLayouts, metrics: dimensionMetrics, dimensionLayout,
-    effectiveDimensionAppearance, activeSketchId, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
-  });
+  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
+  function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const commandTargetPresentation = window.GeometryPresentation.createCommandTargets({
-    readPanelSelection: () => canvasRefresh.selectedItem, readMode: () => mode, instanceSourceCommand, sketchProjectionCommand,
+    readPanelSelection: () => canvasRefresh.selectedItem, readMode: drawOperationLifecycle.readMode, instanceSourceCommand, sketchProjectionCommand,
     geometryInstanceCommand, geometryRefsEqual, geometryRefForItem, readOperands: () => constraintTargetSession.operands, sameArcEndpoint, operandElement,
     readConstraintCommand: () => constraintTargetSession.command, isActiveSketchElement, isReferenceSourceSketchId, elementSketchId, readPending: () => pendingCommandSession.current,
   });
   const sketchPresentation = window.GeometryPresentation.createSketchStyle({
     sketchHasSolveError, elementSketchId, sketchRelationOfElement, constraintStatusOf, isVisibleSketchElement, isActiveSketchElement,
   });
-  const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
-    Point, canvasSelection, canvasHover, viewState,
+  const geometryDisplay = window.GeometryDisplay.create({
+    Point, ctx, viewport, surface: canvasSurface,
+    pointUsage, commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, canvasSelection, canvasHover, viewState,
     isExporting: () => Boolean(pngRendering.frame),
-    effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
-    isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
-    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+    effectiveAppearanceForElement, isEditableSketchElement,
+    isSidebarHighlightedElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement,
+    canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
+    fixedPointLabel: () => applicationText("固定", "Fixed"), geometryReads, isVisibleSketchElement,
     handleQueries: { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint,
       isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
       editedSpline: () => splineEditing.current?.spline, currentScope: workspace.current },
-    pointQueries: { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint,
-      isAnyLineEndpoint, isEndpointPoint, pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
+    pointQueries: { pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
       isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point) },
   });
-  const lineDisplay = window.GeometryPresentation.createLineDisplay({ viewport, effectiveAppearanceForElement, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX });
-  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, readPixelRatio: () => canvasSurface.dpr, paintState: geometryPaintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
-  const { traceSplinePath } = geometryRenderer;
-  const geometryLayer = window.GeometryRenderer.createLayer({ renderer: geometryRenderer, isVisibleSketchElement, drawOrderBySketch, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines });
+  const { geometryDisplayColor, geometryStrokeWidth, traceSplinePath } = geometryDisplay;
   const interactionOverlay = window.InteractionOverlayRenderer.create({ ctx, viewport, withCanvasState,
     elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName });
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
@@ -652,19 +587,15 @@
     boundaryPainters: [{ type: Line, draw: drawLines }, { type: Circle, draw: drawCircles }, { type: Arc, draw: drawArcs }, { type: Spline, draw: drawSplines }],
     allHatches, isVisibleSketchId, hatchAppearanceForDisplay, isConstraintOperandSelected, canvasSelection, activeSketchId,
     readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRendering.frame),
-    sketchAlpha, readMode: () => mode, readCommand: () => hatchCommand,
+    sketchAlpha, readMode: drawOperationLifecycle.readMode, readCommand: () => hatchCommand,
   });
-  const annotationColor = window.AnnotationRenderer.createColor({
-    effectiveAnnotationStyle, readExportFrame: () => pngRendering.frame, canvasSelection,
-    readHoveredAnnotation: () => canvasHover.current.annotation, canvasThemeColor,
+  const { renderer: annotationRenderer, layer: annotationLayer } = window.AnnotationDisplay.create({
+    ctx, viewport, surface: canvasSurface, effectiveAnnotationStyle, canvasSelection, readHover: () => canvasHover.current,
+    readExportFrame: () => pngRendering.frame, canvasThemeColor, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement,
+    resizeEnabled: element => annotationDrag.resizeEnabled(element), activeSketchId,
+    allAnnotations, isVisibleValue, isVisibleSketchId, readPreview: () => annotationCommand.preview(),
   });
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader, annotationPlacementAnchor: readAnnotationPlacementAnchor } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
-    resolvePlacement: (element, base) => window.AnnotationAnchorConstraints.resolve(element, base, resolveGeometryRef),
-    showFrame: element => !pngRendering.frame && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
-    showResizeHandles: element => !pngRendering.frame && !element.blockProjection && canvasSelection.annotations.includes(element) && isEditableSketchElement(element) && annotationDrag.resizeEnabled(element),
-    isResizeHandleHovered: (element, handle) => canvasHover.current.annotationHandle?.element === element && canvasHover.current.annotationHandle.resizeX === handle.resizeX && canvasHover.current.annotationHandle.resizeY === handle.resizeY,
-    showLeaderEndHandle: element => !pngRendering.frame && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
-  const annotationLayer = window.AnnotationRenderer.createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId, drawAnnotationLeader, drawAnnotationText, readPreview: () => annotationCommand.preview() });
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader, annotationPlacementAnchor: readAnnotationPlacementAnchor } = annotationRenderer;
   function annotationPlacementAnchor(...args) { return readAnnotationPlacementAnchor(...args); }
   function materializeAnnotationAnchor(...args) { return annotationAnchorMaterialization.materialize(...args); }
   const annotationAnchorMaterialization = window.AnnotationAnchorConstraints.createMaterialization({
@@ -673,7 +604,7 @@
   const annotationAnchorConstraints = window.AnnotationAnchorConstraints.create({
     getCommand: () => constraintTargetSession.command, setCommand: value => { constraintTargetSession.replaceCommand(value); },
     selectedAnnotation: () => canvasSelection.selectedElementCount() === 1 ? canvasSelection.annotations[0] : null,
-    byId: id => model.annotations.find(item => item.id === id),
+    byId: id => editingScopeBinding.current.annotations.find(item => item.id === id),
     canEdit: item => !item.blockProjection && guardSketchEdit(elementSketchId(item), "structure"),
     canReference: (item, point) => elementSketchId(point) === item.sketchId || isReferenceSourceSketchId(elementSketchId(point), item.sketchId),
     anchor: annotationPlacementAnchor, materialize: materializeAnnotationAnchor, pointRef: geometryRefForItem, resolveRef: resolveGeometryRef,
@@ -681,12 +612,12 @@
     startDistancePlacement: resolution => startDistanceResolution(resolution, null),
   });
   const annotationDimensions = window.AnnotationAnchorConstraints.createDimensions({
-    annotations: () => model.annotations, anchor: annotationPlacementAnchor, resolveRef: resolveGeometryRef,
+    annotations: () => editingScopeBinding.current.annotations, anchor: annotationPlacementAnchor, resolveRef: resolveGeometryRef,
     defaultDimension: defaultDimensionForTarget, normalizeDimension: dimensionPlacement.normalizeDimension,
     capturePosition: item => materializeAnnotationAnchor(item, { capture: true }),
     evaluateValue: expression => evaluateDimensionExpressionDraft(null, expression), applicationText,
   });
-  function dimensionPresentationScope() { return { ...model, constraints: [...model.constraints, ...annotationDimensions.entries()] }; }
+  function dimensionPresentationScope() { return { ...editingScopeBinding.current, constraints: [...editingScopeBinding.current.constraints, ...annotationDimensions.entries()] }; }
   function startAnnotationAnchorConstraint(type, item = canvasSelection.annotations.length === 1 ? canvasSelection.annotations[0] : null) {
     if (!item) return false;
     if (annotationAnchorConstraints.active && constraintTargetSession.command?.type === type) { cancelPendingCommand(""); annotationAnchorConstraints.cancel(); return true; }
@@ -696,22 +627,11 @@
   }
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
-    lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
+    lastPointer: pointerInteractionController.readLastPointer, viewScale: () => viewport.scale,
     annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextMetrics,
-    nextParameterName: () => parameterNamespace.allocateDimensionParameterName({ ...model, parameters: model.parameters.map(item => ({ ...item })), annotations: [...model.annotations] }),
-    validateParameter: draft => {
-      const name = String(draft.parameterName || "").trim(), expression = expressionFromUserInput(draft.expression);
-      const symbols = parameterNamespace.symbolElementsInNamespace(model);
-      parameterNamespace.validateParameterSymbolNames(model.parameters, [...symbols, { parameterName: name }]);
-      const definitions = [...model.parameters.map(item => ({ ...item, kind: "parameter" })),
-        ...symbols.filter(item => !isReadOnlyDimension(item)).map(item => ({ name: item.parameterName, expression: item.expression, kind: "dimension" })),
-        { name, expression, kind: "dimension" }];
-      const values = new Map(symbols.filter(isReadOnlyDimension).map(item => [item.parameterName, item.evaluatedParameterValue]));
-      const value = window.ParameterEngine.evaluateDefinitions(definitions, values).values.get(name);
-      if (!Number.isFinite(value)) throw new Error(applicationText("値を計算できません", "Value could not be evaluated"));
-      return { expression, value };
-    },
-    commitParameter: item => { ensureDimensionParameter(item, model); parameterNamespace.evaluateParameterNamespace(model); },
+    nextParameterName: () => parameterNamespace.allocateDimensionParameterName({ ...editingScopeBinding.current, parameters: editingScopeBinding.current.parameters.map(item => ({ ...item })), annotations: [...editingScopeBinding.current.annotations] }),
+    validateParameter: draft => parameterNamespace.validateNewDimensionParameter(draft, editingScopeBinding.current),
+    commitParameter: item => { ensureDimensionParameter(item, editingScopeBinding.current); parameterNamespace.evaluateParameterNamespace(editingScopeBinding.current); },
     applyStyle: (style, key, value, effective) => appearanceEditing.applyLeaderAppearanceValue(style, key, value, { viewportScale: viewport.scale, effective }),
     parameterErrorText,
     selectAnnotation: item => canvasSelection.set("annotations", [item]),
@@ -726,10 +646,10 @@
     ctx, viewport, withCanvasState, createImage: () => new Image(), onImageLoad: draw, referenceImageCorners,
   });
   const { drawImages: drawReferenceImages, drawOverlays: drawReferenceImageOverlays } = window.ReferenceImageRenderer.createLayer({
-    renderer: referenceImageRenderer, readImages: () => model.referenceImages, canvasSelection, readHover: () => canvasHover.current,
+    renderer: referenceImageRenderer, readImages: () => editingScopeBinding.current.referenceImages, canvasSelection, readHover: () => canvasHover.current,
     isVisibleValue, isVisibleSketchId, activeSketchId, readCalibrationPoints: () => referenceImageInteraction.calibrationPoints,
   });
-  const { drawingStackEntries, drawDrawingStack } = window.DrawingStack.create({
+  const { drawDrawingStack } = window.DrawingStack.create({
     currentScope: workspace.current, activeSketchId, geometryReads,
     isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
     painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
@@ -742,7 +662,7 @@
   const placementPreview = window.PlacementPreviewRenderer.create({ ctx, viewport, withCanvasState, traceSplinePath,
     drawResolvedHatch, resolvedHatchBoundary, hatchAppearanceForDisplay, hatchPatternOrigin, drawAnnotationLeader, drawAnnotationText });
   const placementPreviewLayer = window.PlacementPreviewRenderer.createLayer({
-    renderer: placementPreview, readMode: () => mode, readPointer: () => drawingPreview.pointer,
+    renderer: placementPreview, readMode: drawOperationLifecycle.readMode, readPointer: () => drawingPreview.pointer,
     blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle,
   });
   const geometryCreation = window.GeometryCreation.create({
@@ -758,41 +678,29 @@
     constraintSketchId, constraintIsOperational, addPointToSketch, constraintReferencesPoint, nextSeq, normalizeAppearance,
   });
   const { separateSharedSketchProjectionTargetPoints, synchronizeSketchProjectionMetadata } = sketchProjectionEditing;
-  const drawingSnap = window.DrawingSnap.create({
+  const authoringTools = window.BasicDrawingTools.createAuthoring({
+    currentScope: workspace.current, ids: geometryIds, geometry: geometryCreation, endpointAt, samePosition, sketchContext, pointUsage, geometryReads, isVisibleSketchElement,
     annotationAnchors: () => allAnnotations().filter(element => isVisibleSketchElement(element) && element.visible !== false).map(element => ({ element, ...annotationPlacementAnchor(element) })),
-    geometryReads, isVisibleSketchElement, isActiveSketchElement, isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint, sketchName, elementSketchId, applicationText,
-  });
-  const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
-  function snapForDrawing(point) { return drawingSnap.resolve(point, 10 / viewport.scale); }
-  const { draft: splineDraft, command: splineCommand } = window.BasicDrawingTools.createSpline({
-    currentScope: workspace.current, ids: geometryIds, endpointAt, samePosition, isPointUsedByPrimitive,
-    addSpline, snapForDrawing, scale: () => viewport.scale,
-    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    setMode: value => { mode = value; }, resetEditing: () => splineEditing.reset(),
-    resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar,
-    projection: sketchProjectionCommand, preview: drawingPreview, snap: drawingSnap, clearSelection, selection: canvasSelection,
-    solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw,
-  });
-  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
-  const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, addPoint, addConstraintIfMissing });
-  const { addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, addLineBoundarySnapConstraints } = snapConstraints;
-  const basicDrawingTools = window.BasicDrawingTools.create({
-    geometry: geometryCreation, ids: geometryIds, currentScope: workspace.current, snap: drawingSnap, snapConstraints,
-    snapForDrawing, endpointAt, samePosition, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
+    scale: () => viewport.scale, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH, selection: canvasSelection, preview: drawingPreview,
     checkpoint: { capture: (...args) => snapshotGeometryMutationState(...args), restore: (...args) => restoreGeometryMutationState(...args) },
-    clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
+    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+    setMode: drawOperationLifecycle.setMode, resetEditing: () => splineEditing.reset(),
+    resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar, projection: sketchProjectionCommand, clearSelection,
+    solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw, log,
   });
+  const { snap: drawingSnap, spline: { draft: splineDraft, command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
+  const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
+  function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
+  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
+  const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, rectangle: rectangleCommand, circular: circularCommands, slot: slotCommand } = basicDrawingTools;
-  const { line: handleLineClick, rectangle: handleRectangleClick, circle: handleCircleClick, arc: handleArcClick,
-    threePointArc: handleThreePointArcClick, slot: handleSlotClick } = basicDrawingTools.input;
-  const offsetFeature = window.OffsetFeature.create({
-    currentScope: () => model, geometry: geometryCreation, ids: geometryIds, placement: dimensionPlacement, sourceSelection: offsetSelection,
-    selection: canvasSelection, pending: pendingCommandSession, preview: drawingPreview, valueInput: dimensionInputController,
-    viewport, ctx, withCanvasState, drawDimension, readMode: () => mode, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
-    commitNewConstraint, offsetChainErrorText, applicationText, cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection,
+  const offsetFeature = authoringTools.createOffset({
+    currentScope: () => editingScopeBinding.current, placement: dimensionPlacement, sourceSelection: offsetSelection,
+    pending: pendingCommandSession, valueInput: dimensionInputController, viewport, ctx, withCanvasState, drawDimension, readMode: drawOperationLifecycle.readMode,
+    commitNewConstraint, offsetChainErrorText,
     prepareStart: () => drawOperationLifecycle.prepare("offset"),
-    setHint, updateUI, draw, updateToolbar, updateGeometrySelectionUI, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
+    updateGeometrySelectionUI, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, createGeometry: createOffsetGeometry, chainDraft: offsetChainDraft } = offsetFeature;
   const { offsetDistanceFromPointer } = offsetFeature.plans;
@@ -819,38 +727,27 @@
     profile: work => interactionProfiler.active ? profileInteractionWork("parameters", work) : work(),
   });
   const storedDefinitionStabilization = window.ParameterStabilization.createStoredDefinition({
-    currentScope: () => model, activateScope: activateEditingScope, nextHatchIndex: () => documentIds.peek("hatch"),
+    currentScope: () => editingScopeBinding.current, activateScope: activateEditingScope, nextHatchIndex: () => documentIds.peek("hatch"),
     drawableSketchIds: blockDefinitionDrawableSketchIds, stabilizeNamespace: stabilizeActiveParameterNamespace,
   });
   const solveRefreshCommand = window.SolveRefreshCommand.create({
     activeSketchId, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
   });
-  const filletCommand = window.FilletFeature.create({
-    geometry: geometryCreation, minLineLength: MIN_LINE_LENGTH, defaultDimensionForTarget,
-    syncLineOrientationHints: () => solver.syncLineOrientationHints?.(), pushModelConstraint,
-    pending: pendingCommandSession, selection: canvasSelection, readPointer: () => lastPointerWorld,
-    prepareStart: () => drawOperationLifecycle.prepare("fillet"), clearSnap, updateToolbar, guardSketchProjectionShapeEdit,
-    valueInput: dimensionInputController, checkpoint: editingCheckpoint, clearSelection,
+  const filletCommand = authoringTools.createFillet({
+    defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
+    pending: pendingCommandSession, readPointer: pointerInteractionController.readLastPointer,
+    prepareStart: () => drawOperationLifecycle.prepare("fillet"), guardSketchProjectionShapeEdit,
+    valueInput: dimensionInputController, checkpoint: editingCheckpoint,
     stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
-    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand,
+    updateGeometrySelectionUI,
   });
   const { update: updateFilletRadiusPlacement, submit: submitFilletRadiusPlacement, click: handleFilletClick } = filletCommand;
-  const geometryInstancePersistence = window.GeometryInstancePersistence.create({ applicationText });
-  const blockDefinitionPersistence = window.BlockDefinitionPersistence.create({ applicationText, serializedGeometryInstanceListError });
-  const blockConnectionsPersistence = window.BlockConnectionsPersistence.create({
-    createBlockProjectionBundle, geometryInstanceBundlesForScope, elementSketchId, deserializeConstraint, constraintSketchId,
-    separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace, applicationText,
-  });
-  const documentGeometryPersistence = window.DocumentGeometryPersistence.create({
+  const { loading: documentLoading, geometryInstances: geometryInstancePersistence } = window.DocumentLoading.createWithCodecs({
     createBlockProjectionBundle, geometryInstanceBundlesForScope, elementSketchId, deserializeConstraint, constraintSketchId,
     separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace,
-    isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint, applicationText,
-  });
-  const documentLoading = window.DocumentLoading.create({
-    blockDefinitionPersistence, blockConnectionsPersistence, documentGeometryPersistence, geometryInstancePersistence,
-    serializedGeometryInstanceListError, normalizeGeometryInstance, defaultUnits: DEFAULT_DOCUMENT_UNITS,
-    applicationText, invalidateProjection: invalidateBlockProjectionCache, normalizeArcSweeps,
+    isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint,
+    defaultUnits: DEFAULT_DOCUMENT_UNITS, applicationText, invalidateProjection: invalidateBlockProjectionCache, normalizeArcSweeps,
   });
   const blockConfigurationCommand = window.BlockConfigurationCommand.create({
     currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, createBlockProjectionBundle,
@@ -863,7 +760,7 @@
   const synchronizedInstanceEditing = window.DerivedInstanceEditing.create({
     currentScope: workspace.current, snapshotModelState, restoreModelState, geometryInstanceBundle, geometryInstanceBundlesForScope,
     blockProjectionBundles, serializeModel, addPointSnapConstraints, geometryInstanceSourceObjects,
-    rebind: () => constraintRebinding.rebuildDocument(model, [...blockProjectionBundles(), ...geometryInstanceBundles()]),
+    rebind: () => constraintRebinding.rebuildDocument(editingScopeBinding.current, [...blockProjectionBundles(), ...geometryInstanceBundles()]),
     stabilize: stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR, resolveGeometryRef, setHint, recordHistory, updateUI, draw,
   });
   const instanceTransformCommand = window.InstanceTransformCommand.create({
@@ -880,6 +777,10 @@
     return geometryInstanceCommand.isPlacing(instance) ? geometryInstanceCommand.changeSetting(key, value)
       : synchronizedInstanceEditing.change(instance, key, value);
   }
+  const dimensionEditingSupport = window.DimensionValueCommand.createEditingSupport({
+    synchronizedInstanceEditing, annotationDimensions, annotationAnchorConstraints, expressionFromUserInput, evaluateDimensionExpressionDraft,
+    targetFromConstraint, parameterErrorText, setHint, recordHistory, canvasSelection, resetDimensionDrag: () => dimensionDrag.reset(),
+  });
   const dimensionValueCommand = window.DimensionValueCommand.create({
     canEdit: (id, operation) => guardSketchEdit(id, operation),
     renameDimension: parameterNamespace.renameDimension,
@@ -891,31 +792,7 @@
     stabilizeActiveParameterNamespace, constraintSketchId, acceptError: CONSTRAINT_ACCEPT_ERROR,
     hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
     targetFromConstraint, isReadOnlyDimension, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput,
-    selectEditedConstraint: constraint => {
-      canvasSelection.set("dimensionConstraint", constraint); canvasSelection.set("constraint", null); dimensionDrag.reset();
-    },
-    addDistanceConstraintFromTarget,
-    submitSpecialDistance: (pending, value) => {
-      if (pending.target?.interval) return synchronizedInstanceEditing.interval(pending, value, expressionFromUserInput(pending.buffer));
-      if (pending.constraint?.annotationOwner) {
-        if (!annotationDimensions.setValue(pending.constraint, value)) { setHint("注記の距離拘束が成立しません", "error"); return false; }
-        recordHistory("注記寸法値変更"); return true;
-      }
-      return pending.target?.annotationAnchor ? annotationAnchorConstraints.submitDistance(value, pending.target.dimensionAxis, pending.dimension) : null;
-    },
-    commitSpecialProperty: (constraint, property, input) => {
-      if (constraint instanceof window.GeometrySolver.InstanceAngleIntervalConstraint) {
-        if (property !== "constraint-expression") return null;
-        try { const expression = expressionFromUserInput(input); return synchronizedInstanceEditing.interval({ constraint, target: targetFromConstraint(constraint), dimension: constraint.dimension }, evaluateDimensionExpressionDraft(constraint, expression), expression); }
-        catch (error) { setHint(parameterErrorText(error), "error"); return false; }
-      }
-      if (!constraint.annotationOwner) return null;
-      try {
-        const value = evaluateDimensionExpressionDraft(null, expressionFromUserInput(input));
-        if (property !== "constraint-expression" || !annotationDimensions.setValue(constraint, value)) throw new Error("注記の距離拘束が成立しません");
-        recordHistory("注記寸法値変更"); return true;
-      } catch (error) { setHint(parameterErrorText(error), "error"); return false; }
-    },
+    ...dimensionEditingSupport, addDistanceConstraintFromTarget,
     restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
@@ -923,7 +800,7 @@
     catalog: blockCatalog, invalidateProjection: invalidateBlockProjectionCache, applicationText,
     definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: storedDefinitionStabilization.stabilize },
     document: { rebuild: rebuildRootConstraintObjects, stabilize: () =>
-      stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }) },
+      stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }) },
   });
   const parameterApplication = window.ParameterApplication.create({
     namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
@@ -932,27 +809,22 @@
       if (blockEditor.current && checkpoint.local) restoreModelState(checkpoint.local);
       else if (checkpoint.document) loadModelData(JSON.parse(checkpoint.document), { documentNameFallback: documentModel.documentName });
     },
-    stabilize: namespace => namespace === model
-      ? stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) })
+    stabilize: namespace => namespace === editingScopeBinding.current
+      ? stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) })
       : storedDefinitionStabilization.stabilize(namespace),
     propagate: blockParameterPropagation.propagate,
   });
-  const centerlineCommand = window.BasicDrawingTools.createCenterline({
-    currentScope: workspace.current, geometry: geometryCreation, ids: geometryIds, snapConstraints, commitNewConstraint,
-    parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE, minLineLength: MIN_LINE_LENGTH,
-    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar,
-    selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText,
-    snapForDrawing, snap: drawingSnap, preview: drawingPreview, setMode: value => { mode = value; },
-    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
+  const centerlineCommand = authoringTools.createCenterline({
+    commitNewConstraint,
+    parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { start: startCenterlineCommand, reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
-  const { resetArcs: resetArcCommandState } = circularCommands;
+  const { start: startCenterlineCommand, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
   const authoringPreviewLayer = window.AuthoringPreviewRenderer.createLayer({
-    renderer: authoringPreview, readMode: () => mode, readPointer: () => drawingPreview.pointer, readTrim: () => drawingPreview.trim,
+    renderer: authoringPreview, readMode: drawOperationLifecycle.readMode, readPointer: () => drawingPreview.pointer, readTrim: () => drawingPreview.trim,
     lineCommand, rectangleCommand, slotCommand, circularCommands, splineDraft, centerlineCommand, projectPointToCenterlineSupport,
     readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
   });
-  const { reset: resetSlotCommandState } = slotCommand;
   const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;
   const runtimeVersionView = window.RuntimeVersionView.create({ document, applicationText });
 
@@ -965,30 +837,10 @@
     btn.dataset.tooltip = btn.getAttribute("aria-label");
   }
 
-  function log(msg) {
-    const el = document.getElementById("log");
-    if (!el) return;
-    el.textContent = `${msg}\n` + el.textContent;
-  }
-
-  function setHint(msg, kind = "normal") {
-    if (!interactionProfiler.active) return setHintUnprofiled(msg, kind);
-    return profileInteractionWork("ui", () => setHintUnprofiled(msg, kind));
-  }
-
-  function setHintUnprofiled(msg, kind = "normal") {
-    const el = document.getElementById("hint");
-    el.dataset.hintSource = String(msg);
-    el.textContent = translatedHintText(msg);
-    el.classList.toggle("error", kind === "error");
-  }
-
-  const constraintFeedback = window.ConstraintFeedback.create({ applicationText, readLanguage: () => applicationSettings.language });
-  const { constraintStatusBadge, localizedConstraintName } = constraintFeedback;
-  function setSolveResultHint(label, solved, analysis, dependent) {
-    const hint = constraintFeedback.resultHint(label, solved, analysis, dependent, constraintRedundancy.count);
-    setHint(hint.message, hint.kind);
-  }
+  function log(msg) { return applicationFeedback.log(msg); }
+  function setHint(msg, kind = "normal") { return applicationFeedback.hint(msg, kind); }
+  const { localizedConstraintName } = constraintFeedback;
+  function setSolveResultHint(label, solved, analysis, dependent) { return applicationFeedback.solveResult(label, solved, analysis, dependent); }
 
   function effectiveDocumentName() {
     return effectiveDocumentNameFromValue(documentModel.documentName);
@@ -1002,7 +854,7 @@
     repairMessage: () => documentApplication.blockConstraintRepairMessage, setHint, log, draw,
   });
   const { refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint,
-    save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, importFileData } = documentFileFeature;
+    save: saveJot2DFile, saveAs: saveJot2DFileAs, importFileData } = documentFileFeature;
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
@@ -1014,37 +866,19 @@
     return applicationText("平行線", "Parallel");
   }
 
-  function normalizedSketchCopy(sketch) {
-    return {
-      ...sketch,
-      appearance: normalizeAppearance(sketch?.appearance),
-      constructionAppearance: normalizeConstructionAppearance(sketch?.constructionAppearance),
-      dimensionAppearance: normalizeDimensionAppearance(sketch?.dimensionAppearance),
-      leaderAppearance: window.Appearance.normalizeLeaderAppearance(sketch?.leaderAppearance),
-    };
-  }
 
   function effectiveDimensionAppearance(...args) { return dimensionAppearance.effectiveDimensionAppearance(...args); }
 
   function ensureAppearanceState() {
-    window.DocumentState.normalizeAppearanceState(documentModel, model, { blockEditing: Boolean(blockEditor.current) });
+    return documentPreparation.appearance();
   }
 
-  const blockState = window.BlockState.create({
-    blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, isDrawableSketch, firstDrawableSketchId,
+  const documentPreparation = window.DocumentApplication.createPreparation({
+    document: documentModel, currentScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
+    sketchContext, parameterNamespace, blockCatalog,
   });
   function ensureBlockState() {
-    blockState.normalize(documentModel, model, blockEditor.current?.draft?.id || null);
-  }
-
-  function ensureModelState() {
-    documentModel.units = { ...DEFAULT_DOCUMENT_UNITS };
-    ensureSketchState();
-    ensureAppearanceState();
-    ensureBlockState();
-    ensureDrawingOrderState(model);
-    for (const definition of documentModel.blockDefinitions) ensureDrawingOrderState(definition);
-    ensureParameterNamespace(model);
+    return documentPreparation.blocks();
   }
 
 
@@ -1052,7 +886,7 @@
     capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
     ensureParameter: item => ensureDimensionParameter(item, currentParameterNamespace()),
     renameParameter: parameterNamespace.renameDimension, expressionFromUserInput,
-    stabilize: () => stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }),
+    stabilize: () => stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }),
     recordHistory, setHint, parameterErrorText,
   });
   const commitAnnotationParameterEdit = annotationParameterCommand.commit;
@@ -1076,30 +910,6 @@
   }
 
 
-  function constraintGeometryId(item) {
-    return geometryRefId(geometryRefForItem(item));
-  }
-
-  function geometryElementKey(item) {
-    return geometryRefKey(geometryRefForItem(item)) || "";
-  }
-
-  function sketchProjectionShapeEditBlockedMessage(action = "") {
-    const prefix = action ? `${action}: ` : "";
-    return applicationText(
-      `${prefix}旧形式の投影拘束を削除してから形状を編集してください`,
-      `${prefix}Delete the legacy sketch projection constraint before editing the shape.`,
-    );
-  }
-
-  function guardSketchProjectionShapeEdit(items, { includeSharedNodes = true, action = "" } = {}) {
-    if (!items.filter(Boolean).every(item => guardSketchEdit(elementSketchId(item)))) return false;
-    if (sketchProjectionConstraintsAffectingItems(items, { includeSharedNodes }).length === 0) return true;
-    setHint(sketchProjectionShapeEditBlockedMessage(action), "error");
-    return false;
-  }
-
-
   function snappedBlockRotation(rotation) {
     const quarterTurns = Math.round((Number(rotation) || 0) / BLOCK_ORTHOGONAL_ROTATION_STEP);
     return ((quarterTurns % 4) + 4) % 4 * BLOCK_ORTHOGONAL_ROTATION_STEP;
@@ -1108,7 +918,7 @@
 
 
   function blockInstanceById(id) {
-    return model.blockInstances.find((instance) => instance.id === id) || null;
+    return editingScopeBinding.current.blockInstances.find((instance) => instance.id === id) || null;
   }
 
   function normalizeGeometryInstance(raw, normalizeSketch = value => String(value || activeSketchId()), index = 0) {
@@ -1128,7 +938,6 @@
     return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
   }
 
-  function hitHatchAt(...args) { return regionHitQuery.hitHatchAt(...args); }
   function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
   const referenceImageInteraction = window.ReferenceImageInteraction.create({
@@ -1139,26 +948,15 @@
     viewScale: () => viewport.scale, hypot2, hitReferenceImageAt, referenceImageWorldToLocal, referenceImageLocalToWorld,
     promptDistance: (message, value) => window.prompt(message, value), formatDisplayNumber, recordHistory,
   });
-  const { beginDrag: beginReferenceImageDrag, updateDrag: updateReferenceImageDrag,
-    startCalibration: startReferenceImageCalibration, cancelCalibration: cancelReferenceImageCalibration,
-    calibrationClick: handleReferenceImageCalibrationClick } = referenceImageInteraction;
+  const { beginDrag: beginReferenceImageDrag, startCalibration: startReferenceImageCalibration, calibrationClick: handleReferenceImageCalibrationClick } = referenceImageInteraction;
 
-  function decorateSerializedConstraint(data, constraint) {
-    if (!data || !constraint) return data;
-    if (constraint.readOnlyDimension) data.readOnlyDimension = true;
-    if (isDimensionConstraint(constraint)) {
-      data.parameterName = constraint.parameterName || null;
-      if (!constraint.readOnlyDimension) data.expression = constraint.expression || numericDimensionExpression(constraint);
-    }
-    return data;
-  }
+  function decorateSerializedConstraint(data, constraint) { return constraintMetadata.decorate(data, constraint); }
 
   function effectiveAppearanceForElement(...args) { return geometryAppearance.effectiveAppearanceForElement(...args); }
 
 
   function selectionItems(...args) { return selectionScopeQuery.selectionItems(...args); }
 
-  function selectIdentity(...args) { return identitySelection.selectIdentity(...args); }
 
   function selectionSketchId(...args) { return selectionScopeQuery.selectionSketchId(...args); }
 
@@ -1166,10 +964,15 @@
 
   function guardSelectionEdit(...args) { return sketchEditAccess.guardSelectionEdit(...args); }
 
-  const { ordinarySelectionMode, hitSketchAllowed, hitElementAllowed } = window.GeometryHitQuery.createScopePolicy({
-    readMode: () => mode, readPendingCommand: () => pendingCommandSession.current, readConstraintCommand: () => constraintTargetSession.command,
-    isVisibleSketchId, isVisibleSketchElement, elementSketchId, activeSketchId, isEditableSketchId,
+  const sceneHitInteraction = window.CanvasHitInteraction.createScene({
+    currentScope: workspace.current, dimensionScope: dimensionPresentationScope, viewport, pointUsage, sketchContext, geometryAppearance,
+    geometryReads, catalog: blockCatalog, projections: blockProjections, hatches: hatchGeometryQuery, dimensions: dimensionDisplay,
+    effectiveDimensionAppearance, dimensionLabelForConstraint, dimensionUsesExpression, annotationBounds, hitAnnotationElement,
+    hatchAppearanceForDisplay, targetFromConstraint, drawingOrderOwner, referenceImageWorldToLocal, pointInExpandedBox,
+    readMode: drawOperationLifecycle.readMode, readPendingCommand: () => pendingCommandSession.current, readConstraintCommand: () => constraintTargetSession.command,
+    operandValues: constraintOperandValues,
   });
+  const { ordinarySelectionMode } = sceneHitInteraction.policy;
 
   function canCreateInActiveSketch(...args) { return sketchEditAccess.canCreateInActiveSketch(...args); }
 
@@ -1178,31 +981,14 @@
   function isVisibleValue(...args) { return geometryAppearance.isVisibleValue(...args); }
   function isVisibleSketchId(...args) { return geometryAppearance.isVisibleSketchId(...args); }
   function isVisibleSketchElement(...args) { return geometryAppearance.isVisibleSketchElement(...args); }
-  function assignConstraintSketchId(constraint, sketchId = activeSketchId()) {
-    const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
-    if (constraint) constraint.sketchId = targetSketchId || activeSketchId();
-    return constraint;
-  }
 
-  function pushModelConstraint(constraint, sketchId = activeSketchId()) {
-    assignConstraintSketchId(constraint, sketchId);
-    model.constraints.push(constraint);
-    ensureDimensionParameter(constraint, currentParameterNamespace());
-    return constraint;
-  }
 
-  function operandRelationForSketch(sketchId) {
-    if (sketchId === activeSketchId()) return "active";
-    if (descendantSketchIds(activeSketchId()).includes(sketchId)) return "descendant";
-    if (isReferenceSourceSketchId(sketchId)) return "reference";
-    return null;
-  }
 
   function isConstraintOperandSelected(...args) { return commandTargetPresentation.isConstraintOperandSelected(...args); }
 
   function syncSelectionFromConstraintOperands() { canvasSelection.applyConstraintTargets(constraintTargetsFromOperands(constraintTargetSession.operands)); }
 
-  function constraintOperandsFromSelection() { return constraintOperandValues.fromSelection(canvasSelection, lastPointerWorld); }
+  function constraintOperandsFromSelection() { return constraintOperandValues.fromSelection(canvasSelection, pointerInteractionController.lastWorld); }
 
   function resultIsAccepted(result) {
     return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
@@ -1233,30 +1019,8 @@
     return window.CanvasThemeColors.color(value, applicationSettings.theme);
   }
 
-  function isReferenceHoverElement(...args) { return commandTargetPresentation.isReferenceHoverElement(...args); }
-
-  function isPendingReferenceTarget(...args) { return commandTargetPresentation.isPendingReferenceTarget(...args); }
-
-  function drawOrderBySketch(...args) { return sketchPresentation.drawOrderBySketch(...args); }
 
   function sketchAlpha(...args) { return sketchPresentation.sketchAlpha(...args); }
-
-  function sketchProjectionSourceKey(...args) { return sketchProjectionSources.sketchProjectionSourceKey(...args); }
-
-  function sketchProjectionSourceIsCovered(...args) { return sketchProjectionSources.sketchProjectionSourceIsCovered(...args); }
-
-  function sketchProjectionEntryFromItem(...args) { return sketchProjectionSources.sketchProjectionEntryFromItem(...args); }
-
-  function sketchProjectionEntryFromOperand(...args) { return sketchProjectionSources.sketchProjectionEntryFromOperand(...args); }
-
-
-  function sketchProjectionEntriesByRect(rect, crossing) {
-    return rectangleSelectionQuery.readProjection(rect, crossing, {
-      points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
-      arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches,
-    }, sketchProjectionEntryFromItem);
-  }
-
 
   function selectedItemsForGeometryInstance() { return instanceSourceSelection.read(); }
 
@@ -1274,7 +1038,7 @@
     solveSketchAndDependents, resultIsAccepted, minOrientationLength: MIN_ORIENTATION_LENGTH,
     activeSketchId, isActiveSketchElement, selection: canvasSelection, selectedElementCount,
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    setMode: value => { mode = value; }, clearPreview: () => drawingPreview.setPointer(null),
+    setMode: drawOperationLifecycle.setMode, clearPreview: () => drawingPreview.setPointer(null),
     clearSnap, clearSelection, invalidateAnalysis: () => constraintAnalysis.invalidate(),
     updateUI, draw, setHint, recordHistory, applicationText,
   });
@@ -1286,7 +1050,7 @@
 
   const splineEditing = window.SplineEditCommand.create({
     canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
-    currentScope: () => model, ids: geometryIds, clearSelection, canvasSelection, applicationText, setHint, updateUI, draw,
+    currentScope: () => editingScopeBinding.current, ids: geometryIds, clearSelection, canvasSelection, applicationText, setHint, updateUI, draw,
     restoreModelState, snapshotModelState, stabilizeActiveParameterNamespace, elementSketchId,
     invalidateAnalysis: () => constraintAnalysis.invalidate(), recordHistory, guardSketchProjectionShapeEdit,
     addPoint, isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint,
@@ -1310,103 +1074,37 @@
     return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
   }
 
-  const blockDefinitionCommand = window.BlockDefinitionCommand.create({
-    blockEditor, blockDefinitionEditing, blockCatalog, blockEditingQueries, documentModel,
-    currentScope: workspace.current, canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
-    canvasSelection, captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
-    defaultName: () => `Block-${documentIds.peek("blockDefinition")}`, blockSelectionGeometry, blockSelectionBoundsCenter,
-    guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
-    setMode: (value) => { mode = value; }, closeDefinitions: () => blockView.closeDefinitions(),
-    setEditorActive: (active) => blockView.setEditorActive(active), fitAllGeometryToViewport,
+  function reserveBlockEditorSequences(draft) { return idReservation.scope(draft); }
+
+  const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
+  const { definition: blockDefinitionCommand, completion: blockCompletionCommand } = blockEditingFeature.createCommands({
+    canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
+    canvasSelection, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
+    setMode: drawOperationLifecycle.setMode, closeDefinitions: () => blockView.closeDefinitions(),
+    setEditorActive: active => blockView.setEditorActive(active), fitAllGeometryToViewport,
     resetEmptyViewport: () => {
       const rect = canvas.getBoundingClientRect();
       viewport.update({ scale: CSS_PX_PER_MM });
       viewport.update({ x: rect.width / 2 });
       viewport.update({ y: rect.height / 2 });
     },
-    promptName: (name) => window.prompt("ブロック名", name), invalidateBlockProjectionCache,
-    updateBlockUI, updateUI, draw, recordHistory, setHint,
-  });
-  const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit,
-    restoreHost: restoreBlockEditorHost, cancel: cancelBlockDefinitionEdit,
-    rename: renameBlockDefinition, remove: deleteBlockDefinition } = blockDefinitionCommand;
-
-
-
-
-  function reserveBlockEditorSequences(draft) {
-    reserveGeometryElementSequences(draft);
-    documentIds.reserveScope(draft, model.nextHatchIndex);
-  }
-
-  const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
-  const blockCompletionCommand = window.BlockCompletionCommand.create({
-    blockEditor, blockDefinitionEditing, blockCatalog, documentModel, currentScope: workspace.current,
-    blockDefinitionCyclePath, duplicateBlockElementId, refreshReferenceConstraintValidity,
+    promptName: name => window.prompt("ブロック名", name), updateBlockUI, updateUI, draw, recordHistory, setHint,
+    refreshReferenceConstraintValidity,
     hasInvalidReferenceConstraints: () => referenceConstraintState.errorCount > 0,
     solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
-    requestChoice: (options) => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
-    storedBlockInstancesReferencing, restoreBlockEditorHost, rebuildStoredBlockDefinitionConstraints,
-    nextInstanceId: () => documentIds.allocate("blockInstance"), constraintGraphNodes, annotationReferencesRemovedGeometry,
-    invalidateBlockProjectionCache, blockProjectionBundles, geometryElementKey, blockDefinitionDependsOn,
-    acceptError: CONSTRAINT_ACCEPT_ERROR, setSketchSolveOk, setSketchSolveError,
-    clearSelection, canvasSelection, setMode: (value) => { mode = value; },
-    setHint, log, updateUI, draw, recordHistory,
+    requestChoice: options => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
+    constraintGraphNodes, annotationReferencesRemovedGeometry, acceptError: CONSTRAINT_ACCEPT_ERROR, setSketchSolveOk, setSketchSolveError, log,
   });
+  const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit,
+    cancel: cancelBlockDefinitionEdit, rename: renameBlockDefinition, remove: deleteBlockDefinition } = blockDefinitionCommand;
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
 
   function syncOffsetChainSelection() { return canvasSelection.applyOffsetSelection(offsetSelection); }
 
-  function resetModelState() {
-    sketchMoveCommand?.reset();
-    activateEditingScope(documentModel);
-    flushScheduledCanvasPointerMove({ discard: true });
-    mode = "select";
-    lastAuthoringPerformance = null;
-    window.DocumentState.clearContent(documentModel);
-    referenceImageRenderer.clear();
-    invalidateBlockProjectionCache();
-    sketchSolving.clearAll();
-    referenceConstraintState.clear();
-    constraintAnalysis.invalidate();
-    clearSelection();
-    geometryDrag.reset();
-    dimensionDrag.reset();
-    referenceImageInteraction.reset();
-    canvasNavigation.reset();
-    blankCanvasGesture.clearSuppression();
-    drawOperationLifecycle.resetForDocument();
-    pendingCommandSession.clear();
-    constraintTargetSession.reset();
-    constructionCommand.restore(false);
-    documentCanvasReset.reset();
-    geometryIds.reset();
-    documentIds.reset();
-    blockPlacementCommand.reset();
-    blockEditor.reset();
-    window.DocumentState.resetDefaults(documentModel);
-    hatchCommand.reset();
-    hatchGeometryQuery.clear();
-    sketchTreeView.reset();
-    annotationDrag.reset();
-    referenceImageInteraction.reset();
-  }
+  function resetModelState() { return documentEditingReset.reset(); }
 
 
-  function reserveGeometryElementSequences(source) {
-    geometryIds.reserve(source);
-    documentIds.reserveAttachments(source);
-  }
-
-  function duplicateBlockElementId(definition) {
-    const seen = new Set();
-    for (const item of [...(definition?.points || []), ...(definition?.lines || []), ...(definition?.circles || []), ...(definition?.arcs || []), ...(definition?.splines || []), ...(definition?.hatches || []), ...(definition?.referenceImages || []), ...(definition?.blockInstances || [])]) {
-      const id = String(item?.id || "");
-      if (seen.has(id)) return id;
-      seen.add(id);
-    }
-    return null;
-  }
+  function reserveGeometryElementSequences(source) { return idReservation.geometry(source); }
 
   const { serialize: serializeDimension } = window.DimensionPersistence.create({
     migrateAngleDimensionLabelPlacement, dimensionAnchor, storedDimensionAxis,
@@ -1421,58 +1119,25 @@
     return constraintCodecs.serialize(c);
   }
 
-  const documentSnapshot = window.DocumentSnapshot.create({
+  const documentWriter = window.DocumentSnapshot.createWriter({
+    workspace, prepare: documentPreparation.prepare, version: CURRENT_JSON_VERSION,
+    documentName: effectiveDocumentName, nextHatchIndex: () => documentIds.peek("hatch"),
     geometryMetadata: (item) => ({
       sketchId: elementSketchId(item),
       kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined,
     }),
-    constraintData: (constraint, scope, isDocumentScope) => {
-      const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
-      if (!data) return null;
-      data.sketchId = isDocumentScope ? constraintSketchId(constraint) : constraint.sketchId;
-      if (constraint.reference) {
-        data.reference = true;
-        data.referenceSketchId = constraint.referenceSketchId || null;
-      }
-      return data;
-    },
+    constraintData: constraintMetadata.snapshotData,
   });
 
-  function serializeModel() {
-    ensureModelState();
-    return documentSnapshot.serialize(workspace.snapshotSource(), {
-      version: CURRENT_JSON_VERSION, savedAt: new Date().toISOString(),
-      documentName: effectiveDocumentName(), nextHatchIndex: documentIds.peek("hatch"),
-    });
-  }
+  function serializeModel() { return documentWriter.serialize(); }
 
-  function historySnapshot() {
-    const data = serializeModel();
-    delete data.savedAt;
-    delete data.documentName;
-    return JSON.stringify(data);
-  }
-
-  const blockHistorySnapshot = window.BlockHistorySnapshot.create({
-    cloneDefinition: cloneBlockDefinition, serializeConstraint, decorateSerializedConstraint,
-  });
-
+  function historySnapshot() { return historyFeature.captureDocument(); }
 
   function resetBlockEditorHistory() {
     return historyController.resetBlock();
   }
 
-  function createBlockEditHistory() {
-    return window.EditHistory.create({
-      capture: () => blockHistorySnapshot.capture(liveBlockEditorDefinition()),
-      signature: (snapshot) => snapshot?.signature,
-      restore: restoreBlockEditorHistorySnapshot,
-      limit: HISTORY_LIMIT,
-      recordLabel: "ブロック編集履歴に追加しました",
-      undoLabel: "ブロック編集を戻す",
-      redoLabel: "ブロック編集を進む",
-    });
-  }
+  function createBlockEditHistory() { return historyFeature.createBlockHistory(); }
 
   function activeEditHistory() {
     return historyController.active();
@@ -1491,23 +1156,7 @@
     return historyController.resetDocument(label);
   }
 
-  function recordHistory(label = "変更") {
-    if (!interactionProfiler.active) return recordHistoryUnprofiled(label);
-    return profileInteractionWork("history", () => recordHistoryUnprofiled(label));
-  }
-
-  function recordHistoryUnprofiled(label = "変更") {
-    return historyController.record(label);
-  }
-
-  const historyRestoration = window.HistoryRestoration.create({
-    historyController, document: { getName: () => documentModel.documentName,
-      setName: name => { documentModel.documentName = name; }, load: loadModelData },
-    constructionCommand, blockEditor, cloneBlockDefinition, invalidateBlockProjectionCache,
-    clearInteractionForSketchChange, solveAndRefresh, setHint,
-  });
-  function restoreHistorySnapshot(snapshot, label) { return historyRestoration.document(snapshot, label); }
-  function restoreBlockEditorHistorySnapshot(snapshot, label) { return historyRestoration.block(snapshot, label); }
+  function recordHistory(label = "変更") { return historyFeature.record(label); }
 
   function undoHistory() {
     return historyController.undo();
@@ -1521,12 +1170,9 @@
     return constraintCodecs.deserialize(...args);
   }
 
-  function serializedGeometryInstanceListError(instances) {
-    return geometryInstancePersistence.listError(instances);
-  }
 
   const documentApplication = window.DocumentApplication.create({
-    documentLoading, document: documentModel, model, resetEditingState: resetModelState,
+    documentLoading, document: documentModel, model: editingScopeBinding.current, resetEditingState: resetModelState,
     sketchTreeView: { capture: () => sketchTreeView.capture(), restore: state => sketchTreeView.restore(state) },
     refreshReferenceConstraintValidity, enforceMinimumLineLengths, ensureDimensionDefaults,
     restoreSequences: sequences => {
@@ -1540,7 +1186,7 @@
   }
 
   const canImportDxf = () => canCreateInActiveSketch() && !hasActiveDrawOperation()
-    && !pendingCommandSession.current && !constraintTargetSession.command && mode !== "block-place";
+    && !pendingCommandSession.current && !constraintTargetSession.command && drawOperationLifecycle.mode !== "block-place";
   const dxfImportCommand = window.DxfImportCommand.create({
     parser: window.DxfImport, geometry: geometryCreation, ids: geometryIds,
     currentScope: workspace.current, activeSketchId, canImport: canImportDxf,
@@ -1573,15 +1219,10 @@
     return isActiveSketchElement(item) && isVisibleSketchElement(item);
   }
 
-  const drawOperationLifecycle = window.DrawOperationLifecycle.create({
+  authoringTools.createLifecycle({ lifecycle: drawOperationLifecycle,
     canStart: nextMode => nextMode === "select" || guardSketchEdit(activeSketchId(), "create") && (nextMode !== "trim" || guardSelectionEdit("structure")),
     instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, centerline: centerlineCommand,
-    line: lineCommand, rectangle: rectangleCommand, slot: slotCommand, fillet: filletCommand,
-    circular: circularCommands,
-    spline: splineDraft, splineEditing, projection: sketchProjectionCommand, preview: drawingPreview, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() },
-    transient: { clearPoint: clearTransientPointRollback, clearLineCompletion: clearTransientLineCompletionRollback, rollbackLineStart: rollbackTransientLineStart },
-    clearSnap, clearSelection, selectMode: () => { mode = "select"; }, updateToolbar, setHint, updateUI, draw,
-    cancelConstraintTargetCommand, setMode: value => { mode = value; },
+    fillet: filletCommand, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() },
     clearTrimHover: () => canvasHover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null }),
   });
   function exitDrawMode() { return drawOperationLifecycle.exit(); }
@@ -1622,25 +1263,9 @@
 
 
 
-  const regionHitQuery = window.GeometryHitQuery.createRegions({
-    currentScope: workspace.current, ordinarySelectionMode, allHatches, isVisibleSketchId, isVisibleValue, hatchAppearanceForDisplay,
-    activeSketchId, drawingOrderOwner, resolvedHatchBoundary, hatchContainsSelectablePoint, referenceImageWorldToLocal,
-  });
-  const dimensionHitQuery = window.GeometryHitQuery.createDimensions({
-    currentScope: dimensionPresentationScope, viewportScale: () => viewport.scale, ordinarySelectionMode, isActiveSketchConstraint, isVisibleSketchId,
-    constraintSketchId, targetFromConstraint, defaultDimensionForTarget, isVisibleValue, effectiveDimensionAppearance, dimensionLayout,
-    dimensionLabelForConstraint, dimensionTextDrawingMetrics, dimensionTextWidth, dimensionUsesExpression, pointInExpandedBox,
-  });
-  const instanceHitQuery = window.GeometryHitQuery.createInstances({
-    currentScope: workspace.current, viewportScale: () => viewport.scale, hitSketchAllowed, isVisibleSketchId, blockProjectionBundle,
-    annotationBounds, resolvedHatchBoundary, isVisibleValue, hatchAppearanceForDisplay, hatchContainsSelectablePoint, geometryInstanceBundles,
-  });
-  const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
-    currentScope: workspace.current, viewportScale: () => viewport.scale,
-    isEditableSketchElement: hitElementAllowed, isSelectableEndpointPoint, isExplicitPoint, preferredSketchId: activeSketchId,
-    hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById,
-    hitGeometryInstance, hitAnnotationElement: (...args) => hitAnnotationElement(...args), hitHatchAt, hitReferenceImageAt,
-  });
+  const sceneHitQueries = sceneHitInteraction.createQueries();
+  const { regions: regionHitQuery, dimensions: dimensionHitQuery, instances: instanceHitQuery } = sceneHitQueries;
+  const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = sceneHitQueries.geometry;
 
   function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
     return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
@@ -1658,17 +1283,8 @@
 
 
 
-  function findArcEndpointFixedConstraint(arc, endpoint) {
-    return model.constraints.find((c) => c.enabled !== false && c instanceof ArcEndpointFixedConstraint && sameConstraintDisplayElement(c.arc, arc) && c.endpoint === endpoint);
-  }
 
-  function findLineFixedConstraint(line) {
-    return model.constraints.find((c) => c.enabled !== false && c instanceof LineFixedConstraint && sameConstraintDisplayElement(c.line, line));
-  }
 
-  function pointLockedByLineFixed(point) {
-    return model.constraints.some((c) => c.enabled !== false && c instanceof LineFixedConstraint && (c.line.p1 === point || c.line.p2 === point));
-  }
 
 
 
@@ -1686,8 +1302,6 @@
   function distanceTargetFromSelection() { return constraintSelectionQuery.distanceTarget(); }
 
   function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
-  function hitGeometryInstance(...args) { return instanceHitQuery.hitGeometryInstance(...args); }
-  function hitDerivedGeometryForDrag(...args) { return instanceHitQuery.hitDerivedGeometryForDrag(...args); }
   function hitBlockRotationHandle(x, y) { return null; }
 
 
@@ -1710,13 +1324,7 @@
 
 
 
-  const { hitConstraintOperand: queryConstraintOperand, hitDerivedProjectionOperand, hitBlockProjectionOperand, hitReferenceTarget } = window.OperandHitQuery.create({
-    viewportScale: () => viewport.scale,
-    geometry: { geometryInstanceBundles, blockProjectionBundles, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines },
-    sketches: { isVisibleSketchId, operandRelationForSketch, referenceSourceSketchIds, elementSketchId, isVisibleSketchElement },
-    points: { isExplicitPoint, isPointUsedByPrimitive, isReferencePoint }, makeConstraintOperand, operandFromReferenceTarget,
-    hits: { hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitArcEndpoint },
-  });
+  const { hitConstraintOperand: queryConstraintOperand } = sceneHitQueries.operands;
 
   function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
     if (!target) return NaN;
@@ -1728,150 +1336,51 @@
 
   function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
 
-  function solveFinalDragSession(session) {
-    if (!interactionProfiler.active) return geometryDragEditing.finish(session);
-    return profileInteractionWork("solve", () => geometryDragEditing.finish(session));
-  }
 
   function solveReferenceDependentSketches(...args) { return sketchSolving.solveReferenceDependentSketches(...args); }
   function solveSketchAndDependents(...args) { return sketchSolving.solveSketchAndDependents(...args); }
   function solveConstraintComponentAndDependents(...args) { return sketchSolving.solveConstraintComponentAndDependents(...args); }
 
-  function geometryInstanceUsesRemovedGeometry(instance, removedKeys = new Set(), removedOwnerIds = new Set()) {
-    return geometryInstanceDependencyRefs(instance).some((ref) => removedKeys.has(geometryRefKey(ref)) || removedOwnerIds.has(ref.path?.[0]));
-  }
-
-  function rejectReferencedGeometryDeletion(instances, label) {
-    if (instances.length === 0) return false;
-    const ids = instances.map((instance) => instance.id).join(", ");
-    const message = applicationText(`削除できません: ${label} は派生インスタンス ${ids} から参照されています。先に依存インスタンスを削除してください`, `Cannot delete ${label}; it is referenced by derived instance(s) ${ids}. Delete the dependent instance(s) first.`);
-    setHint(message, "error");
-    log(message);
-    return true;
-  }
-
-  const geometryDeletion = window.GeometryDeletion.create({
-    isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline,
-    constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
-    geometryElementKey, annotationReferencesRemovedGeometry,
-    geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes, removeAnnotationConstraint: constraint => annotationDimensions.remove(constraint),
+  const deletionFeature = window.DeletionFeature.create({
+    currentScope: workspace.current, pointUsage, constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
+    geometryElementKey, annotationReferencesRemovedGeometry, geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes, annotationDimensions,
+    canvasSelection, splineEditing, canvasHover, guardSketchEdit, elementSketchId, geometryInstanceDependencyRefs, geometryRefKey,
+    guardDimensionSymbolDeletion, applicationText,
+    resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
+    pendingCommandSession, constraintTargetSession, lineCommand, circularCommands, drawingPreview, selectMode: drawOperationLifecycle.selectMode,
+    solveSketchAndDependents, normalizeArcSweeps, updateToolbar, updateUI, draw, analysisStable: () => constraintAnalysis.stable, setHint, log, recordHistory,
+    referenceImageInteraction, guardSelectionEdit, selectionSketchId, activeSketchId, geometryRefForItem, invalidateBlockProjectionCache,
+    effectiveSelectedConstraint, clearSelection, solveAndRefresh,
   });
+  function rejectReferencedGeometryDeletion(instances, label) { return deletionFeature.rejectReferences(instances, label); }
+  function deleteElements(options) { return deletionFeature.remove(options); }
+  function deleteCurrentSelection() { return deletionFeature.removeSelection(); }
 
-  const geometryDeletionCommand = window.GeometryDeletionCommand.create({
-    currentScope: workspace.current, geometryDeletion, canvasSelection, splineEditing, canvasHover,
-    guardSketchEdit, elementSketchId, geometryElementKey, geometryInstanceUsesRemovedGeometry,
-    rejectReferencedGeometryDeletion, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion, applicationText,
-    endInteraction: () => {
-      geometryDrag.reset();
-      dimensionDrag.reset();
-      annotationDrag.reset();
-      pendingCommandSession.clear();
-      constraintTargetSession.clearCommand();
-      lineCommand.reset();
-      circularCommands.resetCircle();
-      resetArcCommandState();
-      drawingPreview.setPointer(null);
-      mode = "select";
-
-    },
-    solveSketchAndDependents, normalizeArcSweeps,
-    refreshView: () => { updateToolbar(); updateUI(); draw(); },
-    analysisStable: () => constraintAnalysis.stable, setHint, log, recordHistory,
+  const clipboardFeature = window.ClipboardFeature.create({
+    blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText,
+    annotationTextLayout, annotationTextMetrics, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle, viewport,
+    serializeGeometryInstance, constraintGraphNodes, serializeConstraint, decorateSerializedConstraint,
+    currentScope: () => editingScopeBinding.current, canvasSelection, blockScopeId: currentBlockDefinitionScopeId, setHint,
+    pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX, imageClipboard, updateToolbar, deleteSelection: deleteCurrentSelection,
+    geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById, documentIds, normalizeGeometryInstance,
+    parameters: parameterNamespace, deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache,
+    isGeometryMode, blockDefinitionScopeError, canCreateInActiveSketch, guardSketchEdit, activeSketchId, currentParameterNamespace,
+    clearSelection, selectMode: drawOperationLifecycle.selectMode, solveAndRefresh, updateUI, draw, sketchName,
   });
-  function deleteElements(options) { return geometryDeletionCommand.remove(options); }
-
-  const selectionDeletionCommand = window.SelectionDeletionCommand.create({
-    currentScope: workspace.current, canvasSelection, geometryDeletion, referenceImageInteraction,
-    guardSelectionEdit, selectionSketchId, activeSketchId, geometryRefKey, geometryRefForItem,
-    geometryInstanceUsesRemovedGeometry, rejectReferencedGeometryDeletion, guardDimensionSymbolDeletion,
-    annotationReferencesRemovedGeometry, invalidateBlockProjectionCache, effectiveSelectedConstraint,
-    deleteElements, clearSelection, solveAndRefresh, refreshView: () => { updateUI(); draw(); },
-    recordHistory, setHint, applicationText,
-  });
-  function deleteCurrentSelection() { return selectionDeletionCommand.remove(); }
-
-  const clipboardPayload = window.ClipboardPayload.create({
-    geometryInstanceBundle, geometryInstanceSourcePoints, serializeGeometryInstance, blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, constraintGraphNodes, applicationText,
-    detachedAnnotation: annotation => {
-      const data = serializeAnnotation(annotation);
-      const layout = annotationTextLayout(annotation) || annotationTextMetrics(annotation, annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : annotation);
-      data.x = layout.anchorX; data.y = layout.anchorY;
-      data.anchorPosition = annotation.anchorPosition || effectiveAnnotationStyle(annotation).textAlign + "-middle";
-      if (annotation.type === "leader") {
-        const geometry = annotationLeaderDisplayGeometry(annotation);
-        data.start = { ...annotationLeaderAnchor(annotation) }; data.elbow = { ...geometry.elbow }; data.end = { ...geometry.end };
-        data.textPlacement = "anchor";
-        data.shelfReferenceScale = viewport.scale / window.Appearance.annotationDisplayFactor(effectiveAnnotationStyle(annotation), viewport.scale);
-      }
-      return data;
-    },
-    serializeConstraint: constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint),
-  });
-  function copyableSelectionPayload() {
-    const scopeId = currentBlockDefinitionScopeId();
-    const result = clipboardPayload.build(model, canvasSelection, scopeId ? `block:${scopeId}` : "document");
-    if (result.error) setHint(result.error, "error");
-    return result.payload;
-  }
-
-  const clipboardSession = window.ClipboardSession.create({
-    pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX,
-    onCopyStored: () => { imageClipboard.markCopy(); updateToolbar(); },
-    deleteSelection: deleteCurrentSelection,
-  });
-
+  const { session: clipboardSession, command: clipboardCommand } = clipboardFeature;
+  function copyableSelectionPayload() { return clipboardFeature.copyableSelectionPayload(); }
   function copySelectionToClipboard(options = {}) { return clipboardCommand.copy(options); }
 
-  const clipboardTransfer =
-    window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText });
-
-  const clipboardGeometry = window.ClipboardGeometry.create({
-    geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById,
-    allocateBlockInstanceId: () => documentIds.allocate("blockInstance"),
-    allocateGeometryInstanceId: type => type === "sketchProjection" ? documentIds.allocate("sketchProjection") : type === "mirror" ? documentIds.allocate("mirror") : documentIds.allocate("pattern"),
-    normalizeGeometryInstance, copiedGeometryInstance: clipboardTransfer.copiedGeometryInstance, applicationText,
-  });
-
-  const clipboardPasteCheckpoint = window.ClipboardPasteCheckpoint.create({
-    geometryIds,
-    captureSequences: () => documentIds.snapshot(["annotation", "hatch", "referenceImage", "sketchProjection", "mirror", "pattern", "free", "blockInstance"]),
-    restoreSequences: documentIds.restore,
-  });
-
-  const clipboardGraph = window.ClipboardGraph.create({
-    geometry: clipboardGeometry, transfer: clipboardTransfer, parameters: parameterNamespace,
-    elementIds: { hatch: () => documentIds.allocate("hatch"), annotation: () => documentIds.allocate("annotation"),
-      image: () => documentIds.allocate("referenceImage"), nextHatchIndex: () => documentIds.peek("hatch") },
-    deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache, applicationText,
-  });
-
-  const clipboardCommand = window.ClipboardCommand.create({
-    session: clipboardSession, graph: clipboardGraph, checkpoint: clipboardPasteCheckpoint, selection: canvasSelection,
-    isGeometryMode, buildCopyPayload: copyableSelectionPayload, blockDefinitionScopeError,
-    canCreate: () => { if (canCreateInActiveSketch()) return true; guardSketchEdit(activeSketchId(), "create"); return false; },
-    currentTarget: () => ({ model, sketchId: activeSketchId(), scale: viewport.scale }),
-    parameterTarget: () => ({ namespace: currentParameterNamespace(),
-      namespaceKey: currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document" }),
-    clearSelection, finishPaste: () => { mode = "select"; solveAndRefresh("貼り付け"); },
-    recoverView: () => { invalidateBlockProjectionCache(); clearSelection(); updateUI(); draw(); },
-    sketchName, setHint, updateToolbar,
-  });
   function pasteGeometryClipboard() { return clipboardCommand.paste(); }
 
-  function ensureDimensionDefaults() { return window.DocumentState.normalizeDimensionState(model, targetFromConstraint, (target, dimension) => dimensionPlacement.normalizeDimension(target, dimension)); }
+  function ensureDimensionDefaults() { return window.DocumentState.normalizeDimensionState(editingScopeBinding.current, targetFromConstraint, (target, dimension) => dimensionPlacement.normalizeDimension(target, dimension)); }
 
-  const dimensionSelectionBounds = window.DimensionPresentation.createSelectionBounds({
-    isActiveSketchConstraint, isVisibleSketchId, constraintSketchId, targetFromConstraint, defaultDimensionForTarget,
-    effectiveDimensionAppearance, isVisibleValue, dimensionLayout, dimensionTextDrawingMetrics,
-    dimensionLabelForConstraint, dimensionTextWidth, dimensionUsesExpression,
-  });
-  const dimensionLayer = window.DimensionPresentation.createLayer({
-    ctx, currentScope: dimensionPresentationScope, isActiveSketchConstraint, isVisibleSketchId, constraintSketchId,
-    targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, isVisibleValue, canvasSelection,
+  const { selectionBounds: dimensionSelectionBounds, layer: dimensionLayer } = dimensionDisplay.createTraversal({
+    currentScope: dimensionPresentationScope, isActiveSketchConstraint, isVisibleSketchId, constraintSketchId, isVisibleValue, canvasSelection,
     readHoverDimension: () => canvasHover.current.dimension, readDraggedDimension: () => dimensionDrag.constraint,
     readPending: () => pendingCommandSession.current, readExportFrame: () => pngRendering.frame,
     readConstraintStatus: () => viewState.constraintStatus, inactiveColor: INACTIVE_CONSTRAINT_STATUS_COLOR,
-    dimensionLabelForConstraint, drawDimension, dimensionUsesExpression,
+    dimensionLabelForConstraint, dimensionUsesExpression,
   });
 
   const rectangleSelectionQuery = window.RectangleSelectionQuery.create({
@@ -1882,11 +1391,7 @@
     hatchAppearanceForDisplay, referenceImageBounds, isVisibleValue,
     dimensionSelectionBounds: dimensionSelectionBounds.read,
   });
-  function selectByRect(rect, crossing, additive = false) {
-    if (additive && selectionSketchId() && selectionSketchId() !== activeSketchId()) return;
-    canvasSelection.set("instanceGeometry", null);
-    canvasSelection.applyRectangle(rectangleSelectionQuery.read(rect, crossing), additive);
-  }
+  const { select: selectByRect } = window.CanvasSelectionInteraction.createRectangleSelection({ canvasSelection, selectionSketchId, activeSketchId, query: rectangleSelectionQuery });
 
   function drawBlockInstanceHandles() {
     resetCanvasStrokeState();
@@ -1917,45 +1422,31 @@
 
   function draw() { return canvasRefresh.draw(); }
 
-  const interactiveCanvas = window.CanvasSurface.createInteractiveRenderer({
-    drawBlockInstanceHandles, dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
+  const canvasFrameRenderer = window.CanvasDisplay.createRendering({
+    canvas, ctx, viewport, surface: canvasSurface, zoomControl: canvasZoomControl,
+    readExportFrame: () => pngRendering.frame, recordDraw: () => pointerMoveScheduler.recordDraw(),
+    geometry: geometryDisplay, dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
     authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
-    drawSnapMarker, drawArcEndpointHandles, drawSplineEditHandles, drawPoints, drawReferenceImageOverlays,
+    drawBlockInstanceHandles, drawSnapMarker, drawReferenceImages, drawHatches, drawDrawingStack, drawReferenceImageOverlays,
     drawSketchIdentityLabel, drawSelectionRect, drawExportOverlay: () => pngExportCommand?.drawOverlay(ctx, viewport.scale),
-  });
-  const canvasFrameRenderer = window.CanvasSurface.createFrameRenderer({
-    canvas, ctx, viewport, surface: canvasSurface,
-    syncZoom: () => canvasZoomControl.sync(), readExportFrame: () => pngRendering.frame,
-    recordDraw: () => pointerMoveScheduler.recordDraw(),
-    drawContent: () => { drawReferenceImages(); drawHatches([], { includePreview: true }); drawDrawingStack(); },
-    drawExport: () => { drawDimensions(); drawAnnotations(); drawPoints(); },
-    drawInteractive: interactiveCanvas.draw,
   });
 
   function drawCanvas() { return canvasFrameRenderer.draw(); }
 
 
+  const { add: addInstanceSourcesByRect } = window.InstanceCommandInput.createRectangleSources({
+    getMode: drawOperationLifecycle.readMode, instanceSourceCommand, geometryInstanceCommand, geometryReads, query: rectangleSelectionQuery,
+    sketchProjectionEntriesByRect, elementSketchId, activeSketchId, isVisibleSketchElement,
+  });
   const selectionRectangle = window.SelectionRectangle.create({
     rectFromPoints, hypot2, viewScale: () => viewport.scale,
     releasePointer: (id) => { try { canvas.releasePointerCapture(id); } catch (_) {} },
-    clearSelection, selectByRect, addSketchProjectionSourcesByRect,
-    addInstanceSourcesByRect: (rect, crossing) => {
-      if (mode === "instance-sources" && instanceSourceCommand.instance?.type === "sketchProjection") {
-        const entries = sketchProjectionEntriesByRect(rect, crossing);
-        instanceSourceCommand.addSources(entries.map(entry => entry.item));
-      } else {
-        const items = rectangleSelectionQuery.readProjection(rect, crossing, {
-          points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
-          arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches,
-        }, item => elementSketchId(item) === activeSketchId() && isVisibleSketchElement(item) ? item : null);
-        (mode === "instance-sources" ? instanceSourceCommand : geometryInstanceCommand).addSources(items);
-      }
-    }, setHint, updateGeometrySelectionUI, draw,
+    clearSelection, selectByRect, addSketchProjectionSourcesByRect, addInstanceSourcesByRect,
+    setHint, updateGeometrySelectionUI, draw,
   });
 
   function drawSelectionRect() { return interactionOverlay.drawSelectionRect(selectionRectangle.preview()); }
 
-  function lineDisplaySegment(...args) { return lineDisplay.lineDisplaySegment(...args); }
 
 
 
@@ -1963,14 +1454,12 @@
 
 
 
+  function drawLines(...args) { return geometryDisplay.drawLines(...args); }
+  function drawCircles(...args) { return geometryDisplay.drawCircles(...args); }
+  function drawArcs(...args) { return geometryDisplay.drawArcs(...args); }
+  function drawSplines(...args) { return geometryDisplay.drawSplines(...args); }
 
-  function drawLines(...args) { return geometryLayer.drawLines(...args); }
-  function drawCircles(...args) { return geometryLayer.drawCircles(...args); }
-  function drawArcs(...args) { return geometryLayer.drawArcs(...args); }
-  function drawSplines(...args) { return geometryLayer.drawSplines(...args); }
 
-
-  function drawSplineEditHandles() { geometryRenderer.drawSplineEditHandles(splineHandleState()); }
 
 
 
@@ -1993,11 +1482,8 @@
 
   function drawDimensions() { return dimensionLayer.draw(); }
 
-  function drawAnnotations() { return annotationLayer.draw(); }
 
-  function effectiveLeaderAppearanceForSketch(sketch) { return annotationAppearance.effectiveLeaderAppearanceForSketch(sketch); }
   function effectiveAnnotationStyle(element) { return annotationAppearance.effectiveAnnotationStyle(element); }
-  function annotationDisplayColor(...args) { return annotationColor.annotationDisplayColor(...args); }
 
 
 
@@ -2005,7 +1491,7 @@
 
 
   function annotationById(id) {
-    return id ? model.annotations.find((element) => element.id === id) || null : null;
+    return id ? editingScopeBinding.current.annotations.find((element) => element.id === id) || null : null;
   }
 
   const annotationDrag = window.AnnotationDrag.create({
@@ -2017,7 +1503,6 @@
     beginPointer: (id) => { canvas.setPointerCapture(id); canvas.classList.add("is-dragging"); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
   });
-  const { begin: beginAnnotationDrag, update: updateAnnotationDrag } = annotationDrag;
 
   const dimensionPreview = window.DimensionPreview.create({
     readPending: () => pendingCommandSession.current, drawDimension, drawFilletPreviewArc, dimensionFromAnchor,
@@ -2039,15 +1524,13 @@
 
   function drawSnapMarker() { interactionOverlay.drawSnapMarker(drawingSnap.active); }
   function drawSketchIdentityLabel() {
-    interactionOverlay.drawSketchIdentityLabel({ hoveredIdentity: canvasHover.current.sketchIdentity, selection: canvasSelection, pointer: lastPointerWorld });
+    interactionOverlay.drawSketchIdentityLabel({ hoveredIdentity: canvasHover.current.sketchIdentity, selection: canvasSelection, pointer: pointerInteractionController.lastWorld });
   }
 
 
-  function drawArcEndpointHandles() { geometryRenderer.drawArcEndpointHandles(allGeometryArcs().filter(isVisibleSketchElement)); }
+  function drawArcEndpointHandles() { return geometryDisplay.drawArcEndpointHandles(); }
 
-  function drawPoints() {
-    geometryRenderer.drawPoints(drawOrderBySketch(allGeometryPoints()));
-  }
+  function drawPoints() { return geometryDisplay.drawPoints(); }
 
   function selectedVisibilityTargets() { return propertySelection.visibilityTargets(); }
   function selectionVisibilityIsHidden(targets) { return propertySelection.visibilityIsHidden(targets); }
@@ -2055,7 +1538,7 @@
 
   const toolbarView = window.ToolbarView.create({
     document, isGeometryMode, constructionToggleState,
-    readInteraction: () => ({ mode, hasPending: Boolean(pendingCommandSession.current), hasConstraint: Boolean(constraintTargetSession.command),
+    readInteraction: () => ({ mode: drawOperationLifecycle.mode, hasPending: Boolean(pendingCommandSession.current), hasConstraint: Boolean(constraintTargetSession.command),
       annotationDraft: Boolean(pendingCommandSession.current?.annotationDraft), pendingType: pendingCommandSession.current?.type,
       constraintType: constraintTargetSession.command?.type, splineEditing: Boolean(splineEditing.current) }),
     updateHistoryButtons, selectedVisibilityTargets, selectionVisibilityIsHidden,
@@ -2064,7 +1547,7 @@
   });
   function updateToolbar() { toolbarView.update(); }
   const commandStatusView = window.ToolbarView.createCommandStatus({
-    document, applicationText, readMode: () => mode, readPendingType: () => pendingCommandSession.current?.type,
+    document, applicationText, readMode: drawOperationLifecycle.readMode, readPendingType: () => pendingCommandSession.current?.type,
     readConstraintCommand: () => constraintTargetSession.command,
   });
 
@@ -2091,19 +1574,7 @@
   const constraintTargetCommand = window.ConstraintTargetCommand.create({
     session: constraintTargetSession, startAnnotationAnchorConstraint,
     canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
-    prepareStart: () => {
-      cancelPendingCommand("");
-      resetCenterlineCommandState();
-      resetSlotCommandState();
-      mode = "select";
-      lineCommand.reset();
-      rectangleCommand.reset();
-      filletCommand.reset();
-      circularCommands.resetCircle();
-      resetArcCommandState();
-      drawingPreview.reset();
-    },
-    prepareCancel: () => { if (mode === "centerline") resetCenterlineCommandState(); if (mode === "slot") resetSlotCommandState(); },
+    prepareStart: drawOperationLifecycle.prepareConstraintStart, prepareCancel: drawOperationLifecycle.prepareConstraintCancel,
     constraintLabel, clearSelection, constraintOperandsFromSelection, trimConstraintSelection,
     resolveConstraintIntent, startDistanceResolution, commitConstraintResolution, syncSelectionFromConstraintOperands,
     updateToolbar, updateConstraintButtons, setHint, constraintTargetHint, draw,
@@ -2124,13 +1595,10 @@
 
   const dimensionPlacementCommand = window.DimensionPlacementCommand.create({
     session: constraintTargetSession, selection: canvasSelection, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
+    guardSketchEdit, isPlacingInstance: geometryInstanceCommand.isPlacing, geometryInstanceBundle, targetFromConstraint, cancelPendingCommand, cancelConstraintTargetCommand,
     canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
-    prepareStart: () => {
-      mode = "select";
-      lineCommand.reset(); rectangleCommand.reset(); filletCommand.reset(); circularCommands.resetCircle();
-      resetArcCommandState(); drawingPreview.reset();
-    },
-    selectMode: () => { mode = "select"; },
+    prepareStart: drawOperationLifecycle.prepareDimensionStart,
+    selectMode: drawOperationLifecycle.selectMode,
     constraintOperandsFromSelection, constraintResolutionFromCurrentSelection, selectedPrimitives,
     placement: dimensionPlacement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
     addReadOnlyDimensionConstraint, activeSketchId, syncSelectionFromConstraintOperands,
@@ -2138,22 +1606,13 @@
     hideDimensionValueInput, syncDimensionValueInput, focusDimensionValueInput,
     applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
   });
-  function startInstanceAngleDimension(instance) {
-    if (!guardSketchEdit(instance.sketchId) || geometryInstanceCommand.isPlacing(instance) || instance.placement?.kind !== "circular") return false;
-    cancelPendingCommand(""); cancelConstraintTargetCommand(""); mode = "select";
-    const anchor = geometryInstanceBundle(instance).controlPoints.find(point => point.instanceControl === "anchor");
-    const c = new window.GeometrySolver.InstanceAngleIntervalConstraint(anchor, instance.placement.angleStep);
-    const target = targetFromConstraint(c);
-    pendingCommandSession.replace({ type: "distance-place", target, pointer: defaultDimensionForTarget(target), sketchId: instance.sketchId });
-    setHint("角度間隔寸法の表示位置をクリックしてください"); updateToolbar(); draw(); return true;
-  }
+  function startInstanceAngleDimension(instance) { return dimensionPlacementCommand.startInstanceAngleDimension(instance); }
   function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
 
   function cancelPendingCommand(message) { return pendingCommandSession.cancel(message); }
 
   function startDistanceValueInput(pointer) { return dimensionPlacementCommand.startDistanceValueInput(pointer); }
 
-  function retargetDistancePlaceWithOperand(pointer, hits = {}) { return dimensionPlacementCommand.retargetDistancePlaceWithOperand(pointer, hits); }
 
   const pendingDimensionHover = window.ConstraintCommandInput.createRetargetHover({
     getPending: pendingCommandSession.read, canvasHover, hitConstraintOperand, sameConstraintOperand,
@@ -2164,7 +1623,7 @@
   function startDimensionEditInput(hit) { return dimensionValueCommand.startEdit(hit); }
 
   function sketchHasDimensionConstraint(sketchId = activeSketchId()) {
-    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.dimension);
+    return editingScopeBinding.current.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.dimension);
   }
 
   function selectedFixedBatchTargets() { return constraintSelectionQuery.fixedBatch(); }
@@ -2188,8 +1647,8 @@
     referenceImage: referenceImageInteraction, selectionRectangle, drawing: drawOperationLifecycle,
     pending: pendingCommandSession, constraint: constraintTargetSession, projection: sketchProjectionCommand,
     instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, hover: canvasHover,
-    clearPointer: () => { lastPointerWorld = null; }, hideValueInput: hideDimensionValueInput, clearSnap,
-    selectMode: () => { mode = "select"; }, updateToolbar,
+    clearPointer: pointerInteractionController.clearLastPointer, hideValueInput: hideDimensionValueInput, clearSnap,
+    selectMode: drawOperationLifecycle.selectMode, updateToolbar,
   });
   function clearInteractionForSketchChange() { return sketchInteractionReset.clear(); }
 
@@ -2210,7 +1669,7 @@
     invalidateBlockProjectionCache();
     geometryReads.clearReadCache();
     hatchGeometryQuery.clear();
-    constraintRebinding.rebuildDocument(model, [...blockProjectionBundles(), ...geometryInstanceBundles()]);
+    constraintRebinding.rebuildDocument(editingScopeBinding.current, [...blockProjectionBundles(), ...geometryInstanceBundles()]);
     constraintAnalysis.invalidate();
     refreshReferenceConstraintValidity();
   }
@@ -2223,8 +1682,8 @@
   const sketchMoveInputBinding = window.SketchTreeController.createMoveInputBinding({ document, isMoving: () => sketchMoveCommand.active });
   sketchMoveInputBinding.bind();
   const hatchCommand = window.HatchCommand.create({
-    currentScope: workspace.current, hatchGeometryQuery, getMode: () => mode, setMode: value => { mode = value; },
-    lastPointer: () => lastPointerWorld, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },
+    currentScope: workspace.current, hatchGeometryQuery, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
+    lastPointer: pointerInteractionController.readLastPointer, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },
     activeSketchId, setActiveSketch, canCreateInActiveSketch, rejectRootSketchCreation,
     nextHatchId: () => documentIds.allocate("hatch"), hatchSequence: () => documentIds.peek("hatch"),
     cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection, canvasSelection,
@@ -2268,71 +1727,46 @@
 
 
 
+  const fixedOperandCommand = window.FixedToggleCommand.createOperand({
+    guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText,
+    findLineFixedConstraint, LineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint,
+    currentScope: workspace.current, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
+  });
+
   const sketchTreeObjects = window.SketchTreeObjects.create({
-    sidebarGeometryItem, activeSketchId,
-    objectVisible: (category, entry) => !selectionVisibilityIsHidden([{
-      kind: category === "constraint" ? "constraint" : ["point", "line", "circle", "arc", "spline"].includes(category) ? "geometry"
-        : category === "instance" ? "geometryInstance" : category,
-      item: category === "constraint" ? entry.constraint : entry,
-    }]),
-    currentScope: dimensionPresentationScope, getLanguage: () => applicationSettings.language,
+    readServices: geometryReadServices, sketchContext, applicationSettings, constraintFeedback,
+    isHidden: selectionVisibilityIsHidden,
+    currentScope: dimensionPresentationScope,
     ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
-    isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
-    constraintStatusOf, blockProjectionBundle, applicationText, escapeHtml, formatDisplayNumber,
+    isExplicitPoint, isPointUsedByLine,
+    constraintStatusOf, escapeHtml, formatDisplayNumber,
     toolbarSvgMarkup, constraintToolbarIcon, sketchTreeGutter: window.SketchTreeView.gutter, isSketchProjectedGeometry,
-    findLineFixedConstraint, blockDefinitionById, geometryInstanceTypeLabel, geometryInstanceBundle,
+    findLineFixedConstraint, geometryInstanceTypeLabel,
     resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
-    isDimensionConstraint, localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
+    isDimensionConstraint, constraintGeometryId, isReadOnlyDimension,
     constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected,
     readCanvasHover: () => canvasHover.current, readSidebarHover: () => selectionHighlight.current,
     constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements,
   });
-  const sketchTreeView = window.SketchTreeView.create({
-    document, sketchOverlay, sketchOverlayResizeHandle,
+  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithView({
+    document, window, sketchContext, applicationSettings, escapeHtml, closeCanvasContextMenu,
+    sketchOverlay, sketchOverlayResizeHandle, ensureSketchState, objects: sketchTreeObjects, moveCommand: sketchMoveCommand,
     getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
-    currentScope: () => model, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
-    objects: sketchTreeObjects, selectedSketchId: () => canvasSelection.sketchId,
-    moveState: () => sketchMoveCommand.state(),
-    sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
-    actions: { click: event => sketchTreeController.click(event), doubleClick: event => sketchTreeController.doubleClick(event),
-      keyDown: event => sketchTreeController.keyDown(event), pointerOver: event => sketchTreeController.pointerOver(event), pointerOut: event => sketchTreeController.pointerOut(event),
-      leave: () => sketchTreeController.leave(),
-    },
-  });
-  const sketchTreeController = window.SketchTreeController.create({
-    currentScope: dimensionPresentationScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
+    viewScope: () => editingScopeBinding.current, sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
+    currentScope: dimensionPresentationScope, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
-    sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
+    updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
     hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
-    resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
-    move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
     updateSelectionUI: updateGeometrySelectionUI,
-    openContextMenu: (event, id) => {
-      closeCanvasContextMenu();
-      if (isRootSketch(sketchById(id))) { sketchContextController.close(); return; }
-      sketchContextController.open({ event, target: { id }, items: [{ action: "sketch-edit", label: applicationText("作図先", "Drawing sketch"), disabled: id === activeSketchId() },
-        { action: "sketch-rename", label: applicationText("名前変更", "Rename"), disabled: Boolean(sketchById(id)?.locked) }] });
-    },
-    unfixPoint: point => { if (!guardSketchEdit(elementSketchId(point), "constraint")) return; point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
+    unfixPoint: fixedOperandCommand.unfixPoint,
   });
-  const { refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth } = sketchTreeView;
-  sketchContextController = window.CanvasContextMenu.create({
-    document, window, canvas: document.getElementById("sketchList"), menu: document.getElementById("sketchContextMenu"),
-    escapeHtml, applicationText, ariaLabel: () => applicationText("スケッチメニュー", "Sketch menu"),
-    onOpen: event => sketchTreeController.contextMenu(event),
-    onAction: (action, target) => {
-      if (action === "sketch-rename") renameSketch(target.id);
-      else if (action === "sketch-edit") sketchTreeController.editSketch(target.id);
-    },
-  });
+  const { applyWidth: applySketchTreeWidth } = sketchTreeView;
+  sketchContextController = sketchTreeContextMenu;
   sketchContextController.start();
 
   function isSidebarHighlightedElement(item) { return sketchTreeController.isHighlightedElement(item); }
 
-  function updateSketchUI() {
-    if (!interactionProfiler.active) return updateSketchUIUnprofiled();
-    return profileInteractionWork("tree", updateSketchUIUnprofiled);
-  }
+  function updateSketchUI() { return applicationRefresh.sketch(); }
 
 
 
@@ -2341,19 +1775,8 @@
 
 
 
-  function updateGeometrySelectionUI() {
-    if (!interactionProfiler.active) return updateGeometrySelectionUIUnprofiled();
-    return profileInteractionWork("ui", updateGeometrySelectionUIUnprofiled);
-  }
+  function updateGeometrySelectionUI() { return applicationRefresh.selection(); }
 
-  function updateGeometrySelectionUIUnprofiled() {
-    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command);
-    updateToolbar();
-    updateConstraintButtons();
-    if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
-    updateSketchTreeSelectionState();
-    updatePropertiesUI();
-  }
 
 
 
@@ -2383,7 +1806,7 @@
   }
 
   const expressionInputController = window.ExpressionInputController.create({
-    document, types: { InputElement: HTMLInputElement, TextAreaElement: HTMLTextAreaElement }, currentNamespace: () => model, dimensionValueInput,
+    document, types: { InputElement: HTMLInputElement, TextAreaElement: HTMLTextAreaElement }, currentNamespace: () => editingScopeBinding.current, dimensionValueInput,
     pendingCommandSession, parameterDraft, ensureDimensionParameter, setParameterDialogError,
     setHint, applicationText, language: () => applicationSettings.language, insertIdentifierIntoExpressionInput,
     canvas, canvasPoint, hitDimension, hitAnnotationElement,
@@ -2391,10 +1814,8 @@
   const { context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter, insertAnnotation: insertClickedAnnotationParameter } = expressionInputController;
 
 
-  function effectiveConstructionAppearanceForSketch(...args) { return geometryAppearance.effectiveConstructionAppearanceForSketch(...args); }
   function effectiveDimensionAppearanceForSketch(...args) { return dimensionAppearance.effectiveDimensionAppearanceForSketch(...args); }
 
-  function effectiveAppearanceForSketch(...args) { return geometryAppearance.effectiveAppearanceForSketch(...args); }
 
 
 
@@ -2403,115 +1824,34 @@
 
 
 
-  const MULTIPLE_PROPERTY_MIXED = window.PropertySelection.mixedValue;
-  const propertySelection = window.PropertySelection.create({
-    Point, Line, canvasSelection,
-    getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
-    effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId,
-    blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
-    hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveAnnotationStyle, effectiveDimensionAppearance,
-    isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance,
+  const propertySelection = window.PropertiesDisplay.createSelection({
+    canvasSelection, documentModel, readServices: geometryReadServices, sketchContext, hatchAppearanceForDisplay,
+    getOperation: () => ({ mode: drawOperationLifecycle.mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
   });
-  const { selectedPropertiesTarget: resolvePropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
-  function selectedPropertiesTarget() {
-    const target = resolvePropertiesTarget();
-    const items = target.kind === "multiple" ? target.items.map(entry => entry.item) : [target.item];
-    const locked = items.some(item => sketchById(target.kind === "sketch" ? item?.id : item?.sketchId)?.locked);
-    const ownerId = target.kind === "sketch" ? target.item?.id : items[0]?.sketchId;
-    return { ...target, readOnly: target.readOnly || locked, locked,
-      owningSketchLabel: ownerId ? `${sketchName(ownerId)} (${ownerId})` : null,
-      drawingSketchLabel: `${sketchName(activeSketchId())} (${activeSketchId()})` };
-  }
-  const geometryPropertyCommand = window.GeometryPropertyCommand.create({
-    currentScope: workspace.current, SplineLineTangentConstraint, SplineSplineTangentConstraint,
-    guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
-    snapshotModelState, restoreModelState, stabilizeActiveParameterNamespace, elementSketchId, recordHistory,
-  });
-  const appearanceEditing = window.AppearanceEditing.create({
-    normalizeAppearance, normalizeAnnotationStyle, normalizeHatchAppearance, normalizeDimensionAppearance,
-    defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE, dimensionNumericRules: DIMENSION_APPEARANCE_NUMERIC_RULES,
-  });
-  const { applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue } = appearanceEditing;
-  const appearancePropertyCommand = window.AppearancePropertyCommand.create({
-    materializeAnchor: materializeAnnotationAnchor,
-    editing: appearanceEditing, viewport, effectiveAnnotationStyle, effectiveLeaderAppearanceForSketch, normalizeHatchAppearance, normalizeAnnotationStyle,
+  function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
+  const { editing: propertyEditing, appearanceUI } = window.PropertiesDisplay.createEditing({
+    document, documentModel, currentScope: workspace.current, appearanceScope: () => editingScopeBinding.current, viewport, propertySelection,
+    readServices: geometryReadServices, sketchContext, checkpoint: editingCheckpoint, parameterStabilization,
+    guardSketchProjectionShapeEdit, synchronizeSketchProjectionMetadata, materializeAnchor: materializeAnnotationAnchor,
+    isGeometryMode, toggleSketchVisibility, guardSelectionEdit, applicationSettings, escapeHtml,
     invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
   });
-  const { owner: appearanceOwnerForPropertiesTarget } = appearancePropertyCommand;
-
-  const { apply: applyMultipleProperty } = window.BulkPropertyCommand.create({
-    appearancePropertyCommand,
-    viewport,
-    guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
-    multiplePropertySupports, applyDimensionAppearanceValue, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
-    invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI,
-  });
-  const selectionVisibilityCommand = window.SelectionVisibilityCommand.create({
-    isGeometryMode, selectedVisibilityTargets, selectionVisibilityIsHidden, toggleSketchVisibility, guardSelectionEdit,
-    applyMultipleProperty, applyAppearance: appearancePropertyCommand.apply, recordHistory, updateUI, draw,
-  });
-  const appearanceControls = window.AppearanceControls.create({
-    applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance, normalizeDimensionAppearance,
-    dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS, defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE,
-  });
-  const { defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility, prepareAffixInputs } = appearanceControls;
-  const propertyRows = window.PropertyRows.create({
-    Point, Line, Circle, Arc, Spline, applicationText, escapeHtml, formatDisplayNumber,
-    multiplePropertySameType, multiplePropertySupports, multiplePropertyValue, multiplePropertyAppearance,
-    mixedValue: MULTIPLE_PROPERTY_MIXED, colorPickerValue, sketchProjectionConstraintForTarget, sketchName,
-    constraintGeometryId, constraintStatusBadge, constraintStatusOf, angleDegrees,
-    blockInstanceEnabledSketchSet, blockDefinitionSketchRows, snappedBlockRotation,
-    constraintDefiningGeometryEntries, normalizeAnnotationStyle, effectiveAnnotationStyle, leaderAppearancePropertyRows: appearanceControls.leaderAppearancePropertyRows
-  });
-
-  const appearancePalette = window.AppearancePalette.create({
-    document, documentModel, currentScope: () => model, applicationText, escapeHtml,
-    colorPickerValue, localizeApplicationUI, selectedPropertiesTarget, multiplePropertyValue,
-    multiplePropertyAppearance, mixedValue: MULTIPLE_PROPERTY_MIXED, appearanceOwnerForPropertiesTarget,
-    normalizeAnnotationStyle, applyMultipleProperty, applyDimensionAppearanceValue, normalizeHatchAppearance,
-    applyAnnotationStyleValue, applyAppearanceInput, invalidateBlockProjectionCache, normalizeAppearance,
-    normalizeConstructionAppearance, normalizeDimensionAppearance, recordHistory, updateUI, draw,
-  });
-  const { open: openAppearanceColorPalette, commit: commitColorPaletteValue } = appearancePalette;
-  const elementPropertyCommand = window.ElementPropertyCommand.create({ recordHistory, updateUI, updatePropertiesUI, draw, materializeAnchor: materializeAnnotationAnchor });
-  const propertiesController = window.PropertiesController.create({
-    HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget, activeSketchId,
+  const { appearanceEditing, visibility: selectionVisibilityCommand } = propertyEditing;
+  const propertiesView = window.PropertiesDisplay.createWithController({
+    document, documentModel, currentScope: workspace.current, canvasSelection,
+    getOperation: () => ({ mode: drawOperationLifecycle.mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
+    propertySelection, readServices: geometryReadServices, sketchContext, sketchProjectionConstraintForTarget,
+    constraintGeometryId, constraintFeedback, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
+    hatchAppearanceForDisplay, resolvedHatchBoundary, applicationSettings, escapeHtml, hatchRegionErrorText,
+    geometryInstanceTypeLabel, parameterNamespace, installExpressionInputHighlights,
+    propertyEditing, appearanceUI, HTMLTextAreaElement, HTMLInputElement,
     canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
-    elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
-    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
-    applicationText, setHint,
-    setPlacementRotationLocked: blockPlacementCommand.setRotationLocked,
-    setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
+    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw, setHint,
+    blockPlacement: blockPlacementCommand,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
-    startSplineEdit: spline => splineEditing.activate(spline), openAppearanceColorPalette,
+    annotationCommand, startInstanceSourceEdit: instanceSourceCommand.startForInstance, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
+    startSplineEdit: spline => splineEditing.activate(spline),
   });
-  const { input: handlePropertiesInput, change: handlePropertiesChange, click: handlePropertiesClick } = propertiesController;
-  const propertyPresentation = window.PropertyPresentation.create({
-    currentScope: workspace.current, documentModel, canvasSelection,
-    getOperation: () => ({ mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
-    effectiveAppearanceForElement, sketchName, hatchAppearanceForDisplay, resolvedHatchBoundary,
-    blockDefinitionById, blockProjectionBundle, normalizeAppearance, emptyGeometryInstanceBundle,
-    geometryInstanceBundle, activeSketchId, targetFromConstraint, dimensionDisplayState,
-    constraintSketchId, isReadOnlyDimension, measuredDimensionValue, angleDegrees,
-    sketchById, isRootSketch, effectiveAppearanceForSketch, effectiveConstructionAppearanceForSketch,
-    effectiveDimensionAppearanceForSketch, effectiveLeaderAppearanceForSketch, blockDefinitionSketchRows,
-  });
-  const propertiesContent = window.PropertiesContent.create({
-    presentation: propertyPresentation, rows: propertyRows, appearanceControls, Line, SketchProjectionConstraint,
-    applicationText, escapeHtml, formatDisplayNumber, hatchRegionErrorText, geometryInstanceTypeLabel,
-    geometryRefId, expressionInputValue, numericDimensionExpression, sketchName, localizedConstraintName,
-    collapsibleSketchAppearanceSection: (...args) => propertiesView.collapsibleSketchAppearanceSection(...args),
-  });
-  const propertiesView = window.PropertiesView.create({
-    document, applicationText, localizeApplicationUI, installExpressionInputHighlights,
-    content: propertiesContent.render, prepareAffixInputs,
-    onInput: handlePropertiesInput, onChange: handlePropertiesChange, onClick: handlePropertiesClick,
-  });
-  function updatePropertiesUIUnprofiled() {
-    propertiesView.render(selectedPropertiesTarget());
-  }
-
 
 
 
@@ -2533,10 +1873,7 @@
 
 
 
-  function updatePropertiesUI() {
-    if (!interactionProfiler.active) return updatePropertiesUIUnprofiled();
-    return profileInteractionWork("properties", updatePropertiesUIUnprofiled);
-  }
+  function updatePropertiesUI() { return applicationRefresh.properties(); }
 
 
 
@@ -2560,27 +1897,8 @@
 
   function updateStatusUI() { return commandStatusView.update(); }
 
-  function updateUI({ refreshAnalysis = true } = {}) {
-    if (!interactionProfiler.active) return updateUIUnprofiled({ refreshAnalysis });
-    return profileInteractionWork("ui", () => updateUIUnprofiled({ refreshAnalysis }));
-  }
+  function updateUI(options) { return applicationRefresh.refresh(options); }
 
-  function updateUIUnprofiled({ refreshAnalysis = true } = {}) {
-    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command);
-    ensureParameterNamespace(currentParameterNamespace());
-    if (refreshAnalysis) refreshConstraintAnalysis();
-    updateDocumentNameUI();
-    updateToolbar();
-    updateSketchUI();
-    updateBlockUI();
-    updatePropertiesUI();
-    const propertiesPanel = document.getElementById("propertiesPanel");
-    if (propertiesPanel) propertiesPanel.inert = sketchMoveCommand.active;
-    updateStatusUI();
-    updateConstraintButtons();
-    localizeApplicationUI();
-    syncDimensionValueInput();
-  }
 
   const constraintSolvePreparation = window.ConstraintSolvePreparation.create({
     solver, types: { Line, Arc, ArcEndpointOnLineConstraint, ArcEndpointCoincidentConstraint,
@@ -2604,7 +1922,7 @@
     targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
     clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
     recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
-    sketchName, now: () => performance.now(), recordPerformance: trace => { lastAuthoringPerformance = trace; },
+    sketchName, now: () => performance.now(),
   });
   function commitNewConstraint(...args) { return constraintCommitCommand.ordinary(...args); }
   function markReferenceConstraint(...args) { return constraintCommitCommand.markReference(...args); }
@@ -2647,97 +1965,46 @@
 
   function addConstraint(type) { return constraintCommitCommand.fromSelection(type); }
 
-  const geometryDragSolver = window.GeometryDragSolver.create({
-    solver, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
+  const geometryDragFeature = window.GeometryDragFeature.create({
+    solver, currentScope: workspace.current, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
     viewScale: () => viewport.scale, arcEndpointPoint, acceptError: CONSTRAINT_ACCEPT_ERROR,
     previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
-  });
-  const geometryDragPlan = window.GeometryDragPlan.create({
-    elementSketchId, isEditableSketchId, activeSketchId, blockDefinitionById, blockLocalGeometryBounds,
-    blockInstanceEnabledSketchSet, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint,
-    findArcEndpointFixedConstraint, arcEndpointPoint, arcEndpointDragValue, hypot2, minimumLength: MIN_ORIENTATION_LENGTH,
-  });
-  const buildDragSession = geometryDragPlan.build;
-  const geometryDragEditing = window.GeometryDragEditing.create({
-    currentScope: workspace.current, solver, plan: geometryDragPlan, dragSolver: geometryDragSolver,
+    elementSketchId, isEditableSketchId, blockDefinitionById, blockLocalGeometryBounds, blockInstanceEnabledSketchSet,
+    blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    arcEndpointDragValue, hypot2, minimumLength: MIN_ORIENTATION_LENGTH,
     contextFromSeeds: localSolveContextFromSeeds, projectionConstraintsForItems: sketchProjectionConstraintsAffectingItems,
-    pointLockedByLineFixed, captureValues: snapshotModelState,
-    enforceMinimumLineLengths, normalizeArcSweeps, invalidateProjection: invalidateBlockProjectionCache,
+    captureValues: snapshotModelState, enforceMinimumLineLengths, normalizeArcSweeps, invalidateBlockProjectionCache,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
-    previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
-  });
-  const attachLocalSolveContext = geometryDragEditing.prepare;
-
-  const geometryDrag = window.GeometryDrag.create({
-    canEdit: id => guardSketchEdit(id),
-    prepareSession: attachLocalSolveContext, dragResultForSession, solveFinalDragSession,
-    currentScope: workspace.current, activeSketchId, viewScale: () => viewport.scale,
+    profileSolve: work => interactionProfiler.active ? profileInteractionWork("solve", work) : work(),
+    canEdit: guardSketchEdit,
     beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
-    projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
-    canvasSelection, restoreModelState, restoreSolverState: (state) => solver.restore(state),
-    solveReferenceDependentSketches, normalizeArcSweeps, clearSketchSolveState, invalidateBlockProjectionCache,
-    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+    canvasSelection, restoreModelState, solveReferenceDependentSketches, clearSketchSolveState,
+    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, applicationText, setHint, updateUI,
+    updateGeometrySelectionUI, draw, recordHistory,
+    geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
   });
-
-
-
-  const { begin: beginDerivedGeometryDrag } = window.GeometryDrag.createDerivedEntry({
-    types: { Point, Line }, canEdit: guardSketchEdit, canvasSelection, geometryInstanceSourceObjects,
-    clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource, buildDragSession, geometryDrag,
-    setHint, applicationText, updateGeometrySelectionUI, updateUI, draw,
-  });
-
-
-
-  function dragResultForSession(session, pointer) {
-    if (!interactionProfiler.active) return geometryDragEditing.preview(session, pointer);
-    return profileInteractionWork("solve", () => geometryDragEditing.preview(session, pointer));
-  }
+  const { command: geometryDrag, build: buildDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
 
   function hasDirectRadiusDimension(primitive) {
-    return window.DimensionQueries.hasDirectRadiusDimension(model.constraints, primitive);
+    return window.DimensionQueries.hasDirectRadiusDimension(editingScopeBinding.current.constraints, primitive);
   }
 
-  const dimensionLineGroup = window.DimensionLineGroup.create({ placement: dimensionPlacement, Line });
-  function selectedDimensionLineGroup(reference) {
-    const constraints = canvasSelection.dimensionConstraints;
-    if (constraints.some(constraint => !model.constraints.includes(constraint) || !isEditableSketchId(constraintSketchId(constraint))
-      || !isVisibleSketchId(constraintSketchId(constraint)))) return null;
-    const entries = constraints.map(constraint => ({ constraint, target: targetFromConstraint(constraint) }));
-    if (entries.some(({ constraint, target }) => !target || !isVisibleValue(effectiveDimensionAppearance(
-      constraint.dimension || defaultDimensionForTarget(target), constraintSketchId(constraint)).visible))) return null;
-    return dimensionLineGroup.group(entries, reference);
-  }
-
-  const { sync: syncAngleConstraintFromDimension } = window.DimensionDrag.createAngleSynchronization({
-    LineAngleConstraint, isReadOnlyDimension, angleDimensionAngles,
+  const constraintInputFeature = window.ConstraintCommandInput.createFeature({
+    canvasHover, canvasPoint, pending: pendingCommandSession, targets: constraintTargetSession,
+    placement: dimensionPlacementCommand, constraints: constraintTargetCommand,
   });
-  const dimensionDrag = window.DimensionDrag.create({
-    canEdit: item => guardSketchEdit(constraintSketchId(item)),
-    selectedLineGroup: selectedDimensionLineGroup, translateLineGroup: dimensionLineGroup.translate,
-    dimensionAnchor, migrateAngleDimensionLabelPlacement, canvasSelection, angleDimensionLabelOffsets,
-    viewScale: () => viewport.scale, isDimensionConstraintCommandActive, setHint, clearSnap, hypot2,
+  const dimensionDragFeature = window.DimensionDragFeature.create({
+    placement: dimensionPlacement, viewport, canvasSelection, currentScope: workspace.current,
+    constraintSketchId, isEditableSketchId, isVisibleSketchId, effectiveDimensionAppearance, isVisibleValue,
+    guardSketchEdit, commandInput: constraintInputFeature.dimension, setHint, clearSnap, hypot2,
     beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
-    angleDimensionFromLabelPoint, dimensionWithLabelAt, dimensionFromAnchor, setAngleDimensionLabelOffsets,
-    syncAngleConstraintFromDimension, draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
-    continueCommandClick: (event, hits) => {
-      canvasHover.update({ dimension: null });
-      const pointer = canvasPoint(event);
-      if (pendingCommandSession.current?.type === "distance-place") {
-        if (!retargetDistancePlaceWithOperand(pointer, hits)) startDistanceValueInput(pointer);
-      } else if (constraintTargetSession.command?.type === "distance") {
-        handleConstraintOperandClick(pointer, "distance", hits);
-      }
-    },
+    draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
   });
+  const { command: dimensionDrag, lineGroup: dimensionLineGroup, selectedLineGroup: selectedDimensionLineGroup } = dimensionDragFeature;
   const { begin: beginDimensionDrag } = dimensionDrag;
 
-  function isDimensionConstraintCommandActive() {
-    return constraintTargetSession.command?.type === "distance" && pendingCommandSession.current?.type !== "distance-value";
-  }
 
 
 
@@ -2784,17 +2051,8 @@
 
 
 
-  const { select: selectCanvasContextTarget, constraintHits: constraintHitsFromCanvasContextTarget } = window.CanvasContextTarget.createSelection({
-    canvasSelection, sameArcEndpoint, clearSelection, arcEndpointPoint,
-  });
-  const { state: canvasContextFixState } = window.CanvasContextTarget.createFixObservation({
-    selectedFixedBatchTargets, fixedBatchIsFullyFixed, canvasSelection, findLineFixedConstraint, findArcEndpointFixedConstraint, selectedGeometryItems,
-  });
 
-  function previewCanvasContextCandidate(target) {
-    canvasHover.previewCandidate(target);
-    draw();
-  }
+  function previewCanvasContextCandidate(target) { return canvasContextInteraction.preview(target); }
 
 
 
@@ -2804,7 +2062,7 @@
 
   const canvasCommandCancellation = window.CanvasCommandCancellation.create({
     instances: geometryInstanceCommand,
-    readMode: () => mode, selectMode: () => { mode = "select"; }, blockPlacementCommand, drawingPreview, restoreBlockPlacementPropertiesPanel,
+    readMode: drawOperationLifecycle.readMode, selectMode: drawOperationLifecycle.selectMode, blockPlacementCommand, drawingPreview, restoreBlockPlacementPropertiesPanel,
     readPending: pendingCommandSession.read, cancelPendingCommand, readConstraintCommand: () => constraintTargetSession.command, cancelConstraintTargetCommand,
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
     applicationText, setHint, updateUI, draw,
@@ -2812,132 +2070,70 @@
   function hasCancellableCanvasCommand() { return canvasCommandCancellation.hasCancellable(); }
   function cancelCanvasCommandFromContextMenu() { return canvasCommandCancellation.cancel(); }
 
-  function hasCopyableCanvasSelection() { return clipboardPayload.canOfferCopy(model, canvasSelection); }
+  function hasCopyableCanvasSelection() { return clipboardFeature.canOfferCopy(); }
 
   const { topmostOwner: topmostDrawingOrderOwner, state: drawingOrderCommandState, reorder: reorderSelectedDrawingObjects } = window.DrawingOrderCommand.create({
-    currentScope: () => model, canvasSelection, activeSketchId, selectionSketchId, ordinarySelectionMode,
+    currentScope: () => editingScopeBinding.current, canvasSelection, activeSketchId, selectionSketchId, ordinarySelectionMode,
     guardSelectionEdit, updateUI, draw, recordHistory, applicationText, setHint,
   });
 
 
-  const { items: canvasContextMenuItems } = window.CanvasContextPresentation.createItems({
-    readMode: () => mode, sketchProjectionCommand, applicationText, document, canCreateInActiveSketch, visibleGeometryBounds,
-    pendingCommandSession, constraintTargetSession, splineEditing, isReadOnlyDimension, selectedDimensionLineGroup,
-    blockDefinitionScopeError, blockDefinitionEditError, canvasContextFixState, selectedConstructionTogglePrimitives,
-    canvasSelection, selectedGeometryItems, drawingOrderCommandState, hasCopyableCanvasSelection, hasSelection,
+
+
+
+
+
+  function selectCanvasContextCandidate(target, pointer) { return canvasContextInteraction.selectCandidate(target, pointer); }
+
+
+
+  function openCanvasContextMenu(event) { return canvasContextInteraction.open(event); }
+
+
+
+  function executeCanvasContextAction(action, target, pointer) { return canvasContextInteraction.execute(action, target, pointer); }
+
+  const canvasContextInteraction = window.CanvasContextInteraction.create({
+    canvasSelection, sameArcEndpoint, clearSelection, arcEndpointPoint, selectedFixedBatchTargets, fixedBatchIsFullyFixed, findLineFixedConstraint,
+    findArcEndpointFixedConstraint, selectedGeometryItems, readMode: drawOperationLifecycle.readMode, sketchProjectionCommand, applicationText, document,
+    canCreateInActiveSketch, visibleGeometryBounds, pendingCommandSession, constraintTargetSession, splineEditing, isReadOnlyDimension,
+    selectedDimensionLineGroup, blockDefinitionScopeError, blockDefinitionEditError, selectedConstructionTogglePrimitives, drawingOrderCommandState,
+    hasCopyableCanvasSelection, hasSelection, handleConstraintOperandClick, updateUI, draw, canvasContextMenu, isGeometryMode,
+    closeAppMenus: () => closeAppMenus(), canvasPoint, setLastPointer: pointerInteractionController.setLastPointer, hasCancellableCanvasCommand,
+    canvasContextCandidatesAt, canvasContextController, guardSelectionEdit, guardSketchEdit, elementSketchId, selectionSketchId, activeSketchId,
+    commitSketchProjectionCommand, cancelCanvasCommandFromContextMenu, undoHistory, redoHistory, copySelectionToClipboard, imageClipboard,
+    showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit,
+    setBlockInstanceRotationLocked, startDimensionEditInput, dimensionLineGroup, updateGeometrySelectionUI, recordHistory, setHint, sketchMoveCommand,
+    startHatchBoundaryRepair, reorderSelectedDrawingObjects, addSplineFitPointFromContext, deleteSplineFitPointFromContext, fitVisibleGeometryToViewport,
+    canvasHover,
   });
-
-
-
-
-
-  const canvasContextCandidateAction = window.CanvasContextTarget.createCandidateAction({
-    constraintTargetSession, handleConstraintOperandClick, constraintHitsFromCanvasContextTarget, selectCanvasContextTarget, updateUI, draw,
-  });
-  function selectCanvasContextCandidate(target, pointer) { return canvasContextCandidateAction.select(target, pointer); }
-
-
-
-  const canvasContextEntry = window.CanvasContextMenu.createEntry({
-    canvasContextMenu, isGeometryMode, closeAppMenus: () => closeAppMenus(), canvasPoint, setLastPointer: pointer => { lastPointerWorld = pointer; },
-    hasCancellableCanvasCommand, constraintTargetSession, canvasContextCandidatesAt, selectCanvasContextTarget,
-    updateUI, draw, canvasContextController, canvasContextMenuItems,
-  });
-  function openCanvasContextMenu(event) { return canvasContextEntry.open(event); }
-
-
-
-  const canvasContextActions = window.CanvasContextActions.create({
-    guardSelectionEdit, guardSketchEdit, elementSketchId, selectionSketchId, activeSketchId,
-    commitSketchProjectionCommand, cancelCanvasCommandFromContextMenu, undoHistory, redoHistory, copySelectionToClipboard,
-    imageClipboard, document, showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit, setBlockInstanceRotationLocked,
-    startDimensionEditInput, selectedDimensionLineGroup, dimensionLineGroup, updateGeometrySelectionUI, draw, recordHistory, applicationText, setHint,
-    sketchMoveCommand, startHatchBoundaryRepair, reorderSelectedDrawingObjects, addSplineFitPointFromContext, deleteSplineFitPointFromContext,
-    splineEditing, fitVisibleGeometryToViewport,
-  });
-  function executeCanvasContextAction(action, target, pointer) { return canvasContextActions.execute(action, target, pointer); }
-
   canvasContextController.start();
 
-  const annotationCommandInput = window.AnnotationCommandInput.create({
-    getMode: () => mode, getPending: pendingCommandSession.read, getPendingConstraint: () => constraintTargetSession.command,
-    annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
-    startAnchorConstraint: startAnnotationAnchorConstraint,
-    releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
-  });
-  const constraintCommandInput = window.ConstraintCommandInput.create({
-    canDragDimensionGroup: hit => Boolean(selectedDimensionLineGroup(hit.constraint)),
-    getPending: pendingCommandSession.read, getPendingConstraint: () => constraintTargetSession.command, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
-    beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,
-    handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw,
-  });
-
-  const instanceCommandInput = window.InstanceCommandInput.create({
-    getMode: () => mode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
-    hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
-    hitHatch: p => hitHatchAt(p.x, p.y, { activeOnly: false }),
-    capturePointer: id => canvas.setPointerCapture(id),
-    snapForDrawing: point => geometryInstanceCommand.activeInput === "origin"
-      ? drawingSnap.resolve(point, 10 / viewport.scale, snap => Boolean(window.PatternInstanceModel.relationFromSnap(geometryInstanceCommand.pending, snap, geometryRefForItem, resolveGeometryRef)))
-      : snapForDrawing(point),
-    getSnap: () => drawingSnap.active, makeConstraintOperand, setHint, applicationText,
-    releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
+  const canvasCommandInputs = window.CanvasCommandInputs.create({
+    readMode: drawOperationLifecycle.readMode, readPending: pendingCommandSession.read, readPendingConstraint: () => constraintTargetSession.command,
+    document, canvas, canvasSelection, clearSelection, canvasHover, draw, updateUI, updateGeometrySelectionUI, setHint, applicationText,
+    annotationCommand, annotationDrag, startAnnotationAnchorConstraint, constraintInputFeature, dimensionDragging: dimensionDragFeature, beginDimensionDrag,
+    constraintTargetHint,
+    instanceSourceCommand, geometryInstanceCommand, sceneQueries: sceneHitQueries, operandElement, toggleSketchProjectionSource,
+    clearSnap, selectionRectangle, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing,
+    transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, basicDrawingInput: basicDrawingTools.input, handleCenterlineClick, handleCircleCenterCrossClick,
+    handleFilletClick, handleSplineClick, executeTrimAt, offsetCommand,
+    sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag,
   });
 
-  const pointCommand = window.PointCommand.create({
-    transientAuthoring, snapForDrawing, drawingSnap, addPoint, addPointSnapConstraints, clearSnap, canvasSelection, solveAndRefresh,
-  });
-  const drawingCommandInput = window.DrawingCommandInput.create({
-    getMode: () => mode, rejectRootSketchCreation, pointCommand, handleLineClick, handleCenterlineClick,
-    handleCircleCenterCrossClick, handleRectangleClick, handleSlotClick, handleFilletClick, handleCircleClick,
-    handleArcClick, handleThreePointArcClick, handleSplineClick, executeTrimAt, offsetCommand,
+  const { press: canvasPressQuery, hover: pointerHover, isBlankCommandPanelPoint } = sceneHitQueries.createInteraction({
+    canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget, blankCanvasGesture, instanceSourceCommand, hatchCommand,
   });
 
-  const canvasSelectionInteraction = window.CanvasSelectionInteraction.create({
-    canvasSelection, clearSelection, sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner,
-    beginDerivedGeometryDrag, beginBlockDrag, beginDimensionDrag, beginReferenceImageDrag,
-    buildDragSession, geometryDrag, selectionRectangle,
-    capturePointer: id => canvas.setPointerCapture(id), setHint, applicationText, updateGeometrySelectionUI, draw,
-  });
-
-  const canvasPressQuery = window.CanvasPressQuery.create({
-    geometry: { hitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
-    scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
-      hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget, activeSketchId },
-  });
-  const pointerHover = window.PointerHover.create({
-    canvasHover, sameArcEndpoint, isActiveSketchConstraint,
-    geometry: { hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
-    scene: { hitDimension, hitDerivedProjectionOperand, hitBlockProjectionOperand, hitReferenceTarget, hitSketchIdentityElement,
-      hitBlockInstance, hitGeometryInstance, hitAnnotationElement, hitHatchAt, hitReferenceImageAt,
-      hitAnnotationInteraction: (x, y, anchorsOnly) => {
-        const hit = hitAnnotationElement(x, y);
-        return hit && !hit.element.blockProjection && (hit.part === "anchor" || !anchorsOnly && (["frame", "frame-enable"].includes(hit.part) || hit.textBody)) ? hit : null;
-      } },
-  });
-
-  const pointerInteractionController = window.PointerInteractionController.create({
+  pointerInteractionController.bind({
     canvasNavigation, drawingPreview, canvasHover, clearSnap, draw, transientAuthoring, recordHistory,
     selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
-    getMode: () => mode, getPendingCommand: pendingCommandSession.read,
-    getPendingConstraintCommand: () => constraintTargetSession.command, setLastPointer: point => { lastPointerWorld = point; },
+    getMode: drawOperationLifecycle.readMode, getPendingCommand: pendingCommandSession.read,
+    getPendingConstraintCommand: () => constraintTargetSession.command,
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
-      selectInactive: (event, identity) => {
-        selectIdentity(identity, event.ctrlKey || event.shiftKey);
-        if (sketchById(identity.sketchId)?.locked) guardSketchEdit(identity.sketchId);
-      },
-      prepareSelection: (event, hits) => {
-        const identity = hits.sketchIdentity;
-        if ((event.ctrlKey || event.shiftKey) && identity && selectionSketchId() && selectionSketchId() !== identity.sketchId) return true;
-        if (identity && sketchById(identity.sketchId)?.locked) {
-          selectIdentity(identity, event.ctrlKey || event.shiftKey);
-          guardSketchEdit(identity.sketchId); return true;
-        }
-        if (canvasSelection.inspection && (event.ctrlKey || event.shiftKey)) return true;
-        if (canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
-        return false;
-      },
+      selectInactive: identitySelection.selectInactive,
+      prepareSelection: identitySelection.prepareSelection,
       activation: { selection: canvasSelection, finalizeSpline: finalizeSplineFromDoubleClick, submitOffset: submitOffsetValue,
         startAnnotationEdit: annotationInputController.start, startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
         constraintDoubleClick: handleConstraintTargetDoubleClick, enterBlock: enterBlockDefinitionEdit, beginSplineEdit: beginSplineEditFromDoubleClick },
@@ -2948,53 +2144,16 @@
       referenceAnnotationAt: point => focusedExpressionInputContext() ? hitAnnotationElement(point.x, point.y, { activeOnly: false }) : null,
       commitHatch: commitHatchAt, calibrateImage: handleReferenceImageCalibrationClick,
       placeFilletRadius: submitFilletRadiusPlacement, placeBlock: handleBlockPlacementClick, blankGesture: blankCanvasGesture,
-      inputs: { instance: instanceCommandInput, annotation: annotationCommandInput, constraint: constraintCommandInput,
-        drawing: drawingCommandInput, selection: canvasSelectionInteraction } },
+      inputs: canvasCommandInputs },
   });
 
-  function isDrawToolMode() {
-    return mode === "instance-sources" || mode === "line" || mode === "centerline" || mode === "circle-center-cross" || mode === "point" || mode === "rectangle" || mode === "slot" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
-  }
+  function isDrawToolMode() { return drawOperationLifecycle.isToolMode(); }
 
-  function isBlankCommandPanelPoint(point) {
-    const hits = canvasPressQuery.read(point);
-    if (!blankCanvasGesture.isBlank({ ...hits, annotationHit: hits.blankAnnotationHit })) return false;
-    if ((mode === "sketch-projection" || mode === "instance-sources" && instanceSourceCommand.instance?.type === "sketchProjection")
-      && hitReferenceTarget(point.x, point.y)) return false;
-    if (["hatch", "hatch-repair"].includes(mode)
-      && hatchGeometryQuery.hatchFaceAt(point, { includeConstruction: hatchCommand.includeConstruction }).ok) return false;
-    return true;
-  }
   const canvasInputBinding = window.CanvasInputBinding.create({
-    canvas, pointer: {
-      ...pointerInteractionController,
-      down: e => {
-        if (e.button === 0 && commandPanel?.active) {
-          if (commandPanel.canvasPress(canvasScreenPoint(e), isBlankCommandPanelPoint(canvasPoint(e)))) {
-            blankCanvasGesture.suppressNext();
-            e.preventDefault();
-            return;
-          }
-        }
-        if (pngExportCommand?.active && e.button === 0) pngExportCommand.pick(screenToWorld({ x: e.offsetX, y: e.offsetY }));
-        else pointerInteractionController.down(e);
-      },
-      move: (screen, world, shift) => {
-        commandPanel?.canvasMove(screen);
-        if (pngExportCommand?.active) { if (!canvasNavigation.movePan(screen)) pngExportCommand.move(world); }
-        else pointerInteractionController.move(screen, world, shift);
-      },
-      finish: e => { if (!pngExportCommand?.active || e.button !== 0) pointerInteractionController.finish(e); },
-      doubleClick: e => {
-        if (blankCanvasGesture.takeSuppression()) { e.preventDefault(); return; }
-        if (commandPanel?.active) {
-          commandPanel.canvasDoubleClick(isBlankCommandPanelPoint(canvasPoint(e)));
-          e.preventDefault();
-          return;
-        }
-        if (!pngExportCommand?.active) pointerInteractionController.doubleClick(e);
-      },
-    }, scheduler: pointerMoveScheduler, navigation: canvasNavigation,
+    canvas, pointer: window.CanvasInputBinding.createCommandRouting({
+      pointer: pointerInteractionController, readCommandPanel: () => commandPanel, readPngExportCommand: () => pngExportCommand,
+      blankCanvasGesture, canvasScreenPoint, canvasPoint, isBlankCommandPanelPoint, screenToWorld, navigation: canvasNavigation,
+    }), scheduler: pointerMoveScheduler, navigation: canvasNavigation,
     profileCommit: work => profileInteractionPhase("commit", work), closeContextMenu: closeCanvasContextMenu,
     afterZoom: () => { if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput(); },
     screenToWorld, formatCoordinate: formatDisplayNumber, coordinateStatus: () => document.getElementById("statusCoordinates"),
@@ -3008,13 +2167,13 @@
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
-    readMode: () => mode, isGeometryMode, instances: geometryInstanceCommand, projection: sketchProjectionCommand,
+    readMode: drawOperationLifecycle.readMode, isGeometryMode, instances: geometryInstanceCommand, projection: sketchProjectionCommand,
     referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand, annotationDrag,
     pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand,
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
     hasSelection, clearSelection, annotation: annotationCommand, finishSources: finishInstanceSourceEdit,
     finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
-    removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand, readPointer: () => lastPointerWorld,
+    removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand, readPointer: pointerInteractionController.readLastPointer,
     deleteSelection: deleteCurrentSelection, completeLineLength: completePendingDimensionLineLength,
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
     setHint, updateUI, draw,
@@ -3032,7 +2191,7 @@
 
 
   function rebuildRootConstraintObjects() {
-    constraintRebinding.rebuildDocument(model, blockProjectionBundles());
+    constraintRebinding.rebuildDocument(editingScopeBinding.current, blockProjectionBundles());
     clearSelection();
   }
 
@@ -3046,16 +2205,7 @@
   toolFlyouts.start();
   canvasWorkspaceLayout.bindControls();
   parameterEditor.start();
-  const documentAppearanceEditor = window.DocumentAppearanceEditor.create({
-    document, readDefault: key => documentModel[key], writeDefault: (key, value) => { documentModel[key] = value; },
-    editing: appearanceEditing, appearanceControls,
-    rows: { geometry: appearancePropertyRows, dimension: dimensionAppearancePropertyRows },
-    prepareAffixInputs, localizeApplicationUI, updateDimensionTerminatorAngleVisibility,
-    effectiveLeaderAppearanceForSketch, readViewportScale: () => viewport.scale,
-    openAppearanceColorPalette, recordHistory, updateUI, draw,
-  });
-  documentAppearanceEditor.start();
-  appearancePalette.bind();
+  appearanceUI.start();
   applicationSettings.start();
   blockView.bind();
 
@@ -3068,8 +2218,8 @@
   documentFileFeature.bindControls();
   const pngExport = window.PngExport.create({
     document, window, canvas, rendering: pngRendering, text: applicationText, documentName: effectiveDocumentName,
-    prepareImages: () => referenceImageRenderer.ready(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId))),
-    readViewScale: () => viewport.scale, readMode: () => mode, setMode: value => { mode = value; },
+    prepareImages: () => referenceImageRenderer.ready(editingScopeBinding.current.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId))),
+    readViewScale: () => viewport.scale, readMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
     pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
     withGeometryReadCache, findSnap: (point, tolerance) => drawingSnap.find(point, tolerance),
     flushPointerMove: flushScheduledCanvasPointerMove, setHint, draw,
@@ -3087,12 +2237,6 @@
   window.SidebarController.create({ document, setHint }).bind();
 
 
-
-  const fixedOperandCommand = window.FixedToggleCommand.createOperand({
-    guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText,
-    findLineFixedConstraint, LineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint,
-    currentScope: workspace.current, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint,
-  });
   function toggleGeometryFixedOperand(operand) { return fixedOperandCommand.toggle(operand); }
 
   const fixedSelectionCommand = window.FixedToggleCommand.createSelection({
@@ -3135,13 +2279,9 @@
     const blockConstraintInsertion = window.ConstraintTestDriver.createBlockConstraintInsertion({
       blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, readAnalysis: constraintAnalysisObservation.analysis, readBlockState: blockConstraintObservation.state, serializeModel,
     });
-    const geometryDragTestDriver = window.GeometryDragTestDriver.createGeometryDriver({
-      currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints, arcEndpointPoint,
-      computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
-    });
-    const pointDragTestDriver = window.GeometryDragTestDriver.createPointDriver({
-      currentScope: workspace.current, buildDragSession, attachLocalSolveContext, dragResultForSession, solveFinalDragSession, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
-      computeErrorVector: constraints => solver.computeErrorVectorForConstraints(constraints), targetConstraintCount: geometryDragSolver.targetConstraintCount, now: () => performance.now(),
+    const dragExecutionSupport = window.GeometryDragTestDriver.createExecutionSupport({
+      feature: geometryDragFeature, solver, currentScope: workspace.current, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
+      arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
     });
     const annotationTestSupport = window.AnnotationTestDriver.createSupport({
       annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint,
@@ -3151,41 +2291,34 @@
       resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas,
       screenToWorld, hitAnnotationElement, readDragState: () => annotationDrag.inspect()
     });
-    const dimensionFixtureSupport = window.DimensionTestDriver.createFixtureSupport({
+    const dimensionTestSupport = window.DimensionTestDriver.createSupport({
       resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope: workspace.current,
-      isDimensionConstraint, dimensionLayout, hypot2, isReadOnlyDimension, dimensionLabelForConstraint, targetFromConstraint, defaultDimensionForTarget, serializeModel,
-      constraintTargetSession, pendingCommandSession, startDistanceValueInput, dimensionValueInput, dimensionWithLabelAt,
-      angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint, serializeDimension,
-      rootSketchId: ROOT_SKETCH_ID, ctx, drawDimensions, sketchById, constraintSketchId, isVisibleSketchId
+      isDimensionConstraint, dimensionLayout, hypot2, targetFromConstraint, serializeModel, constraintTargetSession, pendingCommandSession,
+      dimensionValueInput, ctx, drawDimensions, constraintSketchId, canvasSelection, viewport,
+    });
+    const dimensionFixtureSupport = dimensionTestSupport.createFixtures({
+      isReadOnlyDimension, dimensionLabelForConstraint, defaultDimensionForTarget, startDistanceValueInput, dimensionWithLabelAt,
+      angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint,
+      serializeDimension, rootSketchId: ROOT_SKETCH_ID, sketchById, isVisibleSketchId,
     });
     const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint, currentScope: workspace.current,
     });
-    const allGeometryFitFixture = window.CanvasTestDriver.createAllGeometryFitFixture({
-      resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, fitAllGeometryToViewport, allGeometryBounds, screenBoxForBounds, canvas,
+    const canvasTestDriver = window.CanvasTestDriver.createDisplaySupport({
+      viewport, canvas, resizeCanvas, draw, resetModelState, geometry: geometryCreation, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID,
+      fitAllGeometryToViewport, allGeometryBounds, visibleGeometryBounds, isVisibleSketchId, updateUI, readUnits: () => documentModel.units, cssPxPerMm: CSS_PX_PER_MM,
+      snapCandidates, hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
+      evaluateSpline: window.SplineGeometry.evaluate, elementFromPoint: (x, y) => document.elementFromPoint(x, y),
     });
-    const middleButtonFitFixture = window.CanvasTestDriver.createMiddleButtonFitFixture({ resetModelState, addPoint, addLine, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, viewport, updateUI, draw, canvas });
-    const fitObservation = window.CanvasTestDriver.createFitObservation({ canvas, viewport, screenBoxForBounds, visibleGeometryBounds, isVisibleSketchId });
-    const testFitOperation = window.CanvasTestDriver.createFitOperation({ fitAllGeometryToViewport, draw });
-    const setTestDrawingMode = value => { mode = value; };
-    const draftDashCases = window.CanvasRenderTestDriver.createDraftDashCases({
-      setMode: setTestDrawingMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
-      drawTemporaryLine: authoringPreviewLayer.drawTemporaryLine, drawRectanglePreview: authoringPreviewLayer.drawRectanglePreview, drawSlotPreview: authoringPreviewLayer.drawSlotPreview, drawCirclePreview: authoringPreviewLayer.drawCirclePreview, drawArcPreview: authoringPreviewLayer.drawArcPreview, drawOffsetPreview: offsetPreviewLayer.draw, drawTrimPreview: authoringPreviewLayer.drawTrimPreview,
-    });
-    const blockDashCases = window.CanvasRenderTestDriver.createBlockDashCases({
-      createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition),
-      setMode: setTestDrawingMode, blockPlacementCommand, drawingPreview, activeSketchId, currentScope: workspace.current, canvasSelection, drawBlockPlacementPreview: placementPreviewLayer.drawBlockPlacementPreview, drawBlockInstanceHandles,
-    });
-    const canvasDashIsolation = window.CanvasRenderTestDriver.createDashIsolation({
-      resetModelState, viewport, drawingPreview, selectionRectangle, setMode: setTestDrawingMode, ctx, drawSelectionRect, draftCases: draftDashCases, blockCases: blockDashCases, drawAnnotationLeader, addLine, addPoint, draw,
+    const canvasRenderingTestSupport = window.CanvasRenderTestDriver.createRenderingSupport({
+      setMode: drawOperationLifecycle.setMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
+      authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), blockPlacementCommand, activeSketchId, currentScope: workspace.current,
+      canvasSelection, drawBlockInstanceHandles, resetModelState, viewport, selectionRectangle, ctx, drawSelectionRect, drawAnnotationLeader, draw,
+      drawLines, canvasHover, invalidateBlockProjectionCache, blockProjectionBundle, allGeometryLines, effectiveAppearanceForElement,
     });
     const sketchDeletionFixture = window.DocumentTestDriver.createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch });
     const strokeStyleCases = window.PropertiesTestDriver.createStrokeStyleCases({ resetModelState, addLine, addPoint, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, geometryStrokeWidth, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA });
-    const constructionHoverFixture = window.CanvasRenderTestDriver.createConstructionHoverFixture({
-      ctx, viewport, drawLines, resetModelState, addLine, addPoint, canvasHover, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), currentScope: workspace.current, invalidateBlockProjectionCache, blockProjectionBundle,
-    });
-    const constructionLineObservation = window.CanvasRenderTestDriver.createConstructionLineObservation({ allGeometryLines, ctx, drawLines, viewport, effectiveAppearanceForElement });
     const subtreeReferenceFixture = window.SketchTreeTestDriver.createSubtreeReferenceFixture({
       resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, refreshReferenceConstraintValidity,
       fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive, sketchIdentityRelationLabel, sketchIdentityRelationColor, document, getComputedStyle: element => getComputedStyle(element), isVisibleSketchId,
@@ -3212,7 +2345,7 @@
     const blockCreationFixture = window.BlockTestDriver.createCreationFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, VerticalConstraint, canvasSelection, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
     const blockEditorTestSupport = window.BlockTestDriver.createEditorSupport({
       resetModelState, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockEditor, blockEditorSessionChain,
-      readMode: () => mode, blockPlacementCommand, commitBlockPlacement, blockProjectionBundle, HorizontalConstraint, VerticalConstraint,
+      readMode: drawOperationLifecycle.readMode, blockPlacementCommand, commitBlockPlacement, blockProjectionBundle, HorizontalConstraint, VerticalConstraint,
       pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, recordHistory, serializeConstraint,
       createSketch, activeSketchId, addLine, addPoint, cancelBlockDefinitionEdit, completeBlockDefinitionEdit,
       setBlockInstanceEnabledSketchIds, serializeModel, loadModelData, allGeometryLines, enterBlockDefinitionEdit
@@ -3220,21 +2353,18 @@
     const blockObservationSupport = window.BlockTestDriver.createObservationSupport({
       blockInstanceById, currentScope: workspace.current, blockInstanceDisplayCenter, readSolverVariables: () => solver.getVariables(), buildDragSession,
       blockProjectionBundle, worldToCanvasScreen, canvas, constraintTargetSession, canvasHover,
-      blockProjectionBundles, readDefinitions: () => documentModel.blockDefinitions, canvasSelection, readMode: () => mode, serializeModel, viewport
+      blockProjectionBundles, readDefinitions: () => documentModel.blockDefinitions, canvasSelection, readMode: drawOperationLifecycle.readMode, serializeModel, viewport
     });
     const blockRejectionFixture = window.BlockTestDriver.createRejectionFixture({ resetModelState, addPoint, addLine, canvasSelection, blockSelectionGeometry, readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope: workspace.current, activeSketchId, geometryRefForItem });
     const sidebarHighlightObservation = window.PropertiesTestDriver.createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover });
     const sidebarHoverKeyObservation = window.PropertiesTestDriver.createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey });
     const blockDimensionFixture = window.BlockTestDriver.createReadOnlyDimensionFixture({ currentScope: workspace.current, blockProjectionBundle, defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint });
     const blockExternalFixture = window.BlockTestDriver.createExternalConstraintFixture({ currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint, pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
-    const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
-    const dimensionInteractionSupport = window.DimensionTestDriver.createInteractionSupport({
-      currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput,
-      clearSelection, canvasSelection, updateUI, draw, resetModelState, addPoint, addLine, addCircle, addArc,
-      addDistanceConstraintFromTarget, dimensionFromAnchor, activeSketchId, constraintTargetSession, fitAllGeometryToViewport,
-      startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, viewport, dimensionAnchor, serializeModel,
-      LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, pendingCommandSession, signedPointLineDistance,
-      vectorNorm, hypot2, solveSketchAndDependents, snapshotModelState, refreshConstraintAnalysis, dimensionValueInput, dimensionDrag
+    const dimensionInteractionSupport = dimensionTestSupport.createInteraction({
+      clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput, clearSelection, updateUI, draw, addCircle, addArc,
+      fitAllGeometryToViewport, startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, dimensionAnchor,
+      LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, signedPointLineDistance, vectorNorm, solveSketchAndDependents,
+      snapshotModelState, refreshConstraintAnalysis, dimensionDrag,
     });
     const themeObservation = window.PropertiesTestDriver.createThemeObservation({ applicationSettings, readDefaultGeometryColor: () => DEFAULT_APPEARANCE.color, canvasThemeColor, CanvasThemeColors: window.CanvasThemeColors });
     const documentNameObservation = window.DocumentTestDriver.createNameObservation({ readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document });
@@ -3245,7 +2375,6 @@
       resetModelState, addPoint, addLine, pushModelConstraint, DistanceConstraint, ParallelConstraint, PerpendicularConstraint,
       ensureDimensionDefaults, solveAndRefresh, log, fitAllGeometryToViewport, draw, resetHistory, serializeModel,
     });
-    const fixedPointFixture = window.CanvasTestDriver.createFixedPointFixture({ resetModelState, viewport, addPoint, updateUI, fitAllGeometryToViewport, draw, canvas, clientPosition: canvasTestDriver.clientPosition });
     const offsetTestSupport = window.OffsetTestDriver.createSupport({
       resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, currentScope: workspace.current,
       RadiusConstraint, OffsetConstraint, OffsetChainConstraint, HorizontalConstraint, VerticalConstraint, Line,
@@ -3276,7 +2405,7 @@
       appearanceSelectionTarget, normalizeAppearance, invalidateBlockProjectionCache, updatePropertiesUI, draw, recordHistory,
     });
     const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createSupport({
-      types: { Point, Line, Circle, Arc, Spline }, currentScope: workspace.current, readMode: () => mode, readStagedCount: () => sketchProjectionCommand.count, readConstraints: sketchProjectionConstraints,
+      types: { Point, Line, Circle, Arc, Spline }, currentScope: workspace.current, readMode: drawOperationLifecycle.readMode, readStagedCount: () => sketchProjectionCommand.count, readConstraints: sketchProjectionConstraints,
       constraintGeometryId, constraintSketchId, effectiveAppearanceForElement, geometryDisplayColor,
       constraintStatusOf, constraintStatusColor, constraintIsRedundant, serializeModel, readHistory: readTestHistory, document,
       resetModelState, DEFAULT_SKETCH_ID, ROOT_SKETCH_ID, addPoint, addLine, addCircle, addArc, addSpline, addPointToSketch,
@@ -3296,23 +2425,14 @@
       allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle, effectiveAppearanceForElement,
       isSidebarHighlightedElement, Point, isAnyLineEndpoint, isSidebarHoveredElement, canvasHover, geometryDisplayColor, geometryStrokeWidth,
     });
-    const snapObservation = window.CanvasTestDriver.createSnapObservation({ viewport, snapCandidates });
     const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
-      readMode: () => mode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
-      decorateSerializedConstraint, serializeConstraint, readPerformance: () => lastAuthoringPerformance, readSelectedGeometry: readTestSelectedGeometry,
-    });
-    const selectableLinePosition = window.CanvasTestDriver.createSelectableLinePosition({
-      currentScope: workspace.current, canvas, hitPoint, hitLine, hitDimension, worldToCanvasScreen, elementFromPoint: (x, y) => document.elementFromPoint(x, y),
-    });
-    const geometryHitObservation = window.CanvasTestDriver.createHitObservation({ hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline });
-    const geometryPositionObservation = window.CanvasTestDriver.createGeometryPosition({
-      currentScope: workspace.current, evaluateSpline: window.SplineGeometry.evaluate, clientPosition: canvasTestDriver.clientPosition,
+      readMode: drawOperationLifecycle.readMode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
+      decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
     });
     const sketchMoveObservation = window.CanvasSelectionTestDriver.createMoveObservation({
       sketchMoveCommand, activeSketchId, fields: window.SketchMove.fields, canvasSelection, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock: () => Boolean(blockEditor.current),
     });
-    const displayZoomObservation = window.CanvasTestDriver.createZoomObservation({ viewport, clampZoom, readUnits: () => documentModel.units, formatZoom, cssPxPerMm: CSS_PX_PER_MM });
     const geometryIdSelection = window.CanvasSelectionTestDriver.createIdSelection({
       clearSelection, currentScope: workspace.current, canvasSelection, updateUI, draw, blockSelectionGeometry, readSelectedGeometry: readTestSelectedGeometry,
     });
@@ -3359,12 +2479,13 @@
       currentScope: workspace.current, clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection,
       blockSelectionBoundsCenter, dimensionConstraintsInNamespace, deleteElements, document,
     });
-    const dimensionDisplaySupport = window.DimensionTestDriver.createDisplaySupport({
-      Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, circlePointAtAngle, viewport, hypot2, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
-      outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, canvasSelection, canvasHover, ctx, drawDimensions,
-      currentScope: workspace.current, readDocument: () => documentModel, isDimensionConstraint, constraintSketchId, activeSketchId, normalizeDimensionAppearance,
-      effectiveDimensionAppearanceForSketch, dimensionDisplayState, targetFromConstraint, effectiveDimensionAppearance, displayFactor: window.Appearance.annotationDisplayFactor,
-      formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle, dimensionTextOffset
+    const dimensionDisplaySupport = dimensionTestSupport.createDisplay({
+      Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, circlePointAtAngle,
+      screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
+      fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, canvasHover, readDocument: () => documentModel, normalizeDimensionAppearance,
+      effectiveDimensionAppearanceForSketch, dimensionDisplayState, effectiveDimensionAppearance,
+      displayFactor: window.Appearance.annotationDisplayFactor, formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle,
+      dimensionTextOffset,
     });
     const referenceImageTestObservation = window.ReferenceImageTestDriver.createObservation({
       canvasSelection, currentScope: workspace.current, serializeReferenceImage, isEditingBlock: () => Boolean(blockEditor.current),
@@ -3388,22 +2509,12 @@
       nextProjectionId: () => documentIds.allocate("sketchProjection"), nextMirrorId: () => documentIds.allocate("mirror"), nextPatternId: () => documentIds.allocate("pattern"),
       resetHistory, updateUI, draw, readState: derivedInstanceInteraction.state,
     });
-    const clipboardTestObservation = window.ClipboardTestDriver.createObservation({
-      currentScope: workspace.current, serializeModel, isRootSketch, elementSketchId, activeSketchId,
-      readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
-    });
-    const geometryClipboardFixture = window.ClipboardTestDriver.createGeometryFixture({
-      resetModelState, clipboardSession, viewport, currentScope: workspace.current, ROOT_SKETCH_ID, addPoint, addLine, addCircle, addArc,
-      pushModelConstraint, HorizontalConstraint, DistanceConstraint, RadiusConstraint, EqualRadiusConstraint,
-      PointVerticalConstraint, LineFixedConstraint, ArcEndpointFixedConstraint, dimensionFromAnchor, arcEndpointPoint,
-      canvasSelection, resetHistory, updateUI, draw, readState: clipboardTestObservation.state,
-    });
-    const blockClipboardFixture = window.ClipboardTestDriver.createBlockFixture({
-      resetModelState, clipboardSession, viewport, currentScope: workspace.current, ROOT_SKETCH_ID,
-      createEmptyBlockDefinition, Point, Line, HorizontalConstraint, DEFAULT_SKETCH_ID,
+    const clipboardTestSupport = window.ClipboardTestDriver.createSupport({
+      currentScope: workspace.current, serializeModel, sketchContext, readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
+      resetModelState, viewport, geometry: geometryCreation, types: window.GeometrySolver, dimensionFromAnchor, arcEndpointPoint,
+      rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, createEmptyBlockDefinition,
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, canvasSelection, resetHistory, updateUI, draw,
-      readState: clipboardTestObservation.state,
+      invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, resetHistory, updateUI, draw,
     });
     const forcedConstraintCommit = window.ConstraintTestDriver.createForcedCommit({
       resetModelState, addPoint, DistanceConstraint, solver, commitNewConstraint, currentScope: workspace.current, document,
@@ -3423,7 +2534,7 @@
     const hatchTestDriver = window.HatchTestDriver.create({
       resetModelState, viewport, addPoint, addLine, addCircle, currentScope: workspace.current,
       fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
-      readMode: () => mode, allHatches, hatchGeometryQuery, serializeHatch, hatchRegionErrorText, canvasSelection, hatchCommand, document,
+      readMode: drawOperationLifecycle.readMode, allHatches, hatchGeometryQuery, serializeHatch, hatchRegionErrorText, canvasSelection, hatchCommand, document,
       DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, HATCH_SCREEN_PX_PER_MM,
     });
     const hatchProjectionTestDriver = window.HatchTestDriver.createProjection({
@@ -3438,9 +2549,9 @@
     });
     const splineTestDriver = window.SplineTestDriver.create({
       resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
-      readOperation: () => ({ mode, editSplineId: splineEditing.current?.spline?.id || null }),
+      readOperation: () => ({ mode: drawOperationLifecycle.mode, editSplineId: splineEditing.current?.spline?.id || null }),
       canvasSelection, document, addPoint, addSpline, hatchGeometryQuery,
-      readSpline: () => model.splines[0] || null, splineGeometry: window.SplineGeometry, addLine,
+      readSpline: () => editingScopeBinding.current.splines[0] || null, splineGeometry: window.SplineGeometry, addLine,
       PointOnSplineConstraint, SplineLineTangentConstraint, pushModelConstraint, solveAndRefresh, serializeConstraint,
     });
     const splineTransferDriver = window.SplineTestDriver.createTransfer({
@@ -3486,9 +2597,7 @@
       breakFirstHatchBoundaryForTest: hatchTestDriver.breakBoundary,
       restoreClosedBoundaryForHatchTest: hatchTestDriver.restoreBoundary,
       commitConstraintWithForcedSolveResultForTest: forcedConstraintCommit.commit,
-      resetForGeometryClipboardTest: geometryClipboardFixture.reset,
-      resetForBlockClipboardTest: blockClipboardFixture.reset,
-      clipboardStateForTest: clipboardTestObservation.state,
+      ...clipboardTestSupport,
       documentNameState: documentNameObservation.state,
       fileSystemAccessStateForTest: fileObservation.state,
       serializedModelForTest() {
@@ -3528,18 +2637,10 @@
       resolveConstraintIntentForTest: constraintIntentTestDriver.resolve,
       sketchMoveStateForTest: sketchMoveObservation.state,
       selectGeometryIdsForTest: geometryIdSelection.select,
-      focusWorldForTest: canvasTestDriver.focus,
-      displayZoomStateForTest: displayZoomObservation.state,
-      worldClientPositionForTest: canvasTestDriver.clientPosition,
-      hitGeometryAtWorldForTest: geometryHitObservation.hit,
-      geometryClientPositionForTest: geometryPositionObservation.position,
+      ...canvasTestDriver.publicAPI,
       hoverDisplayStateForTest: hoverDisplayObservation.state,
-      snapLabelsAtWorldForTest: snapObservation.labels,
       authoringStateForTest: authoringObservation.state,
-      selectableLineClientPositionForTest: selectableLinePosition.position,
-      guidedPointDragForTest: pointDragTestDriver.drag,
-      guidedPointDragPathForTest: pointDragTestDriver.path,
-      geometryDragPathForTest: geometryDragTestDriver.path,
+      ...dragExecutionSupport,
       constraintStatusesForTest: readTestConstraintStatuses,
       constraintAnalysisForTest: constraintAnalysisObservation.analysis,
       blockConstraintStatusForTest: blockConstraintObservation.state,
@@ -3552,17 +2653,12 @@
       trimConstructionBoundaryCase: trimConstructionFixture.boundaryCase,
       trimCircleDiameterDimensionCase: trimDiameterFixture.diameterCase,
       ...annotationTestSupport.observations,
-      fitAllGeometryForTest: testFitOperation.fit,
       ...annotationTestSupport.interaction,
       historyState: readTestHistory,
       resetForActiveSketchDimensionVisibility: dimensionFixtureSupport.resetForActiveSketchDimensionVisibility,
-      resetForAllGeometryFit: allGeometryFitFixture.reset,
-      resetForMiddleButtonFit: middleButtonFitFixture.reset,
-      middleButtonFitState: fitObservation.state,
-      canvasDashIsolationCases: canvasDashIsolation.cases,
+      canvasDashIsolationCases: canvasRenderingTestSupport.canvasDashIsolationCases,
       resetForSidebarInspection: sidebarInspectionFixture.reset,
       resetForRootSketchTreeHoverTest: rootHoverFixture.reset,
-      resetForFixedPointDisplayTest: fixedPointFixture.reset,
       resetForSketchTreeBlockHoverTest: blockHoverFixture.reset,
       ...offsetTestSupport,
       resetForSketchDeletion: sketchDeletionFixture.reset,
@@ -3570,8 +2666,8 @@
       resetForInactiveDimensionAndBlockHover: inactiveHoverFixture.reset,
       hoverIdentityStateForTest: hoverIdentityObservation.state,
       geometryStrokeStyleCasesForTest: strokeStyleCases.cases,
-      constructionLineHoverDisplayCasesForTest: constructionHoverFixture.cases,
-      constructionLineRenderingForTest: constructionLineObservation.state,
+      constructionLineHoverDisplayCasesForTest: canvasRenderingTestSupport.constructionLineHoverDisplayCasesForTest,
+      constructionLineRenderingForTest: canvasRenderingTestSupport.constructionLineRenderingForTest,
       resetForSiblingSubtreeReference: subtreeReferenceFixture.reset,
       siblingSubtreeVisibilityState: subtreeVisibilityObservation.state,
       moveSiblingSubtreeReferenceLine: referenceLineMove.move,
@@ -3608,31 +2704,21 @@
     };
   }
 
-  derivedPanel = window.DerivedCommandPanel.create({
-    formatDisplayNumber,
-    getMode: () => mode, projectionSources: () => sketchProjectionCommand.sources,
-    geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand,
-    resolveGeometryRef, sketchName, activeSketchId, elementSketchId, geometryRefForItem, applicationText,
-    finishProjection: commitSketchProjectionCommand,
-    removeProjectionSource: sketchProjectionCommand.remove,
-    cancel: () => {
-      if (mode === "instance-sources") return finishInstanceSourceEdit(false);
-      exitDrawMode();
-      updateUI({ refreshAnalysis: false });
-      setHint(applicationText("コマンドをキャンセルしました", "Command canceled."));
-      draw();
-    },
-    changeFreeProperty: changeFreeInstanceProperty,
-    refresh: () => { updatePropertiesUI(); draw(); },
-  });
-  const hatchPanel = window.HatchCommandPanel.create({ command: hatchCommand, getMode: () => mode, applicationText, formatDisplayNumber,
-    cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
-  });
-  const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText, effectiveStyle: item => effectiveAnnotationStyle({ ...item, sketchId: activeSketchId() }) });
-  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement,
-    ...window.CommandPanel.createRouting({ readMode: () => mode, isAnnotationActive: () => annotationCommand.active,
-      derivedPanel, hatchPanel, annotationPanel, pngExportCommand,
-    }),
+  ({ derivedPanel, commandPanel } = window.CommandPanel.createFeature({
+    document, host: canvas.parentElement, readMode: drawOperationLifecycle.readMode, sketchContext, projectionCommand: sketchProjectionCommand,
+    geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand, resolveGeometryRef, geometryRefForItem, applicationText, formatDisplayNumber,
+    finishProjection: commitSketchProjectionCommand, finishSourceEdit: finishInstanceSourceEdit, exitDrawMode,
+    changeFreeProperty: changeFreeInstanceProperty, hatchCommand, annotationCommand, effectiveAnnotationStyle, pngExportCommand,
+    updateUI, updatePropertiesUI, setHint, draw,
+  }));
+
+  const documentEditingReset = window.DocumentEditingReset.create({
+    documentModel, sketchMoveCommand, activateEditingScope, flushPointerMoves: flushScheduledCanvasPointerMove,
+    selectMode: drawOperationLifecycle.selectMode, clearAuthoringPerformance: constraintCommitCommand.clearPerformance,
+    referenceImageRenderer, invalidateBlockProjectionCache, sketchSolving, referenceConstraintState, constraintAnalysis,
+    clearSelection, geometryDrag, dimensionDrag, referenceImageInteraction, canvasNavigation, blankCanvasGesture,
+    drawOperationLifecycle, pendingCommandSession, constraintTargetSession, constructionCommand, documentCanvasReset,
+    geometryIds, documentIds, blockPlacementCommand, blockEditor, hatchCommand, hatchGeometryQuery, sketchTreeView, annotationDrag,
   });
 
   installTestHooks();

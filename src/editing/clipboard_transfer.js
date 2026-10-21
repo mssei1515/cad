@@ -1,7 +1,22 @@
 /* Transform copied values and reconnect projection IDs; no selection, paste session or history. */
 (() => {
   "use strict";
-  function create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText }) {
+  function create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText,
+    annotationTextLayout, annotationTextMetrics, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle, readViewportScale }) {
+    function detachedAnnotation(annotation) {
+      const data = window.AnnotationData.serializeAnnotation(annotation);
+      const layout = annotationTextLayout(annotation) || annotationTextMetrics(annotation, annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : annotation);
+      data.x = layout.anchorX; data.y = layout.anchorY;
+      data.anchorPosition = annotation.anchorPosition || effectiveAnnotationStyle(annotation).textAlign + "-middle";
+      if (annotation.type === "leader") {
+        const geometry = annotationLeaderDisplayGeometry(annotation);
+        data.start = { ...annotationLeaderAnchor(annotation) }; data.elbow = { ...geometry.elbow }; data.end = { ...geometry.end };
+        data.textPlacement = "anchor";
+        data.shelfReferenceScale = readViewportScale() / window.Appearance.annotationDisplayFactor(effectiveAnnotationStyle(annotation), readViewportScale());
+      }
+      return data;
+    }
+
     function remapClipboardValue(value, idMap) {
       if (typeof value === "string") return idMap.get(value) || value;
       if (Array.isArray(value)) return value.map((item) => remapClipboardValue(item, idMap));
@@ -136,7 +151,7 @@
       mapKind(projection.arcs, bundle.arcs, primitiveById);
       mapKind(projection.splines, bundle.splines || [], primitiveById);
     }
-    return Object.freeze({ translateAnnotation, copiedHatch, translateReferenceImage, remapClipboardValue, remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, reconnectDerivedInstances, translatedClipboardConstraintData, mapClipboardBlockProjection });
+    return Object.freeze({ detachedAnnotation, translateAnnotation, copiedHatch, translateReferenceImage, remapClipboardValue, remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, reconnectDerivedInstances, translatedClipboardConstraintData, mapClipboardBlockProjection });
   }
   window.ClipboardTransfer = Object.freeze({ create });
 })();
