@@ -230,7 +230,7 @@
     allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines(),
     editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
   });
-  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isSplineOnlyFitPoint, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isPrimitiveCenterPoint, isSelectableEndpointPoint } = pointUsage;
+  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isSelectableEndpointPoint } = pointUsage;
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
   const interactionProfiler = window.InteractionProfiler.create();
@@ -678,31 +678,22 @@
     constraintSketchId, constraintIsOperational, addPointToSketch, constraintReferencesPoint, nextSeq, normalizeAppearance,
   });
   const { separateSharedSketchProjectionTargetPoints, synchronizeSketchProjectionMetadata } = sketchProjectionEditing;
-  const drawingSnap = window.DrawingSnap.create({
+  const authoringTools = window.BasicDrawingTools.createAuthoring({
+    currentScope: workspace.current, ids: geometryIds, geometry: geometryCreation, endpointAt, samePosition, sketchContext, pointUsage, geometryReads, isVisibleSketchElement,
     annotationAnchors: () => allAnnotations().filter(element => isVisibleSketchElement(element) && element.visible !== false).map(element => ({ element, ...annotationPlacementAnchor(element) })),
-    geometryReads, isVisibleSketchElement, isActiveSketchElement, isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint, sketchName, elementSketchId, applicationText,
-  });
-  const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
-  function snapForDrawing(point) { return drawingSnap.resolve(point, 10 / viewport.scale); }
-  const { draft: splineDraft, command: splineCommand } = window.BasicDrawingTools.createSpline({
-    currentScope: workspace.current, ids: geometryIds, endpointAt, samePosition, isPointUsedByPrimitive,
-    addSpline, snapForDrawing, scale: () => viewport.scale,
-    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    setMode: value => { mode = value; }, resetEditing: () => splineEditing.reset(),
-    resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar,
-    projection: sketchProjectionCommand, preview: drawingPreview, snap: drawingSnap, clearSelection, selection: canvasSelection,
-    solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw,
-  });
-  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
-  const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, addPoint, addConstraintIfMissing });
-  const { addPointSnapConstraints } = snapConstraints;
-  const basicDrawingTools = window.BasicDrawingTools.create({
-    geometry: geometryCreation, ids: geometryIds, currentScope: workspace.current, snap: drawingSnap, snapConstraints,
-    snapForDrawing, endpointAt, samePosition, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
+    scale: () => viewport.scale, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH, selection: canvasSelection, preview: drawingPreview,
     checkpoint: { capture: (...args) => snapshotGeometryMutationState(...args), restore: (...args) => restoreGeometryMutationState(...args) },
-    clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
+    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+    setMode: value => { mode = value; }, resetEditing: () => splineEditing.reset(),
+    resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar, projection: sketchProjectionCommand, clearSelection,
+    solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw, log,
   });
+  const { snap: drawingSnap, spline: { draft: splineDraft, command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
+  const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
+  function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
+  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
+  const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, rectangle: rectangleCommand, circular: circularCommands, slot: slotCommand } = basicDrawingTools;
   const offsetFeature = window.OffsetFeature.create({
     currentScope: () => editingScopeBinding.current, geometry: geometryCreation, ids: geometryIds, placement: dimensionPlacement, sourceSelection: offsetSelection,
@@ -825,13 +816,10 @@
       : storedDefinitionStabilization.stabilize(namespace),
     propagate: blockParameterPropagation.propagate,
   });
-  const centerlineCommand = window.BasicDrawingTools.createCenterline({
-    currentScope: workspace.current, geometry: geometryCreation, ids: geometryIds, snapConstraints, commitNewConstraint,
-    parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE, minLineLength: MIN_LINE_LENGTH,
-    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar,
-    selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText,
-    snapForDrawing, snap: drawingSnap, preview: drawingPreview, setMode: value => { mode = value; },
-    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
+  const centerlineCommand = authoringTools.createCenterline({
+    commitNewConstraint,
+    parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { start: startCenterlineCommand, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
   const authoringPreviewLayer = window.AuthoringPreviewRenderer.createLayer({
