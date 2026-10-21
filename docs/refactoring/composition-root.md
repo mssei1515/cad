@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のProperties表示owner共有／Geometry ID変換単位
+
+PropertiesDisplayがParameterNamespace・ConstraintFeedback・ApplicationSettings・BlockPlacementCommandの既存関数を共有し、個別指定の互換性と配置stateの所有を維持する。Properties以外でも使う図形ObjectのID／key変換はGeometryObjectsへ集約した。構築引数49→45、異なるroot参照46→43、app.jsは2,973→2,964行（9行減）。詳細な検証・次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のInstance参照元編集開始単位
 
 参照元編集の配置有無判定・現在Sketch／guardと開始委譲を既存InstanceSourceCommandへ集約した。旧startの所属確認・sessionと配置commandのdraft・mode・取消／確定は維持し、新stateは持たない。app.jsは2,978→2,973行（5行減）。元app関数との48ケース比較が一致した。検証と次のProperties表示／actionのowner接続は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

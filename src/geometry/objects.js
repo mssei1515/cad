@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   const { Point, Line, Circle, Arc, Spline } = window.GeometrySolver;
-  const { parseId: parseGeometryRefId } = window.GeometryRef;
+  const { parseId: parseGeometryRefId, id: geometryRefId, key: geometryRefKey } = window.GeometryRef;
 
   function geometryKindForItem(item) {
     if (item instanceof Line) return "line";
@@ -27,5 +27,8 @@
     for (const hatch of bundle.hatches || []) primitiveById.set(window.GeometryRef.id(geometryRefForItem(hatch)), hatch);
   }
 
-  window.GeometryObjects = Object.freeze({ geometryKindForItem, geometryRefForItem, addGeometryBundleToMaps });
+  function geometryIdForItem(item) { return geometryRefId(geometryRefForItem(item)); }
+  function geometryKeyForItem(item) { return geometryRefKey(geometryRefForItem(item)) || ""; }
+
+  window.GeometryObjects = Object.freeze({ geometryKindForItem, geometryRefForItem, geometryIdForItem, geometryKeyForItem, addGeometryBundleToMaps });
 })();
