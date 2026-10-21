@@ -39,6 +39,35 @@ function fixture() {
   return f;
 }
 
+test('point unfix uses live ownership and guard before updating the original point and requesting the existing solve', () => {
+  const point = { id: 'P1', sketchId: 'S2', fixed: true }, calls = []; let allowed = false;
+  const command = FixedToggleCommand.createOperand({
+    elementSketchId: item => { assert.equal(item, point); calls.push('owner'); return item.sketchId; },
+    guardSketchEdit: (id, operation) => { calls.push(['guard', id, operation]); return allowed; },
+    solveAndRefresh: function(label) { 'use strict'; assert.equal(this, undefined); assert.equal(point.fixed, false);
+      assert.equal(arguments.length, 1); calls.push(['solve', label]); return false; },
+  });
+  assert.deepEqual(calls, []); assert.equal(command.unfixPoint(point), undefined); assert.equal(point.fixed, true);
+  assert.deepEqual(calls, ['owner', ['guard','S2','constraint']]);
+  allowed = true; point.sketchId = 'S3'; calls.length = 0;
+  assert.equal(command.unfixPoint(point), undefined); assert.equal(point.fixed, false);
+  assert.deepEqual(calls, ['owner', ['guard','S3','constraint'], ['solve','固定解除 P1']]);
+  calls.length = 0; command.unfixPoint(point); assert.equal(calls.filter(row => row[0] === 'solve').length, 1);
+});
+
+test('point unfix propagates failures and preserves the established mutation boundary without extra recovery', () => {
+  const marker = new Error('unfix failed'); let stage = 'owner', solves = 0;
+  const command = FixedToggleCommand.createOperand({ elementSketchId: point => { if (stage === 'owner') throw marker; return point.sketchId; },
+    guardSketchEdit: () => { if (stage === 'guard') throw marker; return true; },
+    solveAndRefresh: () => { solves++; throw marker; } });
+  for (stage of ['owner','guard','solve']) {
+    const point = { id: 'P1', sketchId: 'S1', fixed: true };
+    assert.throws(() => command.unfixPoint(point), error => error === marker);
+    assert.equal(point.fixed, stage !== 'solve');
+  }
+  assert.equal(solves, 1);
+});
+
 test('operand toggles use live constraints, preserve enabled filtering and delegate exact return values', () => {
   const f = fixture(), geometry = {}, disabled = new GeometryFixedConstraint(geometry), existing = new GeometryFixedConstraint(geometry);
   disabled.enabled = false; f.scope = { constraints: [disabled, existing] };

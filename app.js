@@ -1901,6 +1901,12 @@
 
 
 
+  const fixedOperandCommand = window.FixedToggleCommand.createOperand({
+    guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText,
+    findLineFixedConstraint, LineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint,
+    currentScope: workspace.current, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
+  });
+
   const sketchTreeObjects = window.SketchTreeObjects.create({
     readServices: geometryReadServices, sketchContext, applicationSettings, constraintFeedback,
     isHidden: selectionVisibilityIsHidden,
@@ -1937,7 +1943,7 @@
     resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
     move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
     updateSelectionUI: updateGeometrySelectionUI,
-    unfixPoint: point => { if (!guardSketchEdit(elementSketchId(point), "constraint")) return; point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
+    unfixPoint: fixedOperandCommand.unfixPoint,
   });
   const { applyWidth: applySketchTreeWidth } = sketchTreeView;
   sketchContextController = sketchTreeContextMenu;
@@ -2416,12 +2422,6 @@
   window.SidebarController.create({ document, setHint }).bind();
 
 
-
-  const fixedOperandCommand = window.FixedToggleCommand.createOperand({
-    guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText,
-    findLineFixedConstraint, LineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint,
-    currentScope: workspace.current, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint,
-  });
   function toggleGeometryFixedOperand(operand) { return fixedOperandCommand.toggle(operand); }
 
   const fixedSelectionCommand = window.FixedToggleCommand.createSelection({

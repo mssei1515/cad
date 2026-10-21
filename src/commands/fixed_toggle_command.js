@@ -1,7 +1,12 @@
 /* Fixed-state toggles delegate constraints, snapshots, solving and history to their existing owners. */
 (() => {
   "use strict";
-  function createOperand({ guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText, findLineFixedConstraint, LineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint, currentScope, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint }) {
+  function createOperand({ guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText, findLineFixedConstraint, LineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint, currentScope, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh }) {
+    function unfixPoint(point) {
+      if (!guardSketchEdit(elementSketchId(point), "constraint")) return;
+      point.fixed = false;
+      solveAndRefresh(`固定解除 ${point.id}`);
+    }
     function toggle(operand) {
       if (!guardSketchEdit(elementSketchId(operandElement(operand)), "constraint")) return false;
       const geometry = operand.element;
@@ -22,7 +27,7 @@
       if (existing) return deleteElements({ constraints: [existing] });
       return commitNewConstraint("fixed", constraint);
     }
-    return Object.freeze({ toggle });
+    return Object.freeze({ toggle, unfixPoint });
   }
 
   function createSelection({ guardSelectionEdit, canvasSelection, blockDefinitionById, setHint, clearSelection, updateUI, draw, recordHistory, findArcEndpointFixedConstraint, deleteElements, log, arcEndpointPoint, guardSketchProjectionShapeEdit, applicationText, snapshotModelState, commitNewConstraint, ArcEndpointFixedConstraint, restoreModelState, selectedFixedBatchTargets, fixedBatchIsFullyFixed, findLineFixedConstraint, pushModelConstraint, LineFixedConstraint, currentScope, solveSketchAndDependents, acceptError, refreshConstraintAnalysis }) {
