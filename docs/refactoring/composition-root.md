@@ -6,6 +6,11 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 削除機能の生成・接続（2026-10-21）
+
+DeletionFeatureが既存plan／Geometry command／Selection commandと参照拒否を共有し、同じscope／PointUsage／Selection・Annotationと後段resetを接続する。二つのrefresh・通知／例外・部分反映を保ち、独自のモデル／復元／履歴を持たない。構築3→1、明示引数64→47、群外root参照49→47。app.jsは2,765→2,738行（27行減）。旧appとのコピー／Cutと直接削除・参照拒否／leaf削除を含む36状態でmodel・clipboard・mode・履歴／選択・HintとAPI204 key順が一致。構文594・単体1,835・全E2E587件（24.9分）が成功。週枠残量49%に達したため、新しい分離を停止してdevelop先行／main最後で反映・同期する区切りとする。検証と再開地点は[再開手順](refactoring-policy-and-resume.md)を参照する。全体目標未完了。
+
+
 ### Clipboard機能の生成・接続（2026-10-21）
 
 ClipboardFeatureが既存のTransfer／Payload／Session／Geometry／PasteCheckpoint／Graph／Commandを元の順序で構築する。実session／commandとコピー候補のbuild／照会を公開し、現在editing scope／Block namespaceとID／Parameter、通知／復元の時機を保持する。内部処理・stateの所有は各既存ownerのまま。構築7→1、明示引数60→45、群外root参照45→45。app.jsは2,805→2,765行（40行減）。旧appとのコピー／連続貼付け・Undo／Redo／再読込／Cutの21状態でmodel・clipboard・mode・履歴／選択・HintとAPI204 key順が一致。script／検証と再開地点は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
