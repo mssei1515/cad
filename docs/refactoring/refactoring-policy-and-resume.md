@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のInstance参照元編集開始単位
+
+appのstartInstanceSourceEditの判定と開始調整を、既存InstanceSourceCommand.startForInstanceへ集約した。placementがfalsyなら従来startへ委譲し、同一Objectのmodel所属とactive Sketch確認・従来sessionを維持する。placementがtruthyなら、所属Sketchと現在activeの比較→構造編集guard→既存GeometryInstanceCommand.startEdit(instance,"sources")という順に元Objectを渡す。未登録の配置draftに新たなmodel所属条件を加えず、guard拒否前の取消／Selection解除／session変更や履歴を追加しない。戻り値・receiver・例外と部分状態も保持する。従来startとfinish等は独立APIとして残す。
+
+InstanceSourceCommandの生成へ、先に生成済みのgeometryInstanceCommandとguardSketchEditの二つの限定依存を追加した。PropertiesControllerへは新しい開始操作だけを渡し、appの条件分岐とstartProjectionSourceEdit aliasを撤去した。従来source候補はInstanceSourceCommand、配置draftはGeometryInstanceCommandが所有し、mode／model／Selection等の新stateはない。生成時のqueryや順序変更はない。app.jsは2,978→2,973行（5行減）、root未使用bindingは0。仕様書と実装mapを更新した。
+
+構文588ファイル・全単体1,783件・関連単体13件が成功（exit 0）。追加2件は従来startの所属確認・session・取消、現在activeとguardの短絡／拒否時のmodel・mode無変更、元Instanceと未登録draftの同一参照、配置actorのreceiver・sources引数・戻り値、例外伝播を確認する。旧7532202の実app関数と新入口を、placement有無×active Sketch×guard結果×model所属×通常／guard例外／start例外の48ケースで比較し、呼出し順・session・結果と例外・providerの部分状態が一致した。診断は一時directoryのcad-instance-source-start-equivalence.cjs／.log。
+
+関連E2E266件が全成功（4.5分、exit 0）。unified-ui／phase0-characterization／blocks／free-instance／sketch-permissions／sketch-projection／derived-patterns／command-panel／derived-selection-copy／hatching／adversarial-authoring-performanceを実行した。Propertiesからの参照元指定、配置有無の編集・取消と確定、Mirror／Pattern・投影・派生鎖、Root／Sketch権限、既存画面比較・履歴・保存再読込を確認した。性能file全12件を含み、pan139ms（175ms未満）、空白矩形217ms（250ms未満）だった。全runner終了と専用server停止を確認した。ログは一時directoryのcad-instance-source-start-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。mainは5ee5f3fのまま保留、現在コードの全E2Eは未実行、全体目標は未完了。c3a213cでの全E2E584成功は過去の基準として保持する。開始時の週枠使用24%・残量76%で停止条件未到達。
+
+次はPropertiesDisplay.createWithControllerの表示情報と残るactionについて元のownerを確認する。ParameterNamespaceの式表示・ConstraintFeedbackのラベル／badge・BlockPlacementCommandの設定操作など、既存ownerを固定fieldとして使ってroot callbackを減らせるか検討する。constraintGeometryIdはGeometryRef／GeometryObjectsからの純粋な変換であり、rootに残る理由と配置を確認する。操作開始の条件／guardをUIの単なるaliasへ戻さず、各commandの責務とPropertiesの三段階構築・各scopeを維持する。mode／他の通常構築群／test支援も未完了で、200〜500行の目標は維持する。
+
+
 ### 最新のProperties編集／AppearanceUI組立て単位
 
 PropertiesDisplay.createEditingへPropertyEditingFeature→AppearanceUIの生成と共有APIの接続を集約した。Checkpoint・ParameterStabilization・SketchContext・readServices・ApplicationSettings等の既存ownerと限定callback、計23個の依存から各子へ必要な入口を渡す。Checkpointの元のcaptureValues／restoreValuesを使い、Parameter安定化とLeader外観は元のreceiver・引数で呼ぶ。可視性の照会は同じPropertySelectionへ委譲し、query／編集・復元・commit・Palette stateは既存ownerに残す。

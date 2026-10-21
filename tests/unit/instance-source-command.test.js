@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/commands/instance_source_command.js'), 'utf8'), sandbox);
-function fixture({ allowDeletion = true } = {}) {
+function fixture({ allowDeletion = true, activate = true, ...extra } = {}) {
   const calls = [], instance = { id: 'I1', type: 'pattern', placement: { kind: 'linear' }, sketchId: 'S1', sources: [{ id: 'A' }, { id: 'B' }], legacyOutput: 'legacy' };
   const model = { geometryInstances: [instance], constraints: [{ id: 'CA', node: { id: 'A' } }, { id: 'CB', node: { id: 'B' } }], annotations: [{ id: 'NA', source: 'A' }] };
   let mode = 'select';
@@ -18,11 +18,38 @@ function fixture({ allowDeletion = true } = {}) {
     elementSketchId: () => 'S1', geometryInstanceBundlesForScope: scope => scope.geometryInstances.map(bundle), blockProjectionBundles: () => [],
     geometryElementKey: item => item.id, geometryInstanceBundle: bundle, constraintGraphNodes: constraint => [constraint.node],
     guardDimensionSymbolDeletion: () => allowDeletion, annotationReferencesRemovedGeometry: (annotation, ids) => ids.has(annotation.source),
-    clearSketchSolveState: () => calls.push('clearSolve'), recordHistory: () => calls.push('history'),
+    clearSketchSolveState: () => calls.push('clearSolve'), recordHistory: () => calls.push('history'), ...extra,
   });
-  command.start(instance); calls.length = 0;
-  return { command, instance, model, calls };
+  if (activate) command.start(instance); calls.length = 0;
+  return { command, instance, model, calls, mode: () => mode };
 }
+
+test('source edit entry keeps placement-free membership checks and legacy session without consulting placement guards', () => {
+  const f = fixture({ activate: false, guardSketchEdit() { throw new Error('unexpected guard'); } });
+  delete f.instance.placement;
+  assert.equal(f.command.startForInstance({ ...f.instance }), false); assert.equal(f.command.current, null);
+  assert.equal(f.command.startForInstance(f.instance), undefined); assert.equal(f.command.instance, f.instance);
+  assert.equal(f.mode(), 'instance-sources'); assert.deepEqual(Array.from(f.command.current.sources), f.instance.sources);
+  assert.equal(f.command.finish(false), true); assert.equal(f.command.current, null); assert.equal(f.calls.includes('history'), false);
+});
+
+test('placed source editing reads current sketch before the guard and delegates the original instance without changing legacy state', () => {
+  const calls = [], state = { active: 'S2', allowed: false, fail: null }, marker = new Error('start failed'), result = Symbol('result');
+  const placementCommand = { startEdit(instance, key) { assert.equal(this, placementCommand); calls.push(['start', instance, key]); if (state.fail === 'start') throw marker; return result; } };
+  const f = fixture({ activate: false, placementCommand,
+    activeSketchId: () => { calls.push(['active']); return state.active; },
+    guardSketchEdit: function(id, operation) { 'use strict'; assert.equal(this, undefined); calls.push(['guard', id, operation]); if (state.fail === 'guard') throw marker; return state.allowed; } });
+  const before = JSON.stringify(f.model);
+  assert.equal(f.command.startForInstance(f.instance), false); assert.deepEqual(calls, [['active']]);
+  calls.length = 0; state.active = 'S1'; assert.equal(f.command.startForInstance(f.instance), false);
+  assert.deepEqual(calls, [['active'], ['guard', 'S1', 'structure']]); assert.equal(JSON.stringify(f.model), before); assert.equal(f.mode(), 'select');
+  calls.length = 0; state.allowed = true; assert.equal(f.command.startForInstance(f.instance), result);
+  assert.deepEqual(calls, [['active'], ['guard', 'S1', 'structure'], ['start', f.instance, 'sources']]); assert.equal(f.command.current, null); assert.deepEqual(f.calls, []);
+  calls.length = 0; const draft = { ...f.instance }; assert.equal(f.model.geometryInstances.includes(draft), false);
+  assert.equal(f.command.startForInstance(draft), result); assert.equal(calls.at(-1)[1], draft);
+  for (const failure of ['guard', 'start']) { calls.length = 0; state.fail = failure; assert.throws(() => f.command.startForInstance(f.instance), error => error === marker); assert.equal(f.command.current, null); }
+  assert.equal(JSON.stringify(f.model), before);
+});
 
 test('bulk source addition maps own outputs to sources and keeps retained entries', () => {
   const f = fixture();
