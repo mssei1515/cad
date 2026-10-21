@@ -143,7 +143,7 @@ const files = [
   "tests/unit/point-usage.test.js",
   "tests/unit/geometry-deletion.test.js",
   "tests/unit/geometry-deletion-command.test.js",
-  "tests/unit/selection-deletion-command.test.js",
+  "tests/unit/selection-deletion-command.test.js", "tests/unit/deletion-feature.test.js",
   "tests/unit/operand-hit-query.test.js",
   "tests/unit/construction-command.test.js",
   "tests/unit/draw-operation-lifecycle.test.js",

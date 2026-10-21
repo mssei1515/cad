@@ -230,7 +230,7 @@
     allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines(),
     editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
   });
-  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isSelectableEndpointPoint } = pointUsage;
+  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isSelectableEndpointPoint } = pointUsage;
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
   const interactionProfiler = window.InteractionProfiler.create();
@@ -1341,47 +1341,20 @@
   function solveSketchAndDependents(...args) { return sketchSolving.solveSketchAndDependents(...args); }
   function solveConstraintComponentAndDependents(...args) { return sketchSolving.solveConstraintComponentAndDependents(...args); }
 
-  function geometryInstanceUsesRemovedGeometry(instance, removedKeys = new Set(), removedOwnerIds = new Set()) {
-    return geometryInstanceDependencyRefs(instance).some((ref) => removedKeys.has(geometryRefKey(ref)) || removedOwnerIds.has(ref.path?.[0]));
-  }
-
-  function rejectReferencedGeometryDeletion(instances, label) {
-    if (instances.length === 0) return false;
-    const ids = instances.map((instance) => instance.id).join(", ");
-    const message = applicationText(`削除できません: ${label} は派生インスタンス ${ids} から参照されています。先に依存インスタンスを削除してください`, `Cannot delete ${label}; it is referenced by derived instance(s) ${ids}. Delete the dependent instance(s) first.`);
-    setHint(message, "error");
-    log(message);
-    return true;
-  }
-
-  const geometryDeletion = window.GeometryDeletion.create({
-    isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline,
-    constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
-    geometryElementKey, annotationReferencesRemovedGeometry,
-    geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes, removeAnnotationConstraint: constraint => annotationDimensions.remove(constraint),
-  });
-
-  const geometryDeletionCommand = window.GeometryDeletionCommand.create({
-    currentScope: workspace.current, geometryDeletion, canvasSelection, splineEditing, canvasHover,
-    guardSketchEdit, elementSketchId, geometryElementKey, geometryInstanceUsesRemovedGeometry,
-    rejectReferencedGeometryDeletion, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion, applicationText,
+  const deletionFeature = window.DeletionFeature.create({
+    currentScope: workspace.current, pointUsage, constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
+    geometryElementKey, annotationReferencesRemovedGeometry, geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes, annotationDimensions,
+    canvasSelection, splineEditing, canvasHover, guardSketchEdit, elementSketchId, geometryInstanceDependencyRefs, geometryRefKey,
+    guardDimensionSymbolDeletion, applicationText,
     resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
     pendingCommandSession, constraintTargetSession, lineCommand, circularCommands, drawingPreview, selectMode: drawOperationLifecycle.selectMode,
-    solveSketchAndDependents, normalizeArcSweeps,
-    refreshView: () => { updateToolbar(); updateUI(); draw(); },
-    analysisStable: () => constraintAnalysis.stable, setHint, log, recordHistory,
+    solveSketchAndDependents, normalizeArcSweeps, updateToolbar, updateUI, draw, analysisStable: () => constraintAnalysis.stable, setHint, log, recordHistory,
+    referenceImageInteraction, guardSelectionEdit, selectionSketchId, activeSketchId, geometryRefForItem, invalidateBlockProjectionCache,
+    effectiveSelectedConstraint, clearSelection, solveAndRefresh,
   });
-  function deleteElements(options) { return geometryDeletionCommand.remove(options); }
-
-  const selectionDeletionCommand = window.SelectionDeletionCommand.create({
-    currentScope: workspace.current, canvasSelection, geometryDeletion, referenceImageInteraction,
-    guardSelectionEdit, selectionSketchId, activeSketchId, geometryRefKey, geometryRefForItem,
-    geometryInstanceUsesRemovedGeometry, rejectReferencedGeometryDeletion, guardDimensionSymbolDeletion,
-    annotationReferencesRemovedGeometry, invalidateBlockProjectionCache, effectiveSelectedConstraint,
-    deleteElements, clearSelection, solveAndRefresh, refreshView: () => { updateUI(); draw(); },
-    recordHistory, setHint, applicationText,
-  });
-  function deleteCurrentSelection() { return selectionDeletionCommand.remove(); }
+  function rejectReferencedGeometryDeletion(instances, label) { return deletionFeature.rejectReferences(instances, label); }
+  function deleteElements(options) { return deletionFeature.remove(options); }
+  function deleteCurrentSelection() { return deletionFeature.removeSelection(); }
 
   const clipboardFeature = window.ClipboardFeature.create({
     blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText,

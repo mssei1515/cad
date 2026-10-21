@@ -93,6 +93,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新の削除機能組立て単位
+
+基準はdevelop c02a9d6。DeletionFeatureがGeometryDeletion→GeometryDeletionCommand→SelectionDeletionCommandを同じ順序で生成し、削除候補の参照key／最初のowner pathによる依存判定と拒否通知を共有する。既存PointUsageの四つの実照会と、同じAnnotationDimensions／Geometry plan・Selection／sessionを渡す。返却はremove／removeSelection／rejectReferencesだけで、同じrejectを既存GeometryInstanceLifecycleへも接続する。削除計画・データ除去・求解・履歴と途中反映は各既存ownerに残す。
+
+Geometry削除のrefreshはToolbar→UI→draw、混在SelectionはUI→drawという違いを保つ。guardや通知失敗を捕捉せず、元の結果・例外と後続短絡を伝播する。対象なしのrejectは通知せず、参照ありは既存ID順／文言でHint→log。注記拘束のremoveとcommand.removeのreceiverを保つ。Geometry／Dimension／Annotation dragは実際には後段で生成されるため、resetを同じ操作時callbackのまま渡す。Workspace current readerと同期済みediting scopeを混同しない。独自のtransaction／全体rollbackや、新model／Selection stateを加えない。
+
+app.jsは2,765→2,738行（27行減）。root構築3→1、明示引数64→47、構築群の群外root binding参照49→47。不要になったisPointUsedBySpline別名を除きroot未使用bindingは0。全単体1,835件・関連単体26件が成功（exit 0）。追加4件で生成順と共有実体・live scope、PointUsage関数／Annotation receiver、command receiverと結果／例外、依存keyとowner判定、空候補・拒否通知順、遅延reset、二つのrefresh順と解析readerを確認した。既存plan／Geometry／Selection削除の単体も全成功。AST診断は一時directoryのcad-deletion-feature-audit.cjs。
+
+新しいclassic scriptと単体fileを追加し、index.html・tools/check-syntax.js・tools/run-unit-tests.js・unified-uiのscript順期待値を同期した。三つの依存scriptの後／appの前に配置する。構文594ファイルが成功。生成直下が三factoryとObject.freezeだけであることをASTで確認した（cad-deletion-feature-loader-audit.cjs）。
+
+旧c02a9d6のappと現在module群の実ブラウザ比較では、Geometry／Blockのコピー／Cutと連続貼付け21状態、各削除→Undo／Redo→再読込10状態、派生のsource／親削除拒否とleaf削除→Undo5状態の計36状態でmodel・clipboard・mode・履歴・選択・HintとAPI204 key順が一致した（savedAtだけ除外）。削除の成否とGeometry／Block件数、参照拒否、leaf削除成功と復元も確認した。診断は一時directoryのcad-deletion-feature-equivalence.cjs／.log。実file URL Help／script読込E2E1件が成功（2.1秒、exit 0）。同じ製品コードの全E2E587件・50ファイルが全成功（24.9分、exit 0）。拘束drag回帰15件も全成功（file全体12.3分）し、以前の保留対象の航空機A2／A3は1,872 preview・失敗0・最大265.8ms、既存600000ms上限に対して7.2分で成功した。性能全12件も成功しpan142ms（175ms未満）、空白矩形202ms（250ms未満）。期待値・制限・timeoutを変更せず、再試行で失敗を置き換えた結果ではない。全runnerのexit 0と専用server停止を確認した。ログは一時directoryのcad-deletion-feature-{focused,check,unit,loader,full}.log。検証対象の製品／test／manifest七fileのSHA256一致を確認し、検証後の変更はこの記録だけとする（cad-deletion-feature-tested-files.json）。
+
+開始時週枠使用49%／残量51%、全体検証開始時は使用50%／残量50%。全体検証中に使用51%／残量49%を確認し、ユーザー指定の停止条件に達したため新たな分離を停止した。進行中の同じ全E2Eを終えて検証済みの区切りを反映する。停止条件の直前のため製品コードを固定し、全E2E587件（一覧50ファイル）を実行する。以前のmain保留理由だった検証gateは今回の全587成功で解消した。c3a213cの全584成功は過去の基準と区別する。停止条件に従って新しい分離は停止し、この記録を含む検証済み区切りをdevelop先行／main最後で反映・Pushする。main Push直後にdevelopをmainへff-only同期してPushし、local／originの両者一致・祖先関係、clean状態とruntime-versionの最終commitを確認して一時停止する。200〜500行の全体目標は未完了。次回は最新refsと本節から、残る通常機能の構築・hoisted委譲・bind／startを再監査し、既存ownerへ閉じられる生成・接続群を選ぶ。巨大な別rootや単なるcontext包装を採らない。
+
+
 ### 最新のClipboard機能組立て単位
 
 基準はdevelop cbc981d。通常構築の再監査から、連続しているClipboardの生成・接続を独立した機能境界として選んだ。新しいsrc/application/clipboard_feature.jsがTransfer→Payload→Session→Geometry→PasteCheckpoint→Graph→Commandの七つを元の順序で生成する。返却は同じ実session／commandとcopyableSelectionPayload／canOfferCopyに限定した。appはscope・共有query／codec・ID・Parameter・UI・求解を明示して渡す。Payload、Geometry複製／転送、Graph追加、保持state、復元と操作の七既存ownerの処理本体は変更しない。
