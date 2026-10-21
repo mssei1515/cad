@@ -37,5 +37,16 @@
     reset();
     return Object.freeze({ allocate, peek, snapshot, restore, reserveAttachments, reserveScope, reset });
   }
-  window.DocumentIds = Object.freeze({ create });
+  function createReservation({ geometryIds, documentIds, nextHatchIndex }) {
+    function geometry(source) {
+      geometryIds.reserve(source);
+      documentIds.reserveAttachments(source);
+    }
+    function scope(source) {
+      geometry(source);
+      documentIds.reserveScope(source, nextHatchIndex());
+    }
+    return Object.freeze({ geometry, scope });
+  }
+  window.DocumentIds = Object.freeze({ create, createReservation });
 })();

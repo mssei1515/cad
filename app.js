@@ -375,6 +375,7 @@
   const geometryIds = window.GeometryIds.create();
   const { nextSeq } = window.GeometryIds;
   const documentIds = window.DocumentIds.create();
+  const idReservation = window.DocumentIds.createReservation({ geometryIds, documentIds, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex });
   const constraintRebinding = window.ConstraintRebinding.create({
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
@@ -1087,10 +1088,7 @@
     return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
   }
 
-  function reserveBlockEditorSequences(draft) {
-    reserveGeometryElementSequences(draft);
-    documentIds.reserveScope(draft, editingScopeBinding.current.nextHatchIndex);
-  }
+  function reserveBlockEditorSequences(draft) { return idReservation.scope(draft); }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
   const { definition: blockDefinitionCommand, completion: blockCompletionCommand } = blockEditingFeature.createCommands({
@@ -1105,7 +1103,7 @@
       viewport.update({ y: rect.height / 2 });
     },
     promptName: name => window.prompt("ブロック名", name), updateBlockUI, updateUI, draw, recordHistory, setHint,
-    duplicateBlockElementId, refreshReferenceConstraintValidity,
+    refreshReferenceConstraintValidity,
     hasInvalidReferenceConstraints: () => referenceConstraintState.errorCount > 0,
     solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
     requestChoice: options => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
@@ -1120,20 +1118,7 @@
   function resetModelState() { return documentEditingReset.reset(); }
 
 
-  function reserveGeometryElementSequences(source) {
-    geometryIds.reserve(source);
-    documentIds.reserveAttachments(source);
-  }
-
-  function duplicateBlockElementId(definition) {
-    const seen = new Set();
-    for (const item of [...(definition?.points || []), ...(definition?.lines || []), ...(definition?.circles || []), ...(definition?.arcs || []), ...(definition?.splines || []), ...(definition?.hatches || []), ...(definition?.referenceImages || []), ...(definition?.blockInstances || [])]) {
-      const id = String(item?.id || "");
-      if (seen.has(id)) return id;
-      seen.add(id);
-    }
-    return null;
-  }
+  function reserveGeometryElementSequences(source) { return idReservation.geometry(source); }
 
   const { serialize: serializeDimension } = window.DimensionPersistence.create({
     migrateAngleDimensionLabelPlacement, dimensionAnchor, storedDimensionAxis,

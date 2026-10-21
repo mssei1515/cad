@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ blockEditor, blockDefinitionEditing, blockCatalog, documentModel, currentScope,
-    blockDefinitionCyclePath, duplicateBlockElementId, refreshReferenceConstraintValidity,
+    blockDefinitionCyclePath, duplicateBlockElementId = blockCatalog.duplicateElementId, refreshReferenceConstraintValidity,
     hasInvalidReferenceConstraints, solveSketchById, resultIsAccepted, sketchName,
     solveReferenceDependentSketches, requestChoice, applicationText, blockLocalGeometryBounds,
     storedBlockInstancesReferencing, restoreBlockEditorHost, rebuildStoredBlockDefinitionConstraints,

@@ -101,7 +101,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 - `src/solver/constraint_solver.js`: GeometryとConstraintのsolver
 - `src/geometry/geometry_ref.js`: 直接GeometryとBlock Projectionの参照codec
 - `src/geometry/objects.js`: Geometryの型、canonical参照、bundleのMap登録
-- `src/document/block_catalog.js`: 現在のDefinition registry・所有子孫・Sketch表示行の照会と有効Sketchの判定
+- `src/document/block_catalog.js`: 現在のDefinition registry・所有子孫・Sketch表示行の照会と有効Sketchの判定。duplicateElementIdは指定Definition内の既存8 collectionを元の順で走査する純粋照会で、registryや採番状態を読まない。BlockCompletionCommandは同じcatalogの照会を既定値として使用し、明示checkerを優先する。
 - `src/geometry/block_projection.js`: 入れ子BlockのGeometry・Annotation・Hatch投影と永続cache
 - `src/geometry/instance_projection.js`: 派生InstanceのGeometry読取りviewとscope内の依存解決
 - `src/geometry/read_model.js`: 現在scopeと投影を合わせた一覧・参照解決、同期読出し中のGeometry／外観cache
@@ -988,7 +988,7 @@ CanvasSelectionInteraction.createIdentitySelectionはCanvas pressのselectInacti
 
 - src/editing/canvas_selection_interaction.js: createDocumentResetはDocument置換時のhover／highlight／pointer／snapと明示Selection fieldのresetを5依存で調整する。通常clear、早期Selection解除、pending／constraint session、Document／採番の初期化は統合せず既存の順序を維持する。
 
-- src/editing/document_ids.js: 11個のDocument採番状態を所有し、生成・preview照会・予約・reset・checkpoint復元を集約。Block編集の番号予約とclipboardの8種類だけのrollbackを維持。GeometryIdsは基本形状、persistence/DocumentSequencesは読込時の復元計算に専念する。
+- src/editing/document_ids.js: 11個のDocument採番状態を所有し、生成・preview照会・予約・reset・checkpoint復元を集約。createReservationは同じGeometryIds／DocumentIdsと現在Hatch採番readerの3依存で予約順を接続し、新たな採番状態を持たない。Geometry→添付要素、Block scopeではその後に現在Hatch値→scope予約とする。Block編集の番号予約とclipboardの8種類だけのrollbackを維持。GeometryIdsは基本形状、persistence/DocumentSequencesは読込時の復元計算に専念する。
 
 - src/application/reference_image_input.js: 参照画像の準備／配置／Clipboard生成接続とfile input登録を担当。bindClipboard／bindControlsで起動順を保持し、disposeで自分のlistenerだけを解除する。画像変換はReferenceImageImport、現在scopeへの配置はReferenceImageCommand、Geometry／画像／text入力判定はImageClipboardへ委譲。appは明示portと従来の起動タイミングを接続する。
 
