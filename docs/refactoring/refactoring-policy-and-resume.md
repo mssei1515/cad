@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-20の最新再監査基準（develop 46dd77d）ではapp.jsは3,088行。非空白2,595行のうち、create系構築・接続1,354行、条件付きtest hooks478行、call一文の関数248行。root構築216文・複文callback33個・root let8個を確認した。旧63c886cを同条件で再現して比較した。現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)とsection 8を参照する。全てを単純な移動・削除対象とは扱わない。
+2026-10-21の最新再監査基準（develop caf19a0）ではapp.jsは2,924行。非空白2,433行のうち、create系構築・接続1,266行、条件付きtest hooks438行、call一文の関数237行。root構築209文・複文callback30個・root let8個を確認した。旧46dd77dを同条件で再現して比較した。現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)とsection 8を参照する。全てを単純な移動・削除対象とは扱わない。
 
 Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、mode・最後のpointerと、操作固有のcallbackが残る。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。現在のletはmode・pointerと六つの後段接続参照の八つ。後段接続は操作stateの重複とは区別する。
 
@@ -92,6 +92,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-20）
+
+### 最新の構築境界再監査（2026-10-21）
+
+develop caf19a0の現物を再集計し、[再監査](bootstrap-boundary-audit.md)に残存責務・候補の依存と次の実装案を記録した。app.jsは2,924→2,924行（0行差）、今回は文書のみ。旧46dd77dからは164行減、構築216→209文／1,354→1,266非空白行、test hooks478→438行。modeの20代入と二つの操作state＋六つの後段接続は残る。後段const参照117回は全て関数内だが、生成時に呼ばれない証明とは区別する。hooksを全移動しても数百行へ届かず、通常機能の構築境界を引き続き整理する。
+
+次はCommandPanelの表示機能を生成・接続する入口を既存src/ui/command_panel.jsへ集約する案を実装する。Derived→Hatch→Annotation→routing→DOMの5 factoryの順、二つの実panelを返すこと、前段からの遅延照会、mode／styleの操作時取得、DOM／listenerの登録寿命を保つ。SketchContextと既存commandを必要な限定APIへ接続する。Derivedのinstance-sources取消の即return、他のDerived取消とHatch取消のhint差、refreshの順・例外を維持する。独自state／rollbackや巨大なcontextは加えない。共通UIの組立てだけで全体目標へ到達したとは扱わない。mode・test hooks・他の通常構築も未完了として継続する。
+
+旧集計の再現・分類／folder合計、modeと後段参照、実panel sourceと利用箇所を確認した。製品コード差分なしのため製品テストは再実行せず、直前の構文588・単体1,797・関連E2E246成功を同一製品コードの証拠として保持する。全E2Eはc3a213c時点の584成功が過去の基準。mainは5ee5f3fのまま保留。週枠使用36%／残量64%で停止条件未到達。
 
 ### 最新の拘束解析の照会owner共有単位
 
