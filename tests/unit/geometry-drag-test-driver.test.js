@@ -6,11 +6,11 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/testing/geometry_drag_test_driver.js'), 'utf8'), sandbox);
 
-function fixture() {
+function fixture(composed = false) {
   const calls = [], point = { id: 'P1', x: 10, y: 20 }, session = { sketchId: 'S2' };
   let scope = { points: [point] }, available = true, tick = 0, throws = false;
   const constraints = [{}], vector = [3, 4];
-  const driver = sandbox.window.GeometryDragTestDriver.createPointDriver({
+  const ports = {
     currentScope: () => scope,
     buildDragSession: (kind, item, start) => { calls.push(['build', kind, item, { ...start }]); return available ? session : null; },
     attachLocalSolveContext: value => { assert.equal(value, session); calls.push(['attach']); },
@@ -27,9 +27,39 @@ function fixture() {
     vectorNorm: value => { assert.equal(value, vector); calls.push(['norm']); return 5; },
     targetConstraintCount: value => { assert.equal(value, session); calls.push(['count']); return 2; },
     now: () => ++tick,
-  });
-  return { driver, point, calls, setScope: value => { scope = value; }, unavailable: () => { available = false; }, fail: () => { throws = true; } };
+  };
+  const solver = { computeErrorVectorForConstraints(value) { assert.equal(this, solver); return ports.computeErrorVector(value); } };
+  const api = composed ? sandbox.window.GeometryDragTestDriver.createExecutionSupport({
+    feature: { build: ports.buildDragSession, prepare: ports.attachLocalSolveContext, preview: ports.dragResultForSession,
+      finish: ports.solveFinalDragSession, targetConstraintCount: ports.targetConstraintCount }, solver,
+    currentScope: ports.currentScope, normalizeArcSweeps: ports.normalizeArcSweeps, vectorNorm: ports.vectorNorm,
+    sketchSolveConstraints: ports.sketchSolveConstraints, now: ports.now, readConstraintStatuses: () => { calls.push(['status']); return { stable: true }; },
+  }) : null;
+  const driver = composed ? { drag: api.guidedPointDragForTest, path: api.guidedPointDragPathForTest }
+    : sandbox.window.GeometryDragTestDriver.createPointDriver(ports);
+  const geometry = composed ? api.geometryDragPathForTest : sandbox.window.GeometryDragTestDriver.createGeometryDriver({ ...ports,
+    readConstraintStatuses: () => { calls.push(['status']); return { stable: true }; } }).path;
+  return { driver, geometry, api, point, calls, setScope: value => { scope = value; }, unavailable: () => { available = false; }, fail: () => { throws = true; } };
 }
+
+test('execution assembly preserves all three public routes, live scope and failure short-circuiting without constructor work', () => {
+  for (const run of [f => f.driver.drag('P1', 2, -1), f => f.driver.path('P1', [[2, -1], [-3, 4]]),
+    f => f.geometry({ kind: 'point', id: 'P1', inspectConstraints: true }, [[2, -1], [-3, 4]])]) {
+    const legacy = fixture(), composed = fixture(true);
+    assert.deepEqual(composed.calls, []);
+    assert.deepEqual(Object.keys(composed.api), ['guidedPointDragForTest', 'guidedPointDragPathForTest', 'geometryDragPathForTest']);
+    assert.deepEqual(run(composed), run(legacy)); assert.deepEqual(composed.calls, legacy.calls);
+    assert.equal(composed.calls[0][2], composed.point);
+  }
+  const f = fixture(true); f.setScope({ points: [] });
+  assert.equal(f.driver.drag('P1', 1, 1), null); assert.equal(f.geometry({ kind: 'point', id: 'P1' }, []), null);
+  assert.deepEqual(f.calls, []); f.setScope({ points: [f.point] }); f.unavailable();
+  assert.equal(f.driver.path('P1', []), null);
+  assert.equal(f.geometry({ kind: 'point', id: 'P1' }, []).sessionAvailable, false);
+  const failed = fixture(true); failed.fail();
+  assert.throws(() => failed.geometry({ kind: 'point', id: 'P1' }, [[1, 1]]), /preview failed/);
+  assert.deepEqual(failed.calls.map(c => c[0]), ['build', 'attach', 'preview']);
+});
 
 test('single point drag delegates session identity and observes preview before final normalization', () => {
   const f = fixture(), result = f.driver.drag('P1', 2, -1);

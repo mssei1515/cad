@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のdrag実行テスト支援組立て単位
+
+既存GeometryDragTestDriverが同じGeometryDragFeature／Solverを使う二つの実行driverの組立てと三つの公開APIの接続を所有する。製品の状態・求解・計測手順は維持した。構築2→1、引数23→9、異なるroot参照11→7、app.jsは2,964→2,957行（7行減）。旧appとの実ブラウザ比較では公開API全204名の順序と三経路の結果・model・historyが一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のProperties表示owner共有／Geometry ID変換単位
 
 PropertiesDisplayがParameterNamespace・ConstraintFeedback・ApplicationSettings・BlockPlacementCommandの既存関数を共有し、個別指定の互換性と配置stateの所有を維持する。Properties以外でも使う図形ObjectのID／key変換はGeometryObjectsへ集約した。構築引数49→45、異なるroot参照46→43、app.jsは2,973→2,964行（9行減）。詳細な検証・次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
