@@ -1,6 +1,28 @@
 /* Route sketch tree actions to selection, editing commands and expansion state. */
 (() => {
   "use strict";
+  function createWithView({ document, window: windowTarget, sketchContext, applicationSettings, escapeHtml,
+    sketchOverlay, sketchOverlayResizeHandle, getScopeKey, viewScope, ensureSketchState, objects, moveCommand,
+    sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch, canvasSelection,
+    ...controllerOptions }) {
+    const { isRootSketch, activeSketchId } = sketchContext;
+    const { applicationText } = applicationSettings;
+    let controller;
+    const view = window.SketchTreeView.create({ document, sketchOverlay, sketchOverlayResizeHandle, getScopeKey,
+      currentScope: viewScope, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
+      objects, selectedSketchId: () => canvasSelection.sketchId, moveState: () => moveCommand.state(),
+      sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
+      actions: { click: event => controller.click(event), doubleClick: event => controller.doubleClick(event),
+        keyDown: event => controller.keyDown(event), pointerOver: event => controller.pointerOver(event), pointerOut: event => controller.pointerOut(event),
+        leave: () => controller.leave() },
+    });
+    const interaction = createWithContextMenu({ ...controllerOptions, document, window: windowTarget, sketchContext, applicationSettings, escapeHtml,
+      activeSketchId, canvasSelection, sketchTreeView: view, resolveSelectionEntry: objects.resolveSelectionEntry,
+      move: { active: () => moveCommand.active, choose: moveCommand.choose, commit: moveCommand.commit, cancel: moveCommand.cancel },
+    });
+    controller = interaction.controller;
+    return Object.freeze({ view, controller, menu: interaction.menu });
+  }
   function createWithContextMenu({ document, window: windowTarget, sketchContext, applicationSettings, escapeHtml,
     closeCanvasContextMenu, ...controllerOptions }) {
     const { isRootSketch, sketchById } = sketchContext;
@@ -283,5 +305,5 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.SketchTreeController = Object.freeze({ create, createWithContextMenu, createMoveInputBinding });
+  window.SketchTreeController = Object.freeze({ create, createWithView, createWithContextMenu, createMoveInputBinding });
 })();

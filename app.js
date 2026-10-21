@@ -1922,26 +1922,15 @@
     readCanvasHover: () => canvasHover.current, readSidebarHover: () => selectionHighlight.current,
     constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements,
   });
-  const sketchTreeView = window.SketchTreeView.create({
-    document, sketchOverlay, sketchOverlayResizeHandle,
-    getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
-    currentScope: () => editingScopeBinding.current, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
-    objects: sketchTreeObjects, selectedSketchId: () => canvasSelection.sketchId,
-    moveState: () => sketchMoveCommand.state(),
-    sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
-    actions: { click: event => sketchTreeController.click(event), doubleClick: event => sketchTreeController.doubleClick(event),
-      keyDown: event => sketchTreeController.keyDown(event), pointerOver: event => sketchTreeController.pointerOver(event), pointerOut: event => sketchTreeController.pointerOut(event),
-      leave: () => sketchTreeController.leave(),
-    },
-  });
-  const { controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithContextMenu({
+  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithView({
     document, window, sketchContext, applicationSettings, escapeHtml, closeCanvasContextMenu,
-    currentScope: dimensionPresentationScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
+    sketchOverlay, sketchOverlayResizeHandle, ensureSketchState, objects: sketchTreeObjects, moveCommand: sketchMoveCommand,
+    getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
+    viewScope: () => editingScopeBinding.current, sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
+    currentScope: dimensionPresentationScope, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
-    sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
+    updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
     hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
-    resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
-    move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
     updateSelectionUI: updateGeometrySelectionUI,
     unfixPoint: fixedOperandCommand.unfixPoint,
   });
