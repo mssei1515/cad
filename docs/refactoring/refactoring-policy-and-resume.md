@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のDocument／Block履歴機能組立て単位
+
+基準はdevelop 423dadd。既存HistoryController.createFeatureがDocument履歴→core Controller→BlockHistorySnapshot→HistoryRestorationを生成・接続し、Block履歴は要求ごとに独立生成する。履歴snapshotからsavedAt／documentNameを除く方針とrecord計測も同入口へ集約した。EditHistoryのstack／signature、Block snapshotの複製、RestorationのDocument／Block別復元とControllerの抑止flagは既存ownerのまま。document引数はname／loadのadapterであり、DOMをeditingへ持ち込まない。モデル・scope・履歴・flagやglobalを複製しない。
+
+純粋なfactoryを早期にまとめたが、生成時はDocument直列化・Block session／定義・profile activeを照会せず、capture・復元・通知を実行しない。既存serializer／clone／restore／UIの関数とreadyなownerを渡し、後段constを直接捕捉する新引数は0。Document履歴の同じ実体をTransientAuthoringのdiscardLatest／Document名UIのcurrentSnapshotへ返す。core Controllerのrecordは非計測のまま、featureのrecordだけが最新activeと元の非bind workを使い、profileの戻り値と例外を維持する。Document restoreの成功true、Blockの既存返却値、stack移動後の例外とfinally通知、変更なしでも通知・新記録時だけlog、Document名／補助作図設定の保持を維持する。
+
+app.jsは2,905→2,866行（39行減）。対象factory呼出し5→1、構築引数合計30→16、異なるroot binding参照21→17、root未使用bindingは0。snapshot／Block履歴生成／recordの実装と未参照になった二つの復元委譲をappから除いた。構文588ファイル・全単体1,801件・関連単体15件が成功（exit 0）。追加2件は実EditHistory／BlockHistorySnapshot／Restorationで生成・Block履歴準備時の無照会、同じDocument履歴と独立Block stack、metadataだけの変更の非記録・元serializer結果の維持、undo／redoと現在session切替、復元中の再record抑止、profileのraw receiver／戻り値、capture／load／profile例外時のstack・後続短絡とfinally通知を確認した。旧各createは維持し、新file・読込方式変更はない。
+
+旧423daddのappと現在module群の実ブラウザ比較では、Documentの初期／変更／undo／redo、Block編集開始／変更／undo／redo／取消、確定／確定undo／redoと再読込の13状態でmodel、Document／Block履歴、Block editor、選択とUndo／Redoボタン状態が一致した。test API204 key順も一致し、savedAtだけ除外した。診断は一時directoryのcad-history-feature-equivalence.cjs／.log。関連E2E252件が全成功（4.3分、exit 0）。unified-ui／phase0-characterization／blocks／sketch-edit／sketch-move／command-panel／free-instance／derived-patterns／sketch-projection／sketch-tree-delete／adversarial-authoring-performanceを実行した。Document／Block／子Blockの履歴と取消・確定、仮作図、複数選択・削除、参照／派生と既存画面・保存再読込を確認した。性能全12件を含み、pan141ms（175ms未満）・空白矩形203ms（250ms未満）。さらにfile-safety全11件も成功（9.8秒、exit 0）し、保存済み状態のedit／undo／redo追従、開く前の保存確認、遅いsave／load中の変更検知、無効fileで履歴／保存先を保持、離脱guardを確認した。計263件は関連二実行であり全E2Eではない。既存期待値・性能基準を変更していない。両runner終了と各専用server停止を確認済み。ログは一時directoryのcad-history-feature-{focused,check,unit,related,file-safety}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功を過去の基準として保持する。開始時週枠使用37%／残量63%で停止条件未到達。次はappに残るDocument準備・直列化の境界を確認する。ensureModelStateはunits→Sketch→外観→Block→現在scopeと全Block定義の描画順→Parameterの順で既存ownerを呼び、serializeModelはWorkspaceのsnapshotSourceを使う。DocumentSnapshotはcodec、DocumentApplicationは読込／置換、DocumentState／Workspaceは値とscopeを所有する現行境界を基準に、モデル準備の所有と保存用metadataの組立てを整理する。現在BlockとDocument固定参照、各normalizeの実行時機・例外と後続短絡を維持し、読取りを装った新たな副作用や独自scope・snapshot cacheを増やさない。200〜500行の全体目標、mode・test hooks・他の構築は未完了。
+
 ### 最新の共通コマンドパネル組立て単位
 
 基準はdevelop 520f329。既存CommandPanel.createFeatureがDerived→Hatch→Annotation→routing→DOMの5 factoryを生成・接続する。SketchContextから名称／active／所属の元の関数を取り出し、既存commandと23個の限定依存を各子へ接続する。新file・global／draft／rollbackはない。二つの実panelを返し、appの前段からの遅延照会と同じ位置での構築を維持する。生成時はmode／commandを照会せず、DOMのsection追加と4 listener登録、mode／Annotation外観のactive Sketchの操作時取得を保つ。

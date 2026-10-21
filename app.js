@@ -435,17 +435,14 @@
   });
   const { start: startBlockPlacement, commit: commitBlockPlacement, click: handleBlockPlacementClick,
     restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;
-  const documentHistory = window.EditHistory.create({
-    capture: historySnapshot,
-    signature: (snapshot) => snapshot,
-    restore: (snapshot, label) => { restoreHistorySnapshot(snapshot, label); return true; },
-    limit: HISTORY_LIMIT,
-    recordLabel: "履歴に追加しました", undoLabel: "戻る", redoLabel: "進む",
+  const historyFeature = window.HistoryController.createFeature({
+    serializeDocument: serializeModel, document: { getName: () => documentModel.documentName,
+      setName: name => { documentModel.documentName = name; }, load: loadModelData },
+    blockEditor, liveBlockDefinition: liveBlockEditorDefinition, cloneBlockDefinition, serializeConstraint, decorateSerializedConstraint,
+    constructionCommand, invalidateBlockProjectionCache, clearInteractionForSketchChange, solveAndRefresh, setHint,
+    changed: updateHistoryButtons, log, limit: HISTORY_LIMIT, interactionProfiler,
   });
-  const historyController = window.HistoryController.create({
-    documentHistory, currentBlockHistory: () => blockEditor.current?.history,
-    changed: updateHistoryButtons, log,
-  });
+  const { documentHistory, controller: historyController } = historyFeature;
   const CURRENT_JSON_VERSION = 26;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
@@ -1192,33 +1189,13 @@
     });
   }
 
-  function historySnapshot() {
-    const data = serializeModel();
-    delete data.savedAt;
-    delete data.documentName;
-    return JSON.stringify(data);
-  }
-
-  const blockHistorySnapshot = window.BlockHistorySnapshot.create({
-    cloneDefinition: cloneBlockDefinition, serializeConstraint, decorateSerializedConstraint,
-  });
-
+  function historySnapshot() { return historyFeature.captureDocument(); }
 
   function resetBlockEditorHistory() {
     return historyController.resetBlock();
   }
 
-  function createBlockEditHistory() {
-    return window.EditHistory.create({
-      capture: () => blockHistorySnapshot.capture(liveBlockEditorDefinition()),
-      signature: (snapshot) => snapshot?.signature,
-      restore: restoreBlockEditorHistorySnapshot,
-      limit: HISTORY_LIMIT,
-      recordLabel: "ブロック編集履歴に追加しました",
-      undoLabel: "ブロック編集を戻す",
-      redoLabel: "ブロック編集を進む",
-    });
-  }
+  function createBlockEditHistory() { return historyFeature.createBlockHistory(); }
 
   function activeEditHistory() {
     return historyController.active();
@@ -1237,23 +1214,7 @@
     return historyController.resetDocument(label);
   }
 
-  function recordHistory(label = "変更") {
-    if (!interactionProfiler.active) return recordHistoryUnprofiled(label);
-    return profileInteractionWork("history", () => recordHistoryUnprofiled(label));
-  }
-
-  function recordHistoryUnprofiled(label = "変更") {
-    return historyController.record(label);
-  }
-
-  const historyRestoration = window.HistoryRestoration.create({
-    historyController, document: { getName: () => documentModel.documentName,
-      setName: name => { documentModel.documentName = name; }, load: loadModelData },
-    constructionCommand, blockEditor, cloneBlockDefinition, invalidateBlockProjectionCache,
-    clearInteractionForSketchChange, solveAndRefresh, setHint,
-  });
-  function restoreHistorySnapshot(snapshot, label) { return historyRestoration.document(snapshot, label); }
-  function restoreBlockEditorHistorySnapshot(snapshot, label) { return historyRestoration.block(snapshot, label); }
+  function recordHistory(label = "変更") { return historyFeature.record(label); }
 
   function undoHistory() {
     return historyController.undo();

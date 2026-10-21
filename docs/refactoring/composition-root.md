@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のDocument／Block履歴機能組立て単位
+
+HistoryController.createFeatureへDocument／Block履歴の生成方針、既存Controller／Block snapshot／Restorationの接続、Document履歴metadata除外とrecord計測を集約した。stack／flag／復元のowner、Document履歴の共有実体、生成時無照会、scope切替・例外／通知順を維持し、DOMはUI adapterに残した。factory呼出し5→1、構築引数30→16、root参照21→17。app.jsは2,905→2,866行（39行減）。旧appとの13状態のmodel・履歴／Block editor／選択とボタン状態、API204 key順が一致した。検証と次の単位は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新の共通コマンドパネル組立て単位
 
 CommandPanel.createFeatureへ既存3 adapter／routing／DOMの5 factoryの生成と結線を集約した。実panelとmode／styleの操作時照会、DOM登録順、参照元編集取消の即return・Derived／Hatchのhint差と通知／例外を維持した。factory呼出し5→1、構築引数32→23、root参照27→22。app.jsは2,924→2,905行（19行減）。旧appとの11状態のpanel／model・選択・履歴とtest API204 key順序が一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
