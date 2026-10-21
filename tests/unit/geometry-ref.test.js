@@ -14,6 +14,30 @@ function loadGeometryRef() {
 
 const geometryRef = loadGeometryRef();
 
+test("object references share canonical ids and typed keys without changing projected source ids", () => {
+  class Point { constructor(id) { this.id = id; } }
+  class Line extends Point {} class Circle extends Point {} class Arc extends Point {} class Spline extends Point {}
+  const sandbox = { window: { GeometryRef: geometryRef, GeometrySolver: { Point, Line, Circle, Arc, Spline } } };
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync('src/geometry/objects.js', 'utf8'), sandbox);
+  const objects = sandbox.window.GeometryObjects;
+  const line = new Line('BI1@BI2@L1'), point = new Point('BI1@BI2@L1');
+  assert.equal(objects.geometryIdForItem(line), 'BI1@BI2@L1');
+  assert.equal(objects.geometryKeyForItem(line), 'line:BI1@BI2@L1');
+  assert.equal(objects.geometryKeyForItem(point), 'point:BI1@BI2@L1');
+  const hatch = Object.freeze({ id: 'BI1/BI2/H1', boundaryLoops: [], seed: {}, blockProjection: true });
+  assert.equal(objects.geometryIdForItem(hatch), 'BI1@BI2@H1');
+  assert.equal(objects.geometryKeyForItem(hatch), 'hatch:BI1@BI2@H1');
+  assert.equal(hatch.id, 'BI1/BI2/H1');
+  for (const item of [null, {}, new Point('')]) {
+    assert.equal(objects.geometryIdForItem(item), null);
+    assert.equal(objects.geometryKeyForItem(item), '');
+  }
+  const marker = new Error('unavailable id');
+  Object.defineProperty(line, 'id', { get() { throw marker; } });
+  assert.throws(() => objects.geometryIdForItem(line), error => error === marker);
+});
+
 test("direct geometry references preserve kind and canonical id", () => {
   const ref = geometryRef.create("line", ["L1"]);
   assert.equal(ref.kind, "line");

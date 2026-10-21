@@ -93,6 +93,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新のProperties表示owner共有／Geometry ID変換単位
+
+基準はdevelop cb17f56。PropertiesDisplay.createWithControllerでParameterNamespaceの式入力／寸法式、ConstraintFeedbackの拘束名／badge、ApplicationSettingsの翻訳／localize、BlockPlacementCommandの回転lock／Sketch指定を共有した。従来の個別引数を優先しundefinedだけ同じ関数で補完する。receiverをbindし直さず、式評価・配置state・設定更新の所有は元のownerに残す。選択→編集／AppearanceUI→表示の生成段階、各scope／operation readerとstart時機を維持する。
+
+Properties以外の保存・Tree等にも使われるObject→ID／key変換は表示層へ移さず、既存GeometryObjectsへ集約した。同じGeometryRefと型判定、投影Hatchのslash→@正規化、無効ID=null／key=空文字、例外の伝播を維持する。appの同名入口は同じ純粋関数のaliasになり、初回参照より前に確立する。新file・state・汎用contextはない。不要なconstraintStatusBadgeのroot aliasを削除した。
+
+app.jsは2,973→2,964行（9行減）。対象表示構築の引数49→45、引数内の異なるroot binding参照46→43。Geometry ID／keyは二つの実装をrootから既存のdomain ownerへ移したもので、表示callbackを単に一つのObjectへ包んだ変更とは区別する。
+
+構文588ファイル・全単体1,785件・関連単体16件が成功（exit 0）。追加2件で、共通Geometry ID／型付きkey・投影Hatchの元ID不変・無効対象と例外、共有owner／従来指定の寸法markup・localize・配置lock／Sketch操作とhint／drawの同等性を確認した。旧cb17f56のappと現在のmodule群を使う実ブラウザ比較で、初期／複数選択／bulk編集／Document既定値／Palette使用色と確定後のHTML・model・historyが一致した（savedAtだけ比較対象外）。診断は一時directoryのcad-properties-owner-equivalence.cjs／.log。
+
+関連E2E306件が全成功（5.2分、exit 0）。unified-ui／phase0-characterization／blocks／free-instance／sketch-permissions／sketch-projection／unified-annotations／leader-appearance／multiple-dimensions／hatching／parameter-dialog-controller／spline／derived-selection-copy／selection-zoom-shadow／adversarial-authoring-performanceを実行した。Propertiesの式・外観・配置操作、Block／投影・派生・Hatch／Splineの参照、権限・選択／Tree、履歴・保存再読込と既存画面比較を確認した。性能全12件を含み、pan144ms（175ms未満）、空白矩形199ms（250ms未満）。基準を変更せず、runner終了と専用server停止を確認した。ログは一時directoryのcad-properties-owner-{focused,check,unit,related}.log。root未使用bindingは0。この単位をCommit／Pushしdevelopへ統合する。
+
+次はPropertiesに残るBlock操作／寸法確定actionと既存commandの所有境界を調べ、同じownerの限定APIとして接続できるか確認する。callback一覧を移すだけのfactoryや単なる行詰めは行わない。mode・他の通常構築群・test支援も未完了であり、200〜500行の目標を維持する。mainは5ee5f3fで保留、現行コードの全E2Eは未実行、c3a213cの全E2E584成功は過去の基準として保持する。開始時週枠使用26%／残量74%で停止条件には未到達。
+
 ### 最新のInstance参照元編集開始単位
 
 appのstartInstanceSourceEditの判定と開始調整を、既存InstanceSourceCommand.startForInstanceへ集約した。placementがfalsyなら従来startへ委譲し、同一Objectのmodel所属とactive Sketch確認・従来sessionを維持する。placementがtruthyなら、所属Sketchと現在activeの比較→構造編集guard→既存GeometryInstanceCommand.startEdit(instance,"sources")という順に元Objectを渡す。未登録の配置draftに新たなmodel所属条件を加えず、guard拒否前の取消／Selection解除／session変更や履歴を追加しない。戻り値・receiver・例外と部分状態も保持する。従来startとfinish等は独立APIとして残す。

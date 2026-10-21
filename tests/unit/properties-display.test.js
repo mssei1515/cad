@@ -12,7 +12,7 @@ class Input {
   closest() { return null; }
 }
 class TextArea extends Input {}
-function fixture({ interactive = false, sharedScene = false } = {}) {
+function fixture({ interactive = false, sharedScene = false, sharedOwners = false } = {}) {
   const model = w.DocumentState.create(), selection = w.CanvasSelection.create(), calls = [];
   const state = { ready: false, scope: model, operation: {}, controls: [{ disabled: false }], checkbox: {}, section: null };
   const panel = { innerHTML: '', querySelectorAll(selector) {
@@ -62,6 +62,16 @@ function fixture({ interactive = false, sharedScene = false } = {}) {
     setPlacementRotationLocked: notify('placement-lock'), setPlacementSketchIds: notify('placement-sketches'),
     startInstancePlacementEdit: (...args) => { calls.push(['placement-edit', ...args]); return 'placement-result'; }, setHint: notify('hint') };
   const build = interactive ? w.PropertiesDisplay.createWithController : w.PropertiesDisplay.create;
+  const presentationPorts = { applicationText, constraintStatusBadge: () => '',
+    expressionInputValue: value => String(value || ''), numericDimensionExpression: c => String(c.target),
+    localizedConstraintName: value => value, localizeApplicationUI: () => calls.push('localize') };
+  const ownerPorts = sharedOwners ? {
+    applicationSettings: { applicationText, localizeApplicationUI: presentationPorts.localizeApplicationUI },
+    constraintFeedback: { constraintStatusBadge: presentationPorts.constraintStatusBadge, localizedConstraintName: presentationPorts.localizedConstraintName },
+    parameterNamespace: { expressionInputValue: presentationPorts.expressionInputValue, numericDimensionExpression: presentationPorts.numericDimensionExpression },
+    blockPlacement: { setRotationLocked: interactivePorts.setPlacementRotationLocked, setEnabledSketchIds: interactivePorts.setPlacementSketchIds },
+  } : presentationPorts;
+  if (sharedOwners) { delete interactivePorts.setPlacementRotationLocked; delete interactivePorts.setPlacementSketchIds; }
   const scenePorts = interactive && sharedScene ? { readServices: services, sketchContext } : {
     geometryAppearance: services.geometryAppearance, dimensionAppearance: services.dimensionAppearance, annotationAppearance: services.annotationAppearance,
     catalog: services.catalog, projections: services.projections, instances: services.instances, geometryReads: services.reads,
@@ -69,12 +79,11 @@ function fixture({ interactive = false, sharedScene = false } = {}) {
   const view = build({ document, documentModel: model, currentScope: () => state.scope, canvasSelection: selection,
     getOperation: () => state.operation, propertySelection, ...scenePorts,
     appearanceControls: controls, controller, sketchProjectionConstraintForTarget: () => null,
-    constraintGeometryId: item => item?.id, constraintStatusBadge: () => '', constraintStatusOf: () => 'stable',
+    constraintGeometryId: item => item?.id, constraintStatusOf: () => 'stable',
     snappedBlockRotation: value => value, constraintDefiningGeometryEntries: () => [],
     hatchAppearanceForDisplay: item => appearance.normalizeHatchAppearance(item.appearance), resolvedHatchBoundary: () => ({ ok: false }),
-    applicationText, escapeHtml, hatchRegionErrorText: () => '', geometryInstanceTypeLabel: value => value,
-    expressionInputValue: value => String(value || ''), numericDimensionExpression: c => String(c.target), localizedConstraintName: value => value,
-    localizeApplicationUI: () => calls.push('localize'), installExpressionInputHighlights: () => calls.push('highlight'),
+    ...ownerPorts, escapeHtml, hatchRegionErrorText: () => '', geometryInstanceTypeLabel: value => value,
+    installExpressionInputHighlights: () => calls.push('highlight'),
     ...(interactive ? interactivePorts : {}) });
   function point(id, x = 1) { const item = Object.assign(new Point(id, x, 2), { sketchId: activeSketchId() }); state.scope.points.push(item); return item; }
   return { model, state, panel, calls, controller, view, selection, propertySelection, point, services, sketchContext };
@@ -97,6 +106,34 @@ test('shared scene owners preserve mixed markup, current locks and interactive p
     f.view.render(target); f.calls.length = 0;
     f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#ffffff') }); assert.deepEqual(f.calls, []);
     results.push({ mixedHTML, lockedHTML: f.panel.innerHTML, ownership: f.state.ownership.textContent, model: JSON.stringify(f.model) });
+  }
+  assert.deepEqual(results[0], results[1]);
+});
+
+test('shared presentation owners preserve dimension markup, localization and placement actions', () => {
+  const results = [];
+  for (const sharedOwners of [false, true]) {
+    const f = fixture({ interactive: true, sharedScene: true, sharedOwners });
+    assert.deepEqual(f.calls, []); f.state.ready = true;
+    const a = f.point('P1'), b = f.point('P2', 11);
+    const constraint = new w.GeometrySolver.DistanceConstraint(a, b, 10);
+    constraint.sketchId = a.sketchId; constraint.dimension = {};
+    f.model.constraints.push(constraint);
+    const before = JSON.stringify(f.model);
+    f.view.render({ kind: 'constraint', item: constraint });
+    assert.equal(JSON.stringify(f.model), before);
+    const html = f.panel.innerHTML;
+    assert.match(html, /10/); assert.ok(f.calls.includes('localize'));
+    f.model.blockDefinitions.push({ id: 'BD1' });
+    f.state.operation = { mode: 'block-place', blockPlacementDefinitionId: 'BD1' };
+    f.calls.length = 0;
+    f.panel.onchange({ target: new Input({ placementRotationMode: 'locked' }, '') });
+    const input = new Input({ placementSketchId: 'S1' }, '');
+    input.closest = () => ({ querySelectorAll: () => [{ dataset: { placementSketchId: 'S1' } }] });
+    f.panel.onchange({ target: input });
+    assert.deepEqual(JSON.parse(JSON.stringify(f.calls.filter(Array.isArray))), [['placement-lock', true],
+      ['hint', 'Placement rotation is locked to 90° increments'], ['placement-sketches', ['S1']]]);
+    results.push({ html, calls: f.calls });
   }
   assert.deepEqual(results[0], results[1]);
 });

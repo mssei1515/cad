@@ -77,19 +77,21 @@
     return view;
   }
   function createWithController({ document, documentModel, currentScope, canvasSelection, getOperation, propertySelection,
-    readServices, sketchContext,
+    readServices, sketchContext, parameterNamespace, constraintFeedback, blockPlacement, applicationSettings,
     geometryAppearance = readServices?.geometryAppearance, dimensionAppearance = readServices?.dimensionAppearance,
     annotationAppearance = readServices?.annotationAppearance, catalog = readServices?.catalog, projections = readServices?.projections,
     instances = readServices?.instances, geometryReads = readServices?.reads,
     sketchName = sketchContext?.sketchName, sketchById = sketchContext?.sketchById, isRootSketch = sketchContext?.isRootSketch,
     activeSketchId = sketchContext?.activeSketchId, constraintSketchId = sketchContext?.constraintSketchId,
-    sketchProjectionConstraintForTarget, constraintGeometryId, constraintStatusBadge, constraintStatusOf,
+    sketchProjectionConstraintForTarget, constraintGeometryId, constraintStatusBadge = constraintFeedback?.constraintStatusBadge, constraintStatusOf,
     snappedBlockRotation, constraintDefiningGeometryEntries, hatchAppearanceForDisplay, resolvedHatchBoundary,
-    applicationText, escapeHtml, hatchRegionErrorText, geometryInstanceTypeLabel, expressionInputValue,
-    numericDimensionExpression, localizedConstraintName, localizeApplicationUI, installExpressionInputHighlights,
+    applicationText = applicationSettings?.applicationText, escapeHtml, hatchRegionErrorText, geometryInstanceTypeLabel,
+    expressionInputValue = parameterNamespace?.expressionInputValue, numericDimensionExpression = parameterNamespace?.numericDimensionExpression,
+    localizedConstraintName = constraintFeedback?.localizedConstraintName, localizeApplicationUI = applicationSettings?.localizeApplicationUI, installExpressionInputHighlights,
     propertyEditing, appearanceUI, HTMLTextAreaElement, HTMLInputElement, canEditStructure,
     changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw, setHint,
-    setPlacementRotationLocked, setPlacementSketchIds, setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
+    setPlacementRotationLocked = blockPlacement?.setRotationLocked, setPlacementSketchIds = blockPlacement?.setEnabledSketchIds,
+    setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit }) {
     const { Spline } = window.GeometrySolver;
     const controller = window.PropertiesController.create({

@@ -169,7 +169,7 @@
     setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), draw,
   });
 
-  const { geometryKindForItem, geometryRefForItem } = window.GeometryObjects;
+  const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
   const hatchGeometryQuery = window.HatchGeometryQuery.create({
     currentScope: workspace.current, activeSketchId, effectiveAppearanceForElement, applicationText,
     boundaryGeometry: () => [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()],
@@ -873,7 +873,7 @@
   }
 
   const constraintFeedback = window.ConstraintFeedback.create({ applicationText, readLanguage: () => applicationSettings.language });
-  const { constraintStatusBadge, localizedConstraintName } = constraintFeedback;
+  const { localizedConstraintName } = constraintFeedback;
   function setSolveResultHint(label, solved, analysis, dependent) {
     const hint = constraintFeedback.resultHint(label, solved, analysis, dependent, constraintRedundancy.count);
     setHint(hint.message, hint.kind);
@@ -955,14 +955,6 @@
     return true;
   }
 
-
-  function constraintGeometryId(item) {
-    return geometryRefId(geometryRefForItem(item));
-  }
-
-  function geometryElementKey(item) {
-    return geometryRefKey(geometryRefForItem(item)) || "";
-  }
 
   function snappedBlockRotation(rotation) {
     const quarterTurns = Math.round((Number(rotation) || 0) / BLOCK_ORTHOGONAL_ROTATION_STEP);
@@ -2045,14 +2037,13 @@
     document, documentModel, currentScope: workspace.current, canvasSelection,
     getOperation: () => ({ mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
     propertySelection, readServices: geometryReadServices, sketchContext, sketchProjectionConstraintForTarget,
-    constraintGeometryId, constraintStatusBadge, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
-    hatchAppearanceForDisplay, resolvedHatchBoundary, applicationText, escapeHtml, hatchRegionErrorText,
-    geometryInstanceTypeLabel, expressionInputValue, numericDimensionExpression, localizedConstraintName,
-    localizeApplicationUI, installExpressionInputHighlights,
+    constraintGeometryId, constraintFeedback, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
+    hatchAppearanceForDisplay, resolvedHatchBoundary, applicationSettings, escapeHtml, hatchRegionErrorText,
+    geometryInstanceTypeLabel, parameterNamespace, installExpressionInputHighlights,
     propertyEditing, appearanceUI, HTMLTextAreaElement, HTMLInputElement,
     canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
     changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw, setHint,
-    setPlacementRotationLocked: blockPlacementCommand.setRotationLocked, setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
+    blockPlacement: blockPlacementCommand,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     annotationCommand, startInstanceSourceEdit: instanceSourceCommand.startForInstance, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
     startSplineEdit: spline => splineEditing.activate(spline),
