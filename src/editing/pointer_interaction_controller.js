@@ -273,5 +273,22 @@
     }
     return Object.freeze({ down, doubleClick, leave, move, finish });
   }
-  window.PointerInteractionController = Object.freeze({ create });
+  // Share the last raw world position before the later input dependencies are ready.
+  function createSession() {
+    let lastWorld = null, input;
+    function readLastPointer() { return lastWorld; }
+    function setLastPointer(point) { lastWorld = point; }
+    function clearLastPointer() { lastWorld = null; }
+    function bind(dependencies) {
+      input = create({ ...dependencies, setLastPointer });
+      return session;
+    }
+    const session = Object.freeze({
+      get lastWorld() { return lastWorld; }, readLastPointer, setLastPointer, clearLastPointer, bind,
+      down: (...args) => input.down(...args), doubleClick: (...args) => input.doubleClick(...args),
+      leave: (...args) => input.leave(...args), move: (...args) => input.move(...args), finish: (...args) => input.finish(...args),
+    });
+    return session;
+  }
+  window.PointerInteractionController = Object.freeze({ create, createSession });
 })();

@@ -6,6 +6,11 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### pointer入力状態の所有（2026-10-21）
+
+PointerInteractionController.createSessionを早期生成し、既存位置で入力依存をbindする。最後の生world座標と入力処理を同じownerへ集め、context menu更新とDocument／Sketch解除、各command／描画の照会を共有する。DrawingPreviewのsnap済み／仮表示座標とは区別し、pan／右中button・leaveと失敗時の座標保存時機を維持する。app.jsは2,803→2,803行（変化0）、元の7参照・4書込みを接続しroot letは7→6（全て後段接続）。検証と次のdriver境界検討は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
+
 ### modeと作図Lifecycleの状態所有（2026-10-21）
 
 DrawOperationLifecycle.createSessionを早期生成し、後段で既存command群をbindする。modeと開始／取消／終了・resetを同じownerへ集め、各command・表示・診断は同じ限定APIを共有する。既存遷移本体とdraft所有、modeを維持する取消／selectへ戻す終了、部分失敗と各reset範囲を保持した。app.jsは2,803→2,803行（変化0）、元の34参照・17書込みを接続しroot letは8→7。検証と再開地点は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。

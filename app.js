@@ -343,7 +343,7 @@
   const constraintTargetSession = window.ConstraintTargetSession.create({
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
-  let lastPointerWorld = null;
+  const pointerInteractionController = window.PointerInteractionController.createSession();
   const constructionCommand = window.ConstructionCommand.create({
     cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
     synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), setHint, clearSelection, updateUI, draw, recordHistory,
@@ -362,7 +362,7 @@
   });
   const selectionClearing = window.CanvasSelectionInteraction.createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight });
   const documentCanvasReset = window.CanvasSelectionInteraction.createDocumentReset({
-    canvasSelection, canvasHover, selectionHighlight, clearPointer: () => { lastPointerWorld = null; },
+    canvasSelection, canvasHover, selectionHighlight, clearPointer: pointerInteractionController.clearLastPointer,
     clearSnap: () => clearSnap(),
   });
   const offsetSelection = window.OffsetSelection.create({
@@ -435,7 +435,7 @@
     nextInstanceId: () => documentIds.allocate("blockInstance"), clearSelection, canvasSelection, invalidateBlockProjectionCache,
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
     setPropertiesPanelCollapsed, getPointerPreview: () => drawingPreview.pointer,
-    setPointerPreview: value => { drawingPreview.setPointer(value); }, getLastPointerWorld: () => lastPointerWorld,
+    setPointerPreview: value => { drawingPreview.setPointer(value); }, getLastPointerWorld: pointerInteractionController.readLastPointer,
     setMode: drawOperationLifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory,
   });
   const { start: startBlockPlacement, commit: commitBlockPlacement, click: handleBlockPlacementClick,
@@ -627,7 +627,7 @@
   }
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
-    lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
+    lastPointer: pointerInteractionController.readLastPointer, viewScale: () => viewport.scale,
     annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextMetrics,
     nextParameterName: () => parameterNamespace.allocateDimensionParameterName({ ...editingScopeBinding.current, parameters: editingScopeBinding.current.parameters.map(item => ({ ...item })), annotations: [...editingScopeBinding.current.annotations] }),
     validateParameter: draft => parameterNamespace.validateNewDimensionParameter(draft, editingScopeBinding.current),
@@ -735,7 +735,7 @@
   });
   const filletCommand = authoringTools.createFillet({
     defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
-    pending: pendingCommandSession, readPointer: () => lastPointerWorld,
+    pending: pendingCommandSession, readPointer: pointerInteractionController.readLastPointer,
     prepareStart: () => drawOperationLifecycle.prepare("fillet"), guardSketchProjectionShapeEdit,
     valueInput: dimensionInputController, checkpoint: editingCheckpoint,
     stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -988,7 +988,7 @@
 
   function syncSelectionFromConstraintOperands() { canvasSelection.applyConstraintTargets(constraintTargetsFromOperands(constraintTargetSession.operands)); }
 
-  function constraintOperandsFromSelection() { return constraintOperandValues.fromSelection(canvasSelection, lastPointerWorld); }
+  function constraintOperandsFromSelection() { return constraintOperandValues.fromSelection(canvasSelection, pointerInteractionController.lastWorld); }
 
   function resultIsAccepted(result) {
     return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
@@ -1591,7 +1591,7 @@
 
   function drawSnapMarker() { interactionOverlay.drawSnapMarker(drawingSnap.active); }
   function drawSketchIdentityLabel() {
-    interactionOverlay.drawSketchIdentityLabel({ hoveredIdentity: canvasHover.current.sketchIdentity, selection: canvasSelection, pointer: lastPointerWorld });
+    interactionOverlay.drawSketchIdentityLabel({ hoveredIdentity: canvasHover.current.sketchIdentity, selection: canvasSelection, pointer: pointerInteractionController.lastWorld });
   }
 
 
@@ -1714,7 +1714,7 @@
     referenceImage: referenceImageInteraction, selectionRectangle, drawing: drawOperationLifecycle,
     pending: pendingCommandSession, constraint: constraintTargetSession, projection: sketchProjectionCommand,
     instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, hover: canvasHover,
-    clearPointer: () => { lastPointerWorld = null; }, hideValueInput: hideDimensionValueInput, clearSnap,
+    clearPointer: pointerInteractionController.clearLastPointer, hideValueInput: hideDimensionValueInput, clearSnap,
     selectMode: drawOperationLifecycle.selectMode, updateToolbar,
   });
   function clearInteractionForSketchChange() { return sketchInteractionReset.clear(); }
@@ -1750,7 +1750,7 @@
   sketchMoveInputBinding.bind();
   const hatchCommand = window.HatchCommand.create({
     currentScope: workspace.current, hatchGeometryQuery, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
-    lastPointer: () => lastPointerWorld, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },
+    lastPointer: pointerInteractionController.readLastPointer, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },
     activeSketchId, setActiveSketch, canCreateInActiveSketch, rejectRootSketchCreation,
     nextHatchId: () => documentIds.allocate("hatch"), hatchSequence: () => documentIds.peek("hatch"),
     cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection, canvasSelection,
@@ -2166,7 +2166,7 @@
     canCreateInActiveSketch, visibleGeometryBounds, pendingCommandSession, constraintTargetSession, splineEditing, isReadOnlyDimension,
     selectedDimensionLineGroup, blockDefinitionScopeError, blockDefinitionEditError, selectedConstructionTogglePrimitives, drawingOrderCommandState,
     hasCopyableCanvasSelection, hasSelection, handleConstraintOperandClick, updateUI, draw, canvasContextMenu, isGeometryMode,
-    closeAppMenus: () => closeAppMenus(), canvasPoint, setLastPointer: pointer => { lastPointerWorld = pointer; }, hasCancellableCanvasCommand,
+    closeAppMenus: () => closeAppMenus(), canvasPoint, setLastPointer: pointerInteractionController.setLastPointer, hasCancellableCanvasCommand,
     canvasContextCandidatesAt, canvasContextController, guardSelectionEdit, guardSketchEdit, elementSketchId, selectionSketchId, activeSketchId,
     commitSketchProjectionCommand, cancelCanvasCommandFromContextMenu, undoHistory, redoHistory, copySelectionToClipboard, imageClipboard,
     showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit,
@@ -2192,11 +2192,11 @@
     canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget, blankCanvasGesture, instanceSourceCommand, hatchCommand,
   });
 
-  const pointerInteractionController = window.PointerInteractionController.create({
+  pointerInteractionController.bind({
     canvasNavigation, drawingPreview, canvasHover, clearSnap, draw, transientAuthoring, recordHistory,
     selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
     getMode: drawOperationLifecycle.readMode, getPendingCommand: pendingCommandSession.read,
-    getPendingConstraintCommand: () => constraintTargetSession.command, setLastPointer: point => { lastPointerWorld = point; },
+    getPendingConstraintCommand: () => constraintTargetSession.command,
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
       selectInactive: identitySelection.selectInactive,
@@ -2240,7 +2240,7 @@
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
     hasSelection, clearSelection, annotation: annotationCommand, finishSources: finishInstanceSourceEdit,
     finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
-    removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand, readPointer: () => lastPointerWorld,
+    removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand, readPointer: pointerInteractionController.readLastPointer,
     deleteSelection: deleteCurrentSelection, completeLineLength: completePendingDimensionLineLength,
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
     setHint, updateUI, draw,

@@ -56,7 +56,7 @@
 
 2026-10-21の最新再監査基準（develop caf19a0）ではapp.jsは2,924行。非空白2,433行のうち、create系構築・接続1,266行、条件付きtest hooks438行、call一文の関数237行。root構築209文・複文callback30個・root let8個を確認した。旧46dd77dを同条件で再現して比較した。現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)とsection 8を参照する。全てを単純な移動・削除対象とは扱わない。
 
-Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続のほか、最後のpointerと操作固有のcallbackが残る。modeはDrawOperationLifecycleのsessionへ移管した。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。現在のletはpointerと六つの後段接続参照の七つ。後段接続は操作stateの重複とは区別する。
+Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続と操作固有のcallbackが残る。modeはDrawOperationLifecycle、最後の生pointerはPointerInteractionControllerのsessionへ移管した。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。現在のletは六つの後段接続参照だけ。後段接続は操作stateの重複とは区別する。
 
 残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。modeは複数のcommandとtestから更新されるため、既存Lifecycleの遷移APIと同じsessionで所有する。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
@@ -92,6 +92,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-20）
+
+### 最新のpointer入力状態所有単位
+
+基準はdevelop 0aad34b。PointerInteractionController.createSessionが最後の生world座標と実down／move／doubleClick／leave／finishを所有する。appの旧lastPointerWorld初期化位置で生成し、既存位置のbindで入力・command・drag／hover依存を接続する。context menuの更新とDocument／Sketch resetの解除、Block配置・Fillet・寸法／拘束・Hatch・keyboard・ラベル描画の読取りを同じ限定APIへ接続した。生の座標参照を保持し、snapやpreview消去を伴うDrawingPreview.pointerとは統一しない。
+
+早期座標利用と後段入力構築だけを二段階で接続し、可変app contextや独立した座標コピーを増やさない。既存createの全入力処理本体は改行形式を除き完全一致する。pressのworld取得→座標保存→hit照会、moveのpan消費→座標保存→各mode処理、右／中buttonのdownとpointerleaveで座標を保持する順序、例外時の途中更新と後続短絡を維持した。生成／bind時に入力・DOM・scopeを照会しない。旧createも保持する。
+
+app.jsは2,803→2,803行（変化0）。独立したlastPointerWorldの7参照・4書込みをownerへ接続し、root letは7→6。残る六つはpngExportCommand／sketchMoveCommand／sketchContextController／commandPanel／derivedPanel／toolFlyoutsの後段接続参照で、rootが所有するmodeとpointerの操作stateはなくなった。全単体1,825件・関連単体37件が成功（exit 0）。追加3件で早期座標の参照共有、bind時無操作、pan優先、pressでの右／中buttonとhit照会前の保存、移動／hit失敗時の座標、pointerleaveでの保持と明示解除を確認した。AST監査と旧入力本体の一致診断は一時directoryのcad-pointer-state-audit.cjs。
+
+構文590ファイルが成功（exit 0）。旧0aad34bのappと現在module群を実ブラウザで比較し、基本作図・取消／終了・Document置換48状態とOffset／Fillet13状態の計61状態でmodel・mode・履歴・選択とAPI204 key順が一致した。後者はpending／Hintも一致し、savedAtだけを除外した。実図形の生成件数とSpline取消／Document置換後の点数も確認した。診断は一時directoryのcad-pointer-state-equivalence.cjs／.logとcad-pointer-offset-fillet-equivalence.cjs／.log。関連E2E302件が全成功（5.8分、exit 0）。unified-ui／phase0-characterization／blocks／free-instance／derived-patterns／sketch-permissions／sketch-projection／centerline／spline／command-panel／hatching／file-safety／png-export／sketch-edit／sketch-move／adversarial-authoring-performance／adversarial-drag-fixtureを実行した。pointer／右クリック選択と取消、Block／派生／Hatch配置、寸法・拘束入力、Sketch切替／移動／権限、Document置換・保存再読込・Undo／Redoと既存UIを確認した。性能全12件を含みpan141ms（175ms未満）、空白矩形216ms（250ms未満）。既存期待値・性能基準は変更していない。runner終了と専用server停止を確認済み。ログは一時directoryのcad-pointer-state-{focused,check,unit,related}.log。この単位をCommit／Pushしdevelopへ統合する。
+
+mainは5ee5f3fで保留、最新全E2Eは未実行。c3a213cの全584成功は過去の基準と区別する。開始時週枠使用45%／残量55%、検証後使用46%／残量54%で停止条件未到達。test API公開表は127項目・140行・91入力だった。丸ごとの移管では巨大な診断contextを作るため見送り、現在のtest条件内の生成・公開を維持する。次は既存driverの責務ごとにfixture／観測／操作の接続と公開名の境界を確認し、少数の共通capabilityで組立てを集約できる部分を選ぶ。構築監査ではConstraintTestDriverは16入口／30行、PropertiesTestDriverは11入口／27行、DimensionTestDriverは3入口／22行、SketchTreeTestDriverは8入口／21行だった（一時directoryのcad-test-driver-assembly-audit.cjs）。まずDimensionのfixture／interaction／displayの共通scope・layout／serialize・Selection／UIを現物で確認し、専用依存を隠さず接続を絞れるか検討する。生成時の副作用とtest条件、公開順・戻り値／例外を維持する。公開API204 keyの順と、通常機能をtest ownerに移さない境界を保つ。200〜500行、通常構築・test hooks・全体検証の目標は未完了。
+
 
 ### 最新のmode／作図Lifecycle状態所有単位
 
