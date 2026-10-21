@@ -6,7 +6,7 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 sandbox.window.GeometrySolver = {};
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/selection.js'), 'utf8'), sandbox);
-for (const file of ['sketch_tree_objects', 'sketch_tree_controller']) {
+for (const file of ['canvas_context_menu', 'sketch_tree_objects', 'sketch_tree_controller']) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui', `${file}.js`), 'utf8'), sandbox);
 }
 function objectFixture({ sharedOwners = false, ...overrides } = {}) {
@@ -153,6 +153,75 @@ test('dimension category separates constraint and reference dimensions while ret
   const groups = f.objects.index().get('S1');
   assert.deepEqual(Array.from(groups.dimension, entry => entry.modelIndex), [0, 2]);
   assert.deepEqual(Array.from(groups.constraint, entry => entry.modelIndex), [1]);
+});
+
+function menuFixture() {
+  const calls = [], domReads = [], selection = sandbox.window.CanvasSelection.create();
+  const state = { ready: false, active: 'S1', moving: false, language: 'en', failure: null };
+  const sketches = [{ id: 'ROOT', kind: 'root' }, { id: 'S1' }, { id: 'S2', locked: true }];
+  const surface = () => { const listeners = new Map(); return {
+    addEventListener(type, handler) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(handler); },
+    removeEventListener(type, handler) { listeners.get(type)?.delete(handler); },
+    fire(type, event) { for (const handler of listeners.get(type) || []) handler(event); },
+    count: () => [...listeners.values()].reduce((total, rows) => total + rows.size, 0),
+  }; };
+  const document = surface(), windowTarget = surface(), canvas = surface(), menuElement = surface(), attributes = {};
+  Object.assign(menuElement, { hidden: true, innerHTML: '', style: {}, classList: { add() {}, remove() {} },
+    setAttribute: (name, value) => { attributes[name] = value; }, getBoundingClientRect: () => ({ width: 100, height: 60 }),
+    querySelector: () => null, querySelectorAll: () => [], contains: value => value === menuElement });
+  canvas.closest = () => null;
+  document.getElementById = id => { domReads.push(id); return id === 'sketchList' ? canvas : menuElement; };
+  const feature = sandbox.window.SketchTreeController.createWithContextMenu({ document, window: windowTarget,
+    sketchContext: { sketchById: id => { assert.equal(state.ready, true); return sketches.find(s => s.id === id); }, isRootSketch: sketch => sketch?.kind === 'root' },
+    applicationSettings: { applicationText: (ja, en) => state.language === 'en' ? en : ja }, escapeHtml: String,
+    closeCanvasContextMenu: () => calls.push('close-canvas'),
+    currentScope: () => { assert.equal(state.ready, true); return { sketches }; },
+    activeSketchId: () => { assert.equal(state.ready, true); return state.active; },
+    setActiveSketch: id => { assert.equal(menuElement.hidden, true); state.active = id; calls.push(['activate', id]); },
+    clearSelection: () => { calls.push('clear'); selection.clear(); }, canvasSelection: selection,
+    updateUI: () => calls.push('ui'), draw: () => calls.push('draw'), move: { active: () => state.moving },
+    renameSketch: function(id) { 'use strict'; assert.equal(this, undefined); assert.equal(menuElement.hidden, true);
+      calls.push(['rename', id]); if (state.failure) throw state.failure; },
+  });
+  const event = (id, child = false) => ({ clientX: 20, clientY: 30, preventDefault: () => calls.push('prevent'),
+    target: { closest: selector => selector === '.sketch-item' ? { dataset: { id } } : child ? {} : null } });
+  const action = (name, disabled = false) => menuElement.fire('click', { target: {
+    closest: selector => selector === '[data-context-action]' ? { dataset: { contextAction: name }, disabled } : null,
+  } });
+  return { ...feature, canvas, document, windowTarget, menuElement, attributes, state, calls, domReads, selection, sketches, event, action,
+    listeners: () => [menuElement, canvas, document, windowTarget].reduce((total, target) => total + target.count(), 0) };
+}
+
+test('Tree menu assembly defers start, keeps Root and current lock rules, and closes before dispatching existing actions', () => {
+  const f = menuFixture(); assert.deepEqual(f.calls, []); assert.equal(f.listeners(), 0);
+  assert.deepEqual(f.domReads, ['sketchList', 'sketchContextMenu']); f.state.ready = true;
+  f.menu.start(); f.menu.start(); const listenerCount = f.listeners(); assert.equal(listenerCount, 9);
+  f.canvas.fire('contextmenu', f.event('S2'));
+  assert.deepEqual(f.calls, ['prevent','clear','ui','draw','close-canvas']);
+  assert.equal(f.selection.sketchId, 'S2'); assert.equal(f.state.active, 'S1'); assert.equal(f.menuElement.hidden, false);
+  assert.match(f.menuElement.innerHTML, /data-context-action="sketch-rename"[^>]*disabled/);
+  assert.doesNotMatch(f.menuElement.innerHTML, /data-context-action="sketch-edit"[^>]*disabled/);
+  assert.equal(f.attributes['aria-label'], 'Sketch menu'); f.calls.length = 0;
+  f.action('sketch-rename', true); assert.deepEqual(f.calls, []); assert.equal(f.menuElement.hidden, false);
+  f.action('sketch-edit'); assert.deepEqual(f.calls, [['activate','S2'],'clear','ui','draw']);
+  f.calls.length = 0; f.canvas.fire('contextmenu', f.event('ROOT'));
+  assert.equal(f.selection.sketchId, 'ROOT'); assert.equal(f.menuElement.hidden, true); assert.equal(f.state.active, 'S2');
+  f.calls.length = 0; f.sketches[2].locked = false; f.state.language = 'ja'; f.canvas.fire('contextmenu', f.event('S2'));
+  assert.match(f.menuElement.innerHTML, /data-context-action="sketch-edit"[^>]*disabled/);
+  assert.doesNotMatch(f.menuElement.innerHTML, /data-context-action="sketch-rename"[^>]*disabled/);
+  assert.equal(f.attributes['aria-label'], 'スケッチメニュー'); f.calls.length = 0;
+  f.action('sketch-rename'); assert.deepEqual(f.calls, [['rename','S2']]); assert.equal(f.menuElement.hidden, true);
+  f.menu.dispose(); assert.equal(f.listeners(), 0); f.menu.start(); assert.equal(f.listeners(), listenerCount); f.menu.dispose();
+});
+
+test('Tree menu preserves move and child-row suppression and propagates action failures after closing', () => {
+  const f = menuFixture(); f.state.ready = true; f.menu.start(); f.state.moving = true;
+  f.canvas.fire('contextmenu', f.event('S2')); assert.deepEqual(f.calls, ['prevent']); assert.equal(f.selection.sketchId, null);
+  f.state.moving = false; f.calls.length = 0; f.canvas.fire('contextmenu', f.event('S2', true)); assert.deepEqual(f.calls, ['prevent']);
+  f.calls.length = 0; f.canvas.fire('contextmenu', f.event('S1')); f.calls.length = 0;
+  const marker = new Error('rename failed'); f.state.failure = marker;
+  assert.throws(() => f.action('sketch-rename'), error => error === marker);
+  assert.equal(f.menuElement.hidden, true); assert.deepEqual(f.calls, [['rename','S1']]); f.menu.dispose();
 });
 
 function controllerFixture() {

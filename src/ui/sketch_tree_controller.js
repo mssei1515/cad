@@ -1,6 +1,29 @@
 /* Route sketch tree actions to selection, editing commands and expansion state. */
 (() => {
   "use strict";
+  function createWithContextMenu({ document, window: windowTarget, sketchContext, applicationSettings, escapeHtml,
+    closeCanvasContextMenu, ...controllerOptions }) {
+    const { isRootSketch, sketchById } = sketchContext;
+    const { applicationText } = applicationSettings;
+    const { renameSketch, activeSketchId } = controllerOptions;
+    let menu;
+    const controller = create({ ...controllerOptions, openContextMenu: (event, id) => {
+      closeCanvasContextMenu();
+      if (isRootSketch(sketchById(id))) { menu.close(); return; }
+      menu.open({ event, target: { id }, items: [{ action: "sketch-edit", label: applicationText("作図先", "Drawing sketch"), disabled: id === activeSketchId() },
+        { action: "sketch-rename", label: applicationText("名前変更", "Rename"), disabled: Boolean(sketchById(id)?.locked) }] });
+    } });
+    menu = window.CanvasContextMenu.create({ document, window: windowTarget,
+      canvas: document.getElementById("sketchList"), menu: document.getElementById("sketchContextMenu"),
+      escapeHtml, applicationText, ariaLabel: () => applicationText("スケッチメニュー", "Sketch menu"),
+      onOpen: event => controller.contextMenu(event),
+      onAction: (action, target) => {
+        if (action === "sketch-rename") renameSketch(target.id);
+        else if (action === "sketch-edit") controller.editSketch(target.id);
+      },
+    });
+    return Object.freeze({ controller, menu });
+  }
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility, unfixPoint,
@@ -260,5 +283,5 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.SketchTreeController = Object.freeze({ create, createMoveInputBinding });
+  window.SketchTreeController = Object.freeze({ create, createWithContextMenu, createMoveInputBinding });
 })();

@@ -1928,7 +1928,8 @@
       leave: () => sketchTreeController.leave(),
     },
   });
-  const sketchTreeController = window.SketchTreeController.create({
+  const { controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithContextMenu({
+    document, window, sketchContext, applicationSettings, escapeHtml, closeCanvasContextMenu,
     currentScope: dimensionPresentationScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
@@ -1936,24 +1937,10 @@
     resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
     move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
     updateSelectionUI: updateGeometrySelectionUI,
-    openContextMenu: (event, id) => {
-      closeCanvasContextMenu();
-      if (isRootSketch(sketchById(id))) { sketchContextController.close(); return; }
-      sketchContextController.open({ event, target: { id }, items: [{ action: "sketch-edit", label: applicationText("作図先", "Drawing sketch"), disabled: id === activeSketchId() },
-        { action: "sketch-rename", label: applicationText("名前変更", "Rename"), disabled: Boolean(sketchById(id)?.locked) }] });
-    },
     unfixPoint: point => { if (!guardSketchEdit(elementSketchId(point), "constraint")) return; point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
   });
   const { applyWidth: applySketchTreeWidth } = sketchTreeView;
-  sketchContextController = window.CanvasContextMenu.create({
-    document, window, canvas: document.getElementById("sketchList"), menu: document.getElementById("sketchContextMenu"),
-    escapeHtml, applicationText, ariaLabel: () => applicationText("スケッチメニュー", "Sketch menu"),
-    onOpen: event => sketchTreeController.contextMenu(event),
-    onAction: (action, target) => {
-      if (action === "sketch-rename") renameSketch(target.id);
-      else if (action === "sketch-edit") sketchTreeController.editSketch(target.id);
-    },
-  });
+  sketchContextController = sketchTreeContextMenu;
   sketchContextController.start();
 
   function isSidebarHighlightedElement(item) { return sketchTreeController.isHighlightedElement(item); }

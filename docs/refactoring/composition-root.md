@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新のTree Controller／Context menu結線単位
+
+SketchTreeController.createWithContextMenuが既存Controller→CanvasContextMenuの生成と、Root／active／lockによる項目表示・名前変更／編集通知を所有する。同じControllerとmenuを返し、appの外部close入口への接続と明示startは維持した。構築2→1、引数36→32、異なるroot参照39→36、app.jsは2,953→2,940行（13行減）。旧appとの実ブラウザ比較でメニューを含む12状態のHTML・model・historyが一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
+
 ### 最新のTree行分類／照会owner共有単位
 
 SketchTreeObjectsがTree categoryから可視性照会対象への分類を所有し、GeometryReadServices・SketchContext・ConstraintFeedback・ApplicationSettingsを共有する。表示scope、個別引数の互換性と後段PropertySelectionの遅延照会は維持した。構築引数38→32、異なるroot参照36→30、app.jsは2,957→2,953行（4行減）。旧appとの実ブラウザ比較で、7状態の展開Tree／Properties HTML・model・historyが一致した。検証と次の境界は[再開手順](refactoring-policy-and-resume.md)を参照する。main保留・全体目標未完了。
