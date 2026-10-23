@@ -64,6 +64,50 @@ function renderer(handles = false, hoveredHandle = null) {
 }
 const note = extra => ({ id: 'AN1', type: 'text', text: 'AB\nC', sketchId: 'S1', x: 10, y: 20, anchorPosition: 'left-middle', appearanceInheritance: true, style: { textHeight: 5, framePaddingX: 2, framePaddingY: 3, fixedDisplaySize: false, displayScale: 1 }, ...extra });
 
+test('annotation dependencies match leader and normalized anchor references, not arbitrary text', () => {
+  const query = A.referencesRemovedGeometry;
+  const item = note({ type: 'leader', geometryRef: { kind: 'line', path: ['B1', 'L1'] },
+    text: 'P99', metadata: { source: 'point:P99' },
+    anchorConstraints: [{ type: 'symmetry', geometryRef: { kind: 'point', path: ['B2', 'P1'] }, axisRef: { kind: 'line', path: ['B2', 'AX'] } }] });
+  const before = JSON.stringify(item), ids = new Set(['B1@L1']), keys = new Set(['point:B2@P1']);
+  assert.equal(query(item, ids, new Set()), true);
+  assert.equal(query(item, new Set(), keys), true);
+  assert.equal(query(item, new Set(), new Set(['line:B2@AX'])), true);
+  for (const key of ['circle:B1@L1', 'line:B2@P1', 'point:P1', 'line:AX', 'point:P99']) {
+    assert.equal(query(item, new Set(), new Set([key])), false, key);
+  }
+  assert.equal(query(item, new Set(['B1', 'L1', 'P1', 'P99']), new Set()), false);
+  assert.equal(JSON.stringify(item), before);
+  assert.deepEqual([...ids], ['B1@L1']); assert.deepEqual([...keys], ['point:B2@P1']);
+});
+
+test('annotation dependency queries reread live relations and keep normalization eligibility', () => {
+  const item = note({ geometryRef: { kind: 'line', path: ['L1'] }, anchorConstraints: [
+    { type: 'fixed', x: 1, y: 2 },
+    { type: 'distance', geometryRef: { kind: 'point', path: ['P1'] }, value: -1 },
+    { type: 'endpoint', geometryRef: { kind: 'arc', path: ['A1'] } },
+    { type: 'symmetry', geometryRef: { kind: 'point', path: ['P2'] }, axisRef: { kind: 'circle', path: ['C1'] } },
+  ] });
+  const removed = new Set(['L1', 'P1', 'A1', 'P2', 'C1']);
+  assert.equal(A.referencesRemovedGeometry(item, removed, new Set()), false);
+  item.anchorConstraints.push({ type: 'coincident', geometryRef: { kind: 'point', path: ['P3'] } });
+  assert.equal(A.referencesRemovedGeometry(item, new Set(['P3']), new Set()), true);
+  item.anchorConstraints.at(-1).geometryRef.path[0] = 'P4';
+  assert.equal(A.referencesRemovedGeometry(item, new Set(['P3']), new Set()), false);
+  assert.equal(A.referencesRemovedGeometry(item, new Set(['P4']), new Set()), true);
+  item.anchorConstraints = [];
+  assert.equal(A.referencesRemovedGeometry(item, new Set(['P4']), new Set()), false);
+});
+
+test('annotation dependency matching retains ID-first short circuit and ignores invalid leader refs', () => {
+  const item = note({ type: 'leader', geometryRef: { kind: 'line', path: ['L1'] } });
+  const fail = { has() { throw new Error('Later lookup must be skipped'); } };
+  assert.equal(A.referencesRemovedGeometry(item, new Set(['L1']), fail), true);
+  assert.throws(() => A.referencesRemovedGeometry(item, new Set(), fail), /Later lookup/);
+  item.geometryRef = { kind: 'invalid', path: ['L1'] };
+  assert.equal(A.referencesRemovedGeometry(item, fail, fail), false);
+});
+
 test('nine positions keep the model anchor while changing text, padding, alignment, rotation and zoom', () => {
   const h = renderer();
   for (const position of A.POSITIONS) for (const textAlign of ['left', 'center', 'right']) {

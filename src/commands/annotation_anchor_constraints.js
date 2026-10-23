@@ -21,6 +21,13 @@
     })).filter(item => item.type === "fixed" ? Number.isFinite(item.x) && Number.isFinite(item.y) : Boolean(item.geometryRef) && (!item.type.startsWith("distance") || item.type.startsWith("distance-") && item.type !== "distance-line" || item.value >= 0));
   }
   const refs = element => [...(element.type === "leader" && element.geometryRef ? [element.geometryRef] : []), ...normalize(element.anchorConstraints).flatMap(item => [item.geometryRef, item.axisRef].filter(Boolean))];
+  function referencesRemovedGeometry(annotation, removedIds, removedKeys) {
+    const { id: geometryRefId, key: geometryRefKey } = window.GeometryRef;
+    return refs(annotation).some(ref => {
+      const id = geometryRefId(ref), key = geometryRefKey(ref);
+      return Boolean((id && removedIds.has(id)) || (key && removedKeys.has(key)));
+    });
+  }
   function solvePlacement(element, base, resolveRef, strict = false, collectOnly = false) {
     const items = normalize(element.anchorConstraints), G = window.GeometrySolver;
     const point = new G.Point("annotation-anchor:" + element.id, base.x, base.y), constraints = [], variables = [{ object: point, prop: "x" }, { object: point, prop: "y" }];
@@ -241,5 +248,5 @@
     }
     return Object.freeze({ materialize: materializeAnnotationAnchor });
   }
-  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, createDimensions, axes, degree, refs, create, createMaterialization });
+  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, createDimensions, axes, degree, refs, referencesRemovedGeometry, create, createMaterialization });
 })();

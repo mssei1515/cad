@@ -93,6 +93,22 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：注記の参照依存照会（2026-10-23）
+
+基準develop d10adb8からcodex/annotation-reference-queryで実施。AnnotationAnchorConstraints.referencesRemovedGeometryへ、既存refs（leader付着先と正規化したanchorConstraints／対称軸）から完全なGeometryRef ID／kind付きkeyを調べる照会を集めた。appは同じ関数をInstance参照元、Block構成、Spline編集、Block完了、Geometry／Selection削除、Sketch削除の六つの構築箇所へ接続する。各commandの削除計画・guard／通知・求解・履歴と部分失敗の復元は変更していない。照会は注記やSetを変更せず、一般文字列再帰・親／末端IDへの自動展開・新しいcache／contextを追加しない。
+
+app.jsは2,724→2,711行（13行減）。自己再帰以外の参照0だったvalueReferencesRemovedGeometryを撤去し、残るroot functionの自己外参照も監査した。旧binding.referencedだけの未使用0判定を無使用の証明にしない。geometryRefIdはHatch転送のtest driverで使用中のため保持する。新しいscript／folderは追加せず、関係の正規化・refsと依存照会を既存ownerにまとめた。GeometryRef関数の取得は照会時とし、CommandPanelが定義だけを読むscript評価の段階へ新たな必須依存を加えない。
+
+構文596ファイル・全単体1,842件・関連単体48件が成功。追加3件でtyped refs／対称軸と完全path、kind付きkey、任意文字列を対象にしないこと、現在の関係の再読取り・正規化による除外、入力不変、ID先行の短絡／例外を確認した。d10adb8の元関数と現在関数の12,800組で結果と入力不変が一致し、rootの六consumerを保持・自己外参照のないbindingが0であることをASTで確認した。補助診断は一時directoryのcad-annotation-reference-audit.cjs。
+
+旧d10adb8のappを実際に差し替えたブラウザ比較（route1回をassert）では、Geometry／Blockのcopy／Cut・削除、派生source／parent拒否、leaf削除、依存するanchor注記／leaderの削除と無関係な文字列を含む注記の保持、Undo／Redo／再読込を含む41状態でmodel・clipboard・mode・履歴・Selection・HintとAPI204 key順が一致（savedAtだけ除外）。最初の一時診断はfixture読込の既定resetLoadedHistory=falseを考慮しないUndo期待で旧版側で停止した。既存optionをtrueにして履歴初期化を明示し、製品や期待する削除挙動を変えずに修正後41状態を完走した。診断logはcad-annotation-reference-equivalence.log（初回）、cad-annotation-reference-equivalence-corrected.log（修正後）。
+
+関連E2E12ファイル296件が全成功（4.9分、exit 0）。annotation-anchors／annotation-display-size／unified-annotations／blocks／derived-patterns／free-instance／parameter-dialog-controller／phase0-characterization／sketch-edit／sketch-permissions／spline／unified-uiを実行し、file URL Help読込も含む。runnerの終了と自己起動port8789のserver停止を回収済み。ログはcad-annotation-reference-{focused,check,unit,e2e}.log。期待値・性能制限・保存形式は変更せず、最新全E2Eは未実行。前回単位の305成功と今回の296成功、前回releaseの587全成功を混同しない。
+
+仕様／実装mapを更新してCommit／Pushし、developへ統合してコード同一性を確認する。main／origin/mainはdf5aef2を維持。週枠は開始使用7%／残量93%、検証後使用8%／残量92%で停止条件未到達。200〜500行への全体目標は未完了。
+
+次はAnnotationDataがPOSITIONS／normalize／axes／degreeをcommands層のAnnotationAnchorConstraintsから読む方向を確認する。純粋な基準点・関係の保存値定義／正規化・参照照会をdocument層へ分離し、実際の操作・求解・DOMを現在ownerに残す案を検討する。日本語UI labelはデータと区別し、既存公開API・同じ配列／関数の共有、変換条件／JSON field順と例外・評価時機を保持する。appを別の巨大contextへ移さず、既存classic scriptの追加が必要ならloader／check／unit／file URL期待値を同期する。まだこの次単位の実装は開始していない。
+
 ### 最新：表示機能の関連検証完了（2026-10-23）
 
 製品コード9f700d5を固定した関連E2E18ファイル305件が全成功（5.0分、exit 0）。既存の性能12件を含み、空白矩形217ms（250ms未満）、pan144ms（175ms未満）。構文596・単体1,839・関連単体15・file URL読込1と、差し替え確認済みの旧mainとの86状態一致も同じ製品コードの結果。検証中・検証後にapp／src／tests／index／tools／specの内容を変更していない。この追記は文書だけで、app.jsは2,724→2,724行（0行差）。表示機能分離単位の前後は2,738→2,724行（14行減）、構築5→3・明示引数36→25。

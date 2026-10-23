@@ -90,6 +90,7 @@
     ConstraintSolver,
   } = window.GeometrySolver;
 
+  const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorConstraints;
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const {
     constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
@@ -1682,20 +1683,6 @@
   const { updateHatchPreview, startHatchCreation, startHatchBoundaryRepair, commitHatchAt } = hatchCommand;
 
 
-
-  function valueReferencesRemovedGeometry(value, removedIds, removedKeys) {
-    if (typeof value === "string") return removedIds.has(value) || removedKeys.has(value);
-    if (Array.isArray(value)) return value.some((item) => valueReferencesRemovedGeometry(item, removedIds, removedKeys));
-    if (value && typeof value === "object") return Object.values(value).some((item) => valueReferencesRemovedGeometry(item, removedIds, removedKeys));
-    return false;
-  }
-
-  function annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys) {
-    return window.AnnotationAnchorConstraints.refs(annotation).some(ref => {
-      const id = geometryRefId(ref), key = geometryRefKey(ref);
-      return Boolean((id && removedIds.has(id)) || (key && removedKeys.has(key)));
-    });
-  }
 
   const sketchDeletionCommand = window.SketchDeletionCommand.create({
     currentScope: workspace.current, ensureSketchState, sketchById, descendantSketchIds, constraintSketchId,
