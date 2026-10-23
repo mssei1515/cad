@@ -211,15 +211,16 @@
   const fileSession = window.DocumentFiles.create();
 
   const drawOperationLifecycle = window.DrawOperationLifecycle.createSession();
-  const canvasSelection = window.CanvasSelection.create();
+  const selectionFeature = window.CanvasSelectionFeature.create({
+    sketches: sketchContext, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw,
+  });
+  const { selection: canvasSelection, scope: selectionScopeQuery, identity: identitySelection } = selectionFeature;
   const {
     selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, effectiveSelectedConstraint, selectedPrimitives,
     toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
     trimConstraintSelection, sketchTreeObjectSelected,
     hasSelection,
   } = canvasSelection;
-  const selectionScopeQuery = window.CanvasSelection.createScopeQuery({ canvasSelection, selectedGeometryItems });
-  const identitySelection = window.CanvasSelectionInteraction.createIdentitySelection({ canvasSelection, selectionSketchId, clearSelection, updateGeometrySelectionUI, draw, sketchById, guardSketchEdit });
   const pointUsage = window.PointUsage.create({
     currentScope: workspace.current, constraintReferencesPoint,
     allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
@@ -339,20 +340,13 @@
     setLineMode: () => { drawOperationLifecycle.setMode("line"); }, resetLineInputs: () => drawOperationLifecycle.resetInputs("line"),
     clearSnap: () => clearSnap(), updateToolbar,
   });
-  const selectionHighlight = window.SelectionHighlight.create({
-    canvasSelection, blockProjectionBundle, geometryRefsEqual, geometryRefForItem,
-    constraintGraphNodes, types: { Point, Line, Circle, Arc, Spline, OffsetChainConstraint }, effectiveSelectedConstraint, targetFromConstraint,
-    getHoveredDimension: () => canvasHover.current.dimension,
-    setHoveredDimension: value => { canvasHover.update({ dimension: value }); }, draw,
+  const { highlight: selectionHighlight, clearing: selectionClearing, documentReset: documentCanvasReset } = selectionFeature.createPresentation({
+    hover: canvasHover, constraintTargets: constraintTargetSession, pointer: pointerInteractionController,
+    projections: blockProjections, constraintReferences, clearSnap: () => clearSnap(),
   });
   const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
   const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
     currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
-  });
-  const selectionClearing = window.CanvasSelectionInteraction.createClearing({ canvasSelection, constraintTargetSession, canvasHover, selectionHighlight });
-  const documentCanvasReset = window.CanvasSelectionInteraction.createDocumentReset({
-    canvasSelection, canvasHover, selectionHighlight, clearPointer: pointerInteractionController.clearLastPointer,
-    clearSnap: () => clearSnap(),
   });
   const offsetSelection = window.OffsetSelection.create({
     getModel: () => editingScopeBinding.current, activeSketchId, elementSketchId, constraintSketchId,
