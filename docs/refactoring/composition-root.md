@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Sketch Treeの行表示と操作の共有接続（2026-10-24、検証完了）
+
+基準develop／origin/developはee3684b。本単位はcodex/sketch-tree-selection-contextで実施した。既存SketchTreeController.createWithDocumentObjectsが実Objects→Document View→Controller／Menuを組み立て、同じSelection・CanvasHover・SelectionHighlight・Geometry read serviceへ接続する。行選択・関連拘束・Sidebar hover関数とgeometry ID照会をappの中継bindingから外した。Objects／Controllerは既存dimensionPresentationScope、Viewはbound editing scope、展開keyは現在Block IDという違いを維持する。新しい状態・cache・可変context・ファイルは追加しない。既存の直接create APIを維持する。
+
+app.jsは2,545→2,536行（9行減）。対象構築2→1、直下引数68→38。ただし新objectOptionsが21項目を持つため、これを隠して依存が30減ったとは扱わない。hoverも展開しgroup containerを除いた末端引数は74→59（15減）。root未使用binding／初期化前参照は0（cad-tree-selection-audit.cjs）。表示固有のobjectOptionsと操作接続を分け、共通scope・設定・escape・gutter・選択とhoverの結線を組立てownerへ集める。Tree側に選択・HTML生成・幾何計算の再実装を持たせない。
+
+実Objects／View／Controller／Menu／Selection／Hover／Highlightを使う追加2単体で、構築時のscope遅延読取り、行選択の同一参照条件、Canvas／Sidebar hoverの更新と解除、共通geometry照会のbare呼出し、関連拘束照会、scope更新後の対象解決、ViewとControllerのscope差、DOM／resize初期化順・menu start／disposeを確認した。既存期待を緩和していない。関連単体33件、全単体1,911件、構文612ファイルが成功。Tree表示・可視性・削除・権限・Sketch編集／移動・Block・menu・既存UI・phase0保存互換性／描画比較の関連E2E220件が全成功（3.2分、exit 0、runner68528）。sourceを固定し、cad-tree-selection-e2e-receipt.jsonのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した。ログはTEMPのcad-tree-selection-{focused,unit,check,e2e}.log。
+
+spec/architecture/モジュール構成.md・implementation-map.mdへ内部設計を記録した。今回の全E2Eは未実行で、17defd0の全587件成功と区別する。週枠使用11%／残量89%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。
+
+次はrootの機能組立てを引き続き再監査する。TreeのobjectOptionsには拘束状態・寸法・Hatchの既存照会依存が残るため、実ownerの狭い読取りAPIで統合できるか確認する。各ownerを丸ごと渡すだけで境界を曖昧にせず、view／current／presentationのscope差と現在値の取得時機を守る。小さな配線削減だけで200〜500行へ到達するとは見積もらない。
+
 ### 最新：注記の描画と空間照会の共有（2026-10-24、検証完了）
 
 基準develop／origin/developは133353b。本単位はcodex/annotation-spatial-compositionで実施した。AnnotationDisplay.createSpatialQueriesが同じ実rendererの文字layout・高さ・Leader表示geometryを既存AnnotationSpatialQueryへ接続し、AnnotationFeature.spatialから実APIを公開する。新しい状態・cache・モデル・広いcontextは持たない。従来の直接create APIを維持する。明示選択かつ編集可能というframe操作条件を、hover／inspectionによるframe表示と混同しない。resize可否と倍率・現在Sketch・一覧は遅延読取りを維持する。

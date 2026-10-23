@@ -173,7 +173,7 @@
   const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const { blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
-  const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
+  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
@@ -201,7 +201,7 @@
   const {
     selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, effectiveSelectedConstraint, selectedPrimitives,
     toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
-    trimConstraintSelection, sketchTreeObjectSelected,
+    trimConstraintSelection,
     hasSelection,
   } = canvasSelection;
   const pointUsage = geometryReadServices.createPointUsage({
@@ -324,7 +324,7 @@
     hover: canvasHover, constraintTargets: constraintTargetSession, pointer: pointerInteractionController,
     projections: blockProjections, constraintReferences, clearSnap: () => clearSnap(),
   });
-  const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
+  const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement } = selectionHighlight;
   const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
     currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
   });
@@ -1544,30 +1544,21 @@
     currentScope: workspace.current, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
-  const sketchTreeObjects = window.SketchTreeObjects.create({
-    readServices: geometryReadServices, sketchContext, applicationSettings, constraintFeedback,
-    isHidden: selectionVisibilityIsHidden,
-    currentScope: dimensionPresentationScope,
-    ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
-    isExplicitPoint, isPointUsedByLine,
-    constraintStatusOf, escapeHtml, formatDisplayNumber,
-    toolbarSvgMarkup, constraintToolbarIcon, sketchTreeGutter: window.SketchTreeView.gutter, isSketchProjectedGeometry,
-    findLineFixedConstraint, geometryInstanceTypeLabel,
-    resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
-    isDimensionConstraint, constraintGeometryId, isReadOnlyDimension,
-    constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected,
-    readCanvasHover: () => canvasHover.current, readSidebarHover: () => selectionHighlight.current,
-    constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements,
-  });
-  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithDocumentView({
+  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithDocumentObjects({
+    readServices: geometryReadServices, canvasHover, selectionHighlight,
+    objectOptions: { constraintFeedback, isHidden: selectionVisibilityIsHidden,
+      ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver, isExplicitPoint, isPointUsedByLine,
+      constraintStatusOf, formatDisplayNumber, toolbarSvgMarkup, constraintToolbarIcon, isSketchProjectedGeometry,
+      findLineFixedConstraint, geometryInstanceTypeLabel, resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
+      isDimensionConstraint, constraintGeometryId, isReadOnlyDimension, constraintIsRedundant, referenceConstraintErrorInfo },
     document, window, sketchContext, applicationSettings, escapeHtml, closeCanvasContextMenu,
-    ensureSketchState, objects: sketchTreeObjects, moveCommand: sketchMoveCommand,
+    ensureSketchState, moveCommand: sketchMoveCommand,
     getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
     viewScope: () => editingScopeBinding.current, sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
     currentScope: dimensionPresentationScope, setActiveSketch, clearSelection, canvasSelection,
-    sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
+    toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
-    hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
+    hover: { elementSketchId, ROOT_SKETCH_ID },
     updateSelectionUI: updateGeometrySelectionUI,
     unfixPoint: fixedOperandCommand.unfixPoint,
   });

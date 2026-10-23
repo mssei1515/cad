@@ -6,6 +6,7 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 sandbox.window.GeometrySolver = {};
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/selection.js'), 'utf8'), sandbox);
+for (const file of ['canvas_hover', 'selection_highlight']) vm.runInContext(fs.readFileSync(`src/editing/${file}.js`, 'utf8'), sandbox);
 for (const file of ['canvas_context_menu', 'sketch_tree_view', 'sketch_tree_objects', 'sketch_tree_controller']) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui', `${file}.js`), 'utf8'), sandbox);
 }
@@ -155,7 +156,7 @@ test('dimension category separates constraint and reference dimensions while ret
   assert.deepEqual(Array.from(groups.constraint, entry => entry.modelIndex), [1]);
 });
 
-function menuFixture({ withView = false, fromDocument = false, noOverlay = false } = {}) {
+function menuFixture({ withView = false, fromDocument = false, noOverlay = false, withObjects = false } = {}) {
   const calls = [], domReads = [], setup = [], scopeReads = [], selection = sandbox.window.CanvasSelection.create();
   const state = { ready: false, active: 'S1', moving: false, language: 'en', failure: null, key: 'document', moveState: null };
   const sketches = [{ id: 'ROOT', kind: 'root' }, { id: 'S1' }, { id: 'S2', locked: true }];
@@ -178,7 +179,7 @@ function menuFixture({ withView = false, fromDocument = false, noOverlay = false
     sketchContext: { sketchById: id => { assert.equal(state.ready, true); return sketches.find(s => s.id === id); }, isRootSketch: sketch => sketch?.kind === 'root', activeSketchId },
     applicationSettings: { applicationText: (ja, en) => state.language === 'en' ? en : ja }, escapeHtml: String,
     closeCanvasContextMenu: () => calls.push('close-canvas'),
-    currentScope: () => { assert.equal(state.ready, true); scopeReads.push('controller'); return { sketches }; }, activeSketchId,
+    currentScope: () => { assert.equal(state.ready, true); scopeReads.push('controller'); return state.model || { sketches }; }, activeSketchId,
     setActiveSketch: id => { assert.equal(menuElement.hidden, true); state.active = id; calls.push(['activate', id]); },
     clearSelection: () => { calls.push('clear'); selection.clear(); }, canvasSelection: selection,
     updateUI: () => calls.push('ui'), updateSketchUI: () => calls.push('sketch-ui'), draw: () => calls.push('draw'), move: { active: () => state.moving },
@@ -193,10 +194,24 @@ function menuFixture({ withView = false, fromDocument = false, noOverlay = false
     choose: function(id) { assert.equal(this.choose, moveCommand.choose); calls.push(['choose', id]); }, commit() {}, cancel() {} };
   const objects = { index: () => new Map(), row: () => '', summary: () => '', selected: () => false, hovered: () => false, resolveSelectionEntry: () => null };
   if (withView) { delete ports.activeSketchId; delete ports.move; }
-  const createWithView = fromDocument ? sandbox.window.SketchTreeController.createWithDocumentView : sandbox.window.SketchTreeController.createWithView;
+  const canvasHover = sandbox.window.CanvasHover.create({ isEndpointPoint: () => false });
+  const selectionHighlight = sandbox.window.SelectionHighlight.create({ canvasSelection: selection, types: {},
+    constraintGraphNodes: constraint => constraint.nodes, targetFromConstraint: () => false,
+    getHoveredDimension: () => canvasHover.current.dimension, setHoveredDimension: value => canvasHover.update({ dimension: value }), draw: ports.draw });
+  const geometry = { id: 'P1', sketchId: 'S1' };
+  const readServices = { reads: { scopeGeometryItem: function(category, id) {
+    'use strict'; assert.equal(this, undefined); assert.equal(state.ready, true); calls.push(['geometry', category, id]); return geometry;
+  } } };
+  const objectOptions = { types: {}, isDimensionConstraint: () => false, isExplicitPoint: () => true, isPointUsedByLine: () => false,
+    ensureAnalysis() {}, constraintStatusOf: () => 'under', toolbarSvgMarkup: () => '',
+    elementSketchId: item => item.sketchId, constraintSketchId: item => item.sketchId };
+  const createWithView = withObjects ? sandbox.window.SketchTreeController.createWithDocumentObjects
+    : fromDocument ? sandbox.window.SketchTreeController.createWithDocumentView : sandbox.window.SketchTreeController.createWithView;
   const feature = withView ? createWithView({ ...ports, sketchOverlay: noOverlay ? null : fromDocument ? undefined : overlay,
     sketchOverlayResizeHandle: noOverlay ? null : fromDocument ? undefined : handle, getScopeKey: () => state.key, viewScope: () => { assert.equal(state.ready, true); scopeReads.push('view'); return viewScope; },
-    ensureSketchState() {}, objects, moveCommand, sketchHasSolveError: () => false, referenceConstraintErrorCountForSketch: () => 0, constraintDuplicateCountForSketch: () => 0,
+    ensureSketchState() {}, ...(withObjects ? { objectOptions, readServices, canvasHover, selectionHighlight,
+      hover: { elementSketchId: item => item.sketchId, ROOT_SKETCH_ID: 'ROOT' } } : { objects }),
+    moveCommand, sketchHasSolveError: () => false, referenceConstraintErrorCountForSketch: () => 0, constraintDuplicateCountForSketch: () => 0,
   }) : sandbox.window.SketchTreeController.createWithContextMenu(ports);
   const event = (id, child = false) => ({ clientX: 20, clientY: 30, preventDefault: () => calls.push('prevent'),
     target: { closest: selector => selector === '.sketch-item' ? { dataset: { id } } : child ? {} : null } });
@@ -204,8 +219,49 @@ function menuFixture({ withView = false, fromDocument = false, noOverlay = false
     closest: selector => selector === '[data-context-action]' ? { dataset: { contextAction: name }, disabled } : null,
   } });
   return { ...feature, canvas, document, windowTarget, menuElement, attributes, state, calls, domReads, setup, scopeReads, overlay, handle, activeLabel, selection, sketches, event, action,
+    canvasHover, selectionHighlight, geometry,
     listeners: () => [menuElement, canvas, document, windowTarget].reduce((total, target) => total + target.count(), 0) };
 }
+
+test('Tree object composition shares live selection, hover and geometry reads with the real Controller', () => {
+  const f = menuFixture({ withView: true, fromDocument: true, withObjects: true });
+  assert.deepEqual(f.calls, []); assert.deepEqual(f.scopeReads, []); f.state.ready = true;
+  const annotation = { id: 'AN1', type: 'text', sketchId: 'S1', text: 'Note' };
+  f.state.model = { sketches: f.sketches, points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [],
+    annotations: [annotation], hatches: [], referenceImages: [], blockInstances: [], geometryInstances: [] };
+  assert.equal(f.objects.selected('annotation', annotation), false);
+  f.selection.set('annotations', [annotation]); assert.equal(f.objects.selected('annotation', annotation), true);
+  assert.equal(f.objects.selected('annotation', { ...annotation }), false);
+  assert.equal(f.objects.index().get('S1').annotation[0], annotation);
+  const row = { dataset: { objectKind: 'annotation', id: annotation.id, sketchId: 'S1' }, contains: () => false };
+  const event = { target: { closest: selector => selector === '.sketch-object-row' ? row : null } };
+  f.controller.pointerOver(event); assert.equal(f.canvasHover.current.annotation, annotation);
+  assert.equal(f.objects.hovered('annotation', annotation), true);
+  f.controller.pointerOut(event); assert.equal(f.objects.hovered('annotation', annotation), false);
+  row.dataset = { objectKind: 'point', id: 'P1', sketchId: 'S1' };
+  f.controller.pointerOver(event); assert.equal(f.selectionHighlight.current.item, f.geometry);
+  assert.equal(f.objects.hovered('point', f.geometry), true);
+  assert.equal(f.objects.resolveSelectionEntry(row.dataset), f.geometry);
+  const constraint = { nodes: [annotation] };
+  assert.equal(f.objects.related(constraint), false);
+  f.selection.set('points', [annotation]); assert.equal(f.objects.selectedReferenceElements()[0], annotation);
+  assert.equal(f.objects.related(constraint), true);
+  f.controller.pointerOut(event); assert.equal(f.selectionHighlight.current, null);
+});
+
+test('Tree object scope changes remain distinct from View scope and preserve setup and menu lifetime', () => {
+  const f = menuFixture({ withView: true, fromDocument: true, withObjects: true });
+  const direct = menuFixture({ withView: true, fromDocument: true });
+  assert.deepEqual(f.setup, direct.setup); f.state.ready = true;
+  const model = id => ({ sketches: f.sketches, points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [],
+    annotations: [{ id, type: 'text', sketchId: 'S1' }], hatches: [], referenceImages: [], blockInstances: [], geometryInstances: [] });
+  f.state.model = model('AN1'); assert.equal(f.objects.index().get('S1').annotation[0].id, 'AN1');
+  f.state.model = model('AN2'); assert.equal(f.objects.resolveSelectionEntry({ objectKind: 'annotation', id: 'AN1' }), null);
+  assert.equal(f.objects.resolveSelectionEntry({ objectKind: 'annotation', id: 'AN2' }), f.state.model.annotations[0]);
+  f.view.render(); assert.match(f.canvas.innerHTML, /View Sketch/);
+  f.controller.click(f.event('S2')); assert.equal(f.selection.sketchId, 'S2'); assert.equal(f.state.active, 'S1');
+  f.menu.start(); assert.ok(f.listeners() > 0); f.menu.dispose(); assert.equal(f.menuElement.count(), 0);
+});
 
 test('Document Tree view resolves overlays before unchanged resize setup and retains explicit null behavior', () => {
   const f = menuFixture({ withView: true, fromDocument: true }), direct = menuFixture({ withView: true });

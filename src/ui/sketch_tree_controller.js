@@ -1,6 +1,20 @@
 /* Route sketch tree actions to selection, editing commands and expansion state. */
 (() => {
   "use strict";
+  function createWithDocumentObjects({ objectOptions, readServices, canvasHover, selectionHighlight, ...options }) {
+    const { currentScope, sketchContext, applicationSettings, escapeHtml, canvasSelection } = options;
+    const { sketchTreeObjectSelected } = canvasSelection;
+    const { selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection,
+      setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint } = selectionHighlight;
+    const objects = window.SketchTreeObjects.create({ ...objectOptions, readServices, sketchContext, applicationSettings,
+      currentScope, escapeHtml, sketchTreeGutter: window.SketchTreeView.gutter, sketchTreeObjectSelected,
+      readCanvasHover: () => canvasHover.current, readSidebarHover: () => selectionHighlight.current,
+      selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection });
+    const interaction = createWithDocumentView({ ...options, objects,
+      sidebarGeometryItem: readServices.reads.scopeGeometryItem,
+      hover: { ...options.hover, canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint } });
+    return Object.freeze({ objects, ...interaction });
+  }
   function createWithDocumentView({ document, sketchOverlay = document.getElementById("sketchOverlay"),
     sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle"), ...options }) {
     return createWithView({ ...options, document, sketchOverlay, sketchOverlayResizeHandle });
@@ -309,5 +323,5 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.SketchTreeController = Object.freeze({ create, createWithView, createWithDocumentView, createWithContextMenu, createMoveInputBinding });
+  window.SketchTreeController = Object.freeze({ create, createWithView, createWithDocumentView, createWithDocumentObjects, createWithContextMenu, createMoveInputBinding });
 })();
