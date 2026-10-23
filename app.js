@@ -221,11 +221,8 @@
     trimConstraintSelection, sketchTreeObjectSelected,
     hasSelection,
   } = canvasSelection;
-  const pointUsage = window.PointUsage.create({
-    currentScope: workspace.current, constraintReferencesPoint,
-    allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
-    allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines(),
-    editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
+  const pointUsage = geometryReadServices.createPointUsage({
+    constraintReferencesPoint, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
   });
   const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isSelectableEndpointPoint } = pointUsage;
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
