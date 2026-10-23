@@ -175,8 +175,49 @@ function authoringFixture() {
   canCreateInActiveSketch:never,rejectRootSketchCreation:noop,setMode:value=>{state.mode=value;events.push('mode');},resetEditing:()=>events.push('editing'),resetBlankCandidate:never,updateToolbar:()=>events.push('toolbar'),
   projection:{reset:()=>events.push('projection')},clearSelection:()=>events.push('clear'),solveAndRefresh:noop,recordHistory:noop,applicationText:(_ja,en)=>en,setHint:()=>events.push('hint'),updateUI:()=>events.push('ui'),draw:()=>events.push('draw'),log:noop};
  const feature=sandbox.window.BasicDrawingTools.createAuthoring(ports);
- return {created,events,state,ports,feature,createLifecycleSession:sandbox.window.DrawOperationLifecycle.createSession};
+ return {created,events,state,ports,feature,sandbox,createLifecycleSession:sandbox.window.DrawOperationLifecycle.createSession};
 }
+
+function previewFixture() {
+ const f=authoringFixture(),calls=[],state={ready:false,pointer:{x:12,y:8},trim:null,mode:'select',sizeFailure:null};
+ f.sandbox.window.GeometrySolver={hypot2:Math.hypot};
+ for(const file of ['src/geometry/geometry_kernel.js','src/geometry/spline_geometry.js','src/rendering/authoring_preview_renderer.js'])
+  vm.runInNewContext(fs.readFileSync(file,'utf8'),f.sandbox);
+ const ready=()=>assert.equal(state.ready,true,'preview construction must remain lazy');
+ Object.defineProperties(f.ports.preview,{pointer:{get(){ready();return state.pointer;}},trim:{get(){ready();return state.trim;}}});
+ const ctx=Object.fromEntries(['beginPath','moveTo','lineTo','arc','stroke','fill','strokeRect','setLineDash']
+  .map(name=>[name,(...args)=>{ready();calls.push([name,...args]);}])),viewport={scale:2};
+ const centerline={support:null,firstPoint:null,projectPointToCenterlineSupport(point){assert.equal(point,state.pointer);return point;}};
+ f.events.length=0;
+ const result=f.feature.createPreview({ctx,viewport,withCanvasState:work=>{calls.push(['enter']);try{work();}finally{calls.push(['exit']);}},
+  traceSplinePath:spline=>calls.push(['spline',spline.curve()]),readMode:()=>{ready();return state.mode;},centerlineCommand:centerline,
+  readCanvasSize:()=>{ready();calls.push(['size']);if(state.sizeFailure)throw state.sizeFailure;return {width:100,height:80};}});
+ assert.deepEqual(f.events,[]);assert.deepEqual(calls,[]);assert.ok(Object.isFrozen(result));state.ready=true;
+ return {...f,...result,calls,previewState:state,ctx,viewport,centerline};
+}
+
+test('authoring presentation reads the same primitive commands, Spline draft and current pointer without a second preview state',()=>{
+ const f=previewFixture(),state=f.previewState;
+ f.feature.tools.line.startPoint={x:1,y:2};state.mode='line';f.layer.draw();
+ assert.ok(f.calls.some(c=>c[0]==='moveTo'&&c[1]===1&&c[2]===2));
+ assert.ok(f.calls.some(c=>c[0]==='lineTo'&&c[1]===12&&c[2]===8));
+ f.calls.length=0;f.feature.tools.line.startPoint={x:3,y:4};state.pointer={x:20,y:10};f.layer.draw();
+ assert.ok(f.calls.some(c=>c[0]==='moveTo'&&c[1]===3&&c[2]===4));assert.ok(f.calls.some(c=>c[0]==='lineTo'&&c[1]===20));
+ f.calls.length=0;state.mode='rectangle';f.feature.tools.rectangle.startPoint={x:2,y:3};f.layer.draw();
+ assert.ok(f.calls.some(c=>c[0]==='strokeRect'&&c[1]===2&&c[2]===3&&c[3]===18&&c[4]===7));
+ f.calls.length=0;state.mode='spline';f.feature.spline.draft.points=[{x:0,y:0},{x:10,y:5}];f.layer.draw();
+ assert.equal(f.calls.filter(c=>c[0]==='spline').length,1);
+ f.feature.spline.draft.points=[];state.pointer=null;f.calls.length=0;f.layer.draw();assert.deepEqual(f.calls,[]);
+});
+
+test('authoring presentation keeps Centerline guards, size failure boundaries and the live Fillet painter scale',()=>{
+ const f=previewFixture(),state=f.previewState;state.mode='centerline';f.layer.draw();assert.deepEqual(f.calls,[]);
+ f.centerline.support={ok:true,anchor:{x:0,y:0},ux:0,uy:1};state.sizeFailure=new Error('size failed');
+ assert.throws(()=>f.layer.draw(),error=>error===state.sizeFailure);assert.deepEqual(f.calls,[['size']]);
+ state.sizeFailure=null;f.calls.length=0;f.layer.draw();assert.equal(f.calls[0][0],'size');assert.equal(f.calls.at(-1)[0],'exit');
+ f.calls.length=0;f.viewport.scale=4;f.renderer.drawFilletArc({center:{x:3,y:4},radius:5,startAngle:0,endAngle:1});
+ assert.equal(f.ctx.lineWidth,0.5);assert.ok(f.calls.some(c=>c[0]==='arc'&&c[1]===3&&c[2]===4&&c[3]===5));
+});
 
 test('authoring assembly shares actual snap, draft, geometry and checkpoint ports and defers Centerline construction',()=>{
  const f=authoringFixture();assert.deepEqual(f.events,['DrawingSnap','SplineDraft','SplineCommand','SnapConstraints','LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand']);

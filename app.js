@@ -28,10 +28,6 @@
     circlePointAtAngle,
     arcSweep,
     unwrapAngleNear,
-    shortestAngleFrom,
-    threePointArcGeometry,
-    slotGeometry,
-    angleAtArcParam,
     lineNormal,
     lineHasDirection,
     signedPointLineDistance,
@@ -593,10 +589,6 @@
     painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
   });
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
-  const authoringPreview = window.AuthoringPreviewRenderer.create({ ctx, viewport, withCanvasState,
-    hypot2, shortestAngleFrom, slotGeometry, threePointArcGeometry, minimumLineLength: MIN_LINE_LENGTH, minimumArcLength: MIN_ARC_LENGTH,
-    buildSpline: window.SplineGeometry.build, traceSplinePath, angleAtArcParam });
-  const { drawFilletArc: drawFilletPreviewArc } = authoringPreview;
   const placementPreview = window.PlacementPreviewRenderer.create({ ctx, viewport, withCanvasState, traceSplinePath,
     drawResolvedHatch, resolvedHatchBoundary, hatchAppearanceForDisplay, hatchPatternOrigin, drawAnnotationLeader, drawAnnotationText });
   const placementPreviewLayer = window.PlacementPreviewRenderer.createLayer({
@@ -627,7 +619,7 @@
     resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar, projection: sketchProjectionCommand, clearSelection,
     solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw, log,
   });
-  const { snap: drawingSnap, spline: { draft: splineDraft, command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
+  const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
   const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
   function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
   const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
@@ -755,9 +747,8 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { start: startCenterlineCommand, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
-  const authoringPreviewLayer = window.AuthoringPreviewRenderer.createLayer({
-    renderer: authoringPreview, readMode: drawOperationLifecycle.readMode, readPointer: () => drawingPreview.pointer, readTrim: () => drawingPreview.trim,
-    lineCommand, rectangleCommand, slotCommand, circularCommands, splineDraft, centerlineCommand, projectPointToCenterlineSupport,
+  const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreview({
+    ctx, viewport, withCanvasState, traceSplinePath, readMode: drawOperationLifecycle.readMode, centerlineCommand,
     readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
   });
   const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;

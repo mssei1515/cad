@@ -93,6 +93,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：基本作図とプレビューの共有接続（2026-10-24、検証完了）
+
+基準develop／origin/developは214e7a8。直前の参照画像組立て32ba943は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/authoring-preview-compositionで実施した。
+
+BasicDrawingTools.createAuthoringへcreatePreviewを追加し、同じprimitive commands・Spline draft・DrawingPreviewと、外部で生成済みのCenterline commandへAuthoringPreviewRenderer／Layerを接続する。幾何libraryと最小長は同じ作図機能の依存を用い、appからcommand状態やpointer／trimを組み直して渡さない。実renderer／Layerを返し、Filletの補助描画は同じrendererの関数を使う。新しいmode・draft・preview state、可変phase参照、開始／取消・履歴は追加しない。旧factoryのAPIは維持する。
+
+app.jsは2,574→2,565行（9行減）。対象のroot構築2→1、明示port24→7。元のLayer生成位置で両者を生成し、副作用のない早期renderer生成だけを後ろへ集約する。最初の利用である後段DimensionPreviewまでにFillet painterを接続し、Centerline生成・Lifecycle bind・Canvas描画の段階とbind／startは維持する。不要になった静的libraryの4別名とrootのSpline draft別名を除き、AST監査でroot未使用binding／追加接続の初期化前参照は0（cad-authoring-preview-audit.cjs）。
+
+実renderer／Layerを使った2単体で、構築時の無照会、同じcommand／Spline draftと最新pointer、Centerline guard／サイズ照会例外、Filletの現在倍率を確認した。既存テストの期待は変更せず、関連単体27件・全単体1,894件・構文610ファイルが成功（cad-authoring-preview-{focused,unit,check}.log）。既存fileだけの変更で、script一覧・保存形式・UIは変えない。spec/architecture/モジュール構成.mdとimplementation-map.mdへ内部設計を追記した。
+
+Centerline・Spline・Slot・command panel・PNG・既存UI・phase0保存互換性／描画比較の関連E2E151件が全成功（2.2分、exit 0、runner34006、cad-authoring-preview-e2e.log）。sourceを固定し、receiptのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した（cad-authoring-preview-e2e-receipt.json、cad-authoring-preview-last-run.json）。今回の全E2Eは未実行で、直前の全体基準は74a0d17の全587件成功。週枠使用2%／残量98%、停止条件未到達。mainは停止・release時の最後に反映する方針を維持し、全体目標はactiveで未完了。
+
+次は残る構築依存と機能ownerを再監査する。previewという名前だけで異なるcommand／履歴／描画stateを一つに包まず、同じ実ownerを共有できる境界で生成・接続を整理する。小さな引数削減だけで数百行へ届くとは見積もらない。
+
 ### 最新：参照画像機能の組立て（2026-10-24、検証完了）
 
 基準develop／origin/developはc0eba74。直前のWorkspace描画接続ad37b16は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/reference-image-featureで実施した。
