@@ -113,10 +113,11 @@
   const { hatchRegionErrorText, offsetChainErrorText } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
   const { DEFAULT_DOCUMENT_UNITS } = window.DocumentState;
-  const documentModel = window.DocumentState.create();
-  const workspace = window.EditingWorkspace.create(documentModel);
+  const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
+    geometryIds, documentIds, reservation: idReservation } = window.DocumentWorkspace.create({
+    applicationText, constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
+  });
   const currentParameterNamespace = workspace.current;
-  const parameterNamespace = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
   const { guard: guardDimensionSymbolDeletion } = window.ParameterApplication.createDeletionGuard({
     currentNamespace: currentParameterNamespace, symbolDeletionDependents: parameterNamespace.symbolDeletionDependents,
     readLanguage: () => applicationSettings.language, setHint, log,
@@ -141,7 +142,6 @@
   });
   const { draft: parameterDraft, setParameterDialogError, insertIdentifierIntoExpressionInput,
     syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
-  const sketchContext = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
   const {
     ensureSketchState, isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
@@ -343,10 +343,7 @@
     onSelectionChanged: syncOffsetChainSelection,
   });
   const { add: addOffsetChainGeometry } = offsetSelection;
-  const geometryIds = window.GeometryIds.create();
   const { nextSeq } = window.GeometryIds;
-  const documentIds = window.DocumentIds.create();
-  const idReservation = window.DocumentIds.createReservation({ geometryIds, documentIds, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex });
   const constraintRebinding = window.ConstraintRebinding.create({
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,

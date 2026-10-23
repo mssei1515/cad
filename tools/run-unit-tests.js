@@ -49,7 +49,7 @@ const files = [
   "tests/unit/sketch-hierarchy.test.js",
   "tests/unit/document-elements.test.js",
   "tests/unit/document-snapshot.test.js",
-  "tests/unit/editing-workspace.test.js",
+  "tests/unit/editing-workspace.test.js", "tests/unit/document-workspace.test.js",
   "tests/unit/block-editor-session.test.js",
   "tests/unit/block-editing-queries.test.js",
   "tests/unit/block-selection-query.test.js",

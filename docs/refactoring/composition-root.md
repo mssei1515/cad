@@ -6,6 +6,22 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：構築階層の再監査とDocumentWorkspace（2026-10-24、全体検証完了）
+
+基準develop／origin/developは64348ff。直前のSnapshot metadata分離6274ab1は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/document-workspace-compositionで実施した。
+
+組立て階層を再監査し、20fbe41の既報値を同じBabel AST条件で再現した。64348ffは2,555物理行／2,092非空白行、構築1,004・test hooks440・一文call211・その他437、root構築167。DocumentWorkspace追加後は2,552／2,089、構築1,001・hooks440・call211・その他437、root構築161、root関数173・callback271・複文11・後段接続let6。test hooksとcallを全除去する仮定でも1,438非空白行が残る。小関数の移動や公開Objectを巨大contextで包む案では200〜500行に届くとは扱わない。根拠・候補比較・測定条件はbootstrap-boundary-audit.mdの最新節へ記録した。
+
+src/application/document_workspace.jsへDocumentState→EditingWorkspace→ParameterNamespace→SketchContext→GeometryIds→DocumentIds→Reservationの七部品の初期構築を集約した。三依存はapplicationText／constraintGraphNodes／遅延nextHatchIndexだけで、返す七ownerは各既存factoryの実体。Document／scope／照会／採番のstateやreset／restoreは各ownerに残し、UI・Solver実行・履歴・保存sessionを取り込まない。Sketch照会とprivate採番の生成だけを前へ寄せ、七部品の相対順とUI・scope切替・reset／履歴の実行位置を保つ。Hatch getterは元のeditingScopeBinding readerを保持し、workspace.currentへ置換しない。広いapp contextや新しいmodelは追加しない。
+
+app.jsは2,555→2,552行（3行減）、対象構築7→1、明示引数8→3（旧Workspaceの位置引数1も含む）。root未使用bindingと追加接続の初期化前参照は0（cad-document-workspace-audit.cjs）。全体ASTはcad-composition-hierarchy-audit／cad-document-workspace-hierarchy-auditの.cjs／.json／.logで、candidate app blobは3f8dd4e1b460005c3fef4ec19a2f77a2954471eb。
+
+実componentの3単体で初期Document値と独立した複数組、workspace／Document同一性、local scope→復元に追従するSketch／Parameter、同じ採番ownerと遅延Hatch read／途中失敗の順序を確認した。関連47件・全単体1,903件・構文612ファイルが成功（cad-document-workspace-{focused,unit,check}.log）。index.html・tools/check-syntax.js・tools/run-unit-tests.js・unified-ui読込期待を同期し、file URL Help／script読込の先行E2E1件も成功（2.2秒、cad-document-workspace-loader.log）。spec/architecture/モジュール構成.mdとimplementation-map.mdへ内部設計を記録した。
+
+モデルの初期構築全体に触れるため、同じsourceを固定して全587 E2Eを実行し、全件成功した（27.9分、exit 0、runner84270、cad-document-workspace-e2e-full.log）。初期性能12件、adversarial drag、Fillet 3,744 previews／32.2秒、Offset 10,296／2.7分、航空機1,872／8.7分とその後の全UI・保存／復元まで成功。先行loaderと全体検証のreceiptはloaderCode 0／exitCode 0／listeners 0、last-runはpassed／failedTests空で、自己起動port8799の停止も確認した（cad-document-workspace-e2e-receipt.json、cad-document-workspace-last-run.json）。app／新module／index／tools／変更testの固定hashも一致した（cad-document-workspace-source-hashes.json）。旧全体基準74a0d17の587件成功とは区別し、今回のcandidateを最新の全体検証済み基準とする。
+
+週枠は終了時の再確認で使用8%／残量92%、停止条件未到達。mainは停止・release時に最後に反映する方針を維持し、全体目標はactiveで未完了。次も実owner・依存方向・初期化段階を確認して構築階層を育てる。Sketch TreeのObjects／ControllerやParameterのUI／計算／checkpoint、test支援の生成／公開は、まとまった名前だけで多数のportを包まず、各責務とscopeを先に整理する。
+
 ### 最新：スナップショット用図形metadataの照会（2026-10-24、検証完了）
 
 基準develop／origin/developは3b9c67c。直前の拘束・寸法codec接続69a1c80は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/snapshot-geometry-metadataで実施した。
