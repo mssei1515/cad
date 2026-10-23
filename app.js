@@ -367,6 +367,11 @@
     changed: updateHistoryButtons, log, limit: HISTORY_LIMIT, interactionProfiler,
   });
   const { documentHistory, controller: historyController } = historyFeature;
+  const toolbarPresentation = presentation.createToolbar({
+    lifecycle: drawOperationLifecycle, pending: pendingCommandSession, constraints: constraintTargetSession, constructionCommand,
+    readSplineEditing: () => Boolean(splineEditing.current), readHistory: activeEditHistory,
+    updateDocumentStatus: () => updateDocumentNameUI(), isGeometryMode,
+  });
   const CURRENT_JSON_VERSION = 26;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
@@ -972,14 +977,7 @@
     return historyController.active();
   }
 
-  function updateHistoryButtons() {
-    const undoBtn = document.getElementById("undoBtn");
-    const redoBtn = document.getElementById("redoBtn");
-    const history = activeEditHistory();
-    if (undoBtn) undoBtn.disabled = history.undoCount <= 1;
-    if (redoBtn) redoBtn.disabled = history.redoCount === 0;
-    updateDocumentNameUI();
-  }
+  function updateHistoryButtons() { return toolbarPresentation.updateHistory(); }
 
   function resetHistory(label = "initial") {
     return historyController.resetDocument(label);
@@ -1321,22 +1319,12 @@
   function selectionVisibilityIsHidden(targets) { return propertySelection.visibilityIsHidden(targets); }
   function toggleSelectedVisibility() { return selectionVisibilityCommand.toggle(); }
 
-  const toolbarView = window.ToolbarView.create({
-    document, isGeometryMode, constructionToggleState,
-    readInteraction: () => ({ mode: drawOperationLifecycle.mode, hasPending: Boolean(pendingCommandSession.current), hasConstraint: Boolean(constraintTargetSession.command),
-      annotationDraft: Boolean(pendingCommandSession.current?.annotationDraft), pendingType: pendingCommandSession.current?.type,
-      constraintType: constraintTargetSession.command?.type, splineEditing: Boolean(splineEditing.current) }),
-    updateHistoryButtons, selectedVisibilityTargets, selectionVisibilityIsHidden,
+  const { view: toolbarView, status: commandStatusView } = toolbarPresentation.createControls({
+    selectedVisibilityTargets, selectionVisibilityIsHidden,
     canEditTarget: target => canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)),
     syncFlyouts: () => toolFlyouts?.sync(), updateCursor: commandCursor.update,
   });
   function updateToolbar() { toolbarView.update(); }
-  const commandStatusView = window.ToolbarView.createCommandStatus({
-    document, applicationText, readMode: drawOperationLifecycle.readMode, readPendingType: () => pendingCommandSession.current?.type,
-    readConstraintCommand: () => constraintTargetSession.command,
-  });
-
-  function constructionToggleState(geometryMode = isGeometryMode()) { return constructionCommand.state(geometryMode); }
 
   const { label: constraintLabel, targetHint: constraintTargetHint, invalidTargetHint: invalidConstraintTargetHint } = window.ConstraintControlsView.createFeedback({
     constraintButtons, applicationText, feedback: constraintFeedback,
