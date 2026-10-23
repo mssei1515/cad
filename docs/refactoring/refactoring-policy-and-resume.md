@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：寸法拘束の生成・候補分類と追加機能の接続（2026-10-24、検証完了）
+
+基準develop／origin/developは79b87b1。本単位はcodex/constraint-dimension-compositionで実施した。Treeの残存照会を全owner付きのcontextで包む案は採用せず、先に同じ寸法生成器を共有する責務を整理した。ConstraintCommitCommand.createWithDimensionsが実DimensionConstraintFactory→CommitCommand→DimensionReadOnlyQueryを構築し、command／readOnlyを返す。候補生成と分類は既存childに残し、追加時の生成エラー通知adapterを同じcommandへ集める。静的拘束型とtargetItemsは既存namespaceから取得し、並行判定・所属付与・冗長probeとcommit依存は明示注入する。既存create APIを維持し、新しい可変context・cache・モデルは追加しない。
+
+app.jsは2,536→2,516行（20行減）。対象構築3→1、明示port46→40。root未使用binding／初期化前参照は0（cad-constraint-dimensions-audit.cjs）。Treeや寸法配置の早期接続は従来のhoisted wrapperを維持し、候補照会は構築後に行う。Factory／Query／Commandのconstructorはモデル・scope・UIを評価しないため、この純粋な内部生成だけを集約する。求解準備と他機能への接続はappに残す。
+
+実factory／query／commandと拘束classを用いる追加2単体で、PointAxisDistanceの型・geometry／placementの同一性、候補の無登録、同じ規則から別candidateを生成して追加すること、参照metadataと冗長probe、現在Sketchの変化、明示readOnly短絡、候補の無通知と追加時のhint→log、通知例外の伝播とモデル無変更を確認した。外側dimension options.silentを生成callbackへ渡さない既存挙動も維持する。既存期待やE2E規則を緩和していない。関連単体36件、全単体1,913件、構文612ファイルが成功。
+
+複数寸法・寸法prefix・slot寸法・Annotation anchor／parameter・Block・Sketch編集・既存UI・phase0保存互換性／描画比較の関連E2E250件が全成功（3.9分、exit 0、runner57423）。cad-constraint-dimensions-e2e-receipt.jsonのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799停止、製品source hashの不変を確認。ログはTEMPのcad-constraint-dimensions-{focused,unit,check,e2e}.log。spec/architecture/モジュール構成.mdとimplementation-map.mdへ設計を記録した。今回の全E2Eは未実行で、17defd0の全587件成功と区別する。
+
+週枠使用11%／残量89%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残るroot構築を再監査し、実ownerの内部構築と機能間接続を分ける。Treeの拘束・寸法・Hatch読取りは、既存APIの参照を大きな袋に移すだけなら見送る。求解準備はDimensionValueCommandにも共有されるため、commitだけの内部処理と決めつけず、実使用と生成時機を確認する。200〜500行の目標は維持し、小さな引数削減だけで達成扱いにしない。
+
 ### 最新：Sketch Treeの行表示と操作の共有接続（2026-10-24、検証完了）
 
 基準develop／origin/developはee3684b。本単位はcodex/sketch-tree-selection-contextで実施した。既存SketchTreeController.createWithDocumentObjectsが実Objects→Document View→Controller／Menuを組み立て、同じSelection・CanvasHover・SelectionHighlight・Geometry read serviceへ接続する。行選択・関連拘束・Sidebar hover関数とgeometry ID照会をappの中継bindingから外した。Objects／Controllerは既存dimensionPresentationScope、Viewはbound editing scope、展開keyは現在Block IDという違いを維持する。新しい状態・cache・可変context・ファイルは追加しない。既存の直接create APIを維持する。

@@ -54,14 +54,10 @@
     Arc,
     Spline,
     DistanceConstraint,
-    PointAxisDistanceConstraint,
-    PointLineDistanceConstraint,
-    LineLineDistanceConstraint,
     LineCircleDistanceConstraint,
     ConcentricRadiusDifferenceConstraint,
     OffsetConstraint,
     OffsetChainConstraint,
-    LineAngleConstraint,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
@@ -77,7 +73,6 @@
     ParallelConstraint,
     PerpendicularConstraint,
     RadiusConstraint,
-    DiameterConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
     SplineSplineTangentConstraint,
@@ -1710,14 +1705,15 @@
 
   function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
-  const constraintCommitCommand = window.ConstraintCommitCommand.create({
+  const { command: constraintCommitCommand, readOnly: dimensionReadOnlyQuery } = window.ConstraintCommitCommand.createWithDimensions({
+    linesAreParallel, assignSketch: assignConstraintSketchId, probeRedundancy: constraintRedundancy.probeCandidate,
     currentScope: workspace.current, forgetConstraint: constraintRedundancy.forgetConstraint,
     resolveSelection: constraintResolutionFromCurrentSelection, canvasSelection,
     guardSketchEdit, activeSketchId, constraintTargetsAreActive, snapshotModelState, restoreModelState,
     solveStepNormForConstraint, pushModelConstraint, preconditionNewConstraint, withTemporarySolveStepNorm,
     solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
     constraintSketchId, lineCollapseQuery, redundantConstraintInfo, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
+    targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution,
     clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
     recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
     sketchName, now: () => performance.now(),
@@ -1739,22 +1735,6 @@
 
   function commitConstraintResolution(...args) { return constraintCommitCommand.resolution(...args); }
 
-  const dimensionConstraintFactory = window.DimensionConstraintFactory.create({
-    types: { PointAxisDistanceConstraint, DistanceConstraint, PointLineDistanceConstraint, LineLineDistanceConstraint,
-      LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, LineAngleConstraint, RadiusConstraint, DiameterConstraint },
-    linesAreParallel,
-  });
-  function distanceConstraintFromTarget(target, value, dimension, options = {}) {
-    const result = dimensionConstraintFactory.fromTarget(target, value, dimension);
-    if (result.error && !options.silent) { setHint(result.error, "error"); log(result.error); }
-    return result.constraint;
-  }
-
-  const dimensionReadOnlyQuery = window.DimensionReadOnlyQuery.create({
-    fromTarget: dimensionConstraintFactory.fromTarget, activeSketchId, assignSketch: assignConstraintSketchId,
-    markReference: markReferenceConstraint, probeRedundancy: constraintRedundancy.probeCandidate,
-    targetItems: window.DimensionQueries.targetItems,
-  });
   function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
     return dimensionReadOnlyQuery.forPlacement(target, value, dimension, options);
   }
