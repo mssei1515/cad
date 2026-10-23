@@ -33,6 +33,25 @@
     const controls = window.DocumentFileControls.createDocument({
       document, saveJot2DFile: command.save, saveJot2DFileAs: command.saveAs, openJot2DFile: command.open, documentFileCommand: command,
     });
+    function createDxf({ geometry, ids, currentScope, activeSketchId, canImport, minimumLength, clearSelection, updateUI, recordHistory }) {
+      const dxfCommand = window.DxfImportCommand.create({
+        parser: window.DxfImport, geometry, ids, currentScope, activeSketchId, canImport,
+        signature: () => window.DocumentFiles.documentContentSignature(serializeModel()),
+        fileSession, requestChoice, applicationText, minimumLength, setHint,
+        onImported: () => {
+          clearSelection();
+          updateUI();
+          recordHistory("DXF読み込み");
+          fitAllGeometryToViewport();
+          draw();
+        },
+      });
+      function createControls({ flushScheduledCanvasPointerMove }) {
+        return window.DocumentFileControls.createDxf({ document, flushScheduledCanvasPointerMove, fileSession,
+          canImportDxf: canImport, setHint, applicationText, dxfImportCommand: dxfCommand });
+      }
+      return Object.freeze({ command: dxfCommand, createControls });
+    }
     let started = false;
     function start() {
       if (started) return;
@@ -45,7 +64,7 @@
       if (started) browserWindow.removeEventListener("beforeunload", command.beforeUnload);
       started = false;
     }
-    return Object.freeze({ refreshStatus, markCheckpoint, bindControls: controls.bind, start, dispose,
+    return Object.freeze({ refreshStatus, markCheckpoint, createDxf, bindControls: controls.bind, start, dispose,
       save: command.save, saveAs: command.saveAs, open: command.open, importFileData: command.importFileData });
   }
   window.DocumentFileFeature = Object.freeze({ create });

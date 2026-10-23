@@ -1020,19 +1020,9 @@
 
   const canImportDxf = () => canCreateInActiveSketch() && !hasActiveDrawOperation()
     && !pendingCommandSession.current && !constraintTargetSession.command && drawOperationLifecycle.mode !== "block-place";
-  const dxfImportCommand = window.DxfImportCommand.create({
-    parser: window.DxfImport, geometry: geometryCreation, ids: geometryIds,
-    currentScope: workspace.current, activeSketchId, canImport: canImportDxf,
-    signature: () => window.DocumentFiles.documentContentSignature(serializeModel()),
-    fileSession, requestChoice: options => choiceDialog.show(options), applicationText,
-    minimumLength: MIN_LINE_LENGTH, setHint,
-    onImported: () => {
-      clearSelection();
-      updateUI();
-      recordHistory("DXF読み込み");
-      fitAllGeometryToViewport();
-      draw();
-    },
+  const dxfImportFeature = documentFileFeature.createDxf({
+    geometry: geometryCreation, ids: geometryIds, currentScope: workspace.current, activeSketchId, canImport: canImportDxf,
+    minimumLength: MIN_LINE_LENGTH, clearSelection, updateUI, recordHistory,
   });
 
   referenceImageInput.bindClipboard();
@@ -1924,9 +1914,7 @@
   });
   pngExportCommand = pngExport.command;
   pngExport.start();
-  const dxfFileControls = window.DocumentFileControls.createDxf({
-    document, flushScheduledCanvasPointerMove, fileSession, canImportDxf, setHint, applicationText, dxfImportCommand,
-  });
+  const dxfFileControls = dxfImportFeature.createControls({ flushScheduledCanvasPointerMove });
   dxfFileControls.bind();
   referenceImageInput.bindControls();
   document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
