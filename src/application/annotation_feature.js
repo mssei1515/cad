@@ -13,6 +13,7 @@
     const display = window.AnnotationDisplay.create({ ctx, viewport, surface, effectiveAnnotationStyle, canvasSelection,
       readHover, readExportFrame, canvasThemeColor, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement,
       resizeEnabled, activeSketchId, allAnnotations, isVisibleValue, isVisibleSketchId, readPreview: () => command.preview() });
+    const spatial = display.createSpatialQueries();
     const { annotationPlacementAnchor: readAnchor, annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics } = display.renderer;
     function placementAnchor(...args) { return readAnchor(...args); }
     const materialization = window.AnnotationAnchorConstraints.createMaterialization({ annotationPlacementAnchor: placementAnchor,
@@ -77,7 +78,7 @@
         resizeText, beginPointer, endPointer,
       });
     }
-    return Object.freeze({ renderer: display.renderer, layer: display.layer, anchors, dimensions, command,
+    return Object.freeze({ renderer: display.renderer, layer: display.layer, spatial, anchors, dimensions, command,
       placementAnchor, materialize, dimensionScope, startAnchorConstraint, createEditor, createDrag });
   }
   window.AnnotationFeature = Object.freeze({ create });

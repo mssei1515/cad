@@ -13,13 +13,13 @@ function fixture() {
     annotationLeaderDisplayGeometry: step('leader'),
     annotationTextLayout(element) { assert.equal(this, undefined); events.push(['layout', element]); return 'layout' in state ? state.layout : state.result; },
     annotationTextMetrics(...args) { assert.equal(this, undefined); events.push(['metrics', ...args]); return state.metrics; } };
-  const layer = {}, materialization = { materialize(...args) { assert.equal(this, materialization); return state.result; } };
+  const spatial = {}, layer = {}, materialization = { materialize(...args) { assert.equal(this, materialization); return state.result; } };
   const anchors = { startFromSelection(type, element) { assert.equal(this, anchors); events.push(['start', type, element]); return element ? state.result : false; } };
   const dimensions = { entries() { assert.equal(this, dimensions); return state.dimensions; } };
   const command = { preview() { assert.equal(this, command); return state.result; } }, parameterCommand = { commit: step('parameter-commit') },
     textEditing = { commit: step('text-commit') }, editor = {}, drag = {};
   const factory = (name, value) => options => { events.push(name); ports[name] = options; return value; };
-  const context = { window: { AnnotationDisplay: { create: factory('display', { renderer, layer }) }, AnnotationAnchorConstraints: {
+  const context = { window: { AnnotationDisplay: { create: factory('display', { renderer, layer, createSpatialQueries: () => spatial }) }, AnnotationAnchorConstraints: {
     createMaterialization: factory('materialization', materialization), create: factory('anchors', anchors), createDimensions: factory('dimensions', dimensions),
   }, AnnotationCommand: { create: factory('command', command), createTextEditing: factory('text-editing', textEditing) },
     AnnotationParameterCommand: { create: factory('parameter-editing', parameterCommand) },
@@ -46,14 +46,14 @@ function fixture() {
       evaluateParameterNamespace(scope) { assert.equal(this, input.parameterNamespace); events.push(['evaluate', scope]); } },
   });
   const feature = context.window.AnnotationFeature.create(input);
-  return { feature, input, state, item, events, ports, renderer, layer, materialization, anchors, dimensions, command, editor, parameterCommand, textEditing, drag };
+  return { feature, input, state, item, events, ports, renderer, layer, spatial, materialization, anchors, dimensions, command, editor, parameterCommand, textEditing, drag };
 }
 
 test('annotation assembly retains construction order, shared owners and lazy preview, scope and scale reads', () => {
   const f = fixture();
   assert.deepEqual(f.events, ['display', 'materialization', 'anchors', 'dimensions', 'command']);
   assert.equal(f.state.scaleReads, 0);
-  for (const name of ['renderer', 'layer', 'anchors', 'dimensions', 'command']) assert.equal(f.feature[name], f[name]);
+  for (const name of ['renderer', 'layer', 'spatial', 'anchors', 'dimensions', 'command']) assert.equal(f.feature[name], f[name]);
   assert.equal(f.ports.command.currentScope, f.input.currentScope);
   assert.equal(f.ports.command.getPending, f.input.pendingCommandSession.read);
   assert.equal(f.ports.command.setPending, f.input.pendingCommandSession.replace);
