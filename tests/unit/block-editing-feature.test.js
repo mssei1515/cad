@@ -10,9 +10,9 @@ const scope = id => ({ id, name: id, revision: 3, origin: { x: 0, y: 0 }, parent
   points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], parameters: [], annotations: [], hatches: [],
   referenceImages: [], blockInstances: [], geometryInstances: [], sketches: [{ id: 'ROOT', kind: 'root' }, { id: 'S1', kind: 'sketch' }],
   activeSketchId: 'S1', nextHatchIndex: 1, nextDimensionParameterIndex: 1 });
-function fixture() {
+function fixture({ realRebinding = false } = {}) {
   const document = { ...scope('host'), blockDefinitions: [] }, workspace = w.EditingWorkspace.create(document);
-  const state = { ready: false, definitionSeq: 1, hatchSeq: 8, history: 0, viewport: { x: 1, y: 2, scale: 3 }, snapshotError: null };
+  const state = { ready: false, definitionSeq: 1, hatchSeq: 8, history: 0, viewport: { x: 1, y: 2, scale: 3 }, snapshotError: null, bundles: [], serializeFailure: null };
   const events = [];
   const viewport = { snapshot() { assert.equal(this, viewport); assert.equal(state.ready, true);
     events.push('capture-view'); if (state.snapshotError) throw state.snapshotError; return { ...state.viewport }; },
@@ -22,23 +22,25 @@ function fixture() {
     allocate(kind) { assert.equal(this, ids); assert.equal(state.ready, true);
       if (kind === 'blockInstance') return 'BI1'; assert.equal(kind, 'blockDefinition'); return `BD${state.definitionSeq++}`; } };
   const catalog = w.BlockCatalog.create({ definitions: () => { assert.equal(state.ready, true); return document.blockDefinitions; } });
-  const feature = w.BlockEditingFeature.create({ workspace, documentModel: document, ids, catalog,
-    projections: { createBlockProjectionBundle() { throw Error('no nested Block expected in this fixture'); },
-      invalidateBlockProjectionCache: () => events.push('invalidate') },
-    instances: { geometryInstanceBundlesForScope: () => [], emptyGeometryInstanceBundle: () => ({}) },
-    rebinding: { cloneForBlock: (constraint, points) => {
-      events.push('clone-constraint'); const clone = new g.DistanceConstraint(points.get(constraint.p1.id), points.get(constraint.p2.id), constraint.target);
-      clone.sketchId = constraint.sketchId; return clone;
-    } },
+  const projections = { createBlockProjectionBundle() { throw Error('no nested Block expected in this fixture'); },
+    invalidateBlockProjectionCache: () => events.push('invalidate') };
+  const codecs = realRebinding ? w.ConstraintPersistence.create({ geometryId: item => item.id, dimensionData: constraint => constraint.dimension }) : null;
+  const rebinding = realRebinding ? w.ConstraintRebinding.create({ catalog, projections, geometryInstanceBundlesForScope: () => [],
+    serializeConstraint: constraint => { events.push(['serialize', constraint]); if (state.serializeFailure) throw state.serializeFailure; return codecs.serialize(constraint); },
+    decorateSerializedConstraint: data => data, deserializeConstraint: codecs.deserialize, applicationText: (_ja, en) => en,
+  }) : { rebuildDefinition: value => { events.push(['rebuild', value.id]); return 0; }, cloneForBlock: (constraint, points) => {
+    events.push('clone-constraint'); const clone = new g.DistanceConstraint(points.get(constraint.p1.id), points.get(constraint.p2.id), constraint.target);
+    clone.sketchId = constraint.sketchId; return clone;
+  } };
+  const feature = w.BlockEditingFeature.create({ workspace, documentModel: document, ids, catalog, projections,
+    instances: { geometryInstanceBundlesForScope: () => [], emptyGeometryInstanceBundle: () => ({}) }, rebinding,
     normalizedSketchCopy: sketch => ({ ...sketch, appearance: w.Appearance.normalizeAppearance(sketch.appearance) }),
     normalizeGeometryInstance: value => value, isDimensionConstraint: () => false, isReadOnlyDimension: () => false,
     numericDimensionExpression: c => String(c.target), ensureParameterNamespace() {},
-    activeSketchId: () => workspace.current().activeSketchId, blockProjectionBundles: () => [], geometryElementKey: item => item.id,
+    activeSketchId: () => workspace.current().activeSketchId, blockProjectionBundles: () => { assert.equal(state.ready, true); if (realRebinding) events.push('bundles'); return state.bundles; }, geometryElementKey: item => item.id,
     readViewport: () => { assert.equal(state.ready, true); return viewport; },
     activateScope: value => { events.push(['activate', value.id]); return workspace.activate(value); },
     reserveScopeSequences: value => events.push(['reserve', value.id]), createHistory: () => ({ id: ++state.history }),
-    rebuildStoredBlockDefinitionConstraints: () => events.push('rebuild-stored'),
-    rebuildBlockDefinitionConstraintObjects: value => events.push(['rebuild', value.id]),
   });
   function geometry(definition) {
     const a = Object.assign(new g.Point('P1', 0, 0), { sketchId: 'S1' }), b = Object.assign(new g.Point('P2', 10, 0), { sketchId: 'S1' });
@@ -114,7 +116,7 @@ test('staged child definitions and live scope queries share the same session and
   assert.equal(f.feature.queries.blockDefinitionScopeError(child.id), null);
   f.feature.session.restoreHost(session); f.feature.session.rollback(session);
   assert.equal(f.document.blockDefinitions[0], child); assert.equal(child.parentDefinitionId, null);
-  assert.equal(f.feature.queries.blockDefinitionsInCurrentScope()[0], child); assert.equal(f.events.includes('rebuild-stored'), true);
+  assert.equal(f.feature.queries.blockDefinitionsInCurrentScope()[0], child); assert.equal(f.events.some(event => Array.isArray(event) && event[0] === 'rebuild' && event[1] === child.id), true);
 });
 
 test('host capture failure propagates before opening a session, switching scope or creating history', () => {
@@ -209,4 +211,52 @@ test('Block feature View delegates registry rename, guarded deletion and complet
   assert.equal(completed.feature.session.current, null); assert.equal(completed.workspace.current(), completed.document);
   assert.equal(completed.document.blockDefinitions.length, 1); assert.equal(completed.document.blockInstances.length, 1);
   assert.equal(completed.events.filter(event => event[0] === 'view-history').length, 1);
+});
+
+function propagation(f, bound, selection, overrides = {}) {
+  return f.feature.createPropagation({ readEditingScope: () => { assert.equal(f.state.ready, true); f.events.push('bound'); return bound; },
+    clearSelection: () => { f.events.push('clear'); selection.clear(); },
+    stabilizeDefinition: definition => { f.events.push(['stabilize', definition.id]); return { success: true }; },
+    stabilizeDocument: () => { f.events.push('stabilize-document'); return { success: true }; }, applicationText: (_ja, en) => en, ...overrides });
+}
+
+test('Block propagation shares real codecs/rebinding and keeps bound document distinct from workspace with projected point identity', () => {
+  const f = fixture({ realRebinding: true }), bound = scope('bound'), selection = w.CanvasSelection.create();
+  const p = propagation(f, bound, selection); assert.deepEqual(f.events, []); f.state.ready = true;
+  const child = scope('child'), parent = scope('parent'), grand = scope('grand'); child.parentDefinitionId = parent.id; parent.parentDefinitionId = grand.id;
+  for (const definition of [child, parent, grand]) f.geometry(definition);
+  f.document.blockDefinitions = [child, parent, grand]; const sourceParentConstraint = parent.constraints[0];
+  f.geometry(bound); const a = bound.points[0], projected = Object.assign(new g.Point('B:P1', 15, 0), { sketchId: 'S1' });
+  const original = Object.assign(new g.DistanceConstraint(a, projected, 15), { sketchId: 'S1', reference: true, referenceSketchId: 'S0' });
+  bound.constraints = [original]; f.state.bundles = [{ ...scope('projection'), points: [projected] }]; selection.set('points', [a]);
+  const decoy = scope('other-editing-scope'); f.workspace.activate(decoy); const decoyConstraints = decoy.constraints;
+  p.propagate(child);
+  assert.notEqual(parent.constraints[0], sourceParentConstraint); assert.equal(parent.constraints[0].p1, parent.points[0]);
+  assert.notEqual(bound.constraints[0], original); assert.equal(bound.constraints[0].p1, a); assert.equal(bound.constraints[0].p2, projected);
+  assert.equal(bound.constraints[0].reference, true); assert.equal(bound.constraints[0].referenceSketchId, 'S0');
+  assert.equal(decoy.constraints, decoyConstraints); assert.equal(f.workspace.current(), decoy); assert.equal(selection.points.length, 0);
+  assert.deepEqual([child.revision, parent.revision, grand.revision], [4, 4, 4]);
+  assert.deepEqual(f.events.map(event => Array.isArray(event) ? event[0] === 'stabilize' ? 'stabilize-' + event[1] : event[0] : event),
+    ['invalidate', 'serialize', 'stabilize-parent', 'invalidate', 'serialize', 'stabilize-grand', 'invalidate', 'bound', 'bundles', 'serialize', 'clear', 'stabilize-document']);
+  const before = parent.constraints[0]; selection.set('points', [a]); f.events.length = 0;
+  f.feature.session.rollback({ transientDefinitionIds: new Set(), definitionRollbackEntries: new Map([['child', { definition: child, index: 0 }]]) });
+  assert.notEqual(parent.constraints[0], before); assert.equal(parent.constraints[0].p1, parent.points[0]); assert.equal(selection.points[0], a);
+  assert.equal(f.events.filter(event => event[0] === 'serialize').length, 3); assert.equal(f.events.at(-1), 'invalidate');
+});
+
+test('Block propagation preserves failed rebind/solve boundaries and leaves rollback to the caller', () => {
+  for (const failure of ['decode', 'serialize', 'parent-solve']) {
+    const f = fixture({ realRebinding: true }), bound = scope('bound'), selection = w.CanvasSelection.create();
+    const marker = new Error('codec failed'); f.state.ready = true;
+    const child = scope('child'), parent = scope('parent'); f.geometry(parent); f.geometry(bound);
+    if (failure === 'parent-solve') child.parentDefinitionId = parent.id;
+    f.document.blockDefinitions = [child, parent]; selection.set('points', [bound.points[0]]);
+    const original = bound.constraints; if (failure === 'decode') original[0].p2 = new g.Point('missing', 8, 9);
+    if (failure === 'serialize') f.state.serializeFailure = marker;
+    const p = propagation(f, bound, selection, failure === 'parent-solve' ? { stabilizeDefinition: () => ({ success: false, result: { reason: 'parent rejected' } }) } : {});
+    assert.throws(() => p.propagate(child), error => failure === 'serialize' ? error === marker : failure === 'parent-solve' ? error.message === 'parent rejected' : error.message === '点 missing が見つかりません');
+    assert.equal(bound.constraints, original); assert.equal(selection.points[0], bound.points[0]); assert.equal(child.revision, 4);
+    assert.equal(parent.revision, 3); assert.equal(f.events.includes('clear'), false); assert.equal(f.events.includes('stabilize-document'), false);
+    if (failure === 'parent-solve') assert.equal(f.events.includes('bound'), false);
+  }
 });

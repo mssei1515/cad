@@ -306,7 +306,6 @@
     isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
     activeSketchId, blockProjectionBundles, geometryElementKey, readViewport: () => viewport,
     activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences, createHistory: createBlockEditHistory,
-    rebuildStoredBlockDefinitionConstraints, rebuildBlockDefinitionConstraintObjects,
   });
   const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
   const { clone: cloneBlockDefinition, fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
@@ -679,11 +678,10 @@
     restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
-  const blockParameterPropagation = window.BlockParameterPropagation.create({
-    catalog: blockCatalog, invalidateProjection: invalidateBlockProjectionCache, applicationText,
-    definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: storedDefinitionStabilization.stabilize },
-    document: { rebuild: rebuildRootConstraintObjects, stabilize: () =>
-      stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }) },
+  const blockParameterPropagation = blockEditingFeature.createPropagation({
+    readEditingScope: () => editingScopeBinding.current, clearSelection, applicationText,
+    stabilizeDefinition: storedDefinitionStabilization.stabilize, stabilizeDocument: () =>
+      stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }),
   });
   const parameterApplication = window.ParameterApplication.create({
     namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
@@ -917,13 +915,7 @@
   });
   const { read: blockSelectionGeometry, center: blockSelectionBoundsCenter } = blockSelectionQuery;
 
-  function rebuildBlockDefinitionConstraintObjects(definition) {
-    return constraintRebinding.rebuildDefinition(definition);
-  }
 
-  function rebuildStoredBlockDefinitionConstraints() {
-    return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
-  }
 
   function reserveBlockEditorSequences(draft) { return idReservation.scope(draft); }
 
@@ -1833,10 +1825,6 @@
 
 
 
-  function rebuildRootConstraintObjects() {
-    constraintRebinding.rebuildDocument(editingScopeBinding.current, blockProjectionBundles());
-    clearSelection();
-  }
 
 
 
