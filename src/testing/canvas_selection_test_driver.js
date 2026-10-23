@@ -166,5 +166,34 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasSelectionTestDriver = Object.freeze({ createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection, createMoveObservation, createIdObservation });
+  function createSupport({ canvasSelection, currentScope, clearSelection, updateUI, draw }) {
+    const { state: readSelectedGeometry } = createIdObservation({ canvasSelection });
+    function createApi({ sketchMoveCommand, activeSketchId, fields, decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock,
+      blockSelectionGeometry, resetModelState, addLine, addPoint, addArc, ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
+      appendDefinition, nextInstanceId, invalidateBlockProjectionCache, fitSketchToViewport, resetHistory, clientPosition, arcEndpointPoint,
+      canvasHover, canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport }) {
+      const move = createMoveObservation({ sketchMoveCommand, activeSketchId, fields, canvasSelection, currentScope,
+        decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock });
+      const selection = createIdSelection({ clearSelection, currentScope, canvasSelection, updateUI, draw, blockSelectionGeometry, readSelectedGeometry });
+      const overlap = createOverlapFixture({ resetModelState, addLine, addPoint, currentScope, ROOT_SKETCH_ID, DEFAULT_SKETCH_ID,
+        createEmptyBlockDefinition, Point, Line, appendDefinition, nextInstanceId, invalidateBlockProjectionCache, canvasSelection,
+        fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, clientPosition });
+      const endpoints = createEndpointFixture({ resetModelState, addPoint, addLine, addArc, fitSketchToViewport, activeSketchId,
+        resetHistory, updateUI, draw, clientPosition, arcEndpointPoint });
+      const context = createObservation({ canvasHover, canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, readSelectedGeometry });
+      const insertion = createPointInsertion({ canvas, viewport, addPoint, updateUI, draw, clientPosition });
+      return Object.freeze({
+        selectedGeometryIdsForTest: readSelectedGeometry,
+        resetForOverlappingContextSelectionTest: overlap.reset,
+        resetForArcEndpointConstraintSelectionTest: endpoints.reset,
+        canvasContextSelectionStateForTest: context.state,
+        addIsolatedFixedPointForContextTest: insertion.addFixedPoint,
+        sketchMoveStateForTest: move.state,
+        selectGeometryIdsForTest: selection.select,
+      });
+    }
+    return Object.freeze({ readSelectedGeometry, createApi });
+  }
+
+  window.CanvasSelectionTestDriver = Object.freeze({ createSupport, createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection, createMoveObservation, createIdObservation });
 })();
