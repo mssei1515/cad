@@ -6,6 +6,20 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：スナップショット用図形metadataの照会（2026-10-24、検証完了）
+
+基準develop／origin/developは3b9c67c。直前の拘束・寸法codec接続69a1c80は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/snapshot-geometry-metadataで実施した。
+
+GeometryReadServices.createSnapshotMetadataは同じelementSketchIdと実PointUsageへ接続したread-only関数を返す。appのgeometryMetadata内にあったSketch所属とPoint instance／既存kind／primitive利用状況からのfallback分類をこの読取りownerへ移した。Snapshot writerのfield生成、保存形式・codec、Block定義内の独立したlocalGeometryMetadata、履歴や準備順は変えない。現在PointUsage scopeとsnapshotSourceを勝手に統一せず、kindやモデルへ書き戻さない。新しい可変state／cacheやapp contextは追加しない。
+
+app.jsは2,558→2,555行（3行減）。writer生成1→1・writerの明示port7→7に加え、metadata reader生成のpointUsage 1portを接続する。全体の対象Call数1→2／Object port7→8で、単なる引数削減とは扱わず、rootの条件付きデータ照会を所有者へ移す変更である。AST監査でroot未使用bindingと追加接続の初期化前参照は0（cad-snapshot-geometry-metadata-audit.cjs）。
+
+実PointUsage／GeometryReadServices／DocumentSnapshotの2単体で、無照会の構築、Point class判定、truthyなkindと空値fallback、現在scope変更、展開cache無参照、Sketch照会失敗時の短絡、旧callbackとの保存JSON一致とモデル不変、Block内の独立した分類を確認した。Snapshot用fixtureには正式入力で必須のparameters配列を補い、既存期待・製品規則は変更しない。関連単体20件・全単体1,900件・構文610ファイルが成功（cad-snapshot-geometry-metadata-{focused,unit,check}.log）。新file／script一覧・UI変更はなく、spec/architecture/モジュール構成.mdとimplementation-map.mdへ内部設計を追記した。
+
+既存UI・phase0保存互換性／描画比較・Spline・Sketch投影／編集・派生選択copy・ブックマークの関連E2E165件が全成功（2.4分、exit 0、runner18868、cad-snapshot-geometry-metadata-e2e.log）。sourceを固定し、receiptのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した（cad-snapshot-geometry-metadata-e2e-receipt.json、cad-snapshot-geometry-metadata-last-run.json）。今回の全E2Eは未実行で、直前の全体基準は74a0d17の全587件成功。週枠使用4%／残量96%、停止条件未到達。mainは停止・release時に最後に反映する方針を維持し、全体目標はactiveで未完了。
+
+次は残るデータ照会・操作固有callbackと機能構築の依存を再監査し、既存ownerを共有する機能単位の組立て階層を検討する。Snapshot／現在scope／Block定義の意味を保ち、広いcontextでまとめない。小さな引数削減だけで数百行へ届くとは見積もらない。
+
 ### 最新：拘束codecと寸法保存の接続（2026-10-24、検証完了）
 
 基準develop／origin/developは123c50f。直前の寸法Preview接続10c48b1は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/constraint-dimension-codecsで実施した。

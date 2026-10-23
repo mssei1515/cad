@@ -1016,10 +1016,7 @@
   const documentWriter = window.DocumentSnapshot.createWriter({
     workspace, prepare: documentPreparation.prepare, version: CURRENT_JSON_VERSION,
     documentName: effectiveDocumentName, nextHatchIndex: () => documentIds.peek("hatch"),
-    geometryMetadata: (item) => ({
-      sketchId: elementSketchId(item),
-      kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined,
-    }),
+    geometryMetadata: geometryReadServices.createSnapshotMetadata({ pointUsage }),
     constraintData: constraintMetadata.snapshotData,
   });
 

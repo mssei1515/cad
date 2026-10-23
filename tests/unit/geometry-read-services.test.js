@@ -43,6 +43,43 @@ function fixture({ withHatches = false } = {}) {
   return { state, document, services, scene };
 }
 
+test('snapshot metadata keeps point class checks, explicit kinds and the live local PointUsage without reading expanded geometry', () => {
+  const f = fixture(), usage = f.services.createPointUsage({ constraintReferencesPoint: () => false, editedFitPoints: () => [] });
+  const metadata = f.services.createSnapshotMetadata({ pointUsage: usage });
+  assert.equal(f.state.reads + f.state.prepared + f.state.profiles, 0); f.state.ready = true;
+  const a = point('P1'), b = point('P2', 10), orphan = point('P3'); delete a.kind; b.kind = ''; delete orphan.kind;
+  const line = Object.assign(new Line('L1', a, b), { sketchId: 'S1' }); f.state.scope.points = [a, b, orphan]; f.state.scope.lines = [line];
+  assert.deepEqual({ ...metadata(a) }, { sketchId: 'S1', kind: 'endpoint' });
+  assert.equal(metadata(b).kind, 'endpoint'); assert.equal(metadata(orphan).kind, 'explicit');
+  const beforeReads = f.state.reads; a.kind = 'custom-kind'; assert.equal(metadata(a).kind, 'custom-kind'); assert.equal(f.state.reads, beforeReads);
+  assert.deepEqual({ ...metadata(line) }, { sketchId: 'S1', kind: undefined });
+  assert.equal(metadata({ id: 'P4', sketchId: 'S1', kind: 'endpoint' }).kind, undefined);
+  delete a.kind; const replacement = scope(); f.state.scope = replacement; assert.equal(metadata(a).kind, 'explicit');
+  replacement.lines.push(line); assert.equal(metadata(a).kind, 'endpoint');
+  assert.equal(f.state.prepared + f.state.profiles, 0);
+  const failure = new Error('Sketch unavailable'), bad = new Point('BAD', 0, 0); delete bad.kind;
+  Object.defineProperty(bad, 'sketchId', { get() { throw failure; } });
+  const count = f.state.reads; assert.throws(() => metadata(bad), error => error === failure); assert.equal(f.state.reads, count);
+});
+
+test('snapshot metadata preserves legacy JSON and the separate Block-definition point classification', () => {
+  const f = fixture(), usage = f.services.createPointUsage({ constraintReferencesPoint: () => false, editedFitPoints: () => [] });
+  const metadata = f.services.createSnapshotMetadata({ pointUsage: usage }); f.state.ready = true;
+  const source = f.state.scope, a = point('P1'), b = point('P2', 10), orphan = point('P3');
+  for (const p of [a, b, orphan]) delete p.kind;
+  source.parameters = []; source.points = [a, b, orphan]; source.lines = [Object.assign(new Line('L1', a, b), { sketchId: 'S1' })];
+  const local = definition(), localOrphan = point('LOCAL'); delete localOrphan.kind; local.points.push(localOrphan); source.blockDefinitions = [local];
+  const legacy = item => ({ sketchId: item.sketchId, kind: item instanceof Point ? item.kind || (usage.isPointUsedByPrimitive(item) ? 'endpoint' : 'explicit') : undefined });
+  const options = { version: 26, savedAt: 'fixed-time', documentName: 'Drawing', nextHatchIndex: 1 };
+  const serialize = read => w.DocumentSnapshot.create({ geometryMetadata: read, constraintData: () => null }).serialize(source, options);
+  const before = JSON.stringify(source), expected = serialize(legacy), actual = serialize(metadata);
+  assert.equal(JSON.stringify(actual), JSON.stringify(expected));
+  assert.deepEqual(Array.from(actual.points, p => p.kind), ['endpoint', 'endpoint', 'explicit']);
+  assert.equal(actual.blockDefinitions[0].points.at(-1).kind, 'endpoint');
+  f.state.scope = local; assert.equal(JSON.stringify(serialize(metadata)), JSON.stringify(serialize(legacy)));
+  assert.equal(JSON.stringify(source), before);
+});
+
 test('read service composition defers document and scope access and retains the live Block registry', () => {
   const f = fixture(); assert.equal(f.state.reads, 0); assert.equal(f.state.prepared, 0); assert.equal(f.state.profiles, 0);
   assert.equal(Object.isFrozen(f.services), true); f.state.ready = true;
