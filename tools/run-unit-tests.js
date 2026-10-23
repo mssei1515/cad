@@ -5,7 +5,7 @@ const files = [
   "tests/unit/expression-input-view.test.js", "tests/unit/expression-input-controller.test.js",
   "tests/unit/command-panel.test.js",
   "tests/unit/derived-patterns.test.js",
-  "tests/unit/annotation-anchor-constraints.test.js", "tests/unit/annotation-anchor-data.test.js",
+  "tests/unit/annotation-anchor-constraints.test.js", "tests/unit/annotation-anchor-data.test.js", "tests/unit/annotation-feature.test.js",
   "tests/unit/clipboard-transfer.test.js",
   "tests/unit/clipboard-command.test.js", "tests/unit/clipboard-feature.test.js", "tests/unit/solve-refresh-command.test.js", "tests/unit/trim-command.test.js", "tests/unit/drawing-order-command.test.js",
   "tests/unit/clipboard-graph.test.js",

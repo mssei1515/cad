@@ -93,6 +93,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：注記機能の生成・接続と基準点開始の所有（2026-10-23）
+
+基準develop 5c68decからcodex/annotation-feature-assemblyで実施。src/application/annotation_feature.jsへAnnotationDisplay→Materialization→基準点操作→表示用dimensions→AnnotationCommandの生成・接続を集めた。表示／draft／履歴／WeakMapは同じ実childに残し、Featureは必要な入口と実childを返す。巨大context、複製model／session、独自rollbackを追加しない。app.jsは2,711→2,675行（36行減）、この群のroot構築5→1、明示引数76→48。200〜500行の全体目標は未完了である。
+
+startAnnotationAnchorConstraintの対象取得・対象数検査・同種toggle取消は既存AnnotationAnchorConstraints.startFromSelectionへ集約し、UI既定候補はFeatureに残した。注記が一つなら混在選択でも既定候補になる入口と、全選択数一つだけを許す既存startの既定候補を混同しない。取消前にoperandsをコピーし、pending取消の例外なら現在command／draftを保持する。基準点編集と配置の投影guardの評価順も維持した。Workspace.currentと現在editing scopeを区別し、Parameter名候補の浅いコピーとensure後のscope再読取り、dimension表示の二回のscope読取り・実entriesを保持した。
+
+previewと後段AnnotationDrag／appearanceEditingは遅延callbackのままとし、早期のAnnotationSpatialQueryに渡すhoistedなannotationPlacementAnchorをappへ残した。rootの自己外参照なしbindingが0、直接引数も含めた初期化前参照0とchild script順をAST監査した。一時診断はcad-annotation-feature-audit.cjs。classic script追加に合わせindex.html、check-syntax、unit登録、file URL Helpのscript期待値とnamespace確認を同期した。
+
+構文600ファイル・全単体1,851件・関連単体33件・file URL Help読込1件が成功。追加6件で生成時の遅延参照、実child／receiver、混在選択、取消例外時のstate保持、対象コピー、最新scopeと浅いコピー境界を検証した。新しいrenderer模擬がsloppy modeでthisをglobalへ変換していた初回単体失敗は、fixtureを製品と同じstrict modeにして修正した。製品側の呼出し方や既存期待値を変更して通したものではない。
+
+旧5c68decのindex／app／基準点commandを差し替え、旧版にFeatureがないことと三つのroute利用をassertしたブラウザ比較で62状態が一致。注記の作成・連続配置・Parameter名／式・Leader・基準点開始／toggle取消、Sketch間copy／pasteと参照ID、削除、Undo／Redo・再読込を含み、model・clipboard・mode・履歴・Selection・Hint・command panel表示／入力値とAPI204 key順を比較した。除外はsavedAtのみ。一時診断はcad-annotation-feature-equivalence.cjs／.log。
+
+関連E2E15ファイル317件が全成功（5.2分）。Playwrightの最終status=passed／failedTests=[]とrunner終了、自己起動port8791のserver停止を確認した。作業branchをCommit／Pushしてdevelopへ統合し、検証済みsourceとのtree同一性を確認する。ログはcad-annotation-feature-{focused,check,unit,loader,e2e}.log。最新の全E2Eは未実行で、以前のrelease全587件を今回の結果に代用しない。既存UI期待値・性能上限・timeout・保存versionを変更しない。
+
+ユーザーから電源接続の報告を受けた。以前のbaseline／candidate双方の実行時間変動に影響した可能性はあるが、原因の確定とは扱わない。main／origin/mainはdf5aef2のまま。週枠使用12%／残量88%で新規分離の停止条件未到達。
+
+次はDimensionInputView／ControllerとDimensionDisplayの境界を監査する。既存表示ownerに入力の確定／取消まで押し込まず、viewと入力操作の接続を独立した責務として減らせるか、DOM bind／初期化時照会とOffset／Distanceの後段callback、実際のplacement／layouts共有、hoisted layout入口を先に確認する。次単位の実装はまだ行っていない。
 ### 最新：注記の保存値を操作から分離（2026-10-23）
 
 基準develop 4b3f726からcodex/annotation-anchor-dataで実施。src/document/annotation_anchor_data.js（31行）へ基準点・関係の軸／拘束数・normalize／refs／参照依存照会を集め、AnnotationDataとBlockSelectionQuery／ClipboardPayload／SketchMoveのデータ読取りをこのownerへ直接接続した。document／editingのこれらの処理からAnnotationAnchorConstraintsへの依存を除去した。appの依存照会aliasもデータownerへ接続する。AnnotationAnchorConstraintsにはUI日本語labelと位置解決／一時Geometry／操作draft／表示用寸法の所有を残し、既存の六つのデータAPIは同じ配列／関数を再公開する。独自model／cache／context、複製したルールやsetterを追加しない。
