@@ -31,7 +31,17 @@
         return createRendering({ ...options, canvas, ctx, viewport, surface, zoomControl,
           readExportFrame: () => exportRenderer.frame });
       }
-      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering });
+      function createInputBinding({ pointer, readCommandPanel, readPngExportCommand, blankCanvasGesture,
+        isBlankCommandPanelPoint, scheduler, profileCommit }) {
+        const { canvasScreenPoint, canvasPoint, screenToWorld } = viewport;
+        const routing = window.CanvasInputBinding.createCommandRouting({ pointer, readCommandPanel, readPngExportCommand,
+          blankCanvasGesture, canvasScreenPoint, canvasPoint, isBlankCommandPanelPoint, screenToWorld, navigation });
+        return window.CanvasInputBinding.create({ canvas, pointer: routing, scheduler, navigation, profileCommit, closeContextMenu,
+          afterZoom: () => { if (isValueInputPending()) syncDimensionValueInput(); },
+          screenToWorld, formatCoordinate: window.NumberDisplay.formatDisplayNumber,
+          coordinateStatus: () => document.getElementById("statusCoordinates") });
+      }
+      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering, createInputBinding });
     }
     return Object.freeze({ viewport, navigation, zoomControl, createWorkspace });
   }

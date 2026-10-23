@@ -469,7 +469,7 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { rollbackTransientLineCompletion, rollbackTransientPoint } = transientAuthoring;
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering } = createCanvasWorkspace({
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding } = createCanvasWorkspace({
     ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
     window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
@@ -1919,14 +1919,10 @@
 
   function isDrawToolMode() { return drawOperationLifecycle.isToolMode(); }
 
-  const canvasInputBinding = window.CanvasInputBinding.create({
-    canvas, pointer: window.CanvasInputBinding.createCommandRouting({
-      pointer: pointerInteractionController, readCommandPanel: () => commandPanel, readPngExportCommand: () => pngExportCommand,
-      blankCanvasGesture, canvasScreenPoint, canvasPoint, isBlankCommandPanelPoint, screenToWorld, navigation: canvasNavigation,
-    }), scheduler: pointerMoveScheduler, navigation: canvasNavigation,
-    profileCommit: work => profileInteractionPhase("commit", work), closeContextMenu: closeCanvasContextMenu,
-    afterZoom: () => { if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput(); },
-    screenToWorld, formatCoordinate: formatDisplayNumber, coordinateStatus: () => document.getElementById("statusCoordinates"),
+  const canvasInputBinding = createCanvasInputBinding({
+    pointer: pointerInteractionController, readCommandPanel: () => commandPanel, readPngExportCommand: () => pngExportCommand,
+    blankCanvasGesture, isBlankCommandPanelPoint, scheduler: pointerMoveScheduler,
+    profileCommit: work => profileInteractionPhase("commit", work),
   });
   canvasInputBinding.bind();
   dimensionInput.bind();

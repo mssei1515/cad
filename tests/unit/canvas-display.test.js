@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ['src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js']) {
+for (const file of ['src/ui/number_display.js', 'src/ui/canvas_input_binding.js', 'src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
 function fixture() {
@@ -15,10 +15,10 @@ function fixture() {
       emit(name, event = {}) { handlers[name]?.({ preventDefault() {}, stopPropagation() {}, ...event }); },
       focus() { calls.push('focus'); }, select() {}, checkValidity: () => true, reportValidity() {} };
   };
-  const button = element(), input = element(), browser = element();
+  const button = element(), input = element(), browser = element(), status = element();
   const ready = () => assert.equal(state.ready, true);
-  const document = { getElementById(id) { calls.push(['element', id]); return id === 'statusZoom' ? button : id === 'statusZoomInput' ? input : null; }, querySelector: () => null };
-  const canvas = { width: 0, height: 0, getBoundingClientRect() { ready(); calls.push('rect'); return state.rect; }, classList: { add() {}, remove() {} }, setPointerCapture() {} };
+  const document = { getElementById(id) { calls.push(['element', id]); return id === 'statusZoom' ? button : id === 'statusZoomInput' ? input : id === 'statusCoordinates' ? status : null; }, querySelector: () => null };
+  const canvas = { ...element(), width: 0, height: 0, getBoundingClientRect() { ready(); calls.push('rect'); return state.rect; }, classList: { add() {}, remove() {} }, setPointerCapture() {} };
   const ctx = { setTransform(...args) { ready(); calls.push(['transform', ...args]); } };
   const display = sandbox.window.CanvasDisplay.create({ canvas, document, initialScale: 2, minZoom: 0.1, maxZoom: 20, minLength: 1e-6,
     draw: () => { ready(); calls.push('draw'); state.onDraw?.(); }, setHint: () => calls.push('hint'), fitVisibleGeometry: () => true,
@@ -33,8 +33,60 @@ function fixture() {
   });
   assert.deepEqual(calls, []); state.ready = true;
   const enter = percent => { button.emit('click'); input.valueAsNumber = percent; input.emit('keydown', { key: 'Enter' }); };
-  return { display, workspace, state, calls, button, input, browser, canvas, ctx, enter };
+  return { display, workspace, state, calls, button, input, browser, canvas, ctx, enter, status };
 }
+
+function inputFixture() {
+  const f = fixture(), events = [], state = { panel: null, png: null, suppressed: false };
+  const pointer = Object.fromEntries(['down', 'move', 'finish', 'leave', 'doubleClick'].map(name => [name, (...args) => events.push([name, ...args])]));
+  f.state.ready = false;
+  const binding = f.workspace.createInputBinding({ pointer,
+    readCommandPanel: () => { assert.equal(f.state.ready, true); return state.panel; },
+    readPngExportCommand: () => { assert.equal(f.state.ready, true); return state.png; },
+    blankCanvasGesture: { suppressNext: () => { state.suppressed = true; }, takeSuppression: () => { const value = state.suppressed; state.suppressed = false; return value; } },
+    isBlankCommandPanelPoint: () => true,
+    scheduler: { flush: () => { f.calls.push('flush'); if (f.state.error) throw f.state.error; }, schedule: event => binding.processMove(event) },
+    profileCommit: work => { events.push(['profile']); return work(); },
+  });
+  assert.deepEqual(f.calls, []); assert.deepEqual(events, []); binding.bind(); assert.deepEqual(f.calls, []); f.state.ready = true;
+  return { ...f, binding, events, routing: state };
+}
+
+test('workspace input shares viewport coordinates, navigation and late pending-input synchronization', () => {
+  const f = inputFixture();
+  f.canvas.emit('pointermove', { offsetX: 8, offsetY: 12, shiftKey: true });
+  const world = f.display.viewport.screenToWorld({ x: 8, y: 12 });
+  const format = sandbox.window.NumberDisplay.formatDisplayNumber;
+  assert.equal(f.status.textContent, `X ${format(world.x, 3)} / Y ${format(world.y, 3)}`);
+  assert.equal(f.events[0][0], 'move'); assert.equal(f.events[0][2].x, world.x); assert.equal(f.events[0][3], true);
+  for (const pending of [false, true]) {
+    f.state.pending = pending; f.calls.length = 0;
+    const previousScale = f.display.viewport.scale;
+    f.canvas.emit('wheel', { clientX: 8, clientY: 12, offsetX: 8, offsetY: 12, deltaY: -100, preventDefault: () => f.calls.push('prevent') });
+    assert.ok(f.display.viewport.scale > previousScale);
+    const zoomed = f.display.viewport.screenToWorld({ x: 8, y: 12 });
+    assert.ok(Math.abs(zoomed.x - world.x) < 1e-12); assert.ok(Math.abs(zoomed.y - world.y) < 1e-12);
+    assert.deepEqual(f.calls.filter(value => typeof value === 'string' && value !== 'rect'),
+      ['prevent', 'flush', 'close-menu', 'hint', 'draw', 'pending', ...(pending ? ['input'] : [])]);
+  }
+  const before = f.display.viewport.snapshot(), failure = new Error('flush failed'); f.state.error = failure; f.calls.length = 0;
+  assert.throws(() => f.canvas.emit('wheel', { preventDefault: () => f.calls.push('prevent') }), error => error === failure);
+  assert.deepEqual(f.calls, ['prevent', 'flush']); assert.deepEqual(f.display.viewport.snapshot(), before);
+});
+
+test('workspace input combines native flush and profile boundaries with live panel and PNG routing', () => {
+  const f = inputFixture();
+  const event = { button: 0, clientX: 8, clientY: 12, offsetX: 8, offsetY: 12, preventDefault: () => f.events.push(['prevent']) };
+  f.canvas.emit('pointerdown', event); assert.equal(f.calls[0], 'flush'); assert.equal(f.events[0][0], 'down');
+  f.routing.panel = { active: true, canvasPress: () => true, canvasDoubleClick: () => f.events.push(['panel-double']) };
+  f.events.length = 0; f.canvas.emit('pointerdown', event); assert.equal(f.routing.suppressed, true);
+  f.canvas.emit('dblclick', event); assert.equal(f.routing.suppressed, false); assert.deepEqual(f.events.map(value => value[0]), ['prevent', 'prevent']);
+  f.routing.panel = null; const picked = [];
+  f.routing.png = { active: true, pick: point => picked.push(point) }; f.canvas.emit('pointerdown', event);
+  assert.equal(picked[0].x, f.display.viewport.screenToWorld({ x: 8, y: 12 }).x);
+  f.events.length = 0; f.canvas.emit('pointerup', event); assert.deepEqual(f.events, [['profile']]);
+  f.routing.png = null; f.canvas.emit('pointercancel', event); assert.deepEqual(f.events.map(value => value[0]), ['profile', 'profile', 'finish']);
+});
 
 test('Canvas display preserves staged initialization and centered zoom through the same viewport and navigation', () => {
   const f = fixture(); assert.ok(Object.isFrozen(f.display)); assert.ok(Object.isFrozen(f.workspace));
