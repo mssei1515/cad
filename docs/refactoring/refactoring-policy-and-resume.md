@@ -93,6 +93,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Document保存・読込の内部構築（2026-10-24、全体検証完了）
+
+基準develop／origin/developは2ed4adc。本単位はcodex/document-persistence-contextで実施した。DocumentWorkspace.createReadContext().createPersistenceが、同じDocument／Workspace・Parameter／Sketch／ID・実GeometryReadServicesを使う寸法codec／constraint metadata・保存前Preparation・Snapshot writer・読込codec群を構築し、実child七つを返す。八依存はplacement・PointUsage・bound編集scope／Block session reader・version・Point参照判定・投影共有点分離・Arc正規化。実load適用・reset・採番回復・履歴・ファイルUIは既存ownerに残す。新しい状態・cache・モデル・可変contextやfileは追加しない。
+
+app.jsは2,504→2,486行（18行減）、対象構築6→1、明示port34→8、root未使用binding／追加接続の初期化前参照0（TEMP cad-document-persistence-audit.cjs）。構築をeditingCheckpoint直後へまとめた。各constructorはモデル・scope・UI・履歴を評価せず、早期のBlock編集／Historyへのserialize／decorate／deserializeはhoisted入口を維持する。Workspace.snapshotSource、Preparationのbound編集scope、固定Document catalogの違いを維持する。
+
+追加2単体で、無照会構築、Hatch counterとDocument名、寸法／Parameter属性、geometry参照のround trip、decode時の入力／実Document無変更、Workspace切替／復元に追従するsnapshot、bound scopeだけのPreparation、不正単位の拒否、明示installの同一Object／Arc正規化を確認した。新fixtureはhatchSeqとlabelOffsetUを実schemaへ合わせ、既存期待は変更していない。関連単体36件、全単体1,919件、構文612ファイルが成功。ログはcad-document-persistence-{focused,unit,check}.log。
+
+同じsourceを固定した全587 E2Eが27.5分、exit 0で全成功（native54101、最終観測cell1002も終了）。フィレット3,744 previews／maximumMs 29.2、Offset10,296／67.8、航空機1,872／344.1はいずれもfailures空。既存のtimeout・期待値・case数は変更しない。TEMP cad-document-persistence-e2e.log、-e2e-receipt.json（exitCode 0／listeners 0／owned server37076停止）、-last-run.json（passed／failedTests空）と二つの製品source hash一致を確認した。今回が最新の全体基準であり、17defd0の旧全体基準から更新する。実行中はsourceを変更せず、同じsessionを終了まで追跡した。
+
+spec/architecture/モジュール構成.mdとimplementation-map.mdを更新し、bootstrap-boundary-audit.mdへ同条件の再集計を記録した。非空白2,042→2,024、member create構築154→149、構築部分953→931、hooks440／一文委譲209／root let6は維持。bare createPersistenceは従来分類の「その他」に入る点を明記する。hooks／一文委譲を除く仮定でも1,375非空白行が残るため、200〜500行の目標を小さなadapter削減で達成扱いにしない。
+
+次はBlankCanvasGestureの生成段階を検討する。早期のBasicDrawingToolsへのreset入口はcallbackで、最初の直接捕捉は後段のScene interaction付近にある。constructor・各consumer・receiverと引数／戻り値・例外時の途中状態を確認し、既存operation／pending／Selection／transientの実ownerへ接続する。候補として記録しただけで、まだ実装していない。週枠使用16%／残量84%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。
+
 ### 最新：Canvas workspaceの入力生成と共有依存（2026-10-24、検証完了）
 
 基準develop／origin/developは12bff79。本単位はcodex/canvas-workspace-inputで実施した。CanvasDisplay.createWorkspaceがcreateInputBindingを返し、同じcanvas／document・viewport／navigation・保留入力reader／寸法入力同期・menu終了を、既存CommandRoutingとInputBindingへ接続する。外から渡すのはpointer、panel／PNGの現在reader、blank gesture／空白判定、scheduler／commit計測だけ。実Bindingを返し、bindはappの従来位置に維持する。既存createとcreateCommandRouting APIを維持し、状態・cache・listenerやモデルを複製しない。

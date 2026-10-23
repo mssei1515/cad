@@ -22,7 +22,30 @@
           clearGeometryReads: () => services.reads.clearReadCache(),
           invalidateProjection: services.projections.invalidateBlockProjectionCache });
       }
-      return Object.freeze({ services, createScopeBinding });
+      function createPersistence({ placement, pointUsage, readEditingScope, readBlockEditor, version,
+        constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps }) {
+        const { dimensions, codecs } = window.ConstraintPersistence.createWithDimensions({
+          geometryId: window.GeometryObjects.geometryIdForItem, placement });
+        const metadata = window.ConstraintPersistence.createMetadata({ serializeConstraint: codecs.serialize,
+          numericDimensionExpression: parameters.numericDimensionExpression, constraintSketchId: sketches.constraintSketchId });
+        const preparation = window.DocumentApplication.createPreparation({ document, currentScope: readEditingScope,
+          readBlockEditor, sketchContext: sketches, parameterNamespace: parameters, blockCatalog: services.catalog });
+        const writer = window.DocumentSnapshot.createWriter({ workspace, prepare: preparation.prepare, version,
+          documentName: () => window.DocumentFiles.effectiveDocumentNameFromValue(document.documentName),
+          nextHatchIndex: () => documentIds.peek("hatch"),
+          geometryMetadata: services.createSnapshotMetadata({ pointUsage }), constraintData: metadata.snapshotData });
+        const { loading, geometryInstances } = window.DocumentLoading.createWithCodecs({
+          createBlockProjectionBundle: services.projections.createBlockProjectionBundle,
+          geometryInstanceBundlesForScope: services.instances.geometryInstanceBundlesForScope,
+          elementSketchId: sketches.elementSketchId, deserializeConstraint: codecs.deserialize, constraintSketchId: sketches.constraintSketchId,
+          separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace: parameters.prepareLoadedParameterNamespace,
+          isPointUsedByLine: pointUsage.isPointUsedByLine, isPointUsedByCircle: pointUsage.isPointUsedByCircle,
+          isPointUsedByArc: pointUsage.isPointUsedByArc, constraintReferencesPoint,
+          defaultUnits: window.DocumentState.DEFAULT_DOCUMENT_UNITS, applicationText,
+          invalidateProjection: services.projections.invalidateBlockProjectionCache, normalizeArcSweeps });
+        return Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances });
+      }
+      return Object.freeze({ services, createScopeBinding, createPersistence });
     }
     return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, createGeometryReadServices, createReadContext });
   }

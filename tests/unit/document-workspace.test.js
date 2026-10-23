@@ -145,6 +145,68 @@ test('read context binds the same Workspace and Solver while invalidating its ac
   assert.deepEqual(f.calls.map(call => call.name), ['close', 'move']);
 });
 
+function persistenceFixture() {
+  const { model } = fixture(), state = { ready: false, bound: model.document, block: null }, calls = [];
+  const check = () => assert.equal(state.ready, true, 'persistence construction must defer model queries');
+  const context = model.createReadContext({ currentSketches: () => { check(); return state.bound.sketches; },
+    prepareBlocks: () => { check(); }, showHiddenElements: () => false, viewportScale: () => { check(); return 2; }, profileRead: work => work() });
+  const references = w.ConstraintReferences.create({ resolveGeometryRef: () => null });
+  const pointUsage = context.services.createPointUsage({ constraintReferencesPoint: references.constraintReferencesPoint, editedFitPoints: () => [] });
+  const before = JSON.stringify(model.document);
+  const persistence = context.createPersistence({ placement: w.DimensionPlacement.create({ viewport: { scale: 2 } }), pointUsage,
+    readEditingScope: () => { check(); return state.bound; }, readBlockEditor: () => { check(); return state.block; }, version: 26,
+    constraintReferencesPoint: references.constraintReferencesPoint,
+    separateSharedSketchProjectionTargetPoints: () => { check(); calls.push('separate'); },
+    normalizeArcSweeps: arcs => { check(); calls.push(['arcs', arcs]); },
+  });
+  assert.equal(JSON.stringify(model.document), before); assert.deepEqual(calls, []); state.ready = true;
+  return { model, state, calls, persistence };
+}
+
+function addPersistedLine(scope, id, x = 0) {
+  const p1 = Object.assign(new w.GeometrySolver.Point(id + 'a', x, 0), { sketchId: 'S1', kind: 'endpoint' });
+  const p2 = Object.assign(new w.GeometrySolver.Point(id + 'b', x + 10, 0), { sketchId: 'S1', kind: 'endpoint' });
+  const line = Object.assign(new w.GeometrySolver.Line(id, p1, p2), { sketchId: 'S1' });
+  const constraint = Object.assign(new w.GeometrySolver.DistanceConstraint(p1, p2, 10), {
+    sketchId: 'S1', parameterName: 'd1', expression: '10', dimension: { x: 5, y: 7, labelOffsetU: 7 } });
+  scope.points.push(p1, p2); scope.lines.push(line); scope.constraints.push(constraint);
+  return { p1, p2, line, constraint };
+}
+
+test('Document persistence shares actual codecs and round trips dimensions and geometry without applying a load', () => {
+  const f = persistenceFixture(), source = addPersistedLine(f.model.document, 'L1'), api = f.persistence;
+  f.model.document.documentName = '  Example  '; f.model.documentIds.restore({ hatchSeq: 12 });
+  const data = api.writer.serialize();
+  assert.equal(data.documentName, 'Example'); assert.equal(data.version, 26); assert.equal(data.nextHatchIndex, 12);
+  assert.equal(data.constraints[0].type, 'distance'); assert.equal(data.constraints[0].expression, '10');
+  assert.equal(data.constraints[0].parameterName, 'd1'); assert.equal(data.constraints[0].dimension.labelOffsetU, 7);
+  assert.equal(JSON.stringify(api.dimensions.serialize(source.constraint.dimension, w.DimensionQueries.targetFromConstraint(source.constraint))), JSON.stringify(data.constraints[0].dimension));
+  const modelBefore = JSON.stringify(f.model.document), inputBefore = JSON.stringify(data), loaded = api.loading.decode(data);
+  assert.equal(JSON.stringify(data), inputBefore); assert.equal(JSON.stringify(f.model.document), modelBefore);
+  assert.ok(loaded.constraints[0] instanceof w.GeometrySolver.DistanceConstraint);
+  assert.equal(loaded.lines[0].p1, loaded.points[0]); assert.equal(loaded.constraints[0].p2, loaded.points[1]);
+  assert.equal(loaded.constraints[0].expression, '10'); assert.equal(loaded.constraints[0].dimension.labelOffsetU, 7);
+  assert.notEqual(loaded.points[0], source.p1);
+  assert.equal(api.metadata.snapshotData(source.constraint, f.model.document, true).sketchId, 'S1');
+});
+
+test('Document persistence follows workspace snapshots and bound preparation separately and rejects invalid input before install', () => {
+  const f = persistenceFixture(), root = f.model.document, api = f.persistence, host = f.model.workspace.capture();
+  addPersistedLine(root, 'ROOT-L'); const local = w.DocumentState.create(); addPersistedLine(local, 'LOCAL-L', 20);
+  f.model.workspace.activate(local); f.state.bound = local;
+  assert.equal(api.writer.serialize().lines[0].id, 'LOCAL-L');
+  f.model.workspace.restore(host); f.state.bound = root;
+  const data = api.writer.serialize(); assert.equal(data.lines[0].id, 'ROOT-L');
+  const before = JSON.stringify(root), invalid = structuredClone(data); invalid.units.length = 'inch';
+  assert.throws(() => api.loading.decode(invalid), /length unit|長さ単位/); assert.equal(JSON.stringify(root), before);
+  const destination = w.DocumentState.create(), candidate = api.loading.decode(data);
+  api.loading.install(candidate, destination, destination);
+  assert.equal(destination.lines[0], candidate.lines[0]); assert.equal(destination.constraints[0].p1, destination.points[0]);
+  assert.equal(f.calls.at(-1)[0], 'arcs'); assert.equal(f.calls.at(-1)[1], destination.arcs);
+  f.model.workspace.activate(local); f.state.bound = root; local.defaultAppearance = { color: '#123456' };
+  const localBefore = JSON.stringify(local); api.preparation.appearance(); assert.equal(JSON.stringify(local), localBefore);
+});
+
 test('read context preserves restoration before teardown and stops activation at a failed move reset', () => {
   const f = readContextFixture(), { model, binding } = f, host = model.workspace.capture(), draft = w.DocumentState.create();
   binding.activate(draft); model.workspace.restore(host);
