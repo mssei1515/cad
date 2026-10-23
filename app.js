@@ -1478,6 +1478,10 @@
 
   function constructionToggleState(geometryMode = isGeometryMode()) { return constructionCommand.state(geometryMode); }
 
+  const { label: constraintLabel, targetHint: constraintTargetHint, invalidTargetHint: invalidConstraintTargetHint } = window.ConstraintControlsView.createFeedback({
+    constraintButtons, applicationText, feedback: constraintFeedback,
+    readOperands: () => constraintTargetSession.operands, readLanguage: () => applicationSettings.language,
+  });
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand } = window.ConstraintEditing.create({
     session: constraintTargetSession, selection: canvasSelection, pending: pendingCommandSession, candidates: constraintCandidates,
     lifecycle: drawOperationLifecycle, valueInput: dimensionInputController,
@@ -1493,15 +1497,6 @@
     addReadOnlyDimensionConstraint, makeConstraintOperand, sameConstraintOperand, applicationText, log,
   });
   function canApplyConstraint(type) { return constraintSelectionQuery.canApply(type); }
-
-  function constraintLabel(type) {
-    if (type === "fixed") return applicationText("固定", "Fix");
-    const btn = constraintButtons.find((b) => b.dataset.constraint === type);
-    return btn?.dataset.label || btn?.title || type;
-  }
-
-  function constraintTargetHint(type) { return constraintFeedback.targetHint(type, constraintTargetSession.operands, applicationSettings.language, () => constraintLabel(type)); }
-  function invalidConstraintTargetHint(type) { return constraintFeedback.invalidTargetHint(type, constraintTargetSession.operands, applicationSettings.language); }
 
   function startConstraintTargetCommand(type) { return constraintTargetCommand.start(type); }
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }

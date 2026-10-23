@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：拘束コマンドのラベルと案内の接続（2026-10-24、検証完了）
+
+基準develop／origin/developは74a0d17。前単位のConstraintEditing分離fbba968とSolver性能修正43ec1eaを統合・Pushし、全587 E2E（28.4分、exit 0）、構文604、単体1,867件の成功を確認済み。main／origin/mainはdf5aef2のまま。現在はcodex/constraint-target-feedbackで次の責務分離を実施中。
+
+ConstraintControlsView.createFeedbackへconstraintLabel／constraintTargetHint／invalidConstraintTargetHintを集約した。ConstraintFeedbackはDOMを参照しないformatterという既存契約を保つため、ボタンの表示値読取りとSession／言語の接続は元のControls Viewが所有し、文面生成は同じConstraintFeedbackに委譲する。同じbutton配列・formatterと二reader、applicationTextの五portだけを受け、生成時照会・listener・DOM書込み・Session／Selectionの複製や更新を持たない。fixedの短絡、先頭一致とdataset.label→title→typeのtruthy fallback、最新operand→言語→必要時だけlabelの順序、receiver・返却値・参照・例外を維持した。appでは三入口を最初に直接使うConstraintEditing.createより前に生成し、旧hoisted宣言をconstへ移す際の初期化前参照を避けた。
+
+app.jsは2,627→2,622行（5行減）。既存二moduleの責務境界を使い、新file／script読込／global state／保存形式を追加しない。spec/architecture/モジュール構成.mdとimplementation-map.mdへ所有境界と初期化順を記録した。Controls Viewの単体を3件追加し、現在値への追従、固定の短絡、fallback、元operand参照、遅延label、例外の停止順と委譲receiverを検証。関連単体20件・構文604ファイル・全単体1,870件が成功した（cad-target-feedback-{focused,check,unit}.log）。
+
+既存UI・Annotation anchor・拘束メニュー・複数寸法・prefix・slot寸法の関連E2E169件は2.7分で成功（runner7701 exit 0、自己起動port8799停止、cad-target-feedback-e2e.log）。AST監査でもrootの未使用bindingなし、追加接続の初期化前参照なし。明示portは既存ConstraintEditingの50に表示接続の5を追加し、責務をUI ownerへ移した。実装・仕様・テストをこの単位でCommit／Pushし、developへ統合する区切りとする。前単位の全587成功を今回の全体検証とは扱わない。週枠使用24%／残量76%、停止条件未到達。全体目標はactiveで未完了。
+
+次は最新appの構築・接続の群を再監査する。小関数の移動だけで数百行へ届くとは見積もらず、既存ownerを共有する機能の組立て、初期化とbind／startの段階、test hooksの公開境界を、依存portと生成順を明示して検討する。単なる一括移動・巨大context・state複製は採用しない。
 ### 最新：機体ドラッグのprofileに基づく行列アクセス削減（2026-10-24、検証完了）
 
 直前のCholeskyだけの候補は機体E2Eが600,000ms timeoutで失敗（10.1分、exit 1）。runner38131は終了しport8799も停止済み、後続の全E2Eは起動していない。電源接続はユーザーから報告を受けたが、電源状態を原因とは断定しない。この時点ではmain／developへの統合を保留した。最終の検証結果は以下のとおり。

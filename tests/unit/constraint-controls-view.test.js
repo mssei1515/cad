@@ -1,5 +1,57 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const sandbox={window:{}};vm.createContext(sandbox);vm.runInContext(fs.readFileSync('src/ui/constraint_controls_view.js','utf8'),sandbox);
+vm.runInContext(fs.readFileSync('src/ui/constraint_feedback.js','utf8'),sandbox);
+
+test('command feedback reads current button labels with fixed short-circuit and original fallbacks', () => {
+ let language='ja',reads=0;
+ const applicationText=(ja,en)=>language==='en'?en:ja;
+ const buttons=[{dataset:{constraint:'custom',label:'Before'},title:'Title'},
+  {dataset:{constraint:'custom',label:'Second'},title:'Second title'}];
+ const view=sandbox.window.ConstraintControlsView.createFeedback({constraintButtons:buttons,applicationText,
+  feedback:sandbox.window.ConstraintFeedback.create({applicationText,readLanguage:()=>language}),
+  readOperands:()=>{reads++;return [];},readLanguage:()=>{reads++;return language;}});
+ assert.equal(reads,0);assert.equal(view.label('custom'),'Before');
+ buttons[0].dataset.label='After';assert.equal(view.label('custom'),'After');
+ buttons[0].dataset.label='';assert.equal(view.label('custom'),'Title');
+ buttons[0].title='';assert.equal(view.label('custom'),'custom');
+ assert.equal(view.label('unknown'),'unknown');assert.equal(reads,0);
+ assert.equal(view.label('fixed'),'固定');language='en';assert.equal(view.label('fixed'),'Fix');
+ const fixed=sandbox.window.ConstraintControlsView.createFeedback({applicationText,
+  constraintButtons:{find(){throw new Error('unexpected button lookup');}}});
+ assert.equal(fixed.label('fixed'),'Fix');
+});
+
+test('command hints follow the current operand session and language without copying or mutating operands', () => {
+ let language='en',operands=[],reads=[];
+ const applicationText=(ja,en)=>language==='en'?en:ja;
+ const source={dataset:{constraint:'custom',label:'Custom'}};
+ const view=sandbox.window.ConstraintControlsView.createFeedback({constraintButtons:[source],applicationText,
+  feedback:sandbox.window.ConstraintFeedback.create({applicationText,readLanguage:()=>language}),
+  readOperands:()=>{reads.push('operands');return operands;},readLanguage:()=>{reads.push('language');return language;}});
+ assert.deepEqual(reads,[]);assert.match(view.targetHint('symmetry'),/axis/);
+ assert.deepEqual(reads,['operands','language']);reads=[];
+ operands=Object.freeze([Object.freeze({kind:'line'})]);const original=operands;
+ assert.match(view.targetHint('distance'),/second line/);assert.equal(operands,original);
+ language='ja';assert.equal(view.invalidTargetHint('symmetry'),'2番目の対象には対称にする点、線、または円弧を選択してください');
+ source.dataset.label='Changed';assert.equal(view.targetHint('custom'),'Changed の対象を選択してください');
+ language='en';assert.equal(view.targetHint('custom'),'Select targets for Changed.');
+});
+
+test('feedback preserves delegated receiver, operand identity, lazy label lookup and exception order', () => {
+ const calls=[],operands=[],result={},failure=new Error('failed read');
+ const feedback={targetHint(type,items,language,label){assert.equal(this,feedback);assert.equal(items,operands);
+  assert.equal(type,'custom');assert.equal(language,'en');calls.push('hint');return result;},
+  invalidTargetHint(){assert.equal(this,feedback);calls.push('invalid');throw failure;}};
+ const view=sandbox.window.ConstraintControlsView.createFeedback({
+  constraintButtons:{find(){throw new Error('unexpected eager label lookup');}},applicationText:()=>'',feedback,
+  readOperands:()=>{calls.push('operands');return operands;},readLanguage:()=>{calls.push('language');return 'en';}});
+ assert.equal(view.targetHint('custom'),result);assert.deepEqual(calls,['operands','language','hint']);calls.length=0;
+ assert.throws(()=>view.invalidTargetHint('custom'),error=>error===failure);
+ assert.deepEqual(calls,['operands','language','invalid']);calls.length=0;
+ const failed=sandbox.window.ConstraintControlsView.createFeedback({feedback,
+  readOperands:()=>{throw failure;},readLanguage:()=>{calls.push('language');return 'en';}});
+ assert.throws(()=>failed.targetHint('custom'),error=>error===failure);assert.deepEqual(calls,[]);
+});
 
 test('constraint control binding reads current datasets, routes menu through button and owns listener lifetime', () => {
  const calls=[];

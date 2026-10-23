@@ -1,6 +1,16 @@
 /* Reflect and bind constraint/Fix controls; command decisions and selection state are caller-owned. */
 (() => {
   "use strict";
+  function createFeedback({ constraintButtons, applicationText, feedback, readOperands, readLanguage }) {
+    function label(type) {
+      if (type === "fixed") return applicationText("固定", "Fix");
+      const btn = constraintButtons.find((b) => b.dataset.constraint === type);
+      return btn?.dataset.label || btn?.title || type;
+    }
+    function targetHint(type) { return feedback.targetHint(type, readOperands(), readLanguage(), () => label(type)); }
+    function invalidTargetHint(type) { return feedback.invalidTargetHint(type, readOperands(), readLanguage()); }
+    return Object.freeze({ label, targetHint, invalidTargetHint });
+  }
   function create({ document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
     prepareGeometryControls, getCommandType, fixedToggleAllowed, hasSelection, translatedExactText, applicationText }) {
     function update() {
@@ -86,5 +96,5 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.ConstraintControlsView = Object.freeze({ create, createBinding });
+  window.ConstraintControlsView = Object.freeze({ create, createBinding, createFeedback });
 })();
