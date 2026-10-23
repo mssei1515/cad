@@ -27,7 +27,11 @@
         syncCanvasBitmapSize: surface.syncCanvasBitmapSize, applySketchTreeWidth, draw,
         isValueInputPending, syncDimensionValueInput, currentCanvasCenterWorld: viewport.currentCanvasCenterWorld, applicationText, readLanguage,
       });
-      return Object.freeze({ surface, exportRenderer, layout });
+      function createWorkspaceRendering(options) {
+        return createRendering({ ...options, canvas, ctx, viewport, surface, zoomControl,
+          readExportFrame: () => exportRenderer.frame });
+      }
+      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering });
     }
     return Object.freeze({ viewport, navigation, zoomControl, createWorkspace });
   }

@@ -33,7 +33,7 @@ function fixture() {
   });
   assert.deepEqual(calls, []); state.ready = true;
   const enter = percent => { button.emit('click'); input.valueAsNumber = percent; input.emit('keydown', { key: 'Enter' }); };
-  return { display, workspace, state, calls, button, input, browser, canvas, enter };
+  return { display, workspace, state, calls, button, input, browser, canvas, ctx, enter };
 }
 
 test('Canvas display preserves staged initialization and centered zoom through the same viewport and navigation', () => {
@@ -83,6 +83,63 @@ test('export uses the shared viewport and restores its frame before interactive 
 
 const interactiveOrder = ['block-handles', 'dimensions', 'dimension-preview', 'annotations', 'annotation-preview', 'authoring',
   'block-placement', 'free-instance', 'offset', 'trim', 'snap', 'arc-handles', 'spline-handles', 'points', 'image-overlays', 'identity', 'selection-rect', 'export-overlay'];
+function workspaceRenderingFixture() {
+  const f = fixture(), stages = [];
+  f.state.ready = false;
+  function stage(name) {
+    assert.equal(f.state.ready, true); stages.push(name);
+    if (f.state.failure === name) throw f.state.error;
+  }
+  for (const name of ['clearRect', 'save', 'translate', 'scale', 'restore', 'setLineDash']) {
+    f.ctx[name] = (...args) => { assert.equal(f.state.ready, true); f.calls.push([name, ...args]); };
+  }
+  function owner(methods) {
+    const api = {};
+    for (const [method, name] of Object.entries(methods)) api[method] = function () { assert.equal(this, api); stage(name); };
+    return api;
+  }
+  const rendering = f.workspace.createRendering({ recordDraw: () => stage('record'),
+    geometry: owner({ drawArcEndpointHandles: 'arc-handles', drawSplineEditHandles: 'spline-handles', drawPoints: 'points' }),
+    dimensions: owner({ draw: 'dimensions' }), annotations: owner({ draw: 'annotations', drawPreview: 'annotation-preview' }),
+    drawDimensionPreview: () => stage('dimension-preview'), authoringPreview: owner({ draw: 'authoring', drawTrimPreview: 'trim' }),
+    placements: owner({ drawBlockPlacementPreview: 'block-placement', drawFreeInstancePreview: 'free-instance' }),
+    offsetPreview: owner({ draw: 'offset' }), drawBlockInstanceHandles: () => stage('block-handles'), drawSnapMarker: () => stage('snap'),
+    drawReferenceImages: () => stage('images'), drawHatches: () => stage('hatches'), drawDrawingStack: () => stage('stack'),
+    drawReferenceImageOverlays: () => stage('image-overlays'), drawSketchIdentityLabel: () => stage('identity'),
+    drawSelectionRect: () => stage('selection-rect'), drawExportOverlay: () => stage('export-overlay') });
+  assert.deepEqual(f.calls, []); assert.deepEqual(stages, []); assert.ok(Object.isFrozen(rendering));
+  f.state.onContent = rendering.draw; f.state.onDraw = rendering.draw; f.state.ready = true;
+  return { ...f, rendering, stages };
+}
+
+test('Workspace rendering shares the live viewport, bitmap, zoom display and PNG frame without repeated infrastructure ports', () => {
+  const f = workspaceRenderingFixture(), other = workspaceRenderingFixture();
+  f.display.viewport.update({ x: 10, y: 20, scale: 4 });
+  f.rendering.draw(); assert.equal(f.button.textContent, '200%');
+  assert.equal(f.canvas.width, 400); assert.equal(f.workspace.surface.dpr, 2);
+  assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+  assert.equal(other.canvas.width, 0); assert.deepEqual(other.stages, []);
+  f.stages.length = 0; f.calls.length = 0;
+  f.workspace.exportRenderer.render({ x: 2, y: 3, width: 10, height: 20 }, { x: 8, y: 12 });
+  assert.deepEqual(f.stages, ['images', 'hatches', 'stack', 'dimensions', 'annotations', 'points']);
+  assert.ok(f.calls.some(c => c[0] === 'transform' && c[1] === 2 && c[4] === 3 && c[5] === -36 && c[6] === -96));
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, { x: 10, y: 20, scale: 4 });
+  f.stages.length = 0; f.state.dpr = 3; f.workspace.exportRenderer.restore();
+  assert.equal(f.workspace.exportRenderer.frame, null); assert.equal(f.canvas.width, 600);
+  assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+});
+
+test('Workspace rendering retains export failure and restore boundaries on the same renderer', () => {
+  const f = workspaceRenderingFixture(), error = new Error('annotations failed');
+  f.state.failure = 'annotations'; f.state.error = error;
+  assert.throws(() => f.workspace.exportRenderer.render({ x: 0, y: 0, width: 10, height: 10 }, { x: 1, y: 1 }), value => value === error);
+  assert.ok(f.workspace.exportRenderer.frame); assert.deepEqual(f.stages, ['images', 'hatches', 'stack', 'dimensions', 'annotations']);
+  assert.equal(f.calls.some(c => c[0] === 'restore'), false);
+  f.state.failure = null; f.stages.length = 0; f.workspace.exportRenderer.restore();
+  assert.equal(f.workspace.exportRenderer.frame, null);
+  assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+});
+
 function renderingFixture() {
   const calls = [], state = { ready: false, failure: null, onStage: null, dpr: 2, overlay: null, override: undefined };
   const ready = () => assert.equal(state.ready, true, 'rendering construction must stay lazy');

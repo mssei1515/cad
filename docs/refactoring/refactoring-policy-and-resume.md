@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Workspaceと描画基盤の共有接続（2026-10-24、検証完了）
+
+基準develop／origin/developはd815ea8。直前のCanvas周辺UI分離b8713c8は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/canvas-workspace-renderingで実施した。
+
+CanvasDisplay.createWorkspaceの返却値へcreateRenderingを追加した。同じWorkspaceのCanvas・context・viewport・Surface・zoom controlと、CanvasExport rendererの現在frameを、既存の静的createRenderingへ接続する。appから渡す描画固有のportは23→17、対象3factory合計は46→40。rootの不要なzoomControl別名も除いた。初期のcreate→createWorkspace→後段のcreateRenderingという順序と、TransientAuthoringを挟む位置、各bind／startは維持する。frameは描画中に毎回既存ownerから読み、constructorで先読みしない。新たな可変phase参照・frameコピー・renderer cache・app contextはなく、旧静的APIは維持する。
+
+app.jsは2,586→2,585行（1行減）。行数より、同じWorkspaceの描画基盤を組み合わせる責務と依存の削減を目的とする。AST監査でroot未使用bindingと追加接続の初期化前参照は0（cad-workspace-render-audit.cjs）。実componentを使い、遅延構築、同じviewport／bitmap／倍率表示／PNG frame、別Workspaceとの独立、対話→PNG→復元の描画順、例外時の既存frame／restore範囲を2単体で確認した。既存8単体は維持し、関連10件・構文608ファイル・全単体1,889件が成功。構文確認開始後のapp別名整理もnode --check app.jsで確認した。
+
+PNG出力・Canvas zoom／選択glow・Hatch・画像・注記・既存UI・phase0保存互換性と描画比較の関連E2E182件が全成功（2.7分、exit 0、runner48093、cad-workspace-render-e2e.log）。sourceを固定し、専用receiptのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した（cad-workspace-render-e2e-receipt.json、cad-workspace-render-last-run.json）。今回の全E2Eは未実行で、直前の全体基準は74a0d17の全587件成功。週枠使用1%／残量99%で停止条件未到達。mainは停止・releaseの区切りで最後に反映する方針を維持し、全体目標はactiveで未完了。
+
+次はroot構築の依存を再監査し、表示以外の機能単位で共有できるownerと初期化段階を確認する。小さな引数削減だけで数百行へ届くとは見積もらない。test hooks全体や巨大なcontextの移動は採用せず、Document／Blockの異なる復元scope、通常入力とPNG／command panelの違いを維持する。
+
 ### 最新：Canvas周辺UIのDOM取得責務（2026-10-24、検証完了）
 
 基準develop／origin/developは7313e39。PointUsage接続41793b1を統合・Pushし、構文608・単体1,882件・関連E2E239件は成功済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/canvas-view-dom-ownershipで実施した。
