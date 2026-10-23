@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Propertiesの選択・編集・表示を共有ownerで段階構築（2026-10-24、検証完了）
+
+基準develop／origin/developはa8e96f4（構文614・全単体1,942・全587 E2E成功）。本単位はcodex/properties-feature-compositionで実施した。PropertiesDisplay.createFeatureが同じDocument／DOM・currentScope・Selection／readServices／SketchContext／Hatch外観から実PropertySelectionを生成し、createEditing→createViewで同じ選択queryと実編集command／AppearanceUIを既存Controller／Viewへ接続する。共通通知・言語・HTML escapeを一度接続し、段階固有の依存は既存factoryの契約で転送して構築処理や引数宣言を重複実装しない。選択用selectionOperation（Block定義ID等）と表示用getOperation（配置Sketch ID・rotation lock等）、編集currentScopeと外観appearanceScopeの違いを維持する。旧生成順とappearanceUI.start／View render時機を変えず、新state／cache・palette／listenerや可変app contextは追加しない。既存の個別factoryも維持する。
+
+app.jsは2,391→2,389行（2行減）、対象生成3→3、root直下の延べ引数74→55、未使用binding／初期化前参照0（TEMP cad-properties-feature-audit.cjs）。行数効果は小さいが、選択／編集／Viewへ同じ実体を繰り返し指定する接続を減らし、Props内の依存と外部actionの境界を明示する。
+
+追加2単体は実PropertySelection／PropertyEditingFeature／AppearanceUI／PropertiesController／Viewを使い、構築時のDOM／operation無照会、同じSelectionとPointの同一性、previewで無履歴・commitで一回の履歴、選択変更後の別Point編集とlock拒否を確認した。さらに選択用と表示用で内容の異なる二readerを実配置Propertiesの表示とactionへ接続し、定義参照同一性・両readerの操作時読取りとaction結果を維持した。既存テストの期待は変更していない。関連単体19件、全単体1,944件は成功。構文614ファイルと関連E2E205件（Properties・Leader外観・注記・Hatch・派生pattern・画像・複数寸法・phase0保存互換性／描画比較・既存UI）も全成功（3.1分、exit 0、runner91697）。TEMP cad-properties-feature-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server31660の停止と二つの製品source hash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準a8e96f4と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用26%／残量74%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残る機能内構築と機能間接続を再確認し、共通ownerを生かすAPIと初期化段階を整理する。今回の2行減を200〜500行のcomposition root達成とは扱わない。
+
+
 ### 最新：拘束コントロールの表示と後段bindingを機能層へ統合（2026-10-24、全体検証完了）
 
 基準develop／origin/developはcbb0d02。本単位はcodex/constraint-controls-featureで実施した。ConstraintEditing.createControlsが同じSelectionQuery・Target／DimensionPlacement・session／pendingと通知から実ConstraintControlsViewを生成し、返すcreateBindingで後段に実ConstraintControlCommand→既存button bindingを生成する。appから加える依存はdocument・button／menu／Fix・hasSelection・翻訳の六つ。拘束label等は先行生成、Viewは元の位置、ControlCommandとbinding生成／bindはFixedSelection準備後の元の位置を維持する。Pending distanceのannotationAnchor／interval除外、無効target時のcancel messageとDOM反映前の確認順、非Geometry modeでの短絡も同じFeatureへ閉じる。Target／Dimensionへの呼出しは旧root委譲と同じreceiver・引数／戻り値を維持し、操作優先順位は実ControlCommandへ残す。Selection・モード・Pending／listener状態を増やさず、個別factoryも維持する。

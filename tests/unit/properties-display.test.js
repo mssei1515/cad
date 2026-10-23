@@ -12,7 +12,7 @@ class Input {
   closest() { return null; }
 }
 class TextArea extends Input {}
-function fixture({ interactive = false, sharedScene = false, sharedOwners = false } = {}) {
+function fixture({ interactive = false, sharedScene = false, sharedOwners = false, featureComposition = false } = {}) {
   const model = w.DocumentState.create(), selection = w.CanvasSelection.create(), calls = [];
   const state = { ready: false, scope: model, operation: {}, controls: [{ disabled: false }], checkbox: {}, section: null };
   const panel = { innerHTML: '', querySelectorAll(selector) {
@@ -33,7 +33,11 @@ function fixture({ interactive = false, sharedScene = false, sharedOwners = fals
     applicationText, hatchGeometryQuery: { resolvedHatchBoundary: () => ({ ok: false }), hatchPrimitivesFromElements: () => [], hatchPrimitivesForScope: () => [] },
     sketchById, isRootSketch, activeSketchId, showHiddenElements: () => false });
   const appearance = w.Appearance;
-  const propertySelection = sharedScene ? w.PropertiesDisplay.createSelection({ canvasSelection: selection, getOperation: () => state.operation,
+  const composition = featureComposition ? w.PropertiesDisplay.createFeature({ document, documentModel: model,
+    currentScope: () => { assert.equal(state.ready,true); state.scopeReads = (state.scopeReads || 0) + 1; return state.scope; },
+    canvasSelection: selection, readServices: services, sketchContext, hatchAppearanceForDisplay: item => appearance.normalizeHatchAppearance(item.appearance),
+    selectionOperation: () => { assert.equal(state.ready,true); state.selectionReads = (state.selectionReads || 0) + 1; return state.selectionOperation || state.operation; } }) : null;
+  const propertySelection = composition ? composition.selection : sharedScene ? w.PropertiesDisplay.createSelection({ canvasSelection: selection, getOperation: () => state.operation,
     documentModel: model, readServices: services, sketchContext, hatchAppearanceForDisplay: item => appearance.normalizeHatchAppearance(item.appearance) })
     : w.PropertySelection.create({ Point, Line, canvasSelection: selection, getOperation: () => state.operation,
     effectiveSelectedConstraint: selection.effectiveSelectedConstraint, selectedGeometryItems: selection.selectedGeometryItems,
@@ -76,17 +80,25 @@ function fixture({ interactive = false, sharedScene = false, sharedOwners = fals
     geometryAppearance: services.geometryAppearance, dimensionAppearance: services.dimensionAppearance, annotationAppearance: services.annotationAppearance,
     catalog: services.catalog, projections: services.projections, instances: services.instances, geometryReads: services.reads,
     sketchName, sketchById, isRootSketch, activeSketchId, constraintSketchId: sketchContext.constraintSketchId };
-  const view = build({ document, documentModel: model, currentScope: () => state.scope, canvasSelection: selection,
-    getOperation: () => state.operation, propertySelection, ...scenePorts,
+  const viewOptions = { document, documentModel: model, currentScope: () => state.scope, canvasSelection: selection,
+    getOperation: () => { if(featureComposition) { assert.equal(state.ready,true); state.viewReads = (state.viewReads || 0) + 1; } return state.operation; }, propertySelection, ...scenePorts,
     appearanceControls: controls, controller, sketchProjectionConstraintForTarget: () => null,
     constraintGeometryId: item => item?.id, constraintStatusOf: () => 'stable',
     snappedBlockRotation: value => value, constraintDefiningGeometryEntries: () => [],
     hatchAppearanceForDisplay: item => appearance.normalizeHatchAppearance(item.appearance), resolvedHatchBoundary: () => ({ ok: false }),
     ...ownerPorts, escapeHtml, hatchRegionErrorText: () => '', geometryInstanceTypeLabel: value => value,
     installExpressionInputHighlights: () => calls.push('highlight'),
-    ...(interactive ? interactivePorts : {}) });
+    ...(interactive ? interactivePorts : {}) };
+  const editor = composition ? composition.createEditing({ appearanceScope: () => { assert.equal(state.ready,true); return state.appearanceScope || state.scope; },
+    viewport: { get scale() { assert.equal(state.ready,true); return 2; } }, checkpoint: { captureValues: () => ({}), restoreValues() {} },
+    parameterStabilization: { stabilize: () => true }, guardSketchProjectionShapeEdit: () => true,
+    synchronizeSketchProjectionMetadata() {}, materializeAnchor() {}, isGeometryMode: () => true, toggleSketchVisibility() {}, guardSelectionEdit: () => true,
+    applicationSettings: ownerPorts.applicationSettings || { applicationText, localizeApplicationUI: presentationPorts.localizeApplicationUI }, escapeHtml,
+    invalidateBlockProjectionCache: services.projections.invalidateBlockProjectionCache, recordHistory: notify('history'),
+    updateUI: interactivePorts.updateUI, updatePropertiesUI: interactivePorts.updatePropertiesUI, draw: interactivePorts.draw }) : null;
+  const view = editor ? editor.createView(viewOptions) : build(viewOptions);
   function point(id, x = 1) { const item = Object.assign(new Point(id, x, 2), { sketchId: activeSketchId() }); state.scope.points.push(item); return item; }
-  return { model, state, panel, calls, controller, view, selection, propertySelection, point, services, sketchContext };
+  return { model, state, panel, calls, controller, view, selection, propertySelection, point, services, sketchContext, composition, editor };
 }
 
 test('shared scene owners preserve mixed markup, current locks and interactive property routing without construction reads', () => {
@@ -227,4 +239,34 @@ test('interactive Panel uses late placement state, propagates action results and
   f.state.operation = {}; f.selection.set('points', [point]); f.calls.length = 0;
   const button = { closest: () => null }; f.panel.onclick({ target: { closest: selector => selector === '[data-appearance-palette-open]' ? button : null } });
   assert.deepEqual(f.calls, [['palette', button, 'properties']]);
+});
+
+test('Properties feature shares the real query, editing owners and View while preserving live selection, preview and commit', () => {
+  const f = fixture({ interactive: true, sharedScene: true, sharedOwners: true, featureComposition: true });
+  assert.deepEqual(f.calls, []); assert.equal(f.state.selectionReads || 0, 0); assert.equal(f.state.viewReads || 0, 0);
+  assert.equal(f.composition.selection, f.propertySelection); f.state.ready = true;
+  const a = f.point('P1'), b = f.point('P2', 11); f.selection.set('points',[a]); f.view.render(f.propertySelection.selectedDisplayTarget());
+  f.calls.length = 0; f.panel.oninput({ target: new Input({ appearanceKey: 'color' }, '#135790') });
+  assert.equal(a.appearance.color,'#135790'); assert.equal(f.calls.some(call => Array.isArray(call) && call[0] === 'history'),false);
+  f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#135790') });
+  assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'history').length,1);
+  f.selection.set('points',[b]); f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#246801') });
+  assert.equal(b.appearance.color,'#246801'); assert.equal(a.appearance.color,'#135790'); assert.equal(f.state.scope.points[1],b);
+  f.model.sketches.find(sketch => sketch.id === b.sketchId).locked = true; f.calls.length = 0;
+  f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#ff0000') });
+  assert.equal(b.appearance.color,'#246801'); assert.deepEqual(f.calls,[]);
+});
+
+test('Properties feature keeps selection operation and presentation operation distinct and forwards action results', () => {
+  const f = fixture({ interactive: true, sharedScene: true, sharedOwners: true, featureComposition: true }); f.state.ready = true;
+  const definition = { ...w.DocumentState.create(), id: 'BD1', name: 'Placed block' }; f.model.blockDefinitions.push(definition);
+  f.state.selectionOperation = { mode: 'block-place', blockPlacementDefinitionId: definition.id };
+  f.state.operation = { mode: 'block-place', blockPlacementEnabledSketchIds: [f.model.activeSketchId], blockPlacementRotationLocked: true };
+  const target = f.propertySelection.selectedDisplayTarget(); assert.equal(target.item,definition); f.view.render(target);
+  assert.match(f.panel.innerHTML,/data-placement-rotation-mode/); assert.ok(f.state.selectionReads > 0); assert.ok(f.state.viewReads > 0);
+  f.calls.length = 0; f.panel.onchange({ target: new Input({ placementRotationMode: 'locked' }, '') });
+  assert.deepEqual(f.calls[0],['placement-lock',true]);
+  const instance = { id: 'FI1', sketchId: f.model.activeSketchId }; f.state.selectionOperation = { freeInstancePlacement: instance }; f.state.operation = {};
+  f.calls.length = 0; const action = { closest: selector => selector === '[data-property-action]' ? { dataset: { propertyAction: 'instance-anchor' } } : null };
+  assert.equal(f.panel.onclick({ target: action }),'placement-result'); assert.equal(f.calls[1][1],instance);
 });

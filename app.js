@@ -1528,29 +1528,27 @@
 
 
 
-  const propertySelection = window.PropertiesDisplay.createSelection({
-    canvasSelection, documentModel, readServices: geometryReadServices, sketchContext, hatchAppearanceForDisplay,
-    getOperation: () => ({ mode: drawOperationLifecycle.mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
+  const { selection: propertySelection, createEditing: createPropertyEditing } = window.PropertiesDisplay.createFeature({
+    document, documentModel, currentScope: workspace.current, canvasSelection, readServices: geometryReadServices, sketchContext, hatchAppearanceForDisplay,
+    selectionOperation: () => ({ mode: drawOperationLifecycle.mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
   });
   function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
-  const { editing: propertyEditing, appearanceUI } = window.PropertiesDisplay.createEditing({
-    document, documentModel, currentScope: workspace.current, appearanceScope: () => editingScopeBinding.current, viewport, propertySelection,
-    readServices: geometryReadServices, sketchContext, checkpoint: editingCheckpoint, parameterStabilization,
+  const { editing: propertyEditing, appearanceUI, createView: createPropertiesView } = createPropertyEditing({
+    appearanceScope: () => editingScopeBinding.current, viewport, checkpoint: editingCheckpoint, parameterStabilization,
     guardSketchProjectionShapeEdit, synchronizeSketchProjectionMetadata, materializeAnchor: materializeAnnotationAnchor,
     isGeometryMode, toggleSketchVisibility, guardSelectionEdit, applicationSettings, escapeHtml,
     invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
   });
   const { appearanceEditing, visibility: selectionVisibilityCommand } = propertyEditing;
-  const propertiesView = window.PropertiesDisplay.createWithController({
-    document, documentModel, currentScope: workspace.current, canvasSelection,
+  const propertiesView = createPropertiesView({
     getOperation: () => ({ mode: drawOperationLifecycle.mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
-    propertySelection, readServices: geometryReadServices, sketchContext, sketchProjectionConstraintForTarget,
+    sketchProjectionConstraintForTarget,
     constraintGeometryId, constraintFeedback, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
-    hatchAppearanceForDisplay, resolvedHatchBoundary, applicationSettings, escapeHtml, hatchRegionErrorText,
+    resolvedHatchBoundary, hatchRegionErrorText,
     geometryInstanceTypeLabel, parameterNamespace, installExpressionInputHighlights,
-    propertyEditing, appearanceUI, HTMLTextAreaElement, HTMLInputElement,
+    HTMLTextAreaElement, HTMLInputElement,
     canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
-    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw, setHint,
+    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, setHint,
     blockPlacement: blockPlacementCommand,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     annotationCommand, startInstanceSourceEdit: instanceSourceCommand.startForInstance, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
