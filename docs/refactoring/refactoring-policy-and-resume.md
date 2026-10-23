@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：矩形選択の機能組立て（2026-10-24、検証完了）
+
+基準develop／origin/developは20fbe41。直前の拘束表示分離efcdefdを統合・Pushし、構文604・単体1,870件・関連E2E169件は成功済み。main／origin/mainはdf5aef2を保持する。現在はcodex/rectangle-selection-featureで作業中。
+
+生成・接続の群を再監査し、RectangleSelectionQuery→通常選択適用→Instance参照元追加→SelectionRectangleをsrc/application/rectangle_selection_feature.jsへ集約した。queryと矩形Sessionの実体だけを返し、Selection／query／source command／Scope・外観・幾何・投影の既存ownerを共有する。通常選択とsource追加の判断、model編集、開始・更新・終了・reset、失敗時の解除・例外、通知・描画・履歴は各既存ownerへ残す。既存の不変な幾何計算を同じlibraryから使い、全app context／新state／model copyは追加しない。
+
+app.jsは2,622→2,605行（17行減）、この群のroot構築4→1、明示port51→22。前段SketchProjectionFeatureのquery参照は遅延callbackのまま。instance adapterとSessionの生成をCanvas描画器の組立てより前へ寄せたが、実際の各constructorは生成時にscope／操作callback／描画／listenerを実行しないことを確認した。rootの未使用bindingと追加接続の初期化前参照は0。query・三経路・現在のscope／scale、source参照、追加選択のguard、例外の停止位置を実部品で確認する4単体を追加し、関連51件・構文606ファイル・全単体1,874件が成功。ログはcad-rectangle-feature-{focused,check,unit}.log。loader／構文・単体manifest／file URL読込期待も同期し、依存部品の後・appより前に新moduleを置いた。
+
+bootstrap-boundary-audit.mdへ同じAST条件の再監査を記録した。root構築181→178、構築非空白1,064→1,053、test hooks440行のままで、200〜500行の最終目標は未達。Parameter群はDialog UI、計算、Document／Block別checkpointの混在を一括contextで包まず、初期化段階とportを改めて検討する。spec/architecture/モジュール構成.mdとimplementation-map.mdへ今回の所有境界・依存方向を記録した。
+
+既存UI・Block・通常／派生／Sketch投影の矩形選択とコピー・履歴・保存再読込、Hatch・画像・command panelの関連E2E226件は3.3分で成功（runner79935 exit 0、自己起動port8799停止、cad-rectangle-feature-e2e.log）。file URL Help／読込順期待も成功し、.last-run.jsonはpassed／failedTests空。実装・仕様・再監査資料・loader同期・テストをこの単位でCommit／Pushし、developへ統合する区切りとする。今回の全E2Eは未実行で、74a0d17の全587成功は直前の全体基準として区別する。週枠使用25%／残量75%、停止条件未到達。全体目標はactiveで未完了。
 ### 最新：拘束コマンドのラベルと案内の接続（2026-10-24、検証完了）
 
 基準develop／origin/developは74a0d17。前単位のConstraintEditing分離fbba968とSolver性能修正43ec1eaを統合・Pushし、全587 E2E（28.4分、exit 0）、構文604、単体1,867件の成功を確認済み。main／origin/mainはdf5aef2のまま。現在はcodex/constraint-target-feedbackで次の責務分離を実施中。
