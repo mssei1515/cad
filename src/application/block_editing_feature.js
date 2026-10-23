@@ -52,7 +52,17 @@
         blockDefinitionDependsOn: queries.blockDefinitionDependsOn, acceptError, setSketchSolveOk, setSketchSolveError,
         clearSelection, canvasSelection, setMode, setHint, log, updateUI, draw, recordHistory,
       });
-      return Object.freeze({ definition, completion });
+      function createView({ document, escapeHtml, startBlockPlacement, localizeApplicationUI }) {
+        return window.BlockView.create({ document, escapeHtml,
+          readEditing: () => session.current ? { name: session.current.draft.name } : null,
+          blockDefinitionsInCurrentScope: queries.blockDefinitionsInCurrentScope, blockDefinitionUsageCount: queries.blockDefinitionUsageCount,
+          selectedDefinitionIds: () => canvasSelection.blockInstances.map(instance => instance.definitionId),
+          startBlockPlacement, enterBlockDefinitionEdit: definition.enter, renameBlockDefinition: definition.rename, deleteBlockDefinition: definition.remove,
+          completeBlockDefinitionEdit: completion.complete, cancelBlockDefinitionEdit: definition.cancel,
+          changeName: session.rename, commitName: () => { if (session.current) recordHistory("ブロック名変更"); },
+          refresh: updateBlockUI, localizeApplicationUI });
+      }
+      return Object.freeze({ definition, completion, createView });
     }
     return Object.freeze({ editing, session, queries, createCommands });
   }

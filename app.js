@@ -315,8 +315,7 @@
   const { clone: cloneBlockDefinition, fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
-  const { blockDefinitionsInCurrentScope, blockDefinitionScopeError,
-    blockDefinitionUsageCount, blockDefinitionEditError } = blockEditingQueries;
+  const { blockDefinitionScopeError, blockDefinitionEditError } = blockEditingQueries;
 
   const canvasRenderProbe = window.CanvasRenderProbe.create({
     ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
@@ -927,7 +926,7 @@
   function reserveBlockEditorSequences(draft) { return idReservation.scope(draft); }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
-  const { definition: blockDefinitionCommand, completion: blockCompletionCommand } = blockEditingFeature.createCommands({
+  const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView } = blockEditingFeature.createCommands({
     canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
     canvasSelection, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
     setMode: drawOperationLifecycle.setMode, closeDefinitions: () => blockView.closeDefinitions(),
@@ -946,7 +945,7 @@
     constraintGraphNodes, annotationReferencesRemovedGeometry, acceptError: CONSTRAINT_ACCEPT_ERROR, setSketchSolveOk, setSketchSolveError, log,
   });
   const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit,
-    cancel: cancelBlockDefinitionEdit, rename: renameBlockDefinition, remove: deleteBlockDefinition } = blockDefinitionCommand;
+    cancel: cancelBlockDefinitionEdit } = blockDefinitionCommand;
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
 
   function syncOffsetChainSelection() { return canvasSelection.applyOffsetSelection(offsetSelection); }
@@ -1514,17 +1513,7 @@
 
 
 
-  const blockView = window.BlockView.create({
-    document, escapeHtml,
-    readEditing: () => blockEditor.current ? { name: blockEditor.current.draft.name } : null,
-    blockDefinitionsInCurrentScope, blockDefinitionUsageCount,
-    selectedDefinitionIds: () => canvasSelection.blockInstances.map((instance) => instance.definitionId),
-    startBlockPlacement, enterBlockDefinitionEdit, renameBlockDefinition, deleteBlockDefinition,
-    completeBlockDefinitionEdit, cancelBlockDefinitionEdit,
-    changeName: blockEditor.rename,
-    commitName: () => { if (blockEditor.current) recordHistory("ブロック名変更"); },
-    refresh: updateBlockUI, localizeApplicationUI,
-  });
+  const blockView = createBlockView({ document, escapeHtml, startBlockPlacement, localizeApplicationUI });
 
   function updateBlockUI() {
     ensureBlockState();

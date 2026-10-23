@@ -159,3 +159,54 @@ test('invalid completion and stale confirmation leave the active session and reg
   assert.equal(f.workspace.current(), f.document); assert.equal(f.feature.session.current, null);
   assert.equal(f.document.blockDefinitions.length, 0); assert.equal(f.events.includes('history'), false);
 });
+
+function viewFixture(overrides = {}) {
+  const f = fixture(), c = commands(f, { recordHistory: label => f.events.push(['view-history', label]), ...overrides }), elements = {}, reads = [];
+  function element(id) { return { dataset: { id }, events: {}, style: {}, attrs: {}, value: '', hidden: false,
+    classList: { toggle(name, value) { this[name] = value; } }, setAttribute(name, value) { this.attrs[name] = value; },
+    addEventListener(type, handler) { this.events[type] = handler; }, fire(type, event) { return this.events[type]?.call(this, event || { target: this }); },
+    close() { this.open = false; f.events.push('dialog-close'); }, showModal() { this.open = true; f.events.push('dialog-show'); } }; }
+  for (const id of ['blockList','blockOverlayTitle','blockEditorOverlay','blockEditorNameInput','blockEditorActions','openBlockDefinitionsBtn','completeBlockEditBtn','cancelBlockEditBtn','blockDefinitionsDialog']) elements[id] = element(id);
+  const row = element('outer');
+  const buttons = Object.fromEntries(['Place','Edit','Rename','Delete'].map(kind => [`.block${kind}Btn`, element('outer')]));
+  const dom = { getElementById(id) { reads.push(id); return elements[id] || null; },
+    querySelectorAll(selector) { return selector === '.block-item[data-id]' ? [row] : buttons[selector] ? [buttons[selector]] : []; }, body: { classList: { toggle() {} } } };
+  const view = c.createView({ document: dom, escapeHtml: value => String(value).replaceAll('<','&lt;'),
+    startBlockPlacement: function(id) { 'use strict'; assert.equal(this, undefined); f.events.push(['place', id]); },
+    localizeApplicationUI: () => f.events.push('localize') });
+  assert.deepEqual(reads, []); assert.deepEqual(f.events, []); f.state.ready = true;
+  return { ...f, commands: c, view, elements, buttons, row, dom };
+}
+
+test('Block feature View shares definitions, selection and the editor session while preserving name input and cancel behavior', () => {
+  const f = viewFixture(), outer = scope('outer'); outer.name = '<Outer>'; f.geometry(outer);
+  const child = { ...scope('child'), parentDefinitionId: 'outer' }; f.document.blockDefinitions.push(outer, child);
+  const instance = { id: 'BI-existing', definitionId: 'outer' }; f.document.blockInstances.push(instance); f.commands.selection.set('blockInstances', [instance]);
+  f.view.render(); assert.match(f.elements.blockList.innerHTML, /&lt;Outer>/); assert.equal(f.elements.blockList.innerHTML.includes('data-id="child"'), false);
+  assert.equal(f.row.attrs['aria-selected'], 'true'); assert.match(f.elements.blockList.innerHTML, /block-item-count">1</);
+  f.buttons['.blockPlaceBtn'].fire('click'); assert.deepEqual(f.events.slice(-2), ['dialog-close',['place','outer']]);
+  f.view.bind(); f.buttons['.blockEditBtn'].fire('click'); const editing = f.feature.session.current;
+  assert.ok(editing); assert.notEqual(editing.draft, outer); f.view.render(); assert.equal(f.elements.blockEditorNameInput.value, '<Outer>');
+  assert.equal(f.elements.blockEditorOverlay.hidden, false);
+  f.dom.activeElement = f.elements.blockEditorNameInput; f.elements.blockEditorNameInput.value = 'typing'; f.view.render(); assert.equal(f.elements.blockEditorNameInput.value, 'typing');
+  f.elements.blockEditorNameInput.fire('input', { target: { value: 'Draft name' } }); assert.equal(editing.draft.name, 'Draft name'); assert.equal(outer.name, '<Outer>');
+  assert.equal(f.events.some(event => event[0] === 'view-history'), false); f.elements.blockEditorNameInput.fire('change');
+  assert.deepEqual(f.events.at(-1), ['view-history','ブロック名変更']);
+  f.elements.cancelBlockEditBtn.fire('click'); assert.equal(f.feature.session.current, null); assert.equal(f.workspace.current(), f.document);
+  f.view.render(); assert.equal(f.elements.blockEditorOverlay.hidden, true); assert.equal(f.elements.blockEditorNameInput.hidden, true);
+  const count = f.events.length; f.elements.blockEditorNameInput.fire('input', { target: { value: 'stale input' } }); f.elements.blockEditorNameInput.fire('change');
+  assert.equal(f.events.length, count); assert.equal(outer.name, '<Outer>');
+});
+
+test('Block feature View delegates registry rename, guarded deletion and completion to its actual commands', async () => {
+  const f = viewFixture({ promptName: () => ' Renamed ' }), outer = scope('outer'); f.document.blockDefinitions.push(outer); f.view.render();
+  f.buttons['.blockRenameBtn'].fire('click'); assert.equal(outer.name, 'Renamed'); assert.deepEqual(f.events.at(-1), ['view-history','ブロック名変更']);
+  f.document.blockInstances.push({ id: 'BI-existing', definitionId: 'outer' }); f.buttons['.blockDeleteBtn'].fire('click'); assert.equal(f.document.blockDefinitions.includes(outer), true);
+  f.document.blockInstances.length = 0; f.buttons['.blockDeleteBtn'].fire('click'); assert.equal(f.document.blockDefinitions.includes(outer), false);
+  const completed = viewFixture({ requestChoice: () => Promise.resolve(true) }); completed.geometry(completed.document); completed.commands.selection.set('lines', completed.document.lines);
+  completed.commands.definition.startCreation(); assert.ok(completed.feature.session.current); completed.view.bind(); completed.elements.completeBlockEditBtn.fire('click');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(completed.feature.session.current, null); assert.equal(completed.workspace.current(), completed.document);
+  assert.equal(completed.document.blockDefinitions.length, 1); assert.equal(completed.document.blockInstances.length, 1);
+  assert.equal(completed.events.filter(event => event[0] === 'view-history').length, 1);
+});
