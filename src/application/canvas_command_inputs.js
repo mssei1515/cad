@@ -1,7 +1,8 @@
 /* Assemble the five Canvas command input adapters around shared editing owners. */
 (() => {
   "use strict";
-  function create({ readMode, readPending, readPendingConstraint, document, canvas, canvasSelection, clearSelection, canvasHover, draw, updateUI, updateGeometrySelectionUI, setHint, applicationText,
+  function create(options) { return createFeature(options).inputs; }
+  function createFeature({ readMode, readPending, readPendingConstraint, document, canvas, canvasSelection, clearSelection, canvasHover, draw, updateUI, updateGeometrySelectionUI, setHint, applicationText,
     annotationCommand, annotationDrag, startAnnotationAnchorConstraint, selectedDimensionLineGroup, isDimensionConstraintCommandActive, beginDimensionDrag,
     retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint, handleConstraintOperandClick, constraintInputFeature, dimensionDragging,
     instanceSourceCommand, geometryInstanceCommand, sceneQueries, hitReferenceTarget, hitDerivedProjectionOperand, hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource,
@@ -60,7 +61,18 @@
       capturePointer, setHint, applicationText, updateGeometrySelectionUI, draw,
     });
 
-    return Object.freeze({ instance: instanceCommandInput, annotation: annotationCommandInput, constraint: constraintCommandInput, drawing: drawingCommandInput, selection: canvasSelectionInteraction });
+    const inputs = Object.freeze({ instance: instanceCommandInput, annotation: annotationCommandInput, constraint: constraintCommandInput, drawing: drawingCommandInput, selection: canvasSelectionInteraction });
+    function bindPointer(pointer, { canvasNavigation, drawingPreview, recordHistory, referenceImageInteraction,
+      dimensionDrag = dimensionDragging?.command, pointerHover, updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover,
+      hitDimension, hitSketchIdentityElement, press }) {
+      return pointer.bind({ canvasNavigation, drawingPreview, canvasHover, clearSnap, draw, transientAuthoring, recordHistory,
+        selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
+        getMode: readMode, getPendingCommand: readPending, getPendingConstraintCommand: readPendingConstraint,
+        updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
+        press: { ...press, activation: { ...press.activation, selection: canvasSelection },
+          worldPoint: viewport.canvasPoint, screenPoint: viewport.canvasScreenPoint, inputs } });
+    }
+    return Object.freeze({ inputs, bindPointer });
   }
-  window.CanvasCommandInputs = Object.freeze({ create });
+  window.CanvasCommandInputs = Object.freeze({ create, createFeature });
 })();
