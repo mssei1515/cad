@@ -6,6 +6,16 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 表示機能の生成・接続（2026-10-23、性能gateは未通過）
+
+PresentationFeatureへ設定・計測・通知とUI／Canvas更新の接続をまとめた。既存五ownerの処理と状態は移さず、共有settings／profiler／formatterと八つの更新入口を一つの機能として公開する。appの当該構築は5→3、明示引数36→25、app.jsは2,738→2,724行（14行減）。private二参照は構築段階の接続専用で、モデル／UI stateや全app contextを追加しない。UIとCanvasの生成位置は保持し、Settingsのstorage／DOM反映より前に他ownerを実行しない。新moduleはsrc/applicationに配置し、既存UI ownerはsrc/uiに維持する。
+
+構文596ファイル・単体1,839件・関連単体15件・file URL読込1件は成功。旧main df5aef2のappへの差し替えを実際に1回確認する修正済み診断で、UI／設定／コピー／Sketch切替16状態、作図／取消／Document置換48状態、寸法22状態が一致した。比較対象はmodel・履歴・mode／Selection、UI文言／状態、API204 key順等で、除外はsavedAtだけ。
+
+関連E2E305件は304成功・性能1失敗（6.2分）。空白矩形333msで250ms未満の基準を超えた。無変更の旧mainでも選択性能が失敗することを確認したが、今回の差分の影響がないとは断定しない。性能制限・既存testの期待値は変更していない。最新全E2Eは未実行であり、前回release df5aef2の587全成功と区別する。詳細と再現入口は[presentation-performance-investigation.md](presentation-performance-investigation.md)。このcheckpointはタスク完了／release合格ではなく、develop／mainへの統合を保留した作業branchの保存とする。
+
+再開時はGit状態／usage／同じ診断の進行中handle有無を確認する。次は性能のwall時間とCPU／描画回数を分離し、観測した処理に根拠のある改善だけを検討する。採用しなかった寸法hit／数値rule試作を無断で製品へ戻さない。mainはdf5aef2を保持し、全体の200〜500行への目標も未完了。週枠使用4%／残量96%で停止条件には達していない。
+
 ### 削除機能の生成・接続（2026-10-21）
 
 DeletionFeatureが既存plan／Geometry command／Selection commandと参照拒否を共有し、同じscope／PointUsage／Selection・Annotationと後段resetを接続する。二つのrefresh・通知／例外・部分反映を保ち、独自のモデル／復元／履歴を持たない。構築3→1、明示引数64→47、群外root参照49→47。app.jsは2,765→2,738行（27行減）。旧appとのコピー／Cutと直接削除・参照拒否／leaf削除を含む36状態でmodel・clipboard・mode・履歴／選択・HintとAPI204 key順が一致。構文594・単体1,835・全E2E587件（24.9分）が成功。週枠残量49%に達したため、新しい分離を停止してdevelop先行／main最後で反映・同期する区切りとする。検証と再開地点は[再開手順](refactoring-policy-and-resume.md)を参照する。全体目標未完了。
