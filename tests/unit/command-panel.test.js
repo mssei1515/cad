@@ -61,7 +61,7 @@ function featureFixture() {
   'use strict';
   const context = { window: {} }, events = [], queries = [];
   for (const file of ['src/ui/command_panel.js', 'src/ui/derived_command_panel.js', 'src/ui/hatch_command_panel.js',
-    'src/ui/annotation_command_panel.js', 'src/commands/annotation_anchor_constraints.js']) {
+    'src/ui/annotation_command_panel.js', 'src/document/annotation_anchor_data.js', 'src/commands/annotation_anchor_constraints.js']) {
     vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), context);
   }
   const created = {};

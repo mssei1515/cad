@@ -44,7 +44,7 @@
         }
       }
       for (const annotation of scope.annotations || []) {
-        for (const ref of window.AnnotationAnchorConstraints?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : [])) {
+        for (const ref of window.AnnotationAnchorData?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : [])) {
           const target = resolveGeometryRef(ref);
           if (!moved.has(annotation) && !isMoved(target)) continue;
           if (!target || moved.has(annotation) !== isMoved(target)) {

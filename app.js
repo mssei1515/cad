@@ -90,7 +90,7 @@
     ConstraintSolver,
   } = window.GeometrySolver;
 
-  const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorConstraints;
+  const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const {
     constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,

@@ -56,14 +56,14 @@
         }
       }
       for (const annotation of annotations) {
-        for (const ref of window.AnnotationAnchorConstraints?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : [])) {
+        for (const ref of window.AnnotationAnchorData?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : [])) {
           const referenced = resolveGeometryRef(ref);
           if (!referenced || !isSelectedNode(referenced)) return { error: applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`) };
         }
       }
       for (const annotation of model.annotations) {
         if (annotations.includes(annotation)) continue;
-        const references = window.AnnotationAnchorConstraints?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : []);
+        const references = window.AnnotationAnchorData?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : []);
         if (references.some(ref => isSelectedNode(resolveGeometryRef(ref)))) return { error: `注記 ${annotation.id} が選択図形を参照しています` };
       }
       const selectedBoundaryKeys = new Set([...lines, ...circles, ...arcs, ...splines].map((item) => `${geometryKindForItem(item)}:${item.id}`));
