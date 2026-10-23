@@ -21,7 +21,13 @@
         allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
         allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines() });
     }
-    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance, createPointUsage });
+    function createSnapshotMetadata({ pointUsage }) {
+      const { Point } = window.GeometrySolver;
+      const { isPointUsedByPrimitive } = pointUsage;
+      return item => ({ sketchId: elementSketchId(item),
+        kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined });
+    }
+    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance, createPointUsage, createSnapshotMetadata });
   }
   function createWithHatches({ document, currentScope, currentSketches, prepareBlocks, elementSketchId, applicationText,
     sketchById, isRootSketch, activeSketchId, showHiddenElements, profileRead, viewportScale }) {
