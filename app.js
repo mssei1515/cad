@@ -1478,14 +1478,21 @@
 
   function constructionToggleState(geometryMode = isGeometryMode()) { return constructionCommand.state(geometryMode); }
 
-  const constraintSelectionQuery = window.ConstraintSelectionQuery.create({
-    session: constraintTargetSession, selection: canvasSelection, candidates: constraintCandidates,
+  const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand } = window.ConstraintEditing.create({
+    session: constraintTargetSession, selection: canvasSelection, pending: pendingCommandSession, candidates: constraintCandidates,
+    lifecycle: drawOperationLifecycle, valueInput: dimensionInputController,
     resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
-    elementSketchId, canEditSketch, findLineFixedConstraint, selectedGeometryItems,
+    elementSketchId, canEditSketch, findLineFixedConstraint, selectedGeometryItems, guardSketchEdit, guardSelectionEdit, startAnnotationAnchorConstraint,
+    constraintLabel, clearSelection, trimConstraintSelection, commitConstraintResolution, syncSelectionFromConstraintOperands,
+    updateToolbar, updateConstraintButtons, setHint, constraintTargetHint, draw,
+    blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
+    addConstraint, annotationAnchorConstraints, hitConstraintOperand, invalidConstraintTargetHint,
+    toggleGeometryFixedOperand, toggleSelectedFixed, updateGeometrySelectionUI, types: { Circle, Arc },
+    isPlacingInstance: geometryInstanceCommand.isPlacing, geometryInstanceBundle, targetFromConstraint, cancelPendingCommand,
+    selectedPrimitives, placement: dimensionPlacement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
+    addReadOnlyDimensionConstraint, makeConstraintOperand, sameConstraintOperand, applicationText, log,
   });
   function canApplyConstraint(type) { return constraintSelectionQuery.canApply(type); }
-
-  function canCompleteConstraintCommand(type) { return constraintSelectionQuery.canComplete(type); }
 
   function constraintLabel(type) {
     if (type === "fixed") return applicationText("固定", "Fix");
@@ -1496,18 +1503,6 @@
   function constraintTargetHint(type) { return constraintFeedback.targetHint(type, constraintTargetSession.operands, applicationSettings.language, () => constraintLabel(type)); }
   function invalidConstraintTargetHint(type) { return constraintFeedback.invalidTargetHint(type, constraintTargetSession.operands, applicationSettings.language); }
 
-  const constraintTargetCommand = window.ConstraintTargetCommand.create({
-    session: constraintTargetSession, startAnnotationAnchorConstraint,
-    canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
-    prepareStart: drawOperationLifecycle.prepareConstraintStart, prepareCancel: drawOperationLifecycle.prepareConstraintCancel,
-    constraintLabel, clearSelection, constraintOperandsFromSelection, trimConstraintSelection,
-    resolveConstraintIntent, startDistanceResolution, commitConstraintResolution, syncSelectionFromConstraintOperands,
-    updateToolbar, updateConstraintButtons, setHint, constraintTargetHint, draw,
-    blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
-    canCompleteConstraintCommand, distanceTargetFromSelection, startDistanceCommand, addConstraint,
-    annotationAnchorConstraints, hitConstraintOperand, invalidConstraintTargetHint,
-    toggleGeometryFixedOperand, toggleSelectedFixed, updateGeometrySelectionUI, startDistanceValueInput, types: { Circle, Arc },
-  });
   function startConstraintTargetCommand(type) { return constraintTargetCommand.start(type); }
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
   function completePendingDimensionLineLength() { return constraintTargetCommand.completeLineLength(); }
@@ -1518,19 +1513,6 @@
 
   function handleConstraintTargetDoubleClick(hitP, hitL, pointer) { return dimensionPlacementCommand.targetDoubleClick(hitP, hitL, pointer); }
 
-  const dimensionPlacementCommand = window.DimensionPlacementCommand.create({
-    session: constraintTargetSession, selection: canvasSelection, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
-    guardSketchEdit, isPlacingInstance: geometryInstanceCommand.isPlacing, geometryInstanceBundle, targetFromConstraint, cancelPendingCommand, cancelConstraintTargetCommand,
-    canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
-    prepareStart: drawOperationLifecycle.prepareDimensionStart,
-    selectMode: drawOperationLifecycle.selectMode,
-    constraintOperandsFromSelection, constraintResolutionFromCurrentSelection, selectedPrimitives,
-    placement: dimensionPlacement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
-    addReadOnlyDimensionConstraint, activeSketchId, syncSelectionFromConstraintOperands,
-    makeConstraintOperand, hitConstraintOperand, sameConstraintOperand, resolveConstraintIntent,
-    hideDimensionValueInput, syncDimensionValueInput, focusDimensionValueInput,
-    applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
-  });
   function startInstanceAngleDimension(instance) { return dimensionPlacementCommand.startInstanceAngleDimension(instance); }
   function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
 

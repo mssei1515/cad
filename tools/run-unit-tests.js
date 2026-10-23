@@ -72,6 +72,7 @@ const files = [
   "tests/unit/constraint-selection-query.test.js",
   "tests/unit/constraint-intent-resolver.test.js",
   "tests/unit/constraint-target-command.test.js",
+  "tests/unit/constraint-editing.test.js",
   "tests/unit/constraint-commit-command.test.js",
   "tests/unit/drawing-bounds.test.js",
   "tests/unit/first-dimension-scaling.test.js",

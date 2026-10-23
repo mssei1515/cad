@@ -6,6 +6,47 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：機体ドラッグのprofileに基づく行列アクセス削減（2026-10-24、検証完了）
+
+直前のCholeskyだけの候補は機体E2Eが600,000ms timeoutで失敗（10.1分、exit 1）。runner38131は終了しport8799も停止済み、後続の全E2Eは起動していない。電源接続はユーザーから報告を受けたが、電源状態を原因とは断定しない。この時点ではmain／developへの統合を保留した。最終の検証結果は以下のとおり。
+
+実際のA2／A3・fraction .2／.8の遅い反復120 previewをCPU profileし、最大hotspotがreducedRowEchelonとredundancyのaddIndependentRowであることを確認した。各操作は成功し、30 previewの所要時間は4.9〜8.2秒。診断は一時directoryのcad-aircraft-path-profile.cjs／.logとcad-aircraft-path.cpuprofile、runner13791はexit 0で自己起動port8798停止済み。
+
+Solverだけに、行簡約の走査行／pivot行のローカル参照と疎な基底entryの添字アクセスを追加した。pivotの探索順・同値の扱い、積和・減算の順序、二回の再直交化、ゼロ／非有限値の演算、閾値を変えない。旧fbba968と候補の行簡約を10,000行列でdeep比較しbitwise一致（入力不変も確認）。代表200×256行列4回は旧86.4→新45.4msであり、全体速度の保証ではない。診断はcad-rank-access-differential.cjs。構文604・全単体1,867件はexit 0（cad-rank-access-{check,unit}.log）。app.jsは2,627→2,627行（0行差）。
+
+旧Solver sourceを実配信するrouteをassertした実ブラウザ比較は成功（runner94275 exit 0、port8798停止、cad-rank-access-browser.cjs／.log／-records.json）。拘束状態と120 preview、保存modelが一致。代表4操作の合計は旧31.294→新21.406秒、状態照会3回は旧214.5〜221.9→新141.8〜168.3ms。未変更の機体E2Eは8.9分で成功（1 passed、1,872 preview、failures空、maximumMs=288.9）。fixture・timeout600,000ms・期待値は維持した。ログはcad-rank-access-aircraft.log、結果はcad-rank-access-aircraft-results。続けて同じrunner1441／自己起動port8799で全587 E2Eを実行した（cad-rank-access-e2e-full.log）。全587 E2Eは28.4分で成功（exit 0、runner1441終了、.last-run.jsonはpassed／failedTests空、自己起動port8799停止を確認）。フィレット3,744 preview（33.3秒）、Offset10,296 preview（2.7分）、機体1,872 preview（8.9分）もfailures空。機体は単独・全体の両実行で600,000ms以内に成功した。この性能修正は責務分離checkpoint fbba968とは別の論理的commitとしてCommit／Pushし、両変更をdevelopへ統合する区切りとする。mainは停止／release checkpointまで保持し、通常の分離途中で自動反映しない。経過時間とsavedAtのみ比較対象外とし、期待値・ケース数・timeoutは緩和しない。全検証が成功したため、developへの統合後に次の責務分離へ進める。週枠使用23%／残量77%、停止条件未到達。作業branch checkpoint fbba968、develop1592058、main df5aef2、追加差分はSolver／unit／仕様と本資料だけである。
+性能対策後の次単位はConstraintFeedbackへの拘束label／hintの集約を検討する。現物ではconstraintLabel／constraintTargetHint／invalidConstraintTargetHintをConstraintEditing.create（現在1481行）が直接捕捉し、三関数の宣言はその後にある。constへ置換して同じ場所に残すと初期化前参照になるため、最初の直接利用より前で生成する必要がある。constraintButtonsは783行、target sessionは338行で準備済み。固定labelの短絡、dataset.label→title→typeのtruthy fallback、操作時の最新dataset／言語／operandの読取り、汎用hintでだけlabelを読む順序、例外の伝播を維持する。新たな状態複製やDOM listenerを持たせず、既存ownerに狭い読取りportを渡す。これはまだ実装していない。
+
+### 経過：SolverのCholesky先頭ゼロ部分の省略（2026-10-24、旧候補）
+
+作業branch codex/constraint-editing-assemblyのcheckpoint fbba968から、既存の機体E2E timeoutの性能対策を別の論理的変更として実施中。develop／origin/developは1592058、main／origin/mainはdf5aef2で、統合は保留する。src/solver/constraint_solver.jsのsolveDampedLeastSquaresで、Cholesky入力行の最初の非ゼロ列を記録し、二行の先頭ゼロ部分の積だけを省略する。fill-inはこの先頭より左には生じないため、残る積・減算の順序を変更しない。非有限の入力行列では旧dense範囲に戻し、正定性判定1e-12・QR fallback・減衰・許容誤差・反復回数を維持する。app.jsは2,627→2,627行（0行差）。UI・操作・保存形式は変更しない。
+
+旧fbba968のprivate methodと候補を抽出した一時診断で20,000組の結果をObject.isで比較し一致。疎／密・不連結／rank不足、ゼロ減衰／負減衰、非常に大きい／小さい値と非有限値を含め、null判定も一致した。一時診断はcad-cholesky-prefix-{differential,same-realm,extremes}.cjs／.log。初回のVM内microbenchmarkは遅く出たため、それだけで採否を決めず同一realmと実ブラウザで比較した。同一realmの帯行列3回ではn=128が旧3.65→新1.17ms、n=256が旧6.08→新1.39ms。特定matrixの数値であり一般的な速度保証とはしない。
+
+実ブラウザの同一機体fixtureで旧Solverだけをroute差替えし、旧source配信1回をassertして比較した。拘束状態3回、9 previewの全計算値・最終図形・保存modelが一致し、除外はelapsedMsとsavedAtのみ。照会前後のmodel不変も確認した。旧照会174.3〜192.2ms、新152.2〜160.7ms。一時診断はcad-cholesky-prefix-browser.cjs／.log／-browser-records.json。
+
+geometry-solverの追加2件は公開solveCoreから、不連結な線形blockと変数順の入替え、元のゼロ箇所に必要なfill-inを保つ一意解、undampedな特異系のQR fallbackと有限解を確認する。private APIを公開せず既存の形状／drag検証を維持した。構文604ファイル・全単体1,867件・関連単体46件が成功。ログはcad-cholesky-prefix-{focused,check,unit}.log。
+
+この旧候補の機体E2Eはtimeoutで終了し、後続の全E2Eは起動しなかった（tool session38131終了、自己起動port8799停止）。最終候補の結果は上節を参照。baselineのNode hookは適用せず、fixture・timeout600,000ms・期待値も変更しない。観測が途切れても同じhandle／実processを確認し、終了を確認せず重複起動しない。ログはcad-cholesky-prefix-aircraft.logと-e2e-full.log、機体の結果directoryは一時directoryのcad-cholesky-prefix-aircraft-results。この旧候補だけでは全E2E成功を確認できず、profileに基づく上節の追加対策へ進んだ。
+
+修正の計算方法はspec/calculation/拘束と依存更新.mdへ記録した。Source構築のcheckpointはfbba968、現在の追加実装はSolver／対応unit／仕様・再開資料だけ。性能検証を通すためのテスト緩和やケース削除は行わない。性能問題が解決するまで新しい責務分離は止め、ConstraintFeedbackのlabel／hint移管は後続候補として残す。全体目標はactiveのまま。
+### 最新：拘束照会・対象指定・寸法配置の組立て（2026-10-23）
+
+基準develop 1592058からcodex/constraint-editing-assemblyで実施。src/application/constraint_editing.jsへConstraintSelectionQuery→ConstraintTargetCommand→DimensionPlacementCommandの生成・接続を集めた。同じSelection／target session・pending、Lifecycleと値入力Controllerを共有し、返すのは実際の三owner。型別の実操作・求解・履歴・復元は既存commandに残し、model／session／rollbackやapp contextを追加しない。
+
+app.jsは2,645→2,627行（18行減）、この群のroot構築3→1、明示引数78→50。現在active Sketchのcreate guard→Selectionのconstraint guardを同じ関数で短絡評価し、二つの元のguardの戻り値・例外を保持する。通常拘束開始／取消と寸法開始の準備は別々のLifecycleメソッドのまま。queryの能力／現在選択照会と、targetから寸法配置・値入力への進行、寸法からtarget取消への接続はowner間のcallbackへまとめ、同じreceiver・引数境界・戻り値・例外を維持した。
+
+元の三つの構築の間はfunction宣言だけで、実際の構築順序は維持した。constructorはこれらの操作callbackを呼ばず、データを先読みしない。appに残るhoistedな公開入口と、後段ConstraintIntentResolver／ConstraintCommitCommandへの既存接続は保持する。移管後に参照0になったprivate canCompleteConstraintCommandだけを除去し、残るrootの自己外参照なしbindingは0、直接引数を含む初期化前参照0をAST監査した。一時診断はcad-constraint-editing-audit.cjs。旧appと新moduleのASTで三childへ渡す全property key集合が一致することも確認し、子の依存契約を欠落させていない。
+
+新moduleは三child scriptの後へ配置し、index.html／構文一覧／unit一覧／file URL Helpのscript期待値・namespace確認を同期した。構文604ファイル・全単体1,865件・関連単体37件・file URL Help読込1件が成功。追加3件で実owner／session／Selection／pending readerの同一性、別々のLifecycle／入力callback、起動時の遅延参照、開始guardの現在Sketch・評価順／短絡／戻り値・例外、交差callbackの引数数・receiverと元の例外を確認した。既存三childの振る舞いテストも維持する。
+
+旧1592058のindex／appを実際に差し替え、両route利用と旧版に新namespaceがないことをassertしたブラウザ比較で125状態が一致。model・clipboard・mode・履歴・Selection・Hint・command panel・寸法／注記入力・drag中classとAPI204 key順に加え、拘束対象の順序／kind／endpointとcommand種別を比較した。savedAtだけ除外。寸法対象選択→preview→配置→値確定、円弧端点の水平拘束、同種toggle取消、Undo／Redoを追加し、以前の注記／コピー／削除・再読込も含む。一時診断はcad-constraint-editing-equivalence.cjs／.log。
+
+全E2E587件は586件成功・1件失敗で終了（32.9分、exit 1）。機体A2／A3（constraint-drag-regressions.spec.js:92）が600,000msでtimeoutし、stackはload後のconstraintStatusesForTest照会（同file:14）を示す。図形・拘束結果の不一致とは未確定。runner44536終了と自己起動port8796のserver停止を回収した。完了扱い・Commit／Push・main反映は保留。全体のlast-runとerror-contextは一時directoryのcad-constraint-editing-full-last-run.json／-aircraft-full-error-context.mdへ保全した。閾値や期待値は緩和しない。ログはcad-constraint-editing-{focused,check,unit,loader,e2e-full}.log。UI期待値・性能上限・timeout・保存versionは変更しない。前単位の関連317件とreleaseの全587件を今回の検証へ代用しない。
+
+変更前1592058のindex／appをpage routeで配信するNode hookを一時directoryに準備した。他source・図面・テストは同refから差がなく、fixtureもtimeoutも変更しない。既存の短いreloadテスト1件でsource配信を検証（1.5秒、exit 0）し、両routeの実配信と旧sourceのSHA256をprovenance JSONへ記録した。同じ機体テストの単独実行でも600,000ms timeoutが再現（10.1分、exit 1）。96通り中92通りのdrag呼出し終了までprogress記録がある。全体検証と同時には動かしていない。Node側に操作所要時間だけを記録し、browser内のmodel／測定値は変更していない。session59956は終了済み。診断はcad-constraint-editing-baseline-{hook.cjs,sources.json,preflight.log,aircraft.log,provenance-*.json,progress-*.jsonl}。追加のCPU診断（cad-constraint-analysis-profile.cjs／.log／.cpuprofile）では照会235.2ms、stable／freeDof=2、model不変を確認。Jacobian・nullspace／Damped least squares・redundancyが時間を使う。
+
+main／origin/mainはdf5aef2、develop／origin/developは1592058のまま。週枠は開始使用17%／残量83%、診断後使用21%／残量79%で停止条件未到達。責務分離は作業branchだけへcheckpoint Commit／Pushし、既存timeoutの性能問題を別の論理的なcommitとして調査・修正する。全検証の成功までdevelop／mainへの統合は保留し、目標はactiveのまま継続する。次はprofileのhotspotと実matrixの疎性を確認し、式・許容誤差・fallback・図形結果を変えない計算の省略だけで改善できるか調べる。Choleskyの先頭zero prefixなどを候補とし、採用前に旧計算とのbitwise比較・代表matrix benchmark・既存Solver検証で判断する。テストのtimeoutや期待値は緩和しない。次のSolver変更後にbaselineを再実行する場合、旧app／indexの二つだけでなく変更したSolver sourceも旧refへ固定すること。ConstraintFeedbackへのUI label／hint集約は性能問題解決後へ延期する。性能修正の実装はまだ行っていない。
 ### 最新：通常注記ドラッグの生成・接続（2026-10-23）
 
 基準develop 33832ecからcodex/annotation-drag-assemblyで実施。既存AnnotationFeature.createDragへ通常AnnotationDragの生成、共有renderer／materialization・Selection・通知／履歴の接続と現在editing scopeのID照会を集めた。実drag ownerを返し、session／resize handle状態は既存AnnotationDragだけに残す。pointer開始／終了・外観resize・拘束付きbegin callbackは同じ関数をそのまま渡し、DOM操作の順序や例外を変えるwrapperを加えない。新file／folder／scriptやモデル・履歴の複製は追加しない。
