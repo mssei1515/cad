@@ -3,8 +3,8 @@
   "use strict";
   const { formatDisplayNumber, formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
   const { serializeReferenceImage } = window.ReferenceImageData;
-  const { lineIntersectsRect, pointInExpandedBox, rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
-  const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners, referenceImageBounds } = window.ReferenceImageGeometry;
+  const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
+  const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners } = window.ReferenceImageGeometry;
   const { serializeHatch } = window.HatchData;
   const { serializeAnnotation } = window.AnnotationData;
 
@@ -32,7 +32,6 @@
     threePointArcGeometry,
     slotGeometry,
     angleAtArcParam,
-    arcSamplePoints,
     lineNormal,
     lineHasDirection,
     signedPointLineDistance,
@@ -314,12 +313,12 @@
     nextId: () => documentIds.allocate("sketchProjection"), canvasSelection, refreshConstraintAnalysis, recordHistory,
     clearHover: () => canvasHover.update({ point: null, line: null, circle: null, arc: null, spline: null, sketchIdentity: null }),
   });
-  const { command: sketchProjectionCommand, sources: sketchProjectionSources, sketchProjectionEntriesByRect,
+  const { command: sketchProjectionCommand, sources: sketchProjectionSources,
     guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
   const { sketchProjectionSourceKey, sketchProjectionSourceIsCovered, sketchProjectionEntryFromItem,
     sketchProjectionEntryFromOperand } = sketchProjectionSources;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
-    addByRect: addSketchProjectionSourcesByRect, commit: commitSketchProjectionCommand } = sketchProjectionCommand;
+    commit: commitSketchProjectionCommand } = sketchProjectionCommand;
   const drawingPreview = window.DrawingPreview.create({ types: { Point, Line, Circle, Arc }, canvasHover,
     canCreateInActiveSketch, clearSnap: () => clearSnap(), snapForDrawing, draw,
     linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
@@ -1148,10 +1147,6 @@
 
   function clearSelection() { return selectionClearing.clear(); }
 
-  function selectableSketchElement(item) {
-    return isActiveSketchElement(item) && isVisibleSketchElement(item);
-  }
-
   authoringTools.createLifecycle({ lifecycle: drawOperationLifecycle,
     canStart: nextMode => nextMode === "select" || guardSketchEdit(activeSketchId(), "create") && (nextMode !== "trim" || guardSelectionEdit("structure")),
     instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, centerline: centerlineCommand,
@@ -1316,15 +1311,14 @@
     dimensionLabelForConstraint, dimensionUsesExpression,
   });
 
-  const rectangleSelectionQuery = window.RectangleSelectionQuery.create({
-    currentScope: dimensionPresentationScope, selectableSketchElement, isExplicitPoint, isReferencePoint, pointInRect,
-    lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
-    arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId: id => id === activeSketchId(), isVisibleSketchId, blockProjectionBundle, geometryInstanceBundle, mergeBounds,
-    splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
-    hatchAppearanceForDisplay, referenceImageBounds, isVisibleValue,
-    dimensionSelectionBounds: dimensionSelectionBounds.read,
+  const { query: rectangleSelectionQuery, rectangle: selectionRectangle } = window.RectangleSelectionFeature.create({
+    currentScope: dimensionPresentationScope, viewport, canvasSelection, selectionScope: selectionScopeQuery,
+    sketches: sketchContext, pointUsage, appearance: geometryAppearance, geometryReads, projections: blockProjections,
+    hatches: hatchGeometryQuery, dimensionBounds: dimensionSelectionBounds, annotationBounds, hatchAppearanceForDisplay,
+    readMode: drawOperationLifecycle.readMode, instanceSourceCommand, geometryInstanceCommand, sketchProjection: sketchProjectionFeature,
+    releasePointer: (id) => { try { canvas.releasePointerCapture(id); } catch (_) {} },
+    clearSelection, setHint, updateGeometrySelectionUI, draw,
   });
-  const { select: selectByRect } = window.CanvasSelectionInteraction.createRectangleSelection({ canvasSelection, selectionSketchId, activeSketchId, query: rectangleSelectionQuery });
 
   function drawBlockInstanceHandles() {
     resetCanvasStrokeState();
@@ -1365,17 +1359,6 @@
 
   function drawCanvas() { return canvasFrameRenderer.draw(); }
 
-
-  const { add: addInstanceSourcesByRect } = window.InstanceCommandInput.createRectangleSources({
-    getMode: drawOperationLifecycle.readMode, instanceSourceCommand, geometryInstanceCommand, geometryReads, query: rectangleSelectionQuery,
-    sketchProjectionEntriesByRect, elementSketchId, activeSketchId, isVisibleSketchElement,
-  });
-  const selectionRectangle = window.SelectionRectangle.create({
-    rectFromPoints, hypot2, viewScale: () => viewport.scale,
-    releasePointer: (id) => { try { canvas.releasePointerCapture(id); } catch (_) {} },
-    clearSelection, selectByRect, addSketchProjectionSourcesByRect, addInstanceSourcesByRect,
-    setHint, updateGeometrySelectionUI, draw,
-  });
 
   function drawSelectionRect() { return interactionOverlay.drawSelectionRect(selectionRectangle.preview()); }
 

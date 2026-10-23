@@ -210,7 +210,7 @@ const files = [
   "tests/unit/constraint-analysis.test.js",
   "tests/unit/parameter-stabilization.test.js",
   "tests/unit/geometry-drag-solver.test.js",
-  "tests/unit/selection-rectangle.test.js",
+  "tests/unit/selection-rectangle.test.js", "tests/unit/rectangle-selection-feature.test.js",
   "tests/unit/rectangle-selection-query.test.js",
   "tests/unit/sketch-deletion-command.test.js"
 ];

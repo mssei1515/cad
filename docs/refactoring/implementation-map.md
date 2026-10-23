@@ -71,6 +71,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 - `src/commands/dimension_drag.js`: 寸法表示位置ドラッグのsession・更新・確定と小移動時のコマンド継続通知
 
 - `src/editing/rectangle_selection_query.js`: 現在scopeの矩形選択候補照会（選択更新はCanvasSelection）
+- `src/application/rectangle_selection_feature.js`: 矩形候補照会・通常選択適用・Instance参照元追加・SelectionRectangleの組立て。実queryとSessionを返し、同じSelection／scope／幾何照会を共有する。モデル編集・Session状態は既存ownerへ残す。
 
 - `src/commands/selection_rectangle.js`: 選択矩形のsession・previewと通常／投影選択の確定振分け
 
