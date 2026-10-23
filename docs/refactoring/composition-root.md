@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Canvas入力とPointerの共有結線（2026-10-24、検証完了）
+
+基準develop／origin/developはbcddba8。本単位はcodex/canvas-pointer-contextで実施した。CanvasCommandInputs.createFeatureが従来の五つの入力をinputsとして返し、bindPointerで既存PointerInteractionController sessionへ結線する。旧createは五つの入力APIだけを返す互換入口として維持する。入力とPointerが共有するmode／pending reader、Selection・Hover・矩形選択・Annotation／Geometry drag・snap解除・描画・TransientAuthoring・viewportを一度受け、dimension dragには同じDimensionDragFeature.commandを使う。press query／activation操作、preview／hit更新・navigation・履歴等は別の明示依存として接続する。session生成とbindの位置、座標関数のpress receiver、入力生成順・処理優先順位・例外時の途中状態を維持し、新state・cache・listenerや汎用app contextは増やさない。
+
+app.jsは2,465→2,462行（3行減）。対象二つの構築／接続のroot直下引数は63→54（nested press／activationの削減は別）。未使用binding／初期化前参照0（TEMP cad-pointer-context-audit.cjs）。削減量を行数目標の達成とは扱わない。実Pointer sessionと実入力adapter／Selection／Hoverを使う追加2単体で、bind時の無照会、同じsession・Selection、live mode／pending、preview・注記配置・double click、query例外の途中状態、drag終了順と履歴抑止・hover解除を確認する。
+
+初回E2EでPointer終了時のTransientAuthoring接続不足が発覚した。createDrawingInputを使うapp側にも同じownerを明示して渡すことで修正した（期待値の緩和なし）。初回ログはTEMP cad-pointer-context-before-fix-e2e.logへ保存した。修正後の関連単体33件、全単体1,926件、構文612ファイルが成功。同じ関連E2E182件（command panel・注記入力／drag・ReferenceImage・寸法drag・派生pattern／選択copy・Spline・phase0保存互換性／描画・既存UI）も全成功（2.8分、exit 0、runner52870）。TEMP cad-pointer-context-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0とlast-run passed／failedTests空、自己起動server39444の停止、二つの製品source hash不変を確認した。今回の全E2Eは未実行で、最新全体基準f6727f7の587件成功と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用20%／残量80%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残存する機能間接続と機能内部構築を再確認する。入力まわりの小さな移動だけを続けず、生成・bind／start段階と既存ownerの狭いAPIでまとめられる単位を検討し、200〜500行の目標を維持する。
+
+
 ### 最新：Pointと通常作図入力の所有者への接続（2026-10-24、検証完了）
 
 基準develop／origin/developは6cd037e。本単位はcodex/authoring-canvas-inputで実施した。BasicDrawingTools.createCanvasInputが実PointCommand→DrawingCommandInputを構築し、createAuthoring().createCanvasInputは共有済みGeometry／snap／transient／Selection／求解更新とprimitive input／Splineを接続する。外部依存はmode readerとCenterline／円中心十字／Fillet／Trim／Offsetの六つ。CanvasCommandInputs.createのcreateDrawingInput callbackを、従来のPoint生成位置（Annotation→Constraint→Instanceの後、Selectionの前）で一度だけ呼ぶ。raw依存による旧入口も同じ共通factoryを使い、構築処理を重複させない。既存のmode分岐・Point生成規則・draftやSelection状態は各childに残す。
