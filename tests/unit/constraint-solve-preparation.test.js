@@ -8,11 +8,12 @@ const G=sandbox.window.GeometrySolver, K=sandbox.window.GeometryKernel;
 const point=(x,y)=>new G.Point('p',x,y), line=(x1,y1,x2,y2)=>new G.Line('l',point(x1,y1),point(x2,y2));
 const arc=(x,y,r,start=0,end=Math.PI)=>new G.Arc('a',point(x,y),r,start,end);
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9, String(a)+' != '+String(b));
-function fixture() {
+function fixture(shared = false) {
  const fixed=new Set(), state={ sync:0, plan:null }, solver={maxStepNorm:2,syncLineOrientationHints:()=>state.sync++};
- const preparation=sandbox.window.ConstraintSolvePreparation.create({ solver,types:G,hasDirectRadiusDimension:a=>fixed.has(a),
+ const options={ solver,types:G,hasDirectRadiusDimension:a=>fixed.has(a),
   unwrapAngleNear:K.unwrapAngleNear,hypot2:G.hypot2,arcEndpointPoint:K.arcEndpointPoint,lineNormal:K.lineNormal,
-  offsetChainDraft:(...args)=>{state.args=args;return state.plan;},vectorNorm:G.vectorNorm,minimumOrientationLength:1e-8,minimumLineLength:1e-4 });
+  offsetChainDraft:(...args)=>{state.args=args;return state.plan;},vectorNorm:G.vectorNorm,minimumOrientationLength:1e-8,minimumLineLength:1e-4 };
+ const preparation=shared ? sandbox.window.ConstraintSolvePreparation.createForSolver(options) : sandbox.window.ConstraintSolvePreparation.create(options);
  return {preparation,fixed,state,solver};
 }
 test('arc endpoint on support line expands only free radius and leaves directly dimensioned radius intact',()=>{
@@ -49,6 +50,38 @@ test('offset chain requires a complete valid plan and retains offset objects and
  assert.equal(o.p1,p);near(o.p1.x,4);near(o.p2.y,7);near(a.center.x,8);near(a.radiusValue,10);
  assert.equal(f.state.args[0][0].geometry,s);assert.equal(f.state.args[0][0].reversed,true);assert.equal(f.state.args[3],true);
 });
+test('shared Solver construction retains real geometry preconditioning, lazy reads and current numeric settings',()=>{
+ const results=[];
+ for(const shared of [false,true]) {
+  const f=fixture(shared);assert.equal(f.state.sync,0);assert.equal(f.state.args,undefined);
+  const support=line(-10,0,10,0);support.orientationHint='horizontal';const a=arc(0,5,1);
+  f.preparation.precondition(new G.ArcEndpointOnLineConstraint(a,'start',support));
+  results.push([a.radiusValue,a.startAngle,a.endAngle,f.state.sync]);
+  f.solver.maxStepNorm=9;assert.equal(f.preparation.stepNorm(null),9);
+  assert.equal(f.preparation.stepNorm({error:()=>[6,8]}),15);
+ }
+ assert.deepEqual(results[0],results[1]);
+});
+
+test('dimension edits and constraint commits share temporary settings and restore them through nested solve exceptions',()=>{
+ for(const file of ['src/commands/constraint_commit_command.js','src/commands/dimension_value_command.js']) vm.runInContext(fs.readFileSync(file,'utf8'),sandbox);
+ const f=fixture(true),failure=new Error('nested solve failed'),calls=[];
+ const constraint={sketchId:'S1',error:()=>[6,8]},pending={type:'distance-value',target:{kind:'point-point'},constraint,buffer:'3'};
+ const command=sandbox.window.ConstraintCommitCommand.create({solvePreparation:f.preparation,guardSketchEdit:()=>true,activeSketchId:()=> 'S1',
+  constraintTargetsAreActive:()=>true,snapshotModelState:()=>{calls.push(['capture',f.solver.maxStepNorm]);return {};},
+  pushModelConstraint:()=>calls.push(['push',f.solver.maxStepNorm]),now:()=>0,
+  solveConstraintComponentAndDependents:()=>{calls.push(['solve',f.solver.maxStepNorm]);throw failure;},
+ });
+ const editor=sandbox.window.DimensionValueCommand.create({solvePreparation:f.preparation,getPending:()=>pending,
+  expressionFromUserInput:String,evaluateDimensionExpressionDraft:()=>3,activeSketchId:()=> 'S1',constraintSketchId:c=>c.sketchId,
+  snapshotModelState:()=>{calls.push(['edit-capture',f.solver.maxStepNorm]);return {};},
+  stabilizeActiveParameterNamespace:()=>{calls.push(['stabilize',f.solver.maxStepNorm]);return command.ordinary('distance',constraint);},
+ });
+ assert.deepEqual(calls,[]);assert.throws(()=>editor.submit(),error=>error===failure);
+ assert.deepEqual(calls,[['edit-capture',2],['stabilize',15],['capture',15],['push',15],['solve',15]]);
+ assert.equal(f.solver.maxStepNorm,2);assert.equal(constraint.expression,'3');
+});
+
 test('step norm handles scalar and vector errors and restores nested temporary changes after exceptions',()=>{
  const f=fixture();assert.equal(f.preparation.stepNorm(null),2);assert.equal(f.preparation.stepNorm({error:()=>[3,4]}),7.5);
  assert.equal(f.preparation.stepNorm({error:()=>1}),2);assert.equal(f.preparation.stepNorm({error:()=>4}),6);

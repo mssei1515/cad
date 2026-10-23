@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：共有求解準備と初期化段階の整理（2026-10-24、検証完了）
+
+基準develop／origin/developは64233c5。本単位はcodex/shared-solve-preparationで実施した。ConstraintSolvePreparation.createForSolverが既存の型・幾何helperをcreateへ結線し、同じ実precondition／stepNorm／withStepNormを返す。実行時依存はsolver・直接半径寸法照会・OffsetChain計画・最小長二つに限定する。Offset生成後・DimensionValueCommand生成前に一度構築し、同じAPIを寸法値編集とConstraintCommitCommandへ渡す。createと各commandの個別関数注入を維持し、明示値を優先する。数値計算・幾何前処理・snapshot／rollback・求解条件・UI・保存形式は変更しない。
+
+app.jsは2,516→2,508行（8行減）、対象構築3→3、明示port89→80。root未使用binding／初期化前参照0（TEMP cad-shared-preparation-audit.cjs）。constructorはSolver設定・scope／モデル・依存callbackを読まないため、この純粋な初期構築を前へ移せる。テスト用preconditionは同じ実関数を公開し、二つのhoisted設定wrapperを撤去した。状態やcache・可変contextは追加しない。
+
+追加2単体で、新旧APIの実Arc前処理一致・遅延照会・現在のstep normを使うこと、実DimensionValueCommand→ConstraintCommitCommandの入れ子求解で同じSolver設定を共有し、例外時に各直前値へfinally復元することを確認した。モデルのexpressionが例外前に変わる既存境界も維持する。関連単体53件、全単体1,915件、構文612ファイルが成功。
+
+関連E2E265件は全成功（18.4分、exit 0、runner32809）。拘束dragのfileは14.5分、fillets 3,744 previews／maximumMs 34.8、offsets 10,296／66.8、aircraft 1,872／300.3はいずれもfailures空。既存の600,000ms timeout・期待値は変更していない。寸法・Annotation・Block・Sketch編集・既存UI・phase0保存互換性／描画比較も通過。TEMP cad-shared-preparation-e2e-receipt.jsonのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止、四つの製品source hash不変を確認した。関連ログはcad-shared-preparation-{focused,unit,check,e2e}.log。source固定中に再開資料だけへ実行sessionを記録し、途中出力を成功扱いせず同じsessionを終了まで追跡した。
+
+spec/architecture/モジュール構成.mdとimplementation-map.mdへ設計を記録した。全E2Eは今回未実行で、17defd0の全587件成功と区別する。週枠使用12%／残量88%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残存root構築を再監査し、同じ実ownerで完結する内部構築と機能間接続を分ける。起動／bind／startの生成段階は独立して扱い、単に大量のAPIを大きなcontextへ包む案は採用しない。200〜500行の目標は維持し、少数の引数削減で達成扱いにしない。
+
 ### 最新：寸法拘束の生成・候補分類と追加機能の接続（2026-10-24、検証完了）
 
 基準develop／origin/developは79b87b1。本単位はcodex/constraint-dimension-compositionで実施した。Treeの残存照会を全owner付きのcontextで包む案は採用せず、先に同じ寸法生成器を共有する責務を整理した。ConstraintCommitCommand.createWithDimensionsが実DimensionConstraintFactory→CommitCommand→DimensionReadOnlyQueryを構築し、command／readOnlyを返す。候補生成と分類は既存childに残し、追加時の生成エラー通知adapterを同じcommandへ集める。静的拘束型とtargetItemsは既存namespaceから取得し、並行判定・所属付与・冗長probeとcommit依存は明示注入する。既存create APIを維持し、新しい可変context・cache・モデルは追加しない。
