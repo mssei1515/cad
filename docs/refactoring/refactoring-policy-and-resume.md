@@ -93,6 +93,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：参照画像機能の組立て（2026-10-24、検証完了）
+
+基準develop／origin/developはc0eba74。直前のWorkspace描画接続ad37b16は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/reference-image-featureで実施した。
+
+ReferenceImageFeatureをsrc/applicationへ追加し、resource renderer→表示Layer→移動／縮尺校正Interaction→読込／clipboard Inputを同じCanvas・viewport・Selection・通知／履歴へ接続する。実renderer／Layer／Interaction／InputとPNG前のprepareImagesを返す。cache／状態／編集・履歴の実装は既存ownerに残す。表示scopeと配置先の編集scopeを別portで維持し、Layerの較正markerは同じInteractionの現在値、PNG prepareは同じrendererのcacheを使う。静的な画像座標変換は既存libraryから利用する。全app contextや可変phase参照は追加しない。
+
+app.jsは2,585→2,574行（11行減）。対象のroot構築4→1、明示port52→32。後段のInteraction／Input生成を前段のrenderer／Layer生成時へ集約するが、全子factoryは生成時にDOM／scope／model／画像や操作callbackを読み書きせず、listenerを登録しない。Input.bindClipboardとbindControlsは元の異なる位置に残す。先に取得できないclearSnapは操作時に呼ぶ遅延callbackで接続した。最初のAST監査でその直接参照を検出して修正し、再監査でroot未使用binding／初期化前参照は0（cad-reference-image-feature-audit.cjs）。markerとdrag／校正、非同期import後のscope／権限／viewport、表示scopeとcacheの共有、bind／disposeを実componentの3単体で確認した。
+
+構文610ファイル・全単体1,892件・関連単体25件が成功。新module／単体の明示一覧をindex.html、tools/check-syntax.js、tools/run-unit-tests.js、unified-uiのfile URL読込期待へ同期し、依存moduleの後に読込む。先行のfile URL Help／script読込E2E1件も成功（2.3秒）。参照画像・PNG・既存UI・phase0保存互換性／描画比較・Sketch権限／削除・menu・派生選択copyの関連E2E172件が全成功（2.5分、exit 0、runner33775、cad-reference-image-feature-e2e.log）。検証中はsourceを固定し、receiptのloaderCode 0／exitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した（cad-reference-image-feature-e2e-receipt.json、cad-reference-image-feature-last-run.json）。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新し、保存形式は変更しない。
+
+今回の全E2Eは未実行。週枠使用1%／残量99%で停止条件未到達。mainは停止・release時に最後に反映する方針を維持し、全体目標はactiveで未完了。次も既存ownerと初期化段階に沿って複数の生成・接続をまとめられる境界を再監査する。小さな引数削減だけで数百行へ届くとは見積もらない。
+
 ### 最新：Workspaceと描画基盤の共有接続（2026-10-24、検証完了）
 
 基準develop／origin/developはd815ea8。直前のCanvas周辺UI分離b8713c8は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/canvas-workspace-renderingで実施した。
