@@ -481,7 +481,7 @@
   });
   const { redundantConstraintInfo, constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
-  const { viewport, navigation: canvasNavigation, zoomControl: canvasZoomControl, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
+  const { viewport, navigation: canvasNavigation, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
     draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
@@ -492,7 +492,7 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { rollbackTransientLineCompletion, rollbackTransientPoint } = transientAuthoring;
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout } = createCanvasWorkspace({
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering } = createCanvasWorkspace({
     ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
     window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
@@ -1329,9 +1329,8 @@
 
 
 
-  const canvasFrameRenderer = window.CanvasDisplay.createRendering({
-    canvas, ctx, viewport, surface: canvasSurface, zoomControl: canvasZoomControl,
-    readExportFrame: () => pngRendering.frame, recordDraw: () => pointerMoveScheduler.recordDraw(),
+  const canvasFrameRenderer = createCanvasRendering({
+    recordDraw: () => pointerMoveScheduler.recordDraw(),
     geometry: geometryDisplay, dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
     authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
     drawBlockInstanceHandles, drawSnapMarker, drawReferenceImages, drawHatches, drawDrawingStack, drawReferenceImageOverlays,
