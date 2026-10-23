@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：DXF読込をDocumentファイル機能へ接続（2026-10-24、検証完了）
+
+基準develop／origin/developは51784c5。本単位はcodex/document-dxf-compositionで実施した。既存DocumentFileFeature.createDxfが実DxfImportCommandを構築し、同じfileSession・serializeModel／変更signature・選択dialog・言語／hint・fit／drawを共有する。appから追加するのはGeometry／IDs・currentScope／activeSketchId・canImport／最小長さと成功時のSelection解除／UI更新／履歴。成功通知順と保存checkpointを変更しない点を維持し、createControlsで同じcommand／許可readerとsessionを実DocumentFileControlsへ接続する。command構築・control生成／bindは既存の位置で行い、Document start／disposeとDXF bindingの寿命を勝手に統合しない。読み込み中の図面／scope／作図先の変更やlockを拒否し、ID／Geometryの挿入・復元・busy解除は元commandが所有する。新file／global state／sessionは追加しない。
+
+app.jsは2,436→2,424行（12行減）。対象生成／接続2→2、root直下の延べ引数20→10。root未使用binding／初期化前参照0（TEMP cad-document-dxf-audit.cjs）。DXF固有の完了callbackをファイル機能内へ閉じ、ボタンのイベント解釈は既存UI moduleに維持する。
+
+追加2単体で実parser／Geometry／IDs／fileSessionと返された実controlを使い、構築時の無実行・bind時機と重複防止／dispose再bind、flush→busy拒否またはpicker、input値の即時clear、Geometry同一性・Sketch／座標／非construction、一回の履歴と通知順、checkpointを更新せずDocumentをdirtyにすることを確認した。shared dialogでの単位選択取消、非同期読取中の図面内容／scope／作図先／許可変更の四ケースは無挿入・ID無消費・履歴なしでbusyを解除する。既存テストの期待は維持した。関連単体19件、全単体1,934件は成功。構文614ファイルと関連E2E178件（DXF読込・Block・Sketch権限・phase0保存互換性／描画比較・既存UI）も全成功（2.6分、exit 0、runner43503）。TEMP cad-document-dxf-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server40948の停止と二つの製品source hash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準f6727f7と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用22%／残量78%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残存rootの機能生成とbind／startの段階を再確認する。関連する責務と共有依存を実ownerへ集める方針を維持し、今回の12行減を200〜500行のcomposition root達成と扱わない。
+
+
 ### 最新：Sketch移動後の更新手順を所有者へ統合（2026-10-24、検証完了）
 
 基準develop／origin/developは8de34b0。本単位はcodex/sketch-move-refreshで実施した。SketchEditingFeature.createMoveが既定のrefreshGeometryを構築し、同じBlock projections・Geometry readerを用いて、Block cache→Geometry cache→Hatch cache→実editing scopeとBlock／派生Instance bundleで拘束再接続→分析無効化→参照有効性更新の順に委譲する。移動planのcurrentScopeと再接続対象のreadEditingScopeを混同せず、後者とbundleは更新時に読み、従来のmethod receiver／bare callbackを維持する。途中例外の捕捉・所属／参照metadata／描画順／元拘束配列の復元は実SketchMove.apply、成功／失敗通知とsession／Selection／履歴は実SketchMoveCommandに維持する。新たな求解・cache巻戻し・stateは追加しない。明示refresh callbackを使う旧createMoveも維持し、この場合は既定の更新依存を読まない。
