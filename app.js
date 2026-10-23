@@ -1422,15 +1422,8 @@
 
 
 
-  function annotationById(id) {
-    return id ? editingScopeBinding.current.annotations.find((element) => element.id === id) || null : null;
-  }
-
-  const annotationDrag = window.AnnotationDrag.create({
-    canEdit: item => guardSketchEdit(item.sketchId),
+  const annotationDrag = annotationFeature.createDrag({
     beginConstrainedDrag: constrainedAnnotationDrag.begin,
-    annotationById, canvasSelection, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry,
-    annotationTextLayout, effectiveAnnotationStyle, materializeAnchor: materializeAnnotationAnchor,
     resizeText: (item, height) => appearanceEditing.applyAnnotationStyleValue(item, "textHeight", height),
     beginPointer: (id) => { canvas.setPointerCapture(id); canvas.classList.add("is-dragging"); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },

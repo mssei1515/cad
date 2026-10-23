@@ -93,6 +93,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：通常注記ドラッグの生成・接続（2026-10-23）
+
+基準develop 33832ecからcodex/annotation-drag-assemblyで実施。既存AnnotationFeature.createDragへ通常AnnotationDragの生成、共有renderer／materialization・Selection・通知／履歴の接続と現在editing scopeのID照会を集めた。実drag ownerを返し、session／resize handle状態は既存AnnotationDragだけに残す。pointer開始／終了・外観resize・拘束付きbegin callbackは同じ関数をそのまま渡し、DOM操作の順序や例外を変えるwrapperを加えない。新file／folder／scriptやモデル・履歴の複製は追加しない。
+
+app.jsは2,652→2,645行（7行減）、該当生成のroot引数15→4。IDが偽値ならscopeを読まずnullを返し、正の照会では現在editing scopeを毎回読む。Workspace.currentによるインライン編集の照会と区別し、編集許可には注記自身のsketchIdを直接渡す。早期のAnnotationDrag.createConstrainedとSolveScopeQueryのscope／additionalVariables接続は維持した。pointer capture→class追加の順、class除去→release試行と例外抑制、後段appearanceEditingによるresizeはapp側の既存callbackのまま。
+
+構文602ファイル・全単体1,862件・関連単体21件・file URL Help読込1件が成功。追加2件で実drag ownerとrenderer／materialization／Selection／操作callbackの共有、初期化時にdragを生成しないこと、偽値IDの短絡・scope切替後の参照同一性と未検出null、raw sketch IDのguardを検証した。自己外参照なしroot bindingは0、直接引数を含む初期化前参照0をAST監査した。一時診断はcad-annotation-drag-assembly-audit.cjs。
+
+旧33832ecのindex／app／Featureを差し替え、全route利用と旧factoryにcreateDragがないことを確認したブラウザ比較で110状態が一致。model・clipboard・mode・履歴・Selection・Hint・command panel・寸法入力／注記textareaとAPI204 key順に加え、drag中classも比較した。本文移動・frameリサイズ・Leader端点の開始／移動／確定、Undo／Redo・再読込を含み、savedAtだけ除外する。
+
+最初の追加診断は旧版でframe開始の前提を満たさず停止。既存E2Eと同じ基準点right-top／paddingと注記選択をfixtureに明示し、frame-enable→frameをassertした。次の診断はUndo／Redo後のProperties未選択でattachボタンを取得できず旧版で停止したため、既存UIのTreeから再選択する手順を追加した。製品側は変更せず、診断の既定値・選択前提を修正した。初回／一回目修正はcad-annotation-drag-assembly-equivalence{,-corrected}.log、成功した最終比較は-equivalence-selected.cjs／.logに残す。関連E2Eとは結果を区別し、失敗を上書きして通過扱いにしない。
+
+関連E2E15ファイル317件が全成功（5.7分、exit 0）。runner終了と自己起動port8795のserver停止を確認済み。Commit／Pushしてdevelopへ統合し、検証済みsourceとのtree同一性を確認する。ログはcad-annotation-drag-assembly-{focused,check,unit,loader,e2e}.log。UI期待値・性能上限・timeout・保存versionは変更せず、最新全E2Eは未実行。前単位の317件やrelease587件を今回の全体検証に代用しない。
+
+main／origin/mainはdf5aef2のまま。週枠は開始使用16%／残量84%、検証後使用17%／残量83%で新たな分離の停止条件未到達。次はConstraintSelectionQuery・ConstraintTargetCommand・DimensionPlacementCommandの生成・接続を監査する。共有Selection／target session・pending／operand values、二つの開始guard、現在選択の照会とcommand確定の境界を確認する。初期化順・hoisted入口、注記拘束への振分けと特殊寸法の継続、取消・初回寸法・権限拒否の意味を維持し、単に広いapp contextへ包む変更にはしない。早期のConstrained注記ownerを無理に後段へ移すことはしない。次単位の実装はまだ行っていない。
 ### 最新：既存注記の編集UIと本文確定（2026-10-23）
 
 基準develop 5c51921からcodex/annotation-text-editingで実施。AnnotationFeature.createEditorへAnnotationParameterCommandとAnnotationInputControllerの後段生成・接続、開始準備／選択・layout解決を集約した。通常本文の代入→履歴記録とParameter式への分岐は既存AnnotationCommand.createTextEditingへ移管し、application／UIがモデル更新を再実装しない構成にした。返す実ControllerとParameter commit関数は既存の呼出し先へそのまま渡す。新しいfile／folder／script、model／pending／履歴の複製を追加しない。
