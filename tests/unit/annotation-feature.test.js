@@ -10,15 +10,20 @@ function fixture() {
     scale: 2, scaleReads: 0, count: 1, result: { id: 'result' }, command: null, operands: [], dimensions: ['dimension'], allowed: true };
   const step = name => (...args) => { events.push([name, ...args]); return state.result; };
   const renderer = { annotationPlacementAnchor(element) { assert.equal(this, undefined); return element.position; },
-    annotationLeaderDisplayGeometry: step('leader'), annotationTextLayout: step('layout'), annotationTextMetrics: step('metrics') };
+    annotationLeaderDisplayGeometry: step('leader'),
+    annotationTextLayout(element) { assert.equal(this, undefined); events.push(['layout', element]); return 'layout' in state ? state.layout : state.result; },
+    annotationTextMetrics(...args) { assert.equal(this, undefined); events.push(['metrics', ...args]); return state.metrics; } };
   const layer = {}, materialization = { materialize(...args) { assert.equal(this, materialization); return state.result; } };
   const anchors = { startFromSelection(type, element) { assert.equal(this, anchors); events.push(['start', type, element]); return element ? state.result : false; } };
   const dimensions = { entries() { assert.equal(this, dimensions); return state.dimensions; } };
-  const command = { preview() { assert.equal(this, command); return state.result; } };
+  const command = { preview() { assert.equal(this, command); return state.result; } }, parameterCommand = { commit: step('parameter-commit') },
+    textEditing = { commit: step('text-commit') }, editor = {};
   const factory = (name, value) => options => { events.push(name); ports[name] = options; return value; };
   const context = { window: { AnnotationDisplay: { create: factory('display', { renderer, layer }) }, AnnotationAnchorConstraints: {
     createMaterialization: factory('materialization', materialization), create: factory('anchors', anchors), createDimensions: factory('dimensions', dimensions),
-  }, AnnotationCommand: { create: factory('command', command) } } };
+  }, AnnotationCommand: { create: factory('command', command), createTextEditing: factory('text-editing', textEditing) },
+    AnnotationParameterCommand: { create: factory('parameter-editing', parameterCommand) },
+    AnnotationInputController: { create: factory('editor', editor) } } };
   vm.runInNewContext(fs.readFileSync('src/application/annotation_feature.js', 'utf8'), context);
   const input = Object.fromEntries(['canvasThemeColor', 'effectiveAnnotationStyle', 'annotationLeaderAnchor', 'resolveGeometryRef',
     'isEditableSketchElement', 'resizeEnabled', 'activeSketchId', 'allAnnotations', 'isVisibleValue', 'isVisibleSketchId',
@@ -28,7 +33,7 @@ function fixture() {
     'exitDrawMode', 'nextAnnotationId', 'canCreateInActiveSketch', 'rejectRootSketchCreation', 'clearSelection', 'updateToolbar',
     'annotationLeaderTargetFromHit', 'applyStyle', 'lastPointer', 'readHover', 'readExportFrame'].map(name => [name, step(name)]));
   Object.assign(input, { ctx: {}, surface: {}, viewport: { get scale() { state.scaleReads++; return state.scale; } },
-    currentScope: () => ({ id: 'workspace' }), readEditingScope: () => { events.push('scope'); return state.scopes?.shift() || state.scope; },
+    currentScope: () => state.workspace || ({ id: 'workspace' }), readEditingScope: () => { events.push('scope'); return state.scopes?.shift() || state.scope; },
     canvasSelection: { annotations: [item], selectedElementCount: () => state.count, set: step('select') },
     constraintTargetSession: { get command() { return state.command; }, get operands() { return state.operands; },
       replaceCommand(value) { assert.equal(this, input.constraintTargetSession); state.command = value; } },
@@ -36,12 +41,12 @@ function fixture() {
     elementSketchId: element => { events.push('elementSketchId'); return element.sketchId; },
     guardSketchEdit: () => { events.push('guard'); return state.allowed; },
     ensureDimensionParameter: (element, scope) => { events.push(['ensure', element, scope]); if (state.nextScope) state.scope = state.nextScope; },
-    parameterNamespace: { allocateDimensionParameterName(scope) { assert.equal(this, input.parameterNamespace); state.allocated = scope; return 'd1'; },
+    parameterNamespace: { renameDimension: step('rename'), allocateDimensionParameterName(scope) { assert.equal(this, input.parameterNamespace); state.allocated = scope; return 'd1'; },
       validateNewDimensionParameter(draft, scope) { assert.equal(this, input.parameterNamespace); return { draft, scope }; },
       evaluateParameterNamespace(scope) { assert.equal(this, input.parameterNamespace); events.push(['evaluate', scope]); } },
   });
   const feature = context.window.AnnotationFeature.create(input);
-  return { feature, input, state, item, events, ports, renderer, layer, materialization, anchors, dimensions, command };
+  return { feature, input, state, item, events, ports, renderer, layer, materialization, anchors, dimensions, command, editor, parameterCommand, textEditing };
 }
 
 test('annotation assembly retains construction order, shared owners and lazy preview, scope and scale reads', () => {
@@ -95,4 +100,40 @@ test('dimension view scopes retain separate reads, actual dimension entries and 
   f.item.position = null; assert.equal(f.feature.placementAnchor(f.item), null);
   Object.defineProperty(f.item, 'position', { get() { throw error; } });
   assert.throws(() => f.feature.placementAnchor(f.item), value => value === error);
+});
+
+test('existing annotation editor is generated separately and keeps real commands, workspace lookup and preparation order', () => {
+  const f = fixture(); f.events.length = 0;
+  const options = { document: {}, host: {}, capture() {}, restore() {}, guardDimensionSymbolDeletion() {},
+    readParameterNamespace: () => f.state.namespace, expressionFromUserInput() {}, stabilize() {}, resetDrag: () => f.events.push('drag-reset'),
+    toScreen() {}, expressionInputValue() {} };
+  const editor = f.feature.createEditor(options);
+  assert.deepEqual(f.events, ['parameter-editing', 'text-editing', 'editor']);
+  assert.equal(editor.controller, f.editor); assert.equal(editor.commitParameterEdit, f.parameterCommand.commit);
+  assert.equal(f.ports.editor.commit, f.textEditing.commit); assert.equal(f.ports['text-editing'].commitParameterEdit, f.parameterCommand.commit);
+  assert.equal(f.ports.editor.getPending, f.input.pendingCommandSession.read); assert.equal(f.ports.editor.setPending, f.input.pendingCommandSession.replace);
+  assert.equal(f.ports['parameter-editing'].renameParameter, f.input.parameterNamespace.renameDimension);
+  f.state.workspace = { annotations: [f.item] }; f.state.scope.annotations = [];
+  assert.equal(f.ports.editor.find(f.item.id), f.item);
+  f.state.namespace = { id: 'current-parameter-namespace' }; f.events.length = 0;
+  f.ports['parameter-editing'].ensureParameter(f.item);
+  assert.deepEqual(f.events, [['ensure', f.item, f.state.namespace]]);
+  f.events.length = 0; f.ports.editor.prepare(); f.ports.editor.select(f.item);
+  assert.deepEqual(f.events.slice(0, 5), [['exitDrawMode'], ['cancelConstraintTargetCommand', ''], ['cancelPendingCommand', ''], 'drag-reset', ['clearSelection']]);
+  assert.equal(f.events.length, 6); assert.equal(f.events[5][0], 'select'); assert.equal(f.events[5][1], 'annotations');
+  assert.equal(f.events[5][2].length, 1); assert.equal(f.events[5][2][0], f.item);
+  f.events.length = 0; assert.equal(f.ports.editor.canEdit({ ...f.item, blockProjection: true }), false);
+  assert.deepEqual(f.events, ['elementSketchId', 'guard']);
+});
+
+test('editor layout uses live scale and preserves layout-first, text and leader metric fallback without changing boxes', () => {
+  const f = fixture(); f.feature.createEditor({});
+  f.state.layout = { x: 3, y: 4, fontSize: 2 }; f.state.scale = 5; f.events.length = 0;
+  const box = f.ports.editor.layout(f.item); assert.equal(box.screenFontSize, 10); assert.notEqual(box, f.state.layout);
+  assert.equal(f.state.layout.screenFontSize, undefined); assert.deepEqual(f.events, [['layout', f.item]]);
+  f.state.layout = null; f.state.metrics = { x: 7, y: 8, fontSize: 4 }; f.state.scale = 3; f.events.length = 0;
+  assert.equal(f.ports.editor.layout(f.item).screenFontSize, 12); assert.deepEqual(f.events, [['layout', f.item], ['metrics', f.item, f.item]]);
+  f.item.type = 'leader'; f.events.length = 0;
+  assert.equal(f.ports.editor.layout(f.item).screenFontSize, 12);
+  assert.deepEqual(f.events, [['layout', f.item], ['leader', f.item], ['metrics', f.item, f.state.result]]);
 });

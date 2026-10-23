@@ -51,8 +51,25 @@
       annotationLeaderTargetFromHit, annotationLeaderAnchor, effectiveAnnotationStyle, clearSelection, cancelPendingCommand,
       setHint, updateToolbar, updateUI, draw, recordHistory,
     });
+    function createEditor({ document, host, capture, restore, guardDimensionSymbolDeletion, readParameterNamespace,
+      expressionFromUserInput, stabilize, resetDrag, toScreen, expressionInputValue }) {
+      const parameterCommand = window.AnnotationParameterCommand.create({ capture, restore, guardDimensionSymbolDeletion,
+        ensureParameter: item => ensureDimensionParameter(item, readParameterNamespace()), renameParameter: parameterNamespace.renameDimension,
+        expressionFromUserInput, stabilize, recordHistory, setHint, parameterErrorText });
+      const textEditing = window.AnnotationCommand.createTextEditing({ commitParameterEdit: parameterCommand.commit, recordHistory });
+      const controller = window.AnnotationInputController.create({ document, host,
+        getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
+        find: id => currentScope().annotations.find(item => item.id === id),
+        canEdit: item => guardSketchEdit(elementSketchId(item)) && !item.blockProjection,
+        prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); cancelPendingCommand(""); resetDrag(); },
+        select: item => { clearSelection(); canvasSelection.set("annotations", [item]); },
+        layout: item => { const box = annotationTextLayout(item) || annotationTextMetrics(item, item.type === "leader" ? annotationLeaderDisplayGeometry(item) : item); return { ...box, screenFontSize: box.fontSize * viewport.scale }; },
+        toScreen, expressionInputValue, applicationText, commit: textEditing.commit, draw, updateUI,
+      });
+      return Object.freeze({ controller, commitParameterEdit: parameterCommand.commit });
+    }
     return Object.freeze({ renderer: display.renderer, layer: display.layer, anchors, dimensions, command,
-      placementAnchor, materialize, dimensionScope, startAnchorConstraint });
+      placementAnchor, materialize, dimensionScope, startAnchorConstraint, createEditor });
   }
   window.AnnotationFeature = Object.freeze({ create });
 })();

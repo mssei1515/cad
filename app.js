@@ -831,28 +831,12 @@
   }
 
 
-  const annotationParameterCommand = window.AnnotationParameterCommand.create({
-    capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
-    ensureParameter: item => ensureDimensionParameter(item, currentParameterNamespace()),
-    renameParameter: parameterNamespace.renameDimension, expressionFromUserInput,
+  const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationFeature.createEditor({
+    document, host: canvas.parentElement, capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
+    readParameterNamespace: currentParameterNamespace, expressionFromUserInput,
     stabilize: () => stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }),
-    recordHistory, setHint, parameterErrorText,
+    resetDrag: () => annotationDrag.reset(), toScreen: worldToCanvasScreen, expressionInputValue,
   });
-  const commitAnnotationParameterEdit = annotationParameterCommand.commit;
-  const annotationInputController = window.AnnotationInputController.create({
-    document, host: canvas.parentElement, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
-    find: id => workspace.current().annotations.find(item => item.id === id),
-    canEdit: item => guardSketchEdit(elementSketchId(item)) && !item.blockProjection,
-    prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); cancelPendingCommand(""); annotationDrag.reset(); },
-    select: item => { clearSelection(); canvasSelection.set("annotations", [item]); },
-    layout: item => { const box = annotationTextLayout(item) || annotationTextMetrics(item, item.type === "leader" ? annotationLeaderDisplayGeometry(item) : item); return { ...box, screenFontSize: box.fontSize * viewport.scale }; },
-    toScreen: worldToCanvasScreen, expressionInputValue, applicationText,
-    commit: (item, value) => {
-      if (item.parameterEnabled) return commitAnnotationParameterEdit(item, "annotation-expression", value);
-      item.text = value; recordHistory("注記変更"); return true;
-    }, draw, updateUI,
-  });
-
 
   function isGeometryMode() {
     return true;

@@ -6,6 +6,19 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：既存注記の編集UIと本文確定（2026-10-23）
+
+基準develop 5c51921からcodex/annotation-text-editingで実施。AnnotationFeature.createEditorへAnnotationParameterCommandとAnnotationInputControllerの後段生成・接続、開始準備／選択・layout解決を集約した。通常本文の代入→履歴記録とParameter式への分岐は既存AnnotationCommand.createTextEditingへ移管し、application／UIがモデル更新を再実装しない構成にした。返す実ControllerとParameter commit関数は既存の呼出し先へそのまま渡す。新しいfile／folder／script、model／pending／履歴の複製を追加しない。
+
+app.jsは2,668→2,652行（16行減）、この群のroot構築2→1、明示引数25→11。textareaの生成・append・bindは従来の位置に維持し、最初のAnnotationFeature生成時には行わない。作図終了→拘束対象取消→pending取消→drag resetと、選択解除→注記選択の順序、guardを先に読む投影拒否、Workspace.currentのfindと現在Parameter namespaceの読取りを維持した。layout優先とtext／Leader metrics fallback、元boxを変更しない画面font size計算、Parameter編集時の全Sketch安定化とsnapshot復元、通常本文の履歴例外時に新たなrollbackを行わない境界も保持する。後段annotationDrag.resetは遅延callbackのまま。
+
+構文602ファイル・全単体1,860件・関連単体19件・file URL Help読込1件が成功。追加4件で本文／式の履歴と結果・例外、実child／commit関数とpending readerの共有、現在Workspace／Parameter namespace、準備順・投影guard、倍率とlayout fallbackを検証した。新テスト初回のSelection配列比較はVMとhostのArray prototype差で失敗したため、順序・個数・各要素の参照同一性を個別にassertして修正した。製品の挙動や期待する選択結果は変更していない。初回はcad-annotation-editor-focused.log、修正後は-focused-corrected.log。
+
+rootの自己外参照なしbindingは0、直接引数を含む初期化前参照0をAST監査した。一時診断はcad-annotation-editor-audit.cjs。既存scriptから追加本文確定入口をfile URLで確認する。旧5c51921のindex／app／Feature／AnnotationCommandの四つを実際に差し替え、全route利用と旧版に追加入口がないことをassertしたブラウザ比較で91状態が一致した。model・clipboard・mode・履歴・Selection・Hint・command panel・寸法入力に加え、注記textareaの値／表示／検証／行数／式表示／aria-label／styleとAPI204 key順を比較し、savedAtだけ除外した。本文編集・取消・Undo／Redoと、LeaderのParameter式の拒否・訂正・確定・再読込を含む。診断はcad-annotation-editor-equivalence.cjs／.log。
+
+関連E2E15ファイル317件が全成功（4.9分、exit 0）。runner終了と自己起動port8794のserver停止を確認した。Commit／Pushしてdevelopへ統合し、検証済みsourceとのtree同一性を確認する。ログはcad-annotation-editor-{check,unit,loader,e2e}.log。UI期待値・性能上限・timeout・保存versionは変更せず、最新全E2Eは未実行。以前の304件やrelease587件を今回の全体検証へ代用しない。
+
+main／origin/mainはdf5aef2のまま。週枠は開始使用15%／残量85%で新たな分離の停止条件未到達。次は通常AnnotationDragの生成とannotationById照会の境界を監査する。constrained版のscope／additionalVariablesは早期のSolveScopeQuery生成へ渡しており、全てを後段へ単純移動できない。早期のConstrained ownerと後段の通常drag sessionを共有したまま、Featureの実renderer／materialization・Selectionを用いて接続を減らせるか確認する。pointer capture／class表示、後段appearanceEditingによるresize、求解失敗時の復元と各scopeの違いを先に追う。次単位の実装はまだ行っていない。
 ### 最新：寸法値編集と特殊寸法支援の生成（2026-10-23）
 
 基準develop 2be5478からcodex/dimension-value-assemblyで実施。既存DimensionValueCommandにcreateWithEditingSupportを追加し、createEditingSupport→createの生成・接続を同じownerへ集約した。共通の式評価／対象解決／エラー通知／履歴を一度だけ受け取り、同じ関数と実Selection／特殊操作ownerを渡す。返すのは実際の値編集commandであり、新たなwrapper state／model／pending／rollbackを持たない。app全体のcontextを渡す変更ではなく、両既存factoryの限定された編集依存を共有する。新しいfile／folder／scriptは追加しない。
