@@ -15,6 +15,21 @@
     function log(message) { return feedback.log(message); }
     function setHint(message, kind = "normal") { return feedback.hint(message, kind); }
     function setSolveResultHint(label, solved, analysis, dependent) { return feedback.solveResult(label, solved, analysis, dependent); }
+    function createToolbar({ lifecycle, pending, constraints, constructionCommand, readSplineEditing, readHistory, updateDocumentStatus, isGeometryMode }) {
+      const history = window.ToolbarView.createHistory({ document, readHistory, updateDocumentStatus });
+      function createControls({ selectedVisibilityTargets, selectionVisibilityIsHidden, canEditTarget, syncFlyouts, updateCursor }) {
+        const view = window.ToolbarView.create({ document, isGeometryMode,
+          constructionToggleState: (geometryMode = isGeometryMode()) => constructionCommand.state(geometryMode),
+          readInteraction: () => ({ mode: lifecycle.mode, hasPending: Boolean(pending.current), hasConstraint: Boolean(constraints.command),
+            annotationDraft: Boolean(pending.current?.annotationDraft), pendingType: pending.current?.type,
+            constraintType: constraints.command?.type, splineEditing: readSplineEditing() }),
+          updateHistoryButtons: history.update, selectedVisibilityTargets, selectionVisibilityIsHidden, canEditTarget, syncFlyouts, updateCursor });
+        const status = window.ToolbarView.createCommandStatus({ document, applicationText: settings.applicationText,
+          readMode: lifecycle.readMode, readPendingType: () => pending.current?.type, readConstraintCommand: () => constraints.command });
+        return Object.freeze({ view, status });
+      }
+      return Object.freeze({ updateHistory: history.update, createControls });
+    }
     function bindUI({ syncAnnotationResize, prepareParameterNamespace, refreshConstraintAnalysis, updateDocumentName,
       updateToolbar, renderSketch, updateBlockUI, renderProperties, readSketchMoving, updateStatusUI, updateConstraintButtons,
       syncDimensionInput, refreshSketchSelection }) {
@@ -30,7 +45,7 @@
         interactionProfiler: profiler, profileInteractionWork: profiler.work, withGeometryReadCache, drawCanvas });
       return canvas;
     }
-    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, bindUI, bindCanvas,
+    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createToolbar, bindUI, bindCanvas,
       log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw,
       get selectedItem() { return canvas.selectedItem; } });
   }

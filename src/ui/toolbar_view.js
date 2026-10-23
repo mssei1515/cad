@@ -60,6 +60,17 @@
     }
     return Object.freeze({ update });
   }
+  function createHistory({ document, readHistory, updateDocumentStatus }) {
+    function update() {
+      const undoBtn = document.getElementById("undoBtn");
+      const redoBtn = document.getElementById("redoBtn");
+      const history = readHistory();
+      if (undoBtn) undoBtn.disabled = history.undoCount <= 1;
+      if (redoBtn) redoBtn.disabled = history.redoCount === 0;
+      updateDocumentStatus();
+    }
+    return Object.freeze({ update });
+  }
   function createBinding({ document, drawOperationLifecycle, startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand, startGeometryInstanceCommand, constructionCommand, filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation }) {
     let bound = false;
     const removers = [];
@@ -182,5 +193,5 @@
     }
     return Object.freeze({ toolbarSvgMarkup, constraintToolbarIcon });
   }
-  window.ToolbarView = Object.freeze({ create, createBinding, createEditingBinding, createCommandStatus, createIcons });
+  window.ToolbarView = Object.freeze({ create, createHistory, createBinding, createEditingBinding, createCommandStatus, createIcons });
 })();

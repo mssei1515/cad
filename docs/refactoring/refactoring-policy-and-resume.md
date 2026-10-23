@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：履歴buttonとToolbar／Statusの表示接続を既存表示機能へ統合（2026-10-24、検証完了）
+
+基準develop／origin/developは2fbd09c。ToolbarView.createHistoryへapp内の履歴DOM反映を移し、undoBtn→redoBtn照会→現在active履歴→各disabled反映→Document保存状態通知の順と短絡／例外位置を維持する。DOMや履歴はcacheしない。PresentationFeature.createToolbarが同じDOM・ApplicationSettings・Lifecycle／Pending／Constraint session・Constructionをこの表示と共有し、後段のcreateControlsで既存ToolbarView→CommandStatusを生成する。Spline編集とactive履歴・後段Document通知は操作時readerを用いる。Toolbar snapshotの内容／照会順とFlyout後の再読取り、Statusの注記→拘束→mode優先順とbare readMode、Constructionのmethod receiverは維持する。履歴Controller直後の先行生成は無照会・無listenerで、既存UI／Status生成・更新とbindの時機は保つ。モデル／session／履歴のownerは変更せず、個別UI factoryも維持する。新fileや可変app contextは追加しない。
+
+app.jsは2,365→2,353行（12行減）、対象生成2→2、root直下の延べ引数15→13、未使用binding／初期化前直接参照0（TEMP cad-toolbar-presentation-audit.cjs）。履歴buttonのDOM操作と操作snapshot構成・Construction表示adapterがappからなくなった。行数効果だけでなく、表示実装はUI、既存状態の各表示への接続はApplicationに置く境界として扱う。数百行の目標達成とはしない。
+
+既存presentation-feature.test.jsへ追加した2単体は実ToolbarView／CommandStatus／History表示・EditHistory／HistoryController／Lifecycle／Pending／Constraint sessionを使い、構築時のDOM／状態無照会、Document／Block active履歴とUndo／Redo件数の反映、DOM差替え／要素不在、lookup→history→通知順、履歴照会失敗時の無変更・通知失敗後の後続UI停止と例外同一性を確認した。同じmode／pending／拘束によるbuttonとStatus表示、最新言語、Flyout中の操作変更後の最新Cursor入力も確認し、既存期待値は変えていない。関連単体23件、全単体1,950件、構文614ファイルが成功。関連E2E241件（既存UI・phase0保存互換性／描画比較・Toolbar配置・visibility・Block・Sketch移動／権限・派生pattern／free Instance・Hatch）も全成功（3.7分、exit 0、runner10525）。TEMP cad-toolbar-presentation-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server29744の停止と製品source三つのhash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準a8e96f4の成功と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdも更新した。
+
+週枠使用29%／残量71%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残る機能内の接続・状態照会・test公開境界を再確認し、同じownerで閉じられる単位を選ぶ。
+
+
 ### 最新：Canvas選択のブラウザテストAPIを既存driverへ集約（2026-10-24、検証完了）
 
 基準develop／origin/developは1d1ff6b。CanvasSelectionTestDriver.createSupportは既存SelectionとcurrentScope・clear／UI／drawから実ID観測を生成し、その同じreadSelectedGeometryを他driverと公開APIへ共有する。後段のcreateApiは既存Move観測→ID選択→重なり候補fixture→円弧端点fixture→context観測→Point追加を元の順序で生成し、既存七つの公開名への対応をdriver内に所有する。appはtest query内の元の二箇所で生成し、返された公開objectを展開する。現在scope・Selection／Geometry・Hover／viewport・Block定義／採番と履歴／UI／drawは既存ownerの入口を共有し、通常機能の実装・UIや独自状態は変更しない。既存の個別factoryも保持する。test hooksを巨大なapp contextごと別fileへ移す方法は採らない。
