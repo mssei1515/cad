@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Pointと通常作図入力の所有者への接続（2026-10-24、検証完了）
+
+基準develop／origin/developは6cd037e。本単位はcodex/authoring-canvas-inputで実施した。BasicDrawingTools.createCanvasInputが実PointCommand→DrawingCommandInputを構築し、createAuthoring().createCanvasInputは共有済みGeometry／snap／transient／Selection／求解更新とprimitive input／Splineを接続する。外部依存はmode readerとCenterline／円中心十字／Fillet／Trim／Offsetの六つ。CanvasCommandInputs.createのcreateDrawingInput callbackを、従来のPoint生成位置（Annotation→Constraint→Instanceの後、Selectionの前）で一度だけ呼ぶ。raw依存による旧入口も同じ共通factoryを使い、構築処理を重複させない。既存のmode分岐・Point生成規則・draftやSelection状態は各childに残す。
+
+app.jsは2,466→2,465行（1行減）。五つの作図handler中継bindingを撤去し、Point固有の依存をappから外した。対象構築1→1、root直下引数52→41。ただし新factoryへ六つの引数を渡しているため、容器callbackを除いて展開した末端は52→46であり、11依存減と過大に扱わない。未使用binding／初期化前参照は0（TEMP cad-authoring-input-audit.cjs）。物理行削減より内部構築と機能間接続の境界整理を目的とする。Point／Drawingを先行生成して他adapterの生成順を変えず、new state・model・巨大contextは追加しない。
+
+追加3単体で、実Point／Drawing inputと共有authoring ownerのsnap tolerance／snap Object／新Point／Selection同一性、仮rollback順と失敗時の無生成、Centerline／円中心十字／Fillet／Trimの引数とbare callback、Offset receiver／hit束、未知mode拒否、factory一度の構築位置と返す実API、旧callback未参照とfactory例外後のSelection生成短絡を確認した。既存の互換入力テストと期待は変更しない。関連単体32件、全単体1,924件、構文612ファイルが成功。ログはTEMP cad-authoring-input-{focused,unit,check}.log。
+
+Spline・円弧／Centerline・command panel・派生pattern・注記入力／drag・phase0保存互換性／描画比較・既存UIの関連E2E167件は全成功（2.4分、exit 0、runner9289）。cad-authoring-input-e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動port8799の停止、三つの製品source hash不変を確認した。今回の全E2Eは未実行で、最新全体基準f6727f7の587件成功と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用18%／残量82%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次はCanvas入力が共有するpointer bindingの生成段階を検討する。CanvasCommandInputsとPointerが同じmode／pending・Selection／hover・drag ownerを使う点、pressのquery／activationとevent処理の区別、現在のbind位置を確認する。旧createの五つの公開APIを維持し、別の可変app contextや操作状態の複製を作らずに既存ownerへ共有接続する。200〜500行の目標は維持する。
+
 ### 最新：空白ジェスチャーの後段生成と作図機能への接続（2026-10-24、検証完了）
 
 基準develop／origin/developはf6727f7（構文612・全単体1,919・全587 E2E成功）。本単位はcodex/blank-gesture-compositionで実施した。BasicDrawingTools.createAuthoring().createBlankGestureが、同じline／Spline／snap／preview／transient／Selectionと通知・取消を既存BlankCanvasGestureへ結線する。外からLifecycle・pending／constraint session・Spline編集・寸法／Offset／Annotation入力・選択UI更新の八owner／入口を受ける。時計は既定performance.now、テストでは明示注入する。認識／優先順位・candidate／抑止stateは既存Gestureが所有し、複製しない。従来の直接create APIを維持する。

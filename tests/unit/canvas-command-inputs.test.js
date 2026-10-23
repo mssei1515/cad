@@ -32,6 +32,27 @@ test('staged constraint assembly keeps child construction order and uses shared 
     pending = null; calls.length = 0; assert.equal(f.api.constraint.click(f.event, pointer, {}), false); assert.deepEqual(calls, []);
   } finally { for (const [name, owner] of originals) w[name] = owner; }
 });
+test('drawing factory runs once at the original Point construction boundary and short-circuits later construction on error', () => {
+  const order = [], originals = new Map();
+  for (const name of ['AnnotationCommandInput', 'InstanceCommandInput', 'PointCommand', 'DrawingCommandInput', 'CanvasSelectionInteraction']) {
+    const owner = w[name]; originals.set(name, owner);
+    w[name] = { ...owner, create(...args) { order.push(name); return owner.create(...args); } };
+  }
+  try {
+    let built; const args = [], f = fixture({ basicDrawingInput: { get line() { throw Error('legacy input must not be read'); } },
+      createDrawingInput() {
+        order.push('factory'); built = w.BasicDrawingTools.createCanvasInput({ point: {}, drawing: {
+          getMode: () => 'line', rejectRootSketchCreation: () => false, handleLineClick: (...values) => args.push(values) } }); return built;
+      } });
+    assert.deepEqual(order, ['AnnotationCommandInput', 'InstanceCommandInput', 'factory', 'PointCommand', 'DrawingCommandInput', 'CanvasSelectionInteraction']);
+    assert.equal(f.api.drawing, built); assert.equal(f.api.drawing.click(f.event, f.p, {}), true);
+    assert.equal(args[0][0], f.p); assert.equal(args[0][1], undefined);
+    order.length = 0; const error = new Error('drawing construction failed');
+    assert.throws(() => fixture({ createDrawingInput() { order.push('factory'); throw error; } }), value => value === error);
+    assert.deepEqual(order, ['AnnotationCommandInput', 'InstanceCommandInput', 'factory']);
+  } finally { for (const [name, owner] of originals) w[name] = owner; }
+});
+
 function fixture(extra = {}) {
   const calls = [], state = { ready: false, mode: 'select', pending: null, constraint: null, focus: true, reject: false, group: null, top: null, points: [], rollbackError: null };
   const ready = () => assert.equal(state.ready, true);

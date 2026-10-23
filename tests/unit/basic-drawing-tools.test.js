@@ -148,7 +148,7 @@ test('Centerline start refuses a disallowed drawing target after existing comman
  assert.equal(f.selection.points[0],f.sources[0]);assert.equal(f.state.mode,'select');assert.equal(f.command.targets.length,0);
 });
 
-function authoringFixture() {
+function authoringFixture(overrides = {}) {
  const created={},events=[],state={scale:2,snapped:{x:3,y:4},snap:{id:'snap'},selected:null,mode:'select'};
  const names=['DrawingSnap','SplineDraft','SplineCommand','SnapConstraints','LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand','CenterlineGeometry','CenterlineConstruction','CenterlineCommand','OffsetFeature','FilletFeature'];
  const sandbox={window:{}};
@@ -174,6 +174,7 @@ function authoringFixture() {
   minLineLength:4,minArcLength:6,selection,preview:{setPointer:()=>events.push('pointer'),reset:()=>events.push('preview')},checkpoint:{capture:never,restore:never},cancelConstraintTargetCommand:()=>events.push('cancelConstraint'),cancelPendingCommand:()=>events.push('cancelPending'),
   canCreateInActiveSketch:never,rejectRootSketchCreation:noop,setMode:value=>{state.mode=value;events.push('mode');},resetEditing:()=>events.push('editing'),resetBlankCandidate:never,updateToolbar:()=>events.push('toolbar'),
   projection:{reset:()=>events.push('projection')},clearSelection:()=>events.push('clear'),solveAndRefresh:noop,recordHistory:noop,applicationText:(_ja,en)=>en,setHint:()=>events.push('hint'),updateUI:()=>events.push('ui'),draw:()=>events.push('draw'),log:noop};
+ Object.assign(ports,overrides);
  const feature=sandbox.window.BasicDrawingTools.createAuthoring(ports);
  return {created,events,state,ports,feature,sandbox,createLifecycleSession:sandbox.window.DrawOperationLifecycle.createSession};
 }
@@ -268,6 +269,48 @@ test('authoring assembly binds its actual commands to an early Lifecycle session
  f.events.length=0;session.exit();assert.equal(session.mode,'select');assert.equal(f.events.includes('mode'),false);
  assert.equal(f.events.includes('SplineDraft.reset'),true);assert.equal(f.events.includes('SplineDraft.cancel'),false);
  assert.equal(session.start('line'),true);assert.equal(session.mode,'line');assert.equal(f.state.mode,'select');
+});
+
+function authoringInputFixture() {
+ const solved=[],f=authoringFixture({solveAndRefresh:label=>solved.push(label)}),state={mode:'point',reject:false,created:[],constraints:[]};
+ for(const file of ['src/commands/point_command.js','src/editing/drawing_command_input.js'])vm.runInNewContext(fs.readFileSync(file,'utf8'),f.sandbox);
+ const selection=f.ports.selection;
+ selection.set=function(key,value){assert.equal(this,selection);selection[key]=value;f.events.push(['selection',key]);};
+ const transient=f.ports.transientAuthoring;
+ transient.beginTransientPointRollback=function(){assert.equal(this,transient);f.events.push('beginPoint');if(state.failure)throw state.failure;};
+ transient.markCreatedPoint=function(point){assert.equal(this,transient);f.events.push(['created',point]);};
+ f.ports.geometry.addPoint=function(x,y,fixed){'use strict';assert.equal(this,undefined);const point={x,y,fixed};state.created.push(point);return point;};
+ f.created.SnapConstraints.owner.addPointSnapConstraints=function(point,snap){'use strict';assert.equal(this,undefined);state.constraints.push([point,snap]);};
+ const routed=[],bare=name=>function(){'use strict';assert.equal(this,undefined);routed.push([name,...arguments]);};
+ const offset={click(point,hits){assert.equal(this,offset);routed.push(['offset',point,hits]);}};
+ f.events.length=0;
+ const input=f.feature.createCanvasInput({readMode:()=>state.mode,centerline:{click:bare('centerline')},circleCenterCross:{click:bare('cross')},
+  fillet:{click:bare('fillet')},trim:{execute:bare('trim')},offset});
+ assert.deepEqual(f.events,[]);assert.deepEqual(routed,[]);assert.deepEqual(solved,[]);
+ return {...f,input,inputState:state,routed,solved,selection};
+}
+
+test('authoring Canvas input uses the same snap, transient and Selection for actual Point creation and stops at rollback failure',()=>{
+ const f=authoringInputFixture(),pointer={x:10,y:20},event={preventDefault(){throw Error('unexpected rejection');}};
+ assert.equal(f.input.click(event,pointer,{}),true);
+ assert.equal(f.inputState.created.length,1);assert.equal(f.selection.points[0],f.inputState.created[0]);
+ assert.equal(f.inputState.constraints[0][0],f.selection.points[0]);assert.equal(f.inputState.constraints[0][1],f.state.snap);
+ assert.equal(f.selection.points[0].x,f.state.snapped.x);assert.equal(f.selection.points[0].fixed,false);
+ assert.equal(f.events[0],'clearPoint');assert.equal(f.events[1],'beginPoint');assert.equal(f.events[2][0],'resolve');
+ assert.equal(f.events[2][2],5);assert.equal(f.events[3][0],'created');assert.equal(f.events[4],'snap');assert.deepEqual(f.solved,['点追加']);
+ f.events.length=0;f.inputState.failure=new Error('rollback failed');
+ assert.throws(()=>f.input.click(event,pointer,{}),error=>error===f.inputState.failure);
+ assert.deepEqual(f.events,['clearPoint','beginPoint']);assert.equal(f.inputState.created.length,1);assert.deepEqual(f.solved,['点追加']);
+});
+
+test('authoring Canvas input preserves specialized argument order, raw callbacks, Offset receiver and unknown-mode refusal',()=>{
+ const f=authoringInputFixture(),point={},hitP={},hitL={},hitC={},hitA={},event={shiftKey:true};
+ for(const [mode,name,args]of [['centerline','centerline',[point,hitP,hitL]],['circle-center-cross','cross',[hitC]],['fillet','fillet',[hitL,point]],['trim','trim',[point]]]){
+  f.inputState.mode=mode;assert.equal(f.input.click(event,point,{hitP,hitL,hitC,hitA}),true);assert.deepEqual(f.routed.at(-1),[name,...args]);
+ }
+ f.inputState.mode='offset';f.input.click(event,point,{hitP,hitL,hitC,hitA});assert.equal(f.routed.at(-1)[2].hitA,hitA);
+ assert.equal(f.routed.at(-1)[2].hitC,hitC);assert.equal(f.routed.at(-1)[2].hitL,hitL);
+ f.inputState.mode='select';const count=f.routed.length;assert.equal(f.input.click(event,point,{}),false);assert.equal(f.routed.length,count);
 });
 
 function blankGestureFixture() {

@@ -6,7 +6,7 @@
     retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint, handleConstraintOperandClick, constraintInputFeature, dimensionDragging,
     instanceSourceCommand, geometryInstanceCommand, sceneQueries, hitReferenceTarget, hitDerivedProjectionOperand, hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource,
     clearSnap, selectionRectangle, hitHatchAt, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing,
-    transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, basicDrawingInput, handleLineClick, handleCenterlineClick, handleCircleCenterCrossClick,
+    createDrawingInput, transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, basicDrawingInput, handleLineClick, handleCenterlineClick, handleCircleCenterCrossClick,
     handleRectangleClick, handleSlotClick, handleFilletClick, handleCircleClick, handleArcClick, handleThreePointArcClick, handleSplineClick, executeTrimAt, offsetCommand,
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag }) {
     const releasePanelFocus = () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); };
@@ -43,16 +43,14 @@
       releasePanelFocus,
     });
 
-    const pointCommand = window.PointCommand.create({
-      transientAuthoring, snapForDrawing, drawingSnap, addPoint, addPointSnapConstraints, clearSnap, canvasSelection, solveAndRefresh,
-    });
     const basicInput = basicDrawingInput || { line: handleLineClick, rectangle: handleRectangleClick, slot: handleSlotClick,
       circle: handleCircleClick, arc: handleArcClick, threePointArc: handleThreePointArcClick };
-    const drawingCommandInput = window.DrawingCommandInput.create({
-      getMode: readMode, rejectRootSketchCreation, pointCommand, handleLineClick: basicInput.line, handleCenterlineClick,
+    const drawingCommandInput = createDrawingInput ? createDrawingInput() : window.BasicDrawingTools.createCanvasInput({
+      point: { transientAuthoring, snapForDrawing, drawingSnap, addPoint, addPointSnapConstraints, clearSnap, canvasSelection, solveAndRefresh },
+      drawing: { getMode: readMode, rejectRootSketchCreation, handleLineClick: basicInput.line, handleCenterlineClick,
       handleCircleCenterCrossClick, handleRectangleClick: basicInput.rectangle, handleSlotClick: basicInput.slot, handleFilletClick,
       handleCircleClick: basicInput.circle, handleArcClick: basicInput.arc, handleThreePointArcClick: basicInput.threePointArc,
-      handleSplineClick, executeTrimAt, offsetCommand,
+      handleSplineClick, executeTrimAt, offsetCommand },
     });
 
     const canvasSelectionInteraction = window.CanvasSelectionInteraction.create({
