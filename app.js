@@ -574,7 +574,7 @@
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
   const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
   function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
-  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
+  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
   const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, rectangle: rectangleCommand, circular: circularCommands, slot: slotCommand } = basicDrawingTools;
   const offsetFeature = authoringTools.createOffset({
@@ -629,7 +629,7 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
     updateGeometrySelectionUI,
   });
-  const { update: updateFilletRadiusPlacement, submit: submitFilletRadiusPlacement, click: handleFilletClick } = filletCommand;
+  const { update: updateFilletRadiusPlacement, submit: submitFilletRadiusPlacement } = filletCommand;
   const blockConfigurationCommand = window.BlockConfigurationCommand.create({
     currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, createBlockProjectionBundle,
     blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, constraintGraphNodes,
@@ -701,7 +701,7 @@
     parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { start: startCenterlineCommand, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
+  const { start: startCenterlineCommand, projectPointToCenterlineSupport } = centerlineCommand;
   const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreview({
     ctx, viewport, withCanvasState, traceSplinePath, readMode: drawOperationLifecycle.readMode, centerlineCommand,
     readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
@@ -892,7 +892,7 @@
     clearSnap, clearSelection, invalidateAnalysis: () => constraintAnalysis.invalidate(),
     updateUI, draw, setHint, recordHistory, applicationText,
   });
-  const { start: startCircleCenterCrossCommand, click: handleCircleCenterCrossClick } = circleCenterCrossCommand;
+  const { start: startCircleCenterCrossCommand } = circleCenterCrossCommand;
 
   const lineCollapseQuery = window.LineCollapseQuery.create({
     connectedComponentFromSeeds, constraintGraphNodes, localSolveLines, minLineLength: MIN_LINE_LENGTH,
@@ -1752,7 +1752,6 @@
     clearSelection, stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
     invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis, updateUI, recordHistory,
   });
-  const { execute: executeTrimAt } = trimFeature;
 
   const { candidatesAt: canvasContextCandidatesAt } = window.CanvasContextQuery.create({
     selectionScope: { sketch: isVisibleSketchId, element: isVisibleSketchElement },
@@ -1842,8 +1841,8 @@
     constraintTargetHint,
     instanceSourceCommand, geometryInstanceCommand, sceneQueries: sceneHitQueries, operandElement, toggleSketchProjectionSource,
     clearSnap, selectionRectangle, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing,
-    transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, basicDrawingInput: basicDrawingTools.input, handleCenterlineClick, handleCircleCenterCrossClick,
-    handleFilletClick, handleSplineClick, executeTrimAt, offsetCommand,
+    createDrawingInput: () => authoringTools.createCanvasInput({ readMode: drawOperationLifecycle.readMode,
+      centerline: centerlineCommand, circleCenterCross: circleCenterCrossCommand, fillet: filletCommand, trim: trimFeature, offset: offsetCommand }),
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag,
   });
 

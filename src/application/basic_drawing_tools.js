@@ -1,6 +1,10 @@
 /* Compose drawing features around shared geometry, snap and preview owners. */
 (() => {
   "use strict";
+  function createCanvasInput({ point, drawing }) {
+    const pointCommand = window.PointCommand.create(point);
+    return window.DrawingCommandInput.create({ ...drawing, pointCommand });
+  }
   function create({ geometry, ids, currentScope, snap, snapConstraints, snapForDrawing, endpointAt, samePosition,
     transientAuthoring, pushModelConstraint, addConstraintIfMissing, minLineLength, minArcLength,
     selection, preview, checkpoint, clearSelection, setHint, updateUI, draw, solveAndRefresh, log }) {
@@ -140,6 +144,15 @@
         checkpoint: filletCheckpoint, clearSelection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
         applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand });
     }
+    function createAuthoringInput({ readMode, centerline, circleCenterCross, fillet, trim, offset }) {
+      return createCanvasInput({ point: { transientAuthoring, snapForDrawing, drawingSnap: snap, addPoint: geometry.addPoint,
+        addPointSnapConstraints: snapConstraints.addPointSnapConstraints, clearSnap: snap.clear, canvasSelection: selection, solveAndRefresh },
+        drawing: { getMode: readMode, rejectRootSketchCreation, handleLineClick: tools.input.line,
+          handleRectangleClick: tools.input.rectangle, handleSlotClick: tools.input.slot, handleCircleClick: tools.input.circle,
+          handleArcClick: tools.input.arc, handleThreePointArcClick: tools.input.threePointArc,
+          handleCenterlineClick: centerline.click, handleCircleCenterCrossClick: circleCenterCross.click, handleFilletClick: fillet.click,
+          handleSplineClick: spline.command.click, executeTrimAt: trim.execute, offsetCommand: offset } });
+    }
     function createBlankGesture({ lifecycle, pending, constraintTargets, splineEditing, dimensionValues, offset, annotationInput,
       updateGeometrySelectionUI, getTime = () => performance.now() }) {
       const { rollbackTransientLineCompletion, rollbackTransientPoint } = transientAuthoring;
@@ -154,7 +167,7 @@
         setHint, updateUI, draw, cancelActiveDrawOperation: () => lifecycle.cancel(), rollbackTransientPoint,
         hasActiveDrawOperation: () => lifecycle.active(), hasSelection: selection.hasSelection, updateGeometrySelectionUI });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet, createBlankGesture });
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet, createBlankGesture, createCanvasInput: createAuthoringInput });
   }
-  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring });
+  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring, createCanvasInput });
 })();
