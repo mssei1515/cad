@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Canvas選択のブラウザテストAPIを既存driverへ集約（2026-10-24、検証完了）
+
+基準develop／origin/developは1d1ff6b。CanvasSelectionTestDriver.createSupportは既存SelectionとcurrentScope・clear／UI／drawから実ID観測を生成し、その同じreadSelectedGeometryを他driverと公開APIへ共有する。後段のcreateApiは既存Move観測→ID選択→重なり候補fixture→円弧端点fixture→context観測→Point追加を元の順序で生成し、既存七つの公開名への対応をdriver内に所有する。appはtest query内の元の二箇所で生成し、返された公開objectを展開する。現在scope・Selection／Geometry・Hover／viewport・Block定義／採番と履歴／UI／drawは既存ownerの入口を共有し、通常機能の実装・UIや独自状態は変更しない。既存の個別factoryも保持する。test hooksを巨大なapp contextごと別fileへ移す方法は採らない。
+
+app.jsは2,381→2,365行（16行減）、対象生成7→2、root内test組立ての延べ引数58→35、root／test組立ての未使用bindingと初期化前直接参照0（TEMP cad-selection-test-api-audit.cjs）。今回はブラウザテストAPIの契約・共通依存の所有を整理する単位であり、数百行の目標達成とは扱わない。
+
+既存canvas-test-driver.test.jsへ追加した2単体は実Selection／Hover／GeometryCreation／GeometryIds／BlockDefinitionEditingと公開APIを使い、構築時のscope／通知無照会、選択参照とscope切替後の最新Geometry参照、共通ID照会の同一性、context／Move観測、選択ID配列コピー、重なりBlock生成とcache→fit→履歴→UI→draw順、円弧端点fixture、現在viewportでの固定Point挿入、UI例外後のdraw抑制と例外同一性を確認した。既存期待値は変更していない。関連単体10件、全単体1,948件、構文614ファイルが成功。関連16 E2E fileの288件（既存UI・Block／固定・派生pattern／free Instance・centerline・Hatch・phase0保存互換性／描画比較・PNG・Sketch権限／移動／投影・Spline・thread・toolbar・visibility）も全成功（4.4分、exit 0、runner93418）。公開API利用fileのうち長時間のadversarial-drag-fixture／adversarial-authoring-performance／constraint-drag-regressionsの3 fileは今回実行しておらず、最新全体基準a8e96f4の587件成功と区別する。TEMP cad-selection-test-api-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server19840の停止と製品source二つのhash不変を確認した。spec/architecture/モジュール構成.mdとimplementation-map.mdも更新した。
+
+週枠使用28%／残量72%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も公開APIの機能別責務と通常機能の構築依存を確認し、巨大なcontext／細分fileや中継を増やさずに閉じられる単位を選ぶ。
+
+
 ### 最新：Canvasメニューの早期生成と後段の操作接続を機能内へ統合（2026-10-24、検証完了）
 
 基準develop／origin/developはebf5d45。CanvasContextInteraction.createMenuが既存CanvasContextMenuを元の早期位置で生成し、同じDocument・翻訳・CanvasHover・描画・menu element／controllerを保持するcreateInteractionを返す。appは後段の元の位置で実Interactionを生成し、従来どおりcontroller.startを呼ぶ。候補presenterとInteractionは二つの明示的なreaderから操作時だけ参照し、初期化時には照会しない。候補presenterのbare呼出し、Interactionのmethod receiver、Hover各関数の既存receiverと引数／結果・例外伝播を維持する。新しい操作state／listener・可変app contextやファイルは増やさず、Menuのsnapshot／復元とstart／dispose、Target・Entry・Actionsの判断を既存ownerへ残す。個別create APIも維持する。

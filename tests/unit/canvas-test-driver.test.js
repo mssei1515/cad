@@ -150,3 +150,74 @@ test('selectable line position follows current scope and skips competing hits, b
   lines = [];
   assert.equal(observation.position(), null);
 });
+
+// The selection browser API shares the real Selection, Geometry creation and Hover owners.
+const selectionSandbox = { structuredClone, window: {} }; vm.createContext(selectionSandbox);
+const selectionSources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+for (const file of selectionSources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), selectionSandbox, { filename: file });
+function selectionSupportFixture() {
+  const w = selectionSandbox.window, selection = w.CanvasSelection.create(), hover = w.CanvasHover.create({ isEndpointPoint: () => false });
+  const ids = w.GeometryIds.create(), calls = [], fields = ['points', 'lines', 'circles', 'arcs', 'splines', 'blockInstances', 'hatches', 'annotations', 'referenceImages'];
+  const empty = () => ({ ...Object.fromEntries(fields.map(field => [field, []])), constraints: [], sketches: [], activeSketchId: 'S1' });
+  const state = { ready: false, scope: empty(), definitions: [], candidates: [], moving: null, editingBlock: false, failUI: false };
+  const record = (name, ...args) => { assert.equal(state.ready, true); calls.push([name, ...args]); };
+  const currentScope = () => { record('scope'); return state.scope; };
+  const geometry = w.GeometryCreation.create({ currentScope, ids, assignSketchId: item => { item.sketchId = state.scope.activeSketchId; },
+    currentConstruction: () => false, minLineLength: 0.01, minArcLength: 0.01 });
+  let nextDefinition = 0;
+  const definitions = w.BlockDefinitionEditing.create({ nextDefinitionId: () => 'D' + ++nextDefinition });
+  const viewport = { x: 10, y: 20, scale: 2 }, rect = { left: 5, top: 7 };
+  const clientPosition = point => ({ x: rect.left + viewport.x + point.x * viewport.scale, y: rect.top + viewport.y + point.y * viewport.scale });
+  const marker = new Error('UI failure');
+  const support = w.CanvasSelectionTestDriver.createSupport({ canvasSelection: selection, currentScope,
+    clearSelection: () => { record('clear'); selection.clear(); }, updateUI: () => { record('ui'); if (state.failUI) throw marker; }, draw: () => record('draw') });
+  const api = support.createApi({ sketchMoveCommand: { state: () => { record('move'); return state.moving; } }, activeSketchId: () => state.scope.activeSketchId, fields,
+    decorateSerializedConstraint: (value, original) => ({ ...value, sourceId: original.id }), serializeConstraint: item => ({ id: item.id }),
+    serializeModel: () => ({ scope: state.scope }), isEditingBlock: () => state.editingBlock,
+    blockSelectionGeometry: () => { record('block-selection'); return { constraints: [{}], externalConstraints: [{}, {}], error: 'external' }; },
+    resetModelState: () => { record('reset'); state.scope = empty(); state.definitions = []; selection.clear(); ids.reset(); },
+    ...geometry, ROOT_SKETCH_ID: 'ROOT', DEFAULT_SKETCH_ID: 'S1', createEmptyBlockDefinition: definitions.empty,
+    Point: w.GeometrySolver.Point, Line: w.GeometrySolver.Line, appendDefinition: definition => state.definitions.push(definition), nextInstanceId: () => 'I1',
+    invalidateBlockProjectionCache: () => record('cache'), fitSketchToViewport: (...args) => record('fit', ...args), resetHistory: label => record('history', label),
+    clientPosition, arcEndpointPoint: w.GeometryKernel.arcEndpointPoint, canvasHover: hover, canvasContextMenu: { hidden: false },
+    canvasContextController: { candidates: () => state.candidates }, canvasContextCandidatePresentation: target => ({ id: target.item.id, type: target.kind, secondary: 'candidate' }),
+    canvas: { getBoundingClientRect: () => rect }, viewport });
+  assert.deepEqual(calls, []); state.ready = true;
+  return { w, support, api, state, calls, selection, hover, geometry, viewport, rect, clientPosition, marker, empty };
+}
+
+test('selection browser API shares live scope/Selection across id selection, context and Sketch move observations', () => {
+  const f = selectionSupportFixture(), { api, state, selection, calls } = f;
+  const p = f.geometry.addPoint(1, 2), q = f.geometry.addPoint(4, 2), line = f.geometry.addLine(p, q);
+  calls.length = 0; const result = api.selectGeometryIdsForTest({ points: [p.id, p.id], lines: [line.id] });
+  assert.equal(selection.points[0], p); assert.equal(selection.lines[0], line); assert.equal(selection.points.length, 1);
+  assert.equal(result.blockError, 'external'); assert.equal(result.internalConstraintCount, 1); assert.equal(result.externalConstraintCount, 2);
+  assert.deepEqual(calls.slice(-3).map(call => call[0]), ['ui', 'draw', 'block-selection']);
+  assert.equal(api.selectedGeometryIdsForTest, f.support.readSelectedGeometry);
+  f.hover.update({ point: p }); state.candidates = [{ kind: 'line', item: line }];
+  const context = api.canvasContextSelectionStateForTest(); assert.equal(context.hovered, p.id); assert.equal(context.candidates[0].id, line.id);
+  state.moving = { targetId: 'S2' }; state.editingBlock = true; state.scope.constraints.push({ id: 'C1' });
+  const move = api.sketchMoveStateForTest(); assert.equal(move.active, true); assert.equal(move.targetId, 'S2');
+  assert.equal(move.serialized.scope, state.scope); assert.equal(move.ownership.points[0].id, p.id); assert.equal(move.constraints[0].sourceId, 'C1'); assert.equal(move.editingBlock, true);
+  state.scope = f.empty(); const replacement = f.geometry.addPoint(8, 9); replacement.id = p.id;
+  api.selectGeometryIdsForTest({ points: [p.id] }); assert.equal(selection.points[0], replacement); assert.notEqual(selection.points[0], p);
+  const observation = api.selectedGeometryIdsForTest(); observation.points.push('external'); assert.equal(selection.points.length, 1);
+});
+
+test('selection browser fixtures share geometry and notifications, and point insertion reads current viewport without hiding failures', () => {
+  const f = selectionSupportFixture(), { api, state, calls } = f;
+  const overlap = api.resetForOverlappingContextSelectionTest();
+  assert.deepEqual(Array.from(f.selection.lines, item => item.id), Array.from(overlap.lineIds));
+  assert.equal(state.definitions.length, 1); assert.equal(state.definitions[0].lines.length, 2);
+  assert.equal(state.scope.blockInstances[0].id, overlap.blockId); assert.equal(state.scope.lines.find(item => item.id === overlap.excludedIds[0]).appearance.visible, false);
+  assert.deepEqual(calls.slice(-5).map(call => call[0]), ['cache', 'fit', 'history', 'ui', 'draw']);
+  calls.length = 0; const endpoint = api.resetForArcEndpointConstraintSelectionTest();
+  assert.equal(state.scope.lines.length, 1); assert.equal(state.scope.arcs.length, 2); assert.equal(state.scope.arcs[0].id, endpoint.firstArcId);
+  assert.deepEqual(endpoint.first, f.clientPosition(f.w.GeometryKernel.arcEndpointPoint(state.scope.arcs[0], 'start')));
+  f.viewport.scale = 4; const inserted = api.addIsolatedFixedPointForContextTest({ x: 55, y: 67 }); const point = state.scope.points.at(-1);
+  assert.equal(point.x, 10); assert.equal(point.y, 10); assert.equal(point.fixed, true); assert.equal(point.kind, 'explicit');
+  assert.equal(inserted.id, point.id); assert.deepEqual(inserted.client, { x: 55, y: 67 }); assert.deepEqual(calls.slice(-2).map(call => call[0]), ['ui', 'draw']);
+  calls.length = 0; state.failUI = true;
+  assert.throws(() => api.addIsolatedFixedPointForContextTest({ x: 15, y: 27 }), error => error === f.marker);
+  assert.equal(calls.at(-1)[0], 'ui'); assert.equal(calls.some(call => call[0] === 'draw'), false);
+});

@@ -1910,8 +1910,9 @@
     if (!new URLSearchParams(window.location.search).has("test")) return;
     const historyObservation = window.DocumentTestDriver.createHistoryObservation({ activeEditHistory, blockEditor, document, constructionCommand });
     const readTestHistory = historyObservation.state;
-    const selectedGeometryObservation = window.CanvasSelectionTestDriver.createIdObservation({ canvasSelection });
-    const readTestSelectedGeometry = selectedGeometryObservation.state;
+    const { readSelectedGeometry: readTestSelectedGeometry, createApi: createSelectionTestApi } = window.CanvasSelectionTestDriver.createSupport({
+      canvasSelection, currentScope: workspace.current, clearSelection, updateUI, draw,
+    });
     const constraintStatusObservation = window.ConstraintTestDriver.createStatusObservation({ refreshConstraintAnalysis, readMembership: readSketchMembership });
     const readTestConstraintStatuses = constraintStatusObservation.state;
     const constraintAnalysisObservation = window.ConstraintTestDriver.createAnalysisObservation({
@@ -2072,25 +2073,14 @@
       readMode: drawOperationLifecycle.readMode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
     });
-    const sketchMoveObservation = window.CanvasSelectionTestDriver.createMoveObservation({
-      sketchMoveCommand, activeSketchId, fields: window.SketchMove.fields, canvasSelection, currentScope: workspace.current,
-      decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock: () => Boolean(blockEditor.current),
-    });
-    const geometryIdSelection = window.CanvasSelectionTestDriver.createIdSelection({
-      clearSelection, currentScope: workspace.current, canvasSelection, updateUI, draw, blockSelectionGeometry, readSelectedGeometry: readTestSelectedGeometry,
-    });
-    const overlapSelectionFixture = window.CanvasSelectionTestDriver.createOverlapFixture({
-      resetModelState, addLine, addPoint, currentScope: workspace.current, ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
+    const selectionTestApi = createSelectionTestApi({
+      sketchMoveCommand, activeSketchId, fields: window.SketchMove.fields, decorateSerializedConstraint, serializeConstraint, serializeModel,
+      isEditingBlock: () => Boolean(blockEditor.current), blockSelectionGeometry, resetModelState, addLine, addPoint, addArc,
+      ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      invalidateBlockProjectionCache, canvasSelection, fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, clientPosition: canvasTestDriver.clientPosition,
+      invalidateBlockProjectionCache, fitSketchToViewport, resetHistory, clientPosition: canvasTestDriver.clientPosition, arcEndpointPoint,
+      canvasHover, canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport,
     });
-    const endpointSelectionFixture = window.CanvasSelectionTestDriver.createEndpointFixture({
-      resetModelState, addPoint, addLine, addArc, fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, clientPosition: canvasTestDriver.clientPosition, arcEndpointPoint,
-    });
-    const contextSelectionObservation = window.CanvasSelectionTestDriver.createObservation({
-      canvasHover, canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, readSelectedGeometry: readTestSelectedGeometry,
-    });
-    const contextPointInsertion = window.CanvasSelectionTestDriver.createPointInsertion({ canvas, viewport, addPoint, updateUI, draw, clientPosition: canvasTestDriver.clientPosition });
     const documentTestImport = window.DocumentTestDriver.createImport({
       performance, File, importFileData, readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document,
     });
@@ -2271,15 +2261,9 @@
       viewStateForTest: viewObservation.state,
       importDocumentNameFixture: documentTestImport.importName,
       loadDocumentFixtureForDragTest: documentTestLoad.load,
-      selectedGeometryIdsForTest: readTestSelectedGeometry,
-      resetForOverlappingContextSelectionTest: overlapSelectionFixture.reset,
-      resetForArcEndpointConstraintSelectionTest: endpointSelectionFixture.reset,
-      canvasContextSelectionStateForTest: contextSelectionObservation.state,
-      addIsolatedFixedPointForContextTest: contextPointInsertion.addFixedPoint,
+      ...selectionTestApi,
       constraintInputStateForTest: constraintInputObservation.state,
       resolveConstraintIntentForTest: constraintIntentTestDriver.resolve,
-      sketchMoveStateForTest: sketchMoveObservation.state,
-      selectGeometryIdsForTest: geometryIdSelection.select,
       ...canvasTestDriver.publicAPI,
       hoverDisplayStateForTest: hoverDisplayObservation.state,
       authoringStateForTest: authoringObservation.state,
