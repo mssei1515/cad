@@ -6,6 +6,19 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Blockの拘束再構築・Parameter伝播の接続を共有ownerへ統合（2026-10-24、全体検証完了）
+
+基準develop／origin/developはc8aae38。本単位はcodex/block-rebinding-compositionで実施した。BlockEditingFeatureが既に保持するDocument・ConstraintRebindingからDefinition再構築と保存済み全Definitionの再構築を生成し、同じ入口をSession rollback／Completionへ接続する。Documentの現在blockDefinitionsを順に再構築して削除拘束数を合計する既存の処理と戻り値を保ち、appから二つの重複callback依存を除いた。createPropagationは同じcatalog・投影無効化・Definition再構築を実BlockParameterPropagationへ接続する。Document側は明示したreadEditingScope→Block投影bundle→再構築→成功時だけSelection解除という元の順序を維持する。workspace.currentと結線済みscope、通常Instanceを含む他処理のbundleを混同せず、安定化の入口・revision／cache順・失敗時の既存復元範囲は元のownerへ残す。新しいmodel／Selection／Solver／履歴や可変app context・fileは追加しない。
+
+app.jsは2,353→2,341行（12行減）、対象生成2→2、root直下の延べ引数27→25、未使用binding／初期化前直接参照0（TEMP cad-block-rebinding-audit.cjs）。三つの再構築関数をrootから除去し、Block機能からroot callbackへ戻って同じrebindingを呼ぶ接続をなくした。行数効果だけでなく、責務の循環と共通依存の重複を減らす単位とし、数百行の目標達成とは扱わない。
+
+既存block-editing-feature.test.jsの再構築spyは削除した個別callbackでなく共有rebinding portへ付け替え、取消時に実Definitionが再構築される期待を維持した。追加2単体は実ConstraintPersistence／Rebinding／BlockParameterPropagation／EditorSessionとGeometry・Selectionを使い、構築時無照会、親階層の再構築／安定化順、workspaceと異なる結線済みscopeの使用、Block投影Pointと元Geometryの同一参照・reference metadata、保存済み全定義の再構築を確認した。参照先欠損／codec例外／親安定化失敗で、Documentの拘束配列やSelectionを保持し、後続のSelection解除・Document安定化へ進まないことも確認した。数値・UI・保存互換性の既存期待は変えていない。関連単体26件、最終コードの全単体1,952件、構文614ファイルが成功した。
+
+製品sourceを固定した全587 E2Eが成功（28.1分、exit 0、runner80037）。ドラッグ回帰fileは14.5分。性能上限・timeout・既存期待値は変更していない。fillets 3,744 preview／最大32.2ms、offsets 10,296／72.4ms、aircraft 1,872／296.7ms、coupled-lines 5,304／49.5ms、horizontal-line 936／33.6ms、vertical-line 936／169.8msで各failures 0。TEMP cad-block-rebinding-{focused,unit,check}.log、cad-block-rebinding-full-{run.ps1,e2e.log,e2e-receipt.json,last-run.json,source-hashes.json}に証跡を保持する。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server40408の停止、製品source二つのhash不変を確認した。テスト対象のGit blobはapp.js=4a4e33c22b00169aaa888cd325e3e960f49c0143、block_editing_feature.js=82f4ed0b240e0c477d3f548161cb4a16ebab8382。spec/architecture/モジュール構成.mdとimplementation-map.mdも更新した。全体検証後にremoteを再取得し、main／developが検証中に更新されていないことを確認した。
+
+週枠使用31%／残量69%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。最新全体検証は本単位の587件成功であり、古いa8e96f4の全体結果や後続の関連E2Eのみの結果と区別する。全体目標はactive・未完了。読み取り専用AST再監査（TEMP cad-block-rebinding-next-audit.json）ではrootの大きな生成引数はCanvasContextInteraction 58、ConstraintEditing 50、GeometryDragFeature 49、AnnotationFeature 48。次はこれらの既存機能内で共有ownerを再利用できる境界とtest公開APIを検討する。引数を巨大objectへ束ねるだけ・小関数の移動だけで200〜500行へ届くとは見積もらない。
+
+
 ### 最新：履歴buttonとToolbar／Statusの表示接続を既存表示機能へ統合（2026-10-24、検証完了）
 
 基準develop／origin/developは2fbd09c。ToolbarView.createHistoryへapp内の履歴DOM反映を移し、undoBtn→redoBtn照会→現在active履歴→各disabled反映→Document保存状態通知の順と短絡／例外位置を維持する。DOMや履歴はcacheしない。PresentationFeature.createToolbarが同じDOM・ApplicationSettings・Lifecycle／Pending／Constraint session・Constructionをこの表示と共有し、後段のcreateControlsで既存ToolbarView→CommandStatusを生成する。Spline編集とactive履歴・後段Document通知は操作時readerを用いる。Toolbar snapshotの内容／照会順とFlyout後の再読取り、Statusの注記→拘束→mode優先順とbare readMode、Constructionのmethod receiverは維持する。履歴Controller直後の先行生成は無照会・無listenerで、既存UI／Status生成・更新とbindの時機は保つ。モデル／session／履歴のownerは変更せず、個別UI factoryも維持する。新fileや可変app contextは追加しない。

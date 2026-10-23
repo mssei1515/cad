@@ -4,8 +4,11 @@
   function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding,
     normalizedSketchCopy, normalizeGeometryInstance, isDimensionConstraint, isReadOnlyDimension,
     numericDimensionExpression, ensureParameterNamespace, activeSketchId, blockProjectionBundles, geometryElementKey,
-    readViewport, activateScope, reserveScopeSequences, createHistory,
-    rebuildStoredBlockDefinitionConstraints, rebuildBlockDefinitionConstraintObjects }) {
+    readViewport, activateScope, reserveScopeSequences, createHistory }) {
+    function rebuildBlockDefinitionConstraintObjects(definition) { return rebinding.rebuildDefinition(definition); }
+    function rebuildStoredBlockDefinitionConstraints() {
+      return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
+    }
     const editing = window.BlockDefinitionEditing.create({
       normalizedSketchCopy, cloneConstraintForBlock: rebinding.cloneForBlock, blockDefinitionById: catalog.blockDefinitionById,
       createBlockProjectionBundle: projections.createBlockProjectionBundle,
@@ -25,6 +28,14 @@
     });
     const queries = window.BlockEditingQueries.create({ definitions: () => documentModel.blockDefinitions,
       currentScope: workspace.current, editor: session, catalog });
+    function createPropagation({ readEditingScope, clearSelection, stabilizeDefinition, stabilizeDocument, applicationText }) {
+      return window.BlockParameterPropagation.create({ catalog, invalidateProjection: projections.invalidateBlockProjectionCache, applicationText,
+        definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: stabilizeDefinition },
+        document: { rebuild: () => {
+          rebinding.rebuildDocument(readEditingScope(), blockProjectionBundles());
+          clearSelection();
+        }, stabilize: stabilizeDocument } });
+    }
     function createCommands({ canStartCreation, canvasSelection, selectionQuery, guardDimensionSymbolDeletion,
       resetBlockEditorHistory, clearSelection, setMode, closeDefinitions, setEditorActive, fitAllGeometryToViewport,
       resetEmptyViewport, promptName, updateBlockUI, updateUI, draw, recordHistory, setHint,
@@ -64,7 +75,7 @@
       }
       return Object.freeze({ definition, completion, createView });
     }
-    return Object.freeze({ editing, session, queries, createCommands });
+    return Object.freeze({ editing, session, queries, createCommands, createPropagation });
   }
   window.BlockEditingFeature = Object.freeze({ create });
 })();
