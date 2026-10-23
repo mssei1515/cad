@@ -342,6 +342,8 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 - `DimensionInputView`（`src/ui/dimension_input_view.js`）: 寸法入力欄の配置・表示・非表示・検証結果の反映とfocus予約。寸法レイアウトと式評価は呼出し側で行い、DOMへコマンド状態を持ち込まない。
 
+- `DimensionInput`（`src/application/dimension_input.js`）: 入力View／Controllerの生成と共有DimensionDisplay・pending reader・現在倍率への接続。実Controllerを各commandへ公開し、入力bindはappの後段から呼ぶ。求解・履歴・独自sessionを持たない。
+
 - `DimensionInputController`（`src/ui/dimension_input_controller.js`）: 入力待ち状態を読取り、寸法レイアウト・所有Sketchの表示設定・入力検証をviewへ接続する。Canvasのキー操作でbufferを編集し、入力開始・確定・取消はコマンドへ委譲する。モデル更新は所有しない。
 
 - `DimensionValueCommand`（`src/commands/dimension_value_command.js`）: 寸法値・式の確定、既存寸法の更新と失敗時復元、初回寸法追加後の表示範囲復元。入力イベントとDOMを所有しない。
@@ -450,7 +452,7 @@ ConstraintCommandInput.createFeatureは同じ六つのownerからdimension継続
 
 - PointerInteractionControllerのdoubleClick／leaveにCanvasの残るpointer操作を集約。CanvasPressQuery.readDoubleClickが専用hit順序を保持し、Spline編集の開始だけはappのsession操作へ接続。
 
-- DimensionInputController: 寸法／Offset入力欄のイベント受付とbuffer更新を既存の表示・キー入力責務へ統合。app.jsはbindInputで接続する。
+- DimensionInputController: 寸法／Offset入力欄のイベント受付とbuffer更新を既存の表示・キー入力責務へ統合。DimensionInputが入力要素と結線し、app.jsは後段でbindを呼ぶ。
 
 - CanvasViewControls: Canvas表示設定の値とread-only live state、表示checkbox／button・window keyup／blurのlistener寿命を所有。bindWindowとbindControlsで起動順を保持。
 - ConstraintStatusView: 拘束状態表示の固定／Space保持状態、blur解除、表示同期。CanvasViewControlsの内部値へ投影し、keydownの受付と編集対象判定はKeyboardInteractionControllerへ残す。

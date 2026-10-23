@@ -136,6 +136,7 @@ const files = [
   "tests/unit/constraint-controls-view.test.js",
   "tests/unit/dimension-input-view.test.js",
   "tests/unit/dimension-input-controller.test.js",
+  "tests/unit/dimension-input.test.js",
   "tests/unit/dimension-placement-command.test.js",
   "tests/unit/dimension-value-command.test.js",
   "tests/unit/offset-selection.test.js",
