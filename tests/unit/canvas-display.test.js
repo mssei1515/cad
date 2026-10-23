@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ['src/ui/number_display.js', 'src/ui/canvas_input_binding.js', 'src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js']) {
+for (const file of ['src/ui/number_display.js', 'src/ui/canvas_input_binding.js', 'src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js', 'src/geometry/export_region.js', 'src/persistence/document_files.js', 'src/persistence/png_file.js', 'src/commands/png_export_command.js', 'src/application/png_export.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
 function fixture() {
@@ -27,13 +27,13 @@ function fixture() {
   assert.deepEqual(calls, [['element', 'statusZoom'], ['element', 'statusZoomInput']]); calls.length = 0;
   class Observer { constructor(callback) { ready(); state.resize = callback; calls.push('observer'); } observe(value) { assert.equal(value, canvas); calls.push('observe'); } disconnect() { calls.push('disconnect'); } }
   const workspace = display.createWorkspace({ ctx, readPixelRatio: () => { ready(); return state.dpr; }, ResizeObserverClass: Observer,
-    withGeometryReadCache: callback => { calls.push('cache'); callback(); }, drawCanvas: () => { ready(); calls.push('content'); state.onContent?.(); },
+    withGeometryReadCache: callback => { calls.push('cache'); return callback(); }, drawCanvas: () => { ready(); calls.push('content'); state.onContent?.(); },
     isValueInputPending: () => { calls.push('pending'); return state.pending; }, window: browser, updatePropertiesUI() {}, closeContextMenu: () => calls.push('close-menu'),
     applySketchTreeWidth: () => calls.push('tree'), applicationText: (_ja, en) => en, readLanguage: () => 'en',
   });
   assert.deepEqual(calls, []); state.ready = true;
   const enter = percent => { button.emit('click'); input.valueAsNumber = percent; input.emit('keydown', { key: 'Enter' }); };
-  return { display, workspace, state, calls, button, input, browser, canvas, ctx, enter, status };
+  return { display, workspace, state, calls, button, input, browser, canvas, ctx, enter, status, document };
 }
 
 function inputFixture() {
@@ -266,4 +266,69 @@ test('composition retains failure boundaries without adding restoration or swall
   assert.throws(() => f.png.render({ x: 0, y: 0, width: 10, height: 10 }, { x: 1, y: 1 }), value => value === error);
   assert.ok(f.png.frame); assert.deepEqual(f.stages(), ['cache', 'zoom', 'images', 'hatches', 'stack', 'dimensions', 'annotations']);
   f.state.failure = null; f.calls.length = 0; f.png.restore(); assert.equal(f.png.frame, null); assert.ok(f.stages().includes('export-overlay'));
+});
+
+function workspacePngFixture() {
+  const f = fixture(), stages = [], s = f.state; s.mode = 'line';
+  const button = new EventTarget(), originalGet = f.document.getElementById;
+  f.document.getElementById = id => id === 'pngExportBtn' ? button : originalGet(id);
+  let resolveFonts;
+  const fonts = new Promise(resolve => { resolveFonts = resolve; });
+  f.document.fonts = { get ready() { stages.push('fonts'); return fonts; } };
+  f.document.createElement = kind => {
+    assert.equal(kind, 'canvas'); stages.push('output');
+    return { getContext: () => ({ drawImage(source) { assert.equal(source, f.canvas); assert.equal(source.width, 40); assert.equal(source.height, 20); stages.push('copy'); } }),
+      toBlob(callback) { stages.push('blob'); callback({ type: 'image/png' }); } };
+  };
+  f.browser.DocumentFiles = sandbox.window.DocumentFiles;
+  f.browser.showSaveFilePicker = async options => { assert.equal(options.suggestedName, 'current-name.png'); stages.push('picker'); return {
+    createWritable: async () => ({ write: async blob => { assert.equal(blob.type, 'image/png'); stages.push('write'); }, close: async () => stages.push('close') }) }; };
+  const pending = { get current() { assert.equal(s.ready, true); return s.command; }, replace(value) { assert.equal(this, pending); s.command = value; }, clear() { assert.equal(this, pending); s.command = null; } };
+  const lifecycle = { readMode: function() { 'use strict'; assert.equal(this, undefined); assert.equal(s.ready, true); return s.mode; },
+    setMode: function(mode) { 'use strict'; assert.equal(this, undefined); assert.equal(s.ready, true); s.mode = mode; }, active() { assert.equal(this, lifecycle); return false; } };
+  f.workspace.surface.syncCanvasBitmapSize(); f.calls.length = 0; s.ready = false;
+  const feature = f.workspace.createPngExport({ documentName: () => 'current-name', prepareImages: async () => stages.push('images'),
+    drawOperationLifecycle: lifecycle, pendingCommandSession: pending, fileSession: { get busy() { return s.fileBusy; } },
+    constraintTargetSession: { get command() { return s.constraint; } },
+    findSnap: (point, tolerance) => { s.snapArgs = [point, tolerance]; if (s.snapError) throw s.snapError; return s.snap; },
+    flushPointerMove: () => { f.calls.push('flush'); if (s.flushError) throw s.flushError; } });
+  assert.deepEqual(f.calls, []); assert.deepEqual(stages, []); s.ready = true;
+  return { ...f, feature, stages, button, pending, resolveFonts };
+}
+
+test('Workspace PNG uses the same live viewport, mode, pending session and read cache after explicit start', () => {
+  const f = workspacePngFixture(); f.button.dispatchEvent(new Event('click')); assert.equal(f.feature.command.active, false);
+  f.feature.start(); f.feature.start(); f.state.fileBusy = true; f.button.dispatchEvent(new Event('click'));
+  assert.deepEqual(f.calls, ['flush','hint']); assert.equal(f.state.mode, 'line'); assert.equal(f.feature.command.active, false);
+  f.calls.length = 0; f.state.fileBusy = false; f.state.flushError = new Error('flush failed');
+  assert.throws(() => f.feature.open(), error => error === f.state.flushError); assert.deepEqual(f.calls, ['flush']);
+  f.state.flushError = null; f.calls.length = 0; f.feature.open(); assert.equal(f.state.mode, 'png-export'); assert.equal(f.pending.current.type, 'png-export');
+  f.display.viewport.update({ x: 10, y: 20, scale: 4 }); const point = { x: 1, y: 2 }; f.state.snap = { x: 3, y: 4 };
+  f.feature.command.pick(point); assert.equal(f.state.snapArgs[0], point); assert.equal(f.state.snapArgs[1], 2.5); assert.equal(f.calls.includes('cache'), true);
+  const previous = f.workspace.exportRenderer.frame; f.state.snapError = new Error('snap failed');
+  assert.throws(() => f.feature.command.move(point), error => error === f.state.snapError); assert.equal(f.workspace.exportRenderer.frame, previous);
+  f.feature.command.cancel(); assert.equal(f.state.mode, 'line'); assert.equal(f.pending.current, null);
+  f.feature.dispose(); f.button.dispatchEvent(new Event('click')); assert.equal(f.feature.command.active, false);
+});
+
+test('Workspace PNG captures through the existing renderer after fonts and images, restoring the same bitmap and viewport on success or failure', async () => {
+  for (const fail of [false, true]) {
+    const f = workspacePngFixture(); f.display.viewport.update({ x: 10, y: 20, scale: 4 }); f.feature.open();
+    f.feature.command.pick({ x: 0, y: 0 }); f.feature.command.pick({ x: 10, y: 5 }); f.feature.command.onSetting('dpi', 96);
+    const viewport = { ...f.display.viewport.snapshot() }, bitmap = [f.canvas.width, f.canvas.height];
+    f.state.onContent = () => {
+      const frame = f.workspace.exportRenderer.frame; assert.ok(frame); assert.equal(frame.ratio.x, 1);
+      assert.deepEqual({ ...frame.worldBounds }, { x1: 0, y1: 0, x2: 10, y2: 5 }); f.stages.push('render');
+      if (fail) throw new Error('capture failed');
+    };
+    const saving = f.feature.command.onAction('finish'); await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(f.stages, ['picker','fonts']); assert.equal(f.feature.command.busy, true);
+    f.resolveFonts(); await saving;
+    assert.deepEqual(f.stages, fail ? ['picker','fonts','images','output','render'] : ['picker','fonts','images','output','render','copy','blob','write','close']);
+    assert.equal(f.workspace.exportRenderer.frame, null); assert.deepEqual([f.canvas.width, f.canvas.height], bitmap);
+    assert.deepEqual({ ...f.display.viewport.snapshot() }, viewport); assert.equal(f.feature.command.busy, false);
+    assert.equal(f.feature.command.active, fail); assert.equal(f.state.mode, fail ? 'png-export' : 'line');
+    if (fail) { assert.equal(f.feature.command.readState().message.includes('capture failed'), true); f.feature.command.cancel(); }
+    assert.equal(f.pending.current, null);
+  }
 });
