@@ -102,6 +102,19 @@
         selection, sameSketchElements: sketchContext.sameSketchElements, activeSketchId: sketchContext.activeSketchId, isActiveSketchElement,
         applicationText, minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw });
     }
+    function createPreview({ ctx, viewport, withCanvasState, traceSplinePath, readMode, centerlineCommand, readCanvasSize }) {
+      const { shortestAngleFrom, slotGeometry, threePointArcGeometry, angleAtArcParam } = window.GeometryKernel;
+      const renderer = window.AuthoringPreviewRenderer.create({ ctx, viewport, withCanvasState,
+        hypot2: window.GeometrySolver.hypot2, shortestAngleFrom, slotGeometry, threePointArcGeometry,
+        minimumLineLength: minLineLength, minimumArcLength: minArcLength, buildSpline: window.SplineGeometry.build,
+        traceSplinePath, angleAtArcParam });
+      const layer = window.AuthoringPreviewRenderer.createLayer({ renderer, readMode,
+        readPointer: () => preview.pointer, readTrim: () => preview.trim,
+        lineCommand: tools.line, rectangleCommand: tools.rectangle, slotCommand: tools.slot,
+        circularCommands: tools.circular, splineDraft: spline.draft, centerlineCommand,
+        projectPointToCenterlineSupport: centerlineCommand.projectPointToCenterlineSupport, readCanvasSize });
+      return Object.freeze({ renderer, layer });
+    }
     function createLifecycle({ lifecycle, canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
       const construct = lifecycle ? lifecycle.bind : window.DrawOperationLifecycle.create;
       return construct({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover,
@@ -127,7 +140,7 @@
         checkpoint: filletCheckpoint, clearSelection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
         applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createLifecycle, createOffset, createFillet });
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet });
   }
   window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring });
 })();
