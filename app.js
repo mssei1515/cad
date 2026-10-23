@@ -171,20 +171,15 @@
   });
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
-  const hatchGeometryQuery = window.HatchGeometryQuery.create({
-    currentScope: workspace.current, activeSketchId, effectiveAppearanceForElement, applicationText,
-    boundaryGeometry: () => [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()],
-    defaultLineWidth: () => Number(documentModel.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth, viewportScale: () => viewport.scale,
-  });
-  const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems, hatchContainsSelectablePoint } = hatchGeometryQuery;
-  const geometryReadServices = window.GeometryReadServices.create({
+  const geometryReadServices = window.GeometryReadServices.createWithHatches({
     document: documentModel, currentScope: workspace.current, currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
-    elementSketchId, applicationText, hatchGeometryQuery, sketchById, isRootSketch, activeSketchId,
-    showHiddenElements: () => viewState.showHiddenElements,
+    elementSketchId, applicationText, sketchById, isRootSketch, activeSketchId,
+    showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
-    geometryAppearance, dimensionAppearance, annotationAppearance } = geometryReadServices;
+    geometryAppearance, dimensionAppearance, annotationAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
+  const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems, hatchContainsSelectablePoint } = hatchGeometryQuery;
   const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const { blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
