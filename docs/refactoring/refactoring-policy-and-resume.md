@@ -93,6 +93,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：寸法入力UIの生成・接続（2026-10-23）
+
+基準develop b1c8bb9からcodex/dimension-input-assemblyで実施。src/application/dimension_input.jsへDimensionInputView／Controllerの生成、共有DimensionDisplayのlayout／placement／label offset、現在viewport倍率、後段の入力bindを接続する責務を集約した。入力表示と操作をDimensionDisplayへ混在させず、同じ実ControllerをOffset／Fillet／寸法編集／KeyboardInputへ公開する。pending sessionのreaderをそのまま使い、新たなbuffer／モデル／履歴／rollbackを追加しない。app.jsは2,675→2,671行（4行減）、この群のroot構築2→1、明示引数25→20。行数のための圧縮や全体目標の完了とは扱わない。
+
+View生成後にControllerを生成する順序を維持し、生成段階にDOM bindやscope読取りを追加しない。appに残るplacement／layoutsの分解は凍結された通常propertyの取得のみであり、入力の生成時機との入替えに副作用はない。Canvas bindの後で入力をbindする順序、focusのframe予約、現在倍率と最新pendingの再読取り、Offset／Distance確定の後段callback、共用hoisted layout入口を維持した。自己外参照なしroot bindingは0、直接引数を含めた初期化前参照0をAST監査した。一時診断はcad-dimension-input-audit.cjs。
+
+classic scriptを入力View／ControllerとDimensionMetricsの後に登録し、index.html／構文一覧／file URL Helpのscript期待値とnamespace確認／unit一覧を同期した。初回の一時script順診断はMetricsより前の登録を検出したため、定義時には実行されない依存も含めて読込み順を整理し、再監査した。既存UI期待値・timeout・性能上限・保存versionは変更しない。
+
+構文602ファイル・全単体1,854件・関連単体14件・file URL Help読込1件が成功。追加3件は実View／ControllerとFeatureを組み合わせ、bind前にイベントがないこと、古いpendingを捕捉せず現在objectを編集すること、Offset／Distance別確定、遅延focus時の倍率／所有Sketch／符号付き角度の検証、入力要素なしのCanvasキー経路を確認した。
+
+旧b1c8bb9のindex／appを実際に差し替えたブラウザ比較では、両route利用と旧版に新DimensionInputがないことをassertし、77状態でmodel・clipboard・mode・履歴・Selection・Hint・command panel・寸法入力欄の値／表示／検証状態／配置style／式highlightとAPI204 key順が一致した。savedAtだけ除外。式の不正／拒否／取消／確定、Offsetのpreview／不正値／確定、Undo／Redoを含む。一時診断はcad-dimension-input-equivalence.cjs／.log。
+
+関連E2E13ファイル282件が全成功（4.5分、exit 0）。file URL loader→旧版比較→関連E2Eの順に実行し、runner終了と自己起動port8792のserver停止を確認した。作業branchをCommit／Pushしてdevelopへ統合し、検証済みsourceとのtree同一性を確認する。ログはcad-dimension-input-{focused,check,unit,loader,e2e}.log。最新全E2Eは未実行。以前の全587件や前単位317件を今回の全体検証に代用しない。
+
+main／origin/mainはdf5aef2のまま。週枠は開始使用13%／残量87%、検証後使用14%／残量86%で新たな分離の停止条件未到達。次はDimensionValueCommand.createEditingSupportとcreateの生成・接続を監査する。特殊寸法／注記の既存ownerを維持し、共通する式評価・pending・入力Controller・履歴の依存を減らせるか確認する。初回寸法の画面範囲復元、求解失敗のsnapshot復元と特殊寸法の扱い、後段dimensionDragの遅延参照を先に追う。次単位の実装はまだ行っていない。
 ### 最新：注記機能の生成・接続と基準点開始の所有（2026-10-23）
 
 基準develop 5c68decからcodex/annotation-feature-assemblyで実施。src/application/annotation_feature.jsへAnnotationDisplay→Materialization→基準点操作→表示用dimensions→AnnotationCommandの生成・接続を集めた。表示／draft／履歴／WeakMapは同じ実childに残し、Featureは必要な入口と実childを返す。巨大context、複製model／session、独自rollbackを追加しない。app.jsは2,711→2,675行（36行減）、この群のroot構築5→1、明示引数76→48。200〜500行の全体目標は未完了である。

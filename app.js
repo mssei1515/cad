@@ -524,20 +524,16 @@
     minLineLength: MIN_LINE_LENGTH, canvasThemeColor, onExpressionMark: canvasRenderProbe.captureExpressionMark,
     effectiveDimensionAppearance, activeSketchId });
   const { metrics: dimensionMetrics, placement: dimensionPlacement, layouts: dimensionLayouts, painter: dimensionPainter } = dimensionDisplay;
-  const dimensionInputView = window.DimensionInputView.create({
-    input: dimensionValueInput, shell: dimensionValueInputShell, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
-    syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
-  });
-  const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
-  const { jisDimensionTextAngle, dimensionTextOffset, angleDimensionLayout } = dimensionLayouts;
-  const dimensionInputController = window.DimensionInputController.create({
-    displayFactor: appearance => window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
-    view: dimensionInputView, enabled: Boolean(dimensionValueInput), getPending: pendingCommandSession.read,
-    dimensionLayout, worldToCanvasScreen, effectiveDimensionAppearance, constraintSketchId, activeSketchId,
-    dimensionTextOffset, evaluateDimensionExpressionDraft, expressionFromUserInput,
-    cancelPendingCommand, startDistanceValueInput, defaultDimensionForTarget,
+  const dimensionInput = window.DimensionInput.create({
+    input: dimensionValueInput, shell: dimensionValueInputShell, viewport, syncHighlight: syncExpressionInputHighlight,
+    scheduleFrame: callback => requestAnimationFrame(callback), pending: pendingCommandSession, display: dimensionDisplay,
+    worldToCanvasScreen, effectiveDimensionAppearance, constraintSketchId, activeSketchId,
+    evaluateDimensionExpressionDraft, expressionFromUserInput, cancelPendingCommand, startDistanceValueInput,
     submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
   });
+  const { controller: dimensionInputController } = dimensionInput;
+  const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
+  const { jisDimensionTextAngle, dimensionTextOffset, angleDimensionLayout } = dimensionLayouts;
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const commandTargetPresentation = window.GeometryPresentation.createCommandTargets({
@@ -2096,7 +2092,7 @@
     screenToWorld, formatCoordinate: formatDisplayNumber, coordinateStatus: () => document.getElementById("statusCoordinates"),
   });
   canvasInputBinding.bind();
-  dimensionInputController.bindInput(dimensionValueInput);
+  dimensionInput.bind();
 
   const keyboardInput = window.KeyboardInput.create({
     window, menus: { closeSketch: () => sketchContextController.close(),
