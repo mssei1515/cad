@@ -64,6 +64,47 @@ function renderer(handles = false, hoveredHandle = null) {
 }
 const note = extra => ({ id: 'AN1', type: 'text', text: 'AB\nC', sketchId: 'S1', x: 10, y: 20, anchorPosition: 'left-middle', appearanceInheritance: true, style: { textHeight: 5, framePaddingX: 2, framePaddingY: 3, fixedDisplaySize: false, displayScale: 1 }, ...extra });
 
+function selectionStartFixture() {
+  const item = note(), calls = [], state = { command: null, operands: [], selected: [], failure: null };
+  const api = A.create({ getCommand: () => state.command, setCommand: value => { calls.push(['command', value]); state.command = value; },
+    selectedAnnotation: () => item, byId: () => item, canEdit: () => true, canReference: () => true,
+    anchor: () => ({ x: 0, y: 0 }), materialize: () => {}, resolveRef: () => null,
+    pointRef: target => { calls.push(['target', target]); return null; },
+    recordHistory: () => calls.push('history'), updateUI: () => calls.push('ui'), draw: () => calls.push('draw'),
+    setHint: (...args) => calls.push(['hint', ...args]), applicationText: ja => ja,
+    cancelCommands: () => { calls.push('cancel-all'); state.operands.length = 0; },
+    readOperands: () => state.operands, selectionOperands: () => { calls.push('selection'); return state.selected; },
+    cancelPending: message => { calls.push(['pending', message]); if (state.failure) throw state.failure; },
+  });
+  return { item, calls, state, api };
+}
+
+test('anchor selection start preserves target limits, ordinary command copies and handled rejection', () => {
+  const f = selectionStartFixture(), ordinary = { type: 'distance' };
+  assert.equal(f.api.startFromSelection('horizontal', null), false); assert.deepEqual(f.calls, []);
+  f.state.command = ordinary; f.state.operands = [{ id: 1 }, { id: 2 }, { id: 3 }];
+  assert.equal(f.api.startFromSelection('horizontal', f.item), true);
+  assert.equal(f.state.command, ordinary); assert.equal(f.calls.length, 1); assert.equal(f.calls[0][2], 'error');
+  f.calls.length = 0; f.state.operands.length = 2;
+  assert.equal(f.api.startFromSelection('symmetry', f.item), true);
+  assert.equal(f.state.operands.length, 0);
+  assert.equal(f.calls.filter(call => call[0] === 'target').length, 2);
+  assert.equal(f.calls.includes('selection'), false); assert.equal(f.calls.includes('history'), false);
+});
+
+test('anchor selection toggles cancel pending first and preserve the active draft when it throws', () => {
+  const f = selectionStartFixture(), before = JSON.stringify(f.item);
+  assert.equal(f.api.startFromSelection('horizontal', f.item), true); assert.equal(f.api.active, true);
+  const command = f.state.command, error = new Error('pending cancel failed');
+  f.state.failure = error; f.calls.length = 0;
+  assert.throws(() => f.api.startFromSelection('horizontal', f.item), value => value === error);
+  assert.deepEqual(f.calls, [['pending', '']]); assert.equal(f.state.command, command); assert.equal(f.api.active, true);
+  f.state.failure = null; f.calls.length = 0;
+  assert.equal(f.api.startFromSelection('horizontal', f.item), true);
+  assert.deepEqual(f.calls, [['pending', ''], ['command', null], 'ui', 'draw']);
+  assert.equal(f.api.active, false); assert.equal(JSON.stringify(f.item), before);
+});
+
 test('annotation dependencies match leader and normalized anchor references, not arbitrary text', () => {
   const query = A.referencesRemovedGeometry;
   const item = note({ type: 'leader', geometryRef: { kind: 'line', path: ['B1', 'L1'] },

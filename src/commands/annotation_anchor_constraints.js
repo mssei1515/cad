@@ -115,8 +115,16 @@
     return Object.freeze({ entries, setValue, remove });
   }
   function create({ getCommand, setCommand, selectedAnnotation, byId, canEdit, canReference, anchor, materialize,
-    pointRef, resolveRef, recordHistory, updateUI, draw, setHint, cancelCommands, applicationText: t, startDistancePlacement = () => {} }) {
+    pointRef, resolveRef, recordHistory, updateUI, draw, setHint, cancelCommands, applicationText: t, startDistancePlacement = () => {},
+    readOperands, selectionOperands, cancelPending }) {
     let draft = null;
+    function startFromSelection(type, item) {
+      if (!item) return false;
+      if (active() && getCommand()?.type === type) { cancelPending(""); cancel(); return true; }
+      const targets = getCommand() && !getCommand().annotationAnchor ? [...readOperands()] : selectionOperands();
+      if (targets.length > (type === "symmetry" ? 2 : 1)) { setHint(t("注記基準点の参照対象を選び直してください", "Select the reference targets for the annotation anchor again."), "error"); return true; }
+      return start(type, item, targets);
+    }
     function start(type, selected = selectedAnnotation(), targets = []) {
       if (!selected || !canEdit(selected)) return false;
       if (!["coincident", "pointOnCircle", "concentric", "horizontal", "vertical", "distance", "symmetry", "fixed"].includes(type)) { setHint(t("この拘束は点を対象にできません", "This constraint does not accept a point."), "error"); return true; }
@@ -203,7 +211,7 @@
       if (["x", "y"].includes(draft.axis)) draft.value *= anchor(item)[draft.axis] < p[draft.axis] ? -1 : 1;
       return finish();
     }
-    return Object.freeze({ start, click, complete: finish, cancel, submitDistance, get active() { return active(); }, reset: () => { draft = null; } });
+    return Object.freeze({ start, startFromSelection, click, complete: finish, cancel, submitDistance, get active() { return active(); }, reset: () => { draft = null; } });
   }
   function createMaterialization({ annotationPlacementAnchor, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle }) {
     function materializeAnnotationAnchor(element, { capture = false } = {}) {
