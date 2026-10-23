@@ -239,31 +239,6 @@
     currentScope: workspace.current, constraintIsOperational,
   });
   const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, isSketchProjectedGeometry, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
-  const blankCanvasGesture = window.BlankCanvasGesture.create({
-    getMode: drawOperationLifecycle.readMode, getPending: () => pendingCommandSession.current, getPendingConstraint: () => constraintTargetSession.command,
-    getSplineEditSession: () => splineEditing.current, getLineCommand: () => lineCommand, getTransientAuthoring: () => transientAuthoring,
-    getTime: () => performance.now(), hypot2, clearPreview: () => drawingPreview.setPointer(null),
-    finalizeSplineFromDoubleClick: (...args) => finalizeSplineFromDoubleClick(...args),
-    finishSplineEditSession: (...args) => finishSplineEditSession(...args),
-    submitDistanceValue: (...args) => submitDistanceValue(...args),
-    submitOffsetValue: (...args) => submitOffsetValue(...args),
-    submitAnnotationValue: () => annotationInputController.finish(),
-    cancelPendingCommand: (...args) => cancelPendingCommand(...args),
-    isDrawToolMode: (...args) => isDrawToolMode(...args),
-    exitDrawMode: (...args) => exitDrawMode(...args),
-    cancelConstraintTargetCommand: (...args) => cancelConstraintTargetCommand(...args),
-    rollbackTransientLineCompletion: (...args) => rollbackTransientLineCompletion(...args),
-    clearSnap: (...args) => clearSnap(...args),
-    clearSelection: (...args) => clearSelection(...args),
-    setHint: (...args) => setHint(...args),
-    updateUI: (...args) => updateUI(...args),
-    draw: (...args) => draw(...args),
-    cancelActiveDrawOperation: (...args) => cancelActiveDrawOperation(...args),
-    rollbackTransientPoint: (...args) => rollbackTransientPoint(...args),
-    hasActiveDrawOperation: (...args) => hasActiveDrawOperation(...args),
-    hasSelection: (...args) => hasSelection(...args),
-    updateGeometrySelectionUI: (...args) => updateGeometrySelectionUI(...args),
-  });
   const sketchProjectionFeature = window.SketchProjectionFeature.create({
     currentScope: () => editingScopeBinding.current, queries: sketchProjectionQueries, activeSketchId, geometryRefForItem, geometryRefsEqual,
     constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem, elementSketchId,
@@ -464,7 +439,6 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { rollbackTransientLineCompletion, rollbackTransientPoint } = transientAuthoring;
   const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding } = createCanvasWorkspace({
     ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
@@ -932,7 +906,7 @@
     addPoint, isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint,
     guardDimensionSymbolDeletion, geometryElementKey, annotationReferencesRemovedGeometry,
   });
-  const { begin: beginSplineEditFromDoubleClick, finish: finishSplineEditSession,
+  const { begin: beginSplineEditFromDoubleClick,
     addPoint: addSplineFitPointFromContext, deletePoint: deleteSplineFitPointFromContext } = splineEditing;
 
   const blockSelectionQuery = window.BlockSelectionQuery.create({
@@ -1871,6 +1845,12 @@
     transientAuthoring, addPoint, addPointSnapConstraints, solveAndRefresh, rejectRootSketchCreation, basicDrawingInput: basicDrawingTools.input, handleCenterlineClick, handleCircleCenterCrossClick,
     handleFilletClick, handleSplineClick, executeTrimAt, offsetCommand,
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag,
+  });
+
+  const blankCanvasGesture = authoringTools.createBlankGesture({
+    lifecycle: drawOperationLifecycle, pending: pendingCommandSession, constraintTargets: constraintTargetSession,
+    splineEditing, dimensionValues: dimensionValueCommand, offset: offsetCommand, annotationInput: annotationInputController,
+    updateGeometrySelectionUI,
   });
 
   const { press: canvasPressQuery, hover: pointerHover, isBlankCommandPanelPoint } = sceneHitQueries.createInteraction({

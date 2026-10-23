@@ -1377,3 +1377,5 @@ ConstraintSolvePreparation.createForSolverが静的な型・幾何計算の結�
 CanvasDisplay.createWorkspace().createInputBindingがCanvasInputBindingのcommand routingとnative bindingの生成・接続を所有する。既存viewport／navigation／document・保留入力reader／入力同期・menu終了を共有し、pointer・panel／PNG reader・blank gesture／判定・scheduler／commit計測を外から受ける。appは機能間接続とbindを保持する。変換・listener順・wheel同期・panel／PNG優先順位は既存ownerに残し、新しい状態を持たない。
 
 DocumentWorkspace.createReadContext().createPersistenceがDocument保存・読込の内部構築を担当する。同じDocument／Workspace／Parameter・Sketch・ID／GeometryReadServicesからcodec・metadata・Preparation・writer・loadingを作り、実childを返す。appはplacement・PointUsage・bound scope／Block session reader・versionと三つの編集照会を接続する。Snapshot sourceとbound編集scopeは分け、hoistedなserialize／decorate／deserialize入口とDocumentApplicationによる適用・履歴・ファイルUIは従来の所有者に残す。
+
+BasicDrawingTools.createAuthoring().createBlankGestureが既存BlankCanvasGestureの内部結線を所有する。共有済みline／Spline／snap／preview／transient／Selection・通知と取消を使い、後段のLifecycle・pending／constraint session・Spline編集・寸法／Offset／Annotation入力と選択UI更新を接続する。appはScene interactionの直前で生成し、前段Spline開始からのresetは遅延callbackを保持する。Gesture認識・優先順位・candidate／抑止stateは既存BlankCanvasGestureに残す。

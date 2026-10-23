@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：空白ジェスチャーの後段生成と作図機能への接続（2026-10-24、検証完了）
+
+基準develop／origin/developはf6727f7（構文612・全単体1,919・全587 E2E成功）。本単位はcodex/blank-gesture-compositionで実施した。BasicDrawingTools.createAuthoring().createBlankGestureが、同じline／Spline／snap／preview／transient／Selectionと通知・取消を既存BlankCanvasGestureへ結線する。外からLifecycle・pending／constraint session・Spline編集・寸法／Offset／Annotation入力・選択UI更新の八owner／入口を受ける。時計は既定performance.now、テストでは明示注入する。認識／優先順位・candidate／抑止stateは既存Gestureが所有し、複製しない。従来の直接create APIを維持する。
+
+app.jsは2,486→2,466行（20行減）、対象構築1→1、明示port29→8、root未使用binding／追加接続の初期化前参照0（TEMP cad-blank-gesture-audit.cjs）。GestureをScene interactionの最初の直接consumer直前で生成し、前段Spline開始用resetBlankCandidateは遅延callbackを維持する。BasicDrawingTools／SplineCommand／Lifecycleのconstructorはresetを実行せず、mode・draft・timerを読まない。後段で実commandが揃うため、早期の27callbackによる接続を減らせた。新しい可変phase containerやglobal操作状態は持たない。
+
+実BlankCanvasGesture／Lifecycleと組立て済みcommand・transientの追加2単体で、生成時にlive getterを評価しないこと、Spline確定→Spline編集→寸法／Offset／注記→pending／拘束取消の優先順位、Spline編集のraw戻り値、Annotation.finishのreceiver、現在Selectionの解除、実line／transient rollback→preview／snap／選択／UIの順と例外時の短絡を確認した。既存の450ms／6px・一回抑止・クリック意味・rollback範囲と、既存期待は変更していない。関連単体51件、全単体1,921件、構文612ファイルが成功。ログはTEMP cad-blank-gesture-{focused,unit,check}.log。
+
+Spline・円弧／Centerline作図・command panel・注記入力／drag・保存互換性／描画比較・既存UIの関連E2E172件は全成功（2.6分、exit 0、runner93043）。cad-blank-gesture-e2e-receipt.jsonのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止、二つの製品source hash不変を確認した。全E2Eは今回未実行で、直前f6727f7の全587件成功と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdへ設計を記録した。
+
+週枠使用16%／残量84%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も残存rootの機能間接続と内部構築を区別する。CanvasCommandInputs／Pointer bindingはScene query・Selection・作図と同じownerを使うが、read／mutation・gesture状態とbind時機の境界を確認してから扱う。大量のAPIを別の袋へ移すだけの上位moduleは作らず、200〜500行の目標を今回の20行減で達成扱いにしない。
+
 ### 最新：Document保存・読込の内部構築（2026-10-24、全体検証完了）
 
 基準develop／origin/developは2ed4adc。本単位はcodex/document-persistence-contextで実施した。DocumentWorkspace.createReadContext().createPersistenceが、同じDocument／Workspace・Parameter／Sketch／ID・実GeometryReadServicesを使う寸法codec／constraint metadata・保存前Preparation・Snapshot writer・読込codec群を構築し、実child七つを返す。八依存はplacement・PointUsage・bound編集scope／Block session reader・version・Point参照判定・投影共有点分離・Arc正規化。実load適用・reset・採番回復・履歴・ファイルUIは既存ownerに残す。新しい状態・cache・モデル・可変contextやfileは追加しない。

@@ -270,6 +270,56 @@ test('authoring assembly binds its actual commands to an early Lifecycle session
  assert.equal(session.start('line'),true);assert.equal(session.mode,'line');assert.equal(f.state.mode,'select');
 });
 
+function blankGestureFixture() {
+ const f=lifecycleFixture(),state={ready:false,pending:null,constraint:null,edit:null,time:0,selected:false,completion:false,failure:null};
+ f.sandbox.window.GeometrySolver={hypot2:Math.hypot};
+ vm.runInNewContext(fs.readFileSync('src/editing/blank_canvas_gesture.js','utf8'),f.sandbox);
+ const session=f.createLifecycleSession();
+ f.feature.createLifecycle({lifecycle:session,...f.external,hatch:f.state.hatch,clearTrimHover:()=>{}});
+ const check=()=>assert.equal(state.ready,true);
+ const bare=name=>function(){'use strict';assert.equal(this,undefined);f.events.push([name,...arguments]);return state.finishResult;};
+ const editing={get current(){check();return state.edit;},finish:bare('finish-edit')};
+ const annotation={finish(){assert.equal(this,annotation);f.events.push(['annotation']);}};
+ f.created.SplineCommand.owner.doubleClick=bare('spline-double');
+ f.ports.selection.hasSelection=function(){'use strict';assert.equal(this,undefined);check();return state.selected;};
+ Object.assign(f.ports.transientAuthoring,{isLineStartHit:()=>false,isLineCompletionHit:()=>state.completion,isPointHit:()=>false,
+  rollbackTransientLineCompletion:bare('rollback-completion'),rollbackTransientPoint:bare('rollback-point')});
+ const originalRollback=f.ports.transientAuthoring.rollbackTransientLineCompletion;
+ f.ports.transientAuthoring.rollbackTransientLineCompletion=function(){'use strict';assert.equal(this,undefined);if(state.failure)throw state.failure;return originalRollback();};
+ f.events.length=0;
+ const gesture=f.feature.createBlankGesture({lifecycle:session,pending:{get current(){check();return state.pending;}},
+  constraintTargets:{get command(){check();return state.constraint;}},splineEditing:editing,dimensionValues:{submit:bare('dimension')},
+  offset:{submit:bare('offset')},annotationInput:annotation,updateGeometrySelectionUI:()=>f.events.push('selection-ui'),
+  getTime:()=>{check();return state.time;}});
+ assert.deepEqual(f.events,[]);state.ready=true;return {...f,gesture,session,gestureState:state};
+}
+
+test('bound blank gesture shares the live Lifecycle and command owners while preserving completion priority and raw results',()=>{
+ const f=blankGestureFixture(),s=f.gestureState,pointer={x:4,y:5};s.pending={type:'distance-value'};s.edit={};f.session.setMode('spline');
+ assert.equal(f.gesture.handle(pointer),true);assert.deepEqual(f.events,[['spline-double',pointer]]);
+ f.events.length=0;f.session.setMode('select');s.finishResult={finished:true};
+ assert.equal(f.gesture.handle(pointer),s.finishResult);assert.deepEqual(f.events,[['finish-edit']]);
+ for(const [type,expected]of [['distance-value','dimension'],['offset-value','offset'],['annotation-value','annotation']]){
+  s.edit=null;s.pending={type};f.events.length=0;assert.equal(f.gesture.handle(pointer),true);assert.deepEqual(f.events,[[expected]]);
+ }
+ s.pending={type:'other'};s.constraint={};f.session.setMode('point');f.events.length=0;
+ assert.equal(f.gesture.handle(pointer),true);assert.equal(f.events[0],'cancelPending');assert.equal(f.session.mode,'select');assert.equal(f.events.includes('cancelConstraint'),false);
+ s.pending=null;f.events.length=0;f.gesture.handle(pointer);assert.deepEqual(f.events,['cancelConstraint']);
+ s.constraint=null;s.selected=true;f.events.length=0;f.gesture.handle(pointer);assert.deepEqual(f.events,['clear','hint','selection-ui','draw']);
+});
+
+test('bound blank gesture rolls back the actual transient and line draft in order and stops at rollback failure',()=>{
+ const f=blankGestureFixture(),s=f.gestureState;f.session.setMode('line');s.completion=true;
+ const point={id:'P1'};f.feature.tools.line.startPoint=point;
+ assert.equal(f.gesture.handle({}, {hitP:point,hitL:{}}),true);
+ assert.deepEqual(f.events,[['rollback-completion'],'LineCommand.reset','pointer','snap','clear','hint','ui','draw']);
+ f.events.length=0;s.failure=new Error('rollback failed');
+ assert.throws(()=>f.gesture.handle({}, {hitP:point,hitL:{}}),error=>error===s.failure);assert.deepEqual(f.events,[]);
+ assert.equal(f.feature.tools.line.startPoint,point);assert.equal(f.session.mode,'line');
+ s.failure=null;f.events.length=0;f.session.setMode('point');f.gesture.handle({});
+ assert.deepEqual(f.events[0],['rollback-point']);assert.equal(f.session.mode,'select');
+});
+
 test('authoring Lifecycle reuses the created drafts and preserves distinct Sketch reset, cancel and exit effects',()=>{
  const f=lifecycleFixture();assert.equal(f.lifecycle.active(),false);assert.deepEqual(f.events,[]);
  f.lifecycle.resetInputsForSketchChange();assert.deepEqual(f.events,['LineCommand.reset','RectangleCommand.reset','fillet','CircularCommands.resetCircle','CircularCommands.resetArcs','preview','offset']);
