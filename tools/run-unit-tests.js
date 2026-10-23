@@ -192,7 +192,7 @@ const files = [
   "tests/unit/block-configuration-command.test.js",
   "tests/unit/block-completion-command.test.js",
   "tests/unit/block-definition-command.test.js",
-  "tests/unit/sketch-command.test.js",
+  "tests/unit/sketch-command.test.js", "tests/unit/sketch-editing-feature.test.js",
   "tests/unit/sketch-move.test.js",
   "tests/unit/reference-image-interaction.test.js",
   "tests/unit/annotation-drag.test.js",
