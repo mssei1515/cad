@@ -68,8 +68,17 @@
       });
       return Object.freeze({ controller, commitParameterEdit: parameterCommand.commit });
     }
+    function createDrag({ beginConstrainedDrag, resizeText, beginPointer, endPointer }) {
+      return window.AnnotationDrag.create({
+        canEdit: item => guardSketchEdit(item.sketchId), beginConstrainedDrag,
+        annotationById: id => id ? readEditingScope().annotations.find(item => item.id === id) || null : null,
+        canvasSelection, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry,
+        annotationTextLayout, effectiveAnnotationStyle, materializeAnchor: materialize,
+        resizeText, beginPointer, endPointer,
+      });
+    }
     return Object.freeze({ renderer: display.renderer, layer: display.layer, anchors, dimensions, command,
-      placementAnchor, materialize, dimensionScope, startAnchorConstraint, createEditor });
+      placementAnchor, materialize, dimensionScope, startAnchorConstraint, createEditor, createDrag });
   }
   window.AnnotationFeature = Object.freeze({ create });
 })();

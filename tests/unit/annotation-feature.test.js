@@ -17,13 +17,13 @@ function fixture() {
   const anchors = { startFromSelection(type, element) { assert.equal(this, anchors); events.push(['start', type, element]); return element ? state.result : false; } };
   const dimensions = { entries() { assert.equal(this, dimensions); return state.dimensions; } };
   const command = { preview() { assert.equal(this, command); return state.result; } }, parameterCommand = { commit: step('parameter-commit') },
-    textEditing = { commit: step('text-commit') }, editor = {};
+    textEditing = { commit: step('text-commit') }, editor = {}, drag = {};
   const factory = (name, value) => options => { events.push(name); ports[name] = options; return value; };
   const context = { window: { AnnotationDisplay: { create: factory('display', { renderer, layer }) }, AnnotationAnchorConstraints: {
     createMaterialization: factory('materialization', materialization), create: factory('anchors', anchors), createDimensions: factory('dimensions', dimensions),
   }, AnnotationCommand: { create: factory('command', command), createTextEditing: factory('text-editing', textEditing) },
     AnnotationParameterCommand: { create: factory('parameter-editing', parameterCommand) },
-    AnnotationInputController: { create: factory('editor', editor) } } };
+    AnnotationInputController: { create: factory('editor', editor) }, AnnotationDrag: { create: factory('drag', drag) } } };
   vm.runInNewContext(fs.readFileSync('src/application/annotation_feature.js', 'utf8'), context);
   const input = Object.fromEntries(['canvasThemeColor', 'effectiveAnnotationStyle', 'annotationLeaderAnchor', 'resolveGeometryRef',
     'isEditableSketchElement', 'resizeEnabled', 'activeSketchId', 'allAnnotations', 'isVisibleValue', 'isVisibleSketchId',
@@ -39,14 +39,14 @@ function fixture() {
       replaceCommand(value) { assert.equal(this, input.constraintTargetSession); state.command = value; } },
     pendingCommandSession: { read: step('pending-read'), replace: step('pending-replace') },
     elementSketchId: element => { events.push('elementSketchId'); return element.sketchId; },
-    guardSketchEdit: () => { events.push('guard'); return state.allowed; },
+    guardSketchEdit: (...args) => { events.push('guard'); state.guardArgs = args; return state.allowed; },
     ensureDimensionParameter: (element, scope) => { events.push(['ensure', element, scope]); if (state.nextScope) state.scope = state.nextScope; },
     parameterNamespace: { renameDimension: step('rename'), allocateDimensionParameterName(scope) { assert.equal(this, input.parameterNamespace); state.allocated = scope; return 'd1'; },
       validateNewDimensionParameter(draft, scope) { assert.equal(this, input.parameterNamespace); return { draft, scope }; },
       evaluateParameterNamespace(scope) { assert.equal(this, input.parameterNamespace); events.push(['evaluate', scope]); } },
   });
   const feature = context.window.AnnotationFeature.create(input);
-  return { feature, input, state, item, events, ports, renderer, layer, materialization, anchors, dimensions, command, editor, parameterCommand, textEditing };
+  return { feature, input, state, item, events, ports, renderer, layer, materialization, anchors, dimensions, command, editor, parameterCommand, textEditing, drag };
 }
 
 test('annotation assembly retains construction order, shared owners and lazy preview, scope and scale reads', () => {
@@ -136,4 +136,28 @@ test('editor layout uses live scale and preserves layout-first, text and leader 
   f.item.type = 'leader'; f.events.length = 0;
   assert.equal(f.ports.editor.layout(f.item).screenFontSize, 12);
   assert.deepEqual(f.events, [['layout', f.item], ['leader', f.item], ['metrics', f.item, f.state.result]]);
+});
+
+test('normal drag reuses the actual owner and callbacks without constructing early or changing pointer/error boundaries', () => {
+  const f = fixture(); assert.equal(f.ports.drag, undefined); f.events.length = 0;
+  const options = { beginConstrainedDrag() {}, resizeText() {}, beginPointer() {}, endPointer() {} };
+  assert.equal(f.feature.createDrag(options), f.drag); assert.deepEqual(f.events, ['drag']);
+  for (const key of Object.keys(options)) assert.equal(f.ports.drag[key], options[key]);
+  assert.equal(f.ports.drag.canvasSelection, f.input.canvasSelection);
+  assert.equal(f.ports.drag.materializeAnchor, f.feature.materialize);
+  assert.equal(f.ports.drag.annotationLeaderDisplayGeometry, f.renderer.annotationLeaderDisplayGeometry);
+  assert.equal(f.ports.drag.annotationTextLayout, f.renderer.annotationTextLayout);
+  assert.equal(f.ports.drag.recordHistory, f.input.recordHistory);
+});
+
+test('normal drag resolves current editing identities lazily and guards the annotation own sketch without normalization', () => {
+  const f = fixture(); f.feature.createDrag({}); f.events.length = 0;
+  for (const id of [null, undefined, '', 0]) assert.equal(f.ports.drag.annotationById(id), null);
+  assert.deepEqual(f.events, []); f.state.workspace = { annotations: [{ ...f.item, sketchId: 'other' }] };
+  assert.equal(f.ports.drag.annotationById(f.item.id), f.item);
+  const replacement = { ...f.item, sketchId: 'block-scope' }; f.state.scope = { annotations: [replacement] };
+  assert.equal(f.ports.drag.annotationById(f.item.id), replacement); assert.equal(f.ports.drag.annotationById('missing'), null);
+  f.events.length = 0; assert.equal(f.ports.drag.canEdit(replacement), true);
+  assert.deepEqual(f.events, ['guard']); assert.deepEqual(f.state.guardArgs, ['block-scope']);
+  f.state.allowed = false; assert.equal(f.ports.drag.canEdit({}), false); assert.equal(f.state.guardArgs[0], undefined);
 });
