@@ -93,6 +93,22 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：注記の保存値を操作から分離（2026-10-23）
+
+基準develop 4b3f726からcodex/annotation-anchor-dataで実施。src/document/annotation_anchor_data.js（31行）へ基準点・関係の軸／拘束数・normalize／refs／参照依存照会を集め、AnnotationDataとBlockSelectionQuery／ClipboardPayload／SketchMoveのデータ読取りをこのownerへ直接接続した。document／editingのこれらの処理からAnnotationAnchorConstraintsへの依存を除去した。appの依存照会aliasもデータownerへ接続する。AnnotationAnchorConstraintsにはUI日本語labelと位置解決／一時Geometry／操作draft／表示用寸法の所有を残し、既存の六つのデータAPIは同じ配列／関数を再公開する。独自model／cache／context、複製したルールやsetterを追加しない。
+
+app.jsは2,711→2,711行（0行差）。今回は逆向きのデータ→command依存を除き、保存形式を操作・Solver・DOMなしで検証できる境界を作る単位であり、行数削減や200〜500行の全体目標の完了とは扱わない。command fileは252→227行。新data moduleの7宣言と残るcommandの7宣言は4b3f726の本体と一致することをASTで確認した。normalizeの適否、数値変換、dimensionのJSONコピー、refsの順序・短絡、AnnotationDataのfield順と検査失敗前の途中反映を保持した。
+
+新しいclassic scriptをGeometryRefの後／AnnotationData・操作ownerの前へ追加し、index.html、tools/check-syntax.js、tools/run-unit-tests.js、unified-uiのfile URL script期待値／API確認を同期。CommandPanelの単体fixtureは新しいデータ定義も読込み、期待動作は変更していない。構文598ファイル・全単体1,845件・関連単体58件・file URL Help読込1件（2.5秒）が成功。追加3件でcommand／Solverへアクセスすると失敗するdata-only contextから保存／再読込・編集object identity・不正関係の例外と途中反映を確認し、既存command公開APIが同じ配列／関数を共有することも確認した。
+
+旧4b3f726のnormalizer／refs／AnnotationDataと現在data-only実装の18,000組で、結果・保存JSON・例外message・失敗時の入力stateまで一致した。補助診断は一時directoryのcad-anchor-data-audit.cjs。ブラウザ比較ではappだけでなく旧index・command・AnnotationData・三つのediting moduleの計7fileを差し替えたことと、旧版には新Data namespaceがないことをassert。注記付き図形のSketch間copy→pasteの参照ID張替えとBlock候補の拒否／受入、削除・Undo／Redo・再読込を含む47状態でmodel・clipboard・mode・履歴・Selection・HintとAPI204 key順が一致した（savedAtだけ除外）。診断はcad-anchor-data-equivalence.cjs／.log。
+
+関連E2E13ファイル304件が全成功（5.1分、exit 0）。前単位の12fileにsketch-move全8件を加え、annotation-anchors／annotation-display-size／unified-annotations／blocks／derived-patterns／free-instance／parameter-dialog-controller／phase0-characterization／sketch-edit／sketch-permissions／spline／unified-uiと合わせて検証。全runnerの終了と自己起動port8790のserver停止を回収した。ログはcad-anchor-data-{focused,check,unit,loader,e2e}.log。最新全E2Eは未実行で、以前の305件やreleaseの587全成功を今回の全体検証に代用しない。テストの既存UI期待値・性能制限・timeout・保存versionは変更していない。
+
+仕様と実装mapを更新し、作業branchをCommit／Pushしてdevelopへ統合し、tree同一性を確認する。main／origin/mainはdf5aef2のまま。週枠は開始使用8%／残量92%、検証後使用10%／残量90%で停止条件未到達。検証後の変更は本記録を含む文書だけとし、停止条件に達した区切りで最新の全体検証・main反映とdevelop同期を行う。
+
+次は通常機能の生成・接続へ戻り、AnnotationDisplay→Materialization→基準点command→表示用dimensions→AnnotationCommandの群を再監査する。startAnnotationAnchorConstraintの既定選択・同種toggle取消・対象数検査は、既存操作ownerへ寄せられるか確認する。renderer／WeakMapを含む実child・session・Parameter名前空間と採番、Workspace.currentと同期済みediting scopeの違い、後段AnnotationDragへの遅延callbackとhoisted入口を保持する。各factoryの初期化時照会・DOM登録と戻り値／例外を先に追い、単なる全app context包装や新たなモデル／履歴／rollbackを導入しない。この次単位の実装はまだ行っていない。
+
 ### 最新：注記の参照依存照会（2026-10-23）
 
 基準develop d10adb8からcodex/annotation-reference-queryで実施。AnnotationAnchorConstraints.referencesRemovedGeometryへ、既存refs（leader付着先と正規化したanchorConstraints／対称軸）から完全なGeometryRef ID／kind付きkeyを調べる照会を集めた。appは同じ関数をInstance参照元、Block構成、Spline編集、Block完了、Geometry／Selection削除、Sketch削除の六つの構築箇所へ接続する。各commandの削除計画・guard／通知・求解・履歴と部分失敗の復元は変更していない。照会は注記やSetを変更せず、一般文字列再帰・親／末端IDへの自動展開・新しいcache／contextを追加しない。
