@@ -136,9 +136,9 @@
   const {
     ensureSketchState, isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
-    orderedSketches, childSketchesOf, descendantSketchIds,
+    orderedSketches, descendantSketchIds,
     isReferenceSourceSketchId,
-    activeSketch, activeSketchId, assignSketchId,
+    activeSketchId, assignSketchId,
     elementSketchId, membershipQuery: readSketchMembership, sameSketchElements, isEditableSketchId, canEditSketch,
     sketchRelationToActive, operandRelationForSketch, constraintSketchId, isActiveSketchConstraint,
     constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
@@ -1429,19 +1429,16 @@
   });
   function clearInteractionForSketchChange() { return sketchInteractionReset.clear(); }
 
-  const sketchCommand = window.SketchCommand.create({
-    currentScope: workspace.current, ensureSketchState, activeSketch, activeSketchId, sketchById, childSketchesOf,
-    sketchName, nextSketchId: () => documentIds.allocate("sketch"), clearInteractionForSketchChange,
-    setHint, updateUI, draw, recordHistory, promptName: (title, name) => window.prompt(title, name),
-    effectiveAppearanceForElement, clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap,
-    guardEdit: guardSketchEdit, applicationText, prepareLockToggle: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode(); },
+  const sketchEditing = window.SketchEditingFeature.create({
+    currentScope: workspace.current, sketches: sketchContext, ids: documentIds, selection: canvasSelection,
+    geometryReads, projections: blockProjections, constraintReferences,
+    clearInteractionForSketchChange, clearSelection, applicationText, setHint, updateUI, draw, recordHistory,
+    promptName: (title, name) => window.prompt(title, name), effectiveAppearanceForElement,
+    clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap, guardEdit: guardSketchEdit,
+    prepareLockToggle: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode(); },
   });
-  const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleLock: toggleSketchLock, toggleVisibility: toggleSketchVisibilityCommand } = sketchCommand;
+  const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleLock: toggleSketchLock, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
-  const sketchMoveQuery = window.SketchMove.create({
-    currentScope: workspace.current, activeSketchId, constraintGraphNodes, constraintSketchId,
-    resolveGeometryRef, geometryInstanceDependencyRefs, isReferenceSourceSketchId, applicationText,
-  });
   function refreshSketchMoveGeometry() {
     invalidateBlockProjectionCache();
     geometryReads.clearReadCache();
@@ -1450,10 +1447,9 @@
     constraintAnalysis.invalidate();
     refreshReferenceConstraintValidity();
   }
-  sketchMoveCommand = window.SketchMoveCommand.create({
-    currentScope: workspace.current, activeSketchId, selection: canvasSelection, query: sketchMoveQuery,
+  sketchMoveCommand = sketchEditing.createMove({
     prepare: () => { cancelConstraintTargetCommand(""); cancelPendingCommand(""); exitDrawMode(); canvasHover.clear(); },
-    refresh: refreshSketchMoveGeometry, clearSelection, updateUI, draw, setHint, recordHistory, applicationText,
+    refresh: refreshSketchMoveGeometry,
   });
   // Destination mode keeps all editing input in the tree until commit or cancellation.
   const sketchMoveInputBinding = window.SketchTreeController.createMoveInputBinding({ document, isMoving: () => sketchMoveCommand.active });
@@ -1470,15 +1466,11 @@
 
 
 
-  const sketchDeletionCommand = window.SketchDeletionCommand.create({
-    currentScope: workspace.current, ensureSketchState, sketchById, descendantSketchIds, constraintSketchId,
-    geometryInstanceDependencyRefs, resolveGeometryRef, elementSketchId, rejectReferencedGeometryDeletion,
-    sketchName, setHint, log, blockAllProjectionBundle, geometryElementKey, constraintGraphNodes,
-    guardDimensionSymbolDeletion, invalidateBlockProjectionCache, annotationReferencesRemovedGeometry,
-    clearSketchSolveState, clearInteractionForSketchChange,
+  const sketchDeletionCommand = sketchEditing.createDeletion({
+    rejectReferencedGeometryDeletion, log, geometryElementKey, guardDimensionSymbolDeletion,
+    annotationReferencesRemovedGeometry, clearSketchSolveState,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, solveSketchAndDependents,
-    activeSketchId, refreshConstraintAnalysis, updateUI, draw, recordHistory,
-    confirmDeletion: (message) => window.confirm(message),
+    refreshConstraintAnalysis, confirmDeletion: message => window.confirm(message),
   });
   const { remove: deleteSketch } = sketchDeletionCommand;
 

@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Sketch編集の段階的な生成を機能層へ集約（2026-10-24、検証完了）
+
+基準develop／origin/developは9b4aa8e。本単位はcodex/sketch-editing-compositionで実施した。新しいsrc/application/sketch_editing_feature.jsのSketchEditingFeatureが実SketchCommand、実SketchMove query→SketchMoveCommand、実SketchDeletionCommandの生成・共有依存接続を所有する。currentScope・SketchContext・Document IDs・Selection・Geometry read・Block projections・ConstraintReferencesとinteraction reset／選択解除・UI／履歴を共有する。基本commandはcreate、移動は後段createMove、削除はHatch生成後のcreateDeletionで生成し、旧constructor順とTree外入力bindingの時機を維持する。Lock準備とMove準備の取消順は別のcallbackのままで、移動先選択・削除plan・モデル変更・復元・履歴は既存ownerに残す。新feature自身はsessionやcacheを持たず、巨大app contextや新global操作状態は追加しない。
+
+app.jsは2,451→2,443行（8行減）。対象生成4→3、root直下の延べ引数68→32、未使用binding／初期化前参照0（TEMP cad-sketch-editing-audit.cjs）。新fileの有無や行数を目的にせず、同じSketch編集の共有依存と内部構築をまとめた。index.htmlと構文検査・単体一覧・unified-uiの読込期待へ新source／testを明示登録した。
+
+実SketchContext・Selection・ConstraintReferencesと三つの実commandを使う追加2単体で、生成時の無照会、移動前後のGeometry同一性・精度・一回の履歴、active切替時の移動reset、現在scope差替え後のSketch作成／削除、IDsのreceiver、削除拒否・lock拒否とモデル無変更を確認した。移動refresh例外は既存Queryで捕捉して所有と描画順を復元し、sessionを維持してhistoryを記録しない（例外伝播へ変更しない）。既存テストの期待は維持した。関連単体35件、全単体1,930件、構文614ファイルは成功。関連E2E212件（Sketch権限／移動・Block・Hatch・派生pattern・phase0保存互換性／描画比較・既存UI）は全成功（3.1分、exit 0、runner7235）。TEMP cad-sketch-editing-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server19448の停止と二つの製品source hash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準f6727f7と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用21%／残量79%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次はSketch移動後のprojection／Geometry／Hatch cacheと拘束再接続・分析／参照有効性更新を実行するrefreshSketchMoveGeometryを検討する。新featureが既に共有するreaderとBlock projectionsを使えるが、workspace.currentとeditingScopeBinding.currentの違い、更新順、失敗時の復元との境界を確認してから扱う。小さいcallback移動だけで200〜500行へ届くと見積もらず、段階的な構築・接続の整理を継続する。
+
+
 ### 最新：右クリック候補照会とscene読取りの共有（2026-10-24、検証完了）
 
 基準develop／origin/developはf5908fa。本単位はcodex/context-hit-compositionで実施した。CanvasHitInteraction.createScene().createQueries()が返すcreateContextQueryで既存CanvasContextQueryを生成する。同じcurrentScope・viewport・pointUsage・Sketch可視性・projection／Geometry read・寸法layout・Hatchと実regionsの画像hitを共有し、appから渡す後段依存は編集中SplineのfitPoints readerと注記context hitだけ。候補の受付とrankは既存Query、Selection・編集guard・menu状態は元ownerに残す。通常のmode／pending／編集可否によるhit制限をcontext候補へ持ち込まず、ContextのcurrentScopeと寸法hitのdimensionScopeを区別する。初期化位置と各callbackのreceiver／例外伝播を維持し、モデル／候補／cacheは増やさない。
