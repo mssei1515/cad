@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Canvasメニューの早期生成と後段の操作接続を機能内へ統合（2026-10-24、検証完了）
+
+基準develop／origin/developはebf5d45。CanvasContextInteraction.createMenuが既存CanvasContextMenuを元の早期位置で生成し、同じDocument・翻訳・CanvasHover・描画・menu element／controllerを保持するcreateInteractionを返す。appは後段の元の位置で実Interactionを生成し、従来どおりcontroller.startを呼ぶ。候補presenterとInteractionは二つの明示的なreaderから操作時だけ参照し、初期化時には照会しない。候補presenterのbare呼出し、Interactionのmethod receiver、Hover各関数の既存receiverと引数／結果・例外伝播を維持する。新しい操作state／listener・可変app contextやファイルは増やさず、Menuのsnapshot／復元とstart／dispose、Target・Entry・Actionsの判断を既存ownerへ残す。個別create APIも維持する。
+
+app.jsは2,389→2,381行（8行減）、対象生成2→2、root直下の延べ引数74→67、未使用binding／初期化前参照0（TEMP cad-context-menu-audit.cjs）。rootの四つの中継関数と不要になった三つのHover別名を除去した。行数効果だけでなく、早期menuと後段interactionへの共通依存の重複接続を減らす単位として扱う。数百行の目標達成とはしない。
+
+既存canvas-context-interaction.test.jsへ追加した2単体は、実CanvasContextMenu／Interaction／Selection／Hoverで、構築中の後段reader無照会、明示start前の無処理と重複start防止、候補previewの無選択変更と元hover参照の復元、候補確定、表示中に変更された最新拘束commandへの元pointer／対象の受渡し、閉じてからのaction実行、disposeの全listener解除を検証する。既存期待値は変更していない。関連単体16件、全単体1,946件、構文614ファイル、関連E2E214件（Block・Spline・Hatch・複数寸法・Sketch権限／移動・phase0保存互換性／描画比較・既存UI）が成功（3.2分、exit 0、runner34170）。TEMP cad-context-menu-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server40692の停止、二つの製品source hash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準a8e96f4の成功と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdも更新した。
+
+週枠使用28%／残量72%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残る機能間接続・初期化段階とtest hooks公開境界を再監査し、同じownerで閉じられる責務を選ぶ。
+
+
 ### 最新：Propertiesの選択・編集・表示を共有ownerで段階構築（2026-10-24、検証完了）
 
 基準develop／origin/developはa8e96f4（構文614・全単体1,942・全587 E2E成功）。本単位はcodex/properties-feature-compositionで実施した。PropertiesDisplay.createFeatureが同じDocument／DOM・currentScope・Selection／readServices／SketchContext／Hatch外観から実PropertySelectionを生成し、createEditing→createViewで同じ選択queryと実編集command／AppearanceUIを既存Controller／Viewへ接続する。共通通知・言語・HTML escapeを一度接続し、段階固有の依存は既存factoryの契約で転送して構築処理や引数宣言を重複実装しない。選択用selectionOperation（Block定義ID等）と表示用getOperation（配置Sketch ID・rotation lock等）、編集currentScopeと外観appearanceScopeの違いを維持する。旧生成順とappearanceUI.start／View render時機を変えず、新state／cache・palette／listenerや可変app contextは追加しない。既存の個別factoryも維持する。
