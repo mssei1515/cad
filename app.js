@@ -111,11 +111,12 @@
   const canvasContextMenu = document.getElementById("canvasContextMenu");
   const sketchOverlay = document.getElementById("sketchOverlay");
   const sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle");
-  const applicationSettings = window.ApplicationSettings.create({
-    document, storage: () => localStorage,
-    refreshViews: (options) => updateUI(options),
-    redrawCanvas: () => draw(), refreshVersion: () => runtimeVersionView.render(),
+  const presentation = window.PresentationFeature.create({
+    document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
   });
+  const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
+    log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw } = presentation;
+  const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const { applicationText, translatedExactText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText } = window.AuthoringFeedback.create({ applicationText });
@@ -233,20 +234,13 @@
   const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isSelectableEndpointPoint } = pointUsage;
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
-  const interactionProfiler = window.InteractionProfiler.create();
-  const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
-  const applicationFeedback = window.ApplicationFeedback.create({
-    document, settings: applicationSettings, interactionProfiler, readDuplicateCount: () => constraintRedundancy.count,
-  });
-  const { constraints: constraintFeedback } = applicationFeedback;
-  const applicationRefresh = window.ApplicationRefresh.create({
-    document, interactionProfiler, profileInteractionWork,
+  presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
     refreshConstraintAnalysis, updateDocumentName: () => updateDocumentNameUI(), updateToolbar,
     renderSketch: () => sketchTreeView.render(), updateBlockUI,
     renderProperties: () => propertiesView.render(selectedPropertiesTarget()), readSketchMoving: () => sketchMoveCommand.active,
-    updateStatusUI, updateConstraintButtons, localizeApplicationUI, syncDimensionInput: () => syncDimensionValueInput(),
+    updateStatusUI, updateConstraintButtons, syncDimensionInput: () => syncDimensionValueInput(),
     refreshSketchSelection: () => sketchTreeView.refreshSelection(),
   });
   const canvasContextController = window.CanvasContextMenu.create({
@@ -402,10 +396,10 @@
   const HISTORY_LIMIT = 80;
   let commandPanel = null;
   let derivedPanel = null;
-  const canvasRefresh = window.CanvasRefresh.create({
+  presentation.bindCanvas({
     readPngCommand: () => pngExportCommand, readPending: () => pendingCommandSession.current, readMode: drawOperationLifecycle.readMode,
     readCommandPanel: () => commandPanel, syncAnnotationInput: () => annotationInputController.sync(), readDerivedPanel: () => derivedPanel,
-    interactionProfiler, profileInteractionWork, withGeometryReadCache, drawCanvas,
+    withGeometryReadCache, drawCanvas,
   });
   const geometryInstanceCommand = window.GeometryInstanceCommand.create({
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
@@ -546,7 +540,7 @@
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const commandTargetPresentation = window.GeometryPresentation.createCommandTargets({
-    readPanelSelection: () => canvasRefresh.selectedItem, readMode: drawOperationLifecycle.readMode, instanceSourceCommand, sketchProjectionCommand,
+    readPanelSelection: () => presentation.selectedItem, readMode: drawOperationLifecycle.readMode, instanceSourceCommand, sketchProjectionCommand,
     geometryInstanceCommand, geometryRefsEqual, geometryRefForItem, readOperands: () => constraintTargetSession.operands, sameArcEndpoint, operandElement,
     readConstraintCommand: () => constraintTargetSession.command, isActiveSketchElement, isReferenceSourceSketchId, elementSketchId, readPending: () => pendingCommandSession.current,
   });
@@ -837,10 +831,7 @@
     btn.dataset.tooltip = btn.getAttribute("aria-label");
   }
 
-  function log(msg) { return applicationFeedback.log(msg); }
-  function setHint(msg, kind = "normal") { return applicationFeedback.hint(msg, kind); }
   const { localizedConstraintName } = constraintFeedback;
-  function setSolveResultHint(label, solved, analysis, dependent) { return applicationFeedback.solveResult(label, solved, analysis, dependent); }
 
   function effectiveDocumentName() {
     return effectiveDocumentNameFromValue(documentModel.documentName);
@@ -1420,7 +1411,6 @@
 
 
 
-  function draw() { return canvasRefresh.draw(); }
 
   const canvasFrameRenderer = window.CanvasDisplay.createRendering({
     canvas, ctx, viewport, surface: canvasSurface, zoomControl: canvasZoomControl,
@@ -1766,7 +1756,6 @@
 
   function isSidebarHighlightedElement(item) { return sketchTreeController.isHighlightedElement(item); }
 
-  function updateSketchUI() { return applicationRefresh.sketch(); }
 
 
 
@@ -1775,7 +1764,6 @@
 
 
 
-  function updateGeometrySelectionUI() { return applicationRefresh.selection(); }
 
 
 
@@ -1873,7 +1861,6 @@
 
 
 
-  function updatePropertiesUI() { return applicationRefresh.properties(); }
 
 
 
@@ -1897,7 +1884,6 @@
 
   function updateStatusUI() { return commandStatusView.update(); }
 
-  function updateUI(options) { return applicationRefresh.refresh(options); }
 
 
   const constraintSolvePreparation = window.ConstraintSolvePreparation.create({
