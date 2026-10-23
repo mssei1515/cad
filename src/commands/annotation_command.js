@@ -207,5 +207,12 @@
       changeSetting, preview, canFinish, validContent, evaluatedValue: () => content().evaluatedParameterValue, finish, cancel, addLeader, removeLeader,
       get active() { return active(); }, get draft() { return active() ? getPending() : null; } });
   }
-  window.AnnotationCommand = Object.freeze({ create });
+  function createTextEditing({ commitParameterEdit, recordHistory }) {
+    function commit(item, value) {
+      if (item.parameterEnabled) return commitParameterEdit(item, "annotation-expression", value);
+      item.text = value; recordHistory("注記変更"); return true;
+    }
+    return Object.freeze({ commit });
+  }
+  window.AnnotationCommand = Object.freeze({ create, createTextEditing });
 })();

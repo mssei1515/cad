@@ -9,6 +9,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 ## 1. 実装ファイルの責務
 
 - `src/application/annotation_feature.js`: 表示・materialization・基準点操作・表示用寸法・配置commandの生成と接続。共有sessionと実childを用い、preview／後段外観編集は遅延参照する。モデル・履歴・draftを重複所有しない。
+- `AnnotationFeature.createEditor`: 後段のParameter command・本文確定command・AnnotationInputControllerの生成、編集準備／選択・layoutの接続。実ControllerとParameter確定関数を返す。本文更新と履歴は`AnnotationCommand.createTextEditing`、式の求解・復元は既存AnnotationParameterCommandが担当する。
 - `src/commands/annotation_anchor_constraints.js`の`startFromSelection`: 基準点操作の候補受付、同種toggle取消、対象取得・数検査と既存startへの委譲。UI既定候補の選択はFeatureに残す。
 
 - `src/constraints/operand_hit_query.js`: 参照SketchとBlock／派生Geometryの拘束対象hit。Sketch関係と探索優先順を扱う。

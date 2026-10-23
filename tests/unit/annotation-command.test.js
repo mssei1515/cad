@@ -5,6 +5,28 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ['document/appearance.js', 'document/annotations.js', 'commands/annotation_command.js', 'ui/annotation_command_panel.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src', file), 'utf8'), sandbox);
+
+test('existing annotation text confirmation records once while parameter expressions retain their separate commit result', () => {
+  const events = [], item = { text: 'before' };
+  let result = false;
+  const editing = sandbox.window.AnnotationCommand.createTextEditing({ recordHistory: label => events.push(['history', label, item.text]),
+    commitParameterEdit: (...args) => { events.push(['parameter', ...args]); return result; } });
+  assert.deepEqual(events, []); assert.equal(editing.commit(item, 'line 1\nline 2'), true);
+  assert.equal(item.text, 'line 1\nline 2'); assert.deepEqual(events, [['history', '注記変更', 'line 1\nline 2']]);
+  events.length = 0; item.parameterEnabled = true;
+  assert.equal(editing.commit(item, '=bad'), false); assert.equal(item.text, 'line 1\nline 2');
+  result = true; assert.equal(editing.commit(item, '=25'), true);
+  assert.deepEqual(events, [['parameter', item, 'annotation-expression', '=bad'], ['parameter', item, 'annotation-expression', '=25']]);
+});
+
+test('existing text edit exceptions preserve the original mutation boundary without introducing rollback', () => {
+  const error = new Error('history failed'), item = { text: 'before' };
+  const editing = sandbox.window.AnnotationCommand.createTextEditing({ recordHistory: () => { throw error; }, commitParameterEdit: () => { throw error; } });
+  assert.throws(() => editing.commit(item, 'after'), value => value === error); assert.equal(item.text, 'after');
+  item.parameterEnabled = true;
+  assert.throws(() => editing.commit(item, '=2'), value => value === error); assert.equal(item.text, 'after');
+});
+
 function fixture() {
   let pending = null, scope = { annotations: [] }, seq = 1, scale = 2, allowed = true, selected = null;
   const history = [];
