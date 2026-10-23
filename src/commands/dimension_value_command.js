@@ -147,5 +147,9 @@
 
     return Object.freeze({ startEdit, submit, commitProperty });
   }
-  window.DimensionValueCommand = Object.freeze({ create, createEditingSupport });
+  function createWithEditingSupport(options) {
+    const support = createEditingSupport(options);
+    return create({ ...options, ...support });
+  }
+  window.DimensionValueCommand = Object.freeze({ create, createEditingSupport, createWithEditingSupport });
 })();

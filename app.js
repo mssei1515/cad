@@ -732,11 +732,8 @@
     return geometryInstanceCommand.isPlacing(instance) ? geometryInstanceCommand.changeSetting(key, value)
       : synchronizedInstanceEditing.change(instance, key, value);
   }
-  const dimensionEditingSupport = window.DimensionValueCommand.createEditingSupport({
-    synchronizedInstanceEditing, annotationDimensions, annotationAnchorConstraints, expressionFromUserInput, evaluateDimensionExpressionDraft,
-    targetFromConstraint, parameterErrorText, setHint, recordHistory, canvasSelection, resetDimensionDrag: () => dimensionDrag.reset(),
-  });
-  const dimensionValueCommand = window.DimensionValueCommand.create({
+  const dimensionValueCommand = window.DimensionValueCommand.createWithEditingSupport({
+    synchronizedInstanceEditing, annotationDimensions, annotationAnchorConstraints, canvasSelection, resetDimensionDrag: () => dimensionDrag.reset(),
     canEdit: (id, operation) => guardSketchEdit(id, operation),
     renameDimension: parameterNamespace.renameDimension,
     getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
@@ -747,7 +744,7 @@
     stabilizeActiveParameterNamespace, constraintSketchId, acceptError: CONSTRAINT_ACCEPT_ERROR,
     hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
     targetFromConstraint, isReadOnlyDimension, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput,
-    ...dimensionEditingSupport, addDistanceConstraintFromTarget,
+    addDistanceConstraintFromTarget,
     restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;

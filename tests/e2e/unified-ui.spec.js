@@ -1661,12 +1661,12 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
   expect(await page.evaluate(() => [
     typeof window.EditHistory.record, typeof window.InteractionProfiler.create,
     typeof window.Appearance.resolveGeometryAppearance, typeof window.DrawingOrder.reorder,
-    typeof window.DocumentFiles.create,
+    typeof window.DocumentFiles.create, typeof window.DimensionValueCommand.createWithEditingSupport,
     typeof window.ConstraintPersistence.create, typeof window.GeometryPersistence.decodeDocument,
     typeof window.SketchHierarchy.decode, typeof window.AnnotationAnchorData.normalize, typeof window.AnnotationFeature.create, typeof window.DimensionInput.create, typeof window.AnnotationData.normalizeAnnotations,
     typeof window.HatchData.validSerializedHatchList, typeof window.ReferenceImageData.validSerializedReferenceImageList,
     typeof window.DocumentSnapshot.create,
-  ])).toEqual(Array(15).fill("function"));
+  ])).toEqual(Array(16).fill("function"));
 });
 
 test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {
