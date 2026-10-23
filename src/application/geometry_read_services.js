@@ -15,7 +15,13 @@
       cacheAppearance: reads.cacheAppearance, sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements });
     const dimensionAppearance = window.GeometryAppearanceQuery.createDimension({ document, currentSketches, activeSketchId, isRootSketch });
     const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document, currentSketches });
-    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance });
+    function createPointUsage({ constraintReferencesPoint, editedFitPoints }) {
+      const { allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = reads;
+      return window.PointUsage.create({ currentScope, constraintReferencesPoint, editedFitPoints,
+        allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
+        allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines() });
+    }
+    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance, createPointUsage });
   }
   function createWithHatches({ document, currentScope, currentSketches, prepareBlocks, elementSketchId, applicationText,
     sketchById, isRootSketch, activeSketchId, showHiddenElements, profileRead, viewportScale }) {

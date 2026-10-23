@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：PointUsageと幾何読取りの接続（2026-10-24、検証完了）
+
+基準develop／origin/developは5876529。Canvas選択の二段階組立て9b9c980を統合・Pushし、構文608・単体1,880件・関連E2E268件は成功済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/point-usage-read-assemblyで実施した。
+
+既存GeometryReadServicesの返却APIへcreatePointUsageを追加した。同じcurrentScopeとGeometryReadModelのLine／Circle／Arc／Spline readerを共有し、生成時には図形や編集中Splineの点を読まず、PointUsageの実体を返す。現在scopeの用途判定と展開図形の端点照会は統一せず、同じread窓／投影cacheと既存の無効化を使う。拘束のPoint参照判定と、編集中fit pointsのreaderだけをappから渡す。PointUsageの判定・短絡・Object同一性・例外、生成位置とCanvasHoverの生成／接続は元のままであり、hover／Spline sessionや新しいcacheをサービスへ取り込まない。
+
+app.jsは2,594→2,591行（3行減）、root構築数はこの群1→1のまま、明示port7→2。rootの未使用bindingと追加接続の初期化前参照は0。生成時無照会、展開Block端点と通常scopeの用途判定の差、共有read窓のcache hit、同じIDのscope置換による参照更新、編集fit pointsの現在値、無効拘束の短絡と例外時無変更を2単体で確認した。関連14件・構文608ファイル・全単体1,882件は成功（cad-point-usage-read-{focused,check,unit}.log）。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と依存を記録し、新file／script読込／保存形式は追加しない。
+
+既存UI・Spline編集／端点選択・Block・派生／Sketch投影・選択glow・Sketch権限・Hatch／コピー／履歴／保存再読込の関連E2E239件は3.5分で成功（runner80269 exit 0、自己起動port8799停止、cad-point-usage-read-e2e.log）。file URL起動も成功し、.last-run.jsonはpassed／failedTests空。実装・仕様・単体と再開資料の検証を完了し、Commit／Push・develop統合の対象とした。統合後の現在branch／HEADはGit現物を確認する。今回の全E2Eは未実行で、74a0d17の全587成功を直前の全体基準として区別する。週枠使用28%／残量72%、停止条件未到達。全体目標はactiveで未完了。
+
+次はCanvas表示の早期DOM依存と入力／描画の組立てを確認する。DOM参照の一覧やapp全体のcallbackを別fileの大きなcontextへ移すのでなく、既存View ownerに固有の生成責任、現在値を読む時機、bind／startの順序から境界を選ぶ。
 ### 最新：Canvas選択の二段階組立て（2026-10-24、検証完了）
 
 基準develop／origin/developは190adbd。Hatch読取り接続9dbfc0dを統合・Pushし、構文606・単体1,876件・関連E2E226件は成功済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/canvas-selection-assemblyで実施した。

@@ -147,3 +147,42 @@ test('derived Hatch expansion delegates boundary resolution through the supplied
   assert.equal(bundle.valid, true); assert.equal(bundle.hatches[0].resolvedBoundary.area, 4);
   assert.equal(f.state.hatchReads.at(-1).hatch, hatch); assert.equal(Array.isArray(f.state.hatchReads.at(-1).elements), true);
 });
+
+test('point usage shares expanded reads and their cache while keeping local scope and replacement identity distinct', () => {
+  const f = fixture();
+  const usage = f.services.createPointUsage({ constraintReferencesPoint: () => false,
+    editedFitPoints: () => { assert.equal(f.state.ready, true); return undefined; } });
+  assert.equal(f.state.reads + f.state.prepared + f.state.profiles, 0); f.state.ready = true;
+  const local = f.scene(); let projectedPoint;
+  f.services.reads.withGeometryReadCache(() => {
+    const lines = f.services.reads.allGeometryLines(); projectedPoint = lines[1].p1;
+    const profiles = f.state.profiles;
+    assert.equal(usage.isAnyLineEndpoint(projectedPoint), true);
+    assert.equal(usage.isPointUsedByLine(projectedPoint), false);
+    assert.equal(usage.isPointUsedByLine(local.p1), true); assert.equal(f.state.profiles, profiles);
+  });
+  f.state.scope = scope(); f.services.reads.clearReadCache(); f.services.projections.invalidateBlockProjectionCache();
+  const replacement = f.scene();
+  assert.equal(usage.isPointUsedByLine(local.p1), false); assert.equal(usage.isPointUsedByLine(replacement.p1), true);
+  assert.equal(usage.isAnyLineEndpoint(projectedPoint), false);
+});
+
+test('point usage keeps spline edit membership live and preserves disabled-constraint and error boundaries', () => {
+  const f = fixture(); let edited, editFailure, referenceCalls = 0;
+  const usage = f.services.createPointUsage({
+    constraintReferencesPoint: (constraint, point) => { referenceCalls++; return constraint.point === point; },
+    editedFitPoints: () => { assert.equal(f.state.ready, true); if (editFailure) throw editFailure; return edited; },
+  });
+  f.state.ready = true;
+  const fit = point('FIT'), orphan = point('ORPHAN'); fit.kind = orphan.kind = 'endpoint';
+  f.state.scope.splines = [{ fitPoints: [fit] }];
+  assert.equal(usage.isSelectableEndpointPoint(fit), false); edited = [fit];
+  assert.equal(usage.isSelectableEndpointPoint(fit), true); edited = [];
+  assert.equal(usage.isSelectableEndpointPoint(fit), false);
+  const constraint = { point: orphan, enabled: false }; f.state.scope.constraints = [constraint];
+  assert.equal(usage.isReferencePoint(orphan), false); assert.equal(referenceCalls, 0);
+  constraint.enabled = true; assert.equal(usage.isReferencePoint(orphan), true); assert.equal(referenceCalls, 1);
+  const before = JSON.stringify(f.state.scope), failure = new Error('edit points unavailable'); editFailure = failure;
+  assert.throws(() => usage.isSelectableEndpointPoint(fit), error => error === failure);
+  assert.equal(JSON.stringify(f.state.scope), before);
+});
