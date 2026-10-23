@@ -1,6 +1,22 @@
 /* Assemble Properties queries, editing commands, shared appearance UI and display around existing owners. */
 (() => {
   "use strict";
+  function createFeature({ document, documentModel, currentScope, canvasSelection, readServices, sketchContext,
+    hatchAppearanceForDisplay, selectionOperation }) {
+    const selection = createSelection({ canvasSelection, documentModel, readServices, sketchContext,
+      hatchAppearanceForDisplay, getOperation: selectionOperation });
+    function createFeatureEditing({ applicationSettings, escapeHtml, updateUI, updatePropertiesUI, draw, ...options }) {
+      const { editing, appearanceUI } = createEditing({ ...options, document, documentModel, currentScope,
+        propertySelection: selection, readServices, sketchContext, applicationSettings, escapeHtml, updateUI, updatePropertiesUI, draw });
+      function createView(options) {
+        return createWithController({ ...options, document, documentModel, currentScope, canvasSelection,
+          propertySelection: selection, readServices, sketchContext, applicationSettings, escapeHtml, hatchAppearanceForDisplay,
+          propertyEditing: editing, appearanceUI, updateUI, updatePropertiesUI, draw });
+      }
+      return Object.freeze({ editing, appearanceUI, createView });
+    }
+    return Object.freeze({ selection, createEditing: createFeatureEditing });
+  }
   function createEditing({ document, documentModel, currentScope, appearanceScope, viewport, propertySelection, readServices, sketchContext,
     checkpoint, parameterStabilization, guardSketchProjectionShapeEdit, synchronizeSketchProjectionMetadata, materializeAnchor,
     isGeometryMode, toggleSketchVisibility, guardSelectionEdit, applicationSettings, escapeHtml,
@@ -116,5 +132,5 @@
       localizeApplicationUI, installExpressionInputHighlights,
     });
   }
-  window.PropertiesDisplay = Object.freeze({ create, createSelection, createEditing, createWithController });
+  window.PropertiesDisplay = Object.freeze({ create, createFeature, createSelection, createEditing, createWithController });
 })();
