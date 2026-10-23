@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：HatchのブラウザテストAPIを既存driverへ集約（2026-10-24、検証完了）
+
+基準develop／origin/developは37cb5d2（構文614・全単体1,952・全587 E2E成功）。HatchTestDriver.createBrowserApiが通常Hatch→Block投影→転送の既存三factoryを同じscope・Hatch query・Selection・表示／保存／通知へ接続し、既存九つのブラウザ公開名との対応を所有する。appはtest query内の同じ位置で一度だけ生成し、返された公開objectを展開する。個別factoryは独立利用を維持し、projectionの型・定義生成／追加とtransferのClipboard／コピー・Block化依存を各入口で明示する。現在scopeは操作ごとに読み、Geometry／境界参照・採番／cache・履歴／UI／draw順や既存の返り値は変えない。新しいmodel／Selection／Clipboard／cache・可変app context・fileは追加しない。
+
+app.jsは2,341→2,326行（15行減）、対象生成3→1、test組立ての延べ引数55→41、root／test組立ての未使用binding／初期化前直接参照0（TEMP cad-hatch-test-api-audit.cjs）。共通依存の重複指定と九つの公開名の対応付けをappからなくした。三つの既存factoryの本体はGit基準とのAST範囲比較で変更なしを確認した。行数効果だけでなく、機能ごとのテスト公開契約をそのdriverへ閉じる単位とし、数百行の目標達成とは扱わない。
+
+テスト実装・期待値は変更していない。最終コードの全単体1,952件、構文614ファイルが成功。公開APIを利用する全九E2E file（drawing-order・Hatch・Sketch移動／編集・Reference Image・Sketch Tree可視性／削除・View visibility・既存UI）とphase0保存互換性／描画比較の計194件が成功（2.9分、exit 0、runner24909）。TEMP cad-hatch-test-api-{unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonに証跡を保持する。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server36212の停止と製品source二つのhash不変を確認した。今回は全587件の再実行ではなく、最新全体基準37cb5d2の成功と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdも更新した。
+
+先行してAnnotationFeatureも再監査した。表示・空間照会・Anchor／Dimension・Command・Editor・Dragは既に同Featureが組み立て、早期のConstrained Annotation Dragは一般SolveScopeQueryへのscope／追加変数を提供する。これを単に後段Featureへ包み直すと遅延reader／初期化参照が増え、一般求解queryの所有も曖昧になるため、今回はその案を採用していない。今後は既存ownerの共有と初期化段階を確認して境界を選び、生成APIを追加するだけの中継や巨大objectへの引数束ねを増やさない。
+
+週枠使用32%／残量68%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。残る大きな機能組立てとtest公開境界を続けて確認する。
+
+
 ### 最新：Blockの拘束再構築・Parameter伝播の接続を共有ownerへ統合（2026-10-24、全体検証完了）
 
 基準develop／origin/developはc8aae38。本単位はcodex/block-rebinding-compositionで実施した。BlockEditingFeatureが既に保持するDocument・ConstraintRebindingからDefinition再構築と保存済み全Definitionの再構築を生成し、同じ入口をSession rollback／Completionへ接続する。Documentの現在blockDefinitionsを順に再構築して削除拘束数を合計する既存の処理と戻り値を保ち、appから二つの重複callback依存を除いた。createPropagationは同じcatalog・投影無効化・Definition再構築を実BlockParameterPropagationへ接続する。Document側は明示したreadEditingScope→Block投影bundle→再構築→成功時だけSelection解除という元の順序を維持する。workspace.currentと結線済みscope、通常Instanceを含む他処理のbundleを混同せず、安定化の入口・revision／cache順・失敗時の既存復元範囲は元のownerへ残す。新しいmodel／Selection／Solver／履歴や可変app context・fileは追加しない。

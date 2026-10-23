@@ -2140,21 +2140,14 @@
       currentScope: workspace.current, hatchGeometryQuery, isRootSketch, serializeModel, readHistory: readTestHistory,
       clearSelection, canvasSelection, updateUI, draw, reorderSelectedDrawingObjects,
     });
-    const hatchTestDriver = window.HatchTestDriver.create({
+    const hatchTestApi = window.HatchTestDriver.createBrowserApi({
       resetModelState, viewport, addPoint, addLine, addCircle, currentScope: workspace.current,
       fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
       readMode: drawOperationLifecycle.readMode, allHatches, hatchGeometryQuery, serializeHatch, hatchRegionErrorText, canvasSelection, hatchCommand, document,
-      DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, HATCH_SCREEN_PX_PER_MM,
-    });
-    const hatchProjectionTestDriver = window.HatchTestDriver.createProjection({
-      resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE,
-      currentScope: workspace.current, appendDefinitions: (...definitions) => documentModel.blockDefinitions.push(...definitions),
-      invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, blockProjectionBundle, canvas, worldToCanvasScreen,
-      draw, allHatches, hatchGeometryQuery, hitBlockInstance, serializeModel,
-    });
-    const hatchTransferTestDriver = window.HatchTestDriver.createTransfer({
-      currentScope: workspace.current, clearSelection, canvasSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
-      geometryRefId, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, hatchGeometryQuery,
+      DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, HATCH_SCREEN_PX_PER_MM, createEmptyBlockDefinition, Point, Line,
+      appendDefinitions: (...definitions) => documentModel.blockDefinitions.push(...definitions), invalidateBlockProjectionCache,
+      fitAllGeometryToViewport, blockProjectionBundle, hitBlockInstance, clearSelection, copyableSelectionPayload,
+      clipboardSession, pasteGeometryClipboard, geometryRefId, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter,
     });
     const splineTestDriver = window.SplineTestDriver.create({
       resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
@@ -2192,19 +2185,11 @@
       splineHatchPreviewCacheForTest: splineTestDriver.hatchPreviewCache,
       exerciseSplineTransferForTest: splineTransferDriver.exercise,
       exerciseSplineConstraintsForTest: splineTestDriver.exerciseConstraints,
-      resetForHatchTest: hatchTestDriver.reset,
+      ...hatchTestApi,
       resetForDrawingOrderTest: drawingOrderFixture.reset,
       drawingOrderStateForTest: drawingOrderInteraction.state,
       selectDrawingOrderObjectForTest: drawingOrderInteraction.select,
       reorderDrawingOrderForTest: drawingOrderInteraction.reorder,
-      resetForSolidHatchHoleTest: hatchTestDriver.resetSolidHole,
-      resetForProjectedHatchTest: hatchProjectionTestDriver.reset,
-      projectedHatchStateForTest: hatchProjectionTestDriver.state,
-      exerciseHatchTransferForTest: hatchTransferTestDriver.exercise,
-      hatchStateForTest: hatchTestDriver.state,
-      setViewportScaleForHatchTest: hatchTestDriver.setScale,
-      breakFirstHatchBoundaryForTest: hatchTestDriver.breakBoundary,
-      restoreClosedBoundaryForHatchTest: hatchTestDriver.restoreBoundary,
       commitConstraintWithForcedSolveResultForTest: forcedConstraintCommit.commit,
       ...clipboardTestSupport,
       documentNameState: documentNameObservation.state,
