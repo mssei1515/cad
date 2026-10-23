@@ -140,7 +140,21 @@
         checkpoint: filletCheckpoint, clearSelection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
         applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet });
+    function createBlankGesture({ lifecycle, pending, constraintTargets, splineEditing, dimensionValues, offset, annotationInput,
+      updateGeometrySelectionUI, getTime = () => performance.now() }) {
+      const { rollbackTransientLineCompletion, rollbackTransientPoint } = transientAuthoring;
+      return window.BlankCanvasGesture.create({ getMode: lifecycle.readMode,
+        getPending: () => pending.current, getPendingConstraint: () => constraintTargets.command,
+        getSplineEditSession: () => splineEditing.current, getLineCommand: () => tools.line, getTransientAuthoring: () => transientAuthoring,
+        getTime, hypot2: window.GeometrySolver.hypot2, clearPreview: () => preview.setPointer(null),
+        finalizeSplineFromDoubleClick: spline.command.doubleClick, finishSplineEditSession: splineEditing.finish,
+        submitDistanceValue: dimensionValues.submit, submitOffsetValue: offset.submit, submitAnnotationValue: () => annotationInput.finish(),
+        cancelPendingCommand, isDrawToolMode: () => lifecycle.isToolMode(), exitDrawMode: () => lifecycle.exit(),
+        cancelConstraintTargetCommand, rollbackTransientLineCompletion, clearSnap: snap.clear, clearSelection,
+        setHint, updateUI, draw, cancelActiveDrawOperation: () => lifecycle.cancel(), rollbackTransientPoint,
+        hasActiveDrawOperation: () => lifecycle.active(), hasSelection: selection.hasSelection, updateGeometrySelectionUI });
+    }
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet, createBlankGesture });
   }
   window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring });
 })();
