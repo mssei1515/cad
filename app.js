@@ -114,7 +114,7 @@
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
   const { DEFAULT_DOCUMENT_UNITS } = window.DocumentState;
   const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
-    geometryIds, documentIds, reservation: idReservation, createGeometryReadServices } = window.DocumentWorkspace.create({
+    geometryIds, documentIds, reservation: idReservation, createReadContext } = window.DocumentWorkspace.create({
     applicationText, constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
   });
   const currentParameterNamespace = workspace.current;
@@ -162,7 +162,7 @@
   });
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
-  const geometryReadServices = createGeometryReadServices({
+  const { services: geometryReadServices, createScopeBinding } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
@@ -186,10 +186,9 @@
   });
   let sketchMoveCommand = null;
   let sketchContextController = null;
-  const editingScopeBinding = window.EditingScopeBinding.create({
-    workspace, Solver: ConstraintSolver,
+  const editingScopeBinding = createScopeBinding({
+    Solver: ConstraintSolver,
     closeSketchContext: () => sketchContextController?.close(), resetSketchMove: () => sketchMoveCommand?.reset(),
-    clearGeometryReads: () => geometryReads.clearReadCache(), invalidateProjection: invalidateBlockProjectionCache,
   });
   const { solver } = editingScopeBinding;
   function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
