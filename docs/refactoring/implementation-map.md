@@ -348,6 +348,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `DimensionInputView`（`src/ui/dimension_input_view.js`）: 寸法入力欄の配置・表示・非表示・検証結果の反映とfocus予約。寸法レイアウトと式評価は呼出し側で行い、DOMへコマンド状態を持ち込まない。
 
 - `DimensionInput`（`src/application/dimension_input.js`）: 入力View／Controllerの生成と共有DimensionDisplay・pending reader・現在倍率への接続。実Controllerを各commandへ公開し、入力bindはappの後段から呼ぶ。求解・履歴・独自sessionを持たない。
+- DimensionInput.createForDocument／CanvasContextMenu.createForDocument／SketchTreeController.createWithDocumentView: 各UIのDOM要素を生成ownerで取得し、既存factoryへ接続する。実input／menu elementと既存feature／controllerを返し、undefinedだけを取得対象として明示要素・nullと従来APIを保持する。bind／start／resize初期化の順序と対象DOM実体は維持する。
 
 - `DimensionInputController`（`src/ui/dimension_input_controller.js`）: 入力待ち状態を読取り、寸法レイアウト・所有Sketchの表示設定・入力検証をviewへ接続する。Canvasのキー操作でbufferを編集し、入力開始・確定・取消はコマンドへ委譲する。モデル更新は所有しない。
 

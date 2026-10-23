@@ -155,7 +155,7 @@ test('dimension category separates constraint and reference dimensions while ret
   assert.deepEqual(Array.from(groups.constraint, entry => entry.modelIndex), [1]);
 });
 
-function menuFixture({ withView = false } = {}) {
+function menuFixture({ withView = false, fromDocument = false, noOverlay = false } = {}) {
   const calls = [], domReads = [], setup = [], scopeReads = [], selection = sandbox.window.CanvasSelection.create();
   const state = { ready: false, active: 'S1', moving: false, language: 'en', failure: null, key: 'document', moveState: null };
   const sketches = [{ id: 'ROOT', kind: 'root' }, { id: 'S1' }, { id: 'S2', locked: true }];
@@ -171,7 +171,8 @@ function menuFixture({ withView = false } = {}) {
     querySelector: () => null, querySelectorAll: () => [], contains: value => value === menuElement });
   canvas.closest = () => null;
   Object.assign(canvas, { contains: () => false, querySelectorAll: () => [], querySelector: () => null });
-  document.getElementById = id => { setup.push(['dom', id]); domReads.push(id); return id === 'sketchList' ? canvas : id === 'activeSketchLabel' ? activeLabel : menuElement; };
+  document.getElementById = id => { setup.push(['dom', id]); domReads.push(id); return id === 'sketchList' ? canvas : id === 'activeSketchLabel' ? activeLabel
+    : id === 'sketchOverlay' ? overlay : id === 'sketchOverlayResizeHandle' ? handle : menuElement; };
   const activeSketchId = () => { assert.equal(state.ready, true); return state.active; };
   const ports = { document, window: windowTarget,
     sketchContext: { sketchById: id => { assert.equal(state.ready, true); return sketches.find(s => s.id === id); }, isRootSketch: sketch => sketch?.kind === 'root', activeSketchId },
@@ -192,8 +193,9 @@ function menuFixture({ withView = false } = {}) {
     choose: function(id) { assert.equal(this.choose, moveCommand.choose); calls.push(['choose', id]); }, commit() {}, cancel() {} };
   const objects = { index: () => new Map(), row: () => '', summary: () => '', selected: () => false, hovered: () => false, resolveSelectionEntry: () => null };
   if (withView) { delete ports.activeSketchId; delete ports.move; }
-  const feature = withView ? sandbox.window.SketchTreeController.createWithView({ ...ports, sketchOverlay: overlay,
-    sketchOverlayResizeHandle: handle, getScopeKey: () => state.key, viewScope: () => { assert.equal(state.ready, true); scopeReads.push('view'); return viewScope; },
+  const createWithView = fromDocument ? sandbox.window.SketchTreeController.createWithDocumentView : sandbox.window.SketchTreeController.createWithView;
+  const feature = withView ? createWithView({ ...ports, sketchOverlay: noOverlay ? null : fromDocument ? undefined : overlay,
+    sketchOverlayResizeHandle: noOverlay ? null : fromDocument ? undefined : handle, getScopeKey: () => state.key, viewScope: () => { assert.equal(state.ready, true); scopeReads.push('view'); return viewScope; },
     ensureSketchState() {}, objects, moveCommand, sketchHasSolveError: () => false, referenceConstraintErrorCountForSketch: () => 0, constraintDuplicateCountForSketch: () => 0,
   }) : sandbox.window.SketchTreeController.createWithContextMenu(ports);
   const event = (id, child = false) => ({ clientX: 20, clientY: 30, preventDefault: () => calls.push('prevent'),
@@ -204,6 +206,17 @@ function menuFixture({ withView = false } = {}) {
   return { ...feature, canvas, document, windowTarget, menuElement, attributes, state, calls, domReads, setup, scopeReads, overlay, handle, activeLabel, selection, sketches, event, action,
     listeners: () => [menuElement, canvas, document, windowTarget].reduce((total, target) => total + target.count(), 0) };
 }
+
+test('Document Tree view resolves overlays before unchanged resize setup and retains explicit null behavior', () => {
+  const f = menuFixture({ withView: true, fromDocument: true }), direct = menuFixture({ withView: true });
+  assert.deepEqual(f.domReads.slice(0, 2), ['sketchOverlay', 'sketchOverlayResizeHandle']);
+  assert.deepEqual(f.setup.slice(2), direct.setup); assert.deepEqual(f.scopeReads, []); assert.deepEqual(f.calls, []);
+  f.handle.fire('keydown', { key: 'ArrowRight', preventDefault() {} }); assert.equal(f.overlay.style.width, '336px');
+  f.state.ready = true; f.view.render(); assert.match(f.canvas.innerHTML, /View Sketch/);
+  const missing = menuFixture({ withView: true, fromDocument: true, noOverlay: true });
+  assert.deepEqual(missing.domReads, ['sketchList', 'sketchContextMenu']);
+  assert.equal(missing.handle.count(), 0); assert.equal(missing.view.applyWidth(400), 0);
+});
 
 test('Tree assembly preserves View setup order and distinct live display and Controller scopes over one Selection', () => {
   const f = menuFixture({ withView: true }); assert.deepEqual(f.calls, []); assert.deepEqual(f.scopeReads, []);

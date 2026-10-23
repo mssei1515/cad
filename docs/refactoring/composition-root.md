@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Canvas周辺UIのDOM取得責務（2026-10-24、検証完了）
+
+基準develop／origin/developは7313e39。PointUsage接続41793b1を統合・Pushし、構文608・単体1,882件・関連E2E239件は成功済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/canvas-view-dom-ownershipで実施した。
+
+DimensionInput.createForDocument、CanvasContextMenu.createForDocument、SketchTreeController.createWithDocumentViewへ各UI固有のDOM取得を置いた。input→shell、Canvas menu、Tree overlay→resize handleを各ownerが取得し、既存factoryへ同じ設定と実要素を渡す。寸法は実inputと既存feature、Canvas menuは実elementと既存controllerを返し、Treeは既存View／Controller／menuの実体をそのまま返す。Document入口だけがundefined時に取得し、明示要素・nullは優先する。旧create／createWithViewを変更せず、genericなSketch menuの生成や旧APIの欠損／例外／listener挙動も維持した。各component固有のoptionsだけを渡し、UI全体のDOM registryやapp contextを新設しない。
+
+app.jsは2,591→2,586行（5行減）、対象のroot構築3→3、明示port69→65。5つのDOM取得が各View生成時へ移るが、index.htmlにある対象要素は前段factoryが置換せず、View／Controller生成・bind／start・resize listener登録／幅設定の時機と順序は維持する。未使用bindingと追加接続の初期化前参照は0。明示要素とnullの優先、欠損とlookup例外、実input／menu要素の返却と更新、遅延bind、既存Treeのresize setup順・幅変更・live scopeを5単体で確認した。Canvas menuのnullは一律inertとは仮定せず、旧controllerのstart／close／open例外を直接比較して維持し、製品bodyは変更していない。関連33件・構文608ファイル・全単体1,887件は成功（cad-view-dom-{focused,check,unit}.log）。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務とDOM取得時機を記録し、新file／script読込／保存形式は追加しない。
+
+既存UI・寸法入力／Annotation anchor／prefix／複数寸法／Slot・Canvas menu・Sketch編集／移動／Tree削除／表示／権限／幅変更・Canvas zoom・画像・command panel／保存再読込の関連E2E238件が全成功（3.7分、cad-view-dom-e2e.log）。検証中のsourceは固定し、test-results/.last-run.jsonのpassed／failedTests空と自己起動port8799のlistener停止を確認した。runner77886は再接続時には終了済みで終了コードは再取得できず、成功件数は終端logとlast-runで確認した。今回の全E2Eは未実行で、74a0d17の全587成功を直前の全体基準として区別する。週枠は最新確認で使用1%／残量99%、停止条件未到達。以前の性能gateはSolver修正43ec1eaと74a0d17の全体検証で解消済みで、mainは各分離の途中では更新せず、停止・releaseの区切りで最後に反映する方針に従って保持する。全体目標はactiveで未完了。
+
+次はCanvas表示のcreate／createWorkspace／createRenderingと、表示control・入力・描画の共通依存を確認する。生成段階の異なる部品を名前だけでまとめず、同じownerを共有する接続や公開portを整理する。通常入力とPNG／command panel、早期factoryとbind／startの順序の違いは維持する。
 ### 最新：PointUsageと幾何読取りの接続（2026-10-24、検証完了）
 
 基準develop／origin/developは5876529。Canvas選択の二段階組立て9b9c980を統合・Pushし、構文608・単体1,880件・関連E2E268件は成功済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/point-usage-read-assemblyで実施した。

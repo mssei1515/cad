@@ -11,28 +11,55 @@ function surface() {
     fire(type, event = {}) { for (const handler of handlers.get(type) || []) handler(event); },
     count() { return [...handlers.values()].reduce((n, set) => n + set.size, 0); } };
 }
-function fixture() {
+function fixture({ fromDocument = false, menuOverride } = {}) {
   const document = surface(), window = surface(), canvas = surface(), menu = surface(), calls = [], state = { original: true };
   const classes = new Set(); let buttons = [];
   Object.assign(menu, { hidden: true, innerHTML: '', style: {}, classList: { add: x => classes.add(x), remove: x => classes.delete(x) },
     setAttribute() {}, getBoundingClientRect: () => ({ width: 100, height: 60 }), contains: button => buttons.includes(button),
     querySelector: () => buttons[0], querySelectorAll: () => buttons });
   canvas.closest = () => ({ getBoundingClientRect: () => ({ left: 10, top: 20, width: 200, height: 100 }) });
-  const controller = sandbox.window.CanvasContextMenu.create({ document, window, canvas, menu,
+  const domReads = [];
+  document.getElementById = id => { domReads.push(id); return menu; };
+  const options = { document, window, canvas, menu: menuOverride === undefined ? (fromDocument ? undefined : menu) : menuOverride,
     escapeHtml: text => String(text).replaceAll('<', '&lt;'), applicationText: (ja, en) => en,
     presentCandidate: target => ({ icon: '', type: target.kind, id: target.item.id, secondary: '' }),
     hover: { capture: () => state, restore: value => calls.push(['restore', value]), clear: () => calls.push(['clear']),
       preview: value => calls.push(['preview', value]), draw: () => calls.push(['draw']) },
     onOpen: () => calls.push(['open']), onSelect: (target, pointer) => calls.push(['select', target, pointer, menu.hidden]),
-    onAction: (action, target, pointer) => calls.push(['action', action, target, pointer, menu.hidden]) });
+    onAction: (action, target, pointer) => calls.push(['action', action, target, pointer, menu.hidden]) };
+  const resolved = fromDocument ? sandbox.window.CanvasContextMenu.createForDocument(options) : null;
+  const controller = resolved?.controller || sandbox.window.CanvasContextMenu.create(options);
   const target = { kind: 'line', item: { id: 'L1' } }, pointer = { x: 3, y: 4 };
   function button(dataset) { const value = { dataset, disabled: false, contains: () => false,
     closest: selector => selector.includes('candidate') ? (dataset.contextCandidateIndex != null ? value : null) : selector.includes('action') ? (dataset.contextAction ? value : null) : null,
     focus() { document.activeElement = value; } }; buttons.push(value); return value; }
   function open(showCandidates = true) { controller.open({ event: { clientX: 300, clientY: 200 }, pointer, target,
     candidates: [target], showCandidates, items: [{ action: 'copy', label: '<Copy>' }] }); }
-  return { controller, document, window, canvas, menu, calls, state, target, pointer, open, button };
+  return { controller, document, window, canvas, menu, calls, state, target, pointer, open, button, domReads, resolved };
 }
+
+test('Document Canvas menu resolves one live element and leaves session/listener ownership with the controller', () => {
+  const f = fixture({ fromDocument: true });
+  assert.deepEqual(f.domReads, ['canvasContextMenu']); assert.equal(f.resolved.element, f.menu);
+  assert.equal(f.menu.count() + f.canvas.count() + f.document.count() + f.window.count(), 0);
+  f.controller.start(); f.open(false); assert.equal(f.resolved.element.hidden, false);
+  assert.equal(f.controller.close(), true); assert.equal(f.resolved.element.hidden, true); assert.equal(f.domReads.length, 1);
+  f.controller.dispose(); assert.equal(f.menu.count() + f.canvas.count() + f.document.count() + f.window.count(), 0);
+});
+
+test('explicit Canvas menu and null bypass Document lookup and retain legacy null behavior', () => {
+  const direct = fixture(); assert.deepEqual(direct.domReads, []);
+  const disabled = fixture({ fromDocument: true, menuOverride: null });
+  assert.equal(disabled.resolved.element, null); assert.deepEqual(disabled.domReads, []);
+  disabled.controller.start(); assert.equal(disabled.controller.close(), false);
+  const legacy = fixture({ menuOverride: null }); legacy.controller.start();
+  const count = f => f.menu.count() + f.canvas.count() + f.document.count() + f.window.count();
+  assert.equal(count(disabled), count(legacy));
+  let legacyFailure; try { legacy.open(); } catch (error) { legacyFailure = error; }
+  assert.ok(legacyFailure);
+  assert.throws(() => disabled.open(), error => error.name === legacyFailure.name && error.message === legacyFailure.message);
+  disabled.controller.dispose(); legacy.controller.dispose(); assert.equal(count(disabled) + count(legacy), 0);
+});
 test('candidate session owns its list, clamps menu placement and restores hover on dismissal', () => {
   const f = fixture(); f.open();
   assert.equal(f.menu.style.left, '96px'); assert.equal(f.menu.style.top, '36px');
