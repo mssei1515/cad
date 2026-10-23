@@ -106,11 +106,6 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   let pngExportCommand = null;
-  const dimensionValueInput = document.getElementById("dimensionValueInput");
-  const dimensionValueInputShell = document.getElementById("dimensionValueInputShell");
-  const canvasContextMenu = document.getElementById("canvasContextMenu");
-  const sketchOverlay = document.getElementById("sketchOverlay");
-  const sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle");
   const presentation = window.PresentationFeature.create({
     document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
   });
@@ -236,8 +231,8 @@
     updateStatusUI, updateConstraintButtons, syncDimensionInput: () => syncDimensionValueInput(),
     refreshSketchSelection: () => sketchTreeView.refreshSelection(),
   });
-  const canvasContextController = window.CanvasContextMenu.create({
-    document, window, canvas, menu: canvasContextMenu, escapeHtml, applicationText,
+  const { controller: canvasContextController, element: canvasContextMenu } = window.CanvasContextMenu.createForDocument({
+    document, window, canvas, escapeHtml, applicationText,
     presentCandidate: target => canvasContextCandidatePresentation(target),
     hover: { capture: captureCanvasHoverState, restore: restoreCanvasHoverState, preview: previewCanvasContextCandidate, clear: clearCanvasHover, draw },
     onOpen: openCanvasContextMenu, onSelect: selectCanvasContextCandidate, onAction: executeCanvasContextAction,
@@ -509,8 +504,8 @@
     minLineLength: MIN_LINE_LENGTH, canvasThemeColor, onExpressionMark: canvasRenderProbe.captureExpressionMark,
     effectiveDimensionAppearance, activeSketchId });
   const { metrics: dimensionMetrics, placement: dimensionPlacement, layouts: dimensionLayouts, painter: dimensionPainter } = dimensionDisplay;
-  const dimensionInput = window.DimensionInput.create({
-    input: dimensionValueInput, shell: dimensionValueInputShell, viewport, syncHighlight: syncExpressionInputHighlight,
+  const { feature: dimensionInput, input: dimensionValueInput } = window.DimensionInput.createForDocument({
+    document, viewport, syncHighlight: syncExpressionInputHighlight,
     scheduleFrame: callback => requestAnimationFrame(callback), pending: pendingCommandSession, display: dimensionDisplay,
     worldToCanvasScreen, effectiveDimensionAppearance, constraintSketchId, activeSketchId,
     evaluateDimensionExpressionDraft, expressionFromUserInput, cancelPendingCommand, startDistanceValueInput,
@@ -1605,9 +1600,9 @@
     readCanvasHover: () => canvasHover.current, readSidebarHover: () => selectionHighlight.current,
     constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements,
   });
-  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithView({
+  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithDocumentView({
     document, window, sketchContext, applicationSettings, escapeHtml, closeCanvasContextMenu,
-    sketchOverlay, sketchOverlayResizeHandle, ensureSketchState, objects: sketchTreeObjects, moveCommand: sketchMoveCommand,
+    ensureSketchState, objects: sketchTreeObjects, moveCommand: sketchMoveCommand,
     getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
     viewScope: () => editingScopeBinding.current, sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
     currentScope: dimensionPresentationScope, setActiveSketch, clearSelection, canvasSelection,

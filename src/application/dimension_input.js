@@ -19,5 +19,9 @@
     function bind() { controller.bindInput(input); }
     return Object.freeze({ controller, bind });
   }
-  window.DimensionInput = Object.freeze({ create });
+  function createForDocument({ document, input = document.getElementById("dimensionValueInput"),
+    shell = document.getElementById("dimensionValueInputShell"), ...options }) {
+    return Object.freeze({ input, feature: create({ ...options, input, shell }) });
+  }
+  window.DimensionInput = Object.freeze({ create, createForDocument });
 })();

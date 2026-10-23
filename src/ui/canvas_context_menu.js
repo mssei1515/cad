@@ -197,5 +197,8 @@
     return Object.freeze({ open });
   }
 
-  window.CanvasContextMenu = Object.freeze({ create, createEntry });
+  function createForDocument({ document, menu = document.getElementById("canvasContextMenu"), ...options }) {
+    return Object.freeze({ controller: create({ ...options, document, menu }), element: menu });
+  }
+  window.CanvasContextMenu = Object.freeze({ create, createEntry, createForDocument });
 })();

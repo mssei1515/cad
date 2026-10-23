@@ -1,6 +1,10 @@
 /* Route sketch tree actions to selection, editing commands and expansion state. */
 (() => {
   "use strict";
+  function createWithDocumentView({ document, sketchOverlay = document.getElementById("sketchOverlay"),
+    sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle"), ...options }) {
+    return createWithView({ ...options, document, sketchOverlay, sketchOverlayResizeHandle });
+  }
   function createWithView({ document, window: windowTarget, sketchContext, applicationSettings, escapeHtml,
     sketchOverlay, sketchOverlayResizeHandle, getScopeKey, viewScope, ensureSketchState, objects, moveCommand,
     sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch, canvasSelection,
@@ -305,5 +309,5 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.SketchTreeController = Object.freeze({ create, createWithView, createWithContextMenu, createMoveInputBinding });
+  window.SketchTreeController = Object.freeze({ create, createWithView, createWithDocumentView, createWithContextMenu, createMoveInputBinding });
 })();

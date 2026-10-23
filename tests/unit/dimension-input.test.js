@@ -30,7 +30,8 @@ function fixture(enabled = true) {
     applicationText: ja => ja, setHint: () => calls.push('hint'), draw: () => calls.push('draw') };
   const feature = context.window.DimensionInput.create(options);
   function key(value) { return { key: value, stopPropagation: () => calls.push('stop'), preventDefault: () => calls.push('prevent') }; }
-  return { feature, state, input, shell, events, frames, calls, classes, key };
+  return { feature, state, input, shell, events, frames, calls, classes, key,
+    forDocument: overrides => context.window.DimensionInput.createForDocument({ ...options, ...overrides }) };
 }
 
 test('inline input binds later and edits the current pending object without capturing an old command', () => {
@@ -65,4 +66,27 @@ test('missing input stays inert while canvas keys keep using the shared placemen
   assert.equal(f.feature.controller.handleKey(f.key('Enter')), true);
   assert.equal(f.calls[1][0], 'default'); assert.equal(f.calls[2][0], 'start');
   assert.equal(f.calls[2][1].x, 7); assert.equal(f.calls[2][1].y, 8);
+});
+
+test('Document input resolves its own nodes once, returns the actual input and keeps binding deferred', () => {
+  const f = fixture(), reads = [], document = { getElementById(id) {
+    assert.equal(this, document); reads.push(id); return id === 'dimensionValueInput' ? f.input : f.shell;
+  } };
+  const result = f.forDocument({ document, input: undefined, shell: undefined });
+  assert.deepEqual(reads, ['dimensionValueInput', 'dimensionValueInputShell']);
+  assert.equal(result.input, f.input); assert.deepEqual(f.events, {}); assert.deepEqual(f.calls, []);
+  result.feature.bind(); f.state.pending = { type: 'offset-value', buffer: '20', target: {}, dimension: {} };
+  f.input.value = '32'; f.events.input(); assert.equal(f.state.pending.buffer, '32');
+  f.events.keydown(f.key('Enter')); assert.equal(f.calls.at(-1), 'offset'); assert.equal(reads.length, 2);
+});
+
+test('Document input preserves explicit elements and null, missing nodes and lookup failure boundaries', () => {
+  const f = fixture(), failure = new Error('lookup failed'), document = { getElementById() { throw failure; } };
+  assert.equal(f.forDocument({ document }).input, f.input);
+  const disabled = f.forDocument({ document, input: null, shell: null });
+  assert.equal(disabled.input, null); disabled.feature.bind(); disabled.feature.controller.sync();
+  const missing = f.forDocument({ document: { getElementById: () => null }, input: undefined, shell: undefined });
+  assert.equal(missing.input, null); missing.feature.bind(); assert.deepEqual(f.events, {});
+  assert.throws(() => f.forDocument({ document, input: undefined, shell: undefined }), error => error === failure);
+  assert.deepEqual(f.calls, []);
 });
