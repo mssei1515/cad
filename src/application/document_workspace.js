@@ -15,7 +15,16 @@
         prepareBlocks, elementSketchId, applicationText, sketchById, isRootSketch, activeSketchId,
         showHiddenElements, viewportScale, profileRead });
     }
-    return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, createGeometryReadServices });
+    function createReadContext({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead }) {
+      const services = createGeometryReadServices({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead });
+      function createScopeBinding({ Solver, closeSketchContext, resetSketchMove }) {
+        return window.EditingScopeBinding.create({ workspace, Solver, closeSketchContext, resetSketchMove,
+          clearGeometryReads: () => services.reads.clearReadCache(),
+          invalidateProjection: services.projections.invalidateBlockProjectionCache });
+      }
+      return Object.freeze({ services, createScopeBinding });
+    }
+    return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, createGeometryReadServices, createReadContext });
   }
   window.DocumentWorkspace = Object.freeze({ create });
 })();

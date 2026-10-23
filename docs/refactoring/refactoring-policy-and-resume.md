@@ -93,6 +93,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：読取り基盤とscope／Solverの接続（2026-10-24、検証完了）
+
+基準develop／origin/developはb339349。直前の幾何読取り接続58cd33cは統合・Push済み（構文612・単体1,905件・関連E2E247件成功）。main／origin/mainはdf5aef2を保持する。本単位はcodex/document-read-scopeで実施した。
+
+DocumentWorkspace.createReadContextは既存の実ReadServicesと、その基盤専用のcreateScopeBindingを返す。ReadServicesは従来位置で生成し、Binding／Solverはlet初期化と周辺query／layout生成の後にある従来位置で生成する。初期scopeを読むBinding constructorを前へ寄せない。後段factoryはSolver constructor・メニュー終了・Sketch移動resetの3portから既存EditingScopeBindingを生成し、同じWorkspace・幾何read cache・Block投影cacheへ接続する。旧createGeometryReadServicesとEditingScopeBinding.createの直接APIを維持する。
+
+app.jsは2,551→2,550行（1行減）、対象構築2→2、明示port11→8。root未使用bindingと追加接続の初期化前参照は0（cad-document-read-scope-audit.cjs）。cacheの解除先の接続を内部へ集める変更であり、新しいcache・current scope・可変phase containerやモデルを追加しない。メニュー終了→移動reset→Workspace.activate→bound scope／Solver更新→read clear→projection invalidateと、失敗時の途中状態を維持する。
+
+実Binding／Solver／ReadServicesとcacheを使う2単体で、遅延Binding生成と実Solver／Workspace共有、同じ定義とrevisionのままgeometryを変えた投影cacheの解除、read cacheの解除、Workspace.restoreが先行した時のbound scope保持、移動reset失敗時の短絡と復帰を確認した。新fixtureは定義Objectの置換による自動cache失効を避け、同じObject内のgeometryを変える条件へ合わせた。既存期待や製品規則を変更していない。関連単体22件・全単体1,907件・構文612ファイルが成功（cad-document-read-scope-{focused,unit,check}.log）。新file／script一覧／UI／保存形式の変更はなく、spec/architecture/モジュール構成.mdとimplementation-map.mdへ内部設計を追記した。
+
+Block／Sketch編集・移動・派生選択copy・Hatch・ブックマーク・menu・既存UI・phase0保存互換性／描画比較の関連E2E208件が全成功（3.1分、exit 0、runner36117、cad-document-read-scope-e2e.log）。sourceを固定し、receiptのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した（cad-document-read-scope-e2e-receipt.json、cad-document-read-scope-last-run.json）。今回の全E2Eは未実行で、直前の全体基準17defd0の587件成功と区別する。週枠使用9%／残量91%、停止条件未到達。mainは停止・release時に最後に反映する方針を維持し、全体目標はactiveで未完了。
+
+次も実owner・依存方向・初期化段階に沿って内部構築と機能間接続を分ける。現在Workspaceとbound scopeの一時的な違いを保ち、広いcontextで隠さない。小さな引数削減だけで数百行へ届くとは見積もらない。
+
 ### 最新：Document基盤と幾何読取りの二段階接続（2026-10-24、検証完了）
 
 基準develop／origin/developは17defd0。DocumentWorkspace初期構築f33bb4dの構文612・全単体1,903件・全587 E2E（27.9分）は成功・統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/document-geometry-readsで実施した。

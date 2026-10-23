@@ -102,3 +102,58 @@ test('Document read assembly retains cache lifetime, explicit invalidation and l
     services.reads.clearReadCache(); assert.equal(services.reads.allGeometryLines().length, 0);
   });
 });
+
+function readContextFixture() {
+  const { model } = fixture(), calls = [], state = { failure: null }; let binding;
+  const context = model.createReadContext({ currentSketches: () => binding.current.sketches,
+    prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() });
+  assert.deepEqual(calls, []); assert.equal(binding, undefined); assert.ok(Object.isFrozen(context));
+  const stage = name => {
+    calls.push({ name, bound: binding.current, workspace: model.workspace.current(), solver: binding.solver.model });
+    if (state.failure === name) throw state.error;
+  };
+  binding = context.createScopeBinding({ Solver: w.GeometrySolver.ConstraintSolver,
+    closeSketchContext: () => stage('close'), resetSketchMove: () => stage('move') });
+  assert.deepEqual(calls, []); assert.ok(Object.isFrozen(binding));
+  return { model, context, binding, calls, state };
+}
+
+test('read context binds the same Workspace and Solver while invalidating its actual geometry and projection caches', () => {
+  const f = readContextFixture(), { model, binding } = f, services = f.context.services;
+  assert.equal(binding.current, model.document); assert.equal(binding.solver.model, model.document);
+  const makeDefinition = x => {
+    const definition = { ...w.DocumentState.create(), id: 'BD1', revision: 1, origin: { x: 0, y: 0 } };
+    const a = Object.assign(new w.GeometrySolver.Point('P1', x, 0), { sketchId: 'S1' });
+    const b = Object.assign(new w.GeometrySolver.Point('P2', x + 10, 0), { sketchId: 'S1' });
+    definition.points = [a, b]; definition.lines = [Object.assign(new w.GeometrySolver.Line('L1', a, b), { sketchId: 'S1' })];
+    return definition;
+  };
+  const instance = { id: 'BI1', definitionId: 'BD1', sketchId: 'S1', x: 20, y: 30, rotation: 0 };
+  const definition = makeDefinition(1); model.document.blockDefinitions = [definition]; model.document.blockInstances.push(instance);
+  const local = w.DocumentState.create(); local.blockInstances.push(instance);
+  services.reads.withGeometryReadCache(() => {
+    const oldLines = services.reads.allGeometryLines(), oldBundle = services.projections.blockProjectionBundle(instance);
+    assert.equal(oldBundle.points[0].x, 21);
+    const replacement = makeDefinition(12); definition.points = replacement.points; definition.lines = replacement.lines;
+    assert.equal(services.projections.blockProjectionBundle(instance), oldBundle);
+    const solver = binding.solver; binding.activate(local);
+    assert.equal(binding.solver, solver); assert.equal(solver.model, local); assert.equal(model.workspace.current(), local);
+    assert.ok(f.calls.every(call => call.bound === model.document && call.workspace === model.document && call.solver === model.document));
+    const nextLines = services.reads.allGeometryLines(), nextBundle = services.projections.blockProjectionBundle(instance);
+    assert.notEqual(nextLines, oldLines); assert.notEqual(nextBundle, oldBundle); assert.equal(nextBundle.points[0].x, 32);
+  });
+  assert.deepEqual(f.calls.map(call => call.name), ['close', 'move']);
+});
+
+test('read context preserves restoration before teardown and stops activation at a failed move reset', () => {
+  const f = readContextFixture(), { model, binding } = f, host = model.workspace.capture(), draft = w.DocumentState.create();
+  binding.activate(draft); model.workspace.restore(host);
+  assert.equal(model.workspace.current(), model.document); assert.equal(binding.current, draft); assert.equal(binding.solver.model, draft);
+  f.calls.length = 0; f.state.failure = 'move'; f.state.error = new Error('move reset failed');
+  assert.throws(() => binding.activate(model.document), error => error === f.state.error);
+  assert.deepEqual(f.calls.map(call => call.name), ['close', 'move']);
+  assert.ok(f.calls.every(call => call.bound === draft && call.workspace === model.document && call.solver === draft));
+  assert.equal(binding.current, draft); assert.equal(binding.solver.model, draft);
+  f.state.failure = null; binding.activate(model.document);
+  assert.equal(binding.current, model.document); assert.equal(binding.solver.model, model.document);
+});
