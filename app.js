@@ -27,8 +27,6 @@
     arcEndpointPoint, arcEndpointDragValue,
     circlePointAtAngle,
     arcSweep,
-    unwrapAngleNear,
-    lineNormal,
     lineHasDirection,
     signedPointLineDistance,
   } = window.GeometryKernel;
@@ -64,7 +62,6 @@
     PointOnLineConstraint,
     ParallelLinesCenterlineConstraint,
     PointPairCenterlineConstraint,
-    ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
     LineFixedConstraint,
     GeometryFixedConstraint,
@@ -692,6 +689,10 @@
     return geometryInstanceCommand.isPlacing(instance) ? geometryInstanceCommand.changeSetting(key, value)
       : synchronizedInstanceEditing.change(instance, key, value);
   }
+  const constraintSolvePreparation = window.ConstraintSolvePreparation.createForSolver({
+    solver, hasDirectRadiusDimension, offsetChainDraft, minimumOrientationLength: MIN_ORIENTATION_LENGTH, minimumLineLength: MIN_LINE_LENGTH,
+  });
+  const { precondition: preconditionNewConstraint } = constraintSolvePreparation;
   const dimensionValueCommand = window.DimensionValueCommand.createWithEditingSupport({
     synchronizedInstanceEditing, annotationDimensions, annotationAnchorConstraints, canvasSelection, resetDimensionDrag: () => dimensionDrag.reset(),
     canEdit: (id, operation) => guardSketchEdit(id, operation),
@@ -700,7 +701,7 @@
     expressionFromUserInput, evaluateDimensionExpressionDraft, applicationText, parameterErrorText,
     setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint,
     captureSketchScreenFootprint: (sketchId = activeSketchId()) => viewport.captureBoundsFootprint(sketchGeometryBounds(sketchId)),
-    snapshotModelState, restoreModelState, withTemporarySolveStepNorm, solveStepNormForConstraint,
+    snapshotModelState, restoreModelState, solvePreparation: constraintSolvePreparation,
     stabilizeActiveParameterNamespace, constraintSketchId, acceptError: CONSTRAINT_ACCEPT_ERROR,
     hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
     targetFromConstraint, isReadOnlyDimension, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput,
@@ -1693,15 +1694,6 @@
 
 
 
-  const constraintSolvePreparation = window.ConstraintSolvePreparation.create({
-    solver, types: { Line, Arc, ArcEndpointOnLineConstraint, ArcEndpointCoincidentConstraint,
-      ArcEndpointArcEndpointCoincidentConstraint, OffsetConstraint, OffsetChainConstraint },
-    hasDirectRadiusDimension, unwrapAngleNear, hypot2, arcEndpointPoint, lineNormal, offsetChainDraft, vectorNorm,
-    minimumOrientationLength: MIN_ORIENTATION_LENGTH, minimumLineLength: MIN_LINE_LENGTH,
-  });
-  function preconditionNewConstraint(constraint) { return constraintSolvePreparation.precondition(constraint); }
-  function solveStepNormForConstraint(constraint) { return constraintSolvePreparation.stepNorm(constraint); }
-  function withTemporarySolveStepNorm(stepNorm, callback) { return constraintSolvePreparation.withStepNorm(stepNorm, callback); }
 
   function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
@@ -1710,7 +1702,7 @@
     currentScope: workspace.current, forgetConstraint: constraintRedundancy.forgetConstraint,
     resolveSelection: constraintResolutionFromCurrentSelection, canvasSelection,
     guardSketchEdit, activeSketchId, constraintTargetsAreActive, snapshotModelState, restoreModelState,
-    solveStepNormForConstraint, pushModelConstraint, preconditionNewConstraint, withTemporarySolveStepNorm,
+    solvePreparation: constraintSolvePreparation, pushModelConstraint,
     solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
     constraintSketchId, lineCollapseQuery, redundantConstraintInfo, acceptError: CONSTRAINT_ACCEPT_ERROR,
     targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution,

@@ -15,7 +15,8 @@
     return Object.freeze({ command, readOnly });
   }
   function create({ guardSketchEdit, activeSketchId, constraintTargetsAreActive, snapshotModelState, restoreModelState,
-    solveStepNormForConstraint, pushModelConstraint, preconditionNewConstraint, withTemporarySolveStepNorm,
+    solvePreparation, solveStepNormForConstraint = solvePreparation?.stepNorm, pushModelConstraint,
+    preconditionNewConstraint = solvePreparation?.precondition, withTemporarySolveStepNorm = solvePreparation?.withStepNorm,
     solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
     constraintSketchId, lineCollapseQuery, redundantConstraintInfo, acceptError: CONSTRAINT_ACCEPT_ERROR,
     targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
