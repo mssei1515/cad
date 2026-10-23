@@ -30,6 +30,45 @@ function fixture() {
   return { state, display, viewport, document, calls, marks, raw, stack };
 }
 
+test('display preview shares placement and painter while reading current pending expressions and appearance', () => {
+  const f = fixture(), p1 = new Point('A', 0, 0), p2 = new Point('B', 100, 0);
+  const target = { kind: 'point-point', p1, p2, value: 100 };
+  let pending = null, evaluation = 25;
+  const evaluations = [];
+  f.state.ready = false;
+  const preview = f.display.createPreview({ readPending: () => { assert.equal(f.state.ready, true); return pending; },
+    drawFilletPreviewArc: () => { throw new Error('not a Fillet'); }, evaluateDimensionExpressionDraft: (...args) => { evaluations.push(args); return evaluation; } });
+  assert.deepEqual(f.calls, []); assert.deepEqual(evaluations, []); assert.ok(Object.isFrozen(preview)); f.state.ready = true;
+  preview.draw(); assert.deepEqual(f.calls, []);
+  const dimension = f.display.placement.dimensionFromAnchor(target, { x: 50, y: -20 });
+  const constraint = {}; pending = { type: 'distance-value', target, dimension, constraint, buffer: '25' };
+  const before = JSON.stringify({ pending, p1, p2 }); preview.draw();
+  assert.equal(f.calls.some(c => c[0] === 'fillText'), false); // Pending value text stays in the input, as in the existing painter.
+  assert.ok(f.calls.some(c => c[0] === 'stroke'));
+  assert.equal(evaluations[0][0], constraint); assert.equal(evaluations[0][1], '25'); assert.equal(evaluations[0][2], undefined);
+  assert.equal(evaluations[0][3].signedAngle, false); assert.equal(JSON.stringify({ pending, p1, p2 }), before);
+  f.calls.length = 0; pending = { type: 'distance-place', target, pointer: { x: 50, y: -10 } };
+  f.document.defaultDimensionAppearance = { dimensionTextHeight: 12 }; f.state.scale = 4; preview.draw();
+  assert.deepEqual(f.calls.filter(c => c[0] === 'fillText').map(c => c[1]), ['100']);
+  assert.equal(f.state.resolves.at(-1)[1], 'S1'); assert.equal(f.stack.length, 0);
+  f.calls.length = 0; pending = { type: 'offset-value', buffer: '5' }; preview.draw(); assert.deepEqual(f.calls, []);
+});
+
+test('display preview keeps the Fillet geometry identity, read-only model and failure boundary before dimension painting', () => {
+  const f = fixture(), geometry = { ok: true, center: new Point('C', 1, 2), radius: 10, startAngle: 0, endAngle: Math.PI };
+  let pending = { type: 'fillet-radius-place', preview: geometry }, failure = null;
+  const arcs = [], before = JSON.stringify(geometry);
+  const preview = f.display.createPreview({ readPending: () => pending,
+    drawFilletPreviewArc: arc => { arcs.push(arc); if (failure) throw failure; }, evaluateDimensionExpressionDraft: () => { throw new Error('not an expression'); } });
+  preview.draw(); assert.equal(arcs[0], geometry);
+  assert.equal(f.calls.some(c => c[0] === 'fillText'), false);
+  assert.ok(f.calls.some(c => c[0] === 'stroke'));
+  assert.equal(JSON.stringify(geometry), before); assert.equal(f.stack.length, 0);
+  f.calls.length = 0; failure = new Error('Fillet paint failed');
+  assert.throws(() => preview.draw(), error => error === failure); assert.deepEqual(f.calls, []);
+  pending = { type: 'fillet-radius-place', preview: { ok: false } }; preview.draw(); assert.equal(arcs.length, 2);
+});
+
 test('display layout reads current incident geometry and fresh defaults while preserving point identity', () => {
   const f = fixture(), point = new Point('P', 0, 0), line = new Line('L', new Point('A', 20, -100), new Point('B', 20, 100));
   const target = { kind: 'point-line', point, line }, dimension = f.display.placement.dimensionFromAnchor(target, { x: 0, y: 10 });

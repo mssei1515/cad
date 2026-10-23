@@ -6,6 +6,20 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：寸法表示とプレビューの共有接続（2026-10-24、検証完了）
+
+基準develop／origin/developはceab869。直前の基本作図プレビュー75ec188は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/dimension-preview-compositionで実施した。
+
+DimensionDisplay.createPreviewは同じDimensionPlacement／Painterと既存NumberDisplay／DimensionQueriesをDimensionPreviewへ接続する。appから渡すのはpending照会・Fillet補助描画・式評価の3portだけで、実Preview APIを返す。Painterは元のreceiverで呼び、現在pendingの再照会・式評価のcatch範囲・既定の配置／axis／角度／書式を維持する。寸法入力・確定・取消・求解・履歴は移管せず、同じ表示機能の依存接続をまとめる。新しいstateや可変phase参照、app contextは追加しない。
+
+app.jsは2,565→2,563行（2行減）。対象のroot構築1→1、明示port13→3。初期化と描画の位置・順序は変えず、不要なrootの円寸法配置関数の別名を除いた。AST監査でroot未使用bindingと追加接続の初期化前参照は0（cad-dimension-preview-audit.cjs）。既存factoryは直接注入APIとして維持し、script一覧・UI・保存形式は変更しない。
+
+実DimensionDisplay／Painter／Previewを使った2単体で、構築時の無照会、現在pending／式の引数、配置／最新外観と倍率、Fillet geometry同一性と失敗短絡、モデル不変を確認した。新fixtureの文字表示と軸の最初の想定は、既存Painterのhidden文字と配置規則を確認して修正した。既存期待・製品の描画規則を変更していない。関連単体11件・全単体1,896件・構文610ファイルが成功（cad-dimension-preview-{focused,unit,check}.log）。spec/architecture/モジュール構成.mdとimplementation-map.mdへ内部設計を追記した。
+
+注記拘束・寸法prefix／複数寸法／Slot・command panel・PNG・既存UI・phase0保存互換性／描画比較の関連E2E202件が全成功（3.2分、exit 0、runner41050、cad-dimension-preview-e2e.log）。sourceを固定し、receiptのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した（cad-dimension-preview-e2e-receipt.json、cad-dimension-preview-last-run.json）。今回の全E2Eは未実行で、直前の全体基準は74a0d17の全587件成功。週枠使用3%／残量97%、停止条件未到達。mainは停止・release時に最後に反映する方針を維持し、全体目標はactiveで未完了。
+
+次は残る機能構築の依存を再監査する。描画と入力・commandが持つ異なる責務を名前だけで包まず、同じownerと現在scopeを共有できる境界を選ぶ。小さな引数削減だけで数百行へ届くとは見積もらない。
+
 ### 最新：基本作図とプレビューの共有接続（2026-10-24、検証完了）
 
 基準develop／origin/developは214e7a8。直前の参照画像組立て32ba943は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/authoring-preview-compositionで実施した。
