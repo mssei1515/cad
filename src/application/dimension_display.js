@@ -28,7 +28,17 @@
         dimensionLabelForConstraint, drawDimension: painter.drawDimension, dimensionUsesExpression });
       return Object.freeze({ selectionBounds, layer });
     }
-    return Object.freeze({ metrics, placement, layouts, painter, layout, createTraversal });
+    function createPreview({ readPending, drawFilletPreviewArc, evaluateDimensionExpressionDraft }) {
+      const { formatDisplayNumber, formatDimensionLabel } = window.NumberDisplay;
+      const { angleDegrees, angleDimensionAngles } = window.DimensionQueries;
+      return window.DimensionPreview.create({ readPending, drawDimension: (...args) => painter.drawDimension(...args),
+        drawFilletPreviewArc, dimensionFromAnchor: placement.dimensionFromAnchor,
+        applyDefaultCircleDimensionLabelOffset: placement.applyDefaultCircleDimensionLabelOffset,
+        defaultDimensionForTarget: placement.defaultDimensionForTarget, evaluateDimensionExpressionDraft,
+        formatDisplayNumber, angleDegrees, angleDimensionAngles, dimensionAnchor: placement.dimensionAnchor,
+        formatDimensionLabel, dimensionWithLabelAt: placement.dimensionWithLabelAt });
+    }
+    return Object.freeze({ metrics, placement, layouts, painter, layout, createTraversal, createPreview });
   }
   window.DimensionDisplay = Object.freeze({ create });
 })();
