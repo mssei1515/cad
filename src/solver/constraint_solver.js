@@ -1254,10 +1254,25 @@
         }
       }
       const diagonal = matrix.map((row, index) => row[index]);
+      // Cholesky fill cannot precede a row's first nonzero input column.
+      // Keep the remaining products in their original order; invalid input
+      // retains the dense path so zero times nonfinite values is not skipped.
+      const firstColumns = Array(n).fill(0);
+      let finiteMatrix = true;
+      for (let i = 0; i < n; i++) {
+        let first = i;
+        for (let j = 0; j <= i; j++) {
+          const value = matrix[i][j];
+          if (!Number.isFinite(value)) finiteMatrix = false;
+          if (value !== 0 && first === i) first = j;
+        }
+        firstColumns[i] = first;
+      }
+      if (!finiteMatrix) firstColumns.fill(0);
       for (let i = 0; i < n; i++) {
         for (let j = 0; j <= i; j++) {
           let value = matrix[i][j];
-          for (let k = 0; k < j; k++) value -= matrix[i][k] * matrix[j][k];
+          for (let k = Math.max(firstColumns[i], firstColumns[j]); k < j; k++) value -= matrix[i][k] * matrix[j][k];
           if (i === j) {
             // Squaring an ill-conditioned Jacobian may lose positive
             // definiteness. In that case retain the QR path below.
@@ -1291,22 +1306,28 @@
       let rank = 0;
       for (let r = 0; r < m && r < n; r++) {
         let pivotRow = -1, pivotCol = -1, largest = tolerance;
-        for (let i = r; i < m; i++) for (let j = r; j < n; j++) {
-          if (Math.abs(rows[i][j]) > largest) {
-            largest = Math.abs(rows[i][j]); pivotRow = i; pivotCol = j;
+        for (let i = r; i < m; i++) {
+          const row = rows[i];
+          for (let j = r; j < n; j++) {
+            const magnitude = Math.abs(row[j]);
+            if (magnitude > largest) {
+              largest = magnitude; pivotRow = i; pivotCol = j;
+            }
           }
         }
         if (pivotRow < 0) break;
         [rows[r], rows[pivotRow]] = [rows[pivotRow], rows[r]];
         [order[r], order[pivotCol]] = [order[pivotCol], order[r]];
         for (let i = 0; i < m; i++) [rows[i][r], rows[i][pivotCol]] = [rows[i][pivotCol], rows[i][r]];
-        const value = rows[r][r];
-        for (let j = r; j < n; j++) rows[r][j] /= value;
+        const pivot = rows[r];
+        const value = pivot[r];
+        for (let j = r; j < n; j++) pivot[j] /= value;
         for (let i = 0; i < m; i++) {
           if (i === r) continue;
-          const factor = rows[i][r];
-          for (let j = r + 1; j < n; j++) rows[i][j] -= factor * rows[r][j];
-          rows[i][r] = 0;
+          const row = rows[i];
+          const factor = row[r];
+          for (let j = r + 1; j < n; j++) row[j] -= factor * pivot[j];
+          row[r] = 0;
         }
         rank++;
       }
@@ -1930,8 +1951,14 @@
         for (let column = 0; column < row.length; column++) row[column] /= norm;
         for (let pass = 0; pass < 2; pass++) for (const vector of basis) {
           let factor = 0;
-          for (const [column, value] of vector) factor += row[column] * value;
-          if (factor !== 0) for (const [column, value] of vector) row[column] -= factor * value;
+          for (let index = 0; index < vector.length; index++) {
+            const entry = vector[index];
+            factor += row[entry[0]] * entry[1];
+          }
+          if (factor !== 0) for (let index = 0; index < vector.length; index++) {
+            const entry = vector[index];
+            row[entry[0]] -= factor * entry[1];
+          }
         }
         const length = vectorNorm(row);
         if (length <= rankTolerance) return false;
