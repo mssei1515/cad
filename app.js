@@ -4,7 +4,7 @@
   const { formatDisplayNumber, formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
   const { serializeReferenceImage } = window.ReferenceImageData;
   const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
-  const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners } = window.ReferenceImageGeometry;
+  const { referenceImageWorldToLocal } = window.ReferenceImageGeometry;
   const { serializeHatch } = window.HatchData;
   const { serializeAnnotation } = window.AnnotationData;
 
@@ -577,13 +577,16 @@
   const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
   const { pushAnnotation } = annotationCommand;
-  const referenceImageRenderer = window.ReferenceImageRenderer.create({
-    ctx, viewport, withCanvasState, createImage: () => new Image(), onImageLoad: draw, referenceImageCorners,
+  const referenceImageFeature = window.ReferenceImageFeature.create({
+    canvas, ctx, viewport, document, window, withCanvasState, createImage: () => new Image(),
+    readImages: () => editingScopeBinding.current.referenceImages, currentScope: workspace.current, canvasSelection, readHover: () => canvasHover.current,
+    isVisibleValue, isVisibleSketchId, activeSketchId, guardSketchEdit, clearSelection, applicationText, setHint, updateUI, draw, clearSnap: () => clearSnap(), hypot2,
+    hitReferenceImageAt, formatDisplayNumber, recordHistory, screenToWorld, nextId: () => documentIds.allocate("referenceImage"),
+    canCreateInActiveSketch, pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard, isGeometryMode,
+    isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
-  const { drawImages: drawReferenceImages, drawOverlays: drawReferenceImageOverlays } = window.ReferenceImageRenderer.createLayer({
-    renderer: referenceImageRenderer, readImages: () => editingScopeBinding.current.referenceImages, canvasSelection, readHover: () => canvasHover.current,
-    isVisibleValue, isVisibleSketchId, activeSketchId, readCalibrationPoints: () => referenceImageInteraction.calibrationPoints,
-  });
+  const { renderer: referenceImageRenderer, interaction: referenceImageInteraction, input: referenceImageInput } = referenceImageFeature;
+  const { drawImages: drawReferenceImages, drawOverlays: drawReferenceImageOverlays } = referenceImageFeature.layer;
   const { drawDrawingStack } = window.DrawingStack.create({
     currentScope: workspace.current, activeSketchId, geometryReads,
     isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
@@ -853,14 +856,6 @@
 
   function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
-  const referenceImageInteraction = window.ReferenceImageInteraction.create({
-    canEdit: item => guardSketchEdit(item.sketchId),
-    clearSelection, canvasSelection, applicationText, setHint, updateUI, draw, clearSnap,
-    beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
-    endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
-    viewScale: () => viewport.scale, hypot2, hitReferenceImageAt, referenceImageWorldToLocal, referenceImageLocalToWorld,
-    promptDistance: (message, value) => window.prompt(message, value), formatDisplayNumber, recordHistory,
-  });
   const { beginDrag: beginReferenceImageDrag, startCalibration: startReferenceImageCalibration, calibrationClick: handleReferenceImageCalibrationClick } = referenceImageInteraction;
 
   function decorateSerializedConstraint(data, constraint) { return constraintMetadata.decorate(data, constraint); }
@@ -1115,12 +1110,6 @@
     },
   });
 
-  const referenceImageInput = window.ReferenceImageInput.create({
-    window, document, applicationText, canvas, viewport, screenToWorld, currentScope: workspace.current, activeSketchId,
-    nextId: () => documentIds.allocate("referenceImage"), canCreateInActiveSketch, clearSelection, canvasSelection,
-    updateUI, draw, recordHistory, setHint, pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard,
-    isGeometryMode, isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
-  });
   referenceImageInput.bindClipboard();
   const { importFile: importReferenceImageFile, clipboard: imageClipboard } = referenceImageInput;
 
@@ -2065,7 +2054,7 @@
   documentFileFeature.bindControls();
   const pngExport = window.PngExport.create({
     document, window, canvas, rendering: pngRendering, text: applicationText, documentName: effectiveDocumentName,
-    prepareImages: () => referenceImageRenderer.ready(editingScopeBinding.current.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId))),
+    prepareImages: referenceImageFeature.prepareImages,
     readViewScale: () => viewport.scale, readMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
     pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
     withGeometryReadCache, findSnap: (point, tolerance) => drawingSnap.find(point, tolerance),
