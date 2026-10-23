@@ -104,7 +104,6 @@
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
-  const { DEFAULT_DOCUMENT_UNITS } = window.DocumentState;
   const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
     geometryIds, documentIds, reservation: idReservation, createReadContext } = window.DocumentWorkspace.create({
     applicationText, constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
@@ -118,7 +117,7 @@
     evaluateDimensionExpressionDraft: evaluateNamedDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
     dimensionConstraintsInNamespace, ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
-    validateParameterNamespace, prepareLoadedParameterNamespace,
+    validateParameterNamespace,
   } = parameterNamespace;
   function evaluateDimensionExpressionDraft(constraint, expression, namespace, options) {
     return evaluateNamedDimensionExpressionDraft(constraint?.annotationOwner ? null : constraint, expression, namespace, options);
@@ -145,16 +144,13 @@
     constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
     sketchRelationOfElement,
   } = sketchContext;
-  const constraintMetadata = window.ConstraintPersistence.createMetadata({
-    serializeConstraint, numericDimensionExpression, constraintSketchId,
-  });
   const sketchEditAccess = window.SketchCommand.createEditAccess({
     activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId, isGeometryMode,
     setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), draw,
   });
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
-  const { services: geometryReadServices, createScopeBinding } = createReadContext({
+  const { services: geometryReadServices, createScopeBinding, createPersistence } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
@@ -623,6 +619,11 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
+  const { dimensions: { serialize: serializeDimension }, codecs: constraintCodecs, metadata: constraintMetadata,
+    preparation: documentPreparation, writer: documentWriter, loading: documentLoading, geometryInstances: geometryInstancePersistence } = createPersistence({
+    placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
+    version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
+  });
   const sketchSolving = window.SketchSolving.create({
     currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, activeSketchId, elementSketchId,
     constraintSketchId, constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
@@ -655,12 +656,6 @@
     updateGeometrySelectionUI,
   });
   const { update: updateFilletRadiusPlacement, submit: submitFilletRadiusPlacement, click: handleFilletClick } = filletCommand;
-  const { loading: documentLoading, geometryInstances: geometryInstancePersistence } = window.DocumentLoading.createWithCodecs({
-    createBlockProjectionBundle, geometryInstanceBundlesForScope, elementSketchId, deserializeConstraint, constraintSketchId,
-    separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace,
-    isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint,
-    defaultUnits: DEFAULT_DOCUMENT_UNITS, applicationText, invalidateProjection: invalidateBlockProjectionCache, normalizeArcSweeps,
-  });
   const blockConfigurationCommand = window.BlockConfigurationCommand.create({
     currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, createBlockProjectionBundle,
     blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, constraintGraphNodes,
@@ -782,10 +777,6 @@
     return documentPreparation.appearance();
   }
 
-  const documentPreparation = window.DocumentApplication.createPreparation({
-    document: documentModel, currentScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
-    sketchContext, parameterNamespace, blockCatalog,
-  });
   function ensureBlockState() {
     return documentPreparation.blocks();
   }
@@ -991,20 +982,11 @@
 
   function reserveGeometryElementSequences(source) { return idReservation.geometry(source); }
 
-  const { dimensions: { serialize: serializeDimension }, codecs: constraintCodecs } = window.ConstraintPersistence.createWithDimensions({
-    geometryId: constraintGeometryId, placement: dimensionPlacement,
-  });
 
   function serializeConstraint(c) {
     return constraintCodecs.serialize(c);
   }
 
-  const documentWriter = window.DocumentSnapshot.createWriter({
-    workspace, prepare: documentPreparation.prepare, version: CURRENT_JSON_VERSION,
-    documentName: effectiveDocumentName, nextHatchIndex: () => documentIds.peek("hatch"),
-    geometryMetadata: geometryReadServices.createSnapshotMetadata({ pointUsage }),
-    constraintData: constraintMetadata.snapshotData,
-  });
 
   function serializeModel() { return documentWriter.serialize(); }
 
