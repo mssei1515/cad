@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Canvas選択の二段階組立て（2026-10-24、検証完了）
+
+基準develop／origin/developは190adbd。Hatch読取り接続9dbfc0dを統合・Pushし、構文606・単体1,876件・関連E2E226件は成功済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/canvas-selection-assemblyで実施した。
+
+src/application/canvas_selection_feature.jsへ初期のCanvasSelection→scope query→identity選択と、後段のSelectionHighlight→通常clearing→Document resetの組立てを集約した。初期5portと後段createPresentationの6portで同じ実ownerを共有し、hoverはPointUsage生成後の元の位置に残して後段へ渡す。Selection配列・target operands・hover／highlight・pointer・操作Sessionは既存ownerのままで、新たなstate・cache・可変phase接続・listenerは持たない。型と幾何ref／寸法照会は同じ不変libraryを共有する。rootのclearSelectionは早期identity callbackの遅延入口として保持し、生成時には操作を呼ばない。fixed state factoryより前へ通常clearingとDocument resetの生成を寄せたが、各constructorは照会・操作callback・表示更新を実行しないことを確認した。
+
+app.jsは2,600→2,594行（6行減）、この群のroot構築6→2、明示port29→11。未使用binding・追加接続の初期化前参照は0。実部品を使い、二段階の生成時無照会、現在Selectionとscope／寸法hoverの共有、locked identityの選択→guard、通常clearがcommand本体を保持する範囲、Document resetの異なる解除範囲、snap例外のpointer解除後・Selection field解除前での停止を4単体で確認した。関連33件・構文608ファイル・全単体1,880件は成功（cad-selection-feature-{focused,check,unit}.log）。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と初期化段階を記録し、loader／単体・構文manifest／file URL読込期待も同期した。
+
+既存UI・Sketch権限／表示／編集／移動／Tree削除・派生選択／コピー・glow・Annotation anchor・Block・command panel・保存再読込の関連E2E268件は4.2分で成功（runner41307 exit 0、自己起動port8799停止、cad-selection-feature-e2e.log）。file URL起動と読込順期待も成功し、.last-run.jsonはpassed／failedTests空。実装・仕様・loader同期・テストと再開資料の検証を完了し、Commit／Push・develop統合の対象とした。統合後の現在branch／HEADはGit現物を確認する。今回の全E2Eは未実行で、74a0d17の全587成功を直前の全体基準として区別する。週枠使用27%／残量73%、停止条件未到達。全体目標はactiveで未完了。
+
+次はPointUsage／CanvasHoverを作る早期の幾何照会と、hit／矩形／表示側が使う実ownerの依存を確認する。今回の二段階APIへ目的なく部品を追加したり、root callback全体をcontextで渡したりせず、共有するstate／read ownerと生成段階から次の境界を選ぶ。
 ### 最新：Hatchと展開図形の読取り接続（2026-10-24、検証完了）
 
 基準develop／origin/developはdf41dce。矩形選択組立て36f54c7を統合・Pushし、構文606・単体1,874件・関連E2E226件は成功済み。main／origin/mainはdf5aef2を保持する。現在はcodex/hatch-read-assemblyで作業中。

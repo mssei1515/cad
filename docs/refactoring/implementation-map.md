@@ -999,6 +999,7 @@ CanvasSelectionInteraction.createIdentitySelectionはCanvas pressのselectInacti
 - src/editing/draw_operation_lifecycle.js: resetForDocumentはDocument初期化時のLine／Centerline／円弧／Spline／投影／Instance等の16個の下書き破棄を順序どおり調整する。既存依存のみを使い、pending／Hatch／Selection／Document内容は初期化側が引き続き担当する。通常のexit／cancelとは独立した範囲を維持する。
 
 - src/editing/canvas_selection_interaction.js: createDocumentResetはDocument置換時のhover／highlight／pointer／snapと明示Selection fieldのresetを5依存で調整する。通常clear、早期Selection解除、pending／constraint session、Document／採番の初期化は統合せず既存の順序を維持する。
+- src/application/canvas_selection_feature.js: 選択／scope／identityの初期生成と、hover等の生成後のhighlight／clearing／Document resetの接続を二段階で所有する。同じ実ownerを共有し、通常clearとDocument resetの範囲・順序を維持する。状態複製や可変phase containerを持たない。
 
 - src/editing/document_ids.js: 11個のDocument採番状態を所有し、生成・preview照会・予約・reset・checkpoint復元を集約。createReservationは同じGeometryIds／DocumentIdsと現在Hatch採番readerの3依存で予約順を接続し、新たな採番状態を持たない。Geometry→添付要素、Block scopeではその後に現在Hatch値→scope予約とする。Block編集の番号予約とclipboardの8種類だけのrollbackを維持。GeometryIdsは基本形状、persistence/DocumentSequencesは読込時の復元計算に専念する。
 
