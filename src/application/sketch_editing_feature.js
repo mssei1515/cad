@@ -13,10 +13,20 @@
       nextSketchId: () => ids.allocate("sketch"), clearInteractionForSketchChange, setHint, updateUI, draw, recordHistory,
       promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, applicationText, prepareLockToggle,
     });
-    function createMove({ prepare, refresh }) {
+    function createMove({ prepare, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity }) {
+      function refreshGeometry() {
+        const { invalidateBlockProjectionCache } = projections;
+        invalidateBlockProjectionCache();
+        geometryReads.clearReadCache();
+        hatches.clear();
+        const { blockProjectionBundles, geometryInstanceBundles } = geometryReads;
+        rebinding.rebuildDocument(readEditingScope(), [...blockProjectionBundles(), ...geometryInstanceBundles()]);
+        analysis.invalidate();
+        refreshReferenceConstraintValidity();
+      }
       const query = window.SketchMove.create({ currentScope, activeSketchId, constraintGraphNodes, constraintSketchId,
         resolveGeometryRef, geometryInstanceDependencyRefs, isReferenceSourceSketchId, applicationText });
-      return window.SketchMoveCommand.create({ currentScope, activeSketchId, selection, query, prepare, refresh,
+      return window.SketchMoveCommand.create({ currentScope, activeSketchId, selection, query, prepare, refresh: refresh === undefined ? refreshGeometry : refresh,
         clearSelection, updateUI, draw, setHint, recordHistory, applicationText });
     }
     function createDeletion({ rejectReferencedGeometryDeletion, log, geometryElementKey, guardDimensionSymbolDeletion,

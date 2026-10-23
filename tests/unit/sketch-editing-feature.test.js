@@ -6,7 +6,7 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture() {
+function fixture(configureMove) {
   const empty = () => ({ ...Object.fromEntries([...w.SketchMove.fields, 'constraints', 'geometryInstances'].map(field => [field, []])),
     activeSketchId: 'S1', sketches: [{ id: 'ROOT', kind: 'root', name: 'Root' },
       { id: 'S1', kind: 'sketch', name: 'Sketch-1', parentSketchId: 'ROOT' }, { id: 'S2', kind: 'sketch', name: 'Destination', parentSketchId: 'ROOT', visible: false }] });
@@ -19,14 +19,16 @@ function fixture() {
   const selection = w.CanvasSelection.create();
   const ids = { allocate(kind) { assert.equal(this, ids); assert.equal(kind, 'sketch'); return `S${state.sequence++}`; } };
   const projections = { blockAllProjectionBundle: item => item.bundle, invalidateBlockProjectionCache: notify('cache') };
+  const geometryReads = { resolveGeometryRef: resolve };
   const feature = w.SketchEditingFeature.create({ currentScope: read, sketches, ids, selection, constraintReferences,
-    geometryReads: { resolveGeometryRef: resolve }, projections, clearSelection: () => { calls.push(['selection']); selection.clear(); },
+    geometryReads, projections, clearSelection: () => { calls.push(['selection']); selection.clear(); },
     clearInteractionForSketchChange: () => { calls.push(['interaction']); state.move?.reset(); },
     applicationText: (_ja,en) => { assert.equal(state.ready, true); return en; }, setHint: notify('hint'), updateUI: notify('ui'),
     draw: notify('draw'), recordHistory: notify('history'), promptName: () => null,
     effectiveAppearanceForElement: item => item.appearance || {}, clearTreeHover: notify('hover'), clearSnap: notify('snap'),
     guardEdit: () => true, prepareLockToggle: notify('lock') });
-  const move = feature.createMove({ prepare: notify('prepare'), refresh: () => { notify('refresh')(); if(state.refreshError) throw state.refreshError; } });
+  const moveOptions = configureMove ? configureMove({ state, calls, geometryReads, projections }) : { refresh: () => { notify('refresh')(); if(state.refreshError) throw state.refreshError; } };
+  const move = feature.createMove({ prepare: notify('prepare'), ...moveOptions });
   const deletion = feature.createDeletion({ rejectReferencedGeometryDeletion: items => items.length > 0, log: notify('log'),
     geometryElementKey: item => item?.id, guardDimensionSymbolDeletion: () => state.symbols,
     annotationReferencesRemovedGeometry: () => false, clearSketchSolveState: notify('clear-solve'),
@@ -68,4 +70,50 @@ test('shared Sketch editing preserves move cancellation, deletion rejection and 
   assert.deepEqual(other.names(), ['refresh','hint','ui','draw']);
   assert.equal(JSON.stringify(other.state.scope), beforeMove);
   assert.equal(other.state.scope.points[0], other.point); assert.equal(other.move.active, true);
+});
+
+const refreshOrder = ['block-cache','geometry-cache','hatch-cache','bound-scope','blocks','instances','rebind','analysis','references'];
+function refreshingFixture() {
+  const f = fixture(({ state, geometryReads, projections }) => {
+    state.stages = []; state.boundScope = {}; state.blockBundles = [{}]; state.instanceBundles = [{}];
+    const step = name => {
+      assert.equal(state.ready, true); assert.equal(state.scope.points[0].sketchId, 'S2');
+      state.stages.push(name); if (state.failStage === name) throw new Error(`failed ${name}`);
+    };
+    projections.invalidateBlockProjectionCache = function() { 'use strict'; assert.equal(this, undefined); step('block-cache'); };
+    geometryReads.clearReadCache = function() { assert.equal(this, geometryReads); step('geometry-cache'); };
+    geometryReads.blockProjectionBundles = function() { 'use strict'; assert.equal(this, undefined); step('blocks'); return state.blockBundles; };
+    geometryReads.geometryInstanceBundles = function() { 'use strict'; assert.equal(this, undefined); step('instances'); return state.instanceBundles; };
+    const hatches = { clear() { assert.equal(this, hatches); step('hatch-cache'); } };
+    const rebinding = { rebuildDocument(scope, bundles) {
+      assert.equal(this, rebinding); assert.equal(scope, state.boundScope); assert.notEqual(scope, state.scope);
+      assert.deepEqual(Array.from(bundles), [...state.blockBundles, ...state.instanceBundles]); step('rebind');
+    } };
+    const analysis = { invalidate() { assert.equal(this, analysis); step('analysis'); } };
+    return { readEditingScope: () => { step('bound-scope'); return state.boundScope; }, hatches, rebinding, analysis,
+      refreshReferenceConstraintValidity: function() { 'use strict'; assert.equal(this, undefined); step('references'); } };
+  });
+  assert.deepEqual(f.state.stages, []); f.selection.set('points', [f.point]); f.move.start(); f.move.choose('S2'); f.calls.length = 0;
+  return f;
+}
+
+test('Sketch move refresh reads current bound scope and bundles after cache invalidation, then records one history', () => {
+  const f = refreshingFixture(); f.state.boundScope = { id: 'latest bound scope' }; f.state.blockBundles = [{ id: 'latest block bundle' }];
+  assert.equal(f.move.commit(), true); assert.deepEqual(f.state.stages, refreshOrder);
+  assert.equal(f.point.sketchId, 'S2'); assert.equal(f.state.scope.points[0], f.point); assert.equal(f.move.active, false);
+  assert.equal(f.calls.filter(call => call[0] === 'history').length, 1); assert.equal(f.selection.points.length, 0);
+});
+
+test('each Sketch move refresh failure stops later stages and restores ownership while retaining selection and retry state', () => {
+  for (const [index, stage] of refreshOrder.entries()) {
+    const f = refreshingFixture(), before = JSON.stringify(f.state.scope), constraints = f.state.scope.constraints;
+    f.state.failStage = stage;
+    assert.equal(f.move.commit(), false, stage); assert.deepEqual(f.state.stages, refreshOrder.slice(0, index + 1), stage);
+    assert.equal(JSON.stringify(f.state.scope), before, stage); assert.equal(f.state.scope.constraints, constraints);
+    assert.equal(f.state.scope.points[0], f.point); assert.equal(f.selection.points[0], f.point); assert.equal(f.move.active, true);
+    assert.deepEqual(f.names(), ['hint','ui','draw']); assert.equal(f.calls[0][1].includes(`failed ${stage}`), true);
+    f.state.failStage = null; f.state.stages.length = 0; f.calls.length = 0;
+    assert.equal(f.move.commit(), true, stage); assert.deepEqual(f.state.stages, refreshOrder);
+    assert.equal(f.calls.filter(call => call[0] === 'history').length, 1);
+  }
 });

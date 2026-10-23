@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Sketch移動後の更新手順を所有者へ統合（2026-10-24、検証完了）
+
+基準develop／origin/developは8de34b0。本単位はcodex/sketch-move-refreshで実施した。SketchEditingFeature.createMoveが既定のrefreshGeometryを構築し、同じBlock projections・Geometry readerを用いて、Block cache→Geometry cache→Hatch cache→実editing scopeとBlock／派生Instance bundleで拘束再接続→分析無効化→参照有効性更新の順に委譲する。移動planのcurrentScopeと再接続対象のreadEditingScopeを混同せず、後者とbundleは更新時に読み、従来のmethod receiver／bare callbackを維持する。途中例外の捕捉・所属／参照metadata／描画順／元拘束配列の復元は実SketchMove.apply、成功／失敗通知とsession／Selection／履歴は実SketchMoveCommandに維持する。新たな求解・cache巻戻し・stateは追加しない。明示refresh callbackを使う旧createMoveも維持し、この場合は既定の更新依存を読まない。
+
+app.jsは2,443→2,436行（7行減）。対象生成1→1で、root直下の引数は2→6へ増加する。旧refresh callback内でappに閉じていた更新手順を既存Sketch編集ownerへ移管する変更であり、引数削減の成果と取り違えない。root未使用binding／初期化前参照0（TEMP cad-sketch-move-refresh-audit.cjs）。
+
+追加2単体で、実移動commandが所属変更後に更新を始め、各method／bare callbackのreceiverと更新順、操作時のbound scopeと投影bundleを使い、成功時だけ一回の履歴を記録することを確認した。九つの途中段階（Block／Geometry／Hatch cache・bound scope・Block／Instance bundle・再接続・分析・参照）それぞれの例外では後続が停止し、Geometry／元拘束配列の同一性と所属／描画順・Selectionが復元／維持され、移動sessionで再試行できる。関連単体37件、全単体1,932件は成功。構文614ファイル、関連E2E212件（Sketch権限／移動・Block・Hatch・派生pattern・phase0保存互換性／描画比較・既存UI）も全成功（3.1分、exit 0、runner33537）。TEMP cad-sketch-move-refresh-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server26096の停止と二つの製品source hash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準f6727f7と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用21%／残量79%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残存rootの機能生成とbind／startの段階を再確認する。app内に残るoperation手順と機能間接続を区別し、既存ownerが共有する依存を使ってまとめられる単位を選ぶ。今回の7行減を200〜500行のcomposition root達成とは扱わない。
+
+
 ### 最新：Sketch編集の段階的な生成を機能層へ集約（2026-10-24、検証完了）
 
 基準develop／origin/developは9b4aa8e。本単位はcodex/sketch-editing-compositionで実施した。新しいsrc/application/sketch_editing_feature.jsのSketchEditingFeatureが実SketchCommand、実SketchMove query→SketchMoveCommand、実SketchDeletionCommandの生成・共有依存接続を所有する。currentScope・SketchContext・Document IDs・Selection・Geometry read・Block projections・ConstraintReferencesとinteraction reset／選択解除・UI／履歴を共有する。基本commandはcreate、移動は後段createMove、削除はHatch生成後のcreateDeletionで生成し、旧constructor順とTree外入力bindingの時機を維持する。Lock準備とMove準備の取消順は別のcallbackのままで、移動先選択・削除plan・モデル変更・復元・履歴は既存ownerに残す。新feature自身はsessionやcacheを持たず、巨大app contextや新global操作状態は追加しない。

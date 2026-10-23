@@ -1439,17 +1439,10 @@
   });
   const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleLock: toggleSketchLock, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
-  function refreshSketchMoveGeometry() {
-    invalidateBlockProjectionCache();
-    geometryReads.clearReadCache();
-    hatchGeometryQuery.clear();
-    constraintRebinding.rebuildDocument(editingScopeBinding.current, [...blockProjectionBundles(), ...geometryInstanceBundles()]);
-    constraintAnalysis.invalidate();
-    refreshReferenceConstraintValidity();
-  }
   sketchMoveCommand = sketchEditing.createMove({
     prepare: () => { cancelConstraintTargetCommand(""); cancelPendingCommand(""); exitDrawMode(); canvasHover.clear(); },
-    refresh: refreshSketchMoveGeometry,
+    readEditingScope: () => editingScopeBinding.current, hatches: hatchGeometryQuery, rebinding: constraintRebinding,
+    analysis: constraintAnalysis, refreshReferenceConstraintValidity,
   });
   // Destination mode keeps all editing input in the tree until commit or cancellation.
   const sketchMoveInputBinding = window.SketchTreeController.createMoveInputBinding({ document, isMoving: () => sketchMoveCommand.active });
