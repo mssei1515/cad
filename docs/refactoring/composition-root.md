@@ -6,6 +6,21 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：寸法値編集と特殊寸法支援の生成（2026-10-23）
+
+基準develop 2be5478からcodex/dimension-value-assemblyで実施。既存DimensionValueCommandにcreateWithEditingSupportを追加し、createEditingSupport→createの生成・接続を同じownerへ集約した。共通の式評価／対象解決／エラー通知／履歴を一度だけ受け取り、同じ関数と実Selection／特殊操作ownerを渡す。返すのは実際の値編集commandであり、新たなwrapper state／model／pending／rollbackを持たない。app全体のcontextを渡す変更ではなく、両既存factoryの限定された編集依存を共有する。新しいfile／folder／scriptは追加しない。
+
+app.jsは2,671→2,668行（3行減）、この群のroot構築2→1、明示引数45→38（旧側のsupport spreadも一項として数える）。依存の重複を減らす単位であり、38項の構築がまだ大きいことと200〜500行の全体目標が未完了であることを隠さない。最初の寸法のfootprint取得／復元、通常寸法のsnapshot復元、入力Controllerの接続は現在の呼出し側・ownerに残す。後段dimensionDrag.resetは遅延callbackのまま。既存create／createEditingSupportの本体は改行形式を揃えたAST範囲比較で一致し、旧公開APIも維持した。最初の文字列比較はGitと作業treeのCRLF／LF差で不一致だったため、改行だけ正規化して確認した。
+
+自己外参照なしroot bindingは0、直接引数を含めた初期化前参照0をAST監査。一時診断はcad-dimension-value-audit.cjs。新たなscript登録は不要で、file URL Helpでは既存scriptから追加入口を確認する。UI期待値・性能上限・timeout・保存versionは変更していない。
+
+構文602ファイル・全単体1,856件・関連単体18件・file URL Help読込1件が成功。追加2件で新しい生成入口から通常寸法の求解失敗時の式復元／入力保持・最初の寸法のscale→挿入→画面復元を確認し、特殊寸法の成功／拒否と同じpendingの保持、現在Parameter名前空間と符号付き角度の評価、履歴の重複がないことを確認した。既存の個別factoryテストも引き続き実行する。
+
+旧2be5478のindex／app／DimensionValueCommandの三つを実際に差し替え、旧版に追加入口がないことと全route利用をassertしたブラウザ比較では、77状態でmodel・clipboard・mode・履歴・Selection・Hint・command panel・寸法入力欄の値／表示／検証状態／配置style／式highlightとAPI204 key順が一致した。savedAtだけ除外。一時診断はcad-dimension-value-equivalence.cjs／.log。
+
+関連E2E14ファイル304件が全成功（4.8分、exit 0）。通常寸法の13fileにfree-instanceを追加し、派生Instance／角度間隔・注記基準点・Propertiesと求解を含めて確認した。runner終了と自己起動port8793のserver停止を確認済み。Commit／Pushしてdevelopへ統合し、検証済みsourceとのtree同一性を確認する。ログはcad-dimension-value-{focused,check,unit,loader,e2e}.log。最新全E2Eは未実行で、前単位282件やrelease587件を今回の全体検証に代用しない。
+
+main／origin/mainはdf5aef2のまま。週枠は開始使用14%／残量86%、検証後使用15%／残量85%で新たな分離の停止条件未到達。次はappに残るAnnotationInputControllerの組立てを監査する。AnnotationFeatureの生成段階と既存注記の編集開始段階を区別し、textarea生成・bindの時機、準備取消とSelection、layout／metrics fallbackと画面font size、通常本文のmodel更新・履歴とParameter確定の責務境界を確認する。UIやapplication組立てへmodel変更を移さず、既存command ownerを使う方針で検討する。次単位の実装はまだ行っていない。
 ### 最新：寸法入力UIの生成・接続（2026-10-23）
 
 基準develop b1c8bb9からcodex/dimension-input-assemblyで実施。src/application/dimension_input.jsへDimensionInputView／Controllerの生成、共有DimensionDisplayのlayout／placement／label offset、現在viewport倍率、後段の入力bindを接続する責務を集約した。入力表示と操作をDimensionDisplayへ混在させず、同じ実ControllerをOffset／Fillet／寸法編集／KeyboardInputへ公開する。pending sessionのreaderをそのまま使い、新たなbuffer／モデル／履歴／rollbackを追加しない。app.jsは2,675→2,671行（4行減）、この群のroot構築2→1、明示引数25→20。行数のための圧縮や全体目標の完了とは扱わない。

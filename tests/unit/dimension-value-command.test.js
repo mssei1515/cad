@@ -5,10 +5,11 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/commands/dimension_value_command.js'), 'utf8'), sandbox);
-function fixture({ existing = false, success = true, value = 25, added = true, special = null } = {}) {
+function fixture({ existing = false, success = true, value = 25, added = true, special = null, withEditingSupport = false } = {}) {
   const constraint = { expression: '10' }, calls = [];
   let pending = { type: 'distance-value', target: {}, buffer: '25', dimension: {}, constraint: existing ? constraint : null };
-  const command = sandbox.window.DimensionValueCommand.create({
+  const create = withEditingSupport ? sandbox.window.DimensionValueCommand.createWithEditingSupport : sandbox.window.DimensionValueCommand.create;
+  const command = create({
     ...(special === null ? {} : { submitSpecialDistance: () => { calls.push('special'); return special; } }),
     getPending: () => pending, setPending: p => { pending = p; calls.push('clear'); },
     expressionFromUserInput: value => value, evaluateDimensionExpressionDraft: () => { if (value instanceof Error) throw value; return value; },
@@ -222,4 +223,31 @@ test('composed special submit retains the general permission, evaluation and pen
   const f = supportFixture(), constraint = intervalConstraint();
   const denied = sandbox.window.DimensionValueCommand.create({ ...f.ports, ...f.support, canEdit: () => false, constraintSketchId: () => 'S' });
   assert.equal(denied.commitProperty(constraint, 'constraint-expression', 'x'), false); assert.deepEqual(f.events, []);
+});
+
+test('combined factory preserves ordinary solver rollback and first-dimension framing through the same command', () => {
+  const failed = fixture({ withEditingSupport: true, existing: true, success: false }); failed.command.submit();
+  assert.equal(failed.constraint.expression, '10'); assert.ok(failed.pending());
+  assert.deepEqual(failed.calls, ['restore', 'hint', 'sync', 'ui', 'draw']);
+  const first = fixture({ withEditingSupport: true }); first.command.submit();
+  assert.deepEqual(first.calls, ['footprint', 'scale', 'add', 'clear', 'hide', 'frame', 'hint', 'draw']);
+});
+
+test('combined factory shares live special-target callbacks and retains accepted versus rejected pending objects', () => {
+  for (const interval of [false, true]) for (const accepted of [false, true]) {
+    const f = supportFixture(); f.state.ready = false;
+    let pending = { type: 'distance-value', target: interval ? { interval: true } : {}, constraint: interval ? intervalConstraint() : { annotationOwner: {} }, buffer: '=x' };
+    const original = pending;
+    const command = sandbox.window.DimensionValueCommand.createWithEditingSupport({ ...f.ports,
+      canEdit: () => true, getPending: () => pending, setPending: value => { f.events.push(['pending', value]); pending = value; },
+      constraintSketchId: () => 'S', hideDimensionValueInput: () => f.events.push(['hide']), updateUI: () => f.events.push(['ui']), draw: () => f.events.push(['draw']),
+    });
+    assert.deepEqual(f.events, []); f.state.ready = true; f.state.namespace = 'block'; f.state.value = interval ? -30 : 30;
+    f.state.intervalResult = f.state.accepted = accepted;
+    command.submit(); assert.equal(pending, accepted ? null : original);
+    assert.equal(f.events.find(event => event[0] === 'evaluate')[3], 'block');
+    assert.equal(f.events.find(event => event[0] === 'evaluate')[5].signedAngle, interval);
+    assert.equal(f.names().filter(name => name === 'history').length, !interval && accepted ? 1 : 0);
+    assert.equal(f.names().includes('hide'), accepted); assert.deepEqual(f.names().slice(-2), ['ui', 'draw']);
+  }
 });
