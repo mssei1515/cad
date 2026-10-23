@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Block編集とViewの共有結線（2026-10-24、検証完了）
+
+基準develop／origin/developは7833e02。本単位はcodex/block-view-featureで実施した。BlockEditingFeature.createCommandsがcreateViewを返し、同じBlockEditorSession／Queries・CanvasSelection・実Definition／Completion command、updateBlockUI・履歴を実BlockViewへ結線する。appから追加するのはdocument／escapeHtml／配置開始／localizeの四つ。編集名／一覧／使用数／選択IDは操作時に同じownerを読み、nameのinputとchangeの区別・sessionがある場合だけの履歴、refresh→localize→dialog表示、入力保持、cancel／completeの既存順を維持する。View生成とbindは旧位置、commandのView参照は既存の遅延callbackで、追加session／state・汎用app contextは作らない。
+
+app.jsは2,420→2,409行（11行減）。対象生成1→1、root直下引数16→4、未使用binding／初期化前参照0（TEMP cad-block-view-feature-audit.cjs）。name／使用数等の内部照会と編集操作の個別接続をfeatureへ閉じ、不要なroot query／rename／remove aliasを除去した。
+
+実BlockView・session・query・Definition／Completionを使う追加2単体で、生成時のDOM／model無読取り、定義scopeと使用数・Selectionの共有、escape・編集中name入力保持、inputとchange時のhistory区別、配置のdialog終了→callback、cancelのhost復元と古い入力の無履歴、registry rename・使用中削除拒否・定義削除、実Viewからのcomplete成功と一回のhistoryを確認した。既存のテスト期待は変更していない。関連単体19件、全単体1,940件は成功。構文614ファイルと関連E2E185件（Block・Block geometry fixed・派生pattern・phase0保存互換性／描画比較・既存UI）も全成功（2.7分、exit 0、runner17592）。TEMP cad-block-view-feature-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server25312の停止と二つの製品source hash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準f6727f7と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用24%／残量76%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残存rootの構築と機能間接続を再確認し、既存ownerの公開APIと共有依存を使える単位を選ぶ。11行減を最終の200〜500行達成と扱わず、責務境界を優先して継続する。
+
+
 ### 最新：Sketch編集とTreeの共有依存を機能層へ集約（2026-10-24、検証完了）
 
 基準develop／origin/developは15736d8。本単位はcodex/sketch-tree-featureで実施した。SketchEditingFeature.createTreeで実SketchTreeController.createWithDocumentObjectsを生成し、既存SketchContext・Selection・基本SketchCommand・共通UI／draw・選択解除・編集guardを共有する。Move／Deletionの実owner、object metadata・readServices／Hover／Highlight、外部の編集操作は個別に接続する。TreeのdimensionScope、Viewのbound viewScope、commandのcurrentScopeを区別し、Objects／View／Controller／menuの実APIとmenu後段代入／startの時機を維持する。Treeの操作状態・DOM表示、モデルの更新は既存ownerに残す。新しい可変context・session・UI stateやlistenerは作らない。
