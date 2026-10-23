@@ -93,6 +93,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：拘束codecと寸法保存の接続（2026-10-24、検証完了）
+
+基準develop／origin/developは123c50f。直前の寸法Preview接続10c48b1は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/constraint-dimension-codecsで実施した。
+
+Documentの保存・読込・履歴全体を一括で包む案は、Document／Blockの復元範囲と初期化段階を隠すため採用しない。今回は既存ConstraintPersistenceへcreateWithDimensionsを追加し、同じDimensionPlacementの角度移行／anchor／保存axisをDimensionPersistenceへ接続し、constraint.dimensionと既存targetFromConstraintを渡す拘束codecを生成する。返すdimensions／codecsは各既存factoryの実APIで、診断も同じ寸法serializerを使う。旧createのdimensionData注入APIとcreateMetadata・Snapshot writer・Loading／Application・履歴の境界は維持する。
+
+app.jsは2,563→2,558行（5行減）。対象のroot構築2→1、明示port5→2。不要になった角度移行・保存axisのroot別名を除き、AST監査でroot未使用bindingと追加接続の初期化前参照は0（cad-constraint-dimension-codecs-audit.cjs）。生成位置と順序を維持し、新しいscope・モデル・保存cacheや可変phase参照は持たない。
+
+実DimensionPlacement／DimensionPersistence／ConstraintPersistenceを使う2単体を追加した。characterization fixtureの25種類以上の拘束で旧接続とJSON文字列一致および復号→再保存の一致、生成時の無照会、同じIDを持つDocument／Blockの明示Map別参照、寸法serializerの共有、anchor失敗の伝播とgeometry不変を確認した。既存期待は変更せず、関連単体17件・全単体1,898件・構文610ファイルが成功（cad-constraint-dimension-codecs-{focused,unit,check}.log）。新file／script一覧変更・UI／保存形式変更はない。spec/architecture/モジュール構成.mdとimplementation-map.mdへ内部設計を追記した。
+
+既存UI・phase0保存互換性／描画比較・Sketch投影／互換driver・派生pattern・ブックマーク・寸法prefix／複数寸法／Slotの関連E2E182件が全成功（2.6分、exit 0、runner74024、cad-constraint-dimension-codecs-e2e.log）。検証中はsourceを固定し、receiptのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した（cad-constraint-dimension-codecs-e2e-receipt.json、cad-constraint-dimension-codecs-last-run.json）。今回の全E2Eは未実行で、直前の全体基準は74a0d17の全587件成功。週枠使用4%／残量96%、停止条件未到達。mainは停止・release時に最後に反映する方針を維持し、全体目標はactiveで未完了。
+
+次も復元scopeと初期化段階を維持しつつ、残る機能構築の依存を再監査する。codecの変換、モデルへの適用、履歴とUIの責務を名前だけでまとめない。小さな引数削減だけで数百行へ届くとは見積もらない。
+
 ### 最新：寸法表示とプレビューの共有接続（2026-10-24、検証完了）
 
 基準develop／origin/developはceab869。直前の基本作図プレビュー75ec188は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/dimension-preview-compositionで実施した。

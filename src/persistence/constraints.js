@@ -462,5 +462,16 @@
     }
     return Object.freeze({ serialize: constraintCodecs.serialize, deserialize: deserializeConstraint, types: constraintCodecs.types });
   }
-  window.ConstraintPersistence = Object.freeze({ create, createMetadata, isDimensionConstraint });
+  function createWithDimensions({ geometryId, placement }) {
+    const { targetFromConstraint } = window.DimensionQueries;
+    const dimensions = window.DimensionPersistence.create({
+      migrateAngleDimensionLabelPlacement: placement.migrateAngleDimensionLabelPlacement,
+      dimensionAnchor: placement.dimensionAnchor, storedDimensionAxis: placement.storedDimensionAxis,
+    });
+    const { serialize: serializeDimension } = dimensions;
+    const codecs = create({ geometryId,
+      dimensionData: constraint => serializeDimension(constraint.dimension, targetFromConstraint(constraint)) });
+    return Object.freeze({ dimensions, codecs });
+  }
+  window.ConstraintPersistence = Object.freeze({ create, createWithDimensions, createMetadata, isDimensionConstraint });
 })();

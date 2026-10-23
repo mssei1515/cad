@@ -508,7 +508,7 @@
     submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
   });
   const { controller: dimensionInputController } = dimensionInput;
-  const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
+  const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, dimensionWithLabelAt, angleDimensionFromLabelPoint, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
   const { jisDimensionTextAngle, dimensionTextOffset, angleDimensionLayout } = dimensionLayouts;
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
@@ -1005,13 +1005,8 @@
 
   function reserveGeometryElementSequences(source) { return idReservation.geometry(source); }
 
-  const { serialize: serializeDimension } = window.DimensionPersistence.create({
-    migrateAngleDimensionLabelPlacement, dimensionAnchor, storedDimensionAxis,
-  });
-
-  const constraintCodecs = window.ConstraintPersistence.create({
-    geometryId: constraintGeometryId,
-    dimensionData: (constraint) => serializeDimension(constraint.dimension, targetFromConstraint(constraint)),
+  const { dimensions: { serialize: serializeDimension }, codecs: constraintCodecs } = window.ConstraintPersistence.createWithDimensions({
+    geometryId: constraintGeometryId, placement: dimensionPlacement,
   });
 
   function serializeConstraint(c) {
