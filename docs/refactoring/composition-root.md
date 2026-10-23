@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Canvas workspaceの入力生成と共有依存（2026-10-24、検証完了）
+
+基準develop／origin/developは12bff79。本単位はcodex/canvas-workspace-inputで実施した。CanvasDisplay.createWorkspaceがcreateInputBindingを返し、同じcanvas／document・viewport／navigation・保留入力reader／寸法入力同期・menu終了を、既存CommandRoutingとInputBindingへ接続する。外から渡すのはpointer、panel／PNGの現在reader、blank gesture／空白判定、scheduler／commit計測だけ。実Bindingを返し、bindはappの従来位置に維持する。既存createとcreateCommandRouting APIを維持し、状態・cache・listenerやモデルを複製しない。
+
+app.jsは2,508→2,504行（4行減）。対象構築2→1、明示port19→7、root未使用binding／追加接続の初期化前参照0（TEMP cad-workspace-input-audit.cjs）。wheel後の入力同期はresize／layoutと同じisValueInputPendingを使い、既存のdistance-value／offset-value判定を維持する。座標変換・書式・status DOM照会の接続をworkspaceへ集め、通常inputとcommand routingの処理規則は既存ownerに残す。rootに新たな操作状態や巨大contextを作らない。
+
+実viewport／navigation／CommandRouting／InputBindingを使う追加2単体で、生成時の無照会・bind時機、処理済み座標表示・shift転送、wheelのflush→menu終了→zoom→保留入力判定→必要時同期、倍率増加とworld固定点維持、flush例外時の短絡とviewport無変更、panel消費とdouble click一回抑止、PNG左button完了抑止・通常pointer復帰・commit計測を確認した。新fixtureのwheelにはclient座標も与え、NaNによる見かけ上の成功を避けた。既存期待・E2E規則は変更しない。関連単体20件、全単体1,917件、構文612ファイルが成功。
+
+command panel・zoom input・PNG出力・注記入力／drag・参照画像・selection zoom・phase0保存互換性／描画比較・既存UIの関連E2E158件は全成功（2.4分、exit 0、runner82840）。TEMP cad-workspace-input-e2e-receipt.jsonのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止、製品source二つのhash不変を確認した。ログはcad-workspace-input-{focused,unit,check,e2e}.log。spec/architecture/モジュール構成.mdとimplementation-map.mdへ内部設計を記録した。全E2Eは今回未実行で、17defd0の全587件成功および直前12bff79の性能を含む関連265件成功と区別する。
+
+週枠使用14%／残量86%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次はrootの機能組立てと起動段階を引き続き再監査する。通常操作・UI・Document lifecycleを単一の大きなcontextへ移すだけの案は採用せず、同じ実ownerが持つ依存を共有して内部生成と機能間接続を分ける。200〜500行の目標は維持し、今回の4行減だけで大幅な縮小が済んだとは扱わない。
+
 ### 最新：共有求解準備と初期化段階の整理（2026-10-24、検証完了）
 
 基準develop／origin/developは64233c5。本単位はcodex/shared-solve-preparationで実施した。ConstraintSolvePreparation.createForSolverが既存の型・幾何helperをcreateへ結線し、同じ実precondition／stepNorm／withStepNormを返す。実行時依存はsolver・直接半径寸法照会・OffsetChain計画・最小長二つに限定する。Offset生成後・DimensionValueCommand生成前に一度構築し、同じAPIを寸法値編集とConstraintCommitCommandへ渡す。createと各commandの個別関数注入を維持し、明示値を優先する。数値計算・幾何前処理・snapshot／rollback・求解条件・UI・保存形式は変更しない。
