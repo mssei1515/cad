@@ -20,7 +20,7 @@ function fixture() {
 }
 
 function sceneFixture(configure = () => {}) {
-  const empty = () => ({ points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], referenceImages: [], blockInstances: [], geometryInstances: [], hatches: [] });
+  const empty = () => ({ points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], annotations: [], referenceImages: [], blockInstances: [], geometryInstances: [], hatches: [] });
   const state = { ready: false, scope: empty(), dimensionScope: empty(), mode: 'select', active: 'S1', pending: null, command: null,
     hidden: false, locked: false, blocks: [], instances: [], reads: [], error: null };
   const read = name => { assert.equal(state.ready, true); state.reads.push(name); if (state.error) throw state.error; };
@@ -263,4 +263,53 @@ test('hit reader exceptions propagate without fabricating a press result or chan
   assert.throws(() => f.api.hover.updateOrdinary(f.p), value => value === error); assert.deepEqual(f.names(), ['hitAnnotationElement']); assert.equal(f.canvasHover.current, previous); assert.deepEqual({ ...f.canvasHover.current }, before);
   f.calls.length = 0; assert.throws(() => f.api.press.read(f.p), value => value === error); assert.equal(f.calls.at(-1)[0], 'hitAnnotationElement'); assert.equal(f.canvasHover.current, previous); assert.deepEqual({ ...f.canvasHover.current }, before);
   f.state.error = null; f.values.hitLine = line; f.api.hover.updateOrdinary(f.p); assert.equal(f.canvasHover.current.line, line);
+});
+
+test('context query shares live scope and visibility while preserving point and edited fit point priority', () => {
+  const calls = [], f = sceneFixture(ports => {
+    ports.pointUsage.isExplicitPoint = point => { calls.push('explicit'); return point.id !== 'endpoint'; };
+    ports.pointUsage.isSelectableEndpointPoint = point => { calls.push('endpoint'); return true; };
+    ports.sketchContext.isEditableSketchElement = () => { throw new Error('visibility is distinct from editing permission'); };
+  });
+  const { state, queries } = f; state.ready = false;
+  const query = queries.createContextQuery({ editedFitPoints: () => state.edited, canvasContextAnnotationHit: () => null });
+  assert.deepEqual(calls, []); assert.deepEqual(state.reads, []); state.ready = true;
+  const explicit = f.point('explicit', 0, 0, 'S2'), endpoint = f.point('endpoint', 4, 0, 'S2');
+  state.scope.points.push(explicit, endpoint); state.mode = 'line'; state.pending = {}; state.locked = true;
+  assert.deepEqual(Array.from(query.candidatesAt({ x: 0, y: 0 }), target => target.item), [explicit, endpoint]);
+  assert.deepEqual(calls, ['explicit','explicit','endpoint']);
+  state.edited = [endpoint]; assert.equal(query.candidatesAt({ x: 0, y: 0 })[0].item, endpoint);
+  assert.equal(query.candidatesAt({ x: 0, y: 0 }).length, 1);
+  state.scale = 10; assert.deepEqual(Array.from(query.candidatesAt({ x: 0, y: 0 }), target => target.item), [explicit]);
+  state.hidden = true; assert.equal(query.candidatesAt({ x: 0, y: 0 }).length, 0); state.hidden = false;
+  const next = f.point('next', 0, 0); state.scope = f.empty(); state.scope.points.push(next);
+  assert.equal(query.candidatesAt({ x: 0, y: 0 })[0].item, next);
+  const error = new Error('scope failed'); state.error = error;
+  assert.throws(() => query.candidatesAt({ x: 0, y: 0 }), actual => actual === error);
+  assert.equal(state.scope.points[0], next);
+});
+
+test('context query keeps Document scope and shares dimension layout, projection, annotation and image readers', () => {
+  const bundle = { points: [{ x: 0, y: 0 }], lines: [], circles: [], arcs: [], splines: [], annotations: [], hatches: [] };
+  const calls = [], f = sceneFixture(ports => {
+    ports.geometryReads.geometryInstanceBundle = function(item) { 'use strict'; assert.equal(this, undefined); calls.push(item); return bundle; };
+  });
+  const { state, queries } = f;
+  const target = { layout: { text: { x: 0, y: 0 }, hitA: { x: -5, y: 0 }, hitB: { x: 5, y: 0 } } };
+  const constraint = { id: 'document-dimension', sketchId: 'S2', target, dimension: {} };
+  state.scope.constraints.push(constraint); state.dimensionScope.constraints.push({ ...constraint, id: 'presentation-only' });
+  const instance = { id: 'instance', sketchId: 'S2' }, block = { id: 'block', sketchId: 'S2', bundle };
+  state.scope.geometryInstances.push(instance); state.scope.blockInstances.push(block);
+  const annotation = { id: 'annotation', sketchId: 'S2' }, image = { id: 'image', sketchId: 'S2', x: 0, y: 0, pixelWidth: 10, pixelHeight: 10 };
+  state.scope.annotations.push(annotation); state.scope.referenceImages.push(image);
+  const pointer = { x: 0, y: 0 }, hit = { distance: 0 }, error = new Error('annotation failed');
+  const query = queries.createContextQuery({ editedFitPoints: () => null,
+    canvasContextAnnotationHit(item, point) { assert.equal(item, annotation); assert.equal(point, pointer); if (state.failAnnotation) throw error; return hit; } });
+  const candidates = query.candidatesAt(pointer);
+  assert.deepEqual(Array.from(candidates, candidate => candidate.item), [constraint, annotation, block, instance, image]);
+  assert.equal(candidates[1].hit, hit); assert.deepEqual(calls, [instance]);
+  assert.equal(state.reads.includes('layout'), true); assert.equal(state.reads.includes('dimensionScope'), false);
+  state.failAnnotation = true; calls.length = 0;
+  assert.throws(() => query.candidatesAt(pointer), actual => actual === error);
+  assert.deepEqual(calls, []); assert.equal(state.scope.annotations[0], annotation);
 });

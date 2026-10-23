@@ -157,7 +157,7 @@
   });
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, annotationAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
-  const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems, hatchContainsSelectablePoint } = hatchGeometryQuery;
+  const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems } = hatchGeometryQuery;
   const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const { blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
@@ -195,7 +195,7 @@
   const pointUsage = geometryReadServices.createPointUsage({
     constraintReferencesPoint, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
   });
-  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isSelectableEndpointPoint } = pointUsage;
+  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint } = pointUsage;
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
   presentation.bindUI({
@@ -1753,20 +1753,9 @@
     invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis, updateUI, recordHistory,
   });
 
-  const { candidatesAt: canvasContextCandidatesAt } = window.CanvasContextQuery.create({
-    selectionScope: { sketch: isVisibleSketchId, element: isVisibleSketchElement },
-    hitReferenceImageAt, isVisibleValue,
-    currentScope: workspace.current, viewportScale: () => viewport.scale,
-    canvasContextPointIsSelectable, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
-    sketches: { isEditableSketchId, isVisibleSketchId, isEditableSketchElement, isVisibleSketchElement, activeSketchId, isActiveSketchConstraint, constraintSketchId },
-    projections: { blockProjectionBundle, geometryInstanceBundle },
-    dimensions: { targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, dimensionLayout },
-    annotations: { canvasContextAnnotationHit }, hatches: { resolvedHatchBoundary, hatchAppearanceForDisplay, hatchContainsSelectablePoint },
+  const { candidatesAt: canvasContextCandidatesAt } = sceneHitQueries.createContextQuery({
+    editedFitPoints: () => splineEditing.current?.spline?.fitPoints, canvasContextAnnotationHit,
   });
-
-  function canvasContextPointIsSelectable(point) {
-    return isExplicitPoint(point) || isSelectableEndpointPoint(point);
-  }
 
   const canvasContextCandidatePresentation = window.CanvasContextPresentation.create({
     toolbarSvgMarkup, applicationText, formatDisplayNumber, constraintToolbarIcon, localizedConstraintName,

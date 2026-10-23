@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：右クリック候補照会とscene読取りの共有（2026-10-24、検証完了）
+
+基準develop／origin/developはf5908fa。本単位はcodex/context-hit-compositionで実施した。CanvasHitInteraction.createScene().createQueries()が返すcreateContextQueryで既存CanvasContextQueryを生成する。同じcurrentScope・viewport・pointUsage・Sketch可視性・projection／Geometry read・寸法layout・Hatchと実regionsの画像hitを共有し、appから渡す後段依存は編集中SplineのfitPoints readerと注記context hitだけ。候補の受付とrankは既存Query、Selection・編集guard・menu状態は元ownerに残す。通常のmode／pending／編集可否によるhit制限をcontext候補へ持ち込まず、ContextのcurrentScopeと寸法hitのdimensionScopeを区別する。初期化位置と各callbackのreceiver／例外伝播を維持し、モデル／候補／cacheは増やさない。
+
+app.jsは2,462→2,451行（11行減）。対象生成1→1、root直下引数12→2。context専用の点選択predicateと未使用になったpointUsage／Hatch aliasを除去した。未使用binding／初期化前参照0（TEMP cad-context-hit-audit.cjs）。既存Sceneに必要な情報を利用する変更で、引数の袋を別moduleへ移すだけの上位contextは作らない。
+
+追加2単体は、構築時の無照会、可視かつlocked／inactiveの候補受付と通常mode／pendingからの独立、明示点predicateの短絡と端点判定、編集fit point優先、現在scope／倍率／表示判定の反映を実Queryで確認する。さらにDocument寸法と別のdimensionScope、実layoutのreceiver、Block／派生Instance bundleと注記hit／画像の同一参照、例外後の後続projection短絡とモデル無変更を検証した。関連単体21件、全単体1,928件、構文612ファイルは成功。関連E2E245件（Block・Hatch・注記・画像・寸法・派生pattern／copy・Spline・phase0保存互換性／描画比較・UI）は全成功（3.6分、exit 0、runner22140）。追加でSketch権限／移動19件も成功（17.4秒、exit 0、runner86879）。TEMP cad-context-hit-{focused,unit,check,e2e}.logとcad-context-sketch-e2e.log、両receiptのexitCode 0／listeners 0、両last-run passed／failedTests空、自己起動server38268／24640の停止と二つの製品source hash不変を確認した。今回の関連E2E計264件は全体587件の再実行ではなく、最新の全体基準f6727f7と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用20%／残量80%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残存rootの構築と起動の段階を再確認し、複数ownerの共有依存を減らせる機能単位を選ぶ。小さな照会分離だけで200〜500行へ届くと扱わず、現物の依存と責務から進める。
+
+
 ### 最新：Canvas入力とPointerの共有結線（2026-10-24、検証完了）
 
 基準develop／origin/developはbcddba8。本単位はcodex/canvas-pointer-contextで実施した。CanvasCommandInputs.createFeatureが従来の五つの入力をinputsとして返し、bindPointerで既存PointerInteractionController sessionへ結線する。旧createは五つの入力APIだけを返す互換入口として維持する。入力とPointerが共有するmode／pending reader、Selection・Hover・矩形選択・Annotation／Geometry drag・snap解除・描画・TransientAuthoring・viewportを一度受け、dimension dragには同じDimensionDragFeature.commandを使う。press query／activation操作、preview／hit更新・navigation・履歴等は別の明示依存として接続する。session生成とbindの位置、座標関数のpress receiver、入力生成順・処理優先順位・例外時の途中状態を維持し、新state・cache・listenerや汎用app contextは増やさない。
