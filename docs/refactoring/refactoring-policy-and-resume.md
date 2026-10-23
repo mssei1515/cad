@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：注記の描画と空間照会の共有（2026-10-24、検証完了）
+
+基準develop／origin/developは133353b。本単位はcodex/annotation-spatial-compositionで実施した。AnnotationDisplay.createSpatialQueriesが同じ実rendererの文字layout・高さ・Leader表示geometryを既存AnnotationSpatialQueryへ接続し、AnnotationFeature.spatialから実APIを公開する。新しい状態・cache・モデル・広いcontextは持たない。従来の直接create APIを維持する。明示選択かつ編集可能というframe操作条件を、hover／inspectionによるframe表示と混同しない。resize可否と倍率・現在Sketch・一覧は遅延読取りを維持する。
+
+app.jsは2,550→2,545行（5行減）、対象構築2→1、明示port61→48。root未使用binding／追加接続の初期化前参照は0（cad-annotation-spatial-audit.cjs）。BlockLayout／DrawingBoundsの早期構築にはhoistしたbounds委譲を渡し、実照会はFeature生成後に行う。空間計算・優先順位は既存SpatialQueryに残し、表示と照会の内部接続だけを表示ownerへ集めた。小さな接続削減だけで数百行へ届くとは見積もらない。
+
+実renderer／SpatialQueryを使う追加2単体で、生成時にreaderを評価しないこと、回転0.7と複数倍率で同じlayout／bounds／hitを使うこと、モデル無変更・Canvas計測のsave／restoreのみで描画命令なし、選択・編集許可・resize・activeOnly・可視性の条件を確認した。関連単体22件・全単体1,909件・構文612ファイル成功。関連E2E278件は4.4分、exit 0（runner53194）、last-run passed／failedTests空、自己起動port8799停止／listeners 0。ログはTEMPのcad-annotation-spatial-{focused,unit,check,e2e}.log、receiptとlast-runも同prefixで保存。最初のE2E起動はPowerShellがNode警告を例外扱いして中断し、実プロセス終了を確認して実行wrapperのみ修正後に完走した。製品source・E2E期待値・timeoutは緩和していない。後続の回転fixture修正は単体だけで、製品sourceはE2E成功時と同一。
+
+spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。全E2Eは今回未実行で、17defd0の全587件成功と区別する。週枠使用10%／残量90%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は既存ownerの内部構築と機能間接続を分ける。Sketch TreeはObjects／Controllerを広い引数のまま包まず、読取り・操作capabilityとview／current／presentationのscope差を確認して境界を決める。
+
 ### 最新：読取り基盤とscope／Solverの接続（2026-10-24、検証完了）
 
 基準develop／origin/developはb339349。直前の幾何読取り接続58cd33cは統合・Push済み（構文612・単体1,905件・関連E2E247件成功）。main／origin/mainはdf5aef2を保持する。本単位はcodex/document-read-scopeで実施した。

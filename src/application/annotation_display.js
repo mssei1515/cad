@@ -20,7 +20,17 @@
         && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || readHover().annotation === element) });
     const layer = window.AnnotationRenderer.createLayer({ allAnnotations, isVisibleValue, isVisibleSketchId,
       drawAnnotationLeader: renderer.drawAnnotationLeader, drawAnnotationText: renderer.drawAnnotationText, readPreview });
-    return Object.freeze({ color, renderer, layer });
+    function createSpatialQueries() {
+      const { annotationTextWorldHeight, annotationTextLayout, annotationLeaderDisplayGeometry } = renderer;
+      return window.AnnotationSpatialQuery.create({ viewportScale: () => viewport.scale,
+        annotationTextWorldHeight, annotationTextLayout, annotationLeaderDisplayGeometry,
+        formatDisplayNumber: window.NumberDisplay.formatDisplayNumber, effectiveAnnotationStyle,
+        allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
+        annotationLeaderAnchor: element => annotationLeaderAnchor(element),
+        isFrameInteractive: element => canvasSelection.annotations.includes(element) && isEditableSketchElement(element),
+        resizeHandlesEnabled: element => resizeEnabled(element) });
+    }
+    return Object.freeze({ color, renderer, layer, createSpatialQueries });
   }
   window.AnnotationDisplay = Object.freeze({ create });
 })();

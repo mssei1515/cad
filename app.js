@@ -174,13 +174,7 @@
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const { blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
-  const { annotationBounds, hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
-    viewportScale: () => viewport.scale, annotationTextWorldHeight: style => annotationTextWorldHeight(style),
-    formatDisplayNumber, annotationTextLayout: element => annotationTextLayout(element), annotationLeaderDisplayGeometry: element => annotationLeaderDisplayGeometry(element), effectiveAnnotationStyle, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
-    annotationLeaderAnchor: element => annotationLeaderAnchor(element),
-    isFrameInteractive: element => canvasSelection.annotations.includes(element) && isEditableSketchElement(element),
-    resizeHandlesEnabled: element => annotationDrag.resizeEnabled(element),
-  });
+  function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
   });
@@ -565,6 +559,7 @@
   });
   const { layer: annotationLayer, anchors: annotationAnchorConstraints, dimensions: annotationDimensions, command: annotationCommand,
     materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope, startAnchorConstraint: startAnnotationAnchorConstraint } = annotationFeature;
+  const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
   const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
   const { pushAnnotation } = annotationCommand;
