@@ -93,7 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
-### 表示機能の生成・接続（2026-10-23、性能gateは未通過）
+### 最新：表示機能の関連検証完了（2026-10-23）
+
+製品コード9f700d5を固定した関連E2E18ファイル305件が全成功（5.0分、exit 0）。既存の性能12件を含み、空白矩形217ms（250ms未満）、pan144ms（175ms未満）。構文596・単体1,839・関連単体15・file URL読込1と、差し替え確認済みの旧mainとの86状態一致も同じ製品コードの結果。検証中・検証後にapp／src／tests／index／tools／specの内容を変更していない。この追記は文書だけで、app.jsは2,724→2,724行（0行差）。表示機能分離単位の前後は2,738→2,724行（14行減）、構築5→3・明示引数36→25。
+
+再確認の前に、数値rule候補との固定4回の診断で無変更側の線選択103／103ms・空白矩形201／200msを観測し、実行条件による変動があることを確認した。候補も含めmodel／操作state／SelectionとCanvas PNGが全て一致したが、候補は採用しない。その新しい観測を根拠に元のassertion付き関連E2Eを一度通して確認し、305全成功を得た。以前の304／305失敗、baselineでも超過した比較、assertion省略診断を成功結果で上書きせず、[調査記録](presentation-performance-investigation.md)へ残す。根本原因の完全な特定や性能問題全般の解消とは扱わない。その後ユーザーから「先ほど電源につなぎました」と報告があり、電源状態の違いは測定値の改善と整合する有力な要因。接続時刻と各測定、CPU設定を厳密に記録していないため単一原因とは断定しない。
+
+この記録を作業branchへCommit／Pushし、コード同一性を確認してdevelopへ統合・Pushする。main／origin/mainはdf5aef2を維持する。最新全E2Eは未実行で、前回releaseの587全成功を今回の全体検証へ代用しない。週枠使用7%／残量93%で停止条件未到達。通常の分離を続け、停止条件に達した区切りで最新の全体検証・develop先行／main最後の反映と同期を行う。全体の200〜500行への目標は未完了。
+
+次はAnnotation参照依存照会と自己再帰だけの古い汎用参照探索を確認する。全JS検索とASTでvalueReferencesRemovedGeometryの外部参照0を確認した。binding.referencedだけの旧「未使用0」監査では自己参照を使用と数えていたため、今後は自身のbody以外の参照も調べる。実際の注記参照はAnnotationAnchorConstraints.refsの正規化済みtyped refsからID／kind付きkeyを読む。削除・Block変換／投影・Sketch削除・求解の各利用先を保ち、文字列再帰探索を参照判定へ戻さない。この実装はまだ変更していない。
+
+### 前段の表示機能checkpoint（2026-10-23、当時の性能gateは未通過）
 
 PresentationFeatureへ設定・計測・通知とUI／Canvas更新の接続をまとめた。既存五ownerの処理と状態は移さず、共有settings／profiler／formatterと八つの更新入口を一つの機能として公開する。appの当該構築は5→3、明示引数36→25、app.jsは2,738→2,724行（14行減）。private二参照は構築段階の接続専用で、モデル／UI stateや全app contextを追加しない。UIとCanvasの生成位置は保持し、Settingsのstorage／DOM反映より前に他ownerを実行しない。新moduleはsrc/applicationに配置し、既存UI ownerはsrc/uiに維持する。
 

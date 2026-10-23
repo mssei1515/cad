@@ -1,6 +1,25 @@
 # 表示機能組立てと性能gateの調査（2026-10-23）
 
-## 現在の状態
+## 最新：同じ製品コードで関連検証成功
+
+9f700d5のapp／src／tests／index／tools／specを固定したまま、元の関連E2E18ファイル305件が全成功（5.0分、exit 0）。全12性能caseを含み、線選択は150ms未満、空白矩形217ms（250ms未満）、pan144ms（175ms未満）だった。ログは一時directoryのcad-presentation-verified-related.log。専用port8788の自己起動serverはfinallyで停止し、同じrunnerの終了を回収済み。最新全E2Eは未実行。以前の失敗原因を完全に解明したとは扱わず、以下に失敗・診断を保持する。
+
+ユーザーから正式再検証後に「先ほど電源につなぎました」と報告があった。電源状態の違いは、無変更側の測定値が改善したことと整合する有力な要因である。ただし接続の正確な時刻、各計測時の電源状態とCPU設定を採取していないため、単一原因と断定しない。今後の性能比較では同じ電源条件を保つ。
+
+再確認を開始した根拠は、数値rule候補の追加診断で無変更側も測定値が基準内へ戻ったこと。baselineは旧mainではなく現在の9f700d5で、appearance.jsだけを同じURLから既存source／一時候補へ差し替えてbaseline→candidate→candidate→baselineを固定各2回測定した。全caseで差し替え1回をassertし、1worker／retries 0／同じ13操作／同じ元の制限で測定。診断harness内の性能assertionは省いたため、その4 passedを正式な合格へ代用せず、13個の実測値全てが元の上限内だったことを確認してから正式関連E2Eを一度だけ実行した。
+
+| 版 | 線選択 ms | pan ms | 空白矩形 ms |
+| --- | ---: | ---: | ---: |
+| 9f700d5-1（無変更） | 103 | 138 | 201 |
+| 数値rule候補-1 | 85 | 111 | 168 |
+| 数値rule候補-2 | 78 | 141 | 200 |
+| 9f700d5-2（無変更） | 103 | 144 | 200 |
+
+4case終了時のmodel（savedAtだけ除外）、authoring state、Selection、Canvas PNGが完全一致。PNGのdata URL文字列のSHA256はd6ce098e19302025a5d278421522e96e168112b87c68ba206b3b85bfdc74ff30。候補に速いsampleがあるが小標本で、無変更側も全操作で基準内だったため、今回の分離に必要な修正としては採用しない。製品にcache・失効規則・追加の正規化経路を導入していない。
+
+証拠はcad-numeric-rules-experiment.cjs／.json／.logと、そのjsonが指す一時directoryの4caseのjson／appearance-candidate.js／config。前節以前の比較とbaselineの版やassertion有無を混同しない。前回から繰り返し合格を待ったのではなく、変動を示す新しい比較結果を踏まえた一回の正式再検証である。根本原因未特定という制限を残し、通常の開発統合へ進む。mainへの反映は最新の全体検証と停止／release区切りまで保留する。
+
+## 前段checkpoint時の状態
 
 基準main／developはdf5aef27a2ce。作業branchはcodex/presentation-feature-assembly。PresentationFeatureの責務と依存は正式なモジュール構成を参照する。app.jsは2,738→2,724行（14行減）。機能比較は一致しているが、性能gateは未通過。mainへの追加反映を保留するユーザー判断を維持する。既存閾値・timeout・fixtureは変更しない。
 
