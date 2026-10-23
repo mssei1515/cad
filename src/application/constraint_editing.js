@@ -37,7 +37,28 @@
       hideDimensionValueInput: valueInput.hide, syncDimensionValueInput: valueInput.sync, focusDimensionValueInput: valueInput.focus,
       applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
     });
-    return Object.freeze({ selectionQuery, targets, dimensions });
+    function createControls({ document, constraintButtons, constraintMenuButtons, fixPointBtn, hasSelection, translatedExactText }) {
+      const view = window.ConstraintControlsView.create({ document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
+        prepareGeometryControls: () => {
+          if (pending.current?.type?.startsWith("distance") && !pending.current.target?.annotationAnchor && !pending.current.target?.interval) {
+            const target = selectionQuery.distanceTarget();
+            if (!target || target.kind === "invalid") cancelPendingCommand("寸法入力をキャンセルしました");
+          }
+        },
+        getCommandType: () => session.command?.type, fixedToggleAllowed: selectionQuery.fixedToggleAllowed,
+        hasSelection, translatedExactText, applicationText });
+      function createBinding() {
+        const control = window.ConstraintControlCommand.create({ constraintTargetSession: session,
+          cancelConstraintTargetCommand: message => targets.cancel(message), constraintLabel, startAnnotationAnchorConstraint,
+          startConstraintTargetCommand: type => targets.start(type), canApplyConstraint: type => selectionQuery.canApply(type),
+          startDistanceCommand: () => dimensions.startDistanceCommand(), cancelPendingCommand, updateToolbar, updateConstraintButtons,
+          addConstraint, isGeometryMode, hasSelection, toggleSelectedFixed });
+        return window.ConstraintControlsView.createBinding({ constraintButtons, constraintMenuButtons, fixPointBtn,
+          onConstraint: control.activate, onFixed: control.activateFixed });
+      }
+      return Object.freeze({ view, createBinding });
+    }
+    return Object.freeze({ selectionQuery, targets, dimensions, createControls });
   }
   window.ConstraintEditing = Object.freeze({ create });
 })();

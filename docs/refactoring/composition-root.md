@@ -6,6 +6,21 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：拘束コントロールの表示と後段bindingを機能層へ統合（2026-10-24、全体検証完了）
+
+基準develop／origin/developはcbb0d02。本単位はcodex/constraint-controls-featureで実施した。ConstraintEditing.createControlsが同じSelectionQuery・Target／DimensionPlacement・session／pendingと通知から実ConstraintControlsViewを生成し、返すcreateBindingで後段に実ConstraintControlCommand→既存button bindingを生成する。appから加える依存はdocument・button／menu／Fix・hasSelection・翻訳の六つ。拘束label等は先行生成、Viewは元の位置、ControlCommandとbinding生成／bindはFixedSelection準備後の元の位置を維持する。Pending distanceのannotationAnchor／interval除外、無効target時のcancel messageとDOM反映前の確認順、非Geometry modeでの短絡も同じFeatureへ閉じる。Target／Dimensionへの呼出しは旧root委譲と同じreceiver・引数／戻り値を維持し、操作優先順位は実ControlCommandへ残す。Selection・モード・Pending／listener状態を増やさず、個別factoryも維持する。
+
+app.jsは2,409→2,391行（18行減）、対象生成／接続3→2、root直下引数30→6、未使用binding／初期化前参照0（TEMP cad-constraint-controls-audit.cjs）。不要になったcanApplyConstraint／distanceTargetFromSelection／startConstraintTargetCommandのroot委譲を除去した。三番目は最初の関連E2E中の監査で見つけたため、その実行終了後に除去し、製品sourceを固定して全体検証へ進んだ。
+
+実Selection・TargetSession・SelectionQuery・Target／DimensionPlacementとView／ControlCommand／Bindingを使う追加2単体で、生成／bindまで無照会、bind前の無処理と重複防止・dispose再bind、menu→button、対象選択の開始／取消と表示、Fix、距離配置とpending target同一性、選択後の既存Fixed操作への委譲、distance取消と例外／exempt／Geometry mode短絡を検証した。既存テストの期待は変更していない。関連単体18件成功、最終コードの全単体1,942件と構文614ファイルも成功。
+
+中間コードの関連E2E161件（複数寸法／Slot寸法・command panel・Block geometry fixed・派生pattern・phase0保存互換性／描画比較・既存UI）は全成功（2.4分、exit 0、runner91049）。TEMP cad-constraint-controls-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server14020の停止と中間source hash不変を確認した。
+
+最終コードの全587 E2Eは全成功（27.7分、exit 0、runner51020）。TEMP cad-constraint-controls-full-run.ps1／cad-constraint-controls-full-e2e.log、full-e2e-receipt.jsonのexitCode 0／listeners 0、full-last-run.jsonのpassed／failedTests空、自己起動server35684の停止と二つの製品source hash不変を確認した。長時間のドラッグ検証fileは14.6分で正常終了した。制限時間・性能基準・期待値を変更せず、fillets 3,744 preview／最大30.6ms、offsets 10,296／67.3ms、aircraft 1,872／331.1msもfailures空を確認した。最終製品sourceのGit blobはapp.js b859699cb2aa41ae80fd630ee89e5f349ff067c4、constraint_editing.js f6dd96e3fecfb0f5d157fcc38f3bf57e7badde04。これを最新の全体検証基準とし、旧f6727f7の基準とは区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用26%／残量74%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。今回の生成／接続の整理や全体検証だけで200〜500行のcomposition root達成とは扱わない。次は最新rootの機能内構築と機能間接続を再確認し、狭い機能APIでまとめられる単位を選ぶ。Commit／Push／develop統合後の実際のrefはGitで確認する。
+
+
 ### 最新：Block編集とViewの共有結線（2026-10-24、検証完了）
 
 基準develop／origin/developは7833e02。本単位はcodex/block-view-featureで実施した。BlockEditingFeature.createCommandsがcreateViewを返し、同じBlockEditorSession／Queries・CanvasSelection・実Definition／Completion command、updateBlockUI・履歴を実BlockViewへ結線する。appから追加するのはdocument／escapeHtml／配置開始／localizeの四つ。編集名／一覧／使用数／選択IDは操作時に同じownerを読み、nameのinputとchangeの区別・sessionがある場合だけの履歴、refresh→localize→dialog表示、入力保持、cancel／completeの既存順を維持する。View生成とbindは旧位置、commandのView参照は既存の遅延callbackで、追加session／state・汎用app contextは作らない。

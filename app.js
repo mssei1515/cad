@@ -1111,7 +1111,6 @@
   function hitDimension(...args) { return dimensionHitQuery.hitDimension(...args); }
 
 
-  function distanceTargetFromSelection() { return constraintSelectionQuery.distanceTarget(); }
 
   function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
   function hitBlockRotationHandle(x, y) { return null; }
@@ -1346,7 +1345,7 @@
     constraintButtons, applicationText, feedback: constraintFeedback,
     readOperands: () => constraintTargetSession.operands, readLanguage: () => applicationSettings.language,
   });
-  const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand } = window.ConstraintEditing.create({
+  const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand, createControls: createConstraintControls } = window.ConstraintEditing.create({
     session: constraintTargetSession, selection: canvasSelection, pending: pendingCommandSession, candidates: constraintCandidates,
     lifecycle: drawOperationLifecycle, valueInput: dimensionInputController,
     resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
@@ -1360,9 +1359,7 @@
     selectedPrimitives, placement: dimensionPlacement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
     addReadOnlyDimensionConstraint, makeConstraintOperand, sameConstraintOperand, applicationText, log,
   });
-  function canApplyConstraint(type) { return constraintSelectionQuery.canApply(type); }
 
-  function startConstraintTargetCommand(type) { return constraintTargetCommand.start(type); }
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
   function completePendingDimensionLineLength() { return constraintTargetCommand.completeLineLength(); }
 
@@ -1394,16 +1391,8 @@
 
   function selectedFixedBatchTargets() { return constraintSelectionQuery.fixedBatch(); }
   function fixedBatchIsFullyFixed(batch) { return constraintSelectionQuery.fullyFixed(batch); }
-  const constraintControlsView = window.ConstraintControlsView.create({
-    document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
-    prepareGeometryControls: () => {
-      if (pendingCommandSession.current?.type?.startsWith("distance") && !pendingCommandSession.current.target?.annotationAnchor && !pendingCommandSession.current.target?.interval) {
-        const target = distanceTargetFromSelection();
-        if (!target || target.kind === "invalid") cancelPendingCommand("寸法入力をキャンセルしました");
-      }
-    },
-    getCommandType: () => constraintTargetSession.command?.type,
-    fixedToggleAllowed: constraintSelectionQuery.fixedToggleAllowed, hasSelection, translatedExactText, applicationText,
+  const { view: constraintControlsView, createBinding: createConstraintControlBinding } = createConstraintControls({
+    document, constraintButtons, constraintMenuButtons, fixPointBtn, hasSelection, translatedExactText,
   });
   function updateConstraintButtons() { constraintControlsView.update(); }
 
@@ -1920,14 +1909,7 @@
   });
   function toggleSelectedFixed() { return fixedSelectionCommand.toggle(); }
 
-  const constraintControlCommand = window.ConstraintControlCommand.create({
-    constraintTargetSession, cancelConstraintTargetCommand, constraintLabel, startAnnotationAnchorConstraint, startConstraintTargetCommand,
-    canApplyConstraint, startDistanceCommand, cancelPendingCommand, updateToolbar, updateConstraintButtons, addConstraint,
-    isGeometryMode, hasSelection, toggleSelectedFixed,
-  });
-  const constraintControlBinding = window.ConstraintControlsView.createBinding({
-    constraintButtons, constraintMenuButtons, fixPointBtn, onConstraint: constraintControlCommand.activate, onFixed: constraintControlCommand.activateFixed,
-  });
+  const constraintControlBinding = createConstraintControlBinding();
   constraintControlBinding.bind();
 
 
