@@ -439,7 +439,7 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding } = createCanvasWorkspace({
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding, createPngExport } = createCanvasWorkspace({
     ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
     window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
@@ -1904,13 +1904,10 @@
   drawingToolBinding.bind();
 
   documentFileFeature.bindControls();
-  const pngExport = window.PngExport.create({
-    document, window, canvas, rendering: pngRendering, text: applicationText, documentName: effectiveDocumentName,
-    prepareImages: referenceImageFeature.prepareImages,
-    readViewScale: () => viewport.scale, readMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
+  const pngExport = createPngExport({
+    documentName: effectiveDocumentName, prepareImages: referenceImageFeature.prepareImages,
     pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
-    withGeometryReadCache, findSnap: (point, tolerance) => drawingSnap.find(point, tolerance),
-    flushPointerMove: flushScheduledCanvasPointerMove, setHint, draw,
+    findSnap: (point, tolerance) => drawingSnap.find(point, tolerance), flushPointerMove: flushScheduledCanvasPointerMove,
   });
   pngExportCommand = pngExport.command;
   pngExport.start();

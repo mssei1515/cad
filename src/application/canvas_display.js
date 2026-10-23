@@ -41,7 +41,15 @@
           screenToWorld, formatCoordinate: window.NumberDisplay.formatDisplayNumber,
           coordinateStatus: () => document.getElementById("statusCoordinates") });
       }
-      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering, createInputBinding });
+      function createPngExport({ documentName, prepareImages, drawOperationLifecycle, pendingCommandSession,
+        fileSession, constraintTargetSession, findSnap, flushPointerMove }) {
+        return window.PngExport.create({ document, window: browserWindow, canvas, rendering: exportRenderer,
+          text: applicationText, documentName, prepareImages, readViewScale: () => viewport.scale,
+          readMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
+          pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
+          withGeometryReadCache, findSnap, flushPointerMove, setHint, draw });
+      }
+      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering, createInputBinding, createPngExport });
     }
     return Object.freeze({ viewport, navigation, zoomControl, createWorkspace });
   }

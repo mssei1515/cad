@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：PNG書き出しとCanvas基盤の共有結線（2026-10-24、検証完了）
+
+基準develop／origin/developは33215fe。本単位はcodex/canvas-png-compositionで実施した。CanvasDisplay.createWorkspaceが返すcreatePngExportで実PngExportを生成する。同じCanvas／document／browser window・viewport・exportRenderer・Geometry read cache・言語／hint／drawを共有し、追加依存はDocument名・画像準備・Lifecycle／Pending／fileSession／拘束session・snap／pointer flushの八つ。readMode／setModeは同じLifecycle、出力倍率は同じviewportから取得する。実feature APIを返し、commandの後段代入とstartは元の位置を維持する。PNGの範囲・save／mode／busyとframeは各既存ownerが持ち、cache／viewport／renderer・listenerや可変app contextを追加しない。
+
+app.jsは2,424→2,421行（3行減）。対象生成1→1、root直下引数19→8。未使用binding／初期化前参照0（TEMP cad-canvas-png-audit.cjs）。root削減量よりも、同じ描画基盤と機能固有の依存の境界を整理する変更である。
+
+実PngExport／Command／CanvasExport／renderer・PngFileを使う追加2単体で、生成時の無読取り、明示start／disposeと同じfileSessionの拒否、flush例外の短絡、現在viewport倍率とsnap tolerance／cache戻り値、同じLifecycle／Pendingの遷移と取消を確認した。保存はfonts→画像準備→実renderer frame→bitmap copy→blob→書込みの順で、描画例外でもframe・bitmap寸法・viewportを復元し、PNG sessionを維持してerrorを表示する。FixtureのGeometry cache入口は実契約どおりcallbackの戻り値も返すよう補正し、既存テストの期待は変えていない。関連単体22件、全単体1,936件は成功。構文614ファイルと関連E2E141件（PNG書き出し・画像・command panel・phase0保存互換性／描画比較・既存UI）も全成功（2.1分、exit 0、runner90428）。TEMP cad-canvas-png-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server34952の停止と二つの製品source hash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準f6727f7と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用22%／残量78%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残る機能内部の構築と機能間接続を再確認し、同じ所有者のAPI・共有依存を利用してまとめられる単位を選ぶ。3行減を最終の200〜500行の達成と扱わず、責務境界を優先して継続する。
+
+
 ### 最新：DXF読込をDocumentファイル機能へ接続（2026-10-24、検証完了）
 
 基準develop／origin/developは51784c5。本単位はcodex/document-dxf-compositionで実施した。既存DocumentFileFeature.createDxfが実DxfImportCommandを構築し、同じfileSession・serializeModel／変更signature・選択dialog・言語／hint・fit／drawを共有する。appから追加するのはGeometry／IDs・currentScope／activeSketchId・canImport／最小長さと成功時のSelection解除／UI更新／履歴。成功通知順と保存checkpointを変更しない点を維持し、createControlsで同じcommand／許可readerとsessionを実DocumentFileControlsへ接続する。command構築・control生成／bindは既存の位置で行い、Document start／disposeとDXF bindingの寿命を勝手に統合しない。読み込み中の図面／scope／作図先の変更やlockを拒否し、ID／Geometryの挿入・復元・busy解除は元commandが所有する。新file／global state／sessionは追加しない。
