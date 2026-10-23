@@ -17,5 +17,21 @@
     const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document, currentSketches });
     return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance });
   }
-  window.GeometryReadServices = Object.freeze({ create });
+  function createWithHatches({ document, currentScope, currentSketches, prepareBlocks, elementSketchId, applicationText,
+    sketchById, isRootSketch, activeSketchId, showHiddenElements, profileRead, viewportScale }) {
+    const { DEFAULT_APPEARANCE } = window.Appearance;
+    const hatches = window.HatchGeometryQuery.create({
+      currentScope, activeSketchId, applicationText, viewportScale,
+      effectiveAppearanceForElement: (...args) => services.geometryAppearance.effectiveAppearanceForElement(...args),
+      boundaryGeometry: () => {
+        const { allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = services.reads;
+        return [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()];
+      },
+      defaultLineWidth: () => Number(document.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth,
+    });
+    const services = create({ document, currentScope, currentSketches, prepareBlocks, elementSketchId, applicationText,
+      hatchGeometryQuery: hatches, sketchById, isRootSketch, activeSketchId, showHiddenElements, profileRead });
+    return Object.freeze({ ...services, hatches });
+  }
+  window.GeometryReadServices = Object.freeze({ create, createWithHatches });
 })();

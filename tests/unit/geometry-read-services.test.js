@@ -15,19 +15,20 @@ function definition() {
   const a = point('P1', 1), b = point('P2', 4);
   return { ...scope(), id: 'B1', revision: 1, points: [a, b], lines: [Object.assign(new Line('L1', a, b), { sketchId: 'S1' })] };
 }
-function fixture() {
+function fixture({ withHatches = false } = {}) {
   const state = { ready: false, scope: scope(), sketches: [{ id: 'S1', kind: 'sketch', appearance: { color: '#123456' },
     dimensionAppearance: { prefix: 'initial' }, leaderAppearance: { color: '#112233' } }],
-    definitions: [definition()], hidden: false, reads: 0, prepared: 0, profiles: 0, hatchReads: [] };
+    definitions: [definition()], hidden: false, reads: 0, prepared: 0, profiles: 0, hatchReads: [], scale: 1, viewportReads: 0 };
   const document = { defaultAppearance: {}, defaultConstructionAppearance: {}, defaultDimensionAppearance: {},
     defaultLeaderAppearance: {}, defaultTerminatorAppearance: {}, get blockDefinitions() { assert.equal(state.ready, true); return state.definitions; } };
-  const services = w.GeometryReadServices.create({ document,
+  const services = (withHatches ? w.GeometryReadServices.createWithHatches : w.GeometryReadServices.create)({ document,
     currentScope: () => { assert.equal(state.ready, true); state.reads++; return state.scope; },
     currentSketches: () => { assert.equal(state.ready, true); return state.sketches; },
     prepareBlocks: () => { state.prepared++; }, elementSketchId: item => item.sketchId,
     applicationText: (_ja, en) => en, activeSketchId: () => 'S1', isRootSketch: sketch => sketch.id === 'ROOT',
     sketchById: id => state.sketches.find(s => s.id === id), showHiddenElements: () => state.hidden,
     profileRead: work => { state.profiles++; return work(); },
+    viewportScale: () => { assert.equal(state.ready, true); state.viewportReads++; if (state.viewportFailure) throw state.viewportFailure; return state.scale; },
     hatchGeometryQuery: { hatchPrimitivesFromElements: () => [], hatchPrimitivesForScope: () => [],
       resolvedHatchBoundary: (hatch, elements) => { state.hatchReads.push({ hatch, elements });
         return { ok: true, area: 4, loops: [{ role: 'outer', points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }] }] }; } },
@@ -48,6 +49,49 @@ test('read service composition defers document and scope access and retains the 
   assert.equal(f.services.catalog.blockDefinitionById('B1'), f.state.definitions[0]);
   const replacement = definition(); f.state.definitions = [replacement];
   assert.equal(f.services.catalog.blockDefinitionById('B1'), replacement); assert.equal(f.state.reads, 0);
+});
+
+test('Hatch assembly defers reads and resolves shared real geometry, derived fills and changed boundaries', () => {
+  const f = fixture({ withHatches: true }), s = f.services;
+  assert.equal(f.state.reads + f.state.prepared + f.state.profiles + f.state.viewportReads, 0);
+  f.state.ready = true;
+  function rectangle(width) {
+    const points = [[0, 0], [width, 0], [width, 10], [0, 10]].map(([x, y], index) =>
+      Object.assign(new Point('P' + index, x, y), { sketchId: 'S1' }));
+    return { points, lines: points.map((a, index) => Object.assign(new Line('L' + index, a, points[(index + 1) % 4]), { sketchId: 'S1' })) };
+  }
+  Object.assign(f.state.scope, rectangle(10));
+  const face = s.hatches.hatchFaceAt({ x: 5, y: 5 }); assert.equal(face.ok, true);
+  const hatch = { id: 'H1', sketchId: 'S1', seed: { x: 5, y: 5 }, boundaryLoops: face.boundaryLoops, appearance: {} };
+  f.state.scope.hatches = [hatch];
+  const before = JSON.stringify(f.state.scope), resolved = s.hatches.resolvedHatchBoundary(hatch);
+  assert.equal(resolved.area, 100); assert.equal(s.hatches.resolvedHatchBoundary(hatch), resolved);
+  assert.equal(s.hatches.hatchBoundaryGeometryItems(hatch)[0], f.state.scope.lines[0]);
+  assert.equal(JSON.stringify(f.state.scope), before);
+  f.state.scope.geometryInstances.push({ id: 'SPI1', type: 'sketchProjection', sketchId: 'S2', sources: [{ kind: 'hatch', path: ['H1'] }] });
+  const bundle = s.reads.geometryInstanceBundles()[0];
+  assert.equal(bundle.valid, true); assert.equal(bundle.hatches[0].resolvedBoundary.area, 100);
+  assert.equal(bundle.hatches[0].sourceElement, hatch);
+  f.state.scope = { ...f.state.scope, ...rectangle(20), geometryInstances: [] };
+  s.reads.clearReadCache(); s.projections.invalidateBlockProjectionCache();
+  const next = s.hatches.resolvedHatchBoundary(hatch); assert.notEqual(next, resolved); assert.equal(next.area, 200);
+  assert.equal(s.hatches.hatchBoundaryGeometryItems(hatch)[0], f.state.scope.lines[0]);
+  f.state.sketches[0].appearance.visible = false; assert.equal(s.hatches.hatchFaceAt({ x: 5, y: 5 }).ok, false);
+});
+
+test('Hatch hit exclusion keeps live document width, late viewport reads, fallback and exception propagation', () => {
+  const f = fixture({ withHatches: true }), hatches = f.services.hatches;
+  f.state.ready = true; f.document.defaultAppearance.lineWidth = 4;
+  const hatch = { boundaryLoops: [] }, resolved = { ok: true, loops: [{ role: 'outer', points:
+    [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] }] };
+  assert.equal(hatches.hatchContainsSelectablePoint(hatch, resolved, { x: 2.5, y: 5 }), false);
+  f.state.scale = 2; assert.equal(hatches.hatchContainsSelectablePoint(hatch, resolved, { x: 2.5, y: 5 }), true);
+  assert.equal(f.state.viewportReads, 2);
+  const fallback = Math.max(0.5, w.Appearance.DEFAULT_APPEARANCE.lineWidth / 2) + 1;
+  for (const value of [0, 'bad', undefined]) { f.document.defaultAppearance.lineWidth = value;
+    assert.equal(hatches.hatchBoundaryHitExclusionScreenPx(hatch), fallback); }
+  const failure = new Error('viewport unavailable'); f.state.viewportFailure = failure;
+  assert.throws(() => hatches.hatchContainsSelectablePoint(hatch, resolved, { x: 5, y: 5 }), error => error === failure);
 });
 
 test('real Block and derived projections share expanded reads and preserve source and reference identity', () => {

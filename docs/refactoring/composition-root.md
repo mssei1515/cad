@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Hatchと展開図形の読取り接続（2026-10-24、検証完了）
+
+基準develop／origin/developはdf41dce。矩形選択組立て36f54c7を統合・Pushし、構文606・単体1,874件・関連E2E226件は成功済み。main／origin/mainはdf5aef2を保持する。現在はcodex/hatch-read-assemblyで作業中。
+
+既存GeometryReadServices.createWithHatchesへHatchGeometryQueryの生成と、展開境界／実効外観との遅延接続を集約した。Hatch→Instance／Block投影→GeometryReadModel→外観の生成順を維持し、同じ実ownerをhatchesと従来の七ownerとして返す。appが各allGeometry readerを組み合わせていた相互接続は内部に収めた。Line→Circle→Arc→Splineの順序、現在Documentの数値線幅と同じDEFAULT_APPEARANCEへのfallback、後段Viewport／現在scope／Sketchの照会・計測を維持する。HatchのWeakMap／face cache、投影cache、read窓／外観memo、clear／forget／scope切替は既存ownerのままで、新たなcacheやmodel copyを持たない。外部Hatch照会を渡す既存createも維持し、file追加・読込順変更は行わない。
+
+app.jsは2,605→2,600行（5行減）、この群のroot構築2→1、明示port19→12。rootの未使用bindingと追加接続の初期化前参照は0。新入口の生成時無照会、実際のHatch／派生Hatchの面積・source参照・境界cache・同じIDのscope置換・可視性変更、現在の線幅／Viewportとfallback／例外を2単体で検証した。初回は追加fixtureに既存Hatch仕様のseedがなく失敗したため、fixtureに正しいseedを加えて解決し、製品の仕様や計算は変更していない。関連16件・構文606ファイル・全単体1,876件は成功（cad-hatch-read-{focused,check,unit}.log）。spec/architecture/モジュール構成.mdとimplementation-map.mdへ所有境界と依存方向を記録した。
+
+既存UI・Hatch・Block・派生／Sketch投影・画像・矩形選択／コピー・履歴・保存再読込・command panelの関連E2E226件は3.3分で成功（runner49624 exit 0、自己起動port8799停止、cad-hatch-read-e2e.log）。file URL起動・読込期待も成功し、.last-run.jsonはpassed／failedTests空。実装・仕様・単体と再開資料をこの単位でCommit／Pushし、developへ統合する区切りとする。今回の全E2Eは未実行で、74a0d17の全587成功は直前の全体基準として区別する。週枠使用26%／残量74%、停止条件未到達。全体目標はactiveで未完了。
+
+次は早期のCanvasSelection／scope queryと、後段のhover／highlight／clear／Document resetの生成・接続を確認する。生成時期の異なるownerを巨大contextへまとめず、実際の選択と表示状態の所有、初期化段階、既存の参照・通知順から境界を選ぶ。
 ### 最新：矩形選択の機能組立て（2026-10-24、検証完了）
 
 基準develop／origin/developは20fbe41。直前の拘束表示分離efcdefdを統合・Pushし、構文604・単体1,870件・関連E2E169件は成功済み。main／origin/mainはdf5aef2を保持する。現在はcodex/rectangle-selection-featureで作業中。
