@@ -93,6 +93,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Document基盤と幾何読取りの二段階接続（2026-10-24、検証完了）
+
+基準develop／origin/developは17defd0。DocumentWorkspace初期構築f33bb4dの構文612・全単体1,903件・全587 E2E（27.9分）は成功・統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/document-geometry-readsで実施した。
+
+DocumentWorkspaceの返却APIへcreateGeometryReadServicesを追加し、同じDocument・workspace.currentと実SketchContextのelementSketchId／sketchById／isRootSketch／activeSketchId、および同じapplicationTextを既存GeometryReadServices.createWithHatchesへ接続する。appに残すのはcurrentSketches・prepareBlocks・showHiddenElements・viewportScale・profileReadの5port。返すのは既存の実ReadServicesで、新しいcache／scope／モデルや可変phase参照は持たない。
+
+固定DocumentのBlock catalog、現在Workspaceの図形、EditingScopeBinding側のcurrentSketchesを区別する。currentSketchesをworkspace.current().sketchesへ統一しない。Core生成時に読取り群を先行生成せず、旧ReadServicesの生成位置で同じ順序とcallbackを渡す。scope bindとcacheのclear／invalidate、Hatch／外観／投影の実装やUI・履歴・保存形式は変えない。
+
+app.jsは2,552→2,551行（1行減）、対象構築1→1、明示port12→5。root未使用bindingと追加接続の初期化前参照は0（cad-document-geometry-reads-audit.cjs）。実componentの2単体で無照会の構築、固定DocのcatalogとliveなWorkspace図形、異なるbound Sketchからの寸法外観、scope変更／再bind、cache寿命と明示clear、prepare失敗の伝播とモデル不変を確認した。関連単体22件・全単体1,905件・構文612ファイルが成功（cad-document-geometry-reads-{focused,unit,check}.log）。新file／script一覧変更はなく、spec/architecture/モジュール構成.mdとimplementation-map.mdへ内部設計を追記した。
+
+Block／Sketch編集・投影／派生pattern・Hatch・選択glow・Tree表示／権限・既存UI・phase0保存互換性／描画比較の関連E2E247件が全成功（3.7分、exit 0、runner73989、cad-document-geometry-reads-e2e.log）。sourceを固定し、receiptのexitCode 0／listeners 0、last-runのpassed／failedTests空、自己起動port8799の停止を確認した（cad-document-geometry-reads-e2e-receipt.json、cad-document-geometry-reads-last-run.json）。今回の全E2Eは未実行で、直前の全体基準17defd0の587件成功と区別する。週枠使用8%／残量92%、停止条件未到達。mainは停止・release時に最後に反映する方針を維持し、全体目標はactiveで未完了。
+
+次も同じ実ownerを使う構築階層と依存方向を確認する。特に現在Workspaceとbound scope、Document固定情報の違いを広いcontextで隠さず、機能間接続と内部構築を区別する。小さな引数削減だけで数百行へ届くとは見積もらない。
+
 ### 最新：構築階層の再監査とDocumentWorkspace（2026-10-24、全体検証完了）
 
 基準develop／origin/developは64348ff。直前のSnapshot metadata分離6274ab1は統合・Push済み。main／origin/mainはdf5aef2を保持する。本単位はcodex/document-workspace-compositionで実施した。

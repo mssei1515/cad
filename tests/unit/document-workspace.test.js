@@ -56,3 +56,49 @@ test('reservation shares the returned counters and keeps the delayed Hatch read 
   assert.equal(state.reads, 2); assert.equal(model.documentIds.peek('hatch'), 12);
   assert.equal(model.documentIds.peek('sketch'), 8); assert.equal(model.documentIds.peek('annotation'), 5);
 });
+
+test('Document read assembly shares the fixed Document and live Workspace but keeps bound Sketch appearance reads separate', () => {
+  const { model } = fixture(), calls = [];
+  let ready = false, bound = w.DocumentState.create();
+  bound.sketches[1].dimensionAppearance = { prefix: 'bound' };
+  model.document.sketches[1].appearance = { color: '#123456' };
+  model.document.sketches[1].dimensionAppearance = { prefix: 'workspace' };
+  const point = (id, x) => Object.assign(new w.GeometrySolver.Point(id, x, 0), { sketchId: 'S1' });
+  const line = Object.assign(new w.GeometrySolver.Line('L1', point('P1', 0), point('P2', 10)), { sketchId: 'S1' });
+  model.document.lines.push(line);
+  const check = () => assert.equal(ready, true, 'read assembly must not resolve late dependencies');
+  const services = model.createGeometryReadServices({ currentSketches: () => { check(); calls.push('sketches'); return bound.sketches; },
+    prepareBlocks: () => { check(); calls.push('prepare'); }, showHiddenElements: () => { check(); return false; },
+    viewportScale: () => { check(); return 1; }, profileRead: read => { check(); calls.push('profile'); return read(); } });
+  assert.deepEqual(calls, []); assert.ok(Object.isFrozen(services)); ready = true;
+  assert.equal(services.reads.allGeometryLines()[0], line);
+  assert.equal(services.geometryAppearance.effectiveAppearanceForElement(line).color, '#123456');
+  assert.equal(services.dimensionAppearance.dimensionDisplayState({}).prefix, 'bound');
+  const definition = { ...w.DocumentState.create(), id: 'BD1' }; model.document.blockDefinitions = [definition];
+  const local = w.DocumentState.create(), localLine = Object.assign(new w.GeometrySolver.Line('L2', point('P3', 20), point('P4', 30)), { sketchId: 'S1' });
+  local.lines.push(localLine); local.sketches[1].appearance = { color: '#778899' }; local.sketches[1].dimensionAppearance = { prefix: 'local' };
+  model.workspace.activate(local);
+  assert.equal(services.reads.allGeometryLines()[0], localLine);
+  assert.equal(services.geometryAppearance.effectiveAppearanceForElement(localLine).color, '#778899');
+  assert.equal(services.catalog.blockDefinitionById('BD1'), definition);
+  assert.equal(services.dimensionAppearance.dimensionDisplayState({}).prefix, 'bound');
+  bound = w.DocumentState.create(); bound.sketches[1].dimensionAppearance = { prefix: 'rebound' };
+  assert.equal(services.dimensionAppearance.dimensionDisplayState({}).prefix, 'rebound');
+});
+
+test('Document read assembly retains cache lifetime, explicit invalidation and late preparation failures', () => {
+  const { model } = fixture(), failure = new Error('Block preparation failed'); let reject = true;
+  const line = Object.assign(new w.GeometrySolver.Line('L1', new w.GeometrySolver.Point('P1', 0, 0), new w.GeometrySolver.Point('P2', 10, 0)), { sketchId: 'S1' });
+  model.document.lines.push(line);
+  const services = model.createGeometryReadServices({ currentSketches: () => model.document.sketches,
+    prepareBlocks: () => { if (reject) throw failure; }, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() });
+  const before = JSON.stringify(model.document);
+  services.reads.withGeometryReadCache(() => {
+    assert.throws(() => services.reads.allGeometryLines(), error => error === failure);
+    assert.equal(JSON.stringify(model.document), before); reject = false;
+    const cached = services.reads.allGeometryLines(); assert.equal(cached[0], line);
+    const local = w.DocumentState.create(); model.workspace.activate(local);
+    assert.equal(services.reads.allGeometryLines(), cached);
+    services.reads.clearReadCache(); assert.equal(services.reads.allGeometryLines().length, 0);
+  });
+});
