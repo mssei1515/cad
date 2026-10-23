@@ -25,7 +25,7 @@ function fixture(configureMove) {
     clearInteractionForSketchChange: () => { calls.push(['interaction']); state.move?.reset(); },
     applicationText: (_ja,en) => { assert.equal(state.ready, true); return en; }, setHint: notify('hint'), updateUI: notify('ui'),
     draw: notify('draw'), recordHistory: notify('history'), promptName: () => null,
-    effectiveAppearanceForElement: item => item.appearance || {}, clearTreeHover: notify('hover'), clearSnap: notify('snap'),
+    effectiveAppearanceForElement: item => ({ ...state.scope.sketches.find(sketch => sketch.id === item.sketchId)?.appearance, ...item.appearance }), clearTreeHover: notify('hover'), clearSnap: notify('snap'),
     guardEdit: () => true, prepareLockToggle: notify('lock') });
   const moveOptions = configureMove ? configureMove({ state, calls, geometryReads, projections }) : { refresh: () => { notify('refresh')(); if(state.refreshError) throw state.refreshError; } };
   const move = feature.createMove({ prepare: notify('prepare'), ...moveOptions });
@@ -116,4 +116,58 @@ test('each Sketch move refresh failure stops later stages and restores ownership
     assert.equal(f.move.commit(), true, stage); assert.deepEqual(f.state.stages, refreshOrder);
     assert.equal(f.calls.filter(call => call[0] === 'history').length, 1);
   }
+});
+
+function treeFixture() {
+  const f = fixture(), domReads = [], label = { textContent: '' }, document = new EventTarget(), browser = new EventTarget();
+  document.getElementById = id => { domReads.push(id); return id === 'activeSketchLabel' ? label : null; };
+  document.querySelectorAll = () => [];
+  const canvasHover = w.CanvasHover.create({ isEndpointPoint: () => false });
+  const selectionHighlight = w.SelectionHighlight.create({ canvasSelection: f.selection, types: w.GeometrySolver,
+    constraintGraphNodes: () => [], targetFromConstraint: () => null, getHoveredDimension: () => canvasHover.current.dimension,
+    setHoveredDimension: value => canvasHover.update({ dimension: value }), draw: () => f.calls.push(['hover-draw']) });
+  f.state.dimensionScope = { ...f.state.scope, sketches: [...f.state.scope.sketches, { id: 'dimension-only', name: 'Dimension scope' }] };
+  f.state.viewScope = { sketches: [{ id: 'S1', name: 'Bound view' }] }; f.state.ready = false;
+  const read = field => { assert.equal(f.state.ready, true); return f.state[field]; };
+  const tree = f.feature.createTree({ document, window: browser, readServices: { reads: { scopeGeometryItem: () => f.point } },
+    canvasHover, selectionHighlight, objectOptions: { types: w.GeometrySolver },
+    applicationSettings: { applicationText: (_ja,en) => en }, escapeHtml: String, closeCanvasContextMenu: () => f.calls.push(['close-canvas']),
+    moveCommand: f.move, deletion: f.deletion, getScopeKey: () => 'document', viewScope: () => read('viewScope'),
+    sketchHasSolveError: () => false, referenceConstraintErrorCountForSketch: () => 0, constraintDuplicateCountForSketch: () => 0,
+    dimensionScope: () => read('dimensionScope'), toggleBlockInstanceSelection: () => {}, targetFromConstraint: () => null,
+    updateSketchUI: () => f.calls.push(['sketch-ui']), selectionSketchId: () => 'S1', deleteElements: () => {},
+    deleteCurrentSelection: () => {}, toggleSelectedVisibility: () => {}, updateSelectionUI: () => f.calls.push(['selection-ui']), unfixPoint: () => {} });
+  assert.deepEqual(f.calls, []); assert.deepEqual(domReads, ['sketchOverlay','sketchOverlayResizeHandle','sketchList','sketchContextMenu']); f.state.ready = true;
+  const event = (id, className, moveAction) => {
+    const action = className || moveAction ? { dataset: { id, sketchMoveAction: moveAction }, classList: { contains: name => name === className }, closest: () => null } : null;
+    const row = { dataset: { id } };
+    return { key: 'Enter', preventDefault() {}, stopPropagation() {}, target: { closest: selector => selector === 'button' ? action
+      : selector === '.sketch-item' ? row : selector === '.sketchActivateBtn' && className === 'sketchActivateBtn' ? action : null } };
+  };
+  return { ...f, tree, label, domReads, event };
+}
+
+test('Sketch feature Tree keeps bound view and dimension selection scopes separate from the command scope and shares Selection', () => {
+  const f = treeFixture(); f.tree.view.render(); assert.equal(f.label.textContent, 'Drawing sketch: Bound view');
+  f.tree.controller.keyDown(f.event('dimension-only','sketchActivateBtn'));
+  assert.equal(f.selection.sketchId, 'dimension-only'); assert.equal(f.state.scope.activeSketchId, 'S1');
+  assert.equal(f.state.scope.sketches.some(sketch => sketch.id === 'dimension-only'), false);
+  assert.deepEqual(f.names().slice(-3), ['selection','selection-ui','draw']);
+  f.tree.controller.doubleClick(f.event('S2')); assert.equal(f.state.scope.activeSketchId, 'S2');
+  assert.equal(f.state.scope.sketches.find(sketch => sketch.id === 'S2').appearance.visible, true);
+  f.tree.menu.start(); f.tree.menu.start(); f.tree.menu.dispose();
+});
+
+test('Sketch feature Tree delegates visibility, lock, deletion and destination mode to the same real commands', () => {
+  const f = treeFixture(), destination = f.state.scope.sketches.find(sketch => sketch.id === 'S2'); destination.appearance = { visible: false };
+  f.tree.controller.click(f.event('S2','sketchVisibilityBtn')); assert.equal(destination.appearance.visible, true);
+  f.tree.controller.click(f.event('S2','sketchLockBtn')); assert.equal(destination.locked, true);
+  f.tree.controller.click(f.event('S2','sketchDeleteBtn')); assert.equal(f.state.scope.sketches.includes(destination), true);
+  f.tree.controller.click(f.event('S2','sketchLockBtn')); assert.equal(destination.locked, false);
+  f.selection.set('points', [f.point]); assert.equal(f.move.start(), true);
+  f.tree.controller.keyDown(f.event('S2','sketchActivateBtn')); assert.equal(f.move.state().targetId, 'S2');
+  f.tree.controller.click(f.event('S2',null,'commit')); assert.equal(f.move.active, false); assert.equal(f.point.sketchId, 'S2');
+  f.tree.controller.click(f.event('S2','sketchDeleteBtn')); assert.equal(f.state.scope.sketches.includes(destination), false);
+  assert.equal(f.state.scope.points.includes(f.point), false); assert.equal(f.state.scope.activeSketchId, 'S1');
+  assert.equal(f.calls.filter(call => call[0] === 'history' && call[1] === 'スケッチ間の図形移動').length, 1);
 });

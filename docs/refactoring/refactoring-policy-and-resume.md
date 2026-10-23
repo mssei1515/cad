@@ -93,6 +93,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：Sketch編集とTreeの共有依存を機能層へ集約（2026-10-24、検証完了）
+
+基準develop／origin/developは15736d8。本単位はcodex/sketch-tree-featureで実施した。SketchEditingFeature.createTreeで実SketchTreeController.createWithDocumentObjectsを生成し、既存SketchContext・Selection・基本SketchCommand・共通UI／draw・選択解除・編集guardを共有する。Move／Deletionの実owner、object metadata・readServices／Hover／Highlight、外部の編集操作は個別に接続する。TreeのdimensionScope、Viewのbound viewScope、commandのcurrentScopeを区別し、Objects／View／Controller／menuの実APIとmenu後段代入／startの時機を維持する。Treeの操作状態・DOM表示、モデルの更新は既存ownerに残す。新しい可変context・session・UI stateやlistenerは作らない。
+
+app.jsは2,421→2,420行（1行減）。対象生成1→1、root直下引数38→26（nested objectOptionsのmetadataは維持）、未使用binding／初期化前参照0（TEMP cad-sketch-tree-feature-audit.cjs）。不要となったensureSketchState／renameSketch／toggleSketchLockのroot aliasを除去した。行数効果は小さいが、同じ編集ownerからUIの操作を接続して個別の受渡しを減らす変更である。
+
+実Tree／View／Objects／menuと実SketchCommand／Move／Deletionを使う追加2単体で、無model読取りと既存の四DOM照会順、View／dimension／commandの三scopeの区別と同じSelection、行の選択と明示編集の違い、表示切替／lockと削除拒否、同じMove sessionでの移動先選択→確定→一回の履歴、Geometry移動後の削除を確認した。fixtureの外観照会はSketch外観と要素外観を合成する実契約へ補正し、既存テストの期待は変更していない。関連単体36件、全単体1,938件は成功。構文614ファイルと関連E2E212件（Sketch権限／移動・Block・Hatch・派生pattern・phase0保存互換性／描画比較・既存UI）も全成功（3.1分、exit 0、runner47065）。TEMP cad-sketch-tree-feature-{focused,unit,check,e2e}.log、e2e-receipt.jsonのexitCode 0／listeners 0、last-run passed／failedTests空、自己起動server5376の停止と二つの製品source hash不変を確認した。今回は全体587件の再実行ではなく、最新全体基準f6727f7と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdを更新した。
+
+週枠使用23%／残量77%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残る機能内部の構築と機能間接続を再確認する。共有ownerの狭いAPIを生かす単位を選び、今回の1行減や部分成果を200〜500行のcomposition root達成と扱わない。
+
+
 ### 最新：PNG書き出しとCanvas基盤の共有結線（2026-10-24、検証完了）
 
 基準develop／origin/developは33215fe。本単位はcodex/canvas-png-compositionで実施した。CanvasDisplay.createWorkspaceが返すcreatePngExportで実PngExportを生成する。同じCanvas／document／browser window・viewport・exportRenderer・Geometry read cache・言語／hint／drawを共有し、追加依存はDocument名・画像準備・Lifecycle／Pending／fileSession／拘束session・snap／pointer flushの八つ。readMode／setModeは同じLifecycle、出力倍率は同じviewportから取得する。実feature APIを返し、commandの後段代入とstartは元の位置を維持する。PNGの範囲・save／mode／busyとframeは各既存ownerが持ち、cache／viewport／renderer・listenerや可変app contextを追加しない。
