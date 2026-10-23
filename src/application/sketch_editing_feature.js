@@ -39,7 +39,24 @@
         annotationReferencesRemovedGeometry, clearSketchSolveState, clearInteractionForSketchChange, invalidateAnalysis,
         solveSketchAndDependents, activeSketchId, refreshConstraintAnalysis, updateUI, draw, recordHistory, confirmDeletion });
     }
-    return Object.freeze({ command, createMove, createDeletion });
+    function createTree({ readServices, canvasHover, selectionHighlight, objectOptions, document, window: browserWindow,
+      applicationSettings, escapeHtml, closeCanvasContextMenu, moveCommand, deletion, getScopeKey, viewScope,
+      sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch, dimensionScope,
+      toggleBlockInstanceSelection, targetFromConstraint, updateSketchUI, selectionSketchId, deleteElements,
+      deleteCurrentSelection, toggleSelectedVisibility, updateSelectionUI, unfixPoint }) {
+      return window.SketchTreeController.createWithDocumentObjects({
+        readServices, canvasHover, selectionHighlight, objectOptions, document, window: browserWindow,
+        sketchContext: sketches, applicationSettings, escapeHtml, closeCanvasContextMenu, ensureSketchState, moveCommand,
+        getScopeKey, viewScope, sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
+        currentScope: dimensionScope, setActiveSketch: command.activate, clearSelection, canvasSelection: selection,
+        toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw, updateSketchUI,
+        toggleSketchVisibility: command.toggleVisibility, toggleSketchLock: command.toggleLock, guardSketchEdit: guardEdit,
+        selectionSketchId, renameSketch: command.rename, deleteSketch: deletion.remove, deleteElements,
+        deleteCurrentSelection, toggleSelectedVisibility, hover: { elementSketchId, ROOT_SKETCH_ID: window.SketchHierarchy.ROOT_SKETCH_ID },
+        updateSelectionUI, unfixPoint,
+      });
+    }
+    return Object.freeze({ command, createMove, createDeletion, createTree });
   }
   window.SketchEditingFeature = Object.freeze({ create });
 })();

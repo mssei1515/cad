@@ -134,7 +134,7 @@
   const { draft: parameterDraft, setParameterDialogError, insertIdentifierIntoExpressionInput,
     syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
-    ensureSketchState, isRootSketch, isDrawableSketch,
+    isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
     orderedSketches, descendantSketchIds,
     isReferenceSourceSketchId,
@@ -1427,7 +1427,7 @@
     clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap, guardEdit: guardSketchEdit,
     prepareLockToggle: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode(); },
   });
-  const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleLock: toggleSketchLock, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
+  const { createSketch, activate: setActiveSketch, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
   sketchMoveCommand = sketchEditing.createMove({
     prepare: () => { cancelConstraintTargetCommand(""); cancelPendingCommand(""); exitDrawMode(); canvasHover.clear(); },
@@ -1471,21 +1471,20 @@
     currentScope: workspace.current, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
-  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = window.SketchTreeController.createWithDocumentObjects({
+  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = sketchEditing.createTree({
     readServices: geometryReadServices, canvasHover, selectionHighlight,
     objectOptions: { constraintFeedback, isHidden: selectionVisibilityIsHidden,
       ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver, isExplicitPoint, isPointUsedByLine,
       constraintStatusOf, formatDisplayNumber, toolbarSvgMarkup, constraintToolbarIcon, isSketchProjectedGeometry,
       findLineFixedConstraint, geometryInstanceTypeLabel, resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
       isDimensionConstraint, constraintGeometryId, isReadOnlyDimension, constraintIsRedundant, referenceConstraintErrorInfo },
-    document, window, sketchContext, applicationSettings, escapeHtml, closeCanvasContextMenu,
-    ensureSketchState, moveCommand: sketchMoveCommand,
+    document, window, applicationSettings, escapeHtml, closeCanvasContextMenu,
+    moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
     getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
     viewScope: () => editingScopeBinding.current, sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
-    currentScope: dimensionPresentationScope, setActiveSketch, clearSelection, canvasSelection,
-    toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
-    updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
-    hover: { elementSketchId, ROOT_SKETCH_ID },
+    dimensionScope: dimensionPresentationScope,
+    toggleBlockInstanceSelection, targetFromConstraint,
+    updateSketchUI, selectionSketchId, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
     updateSelectionUI: updateGeometrySelectionUI,
     unfixPoint: fixedOperandCommand.unfixPoint,
   });
