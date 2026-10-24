@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Parameter適用のcheckpoint・復元とnamespace振分けを既存ownerへ移管（2026-10-24、検証完了）
+
+基準develop／origin/developは38c2b69。本単位はcodex/parameter-editing-applicationで実施した。appに残っていたParameter適用のDocument／Block局所checkpoint、失敗時復元と現在／保存済みnamespaceの安定化振分けをParameterApplication.createEditingSupportへ移した。DocumentではJSON履歴snapshot、Block編集中は値snapshotという既存境界を保ち、復元時のBlock状態とDocument名fallbackはその時点に照会する。Block伝播を作る前にsupportを生成し、伝播生成後のcreateApplicationでpropagateだけを接続する。現在Documentの非Root全Sketchを安定化する入口は伝播と適用で共有する。workspace.currentと編集中scopeの区別、保存済みDefinitionの一時scope切替は維持し、Solver数値計算・UI・保存形式は変更しない。
+
+app.jsは2,215→2,211行（4行減）。対象の生成／接続2→3、rootの明示引数12→20、未使用binding／初期化前直接参照0（TEMP cad-parameter-editing-application-audit.cjs）。この単位は依存数削減ではなく、曖昧だったcallbackの中の退避・復元・namespace選択を所有者へ置き、必要なsnapshot／load／scope等を明示する変更である。新しい可変状態・cache・contextは追加しない。proof.cjsで既存create／createDeletionGuardの不変、四つのcallback本体を読取portと関数名の置換だけで比較した。二重に記述されていた全Sketch安定化も同じ式であることを確認した。
+
+parameter-application.test.jsへ五つの境界試験を追加し、生成時の読取なし、各呼出し時のactive Sketch／scope再取得、Rootだけを除外しlocked Sketchを残すこと、Document／局所復元とcheckpoint同一性、確定通知後の例外・復元時の名前fallback、保存済みnamespaceの伝播順、退避例外がtry外で伝わりdraftを変更しないことを確認した。関連単体17件・全単体1,977件・構文618ファイルが成功（exit 0）。追加のDocument復元試験ではVMのJSON objectのprototype差をデータ不一致としないようJSON内容で比較し、既存期待値や製品処理を変更していない。正式なParameter操作仕様と不一致がないことを確認し、モジュール構成とimplementation-mapへ内部責務を記録した。
+
+関連E2E336件が全成功（5.4分、exit 0、runner13452）。Parameter画面、既存UI、注記／anchor、Block、保存互換性／描画比較、Sketch編集／権限／投影、寸法prefix／複数寸法、ボルト径、自由注記の式／dragとfree Instanceを実行した。TEMP cad-parameter-editing-application-{focused,check,unit,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server33240停止と製品source二つのhash不変を確認した。今回は関連336件であり、f2c791aの全587件成功と区別する。数値上限・timeout・操作期待値を変えていない。
+
+週枠使用50%／残量50%、50%未満という停止条件には未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も通常機能の生成／接続とstateの所有を確認し、残量50%未満を確認したら新規分離を停止して最新全体検証・Commit・develop先行／main最後の統合・同期を済ませ、一時停止する。Parameterの回復範囲を勝手に広げず、残る汎用delegateをmutable provider／connect setterへ移すだけの変更はしない。
+
 ### 最新：Sketch Treeのtest fixture・可視性／hover観測を一つの公開APIから生成（2026-10-24、検証完了）
 
 基準develop／origin/developはf2c791a。本単位はcodex/sketch-tree-test-apiで実施した。既存SketchTreeTestDriver.createBrowserApiが階層参照／可視性fixture・状態観測、inactive要素、Root／Block hoverの八つの個別factoryを元と同じ順に生成し、既存名の八つの公開hookを返す。元の各生成の95引数を比較し、同名portの値に食い違いがない41依存を一度だけ受ける。scope・描画・モデル生成を共有し、fixtureや観測の本体と個別APIは保持する。通常のTree表示／編集をtest支援へ移さず、新しい操作state・cache・global依存は追加しない。

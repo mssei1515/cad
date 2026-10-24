@@ -37,6 +37,30 @@
     }
     return Object.freeze({ apply });
   }
+  // Retain the existing document-versus-local recovery boundary for parameter editing.
+  // Propagation is supplied later, after the Block editing integration is constructed.
+  function createEditingSupport({ namespace, currentScope, acceptError, applicationText,
+    readEditingScope, readBlockEditor, snapshotDocument, snapshotValues, restoreValues,
+    loadDocument, readDocumentName, stabilizeNamespace, stabilizeStoredNamespace, activeSketchId, isRootSketch }) {
+    function stabilizeDocument() {
+      return stabilizeNamespace(activeSketchId(), { allSketches: readEditingScope().sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) });
+    }
+    function capture() {
+      return { document: readBlockEditor() ? null : snapshotDocument(), local: readBlockEditor() ? snapshotValues() : null };
+    }
+    function restore(checkpoint) {
+      if (readBlockEditor() && checkpoint.local) restoreValues(checkpoint.local);
+      else if (checkpoint.document) loadDocument(JSON.parse(checkpoint.document), { documentNameFallback: readDocumentName() });
+    }
+    function stabilize(target) {
+      return target === readEditingScope() ? stabilizeDocument() : stabilizeStoredNamespace(target);
+    }
+    function createApplication({ propagate }) {
+      return create({ namespace, currentScope, acceptError, applicationText, capture, restore, stabilize, propagate });
+    }
+    return Object.freeze({ stabilizeDocument, createApplication });
+  }
+
   // Guard symbol removal shared by Geometry, Sketch, Block and annotation edits.
   function createDeletionGuard({ currentNamespace, symbolDeletionDependents, readLanguage, setHint, log }) {
     function guard(constraints, namespace = currentNamespace()) {
@@ -51,5 +75,5 @@
     }
     return Object.freeze({ guard });
   }
-  window.ParameterApplication = Object.freeze({ create, createDeletionGuard });
+  window.ParameterApplication = Object.freeze({ create, createEditingSupport, createDeletionGuard });
 })();
