@@ -1473,3 +1473,8 @@ DrawingOrderTestDriver.createBrowserApiは描画順の混在fixtureと選択／�
 ### 共通UIのHTML文字列変換
 
 HtmlText（src/ui/html_text.js）は共有UIのHTML文字列へのエスケープを所有し、escapeHtmlを公開する。元のString(value??"")と五つの特殊文字の置換をそのまま保ち、null／undefinedと0／falseの違い、Unicode・改行、既存entityの二重エスケープ、値の一度の文字列化と例外伝播を維持する。DOM・モデル・設定・操作stateを持たず、appは静的APIから取得した同じ関数をParameter Editor、context表示、Properties、Sketch Tree等へ明示して注入する。任意のHTMLを受け入れる機能や新しい表示仕様を追加せず、classic scriptの読込はNumberDisplay後に登録する。共通変換を無関係な設定／メッセージownerへ混ぜず、UI文字列だけの独立した責務にする。
+
+
+### Sketch Treeのテスト公開APIと共有依存
+
+SketchTreeTestDriver.createBrowserApiは、Treeの階層／可視性fixtureと観測、inactive要素・Root／Block hoverの既存八つのfactoryを同じ順で生成し、既存名の八つのhookを返す。元の95引数で同一だった41個の依存だけを一度受け、各fixtureのモデル生成、各観測の現在scope／DOM読取、Geometry参照・履歴・描画と例外は個別factoryに残す。生成時には注入portを呼ばず、新しい状態やcacheを持たない。appはtest指定時にAPIを生成し、既存の公開hookの並びと他driverの対応を維持して接続する。個別factoryも残し、通常のTree表示／編集やモデルの所有者をtest支援へ移さない。

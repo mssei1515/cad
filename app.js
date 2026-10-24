@@ -1870,11 +1870,15 @@
     });
     const sketchDeletionFixture = window.DocumentTestDriver.createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch });
     const strokeStyleCases = window.PropertiesTestDriver.createStrokeStyleCases({ resetModelState, addLine, addPoint, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, geometryStrokeWidth, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA });
-    const subtreeReferenceFixture = window.SketchTreeTestDriver.createSubtreeReferenceFixture({
-      resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, refreshReferenceConstraintValidity,
-      fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive, sketchIdentityRelationLabel, sketchIdentityRelationColor, document, getComputedStyle: element => getComputedStyle(element), isVisibleSketchId,
+    const sketchTreeTestApi = window.SketchTreeTestDriver.createBrowserApi({
+      resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine,
+      refreshReferenceConstraintValidity, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive,
+      sketchIdentityRelationLabel, sketchIdentityRelationColor, document, getComputedStyle: element => getComputedStyle(element), isVisibleSketchId,
+      serializeModel, sketchStrokeWidth, constraintStatusColor, activeSketchId, addDistanceConstraintFromTarget, dimensionFromAnchor, isDimensionConstraint,
+      createEmptyBlockDefinition, Point, Line, appendDefinition: definition => documentModel.blockDefinitions.push(definition),
+      nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, viewport, dimensionLayout, targetFromConstraint,
+      clientPosition: canvasTestDriver.clientPosition, blockInstanceDisplayCenter, canvasHover, addCircle, addArc, blockProjectionBundle,
     });
-    const subtreeVisibilityObservation = window.SketchTreeTestDriver.createSubtreeVisibilityObservation({ sketchById, isVisibleSketchId });
     const referenceLineMove = window.ConstraintTestDriver.createReferenceLineMove({ currentScope: workspace.current, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId: DEFAULT_SKETCH_ID, isExplicitPoint });
     const dependencyOrderFixture = window.ConstraintTestDriver.createDependencyOrderFixture({
       resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addLine, addPoint, markReferenceConstraint, PointOnLineConstraint, CoincidentConstraint, refreshReferenceConstraintValidity, solveReferenceDependentSketches,
@@ -1919,7 +1923,6 @@
     const documentNameObservation = window.DocumentTestDriver.createNameObservation({ readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document });
     const fileObservation = window.DocumentTestDriver.createFileObservation({ fileSession });
     const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
-    const sketchVisibilityObservation = window.SketchTreeTestDriver.createVisibilityObservation({ sketchById, serializeModel, isVisibleSketchId, document });
     const responsiveDragFixture = window.GeometryDragTestDriver.createResponsiveFixture({
       resetModelState, addPoint, addLine, pushModelConstraint, DistanceConstraint, ParallelConstraint, PerpendicularConstraint,
       ensureDimensionDefaults, solveAndRefresh, log, fitAllGeometryToViewport, draw, resetHistory, serializeModel,
@@ -1932,23 +1935,8 @@
       offsetSelection, drawingPreview, offsetDistanceFromPointer, pendingCommandSession, addOffsetChainGeometry, clearSelection,
       fitAllGeometryToViewport, resetHistory, solveAndRefresh, draw, canvas, worldToCanvasScreen, document
     });
-    const siblingVisibilityFixture = window.SketchTreeTestDriver.createSiblingVisibilityFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, addPoint, addLine, updateUI, draw, isVisibleSketchId, sketchRelationToActive, sketchStrokeWidth, constraintStatusColor, document });
-    const inactiveHoverFixture = window.SketchTreeTestDriver.createInactiveHoverFixture({
-      resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope: workspace.current, isDimensionConstraint, createEmptyBlockDefinition, Point, Line,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, fitAllGeometryToViewport, viewport, updateUI, draw,
-      dimensionLayout, targetFromConstraint, clientPosition: canvasTestDriver.clientPosition, blockInstanceDisplayCenter, sketchIdentityRelationLabel,
-    });
-    const hoverIdentityObservation = window.SketchTreeTestDriver.createIdentityObservation({ canvasHover, sketchIdentityRelationLabel });
     const sidebarInspectionFixture = window.PropertiesTestDriver.createInspectionFixture({
       resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, assignConstraintSketchId, activeSketchId, currentScope: workspace.current, updateUI, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen,
-    });
-    const rootHoverFixture = window.SketchTreeTestDriver.createRootHoverFixture({
-      resetModelState, addPoint, addLine, addCircle, addArc, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw,
-    });
-    const blockHoverFixture = window.SketchTreeTestDriver.createBlockHoverFixture({
-      resetModelState, viewport, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      currentScope: workspace.current, invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw, blockProjectionBundle, clientPosition: canvasTestDriver.clientPosition,
     });
     const appearanceTestAction = window.PropertiesTestDriver.createAppearanceAction({
       appearanceSelectionTarget, normalizeAppearance, invalidateBlockProjectionCache, updatePropertiesUI, draw, recordHistory,
@@ -2153,23 +2141,23 @@
       resetForActiveSketchDimensionVisibility: dimensionFixtureSupport.resetForActiveSketchDimensionVisibility,
       canvasDashIsolationCases: canvasRenderingTestSupport.canvasDashIsolationCases,
       resetForSidebarInspection: sidebarInspectionFixture.reset,
-      resetForRootSketchTreeHoverTest: rootHoverFixture.reset,
-      resetForSketchTreeBlockHoverTest: blockHoverFixture.reset,
+      resetForRootSketchTreeHoverTest: sketchTreeTestApi.resetForRootSketchTreeHoverTest,
+      resetForSketchTreeBlockHoverTest: sketchTreeTestApi.resetForSketchTreeBlockHoverTest,
       ...offsetTestSupport,
       resetForSketchDeletion: sketchDeletionFixture.reset,
-      resetForSiblingVisibility: siblingVisibilityFixture.reset,
-      resetForInactiveDimensionAndBlockHover: inactiveHoverFixture.reset,
-      hoverIdentityStateForTest: hoverIdentityObservation.state,
+      resetForSiblingVisibility: sketchTreeTestApi.resetForSiblingVisibility,
+      resetForInactiveDimensionAndBlockHover: sketchTreeTestApi.resetForInactiveDimensionAndBlockHover,
+      hoverIdentityStateForTest: sketchTreeTestApi.hoverIdentityStateForTest,
       geometryStrokeStyleCasesForTest: strokeStyleCases.cases,
       constructionLineHoverDisplayCasesForTest: canvasRenderingTestSupport.constructionLineHoverDisplayCasesForTest,
       constructionLineRenderingForTest: canvasRenderingTestSupport.constructionLineRenderingForTest,
-      resetForSiblingSubtreeReference: subtreeReferenceFixture.reset,
-      siblingSubtreeVisibilityState: subtreeVisibilityObservation.state,
+      resetForSiblingSubtreeReference: sketchTreeTestApi.resetForSiblingSubtreeReference,
+      siblingSubtreeVisibilityState: sketchTreeTestApi.siblingSubtreeVisibilityState,
       moveSiblingSubtreeReferenceLine: referenceLineMove.move,
       deleteSketchForTest: sketchDeletionFixture.remove,
       referenceDependencyOrderCase: dependencyOrderFixture.orderCase,
       cyclicReferenceLoadCase: cyclicReferenceFixture.loadCase,
-      sketchVisibilityState: sketchVisibilityObservation.state,
+      sketchVisibilityState: sketchTreeTestApi.sketchVisibilityState,
       ...constraintCaseTestApi,
       resetForBlockCreationUi: blockCreationFixture.reset,
       resetForEmptyBlockCreation: blockEditorTestSupport.resetForEmptyBlockCreation,
