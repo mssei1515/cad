@@ -93,6 +93,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：CanvasドラッグのDOM副作用とBlock入口を既存ownerへ接続（2026-10-24、検証完了）
+
+基準develop／origin/developは3d1fd72。本単位はcodex/canvas-drag-compositionで実施した。CanvasInputBinding.createDragPointerへ、表示class追加→capture、capture→表示class追加、表示class解除→releaseの三つの副作用を集約した。CanvasDisplayのworkspaceが同じcanvasで生成して返し、Geometry／寸法と注記が元の開始順序に合う入口を使う。終了時のcatchはreleaseだけに限定し、開始失敗時の途中の表示状態やclass操作例外を無断で変えない。appから六つのDOM callback本体を除去し、同じ本体であることをAST抽出比較した。GeometryDragFeature.createBlockEntryは同じplan.build・実command・Selection・解除／通知を共有し、元の後段位置で実Block入口を生成する。開始可否・session・確定／取消・履歴と求解は各既存commandに残す。新しい操作state・遅延reader／context・fileは追加していない。
+
+app.jsは2,280→2,278行（2行減）、対象生成4→4、root直下の延べ引数81→74、未使用binding／初期化前直接参照0（TEMP cad-canvas-drag-composition-audit.cjs）。行数のために既存の空行や引数行を詰めず、DOM副作用の入力側への移管と、同じdrag ownerからのBlock入口生成を改善点とする。TEMP cad-canvas-drag-composition-proof.cjsで六つのDOM body不変、block-proof.cjsで七つのBlock依存が元のownerと一致することも確認した。数百行の全体目標は未完了。
+
+canvas-input-binding.test.jsへ2境界試験を追加し、生成時にcanvas／classListを読まないこと、実引数とmethod receiver、二つの開始順序、capture失敗時の途中状態、releaseだけの例外抑制とclass解除例外の伝播を確認した。geometry-drag-feature.test.jsへ1境界試験を追加し、後段生成時の無照会、同じInstanceの選択、固定／回転lockによる実plan拒否と既存案内・描画を確認した。既存期待値は変更していない。関連単体30件、最終コードの全単体1,964件、構文616ファイルが成功。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と依存を記録した。
+
+関連E2E310件（既存UI・phase0保存互換性／描画比較・Block／free Instance・複数寸法・Geometry drag／drag smoothness・統合注記／anchor／display size／leader外観・自由text入力drag）が全成功（6.9分、exit 0、runner84508）。TEMP cad-canvas-drag-composition-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server13424停止と製品source四つのhash不変を確認した。今回は関連310件であり、全587件の最新基準37cb5d2とは区別する。数値上限・timeout・既存期待値は変更していない。
+
+寸法／注記のtest支援には既に役割別の生成入口があるため、同じportを包むだけの新wrapperは加えなかった。早期のconstrained Annotation dragはSolveScopeQueryにもscopeを提供するため、その所有を崩して通常drag群へまとめない。次も残るCanvas入力・描画・test公開の共有依存を調べ、機能のownerと生成段階に沿って整理する。
+
+週枠使用38%／残量62%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。今回の2行減を全体達成とはせず、状態ownerと依存方向の改善を継続する。
+
+
 ### 最新：拘束テスト支援の状態照会と編集ケースを公開API単位で集約（2026-10-24、検証完了）
 
 基準develop／origin/developは4841f8b。本単位はcodex/constraint-test-apiで実施した。既存src/testing/constraint_test_driver.jsへcreateModelSupportとcreateEditingCasesを追加した。前者は同じscope・現在Sketch・解析・Block投影と拘束追加から四つのdriverを生成し、状態readerと既存名の四つの公開hookを返す。拘束追加後の解析／状態はその同じ観測を共有する。後者は同じSelection／対象session・model編集・参照／通知から、寸法選択・観測、支持拘束状態、親／兄弟の点線参照・移動・状態の七つのdriverを生成し、既存名の七hookを返す。既存の二つの連続生成位置と順序を維持し、Drag試験へ渡す状態readerも同じ関数である。個別factoryは残し、新しい状態・cache・求解基準・app contextは追加しない。

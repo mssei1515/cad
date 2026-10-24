@@ -438,7 +438,7 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding, createPngExport } = createCanvasWorkspace({
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer } = createCanvasWorkspace({
     ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
     window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
@@ -1266,8 +1266,8 @@
   const annotationDrag = annotationFeature.createDrag({
     beginConstrainedDrag: constrainedAnnotationDrag.begin,
     resizeText: (item, height) => appearanceEditing.applyAnnotationStyleValue(item, "textHeight", height),
-    beginPointer: (id) => { canvas.setPointerCapture(id); canvas.classList.add("is-dragging"); },
-    endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
+    beginPointer: dragPointer.captureThenMark,
+    endPointer: dragPointer.release,
   });
 
   const dimensionPreview = dimensionDisplay.createPreview({
@@ -1607,8 +1607,8 @@
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     profileSolve: work => interactionProfiler.active ? profileInteractionWork("solve", work) : work(),
     canEdit: guardSketchEdit,
-    beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
-    endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
+    beginPointer: dragPointer.markThenCapture,
+    endPointer: dragPointer.release,
     canvasSelection, restoreModelState, solveReferenceDependentSketches, clearSketchSolveState,
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, applicationText, setHint, updateUI,
     updateGeometrySelectionUI, draw, recordHistory,
@@ -1621,8 +1621,8 @@
     placement: dimensionPlacement, viewport, canvasSelection, currentScope: workspace.current,
     constraintSketchId, isEditableSketchId, isVisibleSketchId, effectiveDimensionAppearance, isVisibleValue,
     guardSketchEdit, commandInput: constraintInputFeature.dimension, setHint, clearSnap, hypot2,
-    beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
-    endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
+    beginPointer: dragPointer.markThenCapture,
+    endPointer: dragPointer.release,
     draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
   });
   const { command: dimensionDrag, lineGroup: dimensionLineGroup, selectedLineGroup: selectedDimensionLineGroup } = dimensionDragFeature;
@@ -1634,9 +1634,7 @@
 
 
 
-  const { begin: beginBlockDrag } = window.GeometryDrag.createBlockEntry({
-    clearSelection, canvasSelection, buildDragSession, geometryDrag, setHint, updateUI, draw,
-  });
+  const { begin: beginBlockDrag } = geometryDragFeature.createBlockEntry();
 
 
 

@@ -114,3 +114,11 @@ test('profile wrapper preserves thrown solve errors and lifecycle cleanup', () =
   assert.equal(f.events.at(-2), 'profile-end'); assert.equal(f.events.at(-1), 'on-end');
   assert.equal(f.feature.command.active, false); assert.equal(f.events.includes('history'), false);
 });
+
+test('late Block entry shares the actual drag plan and selection while fixed and rotation-locked refusals stay unchanged',()=>{
+  const f=fixture(),entry=f.feature.createBlockEntry();assert.equal(f.state.reads,0);assert.deepEqual(f.events,[]);f.state.ready=true;
+  const instance={id:'BI1',sketchId:'S1',fixed:true},event={pointerId:5},pointer={x:2,y:3};
+  entry.begin(event,instance,pointer);assert.equal(f.selection.blockInstances[0],instance);assert.equal(f.hints.at(-1)[1],'error');assert.deepEqual(f.events,['draw']);
+  instance.fixed=false;instance.rotationLocked=true;f.events.length=0;entry.begin(event,instance,pointer,true);
+  assert.equal(f.selection.blockInstances[0],instance);assert.equal(f.hints.at(-1)[0],'回転がロックされたブロックインスタンスです');assert.deepEqual(f.events,['draw']);assert.equal(f.state.reads,0);
+});

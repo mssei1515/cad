@@ -1,6 +1,13 @@
 /* Bind native canvas events to input controllers and preserve flush boundaries. */
 (() => {
   "use strict";
+  // Preserve the two existing begin orders and limit cleanup's catch to release.
+  function createDragPointer({ canvas }) {
+    function markThenCapture(id) { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); }
+    function captureThenMark(id) { canvas.setPointerCapture(id); canvas.classList.add("is-dragging"); }
+    function release(id) { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} }
+    return Object.freeze({ markThenCapture, captureThenMark, release });
+  }
   function createCommandRouting({ pointer, readCommandPanel, readPngExportCommand, blankCanvasGesture,
     canvasScreenPoint, canvasPoint, isBlankCommandPanelPoint, screenToWorld, navigation }) {
     return Object.freeze({
@@ -64,5 +71,5 @@
     }
     return Object.freeze({ bind, processMove });
   }
-  window.CanvasInputBinding = Object.freeze({ create, createCommandRouting });
+  window.CanvasInputBinding = Object.freeze({ create, createCommandRouting, createDragPointer });
 })();
