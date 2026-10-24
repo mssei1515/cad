@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：作図要素の種類ラベルを既存の表示moduleへ集約（2026-10-24、検証完了）
+
+基準develop／origin/developは7e3fb7e。本単位はcodex/authoring-type-labelsで実施した。Hatchのcross／solid／既定の平行線と、派生Instanceのmirror／pattern／circularPattern／既定のSketch投影の表示ラベル生成を、既存AuthoringFeedbackへ集約した。既存のHatch／Offset診断と同じapplicationTextだけを注入し、Properties・Sketch Tree・context候補が同じ関数を使う。生成時に翻訳を実行せず、各呼出しの現在言語、厳密な型名比較、未知値／null／undefinedのfallbackと翻訳例外を維持する。新file・状態／cache・Document／DOM依存は追加していない。Block回転の計算やmodel検索は表示文言と責務が異なるため、同じmoduleへ混ぜない。
+
+app.jsは2,278→2,265行（13行減）、AuthoringFeedbackの生成1→1、root直下の延べ引数1→1、未使用binding／初期化前直接参照0（TEMP cad-authoring-type-labels-audit.cjs）。二つの処理をDOMやappを起動せず直接検証できる既存表示APIへ配置する単位であり、引数削減とはしない。数百行の全体目標は未完了。
+
+TEMP cad-authoring-type-labels-proof.cjsで二つの関数のASTが変更前と同一であることを確認した。変更前の関数と実module APIを同じtranslatorで実行し、日本語／英語・各種類・未知値・null／undefined・数値・文字列化を拒否するObjectを含む40呼出しで結果と翻訳引数のtraceが一致した。生成時の無照会と翻訳例外の同一性も確認した。低影響の同一処理移管のため恒久的な期待値複写テストは増やさず、関連の既存単体6件、全単体1,964件、構文616ファイルが成功した。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務・依存を記録し、既存script／単体manifestは維持した。
+
+関連E2E230件（既存UI／Properties・phase0保存互換性／描画比較・Hatch・派生pattern／free Instance・Sketch投影・Block）が全成功（3.2分、exit 0、runner28888）。TEMP cad-authoring-type-labels-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server38736停止と製品source二つのhash不変を確認した。今回は関連230件であり、全587件の最新基準37cb5d2とは区別する。文言・数値上限・timeout・既存期待値は変更していない。
+
+週枠使用39%／残量61%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も残る通常入力・描画・model query・test公開の共有依存を調べ、機能のownerと生成段階を基準に整理する。appの行数だけを目的に無関係な責務をまとめたり、巨大contextへ移したりしない。
+
 ### 最新：CanvasドラッグのDOM副作用とBlock入口を既存ownerへ接続（2026-10-24、検証完了）
 
 基準develop／origin/developは3d1fd72。本単位はcodex/canvas-drag-compositionで実施した。CanvasInputBinding.createDragPointerへ、表示class追加→capture、capture→表示class追加、表示class解除→releaseの三つの副作用を集約した。CanvasDisplayのworkspaceが同じcanvasで生成して返し、Geometry／寸法と注記が元の開始順序に合う入口を使う。終了時のcatchはreleaseだけに限定し、開始失敗時の途中の表示状態やclass操作例外を無断で変えない。appから六つのDOM callback本体を除去し、同じ本体であることをAST抽出比較した。GeometryDragFeature.createBlockEntryは同じplan.build・実command・Selection・解除／通知を共有し、元の後段位置で実Block入口を生成する。開始可否・session・確定／取消・履歴と求解は各既存commandに残す。新しい操作state・遅延reader／context・fileは追加していない。

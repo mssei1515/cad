@@ -1,4 +1,4 @@
-/* Present geometry authoring diagnostics as text; no model, command or DOM updates. */
+/* Present geometry authoring labels and diagnostics as text; no model, command or DOM updates. */
 (() => {
   "use strict";
   function create({ applicationText }) {
@@ -31,7 +31,20 @@
       const pair = messages[result?.code];
       return pair ? applicationText(pair[0], pair[1]) : applicationText("チェーンをオフセットできません", "The chain cannot be offset");
     }
-    return Object.freeze({ hatchRegionErrorText, offsetChainErrorText });
+    function hatchPatternTypeLabel(patternType) {
+      if (patternType === "cross") return applicationText("クロス", "Cross");
+      if (patternType === "solid") return applicationText("塗りつぶし", "Solid fill");
+      return applicationText("平行線", "Parallel");
+    }
+
+    function geometryInstanceTypeLabel(type) {
+      if (type === "mirror") return applicationText("ミラー", "Mirror");
+      if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
+      if (type === "circularPattern") return applicationText("円形パターン", "Circular Pattern");
+      return applicationText("スケッチ投影", "Sketch Projection");
+    }
+
+    return Object.freeze({ hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel });
   }
   window.AuthoringFeedback = Object.freeze({ create });
 })();

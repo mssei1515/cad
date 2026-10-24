@@ -102,7 +102,7 @@
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const { applicationText, translatedExactText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
-  const { hatchRegionErrorText, offsetChainErrorText } = window.AuthoringFeedback.create({ applicationText });
+  const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
   const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
     geometryIds, documentIds, reservation: idReservation, createReadContext } = window.DocumentWorkspace.create({
@@ -732,12 +732,6 @@
     return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
   }
 
-  function hatchPatternTypeLabel(patternType) {
-    if (patternType === "cross") return applicationText("クロス", "Cross");
-    if (patternType === "solid") return applicationText("塗りつぶし", "Solid fill");
-    return applicationText("平行線", "Parallel");
-  }
-
 
   function effectiveDimensionAppearance(...args) { return dimensionAppearance.effectiveDimensionAppearance(...args); }
 
@@ -778,13 +772,6 @@
   }
 
   const { serializeGeometryInstance } = window.DocumentSnapshot;
-
-  function geometryInstanceTypeLabel(type) {
-    if (type === "mirror") return applicationText("ミラー", "Mirror");
-    if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
-    if (type === "circularPattern") return applicationText("円形パターン", "Circular Pattern");
-    return applicationText("スケッチ投影", "Sketch Projection");
-  }
 
   function hitAnnotationElement(x, y, options = {}) {
     return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
