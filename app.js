@@ -2,6 +2,7 @@
 (function () {
   "use strict";
   const { formatDisplayNumber, formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
+  const { escapeHtml } = window.HtmlText;
   const { serializeReferenceImage } = window.ReferenceImageData;
   const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageWorldToLocal } = window.ReferenceImageGeometry;
@@ -725,10 +726,6 @@
   });
   const { refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint,
     save: saveJot2DFile, saveAs: saveJot2DFileAs, importFileData } = documentFileFeature;
-
-  function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
-  }
 
 
   function effectiveDimensionAppearance(...args) { return dimensionAppearance.effectiveDimensionAppearance(...args); }

@@ -55,7 +55,7 @@ const files = [
   "tests/unit/block-selection-query.test.js",
   "tests/unit/block-definition-editing.test.js",
   "tests/unit/selection.test.js",
-  "tests/unit/number-display.test.js", "tests/unit/application-settings.test.js",
+  "tests/unit/number-display.test.js", "tests/unit/html-text.test.js", "tests/unit/application-settings.test.js",
   "tests/unit/constraint-references.test.js",
   "tests/unit/sketch-context.test.js",
   "tests/unit/module-loading.test.js",

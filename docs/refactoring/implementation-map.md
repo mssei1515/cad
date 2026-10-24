@@ -1468,3 +1468,8 @@ ApplicationSettings.prepareButtonTooltipsは既存のbutton[aria-label]をDOM順
 ### 描画順のテスト公開API
 
 DrawingOrderTestDriver.createBrowserApiは描画順の混在fixtureと選択／状態／並べ替え観測を元と同じ順で生成し、既存名の四つのhookを返す。共通のdrawingOrder・現在scope・Hatch照会・serialize・UI通知／描画を一か所で受ける一方、resetHistoryとreadHistoryは役割が異なるため明示して分ける。各個別factoryは残し、fixtureのモデル作成・表示位置と、state呼出し時の既存ensureDrawingOrderState、並べ替えcommandと履歴・Geometry参照・例外を維持する。生成時はモデル／DOM／履歴／描画を呼ばず、新しい状態・cache・ソート規則を持たない。appは29依存を注入して公開APIへ合成し、hook名とdriverの対応を専用moduleへ委ねる。
+
+
+### 共通UIのHTML文字列変換
+
+HtmlText（src/ui/html_text.js）は共有UIのHTML文字列へのエスケープを所有し、escapeHtmlを公開する。元のString(value??"")と五つの特殊文字の置換をそのまま保ち、null／undefinedと0／falseの違い、Unicode・改行、既存entityの二重エスケープ、値の一度の文字列化と例外伝播を維持する。DOM・モデル・設定・操作stateを持たず、appは静的APIから取得した同じ関数をParameter Editor、context表示、Properties、Sketch Tree等へ明示して注入する。任意のHTMLを受け入れる機能や新しい表示仕様を追加せず、classic scriptの読込はNumberDisplay後に登録する。共通変換を無関係な設定／メッセージownerへ混ぜず、UI文字列だけの独立した責務にする。
