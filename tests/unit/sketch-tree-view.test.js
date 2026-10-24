@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui/sketch_tree_view.js'), 'utf8'), sandbox);
-function fixture({ root = false, selected = false } = {}) {
+function fixture({ root = false, selected = false, creationLookup } = {}) {
   const handlers = {}, attrs = {}, classes = new Set(); let scope = 'document', areaWidth = 500;
   const list = {}, label = {}, sketch = { id: 'S1', name: 'Sketch' };
   const overlay = { style: {}, parentElement: { getBoundingClientRect: () => ({ width: areaWidth }) },
@@ -14,7 +14,7 @@ function fixture({ root = false, selected = false } = {}) {
   const handle = { addEventListener: (name, callback) => { handlers[name] = callback; },
     setAttribute: (name, value) => { attrs[name] = value; }, setPointerCapture: () => {} };
   const view = sandbox.window.SketchTreeView.create({
-    document: { getElementById: id => id === 'sketchList' ? list : label }, sketchOverlay: overlay, sketchOverlayResizeHandle: handle,
+    document: { getElementById: id => creationLookup && ['addSketchBtn','addChildSketchBtn'].includes(id) ? creationLookup(id) : id === 'sketchList' ? list : label }, sketchOverlay: overlay, sketchOverlayResizeHandle: handle,
     getScopeKey: () => scope, currentScope: () => ({ sketches: [sketch] }), ensureSketchState() {}, isRootSketch: () => root, selectedSketchId: () => selected ? "S1" : null,
     activeSketchId: () => 'S1', applicationText: (_ja, en) => en, escapeHtml: String,
     objects: { index: () => new Map([['S1', { point: [{ id: 'P1' }], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], instance: [], constraint: [], annotation: [] }]]), row: () => '<point-row>', selected: () => false, hovered: () => false, summary: () => '' },
@@ -69,4 +69,15 @@ test('selected active Sketch keeps its editing marker but hides Edit; Root never
   assert.equal(root.list.innerHTML.includes('sketch-active-label'), false);
   assert.equal(root.list.innerHTML.includes('sketchDeleteBtn'), false);
   assert.ok(active.list.innerHTML.includes('sketchDeleteBtn'));
+});
+
+test('Sketch creation binding preserves lookup/registration order, relation, return values, exceptions and absent buttons',()=>{
+  const trace=[],handlers={},result={},state={failure:null};
+  const buttons=Object.fromEntries(['addSketchBtn','addChildSketchBtn'].map(id=>[id,{addEventListener(type,handler){assert.equal(type,'click');trace.push(['bind',id]);handlers[id]=handler;}}]));
+  const f=fixture({creationLookup:id=>{trace.push(['lookup',id]);return buttons[id];}});assert.deepEqual(trace,[]);
+  function createSketch(relation){'use strict';assert.equal(this,undefined);trace.push(['create',relation]);if(state.failure)throw state.failure;return result;}
+  f.view.bindCreation(createSketch);assert.deepEqual(trace,[['lookup','addSketchBtn'],['bind','addSketchBtn'],['lookup','addChildSketchBtn'],['bind','addChildSketchBtn']]);
+  trace.length=0;assert.equal(handlers.addSketchBtn({}),result);assert.equal(handlers.addChildSketchBtn({}),result);assert.deepEqual(trace,[['create','sibling'],['create','child']]);
+  const marker=new Error('create');state.failure=marker;assert.throws(()=>handlers.addChildSketchBtn({}),error=>error===marker);
+  const missing=fixture({creationLookup:()=>null});assert.doesNotThrow(()=>missing.view.bindCreation(createSketch));
 });

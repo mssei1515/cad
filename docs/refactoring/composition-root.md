@@ -6,6 +6,20 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：tooltip文言の準備とSketch追加ボタンの結線を既存UI ownerへ移管（2026-10-24、検証完了）
+
+基準develop／origin/developは07081a6。本単位はcodex/ui-button-initializationで実施した。appに残っていたbutton[aria-label]のdata-tooltip準備をApplicationSettings.prepareButtonTooltipsへ移し、既存のdata-tooltip翻訳と同じ設定UIに配置した。元と同じCommandCursor生成後／言語反映前の位置で呼ぶ。Sketch追加／子Sketch追加のclick登録はSketchTreeView.bindCreationへ移し、同じcreateSketchへsibling／childを渡す。appは元と同じfile／画像control後、Sidebar結線前に呼ぶ。新しいtooltip表示やモデル作成方針・状態／cache・moduleを追加しない。
+
+app.jsは2,241→2,238行（3行減）。TEMP cad-ui-button-initialization-proof.cjsで、tooltip準備loopと二つの登録statementのASTが変更前と同一であることを確認した。audit.cjsでは新しい明示呼出しも含めて未使用binding／初期化前直接参照0。createSketchのconstは1348行で初期化され、bindCreationは1800行で読むため、以前のcallbackから値を渡す入口へ変えても未初期化参照はない。コンストラクタ引数の削減ではなく、DOMの初期化副作用を既存ownerへ配置する単位である。数百行の全体目標は未完了。
+
+application-settings.test.jsとsketch-tree-view.test.jsへ計2境界試験を追加した。現在の文言をそのままコピーすること、DOM順の読取／書込と途中例外、lookup／登録順、createSketchのrelation・receiver・戻り値／例外、任意ボタンの欠損許容を確認した。既存view fixtureのcreation ID照会だけを任意差替え可能にし、既存期待値・UI操作・tooltip文言を変えていない。関連単体10件、全単体1,970件、構文616ファイルが成功。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と段階を記録し、既存manifest／script順を維持した。
+
+関連E2E198件（既存UI／言語切替・phase0保存互換性／描画比較・Sketch編集／移動／権限・Tree可視性／削除・Sketch投影・command panel）が全成功（2.8分、exit 0、runner89664）。TEMP cad-ui-button-initialization-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server38348停止と製品source三つのhash不変を確認した。今回は関連198件であり、直前の07081a6の全587件成功と区別する。数値上限・timeout・既存期待値は変更していない。
+
+コンテキスト操作の固定batch等は複数UIが同じQueryを使っており、その役割別入口を今回は維持した。行数のために異なるownerを一つのcontextへ束ねたり、新たなadapterを重ねたりしない。次も通常入力・描画・test公開の所有と初期化段階を確認する。
+
+週枠使用45%／残量55%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。今回の3行減で全体達成とはせず、責務と依存方向を基準に継続する。
+
 ### 最新：位置一致と距離を幾何Kernelへ集約し全体検証を更新（2026-10-24、検証完了）
 
 基準develop／origin/developは17e42e0。本単位はcodex/geometry-position-queryで実施した。appのsamePositionとSolverのhypot2を既存GeometryKernelへ移し、Solverは既存のKernel依存から同じhypot2を取り込んでGeometrySolver.hypot2として再公開する。KernelからSolverへの逆依存や新しい状態・moduleは追加しない。Boolean短絡・既定許容差1e-9・座標評価順・Math.sqrt(x*x+y*y)の演算順とoverflow／underflow・例外を維持し、Math.hypotへの置換は行わない。appは通常作図へ位置判定を注入する側とし、数値方針の変更やUI／保存形式の変更と混ぜない。
