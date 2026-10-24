@@ -325,7 +325,7 @@
     readCommandPanel: () => commandPanel, syncAnnotationInput: () => annotationInputController.sync(), readDerivedPanel: () => derivedPanel,
     withGeometryReadCache, drawCanvas,
   });
-  const geometryInstanceCommand = window.GeometryInstanceCommand.create({
+  const { command: geometryInstanceCommand, createSourceCommand: createInstanceSourceCommand, createEditing: createInstanceEditing } = window.DerivedInstanceFeature.create({
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     selectedItemsForGeometryInstance, geometryRefForItem, geometryRefsEqual, isVisibleSketchElement, clearSelection, normalizeGeometryInstance,
     previewFreeId: type => type === "mirror" ? `MI${documentIds.peek("mirror")}` : `PI${documentIds.peek("pattern")}`,
@@ -336,14 +336,10 @@
     resolveGeometryRef, createGeometryInstanceBundle, commitDraft: (...args) => synchronizedInstanceEditing.commit(...args),
   });
   const { start: startGeometryInstanceCommand } = geometryInstanceCommand;
-  const instanceSourceCommand = window.InstanceSourceCommand.create({
-    currentScope: workspace.current, activeSketchId, placementCommand: geometryInstanceCommand, guardSketchEdit, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
-    clearSelection, canvasSelection, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode, updateToolbar, updateUI, updatePropertiesUI,
-    applicationText, setHint, draw, geometryRefForItem, isVisibleSketchElement, geometryRefsEqual,
-    sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered, elementSketchId,
+  const instanceSourceCommand = createInstanceSourceCommand({
+    guardSketchEdit, exitDrawMode, updatePropertiesUI, sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered,
     geometryInstanceBundlesForScope, blockProjectionBundles, geometryElementKey, geometryInstanceBundle,
-    constraintGraphNodes, guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry,
-    clearSketchSolveState, recordHistory,
+    constraintGraphNodes, guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry, clearSketchSolveState,
   });
   const { finish: finishInstanceSourceEdit } = instanceSourceCommand;
   const blockPlacementCommand = window.BlockPlacementCommand.create({
@@ -638,11 +634,11 @@
     invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory,
   });
   const { setEnabledSketchIds: setBlockInstanceEnabledSketchIds } = blockConfigurationCommand;
-  const synchronizedInstanceEditing = window.DerivedInstanceEditing.create({
-    currentScope: workspace.current, snapshotModelState, restoreModelState, geometryInstanceBundle, geometryInstanceBundlesForScope,
+  const { editing: synchronizedInstanceEditing, changeProperty: changeFreeInstanceProperty } = createInstanceEditing({
+    snapshotModelState, restoreModelState, geometryInstanceBundle, geometryInstanceBundlesForScope,
     blockProjectionBundles, serializeModel, addPointSnapConstraints, geometryInstanceSourceObjects,
     rebind: () => constraintRebinding.rebuildDocument(editingScopeBinding.current, [...blockProjectionBundles(), ...geometryInstanceBundles()]),
-    stabilize: stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR, resolveGeometryRef, setHint, recordHistory, updateUI, draw,
+    stabilize: stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const instanceTransformCommand = window.InstanceTransformCommand.create({
     isPlacing: geometryInstanceCommand.isPlacing, currentScope: workspace.current,
@@ -654,10 +650,6 @@
     snappedBlockRotation, solveSketchAndDependents, updatePropertiesUI,
   });
   const { setBlockInstanceRotationLocked, setBlockInstanceOrthogonalRotation } = instanceTransformCommand;
-  function changeFreeInstanceProperty(instance, key, value) {
-    return geometryInstanceCommand.isPlacing(instance) ? geometryInstanceCommand.changeSetting(key, value)
-      : synchronizedInstanceEditing.change(instance, key, value);
-  }
   const constraintSolvePreparation = window.ConstraintSolvePreparation.createForSolver({
     solver, hasDirectRadiusDimension, offsetChainDraft, minimumOrientationLength: MIN_ORIENTATION_LENGTH, minimumLineLength: MIN_LINE_LENGTH,
   });

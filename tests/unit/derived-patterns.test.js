@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ctx = vm.createContext({ window: {}, structuredClone });
-for (const file of ['geometry/geometry_kernel', 'geometry/geometry_ref', 'geometry/spline_geometry', 'solver/constraint_solver', 'geometry/pattern_instance_model', 'geometry/objects', 'geometry/instance_projection', 'commands/geometry_instance_command', 'commands/derived_instance_editing']) vm.runInContext(fs.readFileSync(`src/${file}.js`, 'utf8'), ctx);
+for (const file of ['geometry/geometry_kernel', 'geometry/geometry_ref', 'geometry/spline_geometry', 'solver/constraint_solver', 'geometry/pattern_instance_model', 'geometry/objects', 'geometry/instance_projection', 'commands/geometry_instance_command', 'commands/derived_instance_editing', 'commands/instance_source_command', 'editing/selection', 'application/derived_instance_feature']) vm.runInContext(fs.readFileSync(`src/${file}.js`, 'utf8'), ctx);
 const M = ctx.window.PatternInstanceModel, G = ctx.window.GeometrySolver;
 const ref = (kind, id) => ({ kind, path: id.split('@') });
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
@@ -77,19 +77,19 @@ test('new draft requires a source anchor, permits circular completion without a 
   command.cancel(); assert.equal(history, 0); assert.equal(scope.geometryInstances.length, 0);
   command.start("circularPattern"); command.placeFree({ x: 30, y: 10 }, { data: { line: f.line, midpoint: true } }); assert.equal(command.finish(), true); assert.equal(history, 1);
 });
-function editor(success = true) {
+function editor(success = true, build = options => ctx.window.DerivedInstanceEditing.create(options)) {
   const f = fixture(); f.instance.placementPointDefined = true; M.resize(f.instance, 3);
   const scope = { points: [f.p, f.q], lines: [f.line], circles: [], arcs: [], splines: [], geometryInstances: [f.instance], constraints: [], annotations: [], hatches: [] };
   const projection = ctx.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: s => s });
   let histories = 0, restored = 0;
-  const editing = ctx.window.DerivedInstanceEditing.create({ currentScope: () => scope,
+  const editing = build({ currentScope: () => scope,
     snapshotModelState: () => structuredClone(f.instance), restoreModelState: snapshot => { Object.assign(f.instance, snapshot); restored++; },
     geometryInstanceBundle: instance => projection.geometryInstanceBundlesForScope(scope).find(bundle => bundle.instance === instance),
     geometryInstanceBundlesForScope: projection.geometryInstanceBundlesForScope, blockProjectionBundles: () => [],
     serializeModel: () => ({ ...scope, constraints: scope.constraints.map(c => ({ line: c.line?.id || c.line })) }),
     geometryInstanceSourceObjects: () => new Set([f.p, f.q, f.line]), resolveGeometryRef: f.resolve, rebind() {}, addPointSnapConstraints() {},
     stabilize: (_id, options) => { assert.equal(options.variableAllowed({ object: f.p, prop: 'x' }), false); return { success, result: { errorNorm: success ? 0 : 1 } }; },
-    acceptError: 1e-5, setHint() {}, recordHistory: () => histories++, updateUI() {}, draw() {} });
+    acceptError: 1e-5, setHint() {}, recordHistory: () => histories++, updateUI() {}, draw() {} }, f);
   return { ...f, scope, editing, histories: () => histories, restored: () => restored };
 }
 test('referenced copy reduction is rejected atomically; surviving keys persist after an unreferenced reduction', () => {
@@ -160,4 +160,49 @@ test('circular placement cannot compensate inconsistent interval constraints wit
  scope.constraints=[new G.HorizontalConstraint(bundle.lines[0]),new G.InstanceAngleIntervalConstraint(bundle.controlPoints[0],Math.PI/3)];
  assert.equal(new G.ConstraintSolver(scope).solve().success,false);
  assert.equal('rotation' in i,false); assert.deepEqual(Array.from(M.variables(i),v=>v.prop),['angleStep']);
+});
+
+function featureFixture(success = true) {
+  const shared = { ready:false, mode:'select', scopeReads:0 }, selection=ctx.window.CanvasSelection.create(); let api;
+  const f = editor(success, (options, geometry) => {
+    const currentScope=()=>{assert.equal(shared.ready,true);shared.scopeReads++;return options.currentScope();};
+    const feature=ctx.window.DerivedInstanceFeature.create({currentScope,resolveGeometryRef:options.resolveGeometryRef,
+      setHint:options.setHint,recordHistory:options.recordHistory,updateUI:options.updateUI,draw:options.draw,
+      cancelConstraintTargetCommand() {},cancelPendingCommand() {},canCreateInActiveSketch:()=>true,rejectRootSketchCreation() {},
+      selectedItemsForGeometryInstance:()=>[geometry.line],geometryRefForItem:item=>ref(item instanceof G.Line?'line':'point',item.id),
+      geometryRefsEqual:M.sameRef,isVisibleSketchElement:()=>true,clearSelection:selection.clear,canvasSelection:selection,
+      previewFreeId:()=> 'preview',nextInstanceId:()=> 'next',activeSketchId:()=> 'S1',getMode:()=>shared.mode,setMode:value=>{shared.mode=value;},
+      updateToolbar() {},applicationText:ja=>ja,Line:G.Line,lineHasDirection:ctx.window.GeometryKernel.lineHasDirection,elementSketchId:item=>item.sketchId,
+      createGeometryInstanceBundle:instance=>options.geometryInstanceBundlesForScope({...options.currentScope(),geometryInstances:[instance]},[])[0],
+      commitDraft:(...args)=>editing.commit(...args)});
+    const sources=feature.createSourceCommand({guardSketchEdit:()=>true,exitDrawMode(){},updatePropertiesUI(){},
+      sketchProjectionEntryFromItem(){},sketchProjectionSourceIsCovered:()=>false,
+      geometryInstanceBundlesForScope:options.geometryInstanceBundlesForScope,blockProjectionBundles:options.blockProjectionBundles,
+      geometryElementKey:item=>item.id,geometryInstanceBundle:options.geometryInstanceBundle,constraintGraphNodes:()=>[],
+      guardDimensionSymbolDeletion:()=>true,annotationReferencesRemovedGeometry:()=>false,clearSketchSolveState(){}});
+    const {editing,changeProperty}=feature.createEditing(options);
+    api={feature,command:feature.command,sources,changeProperty};return editing;
+  });
+  assert.equal(shared.scopeReads,0);shared.ready=true;
+  return{...f,...api,shared,selection};
+}
+
+test('derived feature shares placement and source sessions while property changes route by exact instance identity',()=>{
+  const f=featureFixture(), before=JSON.stringify(f.instance);
+  f.sources.startForInstance(f.instance);assert.equal(f.command.editing,f.instance);assert.equal(f.command.activeInput,'sources');assert.equal(f.sources.current,null);
+  const draft=f.command.pending;assert.notEqual(draft,f.instance);assert.equal(f.changeProperty(draft,'count',4),true);
+  assert.equal(f.command.pending,draft);assert.equal(draft.count,4);assert.equal(JSON.stringify(f.instance),before);assert.equal(f.histories(),0);
+  assert.equal(f.command.cancel(),true);assert.equal(f.command.pending,null);assert.equal(JSON.stringify(f.instance),before);
+  assert.equal(f.changeProperty(f.instance,'count',5),true);assert.equal(f.instance.count,5);assert.equal(f.scope.geometryInstances[0],f.instance);assert.equal(f.histories(),1);
+  assert.equal(f.p.x,20);assert.equal(f.q.x,40);
+});
+
+test('derived feature preserves committed edit rollback and pending settings remain outside model history',()=>{
+  const f=featureFixture(false), before=JSON.stringify(f.instance);f.selection.set('lines',[f.line]);
+  assert.equal(f.changeProperty(f.instance,'count',6),false);assert.equal(JSON.stringify(f.instance),before);assert.equal(f.histories(),0);assert.equal(f.restored(),1);assert.equal(f.selection.lines[0],f.line);
+  f.sources.startForInstance(f.instance);const draft=f.command.pending;
+  assert.equal(f.changeProperty(draft,'count',4),true);assert.equal(draft.count,4);assert.equal(JSON.stringify(f.instance),before);assert.equal(f.histories(),0);
+  const copy=structuredClone(draft);assert.equal(f.changeProperty(copy,'count',5),false);assert.equal(f.command.pending,draft);assert.equal(draft.count,4);
+  assert.equal(f.command.finish(),false);assert.equal(f.command.pending,draft);assert.equal(JSON.stringify(f.instance),before);assert.equal(f.histories(),0);
+  f.command.cancel();assert.equal(f.shared.mode,'select');assert.equal(f.command.pending,null);assert.equal(JSON.stringify(f.instance),before);
 });

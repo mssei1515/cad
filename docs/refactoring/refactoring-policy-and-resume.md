@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：派生Instanceの配置・source・確定後編集を機能単位で接続（2026-10-24、検証完了）
+
+基準develop／origin/developは6606d35。本単位はcodex/derived-instance-featureで実施した。src/application/derived_instance_feature.jsへDerivedInstanceFeatureを追加し、GeometryInstanceCommand→InstanceSourceCommand→DerivedInstanceEditingを同じ現在scope・参照解決・通知／描画／履歴とSelection・modeへ接続する。先行create、直後createSourceCommand、後段createEditingの段階と実command生成順は元の位置を保つ。配置中のProperty変更か確定後の編集かをisPlacingの厳密なObject同一性で振り分けるchangePropertyを同Featureへ移し、appの分岐関数を除去した。個別command factory・状態owner・戻り値／receiver、source固有のguard／投影／削除参照判定・Properties更新、確定後のsnapshot／求解／再結線は維持する。配置commandから後段commitへの既存callbackは同じ形でrootに残し、新しい遅延reader・初期化参照や可変app context／操作stateは追加しない。
+
+app.jsは2,323→2,315行（8行減）、対象生成3→3、root直下の延べ引数78→53、未使用binding／初期化前直接参照0（TEMP cad-derived-instance-feature-audit.cjs）。元の配置入力と、source／確定後編集から共有した依存の値が元の配置入力と一致することもAST比較で確認した。行数だけでなく、同じ配置sessionを使うsource操作と確定後編集の入口を機能として揃える単位とし、数百行の目標達成とはしない。
+
+既存derived-patterns.test.jsへ実PatternInstanceModel／GeometrySolver型／InstanceProjection／配置・source・確定後編集とSelectionを使う2境界試験を追加した。source操作が同じ配置sessionへ委譲されること、生成時のscope無照会、配置draftの同一参照とmodel／履歴の無変更、取消、確定後のmodel参照とsource Geometry維持、求解失敗時の復元と無履歴、同じIDの別Objectを配置中と扱わないこと、配置中の確定失敗後もdraftを保持し取消できることを確認した。既存fixtureは組立て差替え口を追加しただけで、既存期待値・数値上限は変えていない。関連単体25件、最終コードの全単体1,956件、構文615ファイルが成功。
+
+関連E2E257件（既存UI・phase0保存互換性／描画比較・派生pattern／free Instance・Sketch投影・Block／固定・複数寸法・Hatch・Sketch移動・Parameter dialog）が全成功（4.0分、exit 0、runner33607）。TEMP cad-derived-instance-feature-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持する。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server35812の停止、製品source三つのhash不変を確認した。今回は全587件の再実行ではなく、最新全体基準37cb5d2の成功と区別する。新moduleをindex.html／tools/check-syntax.js／unified-uiのscript順期待へ登録し、spec/architecture/モジュール構成.mdとimplementation-map.mdへ配置と責務を記録した。
+
+週枠使用35%／残量65%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も残る機能内の共有owner・初期化段階・test公開契約を確認し、巨大なapp contextや細分file・中継追加で目標を達成したとは扱わない。
+
+
 ### 最新：拘束確定と意図resolverを同じ操作Featureから段階生成（2026-10-24、検証完了）
 
 基準develop／origin/developは2409fbd。ConstraintEditing.createCommitが元の後段位置で実ConstraintCommitCommand.createWithDimensionsを生成し、同じSelection・Sketch guard／active Sketch・target照会・Selection解除・通知を共有する。選択解決は同じSelectionQuery.resolutionへ、寸法配置は同じDimensionPlacementCommand.startDistanceResolutionへreceiverと引数／戻り値を保って接続する。返すcreateIntentResolverは元の次の位置で、同じ候補registry・active Sketch・参照元／子孫／循環判定と翻訳／invalid hintから実ConstraintIntentResolverを生成する。確定のcurrentScope、snapshot／復元、求解／挿入、履歴と計測は従来の独立したportで受ける。新しい操作state・遅延reader／初期化参照や可変app contextは追加しない。個別command／resolver factoryと既存の構築・bind順は維持する。

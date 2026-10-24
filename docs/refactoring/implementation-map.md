@@ -8,6 +8,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- `src/application/derived_instance_feature.js`: 配置・source編集・確定後編集を共通scope／Selection・通知／履歴へ接続し、配置中／確定後のProperties変更を既存commandへ振り分ける。
 - `src/application/constraint_editing.js`: Selection能力照会・拘束対象command・寸法配置commandを同じsession／入力／Lifecycleから生成し、実ownerを返す。開始guardを共有し、寸法への継続と取消をowner間で接続する。UI metadata・フォーカス解除とモデル編集・求解の各担当は維持する。後段createCommit→createIntentResolverが同じ選択・通知・参照関係の照会を確定／意図解決へ接続する。
 
 - `src/application/annotation_feature.js`: 表示・materialization・基準点操作・表示用寸法・配置commandの生成と接続。共有sessionと実childを用い、preview／後段外観編集は遅延参照する。モデル・履歴・draftを重複所有しない。
@@ -1175,6 +1176,10 @@ GeometryReadServicesの返却APIに含まれるcreatePointUsageは、同じcurre
 
 GeometryReadServices.createSnapshotMetadataは実PointUsageを受け、同じelementSketchIdで所属を読み、Point instanceだけを既存kindまたは現在scopeのprimitive利用状況から分類するread-only関数を返す。truthyなkindを優先し、未指定／空値のfallbackだけをendpoint／explicitとして求め、Pointでない要素のkindはundefinedとする。Sketch照会→Point判定→kindの短絡→必要な場合だけPointUsageという順序と例外を維持する。生成時は要素／scopeを照会せず、展開geometryやcacheを追加参照しない。返却関数をDocumentSnapshot.createWriterへ接続し、現在のPointUsage scopeとsnapshotSourceを勝手に同一視しない。Snapshotのfield生成・正規化と、Block定義内で使う独立したlocalGeometryMetadataは変更しない。kindやモデルの書込み、独自cache・保存処理・UIは持たない。
 
+
+### 派生Instanceの生成・接続
+
+DerivedInstanceFeature（src/application/derived_instance_feature.js）はGeometryInstanceCommand・InstanceSourceCommand・DerivedInstanceEditingを、同じ現在scope・Geometry参照解決・通知／描画／履歴とSelection／配置modeへ接続する。先行createで実配置command、続くcreateSourceCommandで同じ配置commandに結び付くsource編集、後段createEditingで実確定後編集を元の位置に生成する。changePropertyはisPlacingの厳密なObject同一性で配置設定変更か確定後編集へ委譲し、戻り値・receiverと既存の失敗復元範囲を維持する。配置commandから後段commitへの既存遅延callbackはappが同じ形で接続する。Source固有のguard／投影／削除参照判定・Properties更新や確定後のsnapshot／求解／再結線は固有portとして保つ。新しいsession／preview／ID／model／historyや可変app context・初期化参照を持たず、個別command factoryも維持する。
 
 ### Block下書き・Session・照会の生成・接続
 
