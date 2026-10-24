@@ -2054,17 +2054,12 @@
     const forcedConstraintCommit = window.ConstraintTestDriver.createForcedCommit({
       resetModelState, addPoint, DistanceConstraint, solver, commitNewConstraint, currentScope: workspace.current, document,
     });
-    const drawingOrderFixture = window.DrawingOrderTestDriver.createFixture({
-      drawingOrder: window.DrawingOrder,
-      resetModelState, viewport, addPoint, addLine, currentScope: workspace.current, hatchGeometryQuery,
-      DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, ROOT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), normalizeGeometryInstance, geometryRefForItem,
-      invalidateBlockProjectionCache, fitSketchToViewport, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
-    });
-    const drawingOrderInteraction = window.DrawingOrderTestDriver.createInteraction({
-      drawingOrder: window.DrawingOrder,
-      currentScope: workspace.current, hatchGeometryQuery, isRootSketch, serializeModel, readHistory: readTestHistory,
-      clearSelection, canvasSelection, updateUI, draw, reorderSelectedDrawingObjects,
+    const drawingOrderTestApi = window.DrawingOrderTestDriver.createBrowserApi({
+      drawingOrder: window.DrawingOrder, resetModelState, viewport, addPoint, addLine, currentScope: workspace.current,
+      hatchGeometryQuery, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, ROOT_SKETCH_ID, createEmptyBlockDefinition, Point,
+      Line, appendDefinition: definition => documentModel.blockDefinitions.push(definition), normalizeGeometryInstance, geometryRefForItem, invalidateBlockProjectionCache, fitSketchToViewport,
+      resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
+      isRootSketch, readHistory: readTestHistory, clearSelection, canvasSelection, reorderSelectedDrawingObjects,
     });
     const hatchTestApi = window.HatchTestDriver.createBrowserApi({
       resetModelState, viewport, addPoint, addLine, addCircle, currentScope: workspace.current,
@@ -2112,10 +2107,7 @@
       exerciseSplineTransferForTest: splineTransferDriver.exercise,
       exerciseSplineConstraintsForTest: splineTestDriver.exerciseConstraints,
       ...hatchTestApi,
-      resetForDrawingOrderTest: drawingOrderFixture.reset,
-      drawingOrderStateForTest: drawingOrderInteraction.state,
-      selectDrawingOrderObjectForTest: drawingOrderInteraction.select,
-      reorderDrawingOrderForTest: drawingOrderInteraction.reorder,
+      ...drawingOrderTestApi,
       commitConstraintWithForcedSolveResultForTest: forcedConstraintCommit.commit,
       ...clipboardTestSupport,
       documentNameState: documentNameObservation.state,
