@@ -6,6 +6,20 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 停止地点：最新全体検証とmainへの最終反映（2026-10-24）
+
+週枠使用51%／残量49%を確認したため、ユーザー指定どおり新規分離を停止した。製品コードの最終commitは4dbdc87、検証対象developはe84648b3c5f914457760388b980c2e29ede7ff3b。前回main df5aef2のapp.js 2,738行から2,208行へ、今回の再開区切りで合計530行減った。停止記録では製品コードを変更せず、app.jsは2,208→2,208行（0行変化）。数百行のcomposition rootという全体目標は未完了であり、一時停止として扱う。
+
+最終の全E2E587件が22.5分で全成功（exit 0、runner42711、2026-10-24 12:24:53 JST終了）。対象を絞らず、性能上限・600000ms timeout・既存期待値を変えずに実行した。同じ製品コードの直前検証では構文618ファイル・全単体1,980件も成功している（cad-tool-navigation-presentation-{check,unit}.log）。関連E2Eだけを全体成功に読み替えず、e84648bの現物で全ケースを確認した。最終E2E中は333個の製品sourceのSHA256とHEADが不変だった。
+
+TEMP cad-refactor-oct24-final-{run.ps1,e2e.log,e2e-receipt.json,last-run.json,source-hashes.json,head.txt,metrics.json,root-audit.json}へ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server29336停止を確認済み。フィレット3,744・Offset10,296・航空機1,872・coupled-lines5,304・水平936・垂直936、合計23,088previewは失敗0。各最大時間は30.4／60.9／193.4／28.8／18.4／121.7ms。前のrun途中でユーザーが電源に接続しており、時間差をコードによる性能改善とは断定しない。既存のUI・計算・Geometry参照・.jot2d保存互換性を維持する。
+
+この停止記録をCommit／Pushし、developへ統合・Pushした後にmainを最後に反映・Pushする。直ちにdevelopへ戻ってmainをff-onlyで取り込みPushし、local／originのmainとdevelop四つのcommitが一致すること、mainがdevelopの祖先であること、tracked working treeがcleanであること、runtime-version.jsが最終commitを示すことを確認して目標をpausedにする。最終release commit IDはGitの現物と完了報告を参照する。統合済みのこの記録branchもlocal／remoteから削除する。新しい製品変更は加えない。
+
+再開時はusage、Git状態、worktree、remote main／developと祖先関係、runtimeを確認し、最新developから新しい作業branchを作成する。終了済みbranchを再使用しない。main反映後の同期を最初に確認し、200〜500行の目安や責務境界を縮小せず継続する。現在のappは2,208行、非空白1,756行、root493文、root関数145個（うち単一callのforwarder138個）、条件付きtest hooks362行。単なる空白圧縮やforwarderの移動で達成を装わない。
+
+残るrootの可変参照はpngExportCommand／sketchMoveCommand／sketchContextController／commandPanel／derivedPanelの五つ。現在scopeと初期化段階が異なるため、getter／setterや巨大mutable contextで隠すのでなく、各機能の開始・更新・終了と組立ての所有を確認する。次の候補としてHatchの外観／pattern原点の純粋な照会を調査したが、停止条件到達で未実装。patternOriginはBlock／派生投影のgetterから計算され、保存項目を増やさず戻り値のObject同一性と照会順を守る必要がある。HatchData／Appearance／HatchGeometryQueryの既存責務を再確認してから決める。通常入力・描画とtest APIの共通依存も、機能単位の公開境界と同じscopeのportだけをまとめる。既に分離したownerを包み直すだけの変更は避ける。
+
 ### 最新：メニューとTool展開表示の起動・Toolbar同期をPresentationへ集約（2026-10-24、検証完了）
 
 基準develop／origin/developはcf54e41。本単位はcodex/tool-navigation-presentationで実施した。PresentationFeature.createToolNavigationがApplicationMenusの生成、起動前のclose公開、menu start→ToolFlyouts生成→flyout startの接続順を所有する。ToolFlyoutsのnullable参照とToolbarの既定syncも同じPresentation ownerへ集め、appの可変bindingと同期callbackを除いた。通常のmenu／flyout実装、ツール実行ボタン、表示・操作仕様は変更しない。明示的なsyncFlyouts注入は引き続き利用できる。新しいsetterやscope contextを追加せず、同じUIの参照とその生成・起動・同期をまとめた。
