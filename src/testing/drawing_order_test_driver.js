@@ -124,5 +124,22 @@
     }
     return Object.freeze({ state, select, reorder });
   }
-  window.DrawingOrderTestDriver = Object.freeze({ createFixture, createInteraction });
+  function createBrowserApi({
+    drawingOrder, resetModelState, viewport, addPoint, addLine, currentScope,
+    hatchGeometryQuery, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, ROOT_SKETCH_ID, createEmptyBlockDefinition, Point,
+    Line, appendDefinition, normalizeGeometryInstance, geometryRefForItem, invalidateBlockProjectionCache, fitSketchToViewport,
+    resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
+    isRootSketch, readHistory, clearSelection, canvasSelection, reorderSelectedDrawingObjects
+  }) {
+    const drawingOrderFixture = createFixture({ drawingOrder, resetModelState, viewport, addPoint, addLine, currentScope, hatchGeometryQuery, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, ROOT_SKETCH_ID, createEmptyBlockDefinition, Point, Line, appendDefinition, normalizeGeometryInstance, geometryRefForItem, invalidateBlockProjectionCache, fitSketchToViewport, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel });
+    const drawingOrderInteraction = createInteraction({ drawingOrder, currentScope, hatchGeometryQuery, isRootSketch, serializeModel, readHistory, clearSelection, canvasSelection, updateUI, draw, reorderSelectedDrawingObjects });
+    return Object.freeze({
+      resetForDrawingOrderTest: drawingOrderFixture.reset,
+      drawingOrderStateForTest: drawingOrderInteraction.state,
+      selectDrawingOrderObjectForTest: drawingOrderInteraction.select,
+      reorderDrawingOrderForTest: drawingOrderInteraction.reorder
+    });
+  }
+
+  window.DrawingOrderTestDriver = Object.freeze({ createBrowserApi, createFixture, createInteraction });
 })();

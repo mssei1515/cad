@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：描画順fixtureと操作観測の公開APIを専用driverへ集約（2026-10-24、検証完了）
+
+基準develop／origin/developは00f4c24。本単位はcodex/drawing-order-test-apiで実施した。既存DrawingOrderTestDriver.createBrowserApiが混在図形fixture→選択／状態／並べ替え観測を元と同じ順に生成し、既存名の四つの公開hookを返す。drawingOrder・現在scope・Hatch照会・serialize・UI通知と描画を一度だけ受け、resetHistoryとreadHistoryは異なる役割として明示したままにする。個別factoryと既存の状態照会時ensureDrawingOrderState、並べ替えcommand、履歴・戻り値／例外・Geometry参照を維持する。appは29個の依存を注入して公開APIへ合成し、hook名とdriverの対応を専用moduleが所有する。新しい状態・cache・ソート規則・global依存は追加しない。
+
+app.jsは2,238→2,230行（8行減）、対象生成2→1、rootのtest hook内の延べ引数35→29、未使用binding／初期化前直接参照0（TEMP cad-drawing-order-test-api-audit.cjs）。共通portが元の各生成で同じ値であることを抽出時に確認した。TEMP cad-drawing-order-test-api-proof.cjsで既存関数本体6個と子constructor二つの全portの不変、公開hook名と並びの一致、モデル／DOM／履歴／描画portを生成時に呼ばないことも確認し、extraction.jsonへport数とhook名を保持した。別々のモデルscopeを一つに束ねるcontextは追加せず、同じ描画順支援の共通依存と公開対応を整理する単位とした。数百行の全体目標は未完了。
+
+同じhelper処理を複写した期待値テストを増やさず、既存の描画順とcommandの関連単体12件、全単体1,970件、構文616ファイルが成功した。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と依存を記録し、既存manifest／script順を維持した。
+
+関連E2E217件（描画順専用ケース・Hatch・既存UI・phase0保存互換性／描画比較・Block・free Instance／派生pattern）が全成功（3.1分、exit 0、runner11295）。TEMP cad-drawing-order-test-api-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server29664停止と製品source二つのhash不変を確認した。今回は関連217件であり、07081a6の全587件成功と区別する。数値上限・timeout・既存期待値は変更していない。
+
+週枠使用46%／残量54%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も残る入力・描画・test公開の依存と生成段階を確認する。単に行を詰めたり、既に役割が分かれた入口を再抽出したりせず、同じ機能のownerと状態の結線を優先する。
+
 ### 最新：tooltip文言の準備とSketch追加ボタンの結線を既存UI ownerへ移管（2026-10-24、検証完了）
 
 基準develop／origin/developは07081a6。本単位はcodex/ui-button-initializationで実施した。appに残っていたbutton[aria-label]のdata-tooltip準備をApplicationSettings.prepareButtonTooltipsへ移し、既存のdata-tooltip翻訳と同じ設定UIに配置した。元と同じCommandCursor生成後／言語反映前の位置で呼ぶ。Sketch追加／子Sketch追加のclick登録はSketchTreeView.bindCreationへ移し、同じcreateSketchへsibling／childを渡す。appは元と同じfile／画像control後、Sidebar結線前に呼ぶ。新しいtooltip表示やモデル作成方針・状態／cache・moduleを追加しない。
