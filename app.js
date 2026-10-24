@@ -1322,7 +1322,8 @@
     constraintButtons, applicationText, feedback: constraintFeedback,
     readOperands: () => constraintTargetSession.operands, readLanguage: () => applicationSettings.language,
   });
-  const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand, createControls: createConstraintControls } = window.ConstraintEditing.create({
+  const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand, createControls: createConstraintControls,
+    createCommit: createConstraintCommit } = window.ConstraintEditing.create({
     session: constraintTargetSession, selection: canvasSelection, pending: pendingCommandSession, candidates: constraintCandidates,
     lifecycle: drawOperationLifecycle, valueInput: dimensionInputController,
     resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
@@ -1580,31 +1581,27 @@
 
   function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
-  const { command: constraintCommitCommand, readOnly: dimensionReadOnlyQuery } = window.ConstraintCommitCommand.createWithDimensions({
+  const { command: constraintCommitCommand, readOnly: dimensionReadOnlyQuery, createIntentResolver: createConstraintIntentResolver } = createConstraintCommit({
     linesAreParallel, assignSketch: assignConstraintSketchId, probeRedundancy: constraintRedundancy.probeCandidate,
     currentScope: workspace.current, forgetConstraint: constraintRedundancy.forgetConstraint,
-    resolveSelection: constraintResolutionFromCurrentSelection, canvasSelection,
-    guardSketchEdit, activeSketchId, constraintTargetsAreActive, snapshotModelState, restoreModelState,
+    constraintTargetsAreActive, snapshotModelState, restoreModelState,
     solvePreparation: constraintSolvePreparation, pushModelConstraint,
     solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
     constraintSketchId, lineCollapseQuery, redundantConstraintInfo, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution,
-    clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
-    recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
+    measuredConstraintTargetValue,
+    refreshConstraintAnalysis, updateUI,
+    recordHistory, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
     sketchName, now: () => performance.now(),
   });
   function commitNewConstraint(...args) { return constraintCommitCommand.ordinary(...args); }
   function markReferenceConstraint(...args) { return constraintCommitCommand.markReference(...args); }
 
-  const constraintIntentResolver = window.ConstraintIntentResolver.create({
-    candidates: constraintCandidates, operands: constraintOperandValues,
-    types: { PointOnSplineConstraint, SplineLineTangentConstraint, SplineSplineTangentConstraint },
-    activeSketchId, isReferenceSourceSketchId, wouldCreateReferenceCycle,
-    isActiveSketchElement, isEditableSketchElement, descendantSketchIds, applicationText, invalidConstraintTargetHint,
+  const constraintIntentResolver = createConstraintIntentResolver({
+    operands: constraintOperandValues, types: { PointOnSplineConstraint, SplineLineTangentConstraint, SplineSplineTangentConstraint },
+    isActiveSketchElement, isEditableSketchElement,
   });
   function resolveConstraintIntent(type, operands) { return constraintIntentResolver.resolve(type, operands); }
 
-  function constraintResolutionFromCurrentSelection(type) { return constraintSelectionQuery.resolution(type); }
 
   function startDistanceResolution(resolution, pointer) { return dimensionPlacementCommand.startDistanceResolution(resolution, pointer); }
 

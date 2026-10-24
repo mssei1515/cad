@@ -8,7 +8,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
-- `src/application/constraint_editing.js`: Selection能力照会・拘束対象command・寸法配置commandを同じsession／入力／Lifecycleから生成し、実ownerを返す。開始guardを共有し、寸法への継続と取消をowner間で接続する。UI metadata・フォーカス解除とモデル編集・求解の各担当は維持する。
+- `src/application/constraint_editing.js`: Selection能力照会・拘束対象command・寸法配置commandを同じsession／入力／Lifecycleから生成し、実ownerを返す。開始guardを共有し、寸法への継続と取消をowner間で接続する。UI metadata・フォーカス解除とモデル編集・求解の各担当は維持する。後段createCommit→createIntentResolverが同じ選択・通知・参照関係の照会を確定／意図解決へ接続する。
 
 - `src/application/annotation_feature.js`: 表示・materialization・基準点操作・表示用寸法・配置commandの生成と接続。共有sessionと実childを用い、preview／後段外観編集は遅延参照する。モデル・履歴・draftを重複所有しない。
 - `AnnotationFeature.createEditor`: 後段のParameter command・本文確定command・AnnotationInputControllerの生成、編集準備／選択・layoutの接続。実ControllerとParameter確定関数を返す。本文更新と履歴は`AnnotationCommand.createTextEditing`、式の求解・復元は既存AnnotationParameterCommandが担当する。
@@ -631,6 +631,8 @@ ConstraintCommitCommandはreadOnly・resolution・dimensionの入口も所有す
 
 
 ConstraintSelectionQuery（src/editing/constraint_selection_query.js）は現在のSelectionとConstraintTargetSessionを読む拘束の実行可否／完了可否／意図照会を所有する。対象session→Spline選択変換→通常Selectionの優先を保持し、型候補はConstraintCandidates、対象意図はConstraintIntentResolverへ委譲する。canApplyのGeometry mode制限と、収集済みoperandがあるcanCompleteの既存の判定範囲を区別する。線長寸法はcommand開始後の追加対象待ちを保持する。現在Sketchと操作modeを限定した照会として受け取り、Selection・session・pending・UI・履歴を書き換えない。ConstraintEditingが生成／接続を担当し、appにはhoisted入口を残す。UIと対象操作・寸法操作は同じ実照会ownerを共有する。移管後にappへ残っていた未使用候補／subject変換の分解代入も撤去する。
+
+ConstraintEditing.createCommitは元の後段構築位置で実ConstraintCommitCommand.createWithDimensionsを生成し、同じSelection・Sketch guard／active Sketch・寸法target照会・Selection解除・通知を共有する。選択からの解決は同じSelectionQuery.resolutionへ、寸法配置は同じDimensionPlacementCommand.startDistanceResolutionへmethod receiverと引数／戻り値を保って接続する。返すcreateIntentResolverはその後の元の位置で、同じcandidates・active Sketch・参照元／子孫／循環判定・翻訳／invalid hintを実ConstraintIntentResolverへ渡す。確定用のcurrentScope・snapshot／復元・求解／挿入・履歴・計測は別の既存portとして保つ。生成中にはSelectionやscopeを照会せず、独自のcommand／resolver stateや可変app context・初期化参照を追加しない。個別command／resolver factoryも維持する。
 
 
 ToolbarView.create（src/ui/toolbar_view.js）は描画modeと操作状態の表示値からToolbarのactive／aria-pressed／aria-disabledと既存のdisabled属性を反映する。操作状態は必要な値だけをreadInteractionで受け取り、現在model・sessionを直接参照しない。選択可視性と対象の編集可否は注入した照会へ委譲し、ボタンがない場合やGeometry mode外の既存の短絡評価も保持する。ボタン反映→履歴ボタン→選択可視性→Flyout→カーソルの順序を維持し、カーソルはFlyout同期後の最新操作状態を読む。実行command、選択可視性の変更、履歴編集は所有しない。appは各照会と既存CommandCursor／ToolFlyoutsへの接続とhoisted updateToolbar入口を保持する。
