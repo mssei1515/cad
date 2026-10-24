@@ -369,5 +369,51 @@
     return Object.freeze({ state });
   }
 
-  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture, createParentPointLineFixture, createSiblingPointLineFixture, createSiblingReferenceMove, createPointLineObservation });
+  function createModelSupport({
+    refreshConstraintAnalysis, readMembership, activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines,
+    analyzeConstraintState, acceptError, vectorNorm, currentScope, elementSketchId, blockProjectionBundles,
+    blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, serializeModel
+  }) {
+    const constraintStatusObservation = createStatusObservation({ refreshConstraintAnalysis, readMembership });
+    const readTestConstraintStatuses = constraintStatusObservation.state;
+    const constraintAnalysisObservation = createAnalysisObservation({ activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, analyzeConstraintState, acceptError, vectorNorm, currentScope, elementSketchId });
+    const blockConstraintObservation = createBlockObservation({ refreshConstraintAnalysis, blockProjectionBundles });
+    const blockConstraintInsertion = createBlockConstraintInsertion({ blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, readAnalysis: constraintAnalysisObservation.analysis, readBlockState: blockConstraintObservation.state, serializeModel });
+    const publicAPI = Object.freeze({
+      constraintStatusesForTest: readTestConstraintStatuses,
+      constraintAnalysisForTest: constraintAnalysisObservation.analysis,
+      blockConstraintStatusForTest: blockConstraintObservation.state,
+      addBlockPointOnLineConstraintForTest: blockConstraintInsertion.add
+    });
+    return Object.freeze({ readStatuses: readTestConstraintStatuses, publicAPI });
+  }
+
+  function createEditingCases({
+    resetModelState, addPoint, addLine, DistanceConstraint, dimensionFromAnchor, pushModelConstraint,
+    canvasSelection, constraintTargetSession, updateUI, fitAllGeometryToViewport, draw, canvas,
+    HorizontalConstraint, PointOnLineConstraint, addArc, RadiusConstraint, solveSketchAndDependents, activeSketchId,
+    snapshotModelState, refreshConstraintAnalysis, constraintStatusOf, constraintStatusColor, readSummary, currentScope,
+    worldToCanvasScreen, rootSketchId, defaultSketchId, elementSketchId, solveReferenceDependentSketches, isExplicitPoint,
+    wouldCreateReferenceCycle, signedPointLineDistance, constraintSketchId
+  }) {
+    const dimensionSelectionFixture = createDimensionSelectionFixture({ resetModelState, addPoint, addLine, DistanceConstraint, dimensionFromAnchor, pushModelConstraint, canvasSelection, constraintTargetSession, updateUI, fitAllGeometryToViewport, draw, canvas });
+    const dimensionSelectionObservation = createDimensionSelectionObservation({ canvasSelection, constraintTargetSession });
+    const supportStatusFixture = createSupportStatusFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, PointOnLineConstraint, addArc, RadiusConstraint, solveSketchAndDependents, activeSketchId, snapshotModelState, refreshConstraintAnalysis, fitAllGeometryToViewport, draw, constraintStatusOf, constraintStatusColor, readSummary });
+    const parentPointLineFixture = createParentPointLineFixture({ resetModelState, addPoint, addLine, activeSketchId, currentScope, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const siblingPointLineFixture = createSiblingPointLineFixture({ resetModelState, addPoint, currentScope, rootSketchId, addLine, defaultSketchId, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const siblingReferenceMove = createSiblingReferenceMove({ currentScope, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId, isExplicitPoint, wouldCreateReferenceCycle });
+    const pointLineObservation = createPointLineObservation({ currentScope, PointOnLineConstraint, signedPointLineDistance, constraintSketchId });
+    const publicAPI = Object.freeze({
+      resetForConstraintDimensionSelection: dimensionSelectionFixture.reset,
+      constraintDimensionSelectionState: dimensionSelectionObservation.state,
+      resetForSupportConstraintStatus: supportStatusFixture.reset,
+      resetForReferencePointLineCoincidence: parentPointLineFixture.reset,
+      resetForSiblingPointLineReference: siblingPointLineFixture.reset,
+      moveSiblingReferenceLine: siblingReferenceMove.move,
+      referencePointLineState: pointLineObservation.state
+    });
+    return publicAPI;
+  }
+
+  window.ConstraintTestDriver = Object.freeze({ createModelSupport, createEditingCases, createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture, createParentPointLineFixture, createSiblingPointLineFixture, createSiblingReferenceMove, createPointLineObservation });
 })();

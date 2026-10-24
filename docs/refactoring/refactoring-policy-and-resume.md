@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：拘束テスト支援の状態照会と編集ケースを公開API単位で集約（2026-10-24、検証完了）
+
+基準develop／origin/developは4841f8b。本単位はcodex/constraint-test-apiで実施した。既存src/testing/constraint_test_driver.jsへcreateModelSupportとcreateEditingCasesを追加した。前者は同じscope・現在Sketch・解析・Block投影と拘束追加から四つのdriverを生成し、状態readerと既存名の四つの公開hookを返す。拘束追加後の解析／状態はその同じ観測を共有する。後者は同じSelection／対象session・model編集・参照／通知から、寸法選択・観測、支持拘束状態、親／兄弟の点線参照・移動・状態の七つのdriverを生成し、既存名の七hookを返す。既存の二つの連続生成位置と順序を維持し、Drag試験へ渡す状態readerも同じ関数である。個別factoryは残し、新しい状態・cache・求解基準・app contextは追加しない。
+
+app.jsは2,296→2,280行（16行減）、対象生成11→2、rootのtest hook内の延べ引数85→50、未使用binding／初期化前直接参照0（TEMP cad-constraint-test-api-audit.cjs）。同じkeyの共有依存が元の各constructorで同じ値であることを抽出時に確認した。TEMP cad-constraint-test-api-proof.cjsでは既存関数本体24個の不変、子constructor11個の全portと元の値の一致、公開hook名と並びの一致をAST比較で確認し、extraction.jsonに入口別の数とhook名を保持した。公開名の対応と生成の所有を既存driverへ移し、巨大contextを外へ隠すだけの分割にしない。通常起動時は従来どおりtest hookを生成しない。数百行の全体目標は未完了。
+
+既存constraint-test-driver.test.jsへ1境界試験を追加し、実driverを組み合わせた拘束追加成功／拒否後の解析・Block状態・serializeの順序と同じmodel、scope／projectionの置換、状態readerの同一関数参照、commit例外時に後続照会へ進まないことを確認した。関連単体9件、最終コードの全単体1,961件、構文616ファイルが成功。製品file／単体fileの新規追加はなく、既存manifestとscript順は維持した。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務・依存を記録した。
+
+関連E2E290件（既存UI・phase0保存互換性／描画比較・寸法・Sketch投影とlegacy互換・派生pattern／free Instance・Block／固定・bolt／thread／symmetry・adversarial authoring性能／drag fixture）が全成功（5.5分、exit 0、runner93884）。TEMP cad-constraint-test-api-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server33528停止と製品source二つのhash不変を確認した。今回の関連290件に長時間のconstraint-drag-regressions全fileは含めず、全587件の最新基準37cb5d2とは区別する。性能上限・timeout・既存期待値は変更していない。
+
+週枠使用37%／残量63%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残る寸法／注記等のtest公開と通常のCanvas／Geometry dragの依存を監査し、機能の共有ownerと初期化段階を基準に整理する。既に分離した拘束driverのraw helperを再抽出せず、APIの組立てと状態所有を優先する。
+
+
 ### 最新：拘束の案内・hover・Canvas入力を同じ編集Featureへ接続（2026-10-24、検証完了）
 
 基準develop／origin/developはa1bbd95。本単位はcodex/constraint-input-compositionで実施した。既存ConstraintEditingへcreateWithFeedbackを追加し、実ConstraintControlsViewのfeedbackを先に生成して同じsession／翻訳／現在のoperands・言語から対象commandと寸法配置を接続する。label／targetHint／invalidTargetHintをappで個別に注入し直さず、生成したtargetHintを通常Canvas入力にも返す。createCommandInputは同じpending／operand解決／型から既存RetargetHoverを生成し、hover更新と後段のConstraintCommandInput.createFeature生成入口を返す。後段は同じ対象session・寸法配置・対象commandを共有し、元と同じGeometryDrag後／DimensionDrag前の位置で生成する。通常クリック入力は引き続きDimensionDrag後に生成する。個別createの直接注入APIとfeedback→選択照会→対象command→寸法配置→hover→後段入力の順序を維持する。新しい操作state・遅延reader・app contextは追加していない。
