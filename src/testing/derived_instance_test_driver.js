@@ -91,5 +91,26 @@
     }
     return Object.freeze({ reset });
   }
-  window.DerivedInstanceTestDriver = Object.freeze({ createFixture, createInteraction, createCommandFixture });
+  function createBrowserApi({
+    resetModelState, addPoint, addLine, focus, clientPosition, resetHistory,
+    updateUI, draw, currentScope, serializeModel, geometryInstanceBundle, constraintStatusColor,
+    arcSweep, canvasSelection, resolvedHatchBoundary, document, loadModelData, deleteElements,
+    deleteCurrentSelection, addCircle, addArc, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, normalizeGeometryInstance,
+    activeSketchId, geometryRefForItem, parseGeometryRefId, hatchGeometryQuery, nextProjectionId, nextMirrorId,
+    nextPatternId
+  }) {
+    const instanceCommandFixture = createCommandFixture({ resetModelState, addPoint, addLine, focus, clientPosition, resetHistory, updateUI, draw });
+    const derivedInstanceInteraction = createInteraction({ currentScope, serializeModel, geometryInstanceBundle, constraintStatusColor, arcSweep, canvasSelection, resolvedHatchBoundary, document, loadModelData, updateUI, draw, deleteElements, deleteCurrentSelection });
+    const derivedInstanceFixture = createFixture({ resetModelState, addCircle, addPoint, addLine, addArc, currentScope, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, normalizeGeometryInstance, activeSketchId, geometryRefForItem, parseGeometryRefId, hatchGeometryQuery, nextProjectionId, nextMirrorId, nextPatternId, resetHistory, updateUI, draw, readState: derivedInstanceInteraction.state });
+    return Object.freeze({
+      loadModelForDerivedInstanceTest: derivedInstanceInteraction.load,
+      resetForDerivedInstanceTest: derivedInstanceFixture.reset,
+      resetForGeometryInstanceCommandTest: instanceCommandFixture.reset,
+      derivedInstanceStateForTest: derivedInstanceInteraction.state,
+      deleteDerivedSourceForTest: derivedInstanceInteraction.deleteSource,
+      deleteDerivedInstanceForTest: derivedInstanceInteraction.deleteInstance
+    });
+  }
+
+  window.DerivedInstanceTestDriver = Object.freeze({ createBrowserApi, createFixture, createInteraction, createCommandFixture });
 })();

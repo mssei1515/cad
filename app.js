@@ -2043,19 +2043,13 @@
     const referenceImageBlockFixture = window.ReferenceImageTestDriver.createBlockFixture({
       resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel,
     });
-    const instanceCommandFixture = window.DerivedInstanceTestDriver.createCommandFixture({
-      resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition,
-      resetHistory, updateUI, draw,
-    });
-    const derivedInstanceInteraction = window.DerivedInstanceTestDriver.createInteraction({
-      currentScope: workspace.current, serializeModel, geometryInstanceBundle, constraintStatusColor, arcSweep, canvasSelection,
-      resolvedHatchBoundary, document, loadModelData, updateUI, draw, deleteElements, deleteCurrentSelection,
-    });
-    const derivedInstanceFixture = window.DerivedInstanceTestDriver.createFixture({
-      resetModelState, addCircle, addPoint, addLine, addArc, currentScope: workspace.current, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE,
-      normalizeGeometryInstance, activeSketchId, geometryRefForItem, parseGeometryRefId, hatchGeometryQuery,
-      nextProjectionId: () => documentIds.allocate("sketchProjection"), nextMirrorId: () => documentIds.allocate("mirror"), nextPatternId: () => documentIds.allocate("pattern"),
-      resetHistory, updateUI, draw, readState: derivedInstanceInteraction.state,
+    const derivedInstanceTestApi = window.DerivedInstanceTestDriver.createBrowserApi({
+      resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, resetHistory,
+      updateUI, draw, currentScope: workspace.current, serializeModel, geometryInstanceBundle, constraintStatusColor,
+      arcSweep, canvasSelection, resolvedHatchBoundary, document, loadModelData, deleteElements,
+      deleteCurrentSelection, addCircle, addArc, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, normalizeGeometryInstance,
+      activeSketchId, geometryRefForItem, parseGeometryRefId, hatchGeometryQuery, nextProjectionId: () => documentIds.allocate("sketchProjection"), nextMirrorId: () => documentIds.allocate("mirror"),
+      nextPatternId: () => documentIds.allocate("pattern"),
     });
     const clipboardTestSupport = window.ClipboardTestDriver.createSupport({
       currentScope: workspace.current, serializeModel, sketchContext, readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
@@ -2136,12 +2130,7 @@
       serializedModelForTest() {
         return structuredClone(serializeModel());
       },
-      loadModelForDerivedInstanceTest: derivedInstanceInteraction.load,
-      resetForDerivedInstanceTest: derivedInstanceFixture.reset,
-      resetForGeometryInstanceCommandTest: instanceCommandFixture.reset,
-      derivedInstanceStateForTest: derivedInstanceInteraction.state,
-      deleteDerivedSourceForTest: derivedInstanceInteraction.deleteSource,
-      deleteDerivedInstanceForTest: derivedInstanceInteraction.deleteInstance,
+      ...derivedInstanceTestApi,
       ...sketchProjectionTestSupport,
       referenceImageStateForTest: referenceImageTestObservation.state,
       importReferenceImageDataForTest: referenceImageTestImport.importData,
