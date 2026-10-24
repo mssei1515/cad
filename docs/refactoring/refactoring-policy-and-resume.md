@@ -93,6 +93,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：共通UIのHTML文字列変換を状態のない表示moduleへ分離（2026-10-24、全体検証完了）
+
+基準develop／origin/developは37a493b。本単位はcodex/html-text-formattingで実施した。appに残っていたescapeHtmlをsrc/ui/html_text.jsのHtmlTextへ移した。String(value??"")と五つの特殊文字置換の関数本体はそのままにし、nullishと0／false、Unicode・改行、既存entityの二重エスケープ、文字列化の回数／例外を維持する。モデル・DOM・言語・操作状態に依存せず、appは静的APIから受け取った同じ関数をParameter Editor、context表示、Properties、Sketch Tree等へ明示して注入する。既存のclassic script／namespace方式を保ち、NumberDisplay直後の読込と構文・単体のmanifestへ一度ずつ登録した。設定やメッセージに混ぜず、共有UI文字列の責務を明示する。
+
+app.jsは2,230→2,227行（3行減）。TEMP cad-html-text-formatting-proof.cjsで関数本体のAST一致と14値の差分比較、APIの不変性を確認。audit.cjsで未使用bindingは0。本単位は構築引数を減らす変更ではなく、UI変換の所有を分ける変更である。新規単体2件は五文字のエスケープ、nullish／scalar／既存entity／Unicode・実改行、および一度の文字列化と元の例外の伝播を確認する。構文618ファイル・全単体1,972件が成功（exit 0）。正式なモジュール構成とimplementation-mapも更新した。
+
+最新の全E2E587件が22.4分で全成功（exit 0、runner84617、2026-10-24 11:36:53 JST終了）。TEMP cad-html-text-full-{run.ps1,e2e.log,e2e-receipt.json,last-run.json,source-hashes.json,tested-blobs.json,metrics.json}へ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server42208停止と製品source三つのSHA256不変を確認した。フィレット3,744・Offset10,296・航空機1,872・coupled-lines5,304・水平936・垂直936、合計23,088previewが失敗0。最大時間は順に27.9／40.1／207.5／27.9／21.3／128.9ms。途中でユーザーが電源へ接続したため、過去runとの時間差をコードによる性能改善とは断定しない。数値上限・timeout・既存期待値を変更せず、以前の全体検証07081a6を今回の現物で更新した。
+
+週枠使用49%／残量51%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。新しい分離を停止するのは残量50%未満を確認した時点である。全体目標はactive・未完了で、2,227行は200〜500行の目安に達していない。次も描画・入力・test APIの状態所有と生成段階を監査し、共通依存のある機能単位から進める。描画のhoisted関数をprovider変数とconnect setterへ置換する案や、異なるscopeの操作を巨大contextへ詰める案は、循環を隠すだけになるため採用しない。
+
 ### 最新：描画順fixtureと操作観測の公開APIを専用driverへ集約（2026-10-24、検証完了）
 
 基準develop／origin/developは00f4c24。本単位はcodex/drawing-order-test-apiで実施した。既存DrawingOrderTestDriver.createBrowserApiが混在図形fixture→選択／状態／並べ替え観測を元と同じ順に生成し、既存名の四つの公開hookを返す。drawingOrder・現在scope・Hatch照会・serialize・UI通知と描画を一度だけ受け、resetHistoryとreadHistoryは異なる役割として明示したままにする。個別factoryと既存の状態照会時ensureDrawingOrderState、並べ替えcommand、履歴・戻り値／例外・Geometry参照を維持する。appは29個の依存を注入して公開APIへ合成し、hook名とdriverの対応を専用moduleが所有する。新しい状態・cache・ソート規則・global依存は追加しない。
