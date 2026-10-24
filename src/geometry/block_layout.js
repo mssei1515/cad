@@ -4,6 +4,12 @@
   const { angleOnSignedSweep } = window.GeometryKernel;
   const { splineBBox } = window.GeometryBounds;
   const { resolveBoundary: resolveHatchBoundaryLoops } = window.HatchRegionEngine;
+  const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
+  function snappedBlockRotation(rotation) {
+    const quarterTurns = Math.round((Number(rotation) || 0) / BLOCK_ORTHOGONAL_ROTATION_STEP);
+    return ((quarterTurns % 4) + 4) % 4 * BLOCK_ORTHOGONAL_ROTATION_STEP;
+  }
+
   function create({ catalog, projections, instanceProjections, annotationBounds, hatchPrimitivesForScope }) {
     const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockInstanceEnabledSketchSet } = catalog;
     const { blockWorldPoint, createBlockProjectionBundle } = projections;
@@ -118,7 +124,7 @@
     }
 
 
-    return Object.freeze({ blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor });
+    return Object.freeze({ blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation });
   }
-  window.BlockLayout = Object.freeze({ create });
+  window.BlockLayout = Object.freeze({ create, snappedBlockRotation });
 })();

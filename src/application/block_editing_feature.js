@@ -1,7 +1,7 @@
 /* Compose Block drafts, nested editing sessions and queries over the same owners. */
 (() => {
   "use strict";
-  function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding,
+  function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding, readEditingScope,
     normalizedSketchCopy, normalizeGeometryInstance, isDimensionConstraint, isReadOnlyDimension,
     numericDimensionExpression, ensureParameterNamespace, activeSketchId, blockProjectionBundles, geometryElementKey,
     readViewport, activateScope, reserveScopeSequences, createHistory }) {
@@ -27,12 +27,12 @@
       blockDefinitionOwnedSubtreeIds: catalog.blockDefinitionOwnedSubtreeIds, rebuildBlockDefinitionConstraintObjects,
     });
     const queries = window.BlockEditingQueries.create({ definitions: () => documentModel.blockDefinitions,
-      currentScope: workspace.current, editor: session, catalog });
-    function createPropagation({ readEditingScope, clearSelection, stabilizeDefinition, stabilizeDocument, applicationText }) {
+      currentScope: workspace.current, readEditingScope, editor: session, catalog });
+    function createPropagation({ readEditingScope: readPropagationScope = readEditingScope, clearSelection, stabilizeDefinition, stabilizeDocument, applicationText }) {
       return window.BlockParameterPropagation.create({ catalog, invalidateProjection: projections.invalidateBlockProjectionCache, applicationText,
         definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: stabilizeDefinition },
         document: { rebuild: () => {
-          rebinding.rebuildDocument(readEditingScope(), blockProjectionBundles());
+          rebinding.rebuildDocument(readPropagationScope(), blockProjectionBundles());
           clearSelection();
         }, stabilize: stabilizeDocument } });
     }

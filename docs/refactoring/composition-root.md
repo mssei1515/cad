@@ -6,6 +6,20 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Block回転補正と編集scopeのInstance照会を既存ownerへ配置（2026-10-24、検証完了）
+
+基準develop／origin/developは6027c5b。本単位はcodex/block-layout-and-lookupで実施した。90度刻みのsnappedBlockRotationとprivate定数を既存BlockLayoutへ移し、静的APIと生成済みlayoutから同じ関数を公開する。Number変換、Math.round、moduloの順序を変えず、配置・Boundsを扱う座標計算と同じ場所へ配置した。blockInstanceByIdはBlockEditingQueriesへ移し、BlockEditingFeatureへ明示したreadEditingScopeから現在のblockInstancesを呼出しごとに読む。最初の一致をObjectのまま返し、id厳密比較とnull fallbackを維持する。workspace.currentを使う既存の移動可否等の照会とは別readerを使い、両scopeを混同しない。
+
+同FeatureのcreatePropagationもこのbound readerを既定として共有し、appの従来の読取callbackを一か所へ集めた。個別createPropagationの明示readEditingScope上書きAPIと、個別query生成でのcurrentScope既定も維持する。scope置換、document再結線→Selection解除の順序、旧Instance／Geometry参照、例外と求解は既存の範囲を保つ。生成時にscopeを読まず、新file・操作state／cache・グローバル変数は追加していない。
+
+app.jsは2,265→2,256行（9行減）、対象生成3→3、root直下の延べ引数30→30、未使用binding／初期化前直接参照0（TEMP cad-block-layout-and-lookup-audit.cjs）。回転の計算とモデル検索を一つの便利moduleへ混ぜず、それぞれ既存ownerへ配置した。scope readerは必要な場所へ明示しており、引数総数の削減とはしない。数百行の全体目標は未完了。
+
+block-editing-queries.test.jsとblock-editing-feature.test.jsへ計2境界試験を追加した。生成時の無照会、workspaceとboundに同じIDの別Instanceを置く検索、最初の一致と厳密ID、scope置換、例外とcurrentScope既定を確認した。実codec／rebindingを使うFeature試験では、queryとParameter再構築が現在のboundを共有すること、旧bound／workspaceを変更しないこと、明示したPropagation scopeの上書きがqueryのscopeと独立することを確認した。TEMP cad-block-layout-and-lookup-proof.cjsで回転関数のAST不変、5,012入力の変更前後の結果一致、Number変換例外の伝播を確認した。関連単体26件、全単体1,966件、構文616ファイルが成功。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と依存を記録し、既存manifest／script順を維持した。
+
+関連E2E247件（既存UI・phase0保存互換性／描画比較・Block／固定・Hatch・派生pattern／free Instance・Sketch投影・Parameter dialog・Sketch移動）が全成功（3.6分、exit 0、runner5692）。TEMP cad-block-layout-and-lookup-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server41564停止と製品source四つのhash不変を確認した。今回は関連247件であり、全587件の最新基準37cb5d2とは区別する。既存の文言・数値上限・timeout・期待値は変更していない。
+
+週枠使用40%／残量60%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も残る通常入力・描画と各機能のtest支援の共有ownerを調べ、同じcapabilityを繰り返す接続とappに残す接続を区別する。既存の役割別入口を包むだけの新wrapperや、巨大なapp contextへ移す分割は行わない。
+
 ### 最新：作図要素の種類ラベルを既存の表示moduleへ集約（2026-10-24、検証完了）
 
 基準develop／origin/developは7e3fb7e。本単位はcodex/authoring-type-labelsで実施した。Hatchのcross／solid／既定の平行線と、派生Instanceのmirror／pattern／circularPattern／既定のSketch投影の表示ラベル生成を、既存AuthoringFeedbackへ集約した。既存のHatch／Offset診断と同じapplicationTextだけを注入し、Properties・Sketch Tree・context候補が同じ関数を使う。生成時に翻訳を実行せず、各呼出しの現在言語、厳密な型名比較、未知値／null／undefinedのfallbackと翻訳例外を維持する。新file・状態／cache・Document／DOM依存は追加していない。Block回転の計算やmodel検索は表示文言と責務が異なるため、同じmoduleへ混ぜない。

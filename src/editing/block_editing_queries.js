@@ -1,8 +1,11 @@
 /* Read-only Block queries over the current scope and nested editing drafts. */
 (() => {
   "use strict";
-  function create({ definitions, currentScope, editor, catalog }) {
+  function create({ definitions, currentScope, readEditingScope = currentScope, editor, catalog }) {
     const { blockDefinitionById } = catalog;
+    function blockInstanceById(id) {
+      return readEditingScope().blockInstances.find((instance) => instance.id === id) || null;
+    }
     function selectedBlockDefinitionMoveError(selection) {
       const selectedInstances = new Set(selection?.blockInstances || []);
       const definitionIds = [...new Set((selection?.blockInstances || []).map((instance) => instance.definitionId))];
@@ -87,7 +90,7 @@
       };
       return visit(startDefinitionId, []);
     }
-    return Object.freeze({ selectedBlockDefinitionMoveError, blockDefinitionsInCurrentScope,
+    return Object.freeze({ blockInstanceById, selectedBlockDefinitionMoveError, blockDefinitionsInCurrentScope,
       blockDefinitionScopeError, blockDefinitionDependsOn, storedBlockInstancesReferencing,
       blockDefinitionUsageCount, blockDefinitionEditError, blockDefinitionCyclePath });
   }

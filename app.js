@@ -163,7 +163,7 @@
   const { blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
-  const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
+  const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
   });
   let sketchMoveCommand = null;
@@ -305,6 +305,7 @@
   });
   const blockEditingFeature = window.BlockEditingFeature.create({
     workspace, documentModel, ids: documentIds, catalog: blockCatalog, projections: blockProjections,
+    readEditingScope: () => editingScopeBinding.current,
     instances: instanceProjections, rebinding: constraintRebinding, normalizedSketchCopy, normalizeGeometryInstance,
     isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
     activeSketchId, blockProjectionBundles, geometryElementKey, readViewport: () => viewport,
@@ -314,7 +315,7 @@
   const { clone: cloneBlockDefinition, fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
-  const { blockDefinitionScopeError, blockDefinitionEditError } = blockEditingQueries;
+  const { blockDefinitionScopeError, blockDefinitionEditError, blockInstanceById } = blockEditingQueries;
 
   const canvasRenderProbe = window.CanvasRenderProbe.create({
     ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
@@ -372,7 +373,6 @@
   });
   const CURRENT_JSON_VERSION = 26;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
-  const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
 
 
   const pointerMoveScheduler = window.PointerMoveScheduler.create({
@@ -674,7 +674,7 @@
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
   const blockParameterPropagation = blockEditingFeature.createPropagation({
-    readEditingScope: () => editingScopeBinding.current, clearSelection, applicationText,
+    clearSelection, applicationText,
     stabilizeDefinition: storedDefinitionStabilization.stabilize, stabilizeDocument: () =>
       stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }),
   });
@@ -756,16 +756,7 @@
   }
 
 
-  function snappedBlockRotation(rotation) {
-    const quarterTurns = Math.round((Number(rotation) || 0) / BLOCK_ORTHOGONAL_ROTATION_STEP);
-    return ((quarterTurns % 4) + 4) % 4 * BLOCK_ORTHOGONAL_ROTATION_STEP;
-  }
 
-
-
-  function blockInstanceById(id) {
-    return editingScopeBinding.current.blockInstances.find((instance) => instance.id === id) || null;
-  }
 
   function normalizeGeometryInstance(raw, normalizeSketch = value => String(value || activeSketchId()), index = 0) {
     return geometryInstancePersistence.normalize(raw, normalizeSketch, index);
