@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：Sketch Treeのtest fixture・可視性／hover観測を一つの公開APIから生成（2026-10-24、検証完了）
+
+基準develop／origin/developはf2c791a。本単位はcodex/sketch-tree-test-apiで実施した。既存SketchTreeTestDriver.createBrowserApiが階層参照／可視性fixture・状態観測、inactive要素、Root／Block hoverの八つの個別factoryを元と同じ順に生成し、既存名の八つの公開hookを返す。元の各生成の95引数を比較し、同名portの値に食い違いがない41依存を一度だけ受ける。scope・描画・モデル生成を共有し、fixtureや観測の本体と個別APIは保持する。通常のTree表示／編集をtest支援へ移さず、新しい操作state・cache・global依存は追加しない。
+
+app.jsは2,227→2,215行（12行減）、対象生成8→1、test hook内の延べ引数95→41、未使用binding／初期化前直接参照0（TEMP cad-sketch-tree-test-api-audit.cjs）。proof.cjsで既存factory八つのAST、全95portの受渡し、八つのhook対応、公開object全体のproperty順を比較した。全個別factoryは関数定義とObject.freezeしたAPIの返却のみで、生成時に注入portを呼ばないことを静的・動的に確認した。構築をまとめてもモデル／DOM読取の時機は各hook実行時のままとし、通常scopeの代わりになる巨大contextを追加しない。
+
+構文618ファイル・全単体1,972件・関連E2E237件が全成功（exit 0、E2E3.3分、runner62483）。既存hookを使うunified-ui、phase0保存互換性／描画比較、Treeの可視性／削除、Sketch権限／移動／編集／投影、view visibilityとBlockを実行した。処理本体を複写するテストは増やさず、既存の期待値／操作／性能基準を維持した。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と依存を記録した。
+
+TEMP cad-sketch-tree-test-api-{check,unit,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server11592停止と製品source二つのhash不変を確認した。この単位は関連237件であり、直前f2c791aの全587件成功（22.4分）と区別する。全体目標はactive・未完了で、数百行へ収束したとは扱わない。
+
+週枠使用49%／残量51%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。次も既存機能のowner、現在scopeと初期化段階を確認して通常入力・描画・test公開の接続を整理する。今回は公開hookの元の並びを保つためappの八つの対応行を残した。単なる圧縮や、順序・異なるscopeを隠すための一括contextへ置換しない。
+
 ### 最新：共通UIのHTML文字列変換を状態のない表示moduleへ分離（2026-10-24、全体検証完了）
 
 基準develop／origin/developは37a493b。本単位はcodex/html-text-formattingで実施した。appに残っていたescapeHtmlをsrc/ui/html_text.jsのHtmlTextへ移した。String(value??"")と五つの特殊文字置換の関数本体はそのままにし、nullishと0／false、Unicode・改行、既存entityの二重エスケープ、文字列化の回数／例外を維持する。モデル・DOM・言語・操作状態に依存せず、appは静的APIから受け取った同じ関数をParameter Editor、context表示、Properties、Sketch Tree等へ明示して注入する。既存のclassic script／namespace方式を保ち、NumberDisplay直後の読込と構文・単体のmanifestへ一度ずつ登録した。設定やメッセージに混ぜず、共有UI文字列の責務を明示する。

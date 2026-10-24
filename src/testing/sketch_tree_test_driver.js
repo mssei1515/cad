@@ -297,5 +297,56 @@
     return Object.freeze({ state });
   }
 
-  window.SketchTreeTestDriver = Object.freeze({ createRootHoverFixture, createBlockHoverFixture, createSiblingVisibilityFixture, createInactiveHoverFixture, createIdentityObservation, createSubtreeReferenceFixture, createSubtreeVisibilityObservation, createVisibilityObservation });
+  // Share only the identical test ports; each fixture and observation retains its own API.
+  function createBrowserApi({
+    resetModelState, sketchById, defaultSketchId, currentScope, rootSketchId, addPoint, addLine, refreshReferenceConstraintValidity, fitAllGeometryToViewport,
+    updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive, sketchIdentityRelationLabel, sketchIdentityRelationColor, document, getComputedStyle,
+    isVisibleSketchId, serializeModel, sketchStrokeWidth, constraintStatusColor, activeSketchId, addDistanceConstraintFromTarget, dimensionFromAnchor,
+    isDimensionConstraint, createEmptyBlockDefinition, Point, Line, appendDefinition, nextInstanceId, invalidateBlockProjectionCache, viewport,
+    dimensionLayout, targetFromConstraint, clientPosition, blockInstanceDisplayCenter, canvasHover, addCircle, addArc, blockProjectionBundle,
+  }) {
+    const subtreeReferenceFixture = createSubtreeReferenceFixture({
+      resetModelState, sketchById, defaultSketchId, currentScope, rootSketchId, addPoint, addLine, refreshReferenceConstraintValidity,
+      fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive, sketchIdentityRelationLabel, sketchIdentityRelationColor,
+      document, getComputedStyle, isVisibleSketchId,
+    });
+    const subtreeVisibilityObservation = createSubtreeVisibilityObservation({
+      sketchById, isVisibleSketchId,
+    });
+    const sketchVisibilityObservation = createVisibilityObservation({
+      sketchById, serializeModel, isVisibleSketchId, document,
+    });
+    const siblingVisibilityFixture = createSiblingVisibilityFixture({
+      resetModelState, currentScope, rootSketchId, defaultSketchId, addPoint, addLine, updateUI, draw, isVisibleSketchId, sketchRelationToActive,
+      sketchStrokeWidth, constraintStatusColor, document,
+    });
+    const inactiveHoverFixture = createInactiveHoverFixture({
+      resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope, isDimensionConstraint,
+      createEmptyBlockDefinition, Point, Line, appendDefinition, nextInstanceId, invalidateBlockProjectionCache, fitAllGeometryToViewport, viewport, updateUI,
+      draw, dimensionLayout, targetFromConstraint, clientPosition, blockInstanceDisplayCenter, sketchIdentityRelationLabel,
+    });
+    const hoverIdentityObservation = createIdentityObservation({
+      canvasHover, sketchIdentityRelationLabel,
+    });
+    const rootHoverFixture = createRootHoverFixture({
+      resetModelState, addPoint, addLine, addCircle, addArc, currentScope, rootSketchId, createEmptyBlockDefinition, Point, Line, defaultSketchId,
+      appendDefinition, nextInstanceId, invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw,
+    });
+    const blockHoverFixture = createBlockHoverFixture({
+      resetModelState, viewport, createEmptyBlockDefinition, Point, Line, defaultSketchId, appendDefinition, nextInstanceId, currentScope,
+      invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, draw, blockProjectionBundle, clientPosition,
+    });
+    return Object.freeze({
+      resetForSiblingSubtreeReference: subtreeReferenceFixture.reset,
+      siblingSubtreeVisibilityState: subtreeVisibilityObservation.state,
+      sketchVisibilityState: sketchVisibilityObservation.state,
+      resetForSiblingVisibility: siblingVisibilityFixture.reset,
+      resetForInactiveDimensionAndBlockHover: inactiveHoverFixture.reset,
+      hoverIdentityStateForTest: hoverIdentityObservation.state,
+      resetForRootSketchTreeHoverTest: rootHoverFixture.reset,
+      resetForSketchTreeBlockHoverTest: blockHoverFixture.reset,
+    });
+  }
+
+  window.SketchTreeTestDriver = Object.freeze({ createBrowserApi, createRootHoverFixture, createBlockHoverFixture, createSiblingVisibilityFixture, createInactiveHoverFixture, createIdentityObservation, createSubtreeReferenceFixture, createSubtreeVisibilityObservation, createVisibilityObservation });
 })();
