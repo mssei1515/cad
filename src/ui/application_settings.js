@@ -285,6 +285,11 @@
       for (const remove of listeners.splice(0)) remove();
       started = false;
     }
+    function prepareButtonTooltips() {
+      for (const btn of document.querySelectorAll("button[aria-label]")) {
+        btn.dataset.tooltip = btn.getAttribute("aria-label");
+      }
+    }
     function storedTheme() {
       try { return storage().getItem(APPLICATION_THEME_STORAGE_KEY); }
       catch (_error) { return null; }
@@ -293,7 +298,7 @@
       get language() { return applicationLanguage; },
       get theme() { return applicationTheme; },
       applicationText, translatedExactText, translatedHintText, localizeApplicationUI,
-      setApplicationLanguage, setApplicationTheme, storedTheme, start, dispose,
+      setApplicationLanguage, setApplicationTheme, storedTheme, prepareButtonTooltips, start, dispose,
     });
   }
   window.ApplicationSettings = Object.freeze({ create });

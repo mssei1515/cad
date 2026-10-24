@@ -99,3 +99,12 @@ test("non-persisted initialization leaves stored values intact and independent i
   assert.equal(other.theme, "light");
   assert.deepEqual(trace, ["version"]);
 });
+
+test('button tooltip preparation copies current labels in DOM order and propagates partial failures without escaping',()=>{
+  const f=setup(),calls=[],labels=['文字<&>',''],values=['old','old'];let failure=null;
+  const buttons=labels.map((_,index)=>({get dataset(){return{set tooltip(value){calls.push(['set',index,value]);values[index]=value;}};},getAttribute(name){assert.equal(name,'aria-label');calls.push(['read',index]);if(index===1&&failure)throw failure;return labels[index];}}));
+  f.document.querySelectorAll=selector=>{assert.equal(selector,'button[aria-label]');calls.push('query');return buttons;};
+  assert.deepEqual(calls,[]);f.settings.prepareButtonTooltips();assert.deepEqual(values,labels);assert.deepEqual(calls,['query',['read',0],['set',0,labels[0]],['read',1],['set',1,'']]);
+  labels[0]='English';f.settings.prepareButtonTooltips();assert.equal(values[0],'English');
+  failure=new Error('label');labels[0]='next';calls.length=0;assert.throws(()=>f.settings.prepareButtonTooltips(),error=>error===failure);assert.equal(values[0],'next');assert.equal(values[1],'');assert.deepEqual(calls,['query',['read',0],['set',0,'next'],['read',1]]);
+});

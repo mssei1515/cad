@@ -708,9 +708,7 @@
   const fixPointBtn = document.getElementById("fixPointBtn");
   const commandCursor = window.CommandCursor.create({ document, canvas, fixPointBtn, constraintButtons });
 
-  for (const btn of document.querySelectorAll("button[aria-label]")) {
-    btn.dataset.tooltip = btn.getAttribute("aria-label");
-  }
+  applicationSettings.prepareButtonTooltips();
 
   const { localizedConstraintName } = constraintFeedback;
 
@@ -1799,8 +1797,7 @@
   const dxfFileControls = dxfImportFeature.createControls({ flushScheduledCanvasPointerMove });
   dxfFileControls.bind();
   referenceImageInput.bindControls();
-  document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
-  document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
+  sketchTreeView.bindCreation(createSketch);
 
   window.SidebarController.create({ document, setHint }).bind();
 
