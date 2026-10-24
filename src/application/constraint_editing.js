@@ -37,6 +37,18 @@
       hideDimensionValueInput: valueInput.hide, syncDimensionValueInput: valueInput.sync, focusDimensionValueInput: valueInput.focus,
       applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
     });
+    function createCommandInput({ canvasHover, canvasPoint, referenceTargetFromOperand }) {
+      const hover = window.ConstraintCommandInput.createRetargetHover({
+        getPending: pending.read, canvasHover, hitConstraintOperand, sameConstraintOperand,
+        resolveConstraintIntent, referenceTargetFromOperand, Circle: types.Circle, Arc: types.Arc,
+      });
+      function createFeature() {
+        return window.ConstraintCommandInput.createFeature({
+          canvasHover, canvasPoint, pending, targets: session, placement: dimensions, constraints: targets,
+        });
+      }
+      return Object.freeze({ updateHover: hover.update, createFeature });
+    }
     function createCommit({ isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle, ...options }) {
       const { command, readOnly } = window.ConstraintCommitCommand.createWithDimensions({ ...options,
         canvasSelection: selection, guardSketchEdit, activeSketchId, targetFromConstraint, clearSelection, setHint, draw, log, applicationText,
@@ -71,7 +83,17 @@
       }
       return Object.freeze({ view, createBinding });
     }
-    return Object.freeze({ selectionQuery, targets, dimensions, createControls, createCommit });
+    return Object.freeze({ selectionQuery, targets, dimensions, createControls, createCommit, createCommandInput });
   }
-  window.ConstraintEditing = Object.freeze({ create });
+  // Construct feedback first and share its live session with editing and staged input.
+  function createWithFeedback({ constraintButtons, feedback, readLanguage, session, applicationText, ...options }) {
+    const presentation = window.ConstraintControlsView.createFeedback({
+      constraintButtons, feedback, readLanguage, applicationText,
+      readOperands: () => session.operands,
+    });
+    const editing = create({ ...options, session, applicationText, constraintLabel: presentation.label,
+      constraintTargetHint: presentation.targetHint, invalidConstraintTargetHint: presentation.invalidTargetHint });
+    return Object.freeze({ ...editing, constraintTargetHint: presentation.targetHint });
+  }
+  window.ConstraintEditing = Object.freeze({ create, createWithFeedback });
 })();

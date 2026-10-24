@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：拘束の案内・hover・Canvas入力を同じ編集Featureへ接続（2026-10-24、検証完了）
+
+基準develop／origin/developはa1bbd95。本単位はcodex/constraint-input-compositionで実施した。既存ConstraintEditingへcreateWithFeedbackを追加し、実ConstraintControlsViewのfeedbackを先に生成して同じsession／翻訳／現在のoperands・言語から対象commandと寸法配置を接続する。label／targetHint／invalidTargetHintをappで個別に注入し直さず、生成したtargetHintを通常Canvas入力にも返す。createCommandInputは同じpending／operand解決／型から既存RetargetHoverを生成し、hover更新と後段のConstraintCommandInput.createFeature生成入口を返す。後段は同じ対象session・寸法配置・対象commandを共有し、元と同じGeometryDrag後／DimensionDrag前の位置で生成する。通常クリック入力は引き続きDimensionDrag後に生成する。個別createの直接注入APIとfeedback→選択照会→対象command→寸法配置→hover→後段入力の順序を維持する。新しい操作state・遅延reader・app contextは追加していない。
+
+app.jsは2,304→2,296行（8行減）、対象生成4→3、root直下の延べ引数69→53、未使用binding／初期化前直接参照0（TEMP cad-constraint-input-composition-audit.cjs）。各commandの状態／取消／確定／履歴は既存ownerに残り、appに分散していた同一sessionからの入力組立てを編集Featureへ集める単位である。数百行の全体目標は未完了。
+
+既存constraint-editing.test.jsへ2境界試験を追加し、実ConstraintFeedback／ControlsView・TargetSession・CanvasSelection・CanvasHover・対象command・寸法配置・入力adapterで、分離前の直接結線と新しいFeatureを比較した。現在の言語・operand・ボタンlabelと開始／取消案内、生成時の無照会、hoverの仮寸法非変更、hit例外時のhover／draft保持、拒否時の非変更、正常な仮寸法対象の差替えと同一Geometry／operand参照、distance-value時の非継続を確認し、通知traceも一致した。実寸法配置を通すfixtureにはp1／p2と現在の選択targetを設定し、既存のcontrols更新が仮寸法を取り消す条件も保った。既存の期待値・基準は変更していない。関連単体39件、最終コードの全単体1,960件、構文616ファイルが成功。
+
+関連E2E214件（既存UI・phase0保存互換性／描画比較・複数／prefix／Slot寸法・Sketch投影とlegacy互換driver・派生pattern・Block）が全成功（3.0分、exit 0、runner3277）。TEMP cad-constraint-input-composition-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server22880停止と製品source二つのhash不変を確認した。今回は関連214件であり、全587件の最新基準37cb5d2とは区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務・生成段階を記録した。
+
+週枠使用36%／残量64%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残るCanvas context操作・通常入力・Geometry drag等の共有依存と段階を監査し、状態ownerに沿った組立てを選ぶ。大量のportを別fileへ移すだけの抽出や行数だけの達成はしない。
+
+
 ### 最新：寸法モデル照会と拘束向け測定を既存queryへ集約（2026-10-24、検証完了）
 
 基準develop／origin/developは7334808。本単位はcodex/dimension-model-queriesで実施した。既存src/constraints/dimension_queries.jsへcreateModelQueriesを追加し、現在の結線済みscope・既定active Sketch・拘束所属readerを明示してSketch内の寸法有無と直接半径寸法を照会する。初期化時にはreaderを呼ばず、scopeの置換、配列順／短絡、既定Sketchとscope.activeSketchIdの区別、dimensionのtruthy判定、Radius／Diameterの有効性とprimitiveのObject同一性を保つ。measuredConstraintTargetValueも同moduleへ移し、既定引数の評価時機と通常角の絶対値／間隔角の符号、既存のradian変換式を保持した。元の測定関数本体が同一であることをAST抽出比較で確認した。新しい製品file・状態／cache・求解／UI更新は追加していない。

@@ -1307,20 +1307,17 @@
   });
   function updateToolbar() { toolbarView.update(); }
 
-  const { label: constraintLabel, targetHint: constraintTargetHint, invalidTargetHint: invalidConstraintTargetHint } = window.ConstraintControlsView.createFeedback({
-    constraintButtons, applicationText, feedback: constraintFeedback,
-    readOperands: () => constraintTargetSession.operands, readLanguage: () => applicationSettings.language,
-  });
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand, createControls: createConstraintControls,
-    createCommit: createConstraintCommit } = window.ConstraintEditing.create({
+    createCommit: createConstraintCommit, createCommandInput: createConstraintCommandInput, constraintTargetHint } = window.ConstraintEditing.createWithFeedback({
+    constraintButtons, feedback: constraintFeedback, readLanguage: () => applicationSettings.language,
     session: constraintTargetSession, selection: canvasSelection, pending: pendingCommandSession, candidates: constraintCandidates,
     lifecycle: drawOperationLifecycle, valueInput: dimensionInputController,
     resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
     elementSketchId, canEditSketch, findLineFixedConstraint, selectedGeometryItems, guardSketchEdit, guardSelectionEdit, startAnnotationAnchorConstraint,
-    constraintLabel, clearSelection, trimConstraintSelection, commitConstraintResolution, syncSelectionFromConstraintOperands,
-    updateToolbar, updateConstraintButtons, setHint, constraintTargetHint, draw,
+    clearSelection, trimConstraintSelection, commitConstraintResolution, syncSelectionFromConstraintOperands,
+    updateToolbar, updateConstraintButtons, setHint, draw,
     blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
-    addConstraint, annotationAnchorConstraints, hitConstraintOperand, invalidConstraintTargetHint,
+    addConstraint, annotationAnchorConstraints, hitConstraintOperand,
     toggleGeometryFixedOperand, toggleSelectedFixed, updateGeometrySelectionUI, types: { Circle, Arc },
     isPlacingInstance: geometryInstanceCommand.isPlacing, geometryInstanceBundle, targetFromConstraint, cancelPendingCommand,
     selectedPrimitives, placement: dimensionPlacement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
@@ -1344,11 +1341,9 @@
   function startDistanceValueInput(pointer) { return dimensionPlacementCommand.startDistanceValueInput(pointer); }
 
 
-  const pendingDimensionHover = window.ConstraintCommandInput.createRetargetHover({
-    getPending: pendingCommandSession.read, canvasHover, hitConstraintOperand, sameConstraintOperand,
-    resolveConstraintIntent, referenceTargetFromOperand, Circle, Arc,
+  const { updateHover: updatePendingDistanceRetargetHover, createFeature: createConstraintInputFeature } = createConstraintCommandInput({
+    canvasHover, canvasPoint, referenceTargetFromOperand,
   });
-  function updatePendingDistanceRetargetHover(pointer) { return pendingDimensionHover.update(pointer); }
 
   function startDimensionEditInput(hit) { return dimensionValueCommand.startEdit(hit); }
 
@@ -1621,10 +1616,7 @@
   });
   const { command: geometryDrag, build: buildDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
 
-  const constraintInputFeature = window.ConstraintCommandInput.createFeature({
-    canvasHover, canvasPoint, pending: pendingCommandSession, targets: constraintTargetSession,
-    placement: dimensionPlacementCommand, constraints: constraintTargetCommand,
-  });
+  const constraintInputFeature = createConstraintInputFeature();
   const dimensionDragFeature = window.DimensionDragFeature.create({
     placement: dimensionPlacement, viewport, canvasSelection, currentScope: workspace.current,
     constraintSketchId, isEditableSketchId, isVisibleSketchId, effectiveDimensionAppearance, isVisibleValue,
