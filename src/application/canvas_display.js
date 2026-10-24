@@ -49,7 +49,8 @@
           pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
           withGeometryReadCache, findSnap, flushPointerMove, setHint, draw });
       }
-      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering, createInputBinding, createPngExport });
+      const dragPointer = window.CanvasInputBinding.createDragPointer({ canvas });
+      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
     }
     return Object.freeze({ viewport, navigation, zoomControl, createWorkspace });
   }
