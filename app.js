@@ -86,7 +86,7 @@
 
   const {
     targetFromConstraint, angleDegrees,
-    measuredDimensionValue,
+    measuredDimensionValue, measuredConstraintTargetValue,
     angleDimensionAngles,
     isReadOnlyDimension, isDimensionConstraint,
   } = window.DimensionQueries;
@@ -173,6 +173,9 @@
     closeSketchContext: () => sketchContextController?.close(), resetSketchMove: () => sketchMoveCommand?.reset(),
   });
   const { solver } = editingScopeBinding;
+  const { sketchHasDimensionConstraint, hasDirectRadiusDimension } = window.DimensionQueries.createModelQueries({
+    currentScope: () => editingScopeBinding.current, activeSketchId, constraintSketchId,
+  });
   function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
   const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = window.ConstraintCommitCommand.createInsertion({
@@ -1116,12 +1119,6 @@
 
   const { hitConstraintOperand: queryConstraintOperand } = sceneHitQueries.operands;
 
-  function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
-    if (!target) return NaN;
-    const measured = measuredDimensionValue(target, dimension);
-    return target.kind === "angle" ? (measured * Math.PI) / 180 : measured;
-  }
-
   function dimensionLabelForConstraint(...args) { return dimensionLabels.label(...args); }
 
   function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
@@ -1354,10 +1351,6 @@
   function updatePendingDistanceRetargetHover(pointer) { return pendingDimensionHover.update(pointer); }
 
   function startDimensionEditInput(hit) { return dimensionValueCommand.startEdit(hit); }
-
-  function sketchHasDimensionConstraint(sketchId = activeSketchId()) {
-    return editingScopeBinding.current.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.dimension);
-  }
 
   function selectedFixedBatchTargets() { return constraintSelectionQuery.fixedBatch(); }
   function fixedBatchIsFullyFixed(batch) { return constraintSelectionQuery.fullyFixed(batch); }
@@ -1627,10 +1620,6 @@
     geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
   });
   const { command: geometryDrag, build: buildDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
-
-  function hasDirectRadiusDimension(primitive) {
-    return window.DimensionQueries.hasDirectRadiusDimension(editingScopeBinding.current.constraints, primitive);
-  }
 
   const constraintInputFeature = window.ConstraintCommandInput.createFeature({
     canvasHover, canvasPoint, pending: pendingCommandSession, targets: constraintTargetSession,

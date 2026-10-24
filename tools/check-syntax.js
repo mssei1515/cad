@@ -140,7 +140,7 @@ const files = [
   "src/editing/sketch_context.js",
   "tests/unit/sketch-context.test.js",
   "tests/unit/module-loading.test.js",
-  "src/constraints/dimension_queries.js", "src/constraints/dimension_constraint_factory.js", "src/constraints/dimension_read_only_query.js", "tests/unit/dimension-constraint-factory.test.js", "tests/unit/dimension-read-only-query.test.js",
+  "src/constraints/dimension_queries.js", "src/constraints/dimension_constraint_factory.js", "src/constraints/dimension_read_only_query.js", "tests/unit/dimension-constraint-factory.test.js", "tests/unit/dimension-queries.test.js", "tests/unit/dimension-read-only-query.test.js",
   "src/parameters/namespace.js", "src/application/document_workspace.js",
   "tests/unit/parameter-namespace.test.js",
   "src/geometry/objects.js", "src/geometry/annotation_anchor_query.js", "src/geometry/hatch_query.js",

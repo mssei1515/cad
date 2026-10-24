@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：寸法モデル照会と拘束向け測定を既存queryへ集約（2026-10-24、検証完了）
+
+基準develop／origin/developは7334808。本単位はcodex/dimension-model-queriesで実施した。既存src/constraints/dimension_queries.jsへcreateModelQueriesを追加し、現在の結線済みscope・既定active Sketch・拘束所属readerを明示してSketch内の寸法有無と直接半径寸法を照会する。初期化時にはreaderを呼ばず、scopeの置換、配列順／短絡、既定Sketchとscope.activeSketchIdの区別、dimensionのtruthy判定、Radius／Diameterの有効性とprimitiveのObject同一性を保つ。measuredConstraintTargetValueも同moduleへ移し、既定引数の評価時機と通常角の絶対値／間隔角の符号、既存のradian変換式を保持した。元の測定関数本体が同一であることをAST抽出比較で確認した。新しい製品file・状態／cache・求解／UI更新は追加していない。
+
+app.jsは2,315→2,304行（11行減）、新factoryは0→1、rootの明示引数は0→3、未使用binding／初期化前直接参照0（TEMP cad-dimension-model-queries-audit.cjs）。今回は依存の隠蔽を減らして照会の所有を揃える単位であり、引数総数の削減とはしない。単なる移動だけにならないよう、既存の静的寸法照会を内部で再利用し、scope依存のない測定APIとは分けた。数百行の全体目標は未完了。
+
+新規dimension-queries.test.jsの2境界試験では実Geometry型を使い、scope置換／既定Sketchの独立、無効寸法の扱い、短絡とgetter例外、同じIDで別Objectの半径寸法、通常角と間隔角の値、明示target／dimensionと既定引数getterの時機を確認した。最初の追加テストの符号想定は既存angleDegreesの絶対値処理と不一致だったため、製品処理は変えず60度→120度の既存測定を確認するfixtureへ修正した。関連単体11件、全単体1,958件、構文616ファイルが成功。読込済みmodule内の変更のため新製品script登録はなく、追加単体fileを構文／単体の一覧へ登録した。
+
+関連E2E202件（既存UI・phase0保存互換性／描画比較・複数／prefix／Slot寸法・Geometry drag・free Instance・Block）が全成功（4.3分、exit 0、runner52561）。TEMP cad-dimension-model-queries-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server26764停止と製品source二つのhash不変を確認した。今回は関連202件であり全587件ではなく、最新全体基準37cb5d2の成功と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と依存を記録した。
+
+週枠使用36%／残量64%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次は残るCanvas振分け・拘束編集・Geometry drag等の共有依存と初期化段階を監査し、機能の所有を改善する単位を選ぶ。大量のportを別fileへ移すだけの抽出や行数だけの達成はしない。
+
 ### 最新：派生Instanceの配置・source・確定後編集を機能単位で接続（2026-10-24、検証完了）
 
 基準develop／origin/developは6606d35。本単位はcodex/derived-instance-featureで実施した。src/application/derived_instance_feature.jsへDerivedInstanceFeatureを追加し、GeometryInstanceCommand→InstanceSourceCommand→DerivedInstanceEditingを同じ現在scope・参照解決・通知／描画／履歴とSelection・modeへ接続する。先行create、直後createSourceCommand、後段createEditingの段階と実command生成順は元の位置を保つ。配置中のProperty変更か確定後の編集かをisPlacingの厳密なObject同一性で振り分けるchangePropertyを同Featureへ移し、appの分岐関数を除去した。個別command factory・状態owner・戻り値／receiver、source固有のguard／投影／削除参照判定・Properties更新、確定後のsnapshot／求解／再結線は維持する。配置commandから後段commitへの既存callbackは同じ形でrootに残し、新しい遅延reader・初期化参照や可変app context／操作stateは追加しない。
