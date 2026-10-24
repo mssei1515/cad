@@ -1859,15 +1859,10 @@
     const { readSelectedGeometry: readTestSelectedGeometry, createApi: createSelectionTestApi } = window.CanvasSelectionTestDriver.createSupport({
       canvasSelection, currentScope: workspace.current, clearSelection, updateUI, draw,
     });
-    const constraintStatusObservation = window.ConstraintTestDriver.createStatusObservation({ refreshConstraintAnalysis, readMembership: readSketchMembership });
-    const readTestConstraintStatuses = constraintStatusObservation.state;
-    const constraintAnalysisObservation = window.ConstraintTestDriver.createAnalysisObservation({
-      activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, analyzeConstraintState: options => solver.analyzeConstraintState(options),
-      acceptError: CONSTRAINT_ACCEPT_ERROR, vectorNorm, currentScope: workspace.current, elementSketchId,
-    });
-    const blockConstraintObservation = window.ConstraintTestDriver.createBlockObservation({ refreshConstraintAnalysis, blockProjectionBundles });
-    const blockConstraintInsertion = window.ConstraintTestDriver.createBlockConstraintInsertion({
-      blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, readAnalysis: constraintAnalysisObservation.analysis, readBlockState: blockConstraintObservation.state, serializeModel,
+    const { readStatuses: readTestConstraintStatuses, publicAPI: constraintModelTestApi } = window.ConstraintTestDriver.createModelSupport({
+      refreshConstraintAnalysis, readMembership: readSketchMembership, activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines,
+      analyzeConstraintState: options => solver.analyzeConstraintState(options), acceptError: CONSTRAINT_ACCEPT_ERROR, vectorNorm, currentScope: workspace.current, elementSketchId, blockProjectionBundles,
+      blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, serializeModel,
     });
     const dragExecutionSupport = window.GeometryDragTestDriver.createExecutionSupport({
       feature: geometryDragFeature, solver, currentScope: workspace.current, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
@@ -1922,16 +1917,14 @@
       resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, addPoint, markReferenceConstraint, CoincidentConstraint, serializeModel, loadModelData,
       refreshConstraintAnalysis, updateUI, constraintIsOperational, readReferenceErrors: () => referenceConstraintState.errorReasons(), document,
     });
-    const dimensionSelectionFixture = window.ConstraintTestDriver.createDimensionSelectionFixture({ resetModelState, addPoint, addLine, DistanceConstraint, dimensionFromAnchor, pushModelConstraint, canvasSelection, constraintTargetSession, updateUI, fitAllGeometryToViewport, draw, canvas });
-    const dimensionSelectionObservation = window.ConstraintTestDriver.createDimensionSelectionObservation({ canvasSelection, constraintTargetSession });
-    const supportStatusFixture = window.ConstraintTestDriver.createSupportStatusFixture({
-      resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, PointOnLineConstraint, addArc, RadiusConstraint, solveSketchAndDependents, activeSketchId, snapshotModelState,
-      refreshConstraintAnalysis, fitAllGeometryToViewport, draw, constraintStatusOf, constraintStatusColor, readSummary: () => constraintAnalysis.summary(),
+    const constraintCaseTestApi = window.ConstraintTestDriver.createEditingCases({
+      resetModelState, addPoint, addLine, DistanceConstraint, dimensionFromAnchor, pushModelConstraint,
+      canvasSelection, constraintTargetSession, updateUI, fitAllGeometryToViewport, draw, canvas,
+      HorizontalConstraint, PointOnLineConstraint, addArc, RadiusConstraint, solveSketchAndDependents, activeSketchId,
+      snapshotModelState, refreshConstraintAnalysis, constraintStatusOf, constraintStatusColor, readSummary: () => constraintAnalysis.summary(), currentScope: workspace.current,
+      worldToCanvasScreen, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, elementSketchId, solveReferenceDependentSketches, isExplicitPoint,
+      wouldCreateReferenceCycle, signedPointLineDistance, constraintSketchId,
     });
-    const parentPointLineFixture = window.ConstraintTestDriver.createParentPointLineFixture({ resetModelState, addPoint, addLine, activeSketchId, currentScope: workspace.current, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
-    const siblingPointLineFixture = window.ConstraintTestDriver.createSiblingPointLineFixture({ resetModelState, addPoint, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addLine, defaultSketchId: DEFAULT_SKETCH_ID, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
-    const siblingReferenceMove = window.ConstraintTestDriver.createSiblingReferenceMove({ currentScope: workspace.current, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId: DEFAULT_SKETCH_ID, isExplicitPoint, wouldCreateReferenceCycle });
-    const pointLineObservation = window.ConstraintTestDriver.createPointLineObservation({ currentScope: workspace.current, PointOnLineConstraint, signedPointLineDistance, constraintSketchId });
     const blockCreationFixture = window.BlockTestDriver.createCreationFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, VerticalConstraint, canvasSelection, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
     const blockEditorTestSupport = window.BlockTestDriver.createEditorSupport({
       resetModelState, updateUI, draw, readDefinitions: () => documentModel.blockDefinitions, currentScope: workspace.current, blockEditor, blockEditorSessionChain,
@@ -2199,10 +2192,7 @@
       hoverDisplayStateForTest: hoverDisplayObservation.state,
       authoringStateForTest: authoringObservation.state,
       ...dragExecutionSupport,
-      constraintStatusesForTest: readTestConstraintStatuses,
-      constraintAnalysisForTest: constraintAnalysisObservation.analysis,
-      blockConstraintStatusForTest: blockConstraintObservation.state,
-      addBlockPointOnLineConstraintForTest: blockConstraintInsertion.add,
+      ...constraintModelTestApi,
       ...annotationTestSupport.fixtures,
       ...dimensionFixtureSupport.readOnly,
       ...dimensionDisplaySupport.cases,
@@ -2233,13 +2223,7 @@
       referenceDependencyOrderCase: dependencyOrderFixture.orderCase,
       cyclicReferenceLoadCase: cyclicReferenceFixture.loadCase,
       sketchVisibilityState: sketchVisibilityObservation.state,
-      resetForConstraintDimensionSelection: dimensionSelectionFixture.reset,
-      constraintDimensionSelectionState: dimensionSelectionObservation.state,
-      resetForSupportConstraintStatus: supportStatusFixture.reset,
-      resetForReferencePointLineCoincidence: parentPointLineFixture.reset,
-      resetForSiblingPointLineReference: siblingPointLineFixture.reset,
-      moveSiblingReferenceLine: siblingReferenceMove.move,
-      referencePointLineState: pointLineObservation.state,
+      ...constraintCaseTestApi,
       resetForBlockCreationUi: blockCreationFixture.reset,
       resetForEmptyBlockCreation: blockEditorTestSupport.resetForEmptyBlockCreation,
       ...dimensionInteractionSupport.placement,
