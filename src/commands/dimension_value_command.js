@@ -33,7 +33,8 @@
   function create({ canEdit = () => true, renameDimension, getPending, setPending, expressionFromUserInput, evaluateDimensionExpressionDraft,
     applicationText, parameterErrorText, setHint, syncDimensionValueInput, draw, activeSketchId,
     sketchHasDimensionConstraint, captureSketchScreenFootprint, snapshotModelState, restoreModelState,
-    withTemporarySolveStepNorm, solveStepNormForConstraint, stabilizeActiveParameterNamespace,
+    solvePreparation, withTemporarySolveStepNorm = solvePreparation?.withStepNorm,
+    solveStepNormForConstraint = solvePreparation?.stepNorm, stabilizeActiveParameterNamespace,
     constraintSketchId, acceptError, hideDimensionValueInput, recordHistory, updateUI,
     scaleSketchForFirstDimension, addDistanceConstraintFromTarget, restoreSketchScreenFootprint, targetFromConstraint, isReadOnlyDimension,
     selectEditedConstraint, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput, submitSpecialDistance = () => null, commitSpecialProperty = () => null }) {
@@ -147,5 +148,9 @@
 
     return Object.freeze({ startEdit, submit, commitProperty });
   }
-  window.DimensionValueCommand = Object.freeze({ create, createEditingSupport });
+  function createWithEditingSupport(options) {
+    const support = createEditingSupport(options);
+    return create({ ...options, ...support });
+  }
+  window.DimensionValueCommand = Object.freeze({ create, createEditingSupport, createWithEditingSupport });
 })();

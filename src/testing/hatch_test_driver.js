@@ -190,5 +190,33 @@
     }
     return Object.freeze({ exercise });
   }
-  window.HatchTestDriver = Object.freeze({ create, createProjection, createTransfer });
+  function createBrowserApi({ resetModelState, viewport, addPoint, addLine, addCircle, currentScope,
+    fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
+    readMode, allHatches, hatchGeometryQuery, serializeHatch, hatchRegionErrorText, canvasSelection, hatchCommand, document,
+    DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, HATCH_SCREEN_PX_PER_MM, createEmptyBlockDefinition, Point, Line,
+    appendDefinitions, invalidateBlockProjectionCache, fitAllGeometryToViewport, blockProjectionBundle, hitBlockInstance,
+    clearSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard, geometryRefId,
+    blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter }) {
+    const hatch = create({ resetModelState, viewport, addPoint, addLine, addCircle, currentScope,
+      fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
+      readMode, allHatches, hatchGeometryQuery, serializeHatch, hatchRegionErrorText, canvasSelection, hatchCommand, document,
+      DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, HATCH_SCREEN_PX_PER_MM });
+    const projection = createProjection({ resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE,
+      currentScope, appendDefinitions, invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport, blockProjectionBundle,
+      canvas, worldToCanvasScreen, draw, allHatches, hatchGeometryQuery, hitBlockInstance, serializeModel });
+    const transfer = createTransfer({ currentScope, clearSelection, canvasSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
+      geometryRefId, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, hatchGeometryQuery });
+    return Object.freeze({
+      resetForHatchTest: hatch.reset,
+      resetForSolidHatchHoleTest: hatch.resetSolidHole,
+      resetForProjectedHatchTest: projection.reset,
+      projectedHatchStateForTest: projection.state,
+      exerciseHatchTransferForTest: transfer.exercise,
+      hatchStateForTest: hatch.state,
+      setViewportScaleForHatchTest: hatch.setScale,
+      breakFirstHatchBoundaryForTest: hatch.breakBoundary,
+      restoreClosedBoundaryForHatchTest: hatch.restoreBoundary,
+    });
+  }
+  window.HatchTestDriver = Object.freeze({ create, createProjection, createTransfer, createBrowserApi });
 })();

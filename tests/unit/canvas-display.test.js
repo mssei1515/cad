@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ['src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js']) {
+for (const file of ['src/ui/number_display.js', 'src/ui/canvas_input_binding.js', 'src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js', 'src/geometry/export_region.js', 'src/persistence/document_files.js', 'src/persistence/png_file.js', 'src/commands/png_export_command.js', 'src/application/png_export.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
 function fixture() {
@@ -15,10 +15,10 @@ function fixture() {
       emit(name, event = {}) { handlers[name]?.({ preventDefault() {}, stopPropagation() {}, ...event }); },
       focus() { calls.push('focus'); }, select() {}, checkValidity: () => true, reportValidity() {} };
   };
-  const button = element(), input = element(), browser = element();
+  const button = element(), input = element(), browser = element(), status = element();
   const ready = () => assert.equal(state.ready, true);
-  const document = { getElementById(id) { calls.push(['element', id]); return id === 'statusZoom' ? button : id === 'statusZoomInput' ? input : null; }, querySelector: () => null };
-  const canvas = { width: 0, height: 0, getBoundingClientRect() { ready(); calls.push('rect'); return state.rect; }, classList: { add() {}, remove() {} }, setPointerCapture() {} };
+  const document = { getElementById(id) { calls.push(['element', id]); return id === 'statusZoom' ? button : id === 'statusZoomInput' ? input : id === 'statusCoordinates' ? status : null; }, querySelector: () => null };
+  const canvas = { ...element(), width: 0, height: 0, getBoundingClientRect() { ready(); calls.push('rect'); return state.rect; }, classList: { add() {}, remove() {} }, setPointerCapture() {} };
   const ctx = { setTransform(...args) { ready(); calls.push(['transform', ...args]); } };
   const display = sandbox.window.CanvasDisplay.create({ canvas, document, initialScale: 2, minZoom: 0.1, maxZoom: 20, minLength: 1e-6,
     draw: () => { ready(); calls.push('draw'); state.onDraw?.(); }, setHint: () => calls.push('hint'), fitVisibleGeometry: () => true,
@@ -27,14 +27,66 @@ function fixture() {
   assert.deepEqual(calls, [['element', 'statusZoom'], ['element', 'statusZoomInput']]); calls.length = 0;
   class Observer { constructor(callback) { ready(); state.resize = callback; calls.push('observer'); } observe(value) { assert.equal(value, canvas); calls.push('observe'); } disconnect() { calls.push('disconnect'); } }
   const workspace = display.createWorkspace({ ctx, readPixelRatio: () => { ready(); return state.dpr; }, ResizeObserverClass: Observer,
-    withGeometryReadCache: callback => { calls.push('cache'); callback(); }, drawCanvas: () => { ready(); calls.push('content'); state.onContent?.(); },
+    withGeometryReadCache: callback => { calls.push('cache'); return callback(); }, drawCanvas: () => { ready(); calls.push('content'); state.onContent?.(); },
     isValueInputPending: () => { calls.push('pending'); return state.pending; }, window: browser, updatePropertiesUI() {}, closeContextMenu: () => calls.push('close-menu'),
     applySketchTreeWidth: () => calls.push('tree'), applicationText: (_ja, en) => en, readLanguage: () => 'en',
   });
   assert.deepEqual(calls, []); state.ready = true;
   const enter = percent => { button.emit('click'); input.valueAsNumber = percent; input.emit('keydown', { key: 'Enter' }); };
-  return { display, workspace, state, calls, button, input, browser, canvas, enter };
+  return { display, workspace, state, calls, button, input, browser, canvas, ctx, enter, status, document };
 }
+
+function inputFixture() {
+  const f = fixture(), events = [], state = { panel: null, png: null, suppressed: false };
+  const pointer = Object.fromEntries(['down', 'move', 'finish', 'leave', 'doubleClick'].map(name => [name, (...args) => events.push([name, ...args])]));
+  f.state.ready = false;
+  const binding = f.workspace.createInputBinding({ pointer,
+    readCommandPanel: () => { assert.equal(f.state.ready, true); return state.panel; },
+    readPngExportCommand: () => { assert.equal(f.state.ready, true); return state.png; },
+    blankCanvasGesture: { suppressNext: () => { state.suppressed = true; }, takeSuppression: () => { const value = state.suppressed; state.suppressed = false; return value; } },
+    isBlankCommandPanelPoint: () => true,
+    scheduler: { flush: () => { f.calls.push('flush'); if (f.state.error) throw f.state.error; }, schedule: event => binding.processMove(event) },
+    profileCommit: work => { events.push(['profile']); return work(); },
+  });
+  assert.deepEqual(f.calls, []); assert.deepEqual(events, []); binding.bind(); assert.deepEqual(f.calls, []); f.state.ready = true;
+  return { ...f, binding, events, routing: state };
+}
+
+test('workspace input shares viewport coordinates, navigation and late pending-input synchronization', () => {
+  const f = inputFixture();
+  f.canvas.emit('pointermove', { offsetX: 8, offsetY: 12, shiftKey: true });
+  const world = f.display.viewport.screenToWorld({ x: 8, y: 12 });
+  const format = sandbox.window.NumberDisplay.formatDisplayNumber;
+  assert.equal(f.status.textContent, `X ${format(world.x, 3)} / Y ${format(world.y, 3)}`);
+  assert.equal(f.events[0][0], 'move'); assert.equal(f.events[0][2].x, world.x); assert.equal(f.events[0][3], true);
+  for (const pending of [false, true]) {
+    f.state.pending = pending; f.calls.length = 0;
+    const previousScale = f.display.viewport.scale;
+    f.canvas.emit('wheel', { clientX: 8, clientY: 12, offsetX: 8, offsetY: 12, deltaY: -100, preventDefault: () => f.calls.push('prevent') });
+    assert.ok(f.display.viewport.scale > previousScale);
+    const zoomed = f.display.viewport.screenToWorld({ x: 8, y: 12 });
+    assert.ok(Math.abs(zoomed.x - world.x) < 1e-12); assert.ok(Math.abs(zoomed.y - world.y) < 1e-12);
+    assert.deepEqual(f.calls.filter(value => typeof value === 'string' && value !== 'rect'),
+      ['prevent', 'flush', 'close-menu', 'hint', 'draw', 'pending', ...(pending ? ['input'] : [])]);
+  }
+  const before = f.display.viewport.snapshot(), failure = new Error('flush failed'); f.state.error = failure; f.calls.length = 0;
+  assert.throws(() => f.canvas.emit('wheel', { preventDefault: () => f.calls.push('prevent') }), error => error === failure);
+  assert.deepEqual(f.calls, ['prevent', 'flush']); assert.deepEqual(f.display.viewport.snapshot(), before);
+});
+
+test('workspace input combines native flush and profile boundaries with live panel and PNG routing', () => {
+  const f = inputFixture();
+  const event = { button: 0, clientX: 8, clientY: 12, offsetX: 8, offsetY: 12, preventDefault: () => f.events.push(['prevent']) };
+  f.canvas.emit('pointerdown', event); assert.equal(f.calls[0], 'flush'); assert.equal(f.events[0][0], 'down');
+  f.routing.panel = { active: true, canvasPress: () => true, canvasDoubleClick: () => f.events.push(['panel-double']) };
+  f.events.length = 0; f.canvas.emit('pointerdown', event); assert.equal(f.routing.suppressed, true);
+  f.canvas.emit('dblclick', event); assert.equal(f.routing.suppressed, false); assert.deepEqual(f.events.map(value => value[0]), ['prevent', 'prevent']);
+  f.routing.panel = null; const picked = [];
+  f.routing.png = { active: true, pick: point => picked.push(point) }; f.canvas.emit('pointerdown', event);
+  assert.equal(picked[0].x, f.display.viewport.screenToWorld({ x: 8, y: 12 }).x);
+  f.events.length = 0; f.canvas.emit('pointerup', event); assert.deepEqual(f.events, [['profile']]);
+  f.routing.png = null; f.canvas.emit('pointercancel', event); assert.deepEqual(f.events.map(value => value[0]), ['profile', 'profile', 'finish']);
+});
 
 test('Canvas display preserves staged initialization and centered zoom through the same viewport and navigation', () => {
   const f = fixture(); assert.ok(Object.isFrozen(f.display)); assert.ok(Object.isFrozen(f.workspace));
@@ -83,6 +135,63 @@ test('export uses the shared viewport and restores its frame before interactive 
 
 const interactiveOrder = ['block-handles', 'dimensions', 'dimension-preview', 'annotations', 'annotation-preview', 'authoring',
   'block-placement', 'free-instance', 'offset', 'trim', 'snap', 'arc-handles', 'spline-handles', 'points', 'image-overlays', 'identity', 'selection-rect', 'export-overlay'];
+function workspaceRenderingFixture() {
+  const f = fixture(), stages = [];
+  f.state.ready = false;
+  function stage(name) {
+    assert.equal(f.state.ready, true); stages.push(name);
+    if (f.state.failure === name) throw f.state.error;
+  }
+  for (const name of ['clearRect', 'save', 'translate', 'scale', 'restore', 'setLineDash']) {
+    f.ctx[name] = (...args) => { assert.equal(f.state.ready, true); f.calls.push([name, ...args]); };
+  }
+  function owner(methods) {
+    const api = {};
+    for (const [method, name] of Object.entries(methods)) api[method] = function () { assert.equal(this, api); stage(name); };
+    return api;
+  }
+  const rendering = f.workspace.createRendering({ recordDraw: () => stage('record'),
+    geometry: owner({ drawArcEndpointHandles: 'arc-handles', drawSplineEditHandles: 'spline-handles', drawPoints: 'points' }),
+    dimensions: owner({ draw: 'dimensions' }), annotations: owner({ draw: 'annotations', drawPreview: 'annotation-preview' }),
+    drawDimensionPreview: () => stage('dimension-preview'), authoringPreview: owner({ draw: 'authoring', drawTrimPreview: 'trim' }),
+    placements: owner({ drawBlockPlacementPreview: 'block-placement', drawFreeInstancePreview: 'free-instance' }),
+    offsetPreview: owner({ draw: 'offset' }), drawBlockInstanceHandles: () => stage('block-handles'), drawSnapMarker: () => stage('snap'),
+    drawReferenceImages: () => stage('images'), drawHatches: () => stage('hatches'), drawDrawingStack: () => stage('stack'),
+    drawReferenceImageOverlays: () => stage('image-overlays'), drawSketchIdentityLabel: () => stage('identity'),
+    drawSelectionRect: () => stage('selection-rect'), drawExportOverlay: () => stage('export-overlay') });
+  assert.deepEqual(f.calls, []); assert.deepEqual(stages, []); assert.ok(Object.isFrozen(rendering));
+  f.state.onContent = rendering.draw; f.state.onDraw = rendering.draw; f.state.ready = true;
+  return { ...f, rendering, stages };
+}
+
+test('Workspace rendering shares the live viewport, bitmap, zoom display and PNG frame without repeated infrastructure ports', () => {
+  const f = workspaceRenderingFixture(), other = workspaceRenderingFixture();
+  f.display.viewport.update({ x: 10, y: 20, scale: 4 });
+  f.rendering.draw(); assert.equal(f.button.textContent, '200%');
+  assert.equal(f.canvas.width, 400); assert.equal(f.workspace.surface.dpr, 2);
+  assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+  assert.equal(other.canvas.width, 0); assert.deepEqual(other.stages, []);
+  f.stages.length = 0; f.calls.length = 0;
+  f.workspace.exportRenderer.render({ x: 2, y: 3, width: 10, height: 20 }, { x: 8, y: 12 });
+  assert.deepEqual(f.stages, ['images', 'hatches', 'stack', 'dimensions', 'annotations', 'points']);
+  assert.ok(f.calls.some(c => c[0] === 'transform' && c[1] === 2 && c[4] === 3 && c[5] === -36 && c[6] === -96));
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, { x: 10, y: 20, scale: 4 });
+  f.stages.length = 0; f.state.dpr = 3; f.workspace.exportRenderer.restore();
+  assert.equal(f.workspace.exportRenderer.frame, null); assert.equal(f.canvas.width, 600);
+  assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+});
+
+test('Workspace rendering retains export failure and restore boundaries on the same renderer', () => {
+  const f = workspaceRenderingFixture(), error = new Error('annotations failed');
+  f.state.failure = 'annotations'; f.state.error = error;
+  assert.throws(() => f.workspace.exportRenderer.render({ x: 0, y: 0, width: 10, height: 10 }, { x: 1, y: 1 }), value => value === error);
+  assert.ok(f.workspace.exportRenderer.frame); assert.deepEqual(f.stages, ['images', 'hatches', 'stack', 'dimensions', 'annotations']);
+  assert.equal(f.calls.some(c => c[0] === 'restore'), false);
+  f.state.failure = null; f.stages.length = 0; f.workspace.exportRenderer.restore();
+  assert.equal(f.workspace.exportRenderer.frame, null);
+  assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+});
+
 function renderingFixture() {
   const calls = [], state = { ready: false, failure: null, onStage: null, dpr: 2, overlay: null, override: undefined };
   const ready = () => assert.equal(state.ready, true, 'rendering construction must stay lazy');
@@ -157,4 +266,69 @@ test('composition retains failure boundaries without adding restoration or swall
   assert.throws(() => f.png.render({ x: 0, y: 0, width: 10, height: 10 }, { x: 1, y: 1 }), value => value === error);
   assert.ok(f.png.frame); assert.deepEqual(f.stages(), ['cache', 'zoom', 'images', 'hatches', 'stack', 'dimensions', 'annotations']);
   f.state.failure = null; f.calls.length = 0; f.png.restore(); assert.equal(f.png.frame, null); assert.ok(f.stages().includes('export-overlay'));
+});
+
+function workspacePngFixture() {
+  const f = fixture(), stages = [], s = f.state; s.mode = 'line';
+  const button = new EventTarget(), originalGet = f.document.getElementById;
+  f.document.getElementById = id => id === 'pngExportBtn' ? button : originalGet(id);
+  let resolveFonts;
+  const fonts = new Promise(resolve => { resolveFonts = resolve; });
+  f.document.fonts = { get ready() { stages.push('fonts'); return fonts; } };
+  f.document.createElement = kind => {
+    assert.equal(kind, 'canvas'); stages.push('output');
+    return { getContext: () => ({ drawImage(source) { assert.equal(source, f.canvas); assert.equal(source.width, 40); assert.equal(source.height, 20); stages.push('copy'); } }),
+      toBlob(callback) { stages.push('blob'); callback({ type: 'image/png' }); } };
+  };
+  f.browser.DocumentFiles = sandbox.window.DocumentFiles;
+  f.browser.showSaveFilePicker = async options => { assert.equal(options.suggestedName, 'current-name.png'); stages.push('picker'); return {
+    createWritable: async () => ({ write: async blob => { assert.equal(blob.type, 'image/png'); stages.push('write'); }, close: async () => stages.push('close') }) }; };
+  const pending = { get current() { assert.equal(s.ready, true); return s.command; }, replace(value) { assert.equal(this, pending); s.command = value; }, clear() { assert.equal(this, pending); s.command = null; } };
+  const lifecycle = { readMode: function() { 'use strict'; assert.equal(this, undefined); assert.equal(s.ready, true); return s.mode; },
+    setMode: function(mode) { 'use strict'; assert.equal(this, undefined); assert.equal(s.ready, true); s.mode = mode; }, active() { assert.equal(this, lifecycle); return false; } };
+  f.workspace.surface.syncCanvasBitmapSize(); f.calls.length = 0; s.ready = false;
+  const feature = f.workspace.createPngExport({ documentName: () => 'current-name', prepareImages: async () => stages.push('images'),
+    drawOperationLifecycle: lifecycle, pendingCommandSession: pending, fileSession: { get busy() { return s.fileBusy; } },
+    constraintTargetSession: { get command() { return s.constraint; } },
+    findSnap: (point, tolerance) => { s.snapArgs = [point, tolerance]; if (s.snapError) throw s.snapError; return s.snap; },
+    flushPointerMove: () => { f.calls.push('flush'); if (s.flushError) throw s.flushError; } });
+  assert.deepEqual(f.calls, []); assert.deepEqual(stages, []); s.ready = true;
+  return { ...f, feature, stages, button, pending, resolveFonts };
+}
+
+test('Workspace PNG uses the same live viewport, mode, pending session and read cache after explicit start', () => {
+  const f = workspacePngFixture(); f.button.dispatchEvent(new Event('click')); assert.equal(f.feature.command.active, false);
+  f.feature.start(); f.feature.start(); f.state.fileBusy = true; f.button.dispatchEvent(new Event('click'));
+  assert.deepEqual(f.calls, ['flush','hint']); assert.equal(f.state.mode, 'line'); assert.equal(f.feature.command.active, false);
+  f.calls.length = 0; f.state.fileBusy = false; f.state.flushError = new Error('flush failed');
+  assert.throws(() => f.feature.open(), error => error === f.state.flushError); assert.deepEqual(f.calls, ['flush']);
+  f.state.flushError = null; f.calls.length = 0; f.feature.open(); assert.equal(f.state.mode, 'png-export'); assert.equal(f.pending.current.type, 'png-export');
+  f.display.viewport.update({ x: 10, y: 20, scale: 4 }); const point = { x: 1, y: 2 }; f.state.snap = { x: 3, y: 4 };
+  f.feature.command.pick(point); assert.equal(f.state.snapArgs[0], point); assert.equal(f.state.snapArgs[1], 2.5); assert.equal(f.calls.includes('cache'), true);
+  const previous = f.workspace.exportRenderer.frame; f.state.snapError = new Error('snap failed');
+  assert.throws(() => f.feature.command.move(point), error => error === f.state.snapError); assert.equal(f.workspace.exportRenderer.frame, previous);
+  f.feature.command.cancel(); assert.equal(f.state.mode, 'line'); assert.equal(f.pending.current, null);
+  f.feature.dispose(); f.button.dispatchEvent(new Event('click')); assert.equal(f.feature.command.active, false);
+});
+
+test('Workspace PNG captures through the existing renderer after fonts and images, restoring the same bitmap and viewport on success or failure', async () => {
+  for (const fail of [false, true]) {
+    const f = workspacePngFixture(); f.display.viewport.update({ x: 10, y: 20, scale: 4 }); f.feature.open();
+    f.feature.command.pick({ x: 0, y: 0 }); f.feature.command.pick({ x: 10, y: 5 }); f.feature.command.onSetting('dpi', 96);
+    const viewport = { ...f.display.viewport.snapshot() }, bitmap = [f.canvas.width, f.canvas.height];
+    f.state.onContent = () => {
+      const frame = f.workspace.exportRenderer.frame; assert.ok(frame); assert.equal(frame.ratio.x, 1);
+      assert.deepEqual({ ...frame.worldBounds }, { x1: 0, y1: 0, x2: 10, y2: 5 }); f.stages.push('render');
+      if (fail) throw new Error('capture failed');
+    };
+    const saving = f.feature.command.onAction('finish'); await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(f.stages, ['picker','fonts']); assert.equal(f.feature.command.busy, true);
+    f.resolveFonts(); await saving;
+    assert.deepEqual(f.stages, fail ? ['picker','fonts','images','output','render'] : ['picker','fonts','images','output','render','copy','blob','write','close']);
+    assert.equal(f.workspace.exportRenderer.frame, null); assert.deepEqual([f.canvas.width, f.canvas.height], bitmap);
+    assert.deepEqual({ ...f.display.viewport.snapshot() }, viewport); assert.equal(f.feature.command.busy, false);
+    assert.equal(f.feature.command.active, fail); assert.equal(f.state.mode, fail ? 'png-export' : 'line');
+    if (fail) { assert.equal(f.feature.command.readState().message.includes('capture failed'), true); f.feature.command.cancel(); }
+    assert.equal(f.pending.current, null);
+  }
 });

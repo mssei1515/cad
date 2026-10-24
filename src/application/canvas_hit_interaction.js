@@ -69,7 +69,20 @@
         }
         return Object.freeze({ ...interaction, isBlankCommandPanelPoint });
       }
-      return Object.freeze({ regions, dimensions: dimensionQueries, instances, geometry, operands, createInteraction });
+      function createContextQuery({ editedFitPoints, canvasContextAnnotationHit }) {
+        return window.CanvasContextQuery.create({
+          currentScope, viewportScale, selectionScope: { sketch: isVisibleSketchId, element: isVisibleSketchElement },
+          hitReferenceImageAt: (...args) => regions.hitReferenceImageAt(...args), isVisibleValue,
+          canvasContextPointIsSelectable: point => isExplicitPoint(point) || isSelectableEndpointPoint(point), editedFitPoints,
+          sketches: { isEditableSketchId, isVisibleSketchId, isEditableSketchElement: sketchContext.isEditableSketchElement,
+            isVisibleSketchElement, activeSketchId, isActiveSketchConstraint, constraintSketchId },
+          projections: { blockProjectionBundle, geometryInstanceBundle: geometryReads.geometryInstanceBundle },
+          dimensions: { targetFromConstraint, defaultDimensionForTarget: dimensions.placement.defaultDimensionForTarget,
+            effectiveDimensionAppearance, dimensionLayout: (...args) => dimensions.layout(...args) },
+          annotations: { canvasContextAnnotationHit }, hatches: { resolvedHatchBoundary, hatchAppearanceForDisplay, hatchContainsSelectablePoint },
+        });
+      }
+      return Object.freeze({ regions, dimensions: dimensionQueries, instances, geometry, operands, createInteraction, createContextQuery });
     }
     return Object.freeze({ policy, createQueries });
   }

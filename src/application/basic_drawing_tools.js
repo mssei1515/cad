@@ -1,6 +1,10 @@
 /* Compose drawing features around shared geometry, snap and preview owners. */
 (() => {
   "use strict";
+  function createCanvasInput({ point, drawing }) {
+    const pointCommand = window.PointCommand.create(point);
+    return window.DrawingCommandInput.create({ ...drawing, pointCommand });
+  }
   function create({ geometry, ids, currentScope, snap, snapConstraints, snapForDrawing, endpointAt, samePosition,
     transientAuthoring, pushModelConstraint, addConstraintIfMissing, minLineLength, minArcLength,
     selection, preview, checkpoint, clearSelection, setHint, updateUI, draw, solveAndRefresh, log }) {
@@ -102,6 +106,19 @@
         selection, sameSketchElements: sketchContext.sameSketchElements, activeSketchId: sketchContext.activeSketchId, isActiveSketchElement,
         applicationText, minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw });
     }
+    function createPreview({ ctx, viewport, withCanvasState, traceSplinePath, readMode, centerlineCommand, readCanvasSize }) {
+      const { shortestAngleFrom, slotGeometry, threePointArcGeometry, angleAtArcParam } = window.GeometryKernel;
+      const renderer = window.AuthoringPreviewRenderer.create({ ctx, viewport, withCanvasState,
+        hypot2: window.GeometrySolver.hypot2, shortestAngleFrom, slotGeometry, threePointArcGeometry,
+        minimumLineLength: minLineLength, minimumArcLength: minArcLength, buildSpline: window.SplineGeometry.build,
+        traceSplinePath, angleAtArcParam });
+      const layer = window.AuthoringPreviewRenderer.createLayer({ renderer, readMode,
+        readPointer: () => preview.pointer, readTrim: () => preview.trim,
+        lineCommand: tools.line, rectangleCommand: tools.rectangle, slotCommand: tools.slot,
+        circularCommands: tools.circular, splineDraft: spline.draft, centerlineCommand,
+        projectPointToCenterlineSupport: centerlineCommand.projectPointToCenterlineSupport, readCanvasSize });
+      return Object.freeze({ renderer, layer });
+    }
     function createLifecycle({ lifecycle, canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
       const construct = lifecycle ? lifecycle.bind : window.DrawOperationLifecycle.create;
       return construct({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover,
@@ -127,7 +144,30 @@
         checkpoint: filletCheckpoint, clearSelection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
         applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createLifecycle, createOffset, createFillet });
+    function createAuthoringInput({ readMode, centerline, circleCenterCross, fillet, trim, offset }) {
+      return createCanvasInput({ point: { transientAuthoring, snapForDrawing, drawingSnap: snap, addPoint: geometry.addPoint,
+        addPointSnapConstraints: snapConstraints.addPointSnapConstraints, clearSnap: snap.clear, canvasSelection: selection, solveAndRefresh },
+        drawing: { getMode: readMode, rejectRootSketchCreation, handleLineClick: tools.input.line,
+          handleRectangleClick: tools.input.rectangle, handleSlotClick: tools.input.slot, handleCircleClick: tools.input.circle,
+          handleArcClick: tools.input.arc, handleThreePointArcClick: tools.input.threePointArc,
+          handleCenterlineClick: centerline.click, handleCircleCenterCrossClick: circleCenterCross.click, handleFilletClick: fillet.click,
+          handleSplineClick: spline.command.click, executeTrimAt: trim.execute, offsetCommand: offset } });
+    }
+    function createBlankGesture({ lifecycle, pending, constraintTargets, splineEditing, dimensionValues, offset, annotationInput,
+      updateGeometrySelectionUI, getTime = () => performance.now() }) {
+      const { rollbackTransientLineCompletion, rollbackTransientPoint } = transientAuthoring;
+      return window.BlankCanvasGesture.create({ getMode: lifecycle.readMode,
+        getPending: () => pending.current, getPendingConstraint: () => constraintTargets.command,
+        getSplineEditSession: () => splineEditing.current, getLineCommand: () => tools.line, getTransientAuthoring: () => transientAuthoring,
+        getTime, hypot2: window.GeometrySolver.hypot2, clearPreview: () => preview.setPointer(null),
+        finalizeSplineFromDoubleClick: spline.command.doubleClick, finishSplineEditSession: splineEditing.finish,
+        submitDistanceValue: dimensionValues.submit, submitOffsetValue: offset.submit, submitAnnotationValue: () => annotationInput.finish(),
+        cancelPendingCommand, isDrawToolMode: () => lifecycle.isToolMode(), exitDrawMode: () => lifecycle.exit(),
+        cancelConstraintTargetCommand, rollbackTransientLineCompletion, clearSnap: snap.clear, clearSelection,
+        setHint, updateUI, draw, cancelActiveDrawOperation: () => lifecycle.cancel(), rollbackTransientPoint,
+        hasActiveDrawOperation: () => lifecycle.active(), hasSelection: selection.hasSelection, updateGeometrySelectionUI });
+    }
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet, createBlankGesture, createCanvasInput: createAuthoringInput });
   }
-  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring });
+  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring, createCanvasInput });
 })();

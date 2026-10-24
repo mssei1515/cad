@@ -28,12 +28,12 @@
         }
       }
       Object.assign(item, normalized);
-      if (item.anchorPosition != null && !window.AnnotationAnchorConstraints?.POSITIONS.includes(item.anchorPosition)) throw new Error(`${item.id}: Invalid annotation anchor position`);
+      if (item.anchorPosition != null && !window.AnnotationAnchorData?.POSITIONS.includes(item.anchorPosition)) throw new Error(`${item.id}: Invalid annotation anchor position`);
       if (item.anchorConstraints) {
-        const relations = window.AnnotationAnchorConstraints.normalize(item.anchorConstraints);
-        const axes = relations.flatMap(relation => window.AnnotationAnchorConstraints.axes(relation.type));
+        const relations = window.AnnotationAnchorData.normalize(item.anchorConstraints);
+        const axes = relations.flatMap(relation => window.AnnotationAnchorData.axes(relation.type));
         if (!Array.isArray(item.anchorConstraints) || relations.length !== item.anchorConstraints.length || new Set(axes).size !== axes.length
-          || relations.reduce((sum, relation) => sum + window.AnnotationAnchorConstraints.degree(relation.type), 0) > 2 || !item.anchorPosition) throw new Error(`${item.id}: Invalid annotation anchor constraints`);
+          || relations.reduce((sum, relation) => sum + window.AnnotationAnchorData.degree(relation.type), 0) > 2 || !item.anchorPosition) throw new Error(`${item.id}: Invalid annotation anchor constraints`);
         item.anchorConstraints = relations;
       }
       if (type !== "leader") {
@@ -62,8 +62,8 @@
       style: window.Appearance.annotationStoredStyle(element),
     };
     if (element.appearanceInheritance === true) data.appearanceInheritance = true;
-    if (window.AnnotationAnchorConstraints?.POSITIONS.includes(element.anchorPosition)) data.anchorPosition = element.anchorPosition;
-    if (element.anchorConstraints?.length) data.anchorConstraints = window.AnnotationAnchorConstraints.normalize(element.anchorConstraints);
+    if (window.AnnotationAnchorData?.POSITIONS.includes(element.anchorPosition)) data.anchorPosition = element.anchorPosition;
+    if (element.anchorConstraints?.length) data.anchorConstraints = window.AnnotationAnchorData.normalize(element.anchorConstraints);
     if (element.type === "leader") {
       if (["shelf", "text", "anchor"].includes(element.textPlacement)) data.textPlacement = element.textPlacement;
       if (element.attachment) data.attachment = { ...element.attachment };

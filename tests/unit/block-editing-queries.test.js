@@ -79,3 +79,15 @@ test('Sketch rows retain hierarchy and count drawable objects rather than suppor
   assert.equal(rows[1].sketch, child); assert.equal(rows[1].depth, 1); assert.equal(rows[1].count, 4);
   assert.equal(JSON.stringify(data), before); assert.equal(f.catalog.blockDefinitionSketchRows(null).length, 0);
 });
+
+test('instance lookup reads the bound editing scope live, preserves first identity and strict IDs, and has a current-scope default',()=>{
+  const calls=[],state={ready:false,scope:null,failure:null},first={id:'BI1'},duplicate={id:'BI1'},numeric={id:7},workspace={blockInstances:[{id:'BI1'}]};
+  state.scope={blockInstances:[first,duplicate,numeric]};
+  const options={definitions:()=>assert.fail('no definitions needed'),catalog:{},editor:{},
+    currentScope:()=>{calls.push('workspace');return workspace;},readEditingScope:()=>{assert.equal(state.ready,true);calls.push('bound');if(state.failure)throw state.failure;return state.scope;}};
+  const api=sandbox.window.BlockEditingQueries.create(options);assert.deepEqual(calls,[]);state.ready=true;
+  assert.equal(api.blockInstanceById('BI1'),first);assert.equal(api.blockInstanceById(7),numeric);assert.equal(api.blockInstanceById('7'),null);assert.equal(api.blockInstanceById('missing'),null);assert.equal(calls.includes('workspace'),false);
+  const replacement={id:'BI1'};state.scope={blockInstances:[replacement]};assert.equal(api.blockInstanceById('BI1'),replacement);
+  const marker=new Error('bound scope');state.failure=marker;assert.throws(()=>api.blockInstanceById('BI1'),error=>error===marker);assert.equal(state.scope.blockInstances[0],replacement);
+  const fallback=sandbox.window.BlockEditingQueries.create({...options,readEditingScope:undefined});assert.equal(fallback.blockInstanceById('BI1'),workspace.blockInstances[0]);
+});

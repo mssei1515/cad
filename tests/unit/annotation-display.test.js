@@ -32,6 +32,52 @@ function fixture() {
   return { display, state, calls, reads, selection, note, document, viewport };
 }
 
+function worldPoint(layout, x, y) {
+  return { x: layout.x + x * Math.cos(layout.rotation) - y * Math.sin(layout.rotation),
+    y: layout.y + x * Math.sin(layout.rotation) + y * Math.cos(layout.rotation) };
+}
+
+test('spatial queries share the actual live rotated text layout without painting or materializing', () => {
+  const f = fixture(); f.state.ready = false;
+  const spatial = f.display.createSpatialQueries();
+  assert.deepEqual(f.reads, []); assert.deepEqual(f.calls, []); f.state.ready = true; f.state.arrow = null;
+  const item = f.note({ text: 'First\nSecond', annotationTransformRotation: 0.7 }); f.state.elements = [item];
+  const before = JSON.stringify(item);
+  for (const scale of [2, 8]) {
+    f.viewport.scale = scale;
+    const layout = f.display.renderer.annotationTextLayout(item);
+    assert.equal(layout.rotation, 0.7);
+    const pointer = worldPoint(layout, layout.left + layout.width / 2, 0);
+    assert.deepEqual(spatial.annotationBounds(item), layout.bounds);
+    assert.equal(spatial.hitAnnotationElement(pointer.x, pointer.y).element, item);
+    assert.equal(spatial.canvasContextAnnotationHit(item, pointer).element, item);
+  }
+  assert.equal(JSON.stringify(item), before);
+  assert.equal(f.calls.every(call => call[0] === 'save' || call[0] === 'restore'), true);
+  assert.equal(f.calls.filter(call => call[0] === 'save').length, f.calls.filter(call => call[0] === 'restore').length);
+  f.state.elements = [];
+  assert.equal(spatial.hitAnnotationElement(item.x, item.y), null);
+});
+
+test('spatial frame handles retain selection, editability, resize and visibility guards', () => {
+  const f = fixture(), spatial = f.display.createSpatialQueries(); f.state.arrow = null;
+  const item = f.note({ text: 'Long annotation for handles', anchorPosition: null }); f.state.elements = [item];
+  const layout = f.display.renderer.annotationTextLayout(item);
+  const handle = w.AnnotationRenderer.resizeHandles(layout).find(value => value.resizeX === 1 && value.resizeY === 1);
+  const point = worldPoint(layout, handle.x, handle.y);
+  const hit = () => spatial.hitAnnotationElement(point.x, point.y);
+  f.selection.set('annotations', [item]);
+  assert.equal(hit().part, 'frame'); assert.equal(hit().resizeX, 1); assert.equal(hit().resizeY, 1);
+  f.state.resize = false; assert.equal(hit().part, 'frame-enable');
+  f.state.resize = true; f.state.editable = false; assert.notEqual(hit()?.part, 'frame');
+  f.state.editable = true; f.selection.set('annotations', []); f.state.hover = { annotation: item };
+  assert.notEqual(hit()?.part, 'frame', 'hover decoration does not grant frame interaction');
+  f.selection.set('annotations', [item]); f.state.active = 'S2'; assert.equal(hit(), null);
+  assert.equal(spatial.hitAnnotationElement(point.x, point.y, { activeOnly: false }).element, item);
+  f.state.active = 'S1'; f.state.hiddenSketches.add('S1'); assert.equal(hit(), null);
+  f.state.hiddenSketches.clear(); item.visible = false; assert.equal(hit(), null);
+});
+
 test('annotation decorations share live selection, inspection, hover and export policy with color', () => {
   const f = fixture(), item = f.note(); f.state.elements = [item];
   f.selection.set('annotations', [item]); f.display.layer.draw();

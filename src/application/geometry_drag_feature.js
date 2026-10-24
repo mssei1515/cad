@@ -41,7 +41,11 @@
       clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource, buildDragSession: plan.build, geometryDrag: command,
       setHint, applicationText, updateGeometrySelectionUI, updateUI, draw,
     });
-    return Object.freeze({ command, build: plan.build, prepare: editing.prepare, preview, finish, beginDerived,
+    function createBlockEntry() {
+      return window.GeometryDrag.createBlockEntry({ clearSelection, canvasSelection,
+        buildDragSession: plan.build, geometryDrag: command, setHint, updateUI, draw });
+    }
+    return Object.freeze({ command, build: plan.build, prepare: editing.prepare, preview, finish, beginDerived, createBlockEntry,
       targetConstraintCount: dragSolver.targetConstraintCount });
   }
   window.GeometryDragFeature = Object.freeze({ create });

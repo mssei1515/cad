@@ -23,6 +23,38 @@ const runtime = loadGeometryRuntime();
 const geometry = runtime.GeometrySolver;
 const kernel = runtime.GeometryKernel;
 
+test("disconnected linear blocks and interleaved variables retain fill-in and converge to their unique values", () => {
+  for (const interleaved of [false, true]) {
+    const count = 36, values = Array.from({ length: count }, () => ({ value: 0 }));
+    const expected = Array.from({ length: count }, (_, index) => (index % 7 - 3) / 5);
+    const constraints = [];
+    const indexOf = index => interleaved ? index * 13 % count : index;
+    for (let block = 0; block < count; block += 3) {
+      const [a, b, c] = [block, block + 1, block + 2].map(indexOf);
+      const constraint = new geometry.Constraint('linear block');
+      // The two outer variables have no shared input row; factorization must
+      // still retain the fill created through their common central variable.
+      constraint.rawError = () => [values[a].value - expected[a],
+        values[a].value + values[b].value - expected[a] - expected[b],
+        values[a].value + values[c].value - expected[a] - expected[c]];
+      constraints.push(constraint);
+    }
+    const solver = new geometry.ConstraintSolver({ points: [], lines: [], circles: [], arcs: [], constraints });
+    const result = solver.solveCore(values.map(object => ({ object, prop: 'value' })), constraints, 1e-10, 1000, 1e-3, 12);
+    assert.equal(result.success, true); assert.ok(result.errorNorm < 1e-9);
+    values.forEach((object, index) => assert.ok(Math.abs(object.value - expected[index]) < 1e-8));
+  }
+});
+
+test("singular undamped systems retain the QR fallback and a finite valid solution", () => {
+  const values = [{ value: -2 }, { value: 6 }], constraint = new geometry.Constraint('sum');
+  constraint.rawError = () => values[0].value + values[1].value - 7;
+  const solver = new geometry.ConstraintSolver({ points: [], lines: [], circles: [], arcs: [], constraints: [constraint] });
+  const result = solver.solveCore(values.map(object => ({ object, prop: 'value' })), [constraint], 1e-9, 1000, 0, 8);
+  assert.equal(result.success, true); assert.ok(Math.abs(constraint.error()) < 1e-9);
+  assert.ok(values.every(object => Number.isFinite(object.value)));
+});
+
 test("line angle solves keep the original side while changing angle and length", () => {
   for (const side of [-1, 1]) for (const flip of [0, 1]) {
     const origin = new geometry.Point("O", 0, 0, true);

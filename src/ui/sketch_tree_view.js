@@ -238,8 +238,12 @@
       sketchTreeGroupOpenState.set(key, sketchTreeGroupOpenState.get(key) !== true);
     }
     function setSketchOpen(sketchId, open) { sketchTreeSketchOpenState.set(sketchTreeSketchKey(sketchId), open); }
+    function bindCreation(createSketch) {
+      document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
+      document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
+    }
     return Object.freeze({ refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth,
-      reset, capture, restore, toggleGroup, setSketchOpen });
+      reset, capture, restore, toggleGroup, setSketchOpen, bindCreation });
   }
   function sketchTreeGutter(segments) {
     return `<span class="sketch-tree-gutter" style="--tree-segment-count:${segments.length}" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`;

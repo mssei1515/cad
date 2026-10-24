@@ -136,3 +136,36 @@ test('status observation captures the current sketch after refresh and observes 
   assert.deepEqual(JSON.parse(JSON.stringify(next)), { stable: false, errorNorm: 0.5, freeDof: 0, items: [{ id: 'P1', status: 'conflict' }] });
   assert.equal(reads, 2); assert.equal(refreshed, 2);
 });
+
+test('model support shares live analysis and block status after real insertion or refusal and propagates commit errors', () => {
+  const calls=[],state={ready:false,accept:false,failure:null};
+  const read=name=>{assert.equal(state.ready,true);calls.push(name);};
+  const point={id:'P1',localElement:{id:'localP'},sketchId:'S1'},line={id:'L1',localElement:{id:'localL'},sketchId:'S1'},instance={id:'BI1'};
+  state.scope={points:[point],lines:[line],circles:[],arcs:[],splines:[],constraints:[]};
+  state.bundle={instance,points:[point],lines:[line],circles:[],arcs:[]};state.statuses=new Map([[point,'fixed'],[line,'free']]);
+  class PointOnLineConstraint { constructor(p,l){assert.equal(p,state.bundle.points[0]);assert.equal(l,state.bundle.lines[0]);this.name='point-line';} error(){return 0;} }
+  const support=sandbox.window.ConstraintTestDriver.createModelSupport({
+    refreshConstraintAnalysis:()=>{read('refresh');return{analysis:{stable:true,errorNorm:0,freeVariableCount:1},summary:{count:state.scope.constraints.length},statuses:state.statuses};},
+    readMembership:()=>{read('membership');return{activeSketchId:'S1',elementSketchId:item=>item.sketchId};},
+    activeSketchId:()=>{read('active');return'S1';},sketchSolveVariables:()=>{read('variables');return[];},
+    sketchSolveConstraints:()=>{read('constraints');return state.scope.constraints;},sketchSolveLines:()=>{read('lines');return state.scope.lines;},
+    analyzeConstraintState:()=>{read('analysis');return{stable:true};},acceptError:0.01,vectorNorm:values=>Math.hypot(...values),
+    currentScope:()=>{read('scope');return state.scope;},elementSketchId:item=>item.sketchId,
+    blockProjectionBundles:()=>{read('bundles');return[state.bundle];},blockInstanceById:id=>id==='BI1'?instance:null,
+    blockProjectionBundle:value=>{assert.equal(value,instance);return state.bundle;},PointOnLineConstraint,
+    commitNewConstraint:(type,constraint)=>{read('commit');assert.equal(type,'coincident');if(state.failure)throw state.failure;if(state.accept)state.scope.constraints.push(constraint);return state.accept;},
+    serializeModel:()=>{read('serialize');return{count:state.scope.constraints.length};},
+  });
+  assert.deepEqual(calls,[]);assert.equal(support.readStatuses,support.publicAPI.constraintStatusesForTest);state.ready=true;
+  const api=support.publicAPI;
+  let result=api.addBlockPointOnLineConstraintForTest('BI1','localP','BI1','localL');
+  assert.equal(result.committed,false);assert.equal(result.analysis.constraintCount,0);assert.equal(result.status.summary.count,0);assert.equal(result.serialized.count,0);
+  assert.equal(calls[0],'commit');assert.ok(calls.indexOf('analysis')<calls.indexOf('refresh'));assert.equal(calls.at(-1),'serialize');
+  state.accept=true;result=api.addBlockPointOnLineConstraintForTest('BI1','localP','BI1','localL');
+  assert.equal(result.committed,true);assert.equal(result.analysis.constraintCount,1);assert.equal(result.status.summary.count,1);assert.equal(result.serialized.count,1);
+  const replacement={...point};state.scope={...state.scope,points:[replacement],constraints:[]};state.bundle={...state.bundle,points:[replacement]};state.statuses=new Map([[replacement,'replacement']]);
+  calls.length=0;assert.equal(support.readStatuses().items[0].status,'replacement');assert.deepEqual(calls,['refresh','membership']);
+  assert.equal(api.constraintAnalysisForTest().constraintCount,0);assert.equal(api.blockConstraintStatusForTest('BI1').projections[0].status,'replacement');
+  const marker=new Error('commit');state.failure=marker;calls.length=0;
+  assert.throws(()=>api.addBlockPointOnLineConstraintForTest('BI1','localP','BI1','localL'),error=>error===marker);assert.deepEqual(calls,['commit']);assert.equal(state.scope.constraints.length,0);
+});

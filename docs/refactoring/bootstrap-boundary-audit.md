@@ -6,6 +6,87 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 保存基盤の集約後と次の生成段階（2026-10-24、2ed4adc基準）
+
+同じcad-document-workspace-hierarchy-audit.cjsの分類条件で、2ed4adc（app blob 872e0381338429ef34c7e534211af2ab35fde9fa）とDocument保存基盤を集約したworking tree（blob 9d126d5c55c9b5fad4836e036b271e862882bd11）を比較した。TEMP cad-document-persistence-hierarchy-audit.{cjs,json,log}へ結果を保存した。検証・統合の進行は再開資料section 8を優先する。
+
+| 分類 | 2ed4adc | 保存基盤集約後 |
+| --- | ---: | ---: |
+| 物理行 | 2,504 | 2,486 |
+| 非空白行 | 2,042 | 2,024 |
+| 構築・接続（非空白） | 953 | 931 |
+| test hooks（非空白） | 440 | 440 |
+| call一文の関数（非空白） | 209 | 209 |
+| その他（非空白） | 440 | 444 |
+| member形式create構築文 | 154 | 149 |
+| root関数 | 170 | 170 |
+| 構築Object直下callback | 251 | 248 |
+| 複文callback | 11 | 11 |
+| root let | 6 | 6 |
+
+今回のcreatePersistenceはbare形式であり、この従来分類では「その他」に入る。対象6構築→1の個別監査とmember形式だけの154→149を混同しない。空白462行は変更していない。hooksと一文委譲を全て除く仮定でも2,024−440−209＝1,375非空白行が残るため、小さなadapter移動だけでは200〜500行へ到達しない。次も実ownerの内部構築と機能間接続を区別し、巨大な別rootへ移して達成扱いにしない。
+
+最大の構築文はBlankCanvasGesture.create（25非空白行、callback27）、依存参照の多いものはCanvasContextInteraction 63・Tree 56・CanvasCommandInputs 51・ConstraintEditing 50・GeometryDragFeature 49・AnnotationFeature 48。これはproperty数やAPI数とは異なるAST上の参照数である。rootの六つのletは引き続き後段接続slotであり、操作状態の集中と同一視しない。
+
+次の候補はBlankCanvasGestureの生成段階である。現物はroot早期で作られるが、最初の直接捕捉はsceneHitQueries.createInteraction付近の後段にあり、前段BasicDrawingTools.createAuthoringへ渡すresetBlankCandidateは遅延callbackである。Gesture constructorもcandidate／抑止flagを初期化して関数を返すだけでcommandを照会しない。生成を後段へ置けるかを確認し、通常のoperation／pending／Selection／transientの実ownerを共有して多数の遅延wrapperを減らす余地がある。BasicDrawingToolsのconstructorがresetを早期実行しないこと、全直接consumerの初期化順、既存receiver／引数・戻り値・呼出し回数、空白double clickの取消／確定優先順位と失敗時の途中状態を確認するまで移さない。clockや閾値、pointer gesture、draft rollbackの所有は維持する。これは本単位でまだ実装していない。
+
+## 組立て階層の再監査とDocument基盤（2026-10-24、64348ff）
+
+20fbe41と64348ffのGit blob、およびDocumentWorkspace追加後のworking treeを同じBabel AST条件で比較した。20fbe41の既報値を再現できることを先に確認した。root IIFE直下のmember形式create系構築文、test hooks関数、一文callだけの関数、その他を物理行の範囲で分類し、非空白行を集計する。factory引数直下の関数値と、そのBlockに複数statementがあるcallbackを区別する。これは全Call数や全Object port数の集計とは異なり、bare形式の生成関数も同一の「その他」条件で扱う。
+
+| 分類 | 20fbe41 | 64348ff | DocumentWorkspace追加後 |
+| --- | ---: | ---: | ---: |
+| 物理行 | 2,622 | 2,555 | 2,552 |
+| 非空白行 | 2,156 | 2,092 | 2,089 |
+| 構築・接続（非空白） | 1,064 | 1,004 | 1,001 |
+| test hooks（非空白） | 440 | 440 | 440 |
+| call一文の関数（非空白） | 211 | 211 | 211 |
+| その他（非空白） | 441 | 437 | 437 |
+| root構築文 | 181 | 167 | 161 |
+| root関数 | 174 | 173 | 173 |
+| 構築Object直下のcallback | 295 | 271 | 271 |
+| 複文callback | 13 | 11 | 11 |
+| rootのlet | 6 | 6 | 6 |
+
+64348ffのapp blobは2c1ac964cb6e998f638311fd801629f53b46d117、候補は3f8dd4e1b460005c3fef4ec19a2f77a2954471eb。補助診断は一時directoryのcad-composition-hierarchy-audit.cjs／.json／.log、cad-document-workspace-hierarchy-audit.cjs／.json／.log。後者のcandidateだけがworking treeを読み、他の基準はGit blobから取得した。結果と検証・統合状態は再開手順section 8を優先する。
+
+候補でもtest hooksと一文callを全て除く仮定で2,089−440−211＝1,438非空白行が残る。行の圧縮、小さなadapterの移動、公開Object全体を広いcontext付きで別fileへ移すだけでは、200〜500行の目標に届かない。現在の大きな課題は、rootに残る機能間接続と、各機能の内部で完結できる構築を分けることである。
+
+今回の最初の階層はDocumentWorkspace（src/application/document_workspace.js）とする。DocumentState→EditingWorkspace→ParameterNamespace→SketchContext→GeometryIds→DocumentIds→採番Reservationの七部品を、applicationText・constraintGraphNodes・遅延nextHatchIndexの三依存で生成する。Documentデータ／scope／namespaceとSketch照会／採番の実装とstateは各既存ownerに残し、七つの実体を明示的に返す。DocumentとDOM document、editing scopeと保存用snapshotSource、Geometry採番と添付要素採番を統合しない。新しいmodel state、ID表、広いapp context、起動／resetの代替処理は持たない。
+
+七部品の相対順は維持する。Sketch照会とprivate採番ownerの生成だけが、ParameterEditorや他の機能の間から前段へ移る。SketchContextとParameterNamespaceは生成時にscope／command／翻訳callbackを照会せず、ID ownerのresetは自分のprivateな初期値だけを設定する。ReservationのHatch値は従来のgetterを保持し、scope予約を実行するまで取得しない。UIの生成・bind／start、scope切替・Document reset・保存／読込・履歴の実行位置は変えない。実componentの境界テストで初期値、実体共有、独立した複数組、local scope→復元に追従するSketch／Parameter照会、geometry→添付採番→Hatch値→scope採番の順序と失敗時の途中状態を確認した。
+
+他の候補も比較した。Sketch TreeのObjects／View／Controllerは同じ表示を構成するが、現在は所属／制約／外観の読取りと操作portが多く、単純な二構築の合併では多数のroot依存が残る。まず公開する読取り／操作APIを整理する必要がある。Parameter全体は初期NamespaceとDOM Editor、後段のStabilization／Application、DocumentとBlockで異なるcheckpoint復元があり、一つの可変containerへ包まない。test hooksの最終公開Objectも、多数の実driverを受け取るだけの新しい巨大contextへ移さず、既存の支援groupごとの生成・公開境界を整理する。
+
+候補の同じsourceを固定して、構文612ファイル・全単体1,903件・先行file URL起動1件と全587 E2Eが成功した（全E2E27.9分、exit 0）。専用serverの停止とsource hash一致も確認した。初期構築の安全性確認であり、数百行の目標達成とは区別する。
+
+次は同様に実ownerの共有と初期化段階を確認して機能境界を育てる。各階層は狭い依存と実APIを持ち、通常機能をtestingへ移さず、applicationからdomain／編集／描画／UIの各ownerへ接続する。今回の3行減や七構築の集約は上位の組立てを始める単位であり、数百行の目標達成や全体完了とは扱わない。
+
+## 再監査と矩形選択の構築境界（2026-10-24、20fbe41）
+
+基準はdevelop 20fbe41（app blob a08e0a08f88c68c1eecf3f5a3f7efacddebbc806）。caf19a0と同じBabel AST条件を再利用し、今回の矩形選択組立て後のworking tree（app blob de76eacd93b81dd10a6f5ba188c30b8cdd0358eb）と比較した。補助診断は一時directoryのcad-rectangle-feature-{review,audit}.cjs／.log／review.json。最新の検証・統合状態は再開手順section 8を優先する。
+
+| 分類 | 20fbe41 | 矩形選択の組立て後 |
+| --- | ---: | ---: |
+| 物理行 | 2,622 | 2,605 |
+| 非空白行 | 2,156 | 2,141 |
+| create系構築（非空白） | 1,064 | 1,053 |
+| test hooks（非空白） | 440 | 440 |
+| call一文の関数（非空白） | 211 | 211 |
+| その他（非空白） | 441 | 437 |
+| root構築文 | 181 | 178 |
+| root関数 | 174 | 173 |
+| 構築Object直下のcallback | 295 | 292 |
+| 複文callback | 13 | 13 |
+| rootのlet | 6 | 6 |
+
+生成・接続が依然1,053行あり、test hooksと一文callを全部取り除く仮定でも2,141−440−211＝1,490非空白行が残る。小関数の移動だけで200〜500行へ到達するとは扱わない。letは後段接続用の六参照で、操作modeとpointerは既存Sessionの所有に移管済み。状態の所有と生成・接続の見通しは別々に評価する。
+
+今回選んだのはRectangleSelectionQuery→CanvasSelectionInteraction.createRectangleSelection→InstanceCommandInput.createRectangleSources→SelectionRectangleの四部品である。通常選択と派生参照元追加が同じqueryを使い、矩形の一時stateは同じSelectionRectangleだけが持つ。appの四構築・51明示portから、RectangleSelectionFeature一構築・22portへまとめた。scope／Sketch／外観／幾何／投影は実際の既存ownerを渡し、不変な幾何計算は同じlibraryを参照する。queryとSession以外のadapterをrootへ公開せず、全app context・新たなSelection・独自のcancel／履歴は追加しない。
+
+旧queryとSessionの間にはCanvas描画器の構築があった。四部品と描画器は生成時に操作callback・scope照会・描画・listener登録を行わず、GeometryReadModel等の共有APIは凍結済みの関数値であることを現物確認した。このため後二部品の生成を前へ寄せて四部品を一緒に構築する。前段SketchProjectionFeatureからqueryへの参照は従来どおりcallbackのままで、初期化前には実行しない。ASTでrootの未使用bindingと追加接続の初期化前参照がないことも確認した。
+
+Parameter群も候補として確認したが、初期Namespace／Dialog UI、後段のStabilization／Application、DocumentとBlock編集中の異なるcheckpoint復元、ExpressionInputのCanvas接続が混在する。現在のParameterEditorというUI ownerと計算／編集ownerを同じ大きなcontextへ包む案は採用せず、生成段階と公開portを改めて確認する。起動末尾のbind／startや440行のtest hooksを一つの汎用contextで包む案も、通常機能の所有と公開境界が不明瞭になるため採用しない。次の単位も実際に共有するownerと依存方向から選ぶ。
 ## 再監査（2026-10-21、caf19a0）
 
 この監査から選んだCommandPanelの構築境界は後続のcreateFeature単位で実装した。以下の数値と候補比較は監査時点の記録として保持し、最新実装・検証・次の単位は[再開手順section 8](refactoring-policy-and-resume.md#8-再開地点2026-10-20)を参照する。

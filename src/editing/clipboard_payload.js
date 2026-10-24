@@ -75,7 +75,7 @@
         instanceProjectionData.set(instance, projection);
       }
       const copiedAnnotations = annotations.map(annotation => {
-        const refs = window.AnnotationAnchorConstraints?.refs(annotation) || [];
+        const refs = window.AnnotationAnchorData?.refs(annotation) || [];
         const detached = (refs.length > 0 || annotation.anchorConstraints?.length > 0) && (selectedNodes.size === 0 && geometryInstances.length === 0 || refs.some(ref => {
           const referenced = resolveGeometryRef(ref);
           return !referenced || !selectedNodes.has(referenced) && !selectedBlockProjectionIds.has(referenced.id);

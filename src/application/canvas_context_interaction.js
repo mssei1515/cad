@@ -47,5 +47,20 @@
     }
     return Object.freeze({ open: canvasContextEntry.open, selectCandidate: canvasContextCandidateAction.select, execute: canvasContextActions.execute, preview });
   }
-  window.CanvasContextInteraction = Object.freeze({ create });
+  // Keep early DOM construction separate from late command construction and listener start.
+  function createMenu({ document, window: browserWindow, canvas, escapeHtml, applicationText, canvasHover, draw, readInteraction, readPresentation }) {
+    const { controller, element } = window.CanvasContextMenu.createForDocument({
+      document, window: browserWindow, canvas, escapeHtml, applicationText,
+      presentCandidate: target => readPresentation()(target),
+      hover: { capture: canvasHover.capture, restore: canvasHover.restore, preview: target => readInteraction().preview(target), clear: canvasHover.clear, draw },
+      onOpen: event => readInteraction().open(event),
+      onSelect: (target, pointer) => readInteraction().selectCandidate(target, pointer),
+      onAction: (action, target, pointer) => readInteraction().execute(action, target, pointer),
+    });
+    function createInteraction(options) {
+      return create({ ...options, document, applicationText, canvasHover, draw, canvasContextMenu: element, canvasContextController: controller });
+    }
+    return Object.freeze({ controller, element, createInteraction });
+  }
+  window.CanvasContextInteraction = Object.freeze({ create, createMenu });
 })();

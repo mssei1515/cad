@@ -100,3 +100,66 @@ test('symbol deletion guard reports dependency names in the live language, hint 
   failure = marker; assert.throws(() => api.guard([]), error => error === marker);
   assert.deepEqual(events, []);
 });
+
+function editingFixture({ block = false, stored = false } = {}) {
+  const events = [], result = { success: true, result: { errorNorm: 0 } };
+  const scope = { parameters: [], sketches: [{ id: "ROOT", root: true }, { id: "S1" }, { id: "S2", locked: true }] };
+  const state = { scope, editor: block ? {} : null, active: "S1", name: "before", captureError: null };
+  const target = stored ? { parameters: [] } : scope;
+  const localCheckpoint = Object.freeze({ marker: "same local values" });
+  const documentCheckpoint = { marker: "document before apply" };
+  const support = sandbox.window.ParameterApplication.createEditingSupport({
+    namespace: { expressionFromUserInput: value => value, ensureParameterNamespace: value => events.push(["normalize", value]) },
+    currentScope: () => scope, acceptError: 1, applicationText: (_ja, en) => en,
+    readEditingScope: () => { events.push(["scope", state.scope]); return state.scope; },
+    readBlockEditor: () => { events.push(["editor", state.editor]); return state.editor; },
+    snapshotDocument: () => { events.push(["document snapshot"]); if (state.captureError) throw state.captureError; return JSON.stringify(documentCheckpoint); },
+    snapshotValues: () => { events.push(["local snapshot"]); return localCheckpoint; },
+    restoreValues: values => events.push(["restore local", values]),
+    loadDocument: (data, options) => events.push(["restore document", data, options.documentNameFallback]),
+    readDocumentName: () => state.name,
+    activeSketchId: () => { events.push(["active", state.active]); return state.active; },
+    isRootSketch: sketch => Boolean(sketch.root),
+    stabilizeNamespace: (id, options) => { events.push(["stabilize active", id, Array.from(options.allSketches)]); return result; },
+    stabilizeStoredNamespace: value => { events.push(["stabilize stored", value]); return result; },
+  });
+  const application = support.createApplication({ propagate: value => events.push(["propagate", value]) });
+  return { state, scope, target, support, application, events, result, localCheckpoint, documentCheckpoint,
+    session: { namespace: target, parameters: [{ name: " width ", expression: "12" }], dimensions: [] } };
+}
+
+test("parameter editing support stays lazy and reads current scope and active Sketch for each document stabilization", () => {
+  const f = editingFixture(); assert.deepEqual(f.events, []);
+  assert.equal(f.support.stabilizeDocument(), f.result);
+  assert.deepEqual(f.events.splice(0), [["active", "S1"], ["scope", f.scope], ["stabilize active", "S1", ["S1", "S2"]]]);
+  f.state.scope = { sketches: [{ id: "NEW" }, { id: "ROOT", root: true }] }; f.state.active = "NEW";
+  assert.equal(f.support.stabilizeDocument(), f.result);
+  assert.deepEqual(f.events, [["active", "NEW"], ["scope", f.state.scope], ["stabilize active", "NEW", ["NEW"]]]);
+});
+
+for (const block of [false, true]) {
+  test("parameter editing recovers " + (block ? "local Block values" : "Document") + " after the commit callback fails", () => {
+    const f = editingFixture({ block }), marker = new Error("commit failed");
+    const outcome = f.application.apply(f.session, () => { f.events.push(["commit"]); f.state.name = "at failure"; throw marker; });
+    assert.equal(outcome.success, false); assert.equal(outcome.error, marker);
+    assert.deepEqual(f.events.slice(0, 3).map(event => event[0]), block ? ["editor", "editor", "local snapshot"] : ["editor", "document snapshot", "editor"]);
+    assert.deepEqual(f.events.slice(-3).map(event => event[0]), ["commit", "editor", block ? "restore local" : "restore document"]);
+    const restored = f.events.at(-1);
+    if (block) { assert.equal(restored[1], f.localCheckpoint); assert.equal(f.events.some(event => event[0] === "document snapshot"), false); }
+    else { assert.equal(JSON.stringify(restored[1]), JSON.stringify(f.documentCheckpoint)); assert.equal(restored[2], "at failure"); assert.equal(f.events.some(event => event[0] === "local snapshot"), false); }
+  });
+}
+
+test("stored parameter namespace uses stored stabilization and propagation before commit", () => {
+  const f = editingFixture({ block: true, stored: true });
+  const outcome = f.application.apply(f.session, () => f.events.push(["commit"]));
+  assert.equal(outcome.success, true);
+  assert.deepEqual(f.events.slice(-3), [["stabilize stored", f.target], ["propagate", f.target], ["commit"]]);
+  assert.equal(f.events.some(event => event[0] === "stabilize active"), false);
+});
+
+test("parameter editing capture errors escape before draft mutation and recovery", () => {
+  const f = editingFixture(), marker = new Error("capture failed"), original = f.scope.parameters; f.state.captureError = marker;
+  assert.throws(() => f.application.apply(f.session, () => assert.fail("no commit")), error => error === marker);
+  assert.equal(f.scope.parameters, original); assert.deepEqual(f.events.map(event => event[0]), ["editor", "document snapshot"]);
+});

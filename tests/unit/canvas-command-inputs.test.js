@@ -32,7 +32,28 @@ test('staged constraint assembly keeps child construction order and uses shared 
     pending = null; calls.length = 0; assert.equal(f.api.constraint.click(f.event, pointer, {}), false); assert.deepEqual(calls, []);
   } finally { for (const [name, owner] of originals) w[name] = owner; }
 });
-function fixture(extra = {}) {
+test('drawing factory runs once at the original Point construction boundary and short-circuits later construction on error', () => {
+  const order = [], originals = new Map();
+  for (const name of ['AnnotationCommandInput', 'InstanceCommandInput', 'PointCommand', 'DrawingCommandInput', 'CanvasSelectionInteraction']) {
+    const owner = w[name]; originals.set(name, owner);
+    w[name] = { ...owner, create(...args) { order.push(name); return owner.create(...args); } };
+  }
+  try {
+    let built; const args = [], f = fixture({ basicDrawingInput: { get line() { throw Error('legacy input must not be read'); } },
+      createDrawingInput() {
+        order.push('factory'); built = w.BasicDrawingTools.createCanvasInput({ point: {}, drawing: {
+          getMode: () => 'line', rejectRootSketchCreation: () => false, handleLineClick: (...values) => args.push(values) } }); return built;
+      } });
+    assert.deepEqual(order, ['AnnotationCommandInput', 'InstanceCommandInput', 'factory', 'PointCommand', 'DrawingCommandInput', 'CanvasSelectionInteraction']);
+    assert.equal(f.api.drawing, built); assert.equal(f.api.drawing.click(f.event, f.p, {}), true);
+    assert.equal(args[0][0], f.p); assert.equal(args[0][1], undefined);
+    order.length = 0; const error = new Error('drawing construction failed');
+    assert.throws(() => fixture({ createDrawingInput() { order.push('factory'); throw error; } }), value => value === error);
+    assert.deepEqual(order, ['AnnotationCommandInput', 'InstanceCommandInput', 'factory']);
+  } finally { for (const [name, owner] of originals) w[name] = owner; }
+});
+
+function fixture(extra = {}, withFeature = false) {
   const calls = [], state = { ready: false, mode: 'select', pending: null, constraint: null, focus: true, reject: false, group: null, top: null, points: [], rollbackError: null };
   const ready = () => assert.equal(state.ready, true);
   const record = name => (...args) => { ready(); calls.push([name, ...args]); };
@@ -42,7 +63,7 @@ function fixture(extra = {}) {
   const command = { activeInput: 'origin', pending: { sources: [ref] }, placeFree: record('place'), selectReference: record('reference'), toggleSource: record('source') };
   const focus = { closest(selector) { ready(); assert.equal(this, focus); assert.equal(selector, '#commandPanel'); return state.focus; }, blur() { assert.equal(this, focus); calls.push(['blur']); } };
   const viewport = { scale: 2 };
-  const api = w.CanvasCommandInputs.create({
+  const options = {
     readMode: () => { ready(); return state.mode; }, readPending: () => { ready(); return state.pending; }, readPendingConstraint: () => { ready(); return state.constraint; },
     document: { get activeElement() { ready(); return focus; } }, canvas: { setPointerCapture(id) { ready(); calls.push(['capture', id]); } },
     canvasSelection: selection, clearSelection: () => { ready(); calls.push(['clear']); selection.clear(); }, canvasHover: hover,
@@ -61,11 +82,61 @@ function fixture(extra = {}) {
     addPointSnapConstraints: record('snap-constraint'), solveAndRefresh: record('solve'), rejectRootSketchCreation: () => { ready(); return state.reject; },
     sameArcEndpoint: (a,b) => a === b, topmostDrawingOrderOwner: () => state.top, drawingOrderOwner: item => item,
     geometryDrag: { begin: () => false }, ...extra,
-  });
+  };
+  const feature = withFeature ? w.CanvasCommandInputs.createFeature(options) : null;
+  const api = withFeature ? feature.inputs : w.CanvasCommandInputs.create(options);
   assert.deepEqual(calls, []); state.ready = true;
   const event = { pointerId: 7, preventDefault: record('prevent') }, p = { x: 8, y: 10 };
-  return { api, state, calls, selection, hover, command, drawingSnap, viewport, event, p, snap, snapped, names: () => calls.map(call => call[0]) };
+  return { api, feature, options, state, calls, selection, hover, command, drawingSnap, viewport, event, p, snap, snapped, names: () => calls.map(call => call[0]) };
 }
+
+function pointerFixture() {
+  const stages = [], state = { world: { x: 4, y: 5 }, consumeDimension: true, queryError: null };
+  const dimension = { active: false, finish() { assert.equal(this, dimension); stages.push('dimension'); return state.consumeDimension; } };
+  const f = fixture({ dimensionDragging: { command: dimension } }, true), pointer = w.PointerInteractionController.createSession();
+  f.viewport.canvasPoint = function() { assert.equal(this.inputs, f.api); assert.equal(this.activation.selection, f.selection); stages.push('world'); return state.world; };
+  f.viewport.canvasScreenPoint = function(event) { assert.equal(this.inputs, f.api); return { x: event.offsetX, y: event.offsetY }; };
+  for (const [owner, name] of [[f.options.annotationDrag, 'annotation'], [f.options.geometryDrag, 'geometry'], [f.options.selectionRectangle, 'rectangle']]) {
+    owner.finish = function() { assert.equal(this, owner); stages.push(name); return false; };
+  }
+  const initial = { x: 1, y: 2 }; pointer.setLastPointer(initial); f.state.ready = false;
+  const result = f.feature.bindPointer(pointer, { canvasNavigation: { movePan: () => false, endPan: () => { stages.push('pan'); return false; } },
+    drawingPreview: { updateFreeInstance: point => stages.push(['preview', point]) },
+    recordHistory: label => stages.push(['history', label]), referenceImageInteraction: { finishDrag: () => { stages.push('image'); return false; } },
+    press: { closeContextMenu: () => stages.push('close'), discardMove: () => stages.push('discard'), activation: {},
+      query: { read(point) { assert.equal(pointer.lastWorld, point); stages.push('query'); if (state.queryError) throw state.queryError; return {}; },
+        derivedGeometryAt: () => ({ instance: { id: 'I1' } }) }, blankGesture: { isRepeated: () => false, takeSuppression: () => false } } });
+  assert.equal(result, pointer); assert.equal(pointer.lastWorld, initial); assert.deepEqual(stages, []); assert.deepEqual(f.calls, []); f.state.ready = true;
+  return { ...f, pointer, pointerState: state, stages, dimension };
+}
+
+test('input feature binds the same pointer, Selection and live readers without eagerly invoking queries or commands', () => {
+  const f = pointerFixture(); f.state.mode = 'point';
+  f.pointer.down({ ...f.event, button: 0, offsetX: 8, offsetY: 10 });
+  assert.equal(f.pointer.lastWorld, f.pointerState.world); assert.deepEqual(f.stages, ['close', 'world', 'query']);
+  assert.equal(f.selection.points[0], f.state.points[0]); assert.equal(f.state.points.length, 1);
+  f.state.mode = 'pattern-placement-origin'; f.stages.length = 0; const next = { x: 20, y: 30 };
+  f.pointer.move({}, next, false); assert.equal(f.pointer.lastWorld, next); assert.deepEqual(f.stages, [['preview', next]]);
+  f.state.mode = 'select'; f.state.pending = { type: 'annotation-text-place' }; f.pointer.move({}, next, false);
+  assert.equal(f.state.pending.pointer, next); assert.equal(f.hover.current.point, null);
+  f.state.pending = null; f.pointerState.world = next; f.selection.set('instanceGeometry', { instanceId: 'I1' });
+  const previousCount = f.state.points.length; f.calls.length = 0; f.pointer.doubleClick({ ...f.event, button: 0 });
+  assert.deepEqual(f.names(), ['prevent']); assert.equal(f.state.points.length, previousCount);
+  f.stages.length = 0; f.pointerState.queryError = new Error('query failed'); f.pointerState.world = { x: 40, y: 50 };
+  assert.throws(() => f.pointer.down({ ...f.event, button: 0 }), error => error === f.pointerState.queryError);
+  assert.equal(f.pointer.lastWorld, f.pointerState.world); assert.deepEqual(f.stages, ['close', 'world', 'query']); assert.equal(f.state.points.length, previousCount);
+});
+
+test('input feature uses the shared dimension drag owner and keeps finish priority, history and hover clearing boundaries', () => {
+  const f = pointerFixture(); f.pointer.finish(f.event);
+  assert.deepEqual(f.stages, ['pan', 'image', 'annotation', 'dimension']);
+  f.stages.length = 0; f.pointerState.consumeDimension = false; f.pointer.finish(f.event);
+  assert.deepEqual(f.stages, ['pan', 'image', 'annotation', 'dimension', 'rectangle', 'geometry', ['history', '操作']]);
+  f.stages.length = 0; f.options.transientAuthoring.hasLineStart = true; f.pointer.finish(f.event);
+  assert.equal(f.stages.some(stage => Array.isArray(stage) && stage[0] === 'history'), false);
+  f.stages.length = 0; f.hover.update({ point: {} }); f.calls.length = 0; f.pointer.leave();
+  assert.equal(f.hover.current.point, null); assert.deepEqual(f.stages, ['discard']); assert.deepEqual(f.names(), ['draw']);
+});
 
 test('input assembly defers all scene and DOM reads and uses the original point lifecycle with shared snap and selection', () => {
   const f = fixture(); assert.ok(Object.isFrozen(f.api)); assert.deepEqual(Object.keys(f.api), ['instance','annotation','constraint','drawing','selection']);

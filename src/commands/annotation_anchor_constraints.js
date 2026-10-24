@@ -1,26 +1,8 @@
 /* One-way annotation placement constraints; geometry remains read-only. */
 (() => {
   "use strict";
-  const POSITIONS = ["left-top", "center-top", "right-top", "left-middle", "center-middle", "right-middle", "left-bottom", "center-bottom", "right-bottom"];
+  const { POSITIONS, axes, degree, normalize, refs, referencesRemovedGeometry } = window.AnnotationAnchorData;
   const LABELS = ["左上", "中上", "右上", "左中", "中中", "右中", "左下", "中下", "右下"];
-  const axes = type => type === "horizontal" || type === "distance-y" ? ["y"] : type === "vertical" || type === "distance-x" ? ["x"] : ["coincident", "concentric", "endpoint", "symmetry", "fixed"].includes(type) ? ["x", "y"] : [];
-  const degree = type => axes(type).length || 1;
-  const targetKinds = { coincident: ["point"], horizontal: ["point", "arc"], vertical: ["point", "arc"], "distance-x": ["point", "arc"], "distance-y": ["point", "arc"],
-    "on-line": ["line"], "on-circle": ["circle", "arc"], "on-spline": ["spline"], concentric: ["circle", "arc"], endpoint: ["arc"], distance: ["point", "arc"], "distance-line": ["line"], symmetry: ["point", "arc"] };
-  function normalize(items) {
-    if (!Array.isArray(items)) return [];
-    return items.filter(item => item && (item.type === "fixed" || targetKinds[item.type]?.includes(item.geometryRef?.kind))
-      && (!item.type.startsWith("distance") || Number.isFinite(Number(item.value)))
-      && (!item.endpoint || item.geometryRef?.kind === "arc" && ["start", "end"].includes(item.endpoint))
-      && (item.geometryRef?.kind !== "arc" || ["on-circle", "concentric"].includes(item.type) || ["start", "end"].includes(item.endpoint))
-      && (item.type !== "symmetry" || item.axisRef?.kind === "line" && window.GeometryRef.create("line", item.axisRef.path))).map(item => ({
-      type: item.type, ...(item.type === "fixed" ? { x: Number(item.x), y: Number(item.y) } : { geometryRef: window.GeometryRef.create(item.geometryRef.kind, item.geometryRef.path), value: Number(item.value) || 0,
-        ...(item.endpoint ? { endpoint: item.endpoint } : {}), ...(item.axisRef ? { axisRef: window.GeometryRef.create("line", item.axisRef.path) } : {}),
-        ...(item.type === "distance-line" ? { sign: item.sign === -1 ? -1 : 1 } : {}), ...(item.type === "on-spline" ? { parameter: Math.max(0, Math.min(1, Number(item.parameter) || 0)) } : {}),
-        ...(item.type.startsWith("distance") && item.dimension && typeof item.dimension === "object" ? { dimension: JSON.parse(JSON.stringify(item.dimension)) } : {}) })
-    })).filter(item => item.type === "fixed" ? Number.isFinite(item.x) && Number.isFinite(item.y) : Boolean(item.geometryRef) && (!item.type.startsWith("distance") || item.type.startsWith("distance-") && item.type !== "distance-line" || item.value >= 0));
-  }
-  const refs = element => [...(element.type === "leader" && element.geometryRef ? [element.geometryRef] : []), ...normalize(element.anchorConstraints).flatMap(item => [item.geometryRef, item.axisRef].filter(Boolean))];
   function solvePlacement(element, base, resolveRef, strict = false, collectOnly = false) {
     const items = normalize(element.anchorConstraints), G = window.GeometrySolver;
     const point = new G.Point("annotation-anchor:" + element.id, base.x, base.y), constraints = [], variables = [{ object: point, prop: "x" }, { object: point, prop: "y" }];
@@ -133,8 +115,16 @@
     return Object.freeze({ entries, setValue, remove });
   }
   function create({ getCommand, setCommand, selectedAnnotation, byId, canEdit, canReference, anchor, materialize,
-    pointRef, resolveRef, recordHistory, updateUI, draw, setHint, cancelCommands, applicationText: t, startDistancePlacement = () => {} }) {
+    pointRef, resolveRef, recordHistory, updateUI, draw, setHint, cancelCommands, applicationText: t, startDistancePlacement = () => {},
+    readOperands, selectionOperands, cancelPending }) {
     let draft = null;
+    function startFromSelection(type, item) {
+      if (!item) return false;
+      if (active() && getCommand()?.type === type) { cancelPending(""); cancel(); return true; }
+      const targets = getCommand() && !getCommand().annotationAnchor ? [...readOperands()] : selectionOperands();
+      if (targets.length > (type === "symmetry" ? 2 : 1)) { setHint(t("注記基準点の参照対象を選び直してください", "Select the reference targets for the annotation anchor again."), "error"); return true; }
+      return start(type, item, targets);
+    }
     function start(type, selected = selectedAnnotation(), targets = []) {
       if (!selected || !canEdit(selected)) return false;
       if (!["coincident", "pointOnCircle", "concentric", "horizontal", "vertical", "distance", "symmetry", "fixed"].includes(type)) { setHint(t("この拘束は点を対象にできません", "This constraint does not accept a point."), "error"); return true; }
@@ -221,7 +211,7 @@
       if (["x", "y"].includes(draft.axis)) draft.value *= anchor(item)[draft.axis] < p[draft.axis] ? -1 : 1;
       return finish();
     }
-    return Object.freeze({ start, click, complete: finish, cancel, submitDistance, get active() { return active(); }, reset: () => { draft = null; } });
+    return Object.freeze({ start, startFromSelection, click, complete: finish, cancel, submitDistance, get active() { return active(); }, reset: () => { draft = null; } });
   }
   function createMaterialization({ annotationPlacementAnchor, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle }) {
     function materializeAnnotationAnchor(element, { capture = false } = {}) {
@@ -241,5 +231,5 @@
     }
     return Object.freeze({ materialize: materializeAnnotationAnchor });
   }
-  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, createDimensions, axes, degree, refs, create, createMaterialization });
+  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, createDimensions, axes, degree, refs, referencesRemovedGeometry, create, createMaterialization });
 })();

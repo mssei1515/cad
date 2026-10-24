@@ -1,11 +1,14 @@
 /* Compose Block drafts, nested editing sessions and queries over the same owners. */
 (() => {
   "use strict";
-  function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding,
+  function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding, readEditingScope,
     normalizedSketchCopy, normalizeGeometryInstance, isDimensionConstraint, isReadOnlyDimension,
     numericDimensionExpression, ensureParameterNamespace, activeSketchId, blockProjectionBundles, geometryElementKey,
-    readViewport, activateScope, reserveScopeSequences, createHistory,
-    rebuildStoredBlockDefinitionConstraints, rebuildBlockDefinitionConstraintObjects }) {
+    readViewport, activateScope, reserveScopeSequences, createHistory }) {
+    function rebuildBlockDefinitionConstraintObjects(definition) { return rebinding.rebuildDefinition(definition); }
+    function rebuildStoredBlockDefinitionConstraints() {
+      return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
+    }
     const editing = window.BlockDefinitionEditing.create({
       normalizedSketchCopy, cloneConstraintForBlock: rebinding.cloneForBlock, blockDefinitionById: catalog.blockDefinitionById,
       createBlockProjectionBundle: projections.createBlockProjectionBundle,
@@ -24,7 +27,15 @@
       blockDefinitionOwnedSubtreeIds: catalog.blockDefinitionOwnedSubtreeIds, rebuildBlockDefinitionConstraintObjects,
     });
     const queries = window.BlockEditingQueries.create({ definitions: () => documentModel.blockDefinitions,
-      currentScope: workspace.current, editor: session, catalog });
+      currentScope: workspace.current, readEditingScope, editor: session, catalog });
+    function createPropagation({ readEditingScope: readPropagationScope = readEditingScope, clearSelection, stabilizeDefinition, stabilizeDocument, applicationText }) {
+      return window.BlockParameterPropagation.create({ catalog, invalidateProjection: projections.invalidateBlockProjectionCache, applicationText,
+        definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: stabilizeDefinition },
+        document: { rebuild: () => {
+          rebinding.rebuildDocument(readPropagationScope(), blockProjectionBundles());
+          clearSelection();
+        }, stabilize: stabilizeDocument } });
+    }
     function createCommands({ canStartCreation, canvasSelection, selectionQuery, guardDimensionSymbolDeletion,
       resetBlockEditorHistory, clearSelection, setMode, closeDefinitions, setEditorActive, fitAllGeometryToViewport,
       resetEmptyViewport, promptName, updateBlockUI, updateUI, draw, recordHistory, setHint,
@@ -52,9 +63,19 @@
         blockDefinitionDependsOn: queries.blockDefinitionDependsOn, acceptError, setSketchSolveOk, setSketchSolveError,
         clearSelection, canvasSelection, setMode, setHint, log, updateUI, draw, recordHistory,
       });
-      return Object.freeze({ definition, completion });
+      function createView({ document, escapeHtml, startBlockPlacement, localizeApplicationUI }) {
+        return window.BlockView.create({ document, escapeHtml,
+          readEditing: () => session.current ? { name: session.current.draft.name } : null,
+          blockDefinitionsInCurrentScope: queries.blockDefinitionsInCurrentScope, blockDefinitionUsageCount: queries.blockDefinitionUsageCount,
+          selectedDefinitionIds: () => canvasSelection.blockInstances.map(instance => instance.definitionId),
+          startBlockPlacement, enterBlockDefinitionEdit: definition.enter, renameBlockDefinition: definition.rename, deleteBlockDefinition: definition.remove,
+          completeBlockDefinitionEdit: completion.complete, cancelBlockDefinitionEdit: definition.cancel,
+          changeName: session.rename, commitName: () => { if (session.current) recordHistory("ブロック名変更"); },
+          refresh: updateBlockUI, localizeApplicationUI });
+      }
+      return Object.freeze({ definition, completion, createView });
     }
-    return Object.freeze({ editing, session, queries, createCommands });
+    return Object.freeze({ editing, session, queries, createCommands, createPropagation });
   }
   window.BlockEditingFeature = Object.freeze({ create });
 })();

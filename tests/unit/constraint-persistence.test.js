@@ -7,7 +7,7 @@ const { phase0DocumentFixture } = require("../fixtures/phase0-document");
 
 const sandbox = { window: {} };
 vm.createContext(sandbox);
-for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/persistence/constraint_codec_registry.js", "src/document/appearance.js", "src/constraints/dimension_queries.js", "src/persistence/constraints.js"]) {
+for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/persistence/constraint_codec_registry.js", "src/document/appearance.js", "src/constraints/dimension_queries.js", "src/rendering/dimension_placement.js", "src/persistence/dimensions.js", "src/persistence/constraints.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const geometry = sandbox.window.GeometrySolver;
@@ -24,6 +24,50 @@ function fixtureScope() {
   ]);
   return { fixture, maps: [points, lines, primitives] };
 }
+
+test('dimension-aware codecs preserve legacy composition bytes and reference resolution for the characterization constraints', () => {
+  const w = sandbox.window, state = { ready: false }, placement = w.DimensionPlacement.create({ viewport: { get scale() {
+    assert.equal(state.ready, true); return 2;
+  } } });
+  const geometryId = item => { assert.equal(state.ready, true); return item.id; };
+  const combined = persistence.createWithDimensions({ geometryId, placement });
+  assert.ok(Object.isFrozen(combined)); assert.ok(Object.isFrozen(combined.dimensions)); assert.ok(Object.isFrozen(combined.codecs));
+  const legacyDimensions = w.DimensionPersistence.create({ migrateAngleDimensionLabelPlacement: placement.migrateAngleDimensionLabelPlacement,
+    dimensionAnchor: placement.dimensionAnchor, storedDimensionAxis: placement.storedDimensionAxis });
+  const legacy = persistence.create({ geometryId, dimensionData: c => legacyDimensions.serialize(c.dimension, w.DimensionQueries.targetFromConstraint(c)) });
+  const { fixture, maps } = fixtureScope(); state.ready = true;
+  let count = 0;
+  for (const saved of fixture.constraints) {
+    if (saved.type === 'pointOnLineMidpoint' || Object.values(saved).some(value => typeof value === 'string' && value.includes('@'))) continue;
+    const oldConstraint = legacy.deserialize(JSON.parse(JSON.stringify(saved)), ...maps);
+    const constraint = combined.codecs.deserialize(JSON.parse(JSON.stringify(saved)), ...maps);
+    const expected = legacy.serialize(oldConstraint), actual = combined.codecs.serialize(constraint);
+    assert.equal(JSON.stringify(actual), JSON.stringify(expected), saved.type);
+    assert.equal(JSON.stringify(combined.codecs.serialize(combined.codecs.deserialize(actual, ...maps))), JSON.stringify(actual), saved.type);
+    count++;
+  }
+  assert.ok(count >= 25);
+});
+
+test('dimension-aware codecs keep editing namespaces separate and propagate placement failures without changing geometry', () => {
+  const w = sandbox.window, realPlacement = w.DimensionPlacement.create({ viewport: { scale: 2 } });
+  let fail = false;
+  const failure = new Error('dimension anchor failed'), placement = { ...realPlacement, dimensionAnchor(...args) {
+    if (fail) throw failure; return realPlacement.dimensionAnchor(...args);
+  } };
+  const api = persistence.createWithDimensions({ geometryId: item => item.id, placement });
+  const makePoints = () => [new geometry.Point('P1', 0, 0), new geometry.Point('P2', 100, 0)];
+  const root = makePoints(), local = makePoints(), saved = { type: 'distance', p1: 'P1', p2: 'P2', target: 100 };
+  const read = points => api.codecs.deserialize(saved, new Map(points.map(p => [p.id, p])), new Map(), new Map());
+  const a = read(root), b = read(local); assert.equal(a.p1, root[0]); assert.equal(b.p1, local[0]);
+  b.dimension = realPlacement.dimensionFromAnchor(w.DimensionQueries.targetFromConstraint(b), { x: 50, y: -20 });
+  assert.equal(api.codecs.serialize(a).dimension, null);
+  const record = api.codecs.serialize(b); assert.equal(record.dimension.x, 50); assert.equal(record.dimension.y, -20);
+  assert.equal(JSON.stringify(api.dimensions.serialize(b.dimension, w.DimensionQueries.targetFromConstraint(b))), JSON.stringify(record.dimension));
+  const before = JSON.stringify({ root, local, dimension: b.dimension }); fail = true;
+  assert.throws(() => api.codecs.serialize(b), error => error === failure);
+  assert.equal(JSON.stringify({ root, local, dimension: b.dimension }), before);
+});
 
 test("persistent constraint types round-trip the existing characterization fixture without a DOM", () => {
   const { fixture, maps } = fixtureScope();

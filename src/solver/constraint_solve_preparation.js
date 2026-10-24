@@ -1,6 +1,12 @@
 /* Prepare geometry and temporary numeric settings before solving; transaction and UI are caller-owned. */
 (() => {
   "use strict";
+  function createForSolver({ solver, hasDirectRadiusDimension, offsetChainDraft, minimumOrientationLength, minimumLineLength }) {
+    const { unwrapAngleNear, arcEndpointPoint, lineNormal } = window.GeometryKernel;
+    const { hypot2, vectorNorm } = window.GeometrySolver;
+    return create({ solver, hasDirectRadiusDimension, offsetChainDraft, minimumOrientationLength, minimumLineLength,
+      types: window.GeometrySolver, unwrapAngleNear, arcEndpointPoint, lineNormal, hypot2, vectorNorm });
+  }
   function create({ solver, types, hasDirectRadiusDimension, unwrapAngleNear, hypot2, arcEndpointPoint,
     lineNormal, offsetChainDraft, vectorNorm, minimumOrientationLength: MIN_ORIENTATION_LENGTH, minimumLineLength: MIN_LINE_LENGTH }) {
     const { Line, Arc, ArcEndpointOnLineConstraint, ArcEndpointCoincidentConstraint,
@@ -149,5 +155,5 @@
     return Object.freeze({ precondition: preconditionNewConstraint,
       stepNorm: solveStepNormForConstraint, withStepNorm: withTemporarySolveStepNorm });
   }
-  window.ConstraintSolvePreparation = Object.freeze({ create });
+  window.ConstraintSolvePreparation = Object.freeze({ create, createForSolver });
 })();

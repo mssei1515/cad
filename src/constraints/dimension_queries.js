@@ -181,8 +181,24 @@
               : [];
   }
 
+  function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
+    if (!target) return NaN;
+    const measured = measuredDimensionValue(target, dimension);
+    return target.kind === "angle" ? (measured * Math.PI) / 180 : measured;
+  }
+
+  function createModelQueries({ currentScope, activeSketchId, constraintSketchId }) {
+    function sketchHasDimensionConstraint(sketchId = activeSketchId()) {
+      return currentScope().constraints.some(constraint => constraintSketchId(constraint) === sketchId && constraint.dimension);
+    }
+    function hasRadiusDimension(primitive) {
+      return hasDirectRadiusDimension(currentScope().constraints, primitive);
+    }
+    return Object.freeze({ sketchHasDimensionConstraint, hasDirectRadiusDimension: hasRadiusDimension });
+  }
+
   window.DimensionQueries = Object.freeze({
-    targetItems, targetFromConstraint, offsetPairSign, angleDegrees,
+    targetItems, targetFromConstraint, offsetPairSign, angleDegrees, measuredConstraintTargetValue, createModelQueries,
     angleDimensionSweep, signedAngleBetweenLines, measuredDimensionValue,
     angleDimensionAngles, angleDimensionCandidate, geometryTargetValue,
     isReadOnlyDimension, isDimensionConstraint, hasDirectRadiusDimension,

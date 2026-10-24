@@ -1,8 +1,22 @@
 /* Apply ordinary and reference constraints with existing solve acceptance and recovery rules. */
 (() => {
   "use strict";
+  function createWithDimensions({ linesAreParallel, assignSketch, probeRedundancy, ...options }) {
+    const factory = window.DimensionConstraintFactory.create({ types: window.GeometrySolver, linesAreParallel });
+    const { setHint, log, activeSketchId } = options;
+    function distanceConstraintFromTarget(target, value, dimension, request = {}) {
+      const result = factory.fromTarget(target, value, dimension);
+      if (result.error && !request.silent) { setHint(result.error, "error"); log(result.error); }
+      return result.constraint;
+    }
+    const command = create({ ...options, distanceConstraintFromTarget });
+    const readOnly = window.DimensionReadOnlyQuery.create({ fromTarget: factory.fromTarget, activeSketchId,
+      assignSketch, markReference: command.markReference, probeRedundancy, targetItems: window.DimensionQueries.targetItems });
+    return Object.freeze({ command, readOnly });
+  }
   function create({ guardSketchEdit, activeSketchId, constraintTargetsAreActive, snapshotModelState, restoreModelState,
-    solveStepNormForConstraint, pushModelConstraint, preconditionNewConstraint, withTemporarySolveStepNorm,
+    solvePreparation, solveStepNormForConstraint = solvePreparation?.stepNorm, pushModelConstraint,
+    preconditionNewConstraint = solvePreparation?.precondition, withTemporarySolveStepNorm = solvePreparation?.withStepNorm,
     solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
     constraintSketchId, lineCollapseQuery, redundantConstraintInfo, acceptError: CONSTRAINT_ACCEPT_ERROR,
     targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
@@ -236,5 +250,5 @@
     }
     return Object.freeze({ assignSketch: assignConstraintSketchId, push: pushModelConstraint });
   }
-  window.ConstraintCommitCommand = Object.freeze({ create, createInsertion });
+  window.ConstraintCommitCommand = Object.freeze({ create, createWithDimensions, createInsertion });
 })();

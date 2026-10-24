@@ -27,7 +27,30 @@
         syncCanvasBitmapSize: surface.syncCanvasBitmapSize, applySketchTreeWidth, draw,
         isValueInputPending, syncDimensionValueInput, currentCanvasCenterWorld: viewport.currentCanvasCenterWorld, applicationText, readLanguage,
       });
-      return Object.freeze({ surface, exportRenderer, layout });
+      function createWorkspaceRendering(options) {
+        return createRendering({ ...options, canvas, ctx, viewport, surface, zoomControl,
+          readExportFrame: () => exportRenderer.frame });
+      }
+      function createInputBinding({ pointer, readCommandPanel, readPngExportCommand, blankCanvasGesture,
+        isBlankCommandPanelPoint, scheduler, profileCommit }) {
+        const { canvasScreenPoint, canvasPoint, screenToWorld } = viewport;
+        const routing = window.CanvasInputBinding.createCommandRouting({ pointer, readCommandPanel, readPngExportCommand,
+          blankCanvasGesture, canvasScreenPoint, canvasPoint, isBlankCommandPanelPoint, screenToWorld, navigation });
+        return window.CanvasInputBinding.create({ canvas, pointer: routing, scheduler, navigation, profileCommit, closeContextMenu,
+          afterZoom: () => { if (isValueInputPending()) syncDimensionValueInput(); },
+          screenToWorld, formatCoordinate: window.NumberDisplay.formatDisplayNumber,
+          coordinateStatus: () => document.getElementById("statusCoordinates") });
+      }
+      function createPngExport({ documentName, prepareImages, drawOperationLifecycle, pendingCommandSession,
+        fileSession, constraintTargetSession, findSnap, flushPointerMove }) {
+        return window.PngExport.create({ document, window: browserWindow, canvas, rendering: exportRenderer,
+          text: applicationText, documentName, prepareImages, readViewScale: () => viewport.scale,
+          readMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
+          pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
+          withGeometryReadCache, findSnap, flushPointerMove, setHint, draw });
+      }
+      const dragPointer = window.CanvasInputBinding.createDragPointer({ canvas });
+      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
     }
     return Object.freeze({ viewport, navigation, zoomControl, createWorkspace });
   }

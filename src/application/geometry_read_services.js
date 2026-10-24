@@ -15,7 +15,35 @@
       cacheAppearance: reads.cacheAppearance, sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements });
     const dimensionAppearance = window.GeometryAppearanceQuery.createDimension({ document, currentSketches, activeSketchId, isRootSketch });
     const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document, currentSketches });
-    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance });
+    function createPointUsage({ constraintReferencesPoint, editedFitPoints }) {
+      const { allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = reads;
+      return window.PointUsage.create({ currentScope, constraintReferencesPoint, editedFitPoints,
+        allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
+        allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines() });
+    }
+    function createSnapshotMetadata({ pointUsage }) {
+      const { Point } = window.GeometrySolver;
+      const { isPointUsedByPrimitive } = pointUsage;
+      return item => ({ sketchId: elementSketchId(item),
+        kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined });
+    }
+    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance, createPointUsage, createSnapshotMetadata });
   }
-  window.GeometryReadServices = Object.freeze({ create });
+  function createWithHatches({ document, currentScope, currentSketches, prepareBlocks, elementSketchId, applicationText,
+    sketchById, isRootSketch, activeSketchId, showHiddenElements, profileRead, viewportScale }) {
+    const { DEFAULT_APPEARANCE } = window.Appearance;
+    const hatches = window.HatchGeometryQuery.create({
+      currentScope, activeSketchId, applicationText, viewportScale,
+      effectiveAppearanceForElement: (...args) => services.geometryAppearance.effectiveAppearanceForElement(...args),
+      boundaryGeometry: () => {
+        const { allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = services.reads;
+        return [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()];
+      },
+      defaultLineWidth: () => Number(document.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth,
+    });
+    const services = create({ document, currentScope, currentSketches, prepareBlocks, elementSketchId, applicationText,
+      hatchGeometryQuery: hatches, sketchById, isRootSketch, activeSketchId, showHiddenElements, profileRead });
+    return Object.freeze({ ...services, hatches });
+  }
+  window.GeometryReadServices = Object.freeze({ create, createWithHatches });
 })();

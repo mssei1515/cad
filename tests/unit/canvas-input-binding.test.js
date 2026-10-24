@@ -121,3 +121,26 @@ test('native input binding retains flush, coordinate update and completion profi
   assert.equal(status.textContent, 'X 4 / Y 6'); assert.equal(f.calls.at(-1)[1], f.world);
   f.calls.length = 0; listeners.pointercancel(f.event); assert.deepEqual(f.names(), ['flush', 'profile', 'read-png']);
 });
+
+function dragPointerFixture() {
+  const calls=[],classes=new Set(),state={ready:false,fail:null};
+  const step=(name,id)=>{assert.equal(state.ready,true);calls.push([name,id]);if(state.fail===name)throw state.error;};
+  const classList={add(name){assert.equal(this,classList);step('add',name);classes.add(name);},remove(name){assert.equal(this,classList);step('remove',name);classes.delete(name);}};
+  const canvas={get classList(){assert.equal(state.ready,true);return classList;},
+    setPointerCapture(id){assert.equal(this,canvas);step('capture',id);},releasePointerCapture(id){assert.equal(this,canvas);step('release',id);}};
+  const pointer=sandbox.window.CanvasInputBinding.createDragPointer({canvas});assert.deepEqual(calls,[]);state.ready=true;
+  return{pointer,calls,classes,state};
+}
+test('drag pointer effects preserve both begin orders, exact pointer IDs and class cleanup without construction reads',()=>{
+  const f=dragPointerFixture(),id={pointer:7};
+  f.pointer.markThenCapture(id);assert.deepEqual(f.calls,[['add','is-dragging'],['capture',id]]);assert.equal(f.classes.has('is-dragging'),true);
+  f.calls.length=0;f.pointer.release(id);assert.deepEqual(f.calls,[['remove','is-dragging'],['release',id]]);assert.equal(f.classes.has('is-dragging'),false);
+  f.calls.length=0;f.pointer.captureThenMark(id);assert.deepEqual(f.calls,[['capture',id],['add','is-dragging']]);
+});
+test('drag pointer failures preserve partial begin effects and only suppress capture release errors',()=>{
+  const f=dragPointerFixture(),marker=new Error('pointer');f.state.error=marker;f.state.fail='capture';
+  assert.throws(()=>f.pointer.markThenCapture(9),error=>error===marker);assert.equal(f.classes.has('is-dragging'),true);
+  f.classes.clear();f.calls.length=0;assert.throws(()=>f.pointer.captureThenMark(9),error=>error===marker);assert.deepEqual(f.calls,[['capture',9]]);assert.equal(f.classes.size,0);
+  f.state.fail='release';f.classes.add('is-dragging');f.calls.length=0;assert.doesNotThrow(()=>f.pointer.release(9));assert.deepEqual(f.calls,[['remove','is-dragging'],['release',9]]);assert.equal(f.classes.size,0);
+  f.state.fail='remove';f.calls.length=0;assert.throws(()=>f.pointer.release(9),error=>error===marker);assert.deepEqual(f.calls,[['remove','is-dragging']]);
+});

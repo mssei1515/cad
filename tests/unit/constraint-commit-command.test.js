@@ -132,11 +132,11 @@ test('redundant implicit additions replace the current array by identity before 
  assert.equal(candidate.reference, true); assert.equal(candidate.name, '参照 snap');
  assert.equal(f.events.at(-1)[0], 'forget'); assert.equal(f.events.at(-1)[1], candidate);
 });
-function fixture(overrides = {}) {
+function fixture(overrides = {}, build = options => ({ command: sandbox.window.ConstraintCommitCommand.create(options) })) {
  const events = [], hints = [], model = { constraints: [] }, state = { editable: true, active: true, source: true, cycle: false, dimension: false, collapse: null, duplicate: null, trace: null, target: {}, history: [], measured: 44 };
  const result = { success: true, result: { errorNorm: 0, variableCount: 2, constraintCount: 1, iterations: 3, reason: 'ok' } };
  const constraint = { name: 'test', sketchId: 'S1' }; let time = 0;
- const command = sandbox.window.ConstraintCommitCommand.create({ guardSketchEdit: () => state.editable, activeSketchId: () => 'S1', constraintTargetsAreActive: () => state.active,
+ const composed = build({ guardSketchEdit: () => state.editable, activeSketchId: () => 'S1', constraintTargetsAreActive: () => state.active,
   snapshotModelState: () => { events.push('capture'); return { constraints: [...model.constraints] }; }, restoreModelState: saved => { events.push('restore'); model.constraints = saved.constraints; },
   solveStepNormForConstraint: () => 1, pushModelConstraint: c => { model.constraints.push(c); events.push('push'); }, preconditionNewConstraint: () => events.push('precondition'),
   withTemporarySolveStepNorm: (step, work) => work(), solveConstraintComponentAndDependents: () => { events.push('solve'); return result; },
@@ -154,8 +154,62 @@ function fixture(overrides = {}) {
   canvasSelection: { set: (field,value) => { assert.equal(field,'arcEndpointPair'); state.arcEndpointPair=value; events.push('selection'); } },
   ...overrides,
  });
- return { command, model, state, events, hints, result, constraint };
+ return { ...composed, model, state, events, hints, result, constraint };
 }
+function dimensionFixture() {
+ const context = { structuredClone, window: {} }; vm.createContext(context);
+ const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+ for (const file of sources.filter(source => source.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
+ const w = context.window, reads = [], state = { active: 'S1', parallel: false, redundant: false };
+ const f = fixture({ activeSketchId: () => { reads.push('active'); return state.active; } }, options => {
+  delete options.distanceConstraintFromTarget;
+  return w.ConstraintCommitCommand.createWithDimensions({ ...options,
+   linesAreParallel: function(a, b) { 'use strict'; assert.equal(this, undefined); reads.push(['parallel', a, b]); return state.parallel; },
+   assignSketch: function(c, id) { 'use strict'; assert.equal(this, undefined); reads.push(['assign', c, id]); c.sketchId = id; return c; },
+   probeRedundancy: function(c, id) { 'use strict'; assert.equal(this, undefined); reads.push(['probe', c, id]); return { redundant: state.redundant }; },
+  });
+ });
+ assert.deepEqual(reads, []); assert.deepEqual(f.events, []);
+ return { ...f, w, reads, dimensionState: state };
+}
+
+test('dimension composition creates real constraints and shares geometry and placement without committing candidates', () => {
+ const f = dimensionFixture(), p1 = new f.w.GeometrySolver.Point('P1', 0, 0), p2 = new f.w.GeometrySolver.Point('P2', 20, 10);
+ const target = { kind: 'point-point', p1, p2, dimensionAxis: 'x' }, placement = { axis: 'x', labelOffset: 12 };
+ const original = JSON.stringify([p1, p2, placement]); f.dimensionState.redundant = true;
+ const candidate = f.readOnly.forPlacement(target, 20, placement, { referenceSketchId: 'ROOT' });
+ assert.ok(candidate instanceof f.w.GeometrySolver.PointAxisDistanceConstraint);
+ assert.equal(candidate.p1, p1); assert.equal(candidate.p2, p2); assert.equal(candidate.dimension, placement);
+ assert.equal(candidate.reference, true); assert.equal(candidate.referenceSketchId, 'ROOT'); assert.equal(candidate.sketchId, 'S1');
+ assert.equal(f.reads.at(-1)[1], candidate); assert.equal(f.model.constraints.length, 0); assert.deepEqual(f.events, []);
+ assert.equal(f.command.dimension(target, 20, placement, { expression: '= width' }), true);
+ const committed = f.model.constraints[0]; assert.notEqual(committed, candidate);
+ assert.ok(committed instanceof f.w.GeometrySolver.PointAxisDistanceConstraint);
+ assert.equal(committed.p1, p1); assert.equal(committed.dimension, placement); assert.equal(committed.expression, '= width');
+ assert.equal(f.state.history[0], '拘束追加: dimension'); assert.equal(JSON.stringify([p1, p2, placement]), original);
+});
+
+test('dimension creation errors notify only on commit, before model effects; candidate scopes and refusals stay live', () => {
+ const f = dimensionFixture(), target = { kind: 'line-line', line1: {}, line2: {} };
+ assert.equal(f.readOnly.forPlacement(target, 3, {}), null); assert.deepEqual(f.events, []);
+ assert.equal(f.command.dimension(target, 3, {}, { silent: true }), false);
+ assert.deepEqual(f.events, ['hint', 'log']); assert.deepEqual(f.hints, [['線-線寸法は平行線のみです', 'error']]);
+ assert.equal(f.model.constraints.length, 0); f.events.length = 0;
+ const pointTarget = { kind: 'point-point', p1: new f.w.GeometrySolver.Point('P1', 0, 0), p2: new f.w.GeometrySolver.Point('P2', 2, 0) };
+ f.dimensionState.active = 'S2';
+ assert.equal(f.readOnly.forPlacement(pointTarget, 2, {}), null);
+ assert.equal(f.reads.at(-1)[2], 'S2'); assert.deepEqual(f.events, []);
+ const readOnly = f.readOnly.forPlacement(pointTarget, 2, {}, { readOnlyDimension: true, sketchId: 'S3' });
+ assert.equal(readOnly.sketchId, 'S3'); assert.equal(f.reads.at(-1)[0], 'assign'); assert.deepEqual(f.events, []);
+ const failure = new Error('notification failed'), broken = dimensionFixture();
+ broken.dimensionState.parallel = false;
+ const rejecting = fixture({ setHint: () => { throw failure; } }, options => broken.w.ConstraintCommitCommand.createWithDimensions({
+  ...options, linesAreParallel: () => false, assignSketch() {}, probeRedundancy() {},
+ }));
+ assert.throws(() => rejecting.command.dimension(target, 3, {}), error => error === failure);
+ assert.deepEqual(rejecting.events, []); assert.equal(rejecting.model.constraints.length, 0);
+});
+
 test('ordinary authority and cross-Sketch guards reject before capture or mutation', () => {
  const f = fixture(); f.state.editable = false; assert.equal(f.command.ordinary('parallel', f.constraint), false); assert.equal(f.events.length, 0);
  f.state.editable = true; f.state.active = false; assert.equal(f.command.ordinary('parallel', f.constraint), false); assert.deepEqual(f.events, ['hint', 'log']);
