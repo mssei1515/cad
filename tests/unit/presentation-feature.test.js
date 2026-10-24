@@ -108,3 +108,51 @@ test('history presentation uses active Document/Block stacks and replacement DOM
   assert.throws(()=>f.controls.view.update(),error=>error===f.marker);
   assert.equal(f.nodes.get('undoBtn').disabled,false); assert.equal(f.events.at(-1),'name'); assert.equal(f.events.includes('visibility'),false); assert.equal(f.events.includes('flyouts'),false);
 });
+
+function navigationFixture(failure = null) {
+  const f = fixture(), events = [], browserWindow = { marker: "browser" };
+  const marker = new Error("navigation failure"), syncResult = {};
+  const menus = { close() { events.push("close"); }, start() { events.push("menu start"); if (failure === "menu") throw marker; } };
+  let menuPorts, flyoutPorts, controls, button = null;
+  f.document.getElementById = id => { events.push(["lookup", id]); return button; };
+  f.w.ApplicationMenus = { create(ports) { events.push("menu create"); menuPorts = ports; return menus; } };
+  f.w.ToolFlyouts = { create(ports) {
+    events.push("flyout create"); flyoutPorts = ports;
+    return { start() { events.push("flyout start"); if (failure === "flyout") throw marker; }, sync() { events.push("sync"); return syncResult; } };
+  } };
+  f.w.ToolbarView = {
+    createHistory: () => ({ update() {} }),
+    create: ports => { controls = ports; return {}; },
+    createCommandStatus: () => ({}),
+  };
+  const toolbar = f.feature.createToolbar({ lifecycle: { readMode: () => "select" }, pending: {}, constraints: {} }); toolbar.createControls({});
+  return { ...f, events, browserWindow, menus, marker, syncResult,
+    get menuPorts() { return menuPorts; }, get flyoutPorts() { return flyoutPorts; },
+    get controls() { return controls; }, setButton(value) { button = value; } };
+}
+
+test("presentation creates menus before starting flyouts and synchronizes the same owner after late binding", () => {
+  const f = navigationFixture();
+  assert.equal(f.controls.syncFlyouts(), undefined); assert.deepEqual(f.events, []);
+  const navigation = f.feature.createToolNavigation({ window: f.browserWindow });
+  assert.deepEqual(f.events.splice(0), ["menu create"]);
+  assert.equal(navigation.close, f.menus.close); assert.equal(f.menuPorts.document, f.document); assert.equal(f.menuPorts.window, f.browserWindow);
+  navigation.start();
+  assert.deepEqual(f.events.splice(0), ["menu start", "flyout create", "flyout start"]);
+  assert.equal(f.flyoutPorts.document, f.document); assert.equal(f.flyoutPorts.window, f.browserWindow);
+  assert.equal(f.flyoutPorts.onOpen, navigation.close); f.flyoutPorts.onOpen();
+  assert.equal(f.controls.syncFlyouts(), f.syncResult); assert.deepEqual(f.events.splice(0), ["close", "sync"]);
+  f.menuPorts.activateTool("toolLine");
+  const button = { click() { assert.equal(this, button); f.events.push("click"); } }; f.setButton(button);
+  f.menuPorts.activateTool("toolLine"); assert.deepEqual(f.events, [["lookup", "toolLine"], ["lookup", "toolLine"], "click"]);
+});
+
+for (const failure of ["menu", "flyout"]) {
+  test("presentation preserves the navigation start failure boundary at " + failure, () => {
+    const f = navigationFixture(failure), navigation = f.feature.createToolNavigation({ window: f.browserWindow });
+    f.events.length = 0;
+    assert.throws(() => navigation.start(), error => error === f.marker);
+    assert.deepEqual(f.events.splice(0), failure === "menu" ? ["menu start"] : ["menu start", "flyout create", "flyout start"]);
+    assert.equal(f.controls.syncFlyouts(), failure === "menu" ? undefined : f.syncResult);
+  });
+}

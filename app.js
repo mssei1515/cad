@@ -385,7 +385,6 @@
     }),
   });
   const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
-  let toolFlyouts = null;
   const canvasViewControls = window.CanvasViewControls.create({ document, window, setHint, draw });
   const { state: viewState, constraintStatus: constraintStatusView } = canvasViewControls;
   const MIN_ZOOM = CSS_PX_PER_MM * 0.001;
@@ -1268,7 +1267,7 @@
   const { view: toolbarView, status: commandStatusView } = toolbarPresentation.createControls({
     selectedVisibilityTargets, selectionVisibilityIsHidden,
     canEditTarget: target => canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)),
-    syncFlyouts: () => toolFlyouts?.sync(), updateCursor: commandCursor.update,
+    updateCursor: commandCursor.update,
   });
   function updateToolbar() { toolbarView.update(); }
 
@@ -1762,11 +1761,9 @@
 
 
 
-  const applicationMenus = window.ApplicationMenus.create({ document, window, activateTool: id => document.getElementById(id)?.click() });
-  const { close: closeAppMenus } = applicationMenus;
-  applicationMenus.start();
-  toolFlyouts = window.ToolFlyouts.create({ document, window, onOpen: closeAppMenus });
-  toolFlyouts.start();
+  const toolNavigation = presentation.createToolNavigation({ window });
+  const { close: closeAppMenus } = toolNavigation;
+  toolNavigation.start();
   canvasWorkspaceLayout.bindControls();
   parameterEditor.start();
   appearanceUI.start();

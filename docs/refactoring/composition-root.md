@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：メニューとTool展開表示の起動・Toolbar同期をPresentationへ集約（2026-10-24、検証完了）
+
+基準develop／origin/developはcf54e41。本単位はcodex/tool-navigation-presentationで実施した。PresentationFeature.createToolNavigationがApplicationMenusの生成、起動前のclose公開、menu start→ToolFlyouts生成→flyout startの接続順を所有する。ToolFlyoutsのnullable参照とToolbarの既定syncも同じPresentation ownerへ集め、appの可変bindingと同期callbackを除いた。通常のmenu／flyout実装、ツール実行ボタン、表示・操作仕様は変更しない。明示的なsyncFlyouts注入は引き続き利用できる。新しいsetterやscope contextを追加せず、同じUIの参照とその生成・起動・同期をまとめた。
+
+app.jsは2,211→2,208行（3行減）。対象の生成3→2、延べ引数11→5、未使用binding／初期化前直接参照0（TEMP cad-tool-navigation-presentation-audit.cjs）。probeのproof.cjsでツールactivation callback、sync式、menu start→flyout生成→flyout startの順、二つのview moduleの不変を確認した。appのcloseAppMenusは従来と同じ生成段階でstart前に取り出し、Canvas contextへの遅延callbackは維持する。flyout startの例外でも生成済み参照を保持し、起動前のsyncは何もしない既存境界を保つ。navigationはappから元の起動位置で一度だけstartする。
+
+presentation-feature.test.jsへ三つの境界試験を追加した。menu／flyoutへの同じdocumentとwindow、同じclose関数とsync先、activation時の現在DOM再取得とclick receiver・ボタン欠損許容、menu／flyout startの例外順と生成済み参照を確認した。関連単体9件・全単体1,980件・構文618ファイルが成功（exit 0）。仕様のモジュール構成とimplementation-mapへ責務を記録した。
+
+関連E2E145件が全成功（2.0分、exit 0、runner73708）。application menus、toolbar layout、command panel、PNG export、Sketch編集、既存UIとphase0保存互換性／描画比較を実行。TEMP cad-tool-navigation-presentation-{focused,check,unit,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server36588停止と製品source二つのhash不変を確認した。これは関連145件であり、f2c791aの全587件成功と区別する。既存期待値や性能閾値・timeoutは変えていない。
+
+週枠使用50%／残量50%、50%未満という停止条件には未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了で、2,208行を目安200〜500行の達成とは扱わない。次も機能単位の所有・初期化順と同じscopeの依存を監査し、残量50%未満を確認したら新規分離を停止し、最新全体検証・Commit・develop先行／main最後の統合・同期を完了して一時停止する。
+
 ### 最新：Parameter適用のcheckpoint・復元とnamespace振分けを既存ownerへ移管（2026-10-24、検証完了）
 
 基準develop／origin/developは38c2b69。本単位はcodex/parameter-editing-applicationで実施した。appに残っていたParameter適用のDocument／Block局所checkpoint、失敗時復元と現在／保存済みnamespaceの安定化振分けをParameterApplication.createEditingSupportへ移した。DocumentではJSON履歴snapshot、Block編集中は値snapshotという既存境界を保ち、復元時のBlock状態とDocument名fallbackはその時点に照会する。Block伝播を作る前にsupportを生成し、伝播生成後のcreateApplicationでpropagateだけを接続する。現在Documentの非Root全Sketchを安定化する入口は伝播と適用で共有する。workspace.currentと編集中scopeの区別、保存済みDefinitionの一時scope切替は維持し、Solver数値計算・UI・保存形式は変更しない。
