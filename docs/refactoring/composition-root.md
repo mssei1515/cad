@@ -6,6 +6,22 @@
 
 ## 現在の再開地点（2026-10-20）
 
+### 最新：位置一致と距離を幾何Kernelへ集約し全体検証を更新（2026-10-24、検証完了）
+
+基準develop／origin/developは17e42e0。本単位はcodex/geometry-position-queryで実施した。appのsamePositionとSolverのhypot2を既存GeometryKernelへ移し、Solverは既存のKernel依存から同じhypot2を取り込んでGeometrySolver.hypot2として再公開する。KernelからSolverへの逆依存や新しい状態・moduleは追加しない。Boolean短絡・既定許容差1e-9・座標評価順・Math.sqrt(x*x+y*y)の演算順とoverflow／underflow・例外を維持し、Math.hypotへの置換は行わない。appは通常作図へ位置判定を注入する側とし、数値方針の変更やUI／保存形式の変更と混ぜない。
+
+app.jsは2,245→2,241行（4行減）、対象の通常作図生成1→1、root直下の延べ引数36→36、未使用binding／初期化前直接参照0（TEMP cad-geometry-position-query-audit.cjs）。TEMP cad-geometry-position-query-proof.cjsでは二つの関数のASTが変更前と同一であること、Solver全sourceの変更がhypot2の移管と取込だけであること、非有限値や小さい値を含む968回の計算結果一致を確認した。純粋な位置／距離の所有を揃える境界であり、引数削減や数百行の全体目標達成とはしない。
+
+geometry-kernel.test.jsへ2試験を追加し、許容差・欠損点の短絡・座標getter／許容差変換の評価順と例外、SolverとKernelが同じ関数を公開すること、legacyなoverflow／underflow・数値変換の回数を確認した。関連単体45件、最終コードの全単体1,968件、構文616ファイルが成功。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務と依存方向を記録し、既存manifest／script順を維持した。
+
+最終コードの全E2E587件が全成功（22.8分、exit 0、runner84549、2026-10-24 10:49:29 JST終了）。今回は関連E2Eだけではなく全fileを実行し、CADの対象限定環境変数がないことも確認した。長時間の同じnative handleを終了まで追跡し、観測待ちを理由に再起動していない。TEMP cad-geometry-position-full-{run.ps1,e2e.log,e2e-receipt.json,last-run.json,source-hashes.json,tested-blobs.json,metrics.json}、cad-geometry-position-query-{focused,unit,check}.logへ証跡を保持する。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server8288停止と製品source三つのhash不変を確認した。以前の37cb5d2の全体成功より新しい検証基準は本単位の最終sourceであり、過去の関連238件等とは区別する。
+
+主要拘束ドラッグのpreviewはfillets 3,744／offsets 10,296／aircraft 1,872／coupled-lines 5,304／horizontal 936／vertical 936、計23,088回で失敗0。各最大msは36.9／41.1／307.8／28.3／22.9／130.0。元の上限・timeout・テスト期待値は変更せず、aircraftを含む全ケースを完了した。性能の失敗を隠してmainを保留している状態ではない。全体検証後のfetchでもmainはdf5aef2、develop／origin/developは17e42e0のままで祖先関係が成立している。
+
+検証済みsourceのcanonical Git blobはapp.js=ea38c7f92702f3ca336c9c9158a7b549d37ae1f9、geometry_kernel.js=45d3b112c1d9539aab1a79f3f8eecc3763aa2f67、constraint_solver.js=097ebef7ca3bf76edcd599259f42b603b9677702。Commit／develop統合後はtested-blobs.jsonとHEADの値を比較し、同じ検証済みsourceであることを確認する。
+
+週枠使用44%／残量56%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も通常入力・描画・test公開の共有ownerと段階を確認し、rootの引数表を別fileへ隠すだけの分割はしない。新しい分離後の関連検証と、今回の全体587件の証拠は分けて扱う。
+
 ### 最新：派生Instanceのtest fixture・状態と公開hookの組立てを専用driverへ移管（2026-10-24、検証完了）
 
 基準develop／origin/developはd83ad7d。本単位はcodex/derived-instance-test-apiで実施した。既存DerivedInstanceTestDriver.createBrowserApiが配置command用fixture→load／状態／削除観測→派生モデルfixtureを同じ順で生成し、既存名の六つの公開hookを返す。reset・Geometry追加・現在scope・serialize・履歴・UI通知と描画の共通依存を一度だけ受け、モデルfixtureのreadStateはそこで生成した実Interactionのstateへ結線する。個別factoryと処理・戻り値／例外・参照はそのまま維持し、新しいstate／cache・求解基準・グローバル依存は追加しない。appは31個の明示依存を注入して公開APIへ合成する。

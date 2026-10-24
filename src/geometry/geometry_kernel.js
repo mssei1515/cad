@@ -8,6 +8,14 @@
   const MIN_LINE_INTERSECTION_DETERMINANT = 1e-12;
   const MIN_REFLECTION_LENGTH_SQUARED = MIN_ORIENTATION_LENGTH * MIN_ORIENTATION_LENGTH;
 
+  function hypot2(x, y) {
+    return Math.sqrt(x * x + y * y);
+  }
+
+  function samePosition(a, b, tolerance = 1e-9) {
+    return Boolean(a && b && hypot2(a.x - b.x, a.y - b.y) <= tolerance);
+  }
+
   function normalizeAnglePositive(angle) {
     return ((angle % TWO_PI) + TWO_PI) % TWO_PI;
   }
@@ -312,6 +320,7 @@
   }
 
   window.GeometryKernel = Object.freeze({
+    hypot2, samePosition,
     circlePointAtPointer,
     circlePointAtAngle,
     MIN_ORIENTATION_LENGTH,

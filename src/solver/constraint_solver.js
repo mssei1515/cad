@@ -3,7 +3,7 @@
   "use strict";
 
   const {
-    MIN_ORIENTATION_LENGTH,
+    MIN_ORIENTATION_LENGTH, hypot2,
     normalizeAngleSigned,
     arcEndpointPoint,
     signedPointLineDistance,
@@ -20,10 +20,6 @@
   const GUIDED_DRAG_FAST_TARGET_STEP = 10;
   // Preview correction stays below the constraint-status error threshold.
   const GUIDED_DRAG_SMALL_ERROR_TOLERANCE = 1e-5;
-
-  function hypot2(x, y) {
-    return Math.sqrt(x * x + y * y);
-  }
 
   function vectorNorm(v) {
     let s = 0;
