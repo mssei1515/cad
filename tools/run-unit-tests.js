@@ -83,7 +83,7 @@ const files = [
   "tests/unit/constraint-feedback.test.js", "tests/unit/application-feedback.test.js", "tests/unit/authoring-feedback.test.js",
   "tests/unit/viewport.test.js",
   "tests/unit/dimension-metrics.test.js",
-  "tests/unit/dimension-constraint-factory.test.js",
+  "tests/unit/dimension-constraint-factory.test.js", "tests/unit/dimension-queries.test.js",
   "tests/unit/dimension-read-only-query.test.js",
   "tests/unit/interaction-overlay-renderer.test.js",
   "tests/unit/placement-preview-renderer.test.js",
