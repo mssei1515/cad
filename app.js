@@ -23,7 +23,7 @@
   } = window.DocumentFiles;
 
   const {
-    MIN_ORIENTATION_LENGTH,
+    MIN_ORIENTATION_LENGTH, samePosition,
     arcEndpointPoint, arcEndpointDragValue,
     circlePointAtAngle,
     arcSweep,
@@ -1061,10 +1061,6 @@
 
 
 
-
-  function samePosition(a, b, tolerance = 1e-9) {
-    return Boolean(a && b && hypot2(a.x - b.x, a.y - b.y) <= tolerance);
-  }
 
   function addConstraintIfMissing(...args) { return constraintCommitCommand.ifMissing(...args); }
 

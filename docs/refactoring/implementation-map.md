@@ -1453,3 +1453,8 @@ BlockLayout.snappedBlockRotationは90度刻みの回転補正を所有し、既�
 ### 派生Instanceのテスト公開API
 
 DerivedInstanceTestDriver.createBrowserApiは配置command用fixture、派生Instanceのload／状態／削除観測、モデルfixtureの三つを元と同じ順に生成し、既存名の六つのhookを返す。reset・Geometry追加・現在scope・serialize・履歴・UI通知と描画の共通依存を一か所で受け、モデルfixtureのreadStateはそこで生成した実Interactionのstateへ接続する。各個別factoryとその処理・戻り値／例外・Geometry参照は維持する。生成時にはモデル・DOM・ID採番・履歴を読まず、新しい状態・cache・求解基準を持たない。appは明示した31依存を注入して公開APIへ合成し、hook名やdriver間の対応は専用モジュールが所有する。
+
+
+### 位置一致と距離の純粋な幾何計算
+
+GeometryKernelは純粋な距離hypot2と位置一致samePositionを所有する。hypot2は従来のMath.sqrt(x*x+y*y)をそのまま使い、Math.hypotへの置換など計算精度・overflow／underflow特性の変更を伴わない。samePositionは既存のa／bのtruthy短絡、既定許容差1e-9、座標差の評価順、距離と許容差の比較、Boolean戻り値と例外伝播を保つ。ConstraintSolverはこの距離関数を既存Kernel依存から取り込み、GeometrySolver.hypot2として同じ関数を再公開し、既存APIを維持する。appは通常作図へKernelの位置判定を注入する側となる。KernelからSolverへの逆依存やモデル・DOM・状態・新しい数値許容基準は追加しない。

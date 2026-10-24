@@ -493,3 +493,26 @@ test("signed angle normalization remains bounded for huge and nonfinite inputs",
   assert.equal(Number.isNaN(kernel.normalizeAngleSigned(-Infinity)), true);
   assert.equal(Number.isNaN(kernel.normalizeAngleSigned(NaN)), true);
 });
+
+test('position equality preserves tolerance, missing-point short circuit and coordinate/exception evaluation order',()=>{
+  assert.equal(kernel.samePosition({x:0,y:0},{x:1e-9,y:0}),true);
+  assert.equal(kernel.samePosition({x:0,y:0},{x:1e-9,y:0},1e-9-Number.EPSILON*1e-9),false);
+  assert.equal(kernel.samePosition({x:0,y:0},{x:0,y:0},-1),false);
+  assert.equal(kernel.samePosition({x:0,y:0},{x:0,y:0},NaN),false);
+  const calls=[],marker=new Error('coordinate'),a={get x(){calls.push('ax');return 2;},get y(){calls.push('ay');return 3;}},
+    b={get x(){calls.push('bx');return 2;},get y(){calls.push('by');return 3;}};
+  assert.equal(kernel.samePosition(a,null),false);assert.equal(kernel.samePosition(null,b),false);assert.deepEqual(calls,[]);
+  assert.equal(kernel.samePosition(a,b),true);assert.deepEqual(calls,['ax','bx','ay','by']);
+  calls.length=0;assert.throws(()=>kernel.samePosition(a,{get x(){throw marker;}}),error=>error===marker);assert.deepEqual(calls,['ax']);
+  calls.length=0;assert.throws(()=>kernel.samePosition(a,b,{valueOf(){calls.push('tolerance');throw marker;}}),error=>error===marker);assert.deepEqual(calls,['ax','bx','ay','by','tolerance']);
+});
+test('Solver reexports the identical Kernel distance function without changing legacy overflow, underflow or coercion',()=>{
+  const sandbox={window:{}};vm.createContext(sandbox);
+  for(const file of ['src/geometry/geometry_kernel.js','src/solver/constraint_solver.js'])vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../..',file),'utf8'),sandbox,{filename:file});
+  const geometry=sandbox.window.GeometryKernel,solver=sandbox.window.GeometrySolver;
+  assert.equal(solver.hypot2,geometry.hypot2);assert.equal(geometry.hypot2(3,4),5);assert.equal(geometry.hypot2(1e308,1e308),Infinity);
+  assert.equal(geometry.hypot2(1e-200,1e-200),0);assert.equal(Number.isNaN(geometry.hypot2(NaN,0)),true);
+  assert.equal(geometry.samePosition({x:1e-200,y:0},{x:0,y:0},0),true);assert.equal(geometry.samePosition({x:Infinity,y:0},{x:0,y:0},Infinity),true);
+  const calls=[],x={valueOf(){calls.push('x');return 3;}},y={valueOf(){calls.push('y');return 4;}};
+  assert.equal(geometry.hypot2(x,y),5);assert.deepEqual(calls,['x','x','y','y']);
+});
