@@ -10,7 +10,7 @@ const scope = id => ({ id, name: id, revision: 3, origin: { x: 0, y: 0 }, parent
   points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], parameters: [], annotations: [], hatches: [],
   referenceImages: [], blockInstances: [], geometryInstances: [], sketches: [{ id: 'ROOT', kind: 'root' }, { id: 'S1', kind: 'sketch' }],
   activeSketchId: 'S1', nextHatchIndex: 1, nextDimensionParameterIndex: 1 });
-function fixture({ realRebinding = false } = {}) {
+function fixture({ realRebinding = false, sharedScope = false } = {}) {
   const document = { ...scope('host'), blockDefinitions: [] }, workspace = w.EditingWorkspace.create(document);
   const state = { ready: false, definitionSeq: 1, hatchSeq: 8, history: 0, viewport: { x: 1, y: 2, scale: 3 }, snapshotError: null, bundles: [], serializeFailure: null };
   const events = [];
@@ -33,6 +33,7 @@ function fixture({ realRebinding = false } = {}) {
     clone.sketchId = constraint.sketchId; return clone;
   } };
   const feature = w.BlockEditingFeature.create({ workspace, documentModel: document, ids, catalog, projections,
+    ...(sharedScope ? { readEditingScope: () => { assert.equal(state.ready,true); events.push('shared-bound'); return state.bound; } } : {}),
     instances: { geometryInstanceBundlesForScope: () => [], emptyGeometryInstanceBundle: () => ({}) }, rebinding,
     normalizedSketchCopy: sketch => ({ ...sketch, appearance: w.Appearance.normalizeAppearance(sketch.appearance) }),
     normalizeGeometryInstance: value => value, isDimensionConstraint: () => false, isReadOnlyDimension: () => false,
@@ -259,4 +260,18 @@ test('Block propagation preserves failed rebind/solve boundaries and leaves roll
     assert.equal(parent.revision, 3); assert.equal(f.events.includes('clear'), false); assert.equal(f.events.includes('stabilize-document'), false);
     if (failure === 'parent-solve') assert.equal(f.events.includes('bound'), false);
   }
+});
+
+test('Block lookup and parameter propagation share the current bound scope while explicit propagation overrides remain independent',()=>{
+  const f=fixture({realRebinding:true,sharedScope:true}),first=scope('bound-first'),second=scope('bound-second'),override=scope('bound-override');
+  for(const bound of [first,second,override])f.geometry(bound);
+  const one={id:'BI1'},two={id:'BI1'},decoy={id:'BI1'};first.blockInstances.push(one);second.blockInstances.push(two);f.document.blockInstances.push(decoy);
+  f.state.bound=first;const originalFirst=first.constraints[0],originalSecond=second.constraints[0],originalOverride=override.constraints[0];
+  const options={clearSelection:()=>f.events.push('clear'),stabilizeDefinition:()=>({success:true}),stabilizeDocument:()=>({success:true}),applicationText:(_ja,en)=>en};
+  const propagation=f.feature.createPropagation(options);assert.deepEqual(f.events,[]);f.state.ready=true;
+  assert.equal(f.feature.queries.blockInstanceById('BI1'),one);f.state.bound=second;assert.equal(f.feature.queries.blockInstanceById('BI1'),two);
+  propagation.propagate(scope('changed'));assert.notEqual(second.constraints[0],originalSecond);assert.equal(second.constraints[0].p1,second.points[0]);assert.equal(first.constraints[0],originalFirst);
+  const rebuiltSecond=second.constraints[0];const explicit=f.feature.createPropagation({...options,readEditingScope:()=>override});explicit.propagate(scope('changed-again'));
+  assert.notEqual(override.constraints[0],originalOverride);assert.equal(second.constraints[0],rebuiltSecond);assert.equal(f.feature.queries.blockInstanceById('BI1'),two);
+  assert.equal(f.workspace.current(),f.document);assert.equal(f.document.blockInstances[0],decoy);assert.equal(f.document.constraints.length,0);assert.ok(f.events.includes('shared-bound'));
 });
