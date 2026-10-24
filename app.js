@@ -674,23 +674,19 @@
     restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
+  const { stabilizeDocument: stabilizeDocumentParameters, createApplication: createParameterApplication } = window.ParameterApplication.createEditingSupport({
+    namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
+    readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
+    snapshotDocument: historySnapshot, snapshotValues: snapshotModelState, restoreValues: restoreModelState,
+    loadDocument: loadModelData, readDocumentName: () => documentModel.documentName,
+    stabilizeNamespace: stabilizeActiveParameterNamespace, stabilizeStoredNamespace: storedDefinitionStabilization.stabilize,
+    activeSketchId, isRootSketch,
+  });
   const blockParameterPropagation = blockEditingFeature.createPropagation({
     clearSelection, applicationText,
-    stabilizeDefinition: storedDefinitionStabilization.stabilize, stabilizeDocument: () =>
-      stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }),
+    stabilizeDefinition: storedDefinitionStabilization.stabilize, stabilizeDocument: stabilizeDocumentParameters,
   });
-  const parameterApplication = window.ParameterApplication.create({
-    namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
-    capture: () => ({ document: blockEditor.current ? null : historySnapshot(), local: blockEditor.current ? snapshotModelState() : null }),
-    restore: checkpoint => {
-      if (blockEditor.current && checkpoint.local) restoreModelState(checkpoint.local);
-      else if (checkpoint.document) loadModelData(JSON.parse(checkpoint.document), { documentNameFallback: documentModel.documentName });
-    },
-    stabilize: namespace => namespace === editingScopeBinding.current
-      ? stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) })
-      : storedDefinitionStabilization.stabilize(namespace),
-    propagate: blockParameterPropagation.propagate,
-  });
+  const parameterApplication = createParameterApplication({ propagate: blockParameterPropagation.propagate });
   const centerlineCommand = authoringTools.createCenterline({
     commitNewConstraint,
     parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
