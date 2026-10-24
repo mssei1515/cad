@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：派生Instanceのtest fixture・状態と公開hookの組立てを専用driverへ移管（2026-10-24、検証完了）
+
+基準develop／origin/developはd83ad7d。本単位はcodex/derived-instance-test-apiで実施した。既存DerivedInstanceTestDriver.createBrowserApiが配置command用fixture→load／状態／削除観測→派生モデルfixtureを同じ順で生成し、既存名の六つの公開hookを返す。reset・Geometry追加・現在scope・serialize・履歴・UI通知と描画の共通依存を一度だけ受け、モデルfixtureのreadStateはそこで生成した実Interactionのstateへ結線する。個別factoryと処理・戻り値／例外・参照はそのまま維持し、新しいstate／cache・求解基準・グローバル依存は追加しない。appは31個の明示依存を注入して公開APIへ合成する。
+
+app.jsは2,256→2,245行（11行減）、対象生成3→1、rootのtest hook内の延べ引数41→31、未使用binding／初期化前直接参照0（TEMP cad-derived-instance-test-api-audit.cjs）。共通portの元の値が一致することを抽出時に確認した。TEMP cad-derived-instance-test-api-proof.cjsで既存関数本体8個と子constructor三つの全portの不変、公開hook名と並びの一致、モデル／DOM／履歴／描画portを生成時に呼ばないことも確認した。extraction.jsonへhook名とport数を記録した。巨大contextを外へ移すだけにせず、fixture間の状態照会の結線と公開名の対応を機能のdriverへ所有させた。数百行の全体目標は未完了。
+
+既存の役割別入口がある注記・寸法支援はその境界を維持し、同じportを包むだけの新wrapperは追加しなかった。今回は変更しないhelperの期待値複写テストを増やさず、既存の派生Instance関連単体18件、全単体1,966件、構文616ファイルが成功した。spec/architecture/モジュール構成.mdとimplementation-map.mdへ責務・依存を記録し、既存のscript／単体manifestを維持した。
+
+関連E2E238件（既存UI・phase0保存互換性／描画比較・派生pattern／free Instance・Sketch投影とlegacy互換driver・Block・Hatch）が全成功（3.4分、exit 0、runner11590）。TEMP cad-derived-instance-test-api-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server33224停止と製品source二つのhash不変を確認した。今回は関連238件であり、全587件の最新基準37cb5d2とは区別する。文言・数値上限・timeout・既存期待値は変更していない。
+
+週枠使用41%／残量59%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。次も残る通常入力・描画・各機能のtest公開について、同じownerのcapabilityと状態の結線を確認する。既存の役割別入口を再抽出せず、行数のために異なる責務をまとめない。
+
+
 ### 最新：Block回転補正と編集scopeのInstance照会を既存ownerへ配置（2026-10-24、検証完了）
 
 基準develop／origin/developは6027c5b。本単位はcodex/block-layout-and-lookupで実施した。90度刻みのsnappedBlockRotationとprivate定数を既存BlockLayoutへ移し、静的APIと生成済みlayoutから同じ関数を公開する。Number変換、Math.round、moduloの順序を変えず、配置・Boundsを扱う座標計算と同じ場所へ配置した。blockInstanceByIdはBlockEditingQueriesへ移し、BlockEditingFeatureへ明示したreadEditingScopeから現在のblockInstancesを呼出しごとに読む。最初の一致をObjectのまま返し、id厳密比較とnull fallbackを維持する。workspace.currentを使う既存の移動可否等の照会とは別readerを使い、両scopeを混同しない。
