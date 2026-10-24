@@ -37,6 +37,19 @@
       hideDimensionValueInput: valueInput.hide, syncDimensionValueInput: valueInput.sync, focusDimensionValueInput: valueInput.focus,
       applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
     });
+    function createCommit({ isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle, ...options }) {
+      const { command, readOnly } = window.ConstraintCommitCommand.createWithDimensions({ ...options,
+        canvasSelection: selection, guardSketchEdit, activeSketchId, targetFromConstraint, clearSelection, setHint, draw, log, applicationText,
+        resolveSelection: type => selectionQuery.resolution(type),
+        startDistanceResolution: (resolution, pointer) => dimensions.startDistanceResolution(resolution, pointer),
+        isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle });
+      function createIntentResolver({ operands, types: intentTypes, isActiveSketchElement, isEditableSketchElement }) {
+        return window.ConstraintIntentResolver.create({ candidates, operands, types: intentTypes, activeSketchId,
+          isReferenceSourceSketchId, wouldCreateReferenceCycle, isActiveSketchElement, isEditableSketchElement,
+          descendantSketchIds, applicationText, invalidConstraintTargetHint });
+      }
+      return Object.freeze({ command, readOnly, createIntentResolver });
+    }
     function createControls({ document, constraintButtons, constraintMenuButtons, fixPointBtn, hasSelection, translatedExactText }) {
       const view = window.ConstraintControlsView.create({ document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
         prepareGeometryControls: () => {
@@ -58,7 +71,7 @@
       }
       return Object.freeze({ view, createBinding });
     }
-    return Object.freeze({ selectionQuery, targets, dimensions, createControls });
+    return Object.freeze({ selectionQuery, targets, dimensions, createControls, createCommit });
   }
   window.ConstraintEditing = Object.freeze({ create });
 })();

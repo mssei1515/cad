@@ -93,6 +93,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-20）
 
+### 最新：拘束確定と意図resolverを同じ操作Featureから段階生成（2026-10-24、検証完了）
+
+基準develop／origin/developは2409fbd。ConstraintEditing.createCommitが元の後段位置で実ConstraintCommitCommand.createWithDimensionsを生成し、同じSelection・Sketch guard／active Sketch・target照会・Selection解除・通知を共有する。選択解決は同じSelectionQuery.resolutionへ、寸法配置は同じDimensionPlacementCommand.startDistanceResolutionへreceiverと引数／戻り値を保って接続する。返すcreateIntentResolverは元の次の位置で、同じ候補registry・active Sketch・参照元／子孫／循環判定と翻訳／invalid hintから実ConstraintIntentResolverを生成する。確定のcurrentScope、snapshot／復元、求解／挿入、履歴と計測は従来の独立したportで受ける。新しい操作state・遅延reader／初期化参照や可変app contextは追加しない。個別command／resolver factoryと既存の構築・bind順は維持する。
+
+app.jsは2,326→2,323行（3行減）、対象生成3→3、root直下の延べ引数99→81、未使用binding／初期化前直接参照0（TEMP cad-constraint-commit-composition-audit.cjs）。単純な引数objectの束ねではなく、既存Featureが持つSelectionQuery／DimensionPlacementと共通依存を二つの後段componentへ直接接続する。rootだけにあったconstraintResolutionFromCurrentSelectionを除去した。ほかのhoisted入口は既存の早期callback登録を保つため残す。行数効果は小さいが依存の重複18項目を除いた単位とし、数百行の目標達成とはしない。
+
+既存constraint-editing.test.jsへ2つの境界試験を追加した。実Selection／TargetSession・SelectionQuery／DimensionPlacement・ConstraintCommit／DimensionReadOnlyQuery・IntentResolverとGeometryを、従来の直接生成と新経路で組み立て、通常operand解決と選択確定成功、Solver失敗時のGeometry／拘束配列復元とSelection保持、寸法配置の同じpending／target、子孫参照拒否・編集guardを確認した。従来経路と通知／履歴／pending／計測traceも比較して一致し、構築時無通知を確認した。fixtureは新しい寸法配置経路用に実DimensionPlacementを接続し、既存の期待値・性能上限は変えていない。関連単体41件、最終コードの全単体1,954件と構文614ファイルが成功。
+
+関連E2E300件（既存UI・phase0保存互換性／描画比較・Annotation anchor／注記・複数寸法・Spline・Sketch投影・Block・派生pattern／free Instance）が全成功（4.6分、exit 0、runner29987）。TEMP cad-constraint-commit-composition-{focused,unit,check,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.jsonへ証跡を保持する。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server38444の停止と製品source二つのhash不変を確認した。今回は全587件の再実行ではなく、最新全体基準37cb5d2の成功と区別する。spec/architecture/モジュール構成.mdとimplementation-map.mdも更新した。
+
+注記の権限・可視性も再確認したが、SketchContext・SketchEditAccess・GeometryAppearanceと異なるscope／役割に分かれており、それらを単一contextへ束ねる案は採用しない。引き続き共通の実ownerを共有できる境界と機能内の組立て・test公開契約を確認する。週枠使用33%／残量67%、停止条件未到達。main／origin/mainはdf5aef2を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了。
+
+
 ### 最新：HatchのブラウザテストAPIを既存driverへ集約（2026-10-24、検証完了）
 
 基準develop／origin/developは37cb5d2（構文614・全単体1,952・全587 E2E成功）。HatchTestDriver.createBrowserApiが通常Hatch→Block投影→転送の既存三factoryを同じscope・Hatch query・Selection・表示／保存／通知へ接続し、既存九つのブラウザ公開名との対応を所有する。appはtest query内の同じ位置で一度だけ生成し、返された公開objectを展開する。個別factoryは独立利用を維持し、projectionの型・定義生成／追加とtransferのClipboard／コピー・Block化依存を各入口で明示する。現在scopeは操作ごとに読み、Geometry／境界参照・採番／cache・履歴／UI／draw順や既存の返り値は変えない。新しいmodel／Selection／Clipboard／cache・可変app context・fileは追加しない。

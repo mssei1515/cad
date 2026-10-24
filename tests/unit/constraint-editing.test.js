@@ -89,14 +89,15 @@ function controlsFixture() {
   const pending = { get current() { ready(); return state.pending; }, read: () => { ready(); return state.pending; },
     replace: value => { ready(); state.pending = value; events.push(['pending',value]); } };
   let controls;
-  const feature = w.ConstraintEditing.create({ session, selection, pending,
+  const input = { session, selection, pending,
     candidates: { distanceTargetFromTargets: () => { ready(); events.push(['distance-target']); if(state.queryError)throw state.queryError; return state.target; },
-      canApplyConstraintToTargets: () => { ready(); return state.canApply; }, constraintFromTargets: () => null },
+      canApplyConstraintToTargets: () => { ready(); return state.canApply; }, constraintFromTargets: () => state.createdConstraint || null,
+      constraintTargetsFromOperands: () => selection.currentConstraintTargets(), distanceTargetFromOperands: () => state.target },
     lifecycle: { prepareConstraintStart: note('prepare-start'), prepareConstraintCancel: note('prepare-cancel'), prepareDimensionStart: note('prepare-dimension'), selectMode: note('select-mode') },
-    valueInput: { hide() {}, sync() {}, focus() {} }, placement: { defaultDimensionForTarget: () => ({ x: 1, y: 2 }) },
-    resolveConstraintIntent: () => null, constraintOperandsFromSelection: () => [], activeSketchId: () => 'S1',
+    valueInput: { hide() {}, sync() {}, focus() {} }, placement: { ...w.DimensionPlacement.create({ viewport: { scale: 1 } }), defaultDimensionForTarget: () => ({ x: 1, y: 2 }) },
+    resolveConstraintIntent: (type, operands) => state.resolveIntent ? state.resolveIntent(type, operands) : null, constraintOperandsFromSelection: () => [], activeSketchId: () => 'S1',
     isGeometryMode: () => { ready(); return state.geometry; }, elementSketchId: item => item.sketchId, canEditSketch: () => true,
-    findLineFixedConstraint: () => null, selectedGeometryItems: selection.selectedGeometryItems, guardSketchEdit: () => true, guardSelectionEdit: () => true,
+    findLineFixedConstraint: () => null, selectedGeometryItems: selection.selectedGeometryItems, guardSketchEdit: () => { ready(); return state.editable !== false; }, guardSelectionEdit: () => true,
     startAnnotationAnchorConstraint: () => false, constraintLabel: type => type, clearSelection: selection.clear, trimConstraintSelection() {},
     commitConstraintResolution() {}, syncSelectionFromConstraintOperands() {}, updateToolbar: note('toolbar'),
     updateConstraintButtons: () => { ready(); events.push(['buttons']); controls.view.update(); }, setHint: note('hint'), constraintTargetHint: type => type,
@@ -104,12 +105,13 @@ function controlsFixture() {
     hitConstraintOperand: () => null, invalidConstraintTargetHint: () => '', toggleGeometryFixedOperand: note('operand-fixed'),
     toggleSelectedFixed: note('selected-fixed'), updateGeometrySelectionUI: note('selection-ui'), types: w.GeometrySolver,
     isPlacingInstance: () => false, cancelPendingCommand: message => { ready(); events.push(['cancel-pending',message]); state.pending = null; },
-    selectedPrimitives: () => [], applicationText: (_ja,en) => en, log: note('log') });
+    selectedPrimitives: () => [], applicationText: (_ja,en) => en, log: note('log') };
+  const feature = w.ConstraintEditing.create(input);
   controls = feature.createControls({ document, constraintButtons: buttons, constraintMenuButtons: menu, fixPointBtn: fix,
     hasSelection: () => selection.selectedElementCount() > 0, translatedExactText: value => value });
   const binding = controls.createBinding(); buttons[0].click(); assert.equal(session.command,null); assert.deepEqual(events, []);
   binding.bind(); binding.bind(); assert.deepEqual(events, []); state.ready = true;
-  return { feature, controls, binding, state, session, selection, events, buttons, menu, fix, hint, w };
+  return { feature, controls, binding, state, session, selection, events, buttons, menu, fix, hint, w, input };
 }
 
 test('constraint feature controls share actual target, dimension and Selection state through late binding and menu delegation', () => {
@@ -138,4 +140,62 @@ test('constraint control preparation retains distance exceptions, cancellation a
   assert.equal(f.state.pending,pending); assert.deepEqual(f.events,[]); assert.equal(f.buttons[0].attrs['aria-disabled'],'true');
   f.state.geometry = true; f.state.queryError = new Error('distance query failed'); f.buttons[0].attrs['aria-pressed'] = 'unchanged';
   assert.throws(update,error => error === f.state.queryError); assert.equal(f.state.pending,pending); assert.equal(f.buttons[0].attrs['aria-pressed'],'unchanged');
+});
+
+function commitCompositionFixture(bound = true) {
+  const f = controlsFixture(), g = f.w.GeometrySolver, model = { constraints: [] }, history = [];
+  const a = Object.assign(new g.Point('P1',0,0), { sketchId:'S1' }), b = Object.assign(new g.Point('P2',10,0), { sketchId:'S1' });
+  const line = Object.assign(new g.Line('L1',a,b), { sketchId:'S1' }); f.selection.set('lines',[line]);
+  f.state.createdConstraint = Object.assign(new g.HorizontalConstraint(line), { sketchId:'S1' });
+  const record = name => (...args) => f.events.push([name,...args]); let time = 0;
+  const options = { currentScope: () => model, linesAreParallel: () => true, assignSketch: (c,id) => { c.sketchId=id;return c; }, probeRedundancy: () => ({redundant:false}),
+    constraintTargetsAreActive: () => true, snapshotModelState: () => { record('capture')();return{constraints:[...model.constraints],y:b.y}; },
+    restoreModelState: snapshot => { record('restore')();model.constraints=snapshot.constraints;b.y=snapshot.y; },
+    solveStepNormForConstraint: () => 1, preconditionNewConstraint: record('precondition'), withTemporarySolveStepNorm: (_step,work) => work(),
+    pushModelConstraint: c => { record('push')();model.constraints.push(c); },
+    solveConstraintComponentAndDependents: () => { record('solve')();if(f.state.rejectSolve)b.y=33;return{success:!f.state.rejectSolve,result:{errorNorm:f.state.rejectSolve?1:0,reason:'fixture',variableCount:2,constraintCount:1}}; },
+    isDimensionConstraint: () => false, isReadOnlyDimension: () => false, stabilizeActiveParameterNamespace: () => { record('stabilize')();return{success:true}; },
+    constraintSketchId: c => c.sketchId, lineCollapseQuery: {find: () => null}, redundantConstraintInfo: () => null, acceptError:0.001,
+    measuredConstraintTargetValue: () => 10, refreshConstraintAnalysis: record('analysis'), updateUI: record('ui'),
+    recordHistory: label => { history.push(label);record('history')(label); }, isReferenceSourceSketchId: () => true, descendantSketchIds: () => ['child'], wouldCreateReferenceCycle: () => false,
+    sketchName: id => id, now: () => ++time };
+  const common = { canvasSelection:f.selection, guardSketchEdit:f.input.guardSketchEdit, activeSketchId:f.input.activeSketchId,
+    targetFromConstraint:f.input.targetFromConstraint, clearSelection:f.input.clearSelection, setHint:f.input.setHint, draw:f.input.draw, log:f.input.log, applicationText:f.input.applicationText,
+    resolveSelection:type=>f.feature.selectionQuery.resolution(type), startDistanceResolution:(resolution,pointer)=>f.feature.dimensions.startDistanceResolution(resolution,pointer) };
+  f.state.ready=false;
+  const support = bound ? f.feature.createCommit(options) : f.w.ConstraintCommitCommand.createWithDimensions({...options,...common});
+  const intentOptions = { operands:{subjectFromOperand:o=>o,referenceTargetFromOperand:o=>o,referenceSubjectElement:o=>o.item,referenceSubjectSketchId:o=>o.sketchId},
+    types:g, isActiveSketchElement:()=>true, isEditableSketchElement:()=>true };
+  const resolver = bound ? support.createIntentResolver(intentOptions) : f.w.ConstraintIntentResolver.create({...intentOptions,candidates:f.input.candidates,
+    activeSketchId:f.input.activeSketchId,isReferenceSourceSketchId:options.isReferenceSourceSketchId,descendantSketchIds:options.descendantSketchIds,
+    wouldCreateReferenceCycle:options.wouldCreateReferenceCycle,applicationText:f.input.applicationText,invalidConstraintTargetHint:f.input.invalidConstraintTargetHint});
+  f.state.resolveIntent=(type,operands)=>resolver.resolve(type,operands); assert.deepEqual(f.events,[]); f.state.ready=true;
+  return{...f,...support,resolver,model,history,line,a,b};
+}
+
+test('shared constraint composition keeps actual intent, selection and commit behavior identical through success and solver rollback',()=>{
+  for(const rejectSolve of [false,true]) {
+    const results=[];
+    for(const bound of [false,true]) {
+      const f=commitCompositionFixture(bound), operand={kind:'line',line:f.line,item:f.line,relation:'active',sketchId:'S1'};
+      const intent=f.resolver.resolve('horizontal',[operand]); assert.equal(intent.constraint,f.state.createdConstraint);
+      f.session.begin('horizontal',[operand]); f.state.rejectSolve=rejectSolve; f.command.fromSelection('horizontal');
+      assert.equal(f.b.y,0); assert.equal(f.model.constraints.length,rejectSolve?0:1);
+      if(rejectSolve){assert.equal(f.selection.lines[0],f.line);assert.equal(f.history.length,0);}else{assert.equal(f.model.constraints[0].line,f.line);assert.equal(f.selection.lines.length,0);}
+      results.push(JSON.stringify({events:f.events,history:f.history,trace:f.command.readPerformance()}));
+    }
+    assert.equal(results[1],results[0]);
+  }
+});
+
+test('shared commit delegates distance to the same placement session and preserves reference rejection and edit guards',()=>{
+  const results=[];
+  for(const bound of [false,true]) {
+    const f=commitCompositionFixture(bound), target={kind:'point-point',p1:f.a,p2:f.b};f.state.target=target;
+    f.command.fromSelection('distance'); assert.equal(f.state.pending.target,target); assert.equal(f.state.pending.type,'distance-place');assert.equal(f.model.constraints.length,0);assert.equal(f.history.length,0);
+    const rejected=f.resolver.resolve('horizontal',[{relation:'descendant',kind:'line',line:f.line,sketchId:'child'}]);assert.match(rejected.error,/子孫/);
+    f.state.editable=false;const before=f.events.length;assert.equal(f.command.ordinary('horizontal',f.state.createdConstraint),false);assert.equal(f.events.length,before);assert.equal(f.selection.lines[0],f.line);
+    results.push(JSON.stringify({events:f.events,pending:f.state.pending,history:f.history}));
+  }
+  assert.equal(results[1],results[0]);
 });
