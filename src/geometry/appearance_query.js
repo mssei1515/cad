@@ -67,6 +67,10 @@
 
 
     function isVisibleSketchElement(item) {
+      if (item?.blockProjection && !item?.derivedProjection) {
+        const definitionSketch = item.blockDefinition?.sketches?.find(sketch => sketch.id === item.localElement?.sketchId);
+        if (definitionSketch && !isVisibleValue(effectiveAppearanceForSketch(definitionSketch).visible)) return false;
+      }
       return isVisibleSketchId(elementSketchId(item)) && isVisibleValue(effectiveAppearanceForElement(item).visible);
     }
 

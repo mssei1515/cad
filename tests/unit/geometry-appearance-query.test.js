@@ -105,6 +105,27 @@ test('visibility combines sketch and element appearance and reads show-hidden st
   assert.equal(q.isVisibleSketchId(), false); assert.equal(q.isVisibleSketchElement(f.line), false);
 });
 
+test('hidden definition sketches hide projected construction geometry independently of appearance overrides', () => {
+  const f = fixture(), q = f.query;
+  const hidden = { id: 'inner', appearance: { visible: false }, constructionAppearance: {} };
+  const child = { id: 'child', parentSketchId: 'inner', appearance: {}, constructionAppearance: {} };
+  const blockDefinition = { sketches: [hidden, child] };
+  const { Circle, Arc, Spline } = sandbox.window.GeometrySolver;
+  const geometry = [f.line, new Circle('C', f.line.p1, 5, true), new Arc('A', f.line.p1, 5, 0, Math.PI, true),
+    new Spline('SP', [f.line.p1, f.line.p2], false, true)];
+  for (const item of geometry) {
+    Object.assign(item, { construction: true, sketchId: 'S1', blockProjection: true, blockDefinition,
+      localElement: { sketchId: 'inner', appearance: { visible: true } }, blockAppearanceOverrides: [{ visible: true }] });
+    assert.equal(q.isVisibleSketchElement(item), false);
+    f.state.hidden = true; assert.equal(q.isVisibleSketchElement(item), true);
+    f.state.hidden = false;
+    item.localElement.sketchId = 'child'; assert.equal(q.isVisibleSketchElement(item), true);
+    item.localElement.sketchId = 'inner';
+    hidden.appearance.visible = true; assert.equal(q.isVisibleSketchElement(item), true);
+    hidden.appearance.visible = false;
+  }
+});
+
 test('annotation appearance keeps plain text independent and reads current defaults/sketches for inherited leaders', () => {
   let sketches = [{ id: 'S', leaderAppearance: { color: '#333333' } }], reads = 0;
   const document = { defaultLeaderAppearance: { color: '#111111' }, defaultTerminatorAppearance: { terminatorType: 'dot' } };
