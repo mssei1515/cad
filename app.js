@@ -37,9 +37,6 @@
   } = window.GeometryRef;
 
 
-  const {
-    formatReference: formatParameterReference,
-  } = window.ParameterEngine;
 
   const {
     hypot2,
@@ -108,13 +105,9 @@
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
     ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
   } = parameterNamespace;
-  const parameterEditor = window.ParameterEditor.create({
-    document, window, InputElement: HTMLInputElement, Event,
-    namespace: parameterNamespace, currentScope: () => editingScopeBinding.current,
-    readDefinitions: () => documentModel.blockDefinitions, readBlockEditor: () => blockEditor.current,
-    applicationText, language: () => applicationSettings.language,
-    formatting: { escapeHtml, formatDisplayNumber, formatParameterReference, parameterErrorText, defaultSketchId: DEFAULT_SKETCH_ID },
-    localizeApplicationUI, applyDraft: (...args) => parameterApplication.apply(...args),
+  const parameterEditor = window.ParameterEditor.createForWorkspace({
+    document, window, documentWorkspace, currentScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
+    settings: applicationSettings, applyDraft: (...args) => parameterApplication.apply(...args),
     recordHistory, setHint, updateUI, draw, pickDimension: event => expressionInputController.pickCanvas(event),
   });
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
