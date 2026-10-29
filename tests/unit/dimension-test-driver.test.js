@@ -98,3 +98,58 @@ test('dimension color observation forwards stroke calls and restores live select
     assert.deepEqual(calls, [['path', 3], ['same color'], ['other color']]);
   }
 });
+
+const editingSandbox={structuredClone,window:{}};vm.createContext(editingSandbox);
+const editingSources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+for(const source of editingSources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(source,'utf8'),editingSandbox,{filename:source});
+function editingSupportFixture(composed){
+ const w=editingSandbox.window,state={ready:false,scope:null,pending:null,drawFailure:null,placementFailure:null},events=[],viewport={scale:2},selection=w.CanvasSelection.create();
+ const ready=()=>assert.equal(state.ready,true),currentScope=()=>{ready();return state.scope;};
+ const ctx={measureText:text=>({width:String(text).length*7}),fillText(){}};
+ const rawDisplay=w.DimensionDisplay.create({ctx,viewport,currentLines:()=>currentScope().lines,minLineLength:12,
+  effectiveDimensionAppearance:()=>w.Appearance.normalizeDimensionAppearance({}, {partial:false}),activeSketchId:()=>currentScope().activeSketchId});
+ const display={placement:rawDisplay.placement,layouts:rawDisplay.layouts,layout(...args){assert.equal(this,display);return rawDisplay.layout(...args);}};
+ const resetModelState=()=>{ready();state.scope=w.DocumentState.create();selection.clear();state.pending=null;events.push('reset');};
+ const geometry={addPoint(x,y,fixed,kind){ready();const p=new w.GeometrySolver.Point('P'+state.scope.points.length,x,y);p.fixed=Boolean(fixed);p.kind=kind;p.sketchId=state.scope.activeSketchId;state.scope.points.push(p);return p;},
+  addLine(a,b){ready();const line=new w.GeometrySolver.Line('L'+state.scope.lines.length,a,b);line.sketchId=state.scope.activeSketchId;state.scope.lines.push(line);return line;}};
+ const sketches={activeSketchId:()=>currentScope().activeSketchId,constraintSketchId:c=>c.sketchId,sketchById:id=>currentScope().sketches.find(s=>s.id===id)};
+ const appearance={isVisibleSketchId:id=>sketches.sketchById(id)?.appearance?.visible!==false};
+ const addDistanceConstraintFromTarget=(target,value,dimension,options)=>{const c=new w.GeometrySolver.DistanceConstraint(target.p1,target.p2,value);c.sketchId=options.sketchId;c.dimension=dimension;state.scope.constraints.push(c);return c;};
+ const pendingCommandSession={get current(){ready();return state.pending;},replace(p){ready();state.pending=p;events.push('pending');}},constraintTargetSession={replaceCommand(command){ready();state.command=command;events.push('target');}};
+ const dimensionValueInput={hidden:true},dimensions={startDistanceValueInput(pointer){assert.equal(this,dimensions);ready();events.push(['value',pointer]);if(state.placementFailure)throw state.placementFailure;state.pending={type:'distance-value'};dimensionValueInput.hidden=false;}};
+ const layer={draw(){assert.equal(this,layer);ready();events.push('draw');ctx.fillText('dimension');if(state.drawFailure)throw state.drawFailure;}};
+ const serializeModel=()=>structuredClone(currentScope()),serializeDimension=dimension=>structuredClone(dimension),dimensionLabelForConstraint=c=>String(c.target);
+ const ports={geometry,display,sketches,appearance,currentScope,viewport,canvasSelection:selection,resetModelState,addDistanceConstraintFromTarget,dimensions,serializeModel,serializeDimension,constraintTargetSession,pendingCommandSession,dimensionValueInput,ctx,layer,dimensionLabelForConstraint};
+ let assembled;
+ if(composed)assembled=w.DimensionTestDriver.createForEditing(ports);
+ else{
+  const support=w.DimensionTestDriver.createSupport({resetModelState,addPoint:geometry.addPoint,addLine:geometry.addLine,dimensionFromAnchor:display.placement.dimensionFromAnchor,addDistanceConstraintFromTarget,activeSketchId:sketches.activeSketchId,currentScope,
+   isDimensionConstraint:w.DimensionQueries.isDimensionConstraint,dimensionLayout:(...args)=>display.layout(...args),hypot2:w.GeometrySolver.hypot2,targetFromConstraint:w.DimensionQueries.targetFromConstraint,serializeModel,constraintTargetSession,pendingCommandSession,dimensionValueInput,ctx,drawDimensions:()=>layer.draw(),constraintSketchId:sketches.constraintSketchId,canvasSelection:selection,viewport});
+  const p=display.placement,fixtures=support.createFixtures({isReadOnlyDimension:w.DimensionQueries.isReadOnlyDimension,dimensionLabelForConstraint,defaultDimensionForTarget:p.defaultDimensionForTarget,startDistanceValueInput:pointer=>dimensions.startDistanceValueInput(pointer),dimensionWithLabelAt:p.dimensionWithLabelAt,
+   angleDimensionLabelBasis:p.angleDimensionLabelBasis,angleDimensionLayout:display.layouts.angleDimensionLayout,angleDimensionLabelOffsets:p.angleDimensionLabelOffsets,setAngleDimensionLabelOffsets:p.setAngleDimensionLabelOffsets,angleDimensionFromLabelPoint:p.angleDimensionFromLabelPoint,serializeDimension,rootSketchId:w.SketchHierarchy.ROOT_SKETCH_ID,sketchById:sketches.sketchById,isVisibleSketchId:appearance.isVisibleSketchId});assembled={support,fixtures};
+ }
+ assert.deepEqual(events,[]);assert.equal(state.scope,null);state.ready=true;return{...assembled,ports,state,events,w};
+}
+
+test('editing dimension support matches direct fixtures with real placement, layout and geometry without construction reads',()=>{
+ const results=[];for(const composed of [false,true]){
+  const f=editingSupportFixture(composed);assert.ok(Object.isFrozen(f.support));assert.ok(Object.isFrozen(f.fixtures));
+  const extension=f.fixtures.readOnly.pointPointRectangleDimensionExtensionVisibilityCases(),angle=f.fixtures.angleDimensionLabelFollowCase();
+  assert.equal(f.state.scope.points.length>0,true);results.push(JSON.stringify({extension,angle,events:f.events}));
+ }assert.equal(results[1],results[0]);
+});
+
+test('editing dimension support keeps the current session, placement receiver and failure state for input continuation',()=>{
+ for(const composed of [false,true]){
+  const f=editingSupportFixture(composed),result=f.fixtures.readOnly.resetForReadOnlyDimensionPlacement();assert.equal(result.pendingType,'distance-value');assert.equal(result.inputHidden,false);assert.equal(f.events.at(-1)[0],'value');
+  const error=new Error('placement failed');f.state.placementFailure=error;
+  assert.throws(()=>f.fixtures.readOnly.resetForReadOnlyDimensionPlacement(),e=>e===error);assert.equal(f.state.pending.type,'distance-place');assert.equal(f.state.command.type,'distance');assert.equal(f.state.scope.constraints.length,1);
+ }
+});
+
+test('editing dimension support shares the rendering owner and preserves the existing Canvas recovery boundary',()=>{
+ for(const composed of [false,true]){
+  const f=editingSupportFixture(composed),fillText=f.ports.ctx.fillText;f.fixtures.resetForActiveSketchDimensionVisibility();assert.equal(f.ports.ctx.fillText,fillText);assert.equal(f.events.filter(e=>e==='draw').length,2);
+  const error=new Error('layer failed');f.state.drawFailure=error;assert.throws(()=>f.fixtures.resetForActiveSketchDimensionVisibility(),e=>e===error);assert.equal(f.ports.ctx.fillText,fillText);assert.equal(f.state.scope.constraints.length,2);
+ }
+});

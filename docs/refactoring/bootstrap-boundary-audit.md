@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 寸法テスト支援の実owner接続（2026-10-30、4b2925a基準）
+
+DimensionTestDriver.createForEditingは実GeometryCreation／DimensionDisplay／SketchContext／外観／Selection／viewport／配置command／layerとsession等の18portを受け、従来のcreateSupport→createFixturesへ同じ34項目を接続する。元のtest guardの内部で同じ順に生成し、返却supportとfixturesは実API。通常機能の状態やmodelを所有せず、constructor時のmodel／scope／DOM読取り・listener・独自採番や第二sessionは持たない。layout／draw／値入力継続は同じreceiverと引数で呼び、fixtureの例外とCanvas復元・途中modelの元の境界は変更しない。旧createSupport／createFixturesと後段のinteraction／display生成も維持する。
+
+app.jsは1,954→1,950行、非空白1,504→1,500行、root420文／関数84個。構築135文746非空白行、hooks323→319行、一文call関数80個104行、その他204文326行（文外5行）。可変参照三つは不変。今回減ったのはtest hooks内で、hooksと短い委譲を除いても1,077非空白行が残る。TEMP cad-dimension-test-composition-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
 ## Propertiesの操作状態とcommand接続（2026-10-30、d277dd8基準）
 
 PropertiesDisplay.createFeatureは実Lifecycle／InstanceSource／GeometryInstance／BlockPlacementから選択判定用readerを作る。後段createViewForEditingが表示用readerと実commandへの操作を接続し、選択用のdefinition IDと表示用の有効Sketch／回転lockを同じsnapshotへ混ぜない。元の状態形・読取順とlive評価、guardの引数、寸法／Spline wrapperのreceiverと返却・例外を維持する。新stateや汎用app contextは持たず、操作・取消・履歴は各commandに残す。旧selectionOperationとcreateView／createWithControllerは直接利用でき、Controller／View本体・生成位置は不変。

@@ -97,6 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
+### 最新：寸法テスト支援の実owner接続（2026-10-30、検証完了）
+
+基準developは4b2925a。既存DimensionTestDriver.createForEditingが実GeometryCreation／DimensionDisplay／SketchContext／外観・Selection・viewport・寸法配置command／layerと既存sessionを共有し、createSupport→createFixturesを元のtest bootstrap位置と順で生成する。supportとfixturesは元の実APIで、後段createInteraction／createDisplayも元のsupportに接続する。配置・角度layout・Geometryの関数値は同じownerから取り、layout／draw／値入力継続のwrapperは元のreceiverと引数を保つ。共通の静的query・hypot2・ROOT定数は既存namespaceを使う。旧API・fixture本体・window.__jot2dTestの公開順と内容は維持し、test指定時のみ生成する。通常起動のmodel／scope／DOM照会やlistener、独自の採番・model／session・汎用contextは追加しない。
+
+app.jsは1,954→1,950行（4行減）、非空白1,504→1,500行、root420文／関数84個／hooks323→319行／可変参照三つ。二生成へのroot接続は合計34→18項目、不要な六aliasを除去した。構築135文746非空白行、一文call関数80個104行、その他204文326行（文外5行）。TEMP cad-dimension-test-composition-{proof,hierarchy}.cjsで全子接続とwrapperの一致、test guard／生成位置／support→fixture順とraw API返却、その他appと既存DimensionTestDriverのAST不変、root未使用bindingなしを確認。今回の削減はtest hooks内であり、hooksと短い委譲を除いた1,077非空白行は変わらず、数百行目標は未達。
+
+単体へ三つの境界試験を追加した。実DimensionDisplay／配置・layoutとGeometrySolver型を使い、旧接続とのfixture結果／操作順の比較、構築時の無照会／無編集、live scopeとSelection共有、寸法値入力継続のmethod receiverと失敗時pending／target／model、layer描画のreceiverと例外・Canvas fillText復元の既存境界を確認。関連単体6件／全単体2,079件／構文624fileと最終appのnode --checkが成功。対象fixtureを参照する関連8suite（annotation-anchors／annotation-display-size／view-visibility／unified-ui／unified-annotations／multiple-dimensions／sketch-tree-visibility／leader-appearance）のE2E233件が全成功（4.0分、exit 0、実行session34282）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-dimension-test-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerは変更しない。今回の全E2Eは未実行であり、基準4b2925aの全588件成功と区別する。
+
+全体目標active、開始時週枠残量73%で停止条件未到達。mainは停止／releaseの最後に反映する。通常機能とテスト支援の境界を維持し、既存のrole別支援を一つの巨大な可変contextへまとめない。
+
+
 ### 最新：Propertiesの操作状態とcommand接続（2026-10-30、検証完了）
 
 基準developはd277dd8。既存PropertiesDisplay.createFeatureがoperationsとして実Lifecycle／InstanceSource／GeometryInstance／BlockPlacementを共有し、選択判定用の状態readerを所有する。後段createViewForEditingが表示用readerと実InstanceTransform／BlockConfiguration／DimensionValue／DimensionPlacement／ReferenceImage／Hatch／SplineEditingへの操作接続を所有する。選択用のmode→source→pending→definitionと、表示用のmode→pending→source→enabledSketchIds→rotationLockedという別の形と読取順を保ち、毎回最新状態を読む。モデル・draft・Selection・command状態は元ownerに残し、値snapshotの保持や第二状態、setter／listener、巨大contextを追加しない。従来のcreateFeatureの明示selectionOperation、createView／createWithControllerの直接接続は維持する。生成段階・通知・例外の境界とController／View本体は変更しない。
