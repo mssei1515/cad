@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Pointer commandの接続所有（2026-10-30、3e5db6f基準）
+
+CanvasCommandInputs.bindPointerForEditingが実commandとidentity選択、式参照APIを既存Pointerのpress／activationへ接続する。CanvasInteractionFeature.bindEditingPointerは同じPointer／Preview／identityを共有する。生成順は変えず、model／scope／DOMを先読みせず、座標・gesture・操作確定のownerも変更しない。寸法の三つの委譲はmethod receiverと引数を保持し、ほかは同じ関数値を使用する。appは九つの不要aliasと一つの委譲関数を保持せず、旧bindPointerの直接利用は維持する。接続の集約であり、別の巨大contextや第二sessionは導入しない。
+
+app.jsは1,974→1,964行、非空白1,524→1,514行、root424→422文／関数86→85個。構築136文755非空白行、hooks323行、一文call関数81個105行、その他204文326行（文外5行）。可変参照三つは不変。hooksと短い委譲を除いても1,086非空白行が残る。TEMP cad-pointer-command-bindings-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
 ## 固定操作の二段階生成（2026-10-30、bc59973基準）
 
 ConstraintEditing.createFixedEditingは共有する編集guard・Sketch所属・Line固定照会・Selection・通知と、明示されたcurrentScope／固定操作portから既存FixedToggleCommand.createOperandを生成する。返すoperandは実APIで、後段createSelectionはsnapshot／restore・求解・履歴などの遅い依存を受けて既存選択固定commandを生成する。二つのraw commandの生成位置・順序はappが従来どおり選ぶ。固定対象batchと全固定判定は同じConstraintSelectionQueryのmethodを操作時に呼び、戻り値・receiverを維持する。scope／Selectionを生成時に読まず、モデル・固定状態・採番・cacheや第二sessionは所有しない。guard拒否・投影対象・Block固定・失敗復元・履歴は既存FixedToggleCommandに残し、旧createOperand／createSelectionも変更しない。

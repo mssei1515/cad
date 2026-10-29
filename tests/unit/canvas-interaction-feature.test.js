@@ -98,3 +98,14 @@ test('Canvas keyboard assembly retains one listener, pending before constraint c
  keyboard.dispose();keyboard.dispose();assert.equal(listeners.size,0);
 }
 );
+
+test('editing pointer connection shares the existing identity, preview and pointer without early reads or error recovery',()=>{
+ const f=fixture(),s=f.sessions,initial={x:31,y:47};s.pointer.setLastPointer(initial);f.state.ready=false;
+ const marker=new Error('binding failed');let failure=false,calls=0;
+ const inputs={bindPointerForEditing(pointer,options){
+  assert.equal(this,inputs);assert.equal(pointer,s.pointer);assert.equal(options.identity,f.foundation.selectionFeature.identity);assert.equal(options.drawingPreview,s.preview);
+  calls++;if(failure)throw marker;return pointer;
+ }};
+ assert.equal(s.bindEditingPointer(inputs,{}),s.pointer);assert.equal(calls,1);assert.equal(s.pointer.readLastPointer(),initial);assert.deepEqual(f.events,[]);
+ failure=true;assert.throws(()=>s.bindEditingPointer(inputs,{}),error=>error===marker);assert.equal(calls,2);assert.equal(s.pointer.readLastPointer(),initial);assert.deepEqual(f.events,[]);
+});

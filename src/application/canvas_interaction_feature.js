@@ -31,12 +31,15 @@
       function bindPointer(inputs, options) {
         return inputs.bindPointer(pointer, { ...options, drawingPreview: preview });
       }
+      function bindEditingPointer(inputs, options) {
+        return inputs.bindPointerForEditing(pointer, { ...options, drawingPreview: preview, identity: selectionFeature.identity });
+      }
       function createKeyboard(inputs, options) {
         return inputs.createKeyboard({ ...options, isGeometryMode, pendingCommandSession: pending, constraintTargetSession: targets,
           drawing: { active: lifecycle.active, cancel: lifecycle.cancel, isToolMode: lifecycle.isToolMode, exit: lifecycle.exit },
           readPointer: pointer.readLastPointer });
       }
-      return Object.freeze({ preview, pending, targets, pointer, createSelectionPresentation, createInputFeature, bindPointer, createKeyboard });
+      return Object.freeze({ preview, pending, targets, pointer, createSelectionPresentation, createInputFeature, bindPointer, bindEditingPointer, createKeyboard });
     }
     return Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
       identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions });

@@ -166,7 +166,7 @@
     clearSelection, updateGeometrySelectionUI, draw,
   });
   const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, scope: selectionScopeQuery,
-    identity: identitySelection, access: sketchEditAccess, pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
+    access: sketchEditAccess, pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
   const { exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode } = drawOperationLifecycle;
   const { guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation } = sketchEditAccess;
   const { selectionSketchId } = selectionScopeQuery;
@@ -225,7 +225,7 @@
     commit: commitSketchProjectionCommand } = sketchProjectionCommand;
   const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
     pointer: pointerInteractionController, createSelectionPresentation, createInputFeature: createCanvasInputFeature,
-    bindPointer: bindCanvasPointer, createKeyboard: createCanvasKeyboard } = createOperationSessions({
+    bindEditingPointer: bindCanvasPointer, createKeyboard: createCanvasKeyboard } = createOperationSessions({
     snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
     readCenterline: () => centerlineCommand, projectPointToCenterlineSupport: point => projectPointToCenterlineSupport(point),
     readOffsetSelection: () => offsetSelection, computeTrimPreview,
@@ -313,7 +313,7 @@
     setPointerPreview: value => { drawingPreview.setPointer(value); }, getLastPointerWorld: pointerInteractionController.readLastPointer,
     setMode: drawOperationLifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory,
   });
-  const { start: startBlockPlacement, commit: commitBlockPlacement, click: handleBlockPlacementClick,
+  const { start: startBlockPlacement, commit: commitBlockPlacement,
     restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;
   const historyFeature = window.HistoryController.createFeature({
     serializeDocument: serializeModel, document: { getName: () => documentModel.documentName,
@@ -515,7 +515,7 @@
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
   const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
   function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
-  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
+  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation } = splineCommand;
   const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, rectangle: rectangleCommand, circular: circularCommands, slot: slotCommand } = basicDrawingTools;
   const offsetFeature = authoringTools.createOffset({
@@ -562,7 +562,6 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
     updateGeometrySelectionUI,
   });
-  const { update: updateFilletRadiusPlacement, submit: submitFilletRadiusPlacement } = filletCommand;
   const blockConfigurationCommand = window.BlockConfigurationCommand.create({
     currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, createBlockProjectionBundle,
     blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, constraintGraphNodes,
@@ -693,7 +692,7 @@
 
   function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
-  const { beginDrag: beginReferenceImageDrag, startCalibration: startReferenceImageCalibration, calibrationClick: handleReferenceImageCalibrationClick } = referenceImageInteraction;
+  const { beginDrag: beginReferenceImageDrag, startCalibration: startReferenceImageCalibration } = referenceImageInteraction;
 
   function decorateSerializedConstraint(data, constraint) { return constraintMetadata.decorate(data, constraint); }
 
@@ -768,8 +767,7 @@
     addPoint, isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint,
     guardDimensionSymbolDeletion, geometryElementKey, annotationReferencesRemovedGeometry,
   });
-  const { begin: beginSplineEditFromDoubleClick,
-    addPoint: addSplineFitPointFromContext, deletePoint: deleteSplineFitPointFromContext } = splineEditing;
+  const { addPoint: addSplineFitPointFromContext, deletePoint: deleteSplineFitPointFromContext } = splineEditing;
 
   const blockSelectionQuery = window.BlockSelectionQuery.create({
     currentScope: workspace.current, canvasSelection, blockProjectionBundle, elementSketchId, activeSketchId,
@@ -1141,7 +1139,6 @@
 
   function handleConstraintOperandClick(pointer, type, hits = {}) { return constraintTargetCommand.operandClick(pointer, type, hits); }
 
-  function handleConstraintTargetDoubleClick(hitP, hitL, pointer) { return dimensionPlacementCommand.targetDoubleClick(hitP, hitL, pointer); }
 
   function startInstanceAngleDimension(instance) { return dimensionPlacementCommand.startInstanceAngleDimension(instance); }
   function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
@@ -1195,7 +1192,7 @@
     hatchGeometryQuery, readMode: drawOperationLifecycle.readMode, lastPointer: pointerInteractionController.readLastPointer,
     documentIds, updateStatusUI, hatchRegionErrorText,
   });
-  const { updateHatchPreview, startHatchCreation, startHatchBoundaryRepair, commitHatchAt } = hatchCommand;
+  const { startHatchCreation, startHatchBoundaryRepair } = hatchCommand;
 
 
 
@@ -1518,18 +1515,11 @@
 
   bindCanvasPointer(canvasInputFeature, {
     canvasNavigation, recordHistory, referenceImageInteraction, pointerHover,
-    updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
-    press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
-      selectInactive: identitySelection.selectInactive,
-      prepareSelection: identitySelection.prepareSelection,
-      activation: { finalizeSpline: finalizeSplineFromDoubleClick, submitOffset: submitOffsetValue,
-        startAnnotationEdit: annotationInputController.start, startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
-        constraintDoubleClick: handleConstraintTargetDoubleClick, enterBlock: enterBlockDefinitionEdit, beginSplineEdit: beginSplineEditFromDoubleClick },
-      query: canvasPressQuery,
-      closeContextMenu: closeCanvasContextMenu, ...expressionInputController.pointerReferences,
-      commitHatch: commitHatchAt, calibrateImage: handleReferenceImageCalibrationClick,
-      placeFilletRadius: submitFilletRadiusPlacement, placeBlock: handleBlockPlacementClick, blankGesture: blankCanvasGesture,
-    },
+    updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
+    hatch: hatchCommand, fillet: filletCommand, offset: offsetCommand, spline: splineCommand, splineEditing,
+    blockPlacement: blockPlacementCommand, annotationInput: annotationInputController, dimensionValues: dimensionValueCommand, dimensions: dimensionPlacementCommand,
+    expressions: expressionInputController, discardMoves: flushScheduledCanvasPointerMove, enterBlock: enterBlockDefinitionEdit,
+    query: canvasPressQuery, closeContextMenu: closeCanvasContextMenu, blankGesture: blankCanvasGesture,
   });
 
 

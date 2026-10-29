@@ -312,3 +312,63 @@ test('keyboard finishes the same pointer source command and annotation, retainin
   assert.throws(() => f.key('Escape'), error => error === f.state.cancelFailure);
   assert.deepEqual(f.calls, [['key-prevent'], ['cancel-pending', undefined]]); f.keyboard.dispose();
 });
+
+function editingPointerFixture() {
+  const f = fixture({ dimensionDragging: { command: { active: false } } }, true);
+  const pointer = w.PointerInteractionController.createSession(), events = [], live = { hits: {}, consume: false, fail: null };
+  const record = name => (...args) => { assert.equal(f.state.ready, true); events.push([name, ...args]); return live.consume; };
+  const dimensions = { startDistanceValueInput(point) { assert.equal(this, dimensions); return record('distance-value')(point); },
+    targetDoubleClick(...args) { assert.equal(this, dimensions); return record('target')(...args); } };
+  const dimensionValues = { startEdit(hit) { assert.equal(this, dimensionValues); return record('edit')(hit); }, submit: record('distance-submit') };
+  const actors = { hatch: { updateHatchPreview: record('hatch-preview'), commitHatchAt: record('hatch') }, fillet: { update: record('fillet-preview'), submit: record('fillet') },
+    offset: { submit: record('offset') }, spline: { doubleClick: record('spline') }, splineEditing: { begin: record('spline-edit') }, blockPlacement: { click: record('block') },
+    annotationInput: { start: record('annotation') }, dimensions, dimensionValues,
+    identity: { selectInactive: record('inactive'), prepareSelection: record('prepare') },
+    referenceImageInteraction: { calibrating: false, calibrationClick: record('calibrate') } };
+  const references = { referenceDimensionAt: record('reference-hit'), insertDimensionParameter: record('reference-insert'), referenceAnnotationAt: () => null };
+  const initial = { x: -1, y: -2 }; pointer.setLastPointer(initial);
+  f.viewport.canvasPoint = function() { assert.equal(this.inputs, f.api); assert.equal(this.activation.selection, f.selection); return f.p; };
+  f.viewport.canvasScreenPoint = () => f.p;
+  let bound;
+  f.state.ready = false;
+  assert.equal(f.feature.bindPointerForEditing({ bind(options) { bound = options; return pointer.bind(options); } }, {
+    ...actors, canvasNavigation: { movePan: () => false }, drawingPreview: { setPointer: record('preview') },
+    expressions: { pointerReferences: references }, discardMoves: record('discard'), enterBlock: record('enter'),
+    query: { read() { if (live.fail) throw live.fail; return live.hits; }, readDoubleClick: () => live.hits },
+    closeContextMenu: record('close'), blankGesture: { isRepeated: () => false, takeSuppression: () => false, handle: () => false },
+  }), pointer);
+  assert.deepEqual(events, []); assert.equal(pointer.lastWorld, initial); f.state.ready = true;
+  return { ...f, pointer, actors, live, events, bound, references, initial, names: () => events.map(e => e[0]) };
+}
+
+test('editing pointer binding retains command receivers and live double-click priority without replacing the session', () => {
+  const f = editingPointerFixture(), { pointer, live, actors, events } = f;
+  const click = () => { events.length = 0; pointer.doubleClick(f.event); };
+  f.state.mode = 'spline'; click(); assert.deepEqual(f.names(), ['spline']); assert.equal(events[0][1], f.p);
+  f.state.mode = 'select'; f.state.pending = { type: 'offset-value' }; click(); assert.deepEqual(f.names(), ['offset']);
+  f.state.pending = { type: 'distance-place' }; click(); assert.deepEqual(f.names(), ['distance-value', 'distance-submit']); assert.equal(events[0][1], f.p);
+  f.state.pending = null; const hitD = {}; live.hits = { hitD }; live.consume = true; click(); assert.deepEqual(f.names(), ['edit']); assert.equal(events[0][1], hitD);
+  const hitP = {}, hitL = {}; live.hits = { hitP, hitL }; click(); assert.deepEqual(events, [['target', hitP, hitL, f.p]]);
+  live.consume = false; live.hits = { hitBlock: { definitionId: 'B1' } }; click(); assert.deepEqual(f.names(), ['target', 'enter']); assert.equal(events[1][1], 'B1');
+  live.hits = { hitS: {} }; click(); assert.deepEqual(f.names(), ['target', 'spline-edit']); assert.equal(events[1][1], live.hits.hitS);
+  assert.equal(pointer.lastWorld, f.initial);
+  assert.equal(f.bound.press.activation.finalizeSpline, actors.spline.doubleClick);
+  assert.equal(f.bound.press.prepareSelection, actors.identity.prepareSelection);
+  assert.equal(f.bound.press.activation.submitDistance, actors.dimensionValues.submit);
+});
+
+test('editing pointer binding preserves parameter interception, placement priority, shared preview and query failure state', () => {
+  const f = editingPointerFixture(), { pointer, live, actors, events } = f;
+  const down = () => { events.length = 0; pointer.down({ ...f.event, button: 0 }); };
+  f.state.mode = 'hatch'; actors.referenceImageInteraction.calibrating = true; const hitD = {}; live.hits = { hitD }; live.consume = true;
+  down(); assert.deepEqual(f.names(), ['close', 'reference-insert']); assert.equal(events[1][2], hitD);
+  live.consume = false; live.hits = {}; down(); assert.deepEqual(f.names(), ['close', 'reference-hit', 'hatch']); assert.equal(events.at(-1)[1], f.p);
+  f.state.mode = 'select'; down(); assert.deepEqual(f.names(), ['close', 'reference-hit', 'calibrate']);
+  actors.referenceImageInteraction.calibrating = false; f.state.pending = { type: 'fillet-radius-place' }; down(); assert.equal(events.at(-1)[0], 'fillet');
+  f.state.pending = null; f.state.mode = 'block-place'; down(); assert.equal(events.at(-1)[0], 'block');
+  f.state.mode = 'hatch'; events.length = 0; pointer.move({}, f.p, false); assert.deepEqual(f.names(), ['preview', 'hatch-preview']);
+  f.state.mode = 'select'; f.state.pending = { type: 'fillet-radius-place' }; events.length = 0; pointer.move({}, f.p, false); assert.deepEqual(f.names(), ['fillet-preview']);
+  const error = new Error('hit query failed'); live.fail = error; events.length = 0;
+  assert.throws(() => pointer.down({ ...f.event, button: 0 }), value => value === error); assert.deepEqual(f.names(), ['close']); assert.equal(pointer.lastWorld, f.p);
+  events.length = 0; f.bound.press.discardMove(); assert.equal(events[0][0], 'discard'); assert.equal(events[0][1].discard, true);
+});
