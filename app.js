@@ -82,7 +82,7 @@
 
   const {
     targetFromConstraint, angleDegrees,
-    measuredDimensionValue, measuredConstraintTargetValue,
+    measuredConstraintTargetValue,
     angleDimensionAngles,
     isReadOnlyDimension, isDimensionConstraint,
   } = window.DimensionQueries;
@@ -216,10 +216,7 @@
   const instanceSourceSelection = window.InstanceProjection.createSourceSelection({
     currentScope: () => editingScopeBinding.current, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
   });
-  const dimensionLabels = window.DimensionPresentation.createLabel({
-    isReadOnlyDimension, measuredDimensionValue, angleDegrees, dimensionDisplayState, constraintSketchId,
-    formatDimensionLabel, formatMeasuredDimensionLabel,
-  });
+
   const { hitAnnotationTarget, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationFeature.createAnchorQuery({
     sketches: sketchContext, readServices: geometryReadServices, pointUsage, selection: canvasSelection, viewportScale: () => viewport.scale,
   });
@@ -437,9 +434,9 @@
   });
   const { resetCanvasStrokeState, withCanvasState } = canvasSurface;
   const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR } = window.DimensionMetrics;
-  const dimensionDisplay = window.DimensionDisplay.create({ ctx, viewport, currentLines: () => workspace.current().lines,
+  const { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint } } = window.DimensionDisplay.createForScene({ ctx, viewport, currentLines: () => workspace.current().lines,
     minLineLength: MIN_LINE_LENGTH, canvasThemeColor, onExpressionMark: canvasRenderProbe.captureExpressionMark,
-    effectiveDimensionAppearance, activeSketchId });
+    appearance: dimensionAppearance, sketches: sketchContext });
   const { metrics: dimensionMetrics, placement: dimensionPlacement, layouts: dimensionLayouts, painter: dimensionPainter } = dimensionDisplay;
   const { feature: dimensionInput, input: dimensionValueInput } = window.DimensionInput.createForDocument({
     document, viewport, syncHighlight: syncExpressionInputHighlight,
@@ -1043,7 +1040,6 @@
 
   const { hitConstraintOperand: queryConstraintOperand } = sceneHitQueries.operands;
 
-  function dimensionLabelForConstraint(...args) { return dimensionLabels.label(...args); }
 
   function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
 

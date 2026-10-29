@@ -7,7 +7,7 @@ const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/
 for (const file of sources.filter(source => source.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window, { Point, Line } = w.GeometrySolver;
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
-function fixture() {
+function fixture(buildDisplay = ports => ({ display: w.DimensionDisplay.create(ports) })) {
   const state = { ready: false, scale: 2, active: 'S1', scope: { lines: [] }, resolves: [] }, calls = [], marks = [], stack = [];
   const document = { defaultDimensionAppearance: { color: '#123456' } };
   const viewport = { get scale() { assert.equal(state.ready, true); return state.scale; } };
@@ -19,15 +19,16 @@ function fixture() {
   raw.fillText = (...args) => calls.push(['fillText', ...args, raw.font]);
   raw.stroke = () => calls.push(['stroke', raw.strokeStyle]);
   const ctx = new Proxy(raw, { get(target, key) { assert.equal(state.ready, true); return target[key]; } });
-  const appearance = w.GeometryAppearanceQuery.createDimension({ document, currentSketches: () => [],
+  const appearance = w.GeometryAppearanceQuery.createDimension({ document, currentSketches: () => state.sketches || [],
     activeSketchId: () => state.active, isRootSketch: () => false });
-  const display = w.DimensionDisplay.create({ ctx, viewport,
+  const bundle = buildDisplay({ ctx, viewport,
     currentLines: () => { assert.equal(state.ready, true); return state.scope.lines; }, minLineLength: 1e-6,
     canvasThemeColor: color => { calls.push(['theme', color]); return color; }, onExpressionMark: mark => marks.push(mark),
     effectiveDimensionAppearance: (dimension, sketchId) => { assert.equal(state.ready, true); state.resolves.push([dimension, sketchId]); return appearance.effectiveDimensionAppearance(dimension, sketchId); },
-    activeSketchId: () => { assert.equal(state.ready, true); return state.active; } });
+    activeSketchId: () => { assert.equal(state.ready, true); return state.active; } }, appearance, state);
+  const { display } = bundle;
   assert.deepEqual(calls, []); assert.deepEqual(state.resolves, []); state.ready = true;
-  return { state, display, viewport, document, calls, marks, raw, stack };
+  return { state, display, labels: bundle.labels, bundle, viewport, document, calls, marks, raw, stack };
 }
 
 test('display preview shares placement and painter while reading current pending expressions and appearance', () => {
@@ -205,4 +206,47 @@ test('traversal observes hover, drag, selection, editing and PNG export flags th
   assert.equal(f.calls.filter(call => call[0] === 'fillText').length, 2); assert.equal(f.marks.length, 0);
   assert.equal(f.calls.some(call => call[0] === 'stroke' && ['#2563eb', '#999999'].includes(call[1])), false);
   assert.equal(f.stack.length, 0);
+});
+
+function buildSceneDisplay(ports, appearance, state) {
+  const { effectiveDimensionAppearance, activeSketchId, ...options } = ports;
+  return w.DimensionDisplay.createForScene({ ...options,
+    appearance: { effectiveDimensionAppearance, dimensionDisplayState: appearance.dimensionDisplayState },
+    sketches: { activeSketchId, constraintSketchId: constraint => { assert.equal(state.ready, true); return constraint.sketchId || state.active; } },
+  });
+}
+
+test('scene composition shares live Sketch appearance across labels, layout and the actual painter without eager reads', () => {
+  const f = fixture(buildSceneDisplay); assert.ok(Object.isFrozen(f.bundle)); assert.ok(Object.isFrozen(f.display)); assert.ok(Object.isFrozen(f.labels));
+  assert.equal(f.bundle.display, f.display); f.document.defaultDimensionAppearance = { precision: 1, suffix: 'mm' };
+  f.state.sketches = [
+    { id: 'S1', kind: 'sketch', dimensionAppearance: { prefix: 'A', precision: 2, color: '#aa0000', extensionLineOvershoot: 1 } },
+    { id: 'S2', kind: 'sketch', dimensionAppearance: { prefix: 'B', precision: 1, color: '#0000aa', extensionLineOvershoot: 5 } },
+  ];
+  const target = { kind: 'point-point', p1: new Point('A', 0, 0), p2: new Point('B', 100, 0) };
+  const dimension = f.display.placement.dimensionFromAnchor(target, { x: 50, y: -20 }), constraint = { target: 12, sketchId: 'S1' };
+  const first = f.display.layout(target, dimension), label = f.labels.label(constraint, target, dimension);
+  assert.equal(label, 'A12.00mm'); assert.equal(first.points[0].source, target.p1);
+  f.calls.length = 0; f.display.painter.drawDimension(target, dimension, label);
+  assert.ok(f.calls.some(call => call[0] === 'fillText' && call[1] === label)); assert.ok(f.calls.some(call => call[0] === 'stroke' && call[1] === '#aa0000'));
+  f.state.active = 'S2'; constraint.sketchId = 'S2';
+  const second = f.display.layout(target, dimension), nextLabel = f.labels.label(constraint, target, dimension);
+  assert.equal(nextLabel, 'B12.0mm'); close(Math.abs(second.points[0].extensionEnd.y - first.points[0].extensionEnd.y), 4 * w.Appearance.CSS_PX_PER_MM / f.state.scale);
+  f.calls.length = 0; f.display.painter.drawDimension(target, dimension, nextLabel);
+  assert.ok(f.calls.some(call => call[0] === 'fillText' && call[1] === nextLabel)); assert.ok(f.calls.some(call => call[0] === 'stroke' && call[1] === '#0000aa'));
+  assert.equal(f.stack.length, 0);
+});
+
+test('scene labels and layout propagate the same appearance failure while explicit resolved display remains usable', () => {
+  const f = fixture(buildSceneDisplay), marker = new Error('dimension appearance');
+  const target = { kind: 'point-point', p1: new Point('A', 0, 0), p2: new Point('B', 100, 0) };
+  const dimension = f.display.placement.dimensionFromAnchor(target, { x: 50, y: -20 }), constraint = { target: 12, sketchId: 'S1' };
+  const before = JSON.stringify({ target, dimension });
+  Object.defineProperty(f.document, 'defaultDimensionAppearance', { get() { throw marker; } });
+  assert.throws(() => f.labels.label(constraint, target, dimension), error => error === marker);
+  assert.throws(() => f.display.layout(target, dimension), error => error === marker);
+  assert.equal(JSON.stringify({ target, dimension }), before); assert.deepEqual(f.calls, []);
+  const resolved = w.Appearance.normalizeDimensionAppearance({ prefix: 'R', precision: 3 }, { partial: false });
+  assert.equal(f.labels.label(constraint, target, dimension, resolved), 'R12.000');
+  assert.equal(f.display.layout(target, dimension, resolved).points[0].source, target.p1);
 });
