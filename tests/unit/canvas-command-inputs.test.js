@@ -253,3 +253,62 @@ test('constraint and selection adapters keep shared selection identity, group dr
   f.calls.length = 0; f.state.pending = null; f.state.top = line; f.api.selection.begin({ ...f.event, ctrlKey: true }, f.p, { hitL: line });
   assert.equal(f.selection.lines[0], line); f.api.selection.begin({ ...f.event, shiftKey: true }, f.p, { hitL: line }); assert.equal(f.selection.lines.length, 0);
 });
+
+function keyboardFixture() {
+  const f = fixture({}, true), listeners = new Set();
+  const record = name => (...args) => f.calls.push([name, ...args]);
+  const browser = {
+    addEventListener(type, handler) { assert.equal(type, 'keydown'); listeners.add(handler); },
+    removeEventListener(type, handler) { assert.equal(type, 'keydown'); listeners.delete(handler); },
+  };
+  Object.assign(f.options.annotationDrag, { handlesActive: false, resizing: false,
+    begin(event, hit, point) { assert.equal(this, f.options.annotationDrag); this.handlesActive = true; f.calls.push(['annotation-begin', hit, point]); },
+    reset() { assert.equal(this, f.options.annotationDrag); this.handlesActive = false; f.calls.push(['annotation-reset']); } });
+  f.command.cancel = () => false;
+  f.options.instanceSourceCommand.finish = record('finish-sources');
+  f.state.ready = false;
+  const keyboard = f.feature.createKeyboard({ window: browser,
+    menus: { closeSketch: () => false, canvasVisible: () => false }, sketchMove: { active: false },
+    constraintStatusView: { hold: () => false }, dimensionInput: { handleKey: () => false }, shortcuts: {},
+    isGeometryMode: () => true, projection: {}, referenceImage: {}, splineEditing: {}, blockPlacement: {},
+    pendingCommandSession: { get current() { assert.equal(f.state.ready, true); return f.state.pending; } },
+    constraintTargetSession: { get command() { assert.equal(f.state.ready, true); return f.state.constraint; } },
+    cancelPendingCommand: message => { f.calls.push(['cancel-pending', message]); if (f.state.cancelFailure) throw f.state.cancelFailure; },
+    cancelConstraintTargetCommand: record('cancel-constraint'), drawing: { active: () => false, isToolMode: () => false },
+    completeLineLength: () => false, isTextEditingTarget: () => false,
+  });
+  assert.deepEqual(f.calls, []); assert.equal(listeners.size, 0); f.state.ready = true;
+  function key(key) { const event = { key, target: {}, preventDefault: record('key-prevent') }; for (const handler of listeners) handler(event); }
+  return { ...f, keyboard, browser, listeners, key };
+}
+
+test('staged keyboard shares pointer annotation handles and Selection, retaining explicit listener lifetime', () => {
+  const f = keyboardFixture(), annotation = { id: 'AN', type: 'text' };
+  f.keyboard.start(); f.keyboard.start(); assert.equal(f.listeners.size, 1);
+  f.api.annotation.select(f.event, f.p, { blankAnnotationHit: { element: annotation, part: 'frame' } });
+  assert.equal(f.options.annotationDrag.handlesActive, true); assert.ok(f.names().includes('annotation-begin'));
+  f.calls.length = 0; f.command.cancel = () => assert.fail('annotation handles have cancellation priority');
+  f.key('Escape'); assert.equal(f.options.annotationDrag.handlesActive, false);
+  assert.deepEqual(f.names(), ['key-prevent', 'annotation-reset', 'ui', 'draw']);
+  f.command.cancel = () => false; f.selection.set('points', [f.p]); f.calls.length = 0;
+  f.key('Escape'); assert.equal(f.selection.hasSelection(), false);
+  assert.deepEqual(f.names(), ['key-prevent', 'clear', 'hint', 'ui', 'draw']);
+  let external = 0; f.browser.addEventListener('keydown', () => external++);
+  f.keyboard.dispose(); f.keyboard.dispose(); f.calls.length = 0; f.key('Escape');
+  assert.deepEqual(f.calls, []); assert.equal(f.listeners.size, 1); assert.equal(external, 1);
+});
+
+test('keyboard finishes the same pointer source command and annotation, retaining live cancellation priority and errors', () => {
+  const f = keyboardFixture(), source = { id: 'source' }; f.keyboard.start(); f.state.mode = 'instance-sources';
+  f.api.instance.click(f.event, f.p, { hitL: source }); assert.equal(f.calls.at(-1)[1], source);
+  f.calls.length = 0; f.key('Enter'); assert.deepEqual(f.calls, [['key-prevent'], ['finish-sources', true]]);
+  f.state.mode = 'select'; f.options.annotationCommand.active = true;
+  f.options.annotationCommand.finish = function () { assert.equal(this, f.options.annotationCommand); f.calls.push(['finish-annotation']); };
+  f.calls.length = 0; f.key('Enter'); assert.deepEqual(f.names(), ['key-prevent', 'finish-annotation']);
+  f.options.annotationCommand.active = false; f.state.pending = {}; f.state.constraint = {}; f.calls.length = 0;
+  f.key('Escape'); assert.deepEqual(f.calls, [['key-prevent'], ['cancel-pending', undefined]]);
+  f.state.pending = null; f.calls.length = 0; f.key('Escape'); assert.deepEqual(f.calls, [['key-prevent'], ['cancel-constraint']]);
+  f.state.pending = {}; f.state.cancelFailure = new Error('pending cancellation'); f.calls.length = 0;
+  assert.throws(() => f.key('Escape'), error => error === f.state.cancelFailure);
+  assert.deepEqual(f.calls, [['key-prevent'], ['cancel-pending', undefined]]); f.keyboard.dispose();
+});

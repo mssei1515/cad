@@ -1,4 +1,4 @@
-/* Assemble the five Canvas command input adapters around shared editing owners. */
+/* Compose Canvas command routing and staged pointer/keyboard bindings. */
 (() => {
   "use strict";
   function create(options) { return createFeature(options).inputs; }
@@ -72,7 +72,19 @@
         press: { ...press, activation: { ...press.activation, selection: canvasSelection },
           worldPoint: viewport.canvasPoint, screenPoint: viewport.canvasScreenPoint, inputs } });
     }
-    return Object.freeze({ inputs, bindPointer });
+    function createKeyboard({ window: browserWindow, menus, sketchMove, constraintStatusView, dimensionInput, shortcuts,
+      isGeometryMode, projection, referenceImage, splineEditing, blockPlacement,
+      pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand, drawing,
+      finishSpline, finishProjection, finishHatch, removeSplinePoint, offset, readPointer,
+      deleteSelection, completeLineLength, isTextEditingTarget }) {
+      return window.KeyboardInput.create({ window: browserWindow, menus, sketchMove, constraintStatusView, dimensionInput, shortcuts,
+        readMode, isGeometryMode, instances: geometryInstanceCommand, projection, referenceImage, splineEditing, blockPlacement, annotationDrag,
+        pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand, drawing,
+        hasSelection: canvasSelection.hasSelection, clearSelection, annotation: annotationCommand, finishSources: instanceSourceCommand.finish,
+        finishSpline, finishProjection, finishHatch, removeSplinePoint, offset, readPointer, deleteSelection, completeLineLength,
+        isTextEditingTarget, setHint, updateUI, draw });
+    }
+    return Object.freeze({ inputs, bindPointer, createKeyboard });
   }
   window.CanvasCommandInputs = Object.freeze({ create, createFeature });
 })();

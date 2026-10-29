@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-29）
 
+### 最新：Keyboard生成を共有Canvas入力機能へ統合（2026-10-29、検証完了）
+
+基準develop／origin/developはc324732。本単位はcodex/canvas-keyboard-compositionで実施した。既存CanvasCommandInputs.createFeatureのcreateKeyboardから、Pointerと同じmode reader・Geometry Instance・Annotation command／drag・Selection・UI通知を実KeyboardInputへ接続する。Sketch移動・menu・shortcut・text入力判定・固有の確定操作とpending／constraint sessionは後段の明示portに残す。Selection.hasSelectionとInstance参照元command.finishも同じfrozen ownerから捕捉する。生成／startは元の後段のままで、createFeature時にKeyboard生成やstate照会・listener登録を行わない。
+
+app.jsは2,147→2,145行（2行減）、非空白1,695行、root直下476文・関数122個、test hooks351行。Keyboardへのroot引数35→25、共通10portを再利用する。TEMP cad-canvas-keyboard-composition-proof.cjsで全35引数の対応と二method aliasの参照元、他のapp全statement／start順、既存Pointer組立てのAST不変を確認した。KeyboardInput・KeyboardInteractionController・CanvasCommandCancellation三moduleは不変。Escapeは一つずつ優先して取消し、Canvas menuは複数対象を順に取消す既存方針を維持し、両者のcancel実装を共通化しない。新mode・Selection・sessionやmutable contextは追加せず、既存の個別factoryも残す。
+
+canvas-command-inputs.test.jsへ実Annotation／Instance入力・Selection・KeyboardInput／KeyboardInteractionControllerを組み合わせる二つの境界試験を追加した。Pointerで始めた注記handleを同じKeyboardから解除し、同じSelectionも解除できること、同じInstance参照元commandとAnnotationの完了、操作時のpending優先／constraint取消と例外、生成時の照会なし、明示startと重複登録なし、外部listenerを残すdisposeを確認した。取消callbackの引数なしという元の契約も維持する。既存期待値は変更していない。関連単体23件・全単体2,001件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新した。
+
+関連E2E229件が全成功（3.6分、exit 0、runner53671）。既存UI、Sketch移動／編集、Annotation anchors、free Instance、派生pattern、参照画像、command panel、phase0保存互換性／描画比較を実行した。TEMP cad-canvas-keyboard-composition-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server22984停止とsource二つのhash不変を確認した。今回は関連229件であり、最新コード全体のE2Eとは扱わない。UI・入力優先順位・保存形式・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用12%／残量88%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。今回の行数減少は小さいが、入力経路をまたぐ同じownerの重複接続を除いた単位である。次も機能の生成／起動とtest API公開を監査し、巨大contextや汎用setterで循環を隠す変更はしない。200〜500行の全体目標は未達であり、現在の中間成果で完了扱いにしない。
+
 ### 最新：入力計測のテストAPIをCanvasTestDriverへ集約（2026-10-29、検証完了）
 
 基準develop／origin/developはd64be0b。本単位はcodex/interaction-profile-test-apiで実施した。既存CanvasTestDriver.createInteractionProfilingへ実ProfilerとPointerMoveSchedulerの二ownerを明示して渡し、計測開始／停止・frame統計reset／取得の四つのブラウザテストAPIをまとめた。appは既存test flag内の最後で生成し、元の公開位置へ展開する。生成はObjectを返すだけで状態を読まない。計測stateと入力queue／coalescingは従来の診断／UI ownerに残し、新session・globalや通常機能の移管を行わない。
