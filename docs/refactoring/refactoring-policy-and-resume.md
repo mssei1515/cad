@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,185行、非空白1,735行、root直下488文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,178行、非空白1,728行、root直下481文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：外観・描画照会を実ownerから直接接続（2026-10-29、検証完了）
+
+基準develop／origin/developは7e13172。本単位はcodex/appearance-query-bindingsで実施した。GeometryReadServicesのGeometry／Dimension／Annotation外観とGeometryPresentationのcommand targets／Sketch styleが返す十二の実照会を、生成後かつ最初のconsumerより前に捕捉し、同名のroot転送関数を削除した。対象methodはfrozen ownerのclosureでreceiver／arguments objectに依存しない。生成時には照会を実行せず、現在scope・表示設定・cache・mode・Panel選択を操作時に読む構造は維持する。初期化順のために残る遅延委譲へ一律に適用しない。
+
+app.jsは2,185→2,178行（7行減）、非空白1,728行、root直下488→481文、root関数142→130個。TEMP cad-appearance-query-bindings-proof.cjsで十二bindingの不変性と全参照が初期化後であること、他のapp全statementのAST不変、実照会methodにthis／arguments依存がなく元moduleが不変であることを確認した。新しい機能・state・global・context・adapterを追加しない。既存の所有者とconsumerを直結し、不要なhoisted転送の層を除く単位であり、機能そのものを新fileへ分割したとは扱わない。
+
+関連単体59件・全単体1,995件・構文618ファイルが成功（exit 0）。既存の外観、GeometryReadServices、GeometryPresentation、GeometryDisplay、DocumentWorkspaceの検証を実行した。この低影響の接続整理だけを固定する新テストや、既存期待値の変更は加えていない。モジュール構成とimplementation-mapへ直接接続と遅延readerの区別を記録した。
+
+関連E2E212件が全成功（3.2分、exit 0、runner84366）。既存UI、非表示可視性、注記、leader外観、注記表示寸法、phase0保存互換性／描画比較、PNG出力、Hatch、Sketch投影を実行した。非表示Block内部Sketchの中心線を外側で隠す既存回帰も含む。TEMP cad-appearance-query-bindings-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server28096停止とapp hash不変を確認した。今回は関連212件であり、最新コードの全体E2Eとは扱わない。UI・保存形式・性能上限／timeout・テスト期待値は変更していない。
+
+週枠使用9%／残量91%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。残るquery・commandの一文委譲にも直接接続可能なものがあるが、owner生成時機、receiver、引数加工と部分的構築の契約を個別に確認する。200〜500行の全体目標は未達であり、小さな転送整理だけで届くとは扱わない。次も機能単位の構築・起動とtest API公開の境界を監査する。
 
 ### 最新：トリム生成を共有作図機能へ統合（2026-10-29、検証完了）
 

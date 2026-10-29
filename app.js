@@ -150,6 +150,9 @@
   });
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, annotationAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
+  const { effectiveAppearanceForElement, isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
+  const { effectiveDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState } = dimensionAppearance;
+  const { effectiveAnnotationStyle } = annotationAppearance;
   const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems } = hatchGeometryQuery;
   const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
@@ -460,6 +463,8 @@
   const sketchPresentation = window.GeometryPresentation.createSketchStyle({
     sketchHasSolveError, elementSketchId, sketchRelationOfElement, constraintStatusOf, isVisibleSketchElement, isActiveSketchElement,
   });
+  const { isConstraintOperandSelected } = commandTargetPresentation;
+  const { constraintStatusColor, sketchStrokeWidth, sketchAlpha } = sketchPresentation;
   const geometryDisplay = window.GeometryDisplay.create({
     Point, ctx, viewport, surface: canvasSurface,
     pointUsage, commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, canvasSelection, canvasHover, viewState,
@@ -713,7 +718,6 @@
     save: saveJot2DFile, saveAs: saveJot2DFileAs, importFileData } = documentFileFeature;
 
 
-  function effectiveDimensionAppearance(...args) { return dimensionAppearance.effectiveDimensionAppearance(...args); }
 
   function ensureAppearanceState() {
     return documentPreparation.appearance();
@@ -754,7 +758,6 @@
 
   function decorateSerializedConstraint(data, constraint) { return constraintMetadata.decorate(data, constraint); }
 
-  function effectiveAppearanceForElement(...args) { return geometryAppearance.effectiveAppearanceForElement(...args); }
 
 
   function selectionItems(...args) { return selectionScopeQuery.selectionItems(...args); }
@@ -780,13 +783,9 @@
 
   function rejectRootSketchCreation(...args) { return sketchEditAccess.rejectRootSketchCreation(...args); }
 
-  function isVisibleValue(...args) { return geometryAppearance.isVisibleValue(...args); }
-  function isVisibleSketchId(...args) { return geometryAppearance.isVisibleSketchId(...args); }
-  function isVisibleSketchElement(...args) { return geometryAppearance.isVisibleSketchElement(...args); }
 
 
 
-  function isConstraintOperandSelected(...args) { return commandTargetPresentation.isConstraintOperandSelected(...args); }
 
   function syncSelectionFromConstraintOperands() { canvasSelection.applyConstraintTargets(constraintTargetsFromOperands(constraintTargetSession.operands)); }
 
@@ -813,16 +812,13 @@
 
   function refreshConstraintAnalysis(options = {}) { return constraintAnalysis.refresh(options); }
 
-  function constraintStatusColor(...args) { return sketchPresentation.constraintStatusColor(...args); }
 
-  function sketchStrokeWidth(...args) { return sketchPresentation.sketchStrokeWidth(...args); }
 
   function canvasThemeColor(value) {
     return window.CanvasThemeColors.color(value, applicationSettings.theme);
   }
 
 
-  function sketchAlpha(...args) { return sketchPresentation.sketchAlpha(...args); }
 
   function selectedItemsForGeometryInstance() { return instanceSourceSelection.read(); }
 
@@ -1202,7 +1198,6 @@
   function drawDimensions() { return dimensionLayer.draw(); }
 
 
-  function effectiveAnnotationStyle(element) { return annotationAppearance.effectiveAnnotationStyle(element); }
 
 
 
@@ -1422,7 +1417,6 @@
   const { context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter, insertAnnotation: insertClickedAnnotationParameter } = expressionInputController;
 
 
-  function effectiveDimensionAppearanceForSketch(...args) { return dimensionAppearance.effectiveDimensionAppearanceForSketch(...args); }
 
 
 
@@ -1473,7 +1467,6 @@
 
 
 
-  function dimensionDisplayState(...args) { return dimensionAppearance.dimensionDisplayState(...args); }
 
 
 
