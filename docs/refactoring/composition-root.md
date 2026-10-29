@@ -6,6 +6,16 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Geometry生成と作図基盤の共有接続（2026-10-30、既存性能失敗を切り分け）
+
+基準develop／origin/developは6b77cf0。本単位はcodex/authoring-geometry-foundationで実施した。既存BasicDrawingTools.createGeometryはGeometryCreation→同じaddPointを使うEndpoint resolverを生成し、実Geometry APIと後段createAuthoring入口を返す。後段は同じscope／ID／Geometry／endpointAt／最小Line・Arc長を既存createAuthoringへ渡す。端点解決の唯一の利用先である作図基盤へ直接接続し、rootのendpointAt bindingを除いた。通常Geometry APIは他の編集・投影・保存へ引き続き同じ実参照で公開し、model・ID・draftを複製しない。Geometryと作図基盤の二つの生成位置、Endpoint hit／snapshot／BlankGesture等の遅延callback、旧createAuthoringの個別port APIと子生成順を維持する。新file・可変context・setterは追加しない。
+
+app.jsは2,028→2,026行（2行減）、非空白1,578→1,576行、root438→437文／関数98個／test hooks333行／可変参照三つ。三生成・45項目をroot二生成・38項目へ整理した。TEMP cad-authoring-geometry-foundation-proof.cjsで全接続式、既存BasicDrawingTools部分とその他appのAST不変、raw GeometryCreationの差分なしを確認。rootの既存APIのdestructureは保ち、端点だけをroot外にした。hierarchy.cjsでは構築136文774非空白行、hooks333行、一文call関数92個116行、その他208文348行（文外5行）。hooksと短い委譲を全て除く仮定でも1,127非空白行であり、全体目標active・数百行目標未達である。
+
+既存basic-drawing-tools.test.jsへ実GeometryCreation／GeometryIds／DrawingSnap／SnapConstraints／Line等を使う二件を追加した。生成時のscope／hit／checkpoint照会なし、同じ既存端点の再利用、明示Pointと異なるendpointの生成、直接追加と作図での採番・参照共有、scope／Sketch・constructionの切替、最小長4の一致を確認する。hit例外は同一errorのまま伝播し、transient開始後、明示Point hit・採番・モデル挿入前に停止する。関連単体36件・全単体2,042件・構文622ファイルが成功。関連E2Eは220成功・性能1失敗（4.0分、exit 1、runner83822）。unified-ui／spline／blocks／free-instance／sketch-permissions／sketch-projection／slot-dimension／file-safety／adversarial-authoring-performanceを実行した。失敗はselection／deletion／undo／redo性能試験の矩形選択282ms（上限は250ms未満）で、機能assertや残る性能項目には失敗がない。上限・worker・timeout・期待値は変えず、同じ作業ツリー・Git情報取得・metadata・ファイルI/Oを使いapp.jsとBasicDrawingToolsだけを6b77cf0へ差替え配信するTEMP serverで比較した。変更前・変更後とも矩形265ms／250msで失敗した。HTTP配信した二fileを基準Git blobと照合する再確認でも一致し、変更前は250ms／250msで失敗した。今回のGeometry接続に固有の回帰の証拠はなく、変更前からの性能失敗として記録するが、具体原因と性能試験の安定化は未解決で、全テスト成功とは報告しない。TEMP cad-authoring-geometry-foundation-{check,unit,e2e}.log、run.ps1、proof.cjs、hierarchy.cjs、source-hashes.json、e2e-receipt.json、last-run.jsonとcad-authoring-geometry-{baseline,performance,baseline-verified}*へ証跡を保持。HTTPのbaseline-http-proof.jsonも保存した。404製品／E2E入力fileのhash不変、各receipt exitCode 1／listeners 0と自己起動server停止を確認した。今回の全体E2Eは未実行で、以前の全588件成功を今回の全体検証として流用しない。今回は既存module／test内の変更なのでscript／syntax／unit登録を増やさない。UI・保存形式・既存期待値・性能上限／timeout・workerは変更しない。
+
+開始時の週枠使用17%／残量83%で停止条件未到達。main／origin/mainは5800850を保持し、停止／releaseの最後に反映する。AGENTS.mdの既存問題による検証失敗を明記する条件に従い、今回の接続と切り分け記録をCommit／Push・develop統合する。mainは変更しない。次は新しい分離より性能失敗の原因調査を優先し、既存上限を守る。今回の2行減や短い委譲の移動だけで200〜500行へ届くとは見積もらない。
+
 ### 最新：Sketch求解とParameter安定化の組立て（2026-10-30、検証完了）
 
 基準develop／origin/developは5662046。本単位はcodex/sketch-solving-featureで実施した。src/application/sketch_solving_feature.jsのSketchSolvingFeature.createがSketchSolving→ParameterStabilization→stored-definition stabilization→SolveRefreshCommandを元の順で生成する。四APIを実参照のまま返し、同じ求解APIとstabilizeを接続する。通常currentScope／Parameter namespaceとreadEditingScope／activateEditingScopeの役割を区別し、前の編集scope復元とHatch ID保持、snapshot復元・受理誤差・反復上限／収束許容差、解析・表示・履歴の順序を維持する。Profilerは実activeを呼出し時に読み、同じwork関数をreceiverなしでdependencies／parametersへ使う。計算・モデル・履歴本体は既存ownerに残し、新state・scope stack・可変contextは持たない。初期化順と早期callbackのhoisted入口は保持する。

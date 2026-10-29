@@ -80,6 +80,16 @@
     });
   }
 
+  function createGeometry({ currentScope, ids, assignSketchId, currentConstruction, minLineLength, minArcLength,
+    hitEndpointPoint, hitExplicitPoint }) {
+    const geometry = window.GeometryCreation.create({ currentScope, ids, assignSketchId, currentConstruction, minLineLength, minArcLength });
+    const { endpointAt } = window.GeometryCreation.createEndpointResolver({ addPoint: geometry.addPoint, hitEndpointPoint, hitExplicitPoint });
+    function createTools(options) {
+      return createAuthoring({ ...options, currentScope, ids, geometry, endpointAt, minLineLength, minArcLength });
+    }
+    return Object.freeze({ geometry, createAuthoring: createTools });
+  }
+
   function createAuthoring({ currentScope, ids, geometry, endpointAt, samePosition, sketchContext, pointUsage, geometryReads,
     isVisibleSketchElement, annotationAnchors, scale, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
     minLineLength, minArcLength, selection, preview, checkpoint, cancelConstraintTargetCommand, cancelPendingCommand,
@@ -186,5 +196,5 @@
     }
     return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createBlankGesture, createCanvasInput: createAuthoringInput });
   }
-  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring, createCanvasInput });
+  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createGeometry, createAuthoring, createCanvasInput });
 })();

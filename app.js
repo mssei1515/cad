@@ -503,24 +503,22 @@
     renderer: placementPreview, readMode: drawOperationLifecycle.readMode, readPointer: () => drawingPreview.pointer,
     blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle,
   });
-  const geometryCreation = window.GeometryCreation.create({
+  const { geometry: geometryCreation, createAuthoring: createAuthoringTools } = window.BasicDrawingTools.createGeometry({
     currentScope: workspace.current, ids: geometryIds, assignSketchId, currentConstruction: () => constructionCommand.enabled,
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
+    hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
   });
   const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
-  const { endpointAt } = window.GeometryCreation.createEndpointResolver({
-    addPoint, hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
-  });
   const sketchProjectionEditing = window.SketchProjectionEditing.create({
     currentScope: workspace.current, queries: sketchProjectionQueries, resolveGeometryRef, geometryRefForItem, geometryKindForItem,
     constraintSketchId, constraintIsOperational, addPointToSketch, constraintReferencesPoint, nextSeq, normalizeAppearance,
   });
   const { separateSharedSketchProjectionTargetPoints, synchronizeSketchProjectionMetadata } = sketchProjectionEditing;
-  const authoringTools = window.BasicDrawingTools.createAuthoring({
-    currentScope: workspace.current, ids: geometryIds, geometry: geometryCreation, endpointAt, samePosition, sketchContext, pointUsage, geometryReads, isVisibleSketchElement,
+  const authoringTools = createAuthoringTools({
+    samePosition, sketchContext, pointUsage, geometryReads, isVisibleSketchElement,
     annotationAnchors: () => allAnnotations().filter(element => isVisibleSketchElement(element) && element.visible !== false).map(element => ({ element, ...annotationPlacementAnchor(element) })),
     scale: () => viewport.scale, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
-    minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH, selection: canvasSelection, preview: drawingPreview,
+    selection: canvasSelection, preview: drawingPreview,
     checkpoint: { capture: (...args) => snapshotGeometryMutationState(...args), restore: (...args) => restoreGeometryMutationState(...args) },
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     setMode: drawOperationLifecycle.setMode, resetEditing: () => splineEditing.reset(),
