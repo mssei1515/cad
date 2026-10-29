@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：SelectionとSketch編集権限の生成依存を同じfeatureへ集約（2026-10-30、検証完了）
+
+基準develop／origin/developは273b172。本単位はcodex/selection-edit-accessで実施した。CanvasSelectionFeature.createEditingはSelection→scope query→SketchCommand.createEditAccess→identity selectionを生成する。権限は今生成した同じscope.selectionItemsを使い、appの未生成Selectionへのhoisted照会を不要にした。appは返されたaccessの四APIと生成済みscope.selectionSketchIdを接続し、selectionItems／selectionSketchIdの二つの委譲関数を除いた。旧createの五port注入APIと五field返却、createConstraintOperands／createPresentationは維持する。新しい可変接続参照やSelection／操作stateを追加しない。
+
+app.jsは2,055→2,051行（4行減）、非空白1,604→1,600行、root直下449→447文・関数100→98個、test hooks333行、可変参照三つ。対象の権限生成はappから既存Selection featureへ集約した。TEMP cad-selection-edit-access-proof.cjsで旧権限11portとSelection生成5port、元のSelection／scope constructorとidentity以降の全feature処理のAST一致、その他appのAST不変、raw SketchCommandのGit blob不変と生成時に操作callbackを呼ばない構造を確認した。生成順はaccess→SelectionからSelection→scope→accessへ変わるが、access factoryは関数定義と凍結API返却だけで、初期scope・Selection・通知を変えない。root未使用binding 0。hierarchy.{cjs,json}では構築146文799非空白行、hooks1文333行、一文call関数92個116行、その他208文347行（文外5行）。数百行目標は未達のままとする。
+
+canvas-selection-feature.test.jsへ実Selection／scope・SketchCommand access・identityを使う二つの境界試験を追加した。生成時のSketch照会／遅延snap・preview操作なし、同じ選択とscopeからの現在権限・active Sketch変更、locked identityを選択してから拒否する順序、default Sketch／operationとGeometry modeの短絡、作図拒否時の元のcleanup順、snap例外時の同じerrorとSelection・未実行preview／drawを確認した。既存テストの期待値は変更しない。関連単体21件・全単体2,033件・構文618ファイルが成功（exit 0）。正式モジュール構成とimplementation-mapでは、scopeの先行hoisted参照が必要という旧説明も現構成へ更新した。
+
+関連E2E207件が全成功（3.0分、exit 0、runner22090）。sketch-permissions／selection-zoom-shadow／blocks／free-instance／sketch-projection／command-panel／file-safety／unified-uiを実行し、Sketch権限／拒否、通常／identity／矩形の選択・表示・zoom、投影／Block／Instance、保存再読込と通常UIを確認した。TEMP cad-selection-edit-access-{focused,check,unit,e2e}.log、proof.cjs、hierarchy.{cjs,json}、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保存。製品／E2E入力402fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。この単位で全E2Eは未実行。直前Scene単位の全588件成功を今回の全体結果として流用しない。UI・保存形式・既存期待値・性能上限／timeoutは変更しない。
+
+週枠使用15%／残量85%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この単位をCommit／Pushしてdevelopへ統合する。次も単に別fileへ大きなrootを移すのでなく、共有ownerを同じ生成階層で組み立て、実際の初期化依存を減らす。後段clearSelection／表示更新・snap／previewのcallbackは元の実行時機を保ち、製品の保存形式／操作規則は変更しない。
+
 ### 最新：準備済みのSketch権限・作図Lifecycle APIを直接接続（2026-10-30、検証完了）
 
 基準develop／origin/developはeff66c8。本単位はcodex/edit-operation-bindingsで実施した。SketchCommand.createEditAccess直後に四つの権限／作図拒否API、DrawOperationLifecycle.createSession直後にexit／active／cancel／isToolModeを同じ凍結APIから取得し、従来のapp名へ接続する。八つの純粋な委譲関数を除いた。Sketchの現在状態、Lifecycleの現在modeと後段bindへの委譲は既存ownerに残す。bind位置・開始／取消／reset・例外順は変更しない。早期登録に必要なselectionItems・履歴／command等のhoisted入口と独自判定は維持する。
