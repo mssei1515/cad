@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Hatchの作図owner共有（2026-10-30、a23e325基準）
+
+BasicDrawingTools.createAuthoring.createHatchは共有するcurrentScope／SketchContext、DrawingPreview、DrawingSnap、Selection、取消・表示通知・履歴を使い、後段で実HatchCommandを生成する。外部portはHatchGeometryQuery、mode照会、最後のpointer、DocumentIds、status更新、領域error表示の六つとする。採番はGeometryIdsではなく同じDocumentIds.allocate／peekを使い、scopeとactive Sketch・previewは操作時に読む。生成時にscope／pointer／IDを照会せず、作成・境界再指定・拒否・例外後の途中状態はHatchCommandに残す。未使用だったSketch切替依存を渡さず、別Sketchの境界再指定を自動切替で許可しない。返すAPIは実HatchCommandのままで、追加draft・mode・cacheを持たず、旧HatchCommand.createの個別port APIも変更しない。
+
+app.jsは1,992→1,988行、非空白1,542→1,538行、root428文／関数88個。構築138文766非空白行、hooks323行、一文call関数84個108行、その他205文336行（文外5行）。可変参照三つは不変。hooksと短い委譲を除いても1,107非空白行が残る。TEMP cad-hatch-authoring-composition-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
 ## Sketch求解結果の明示owner（2026-10-30、6242858基準）
 
 SketchSolving.createStateは結果Mapを非公開で所有し、setSketchSolveOk／setSketchSolveError、sketchSolveState／hasError、単一clear／clearAllを公開する。appは最初の削除接続より前にこのownerを作り、SketchSolvingFeatureのsolveState portを経て実SketchSolvingへ同じownerを渡す。求解・削除・表示は同じMapを共有する。生成はMapの準備だけで、モデル・scope・UIを読まない。createへstateを渡さない従来の呼出しは独立ownerを生成し、既存APIを維持する。createResultAcceptanceは許容値を束縛した既存の判定を返し、resultの真偽、有限errorNorm、許容値以下という条件とgetter読取り順を維持する。success flagは受理条件へ追加しない。

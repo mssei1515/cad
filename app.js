@@ -1190,7 +1190,7 @@
     clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap, guardEdit: guardSketchEdit,
     prepareLockToggle: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode(); },
   });
-  const { createSketch, activate: setActiveSketch, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
+  const { createSketch, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
   const { command: createdSketchMoveCommand, input: sketchMoveInputBinding } = sketchEditing.createMoveWithInput({
     document, prepare: () => { cancelConstraintTargetCommand(""); cancelPendingCommand(""); exitDrawMode(); canvasHover.clear(); },
@@ -1200,13 +1200,9 @@
   // Publish the command before enabling destination-only input.
   sketchMoveCommand = createdSketchMoveCommand;
   sketchMoveInputBinding.bind();
-  const hatchCommand = window.HatchCommand.create({
-    currentScope: workspace.current, hatchGeometryQuery, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
-    lastPointer: pointerInteractionController.readLastPointer, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },
-    activeSketchId, setActiveSketch, canCreateInActiveSketch, rejectRootSketchCreation,
-    nextHatchId: () => documentIds.allocate("hatch"), hatchSequence: () => documentIds.peek("hatch"),
-    cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection, canvasSelection,
-    updateToolbar, updateStatusUI, updateUI, setHint, draw, recordHistory, applicationText, hatchRegionErrorText,
+  const hatchCommand = authoringTools.createHatch({
+    hatchGeometryQuery, readMode: drawOperationLifecycle.readMode, lastPointer: pointerInteractionController.readLastPointer,
+    documentIds, updateStatusUI, hatchRegionErrorText,
   });
   const { updateHatchPreview, startHatchCreation, startHatchBoundaryRepair, commitHatchAt } = hatchCommand;
 

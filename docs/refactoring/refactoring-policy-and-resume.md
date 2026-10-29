@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,992行、非空白1,542行、root直下428文、条件付きtest hooks323行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,988行、非空白1,538行、root直下428文、条件付きtest hooks323行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Hatch生成を共有作図ownerへ集約（2026-10-30、検証完了）
+
+基準developはa23e325。既存BasicDrawingTools.createAuthoringの後段createHatchが、作図基盤の同じscope／SketchContext・preview・snap・Selection・取消・通知・履歴を共有し、元の生成位置で実HatchCommandを作る。外部はHatchGeometryQuery／mode照会／最後のpointer／DocumentIds／status更新／領域error表示の六port。Hatch採番はGeometryIdsへ混ぜず、同じDocumentIdsのallocate／peekを使う。scope・active Sketch・previewの操作時照会、setterのundefined返却、作成・修復・拒否・例外の境界を保つ。raw HatchCommandの本体と旧APIは変更しない。未使用のsetActiveSketch入力とroot別名を除き、境界再指定が別Sketchを自動で作図先へ変えない既存動作も維持する。新規file・global・状態・cacheやUI／保存形式の変更はない。
+
+app.jsは1,992→1,988行（4行減）、非空白1,542→1,538行、root428文／関数88個／hooks323行／可変参照三つ。Hatchのroot接続は26→6項目（25個は同じchild接続、一つは元から未使用の入力）。構築138文766非空白行、一文call関数84個108行、その他205文336行（文外5行）。TEMP cad-hatch-authoring-composition-{proof,hierarchy}.cjsで全child接続の同値性、workspace.currentとSketchContext／Snapの由来、unused activation入力の未参照、その他appと既存authoring本体のAST不変、root未使用bindingなしを確認した。hooksと短い委譲を除いても1,107非空白行が残り、数百行目標は未達。
+
+単体へ三つの境界試験を追加し、実HatchCommandとDocumentIdsを使って生成時の無操作、live scope／Sketch／preview、共通採番とSelection・履歴、取消後の生成拒否、ID・preview例外、active／local対象だけの境界再指定と同一Hatch保持を確認した。関連単体37件／全単体2,061件が成功。構文624fileが成功。関連5suite（hatching／unified-ui／blocks／command-panel／sketch-move）の169件が全成功（2.4分、exit 0、runner70302）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-hatch-authoring-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存期待値・性能上限／timeout・workerは変更しない。HatchCommand本体と求解・描画は変更せず、今回は全E2E未実行とし、直前の全588件成功と区別する。
+
+次は作図や編集の既存ownerが持つ依存をrootで重複して渡す接続を確認する。DocumentIdsとGeometryIds、workspace.currentと同期済みediting scope、取消／resetの違いは維持し、巨大contextへまとめない。全体目標active、開始時週枠残量77%で停止条件未到達。mainは停止／releaseの最後に反映する。
 
 ### 最新：Sketch求解結果の状態ownerと受理判定（2026-10-30、全E2E検証完了）
 
