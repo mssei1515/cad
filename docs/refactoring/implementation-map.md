@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- DimensionTestDriver.createForEditing: 実Geometry・寸法描画／配置・Sketch・外観・sessionから寸法テストsupportとfixtureを元の順で生成し、元の実APIを返す。test指定時のみ生成し、通常機能の状態・modelを所有しない。旧APIと後段interaction／display支援を維持する。
+
 - PropertiesDisplay.createFeature.operations／createViewForEditing: 実Lifecycle・InstanceSource／Placement・BlockPlacementから選択／表示用の別readerを作り、Properties操作を各実commandへ接続する。状態を保持せず、元の読取順・guard・引数／receiver・戻り値と例外を維持する。旧selectionOperation／createView／createWithControllerも利用可能。
 
 - ConstraintEditing.createCommandInput.createWithDragging: 同じplacement／Selection／guard／入力欄sync／通知を共有し、実寸法入力と寸法dragを元の順で生成する。Sketch・外観・pointerは実ownerを接続し、操作・状態・履歴は既存commandに残す。旧createFeatureも維持する。

@@ -911,5 +911,24 @@
     return Object.freeze({ createFixtures, createInteraction, createDisplay });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
+  // Connect the real dimension owners only when the test bootstrap requests support.
+  function createForEditing({ geometry, display, sketches, appearance, currentScope, viewport, canvasSelection, resetModelState,
+    addDistanceConstraintFromTarget, dimensions, serializeModel, serializeDimension, constraintTargetSession, pendingCommandSession,
+    dimensionValueInput, ctx, layer, dimensionLabelForConstraint }) {
+    const { isDimensionConstraint, isReadOnlyDimension, targetFromConstraint } = window.DimensionQueries;
+    const { hypot2 } = window.GeometrySolver, { ROOT_SKETCH_ID: rootSketchId } = window.SketchHierarchy;
+    const { addPoint, addLine } = geometry, { placement, layouts } = display, { activeSketchId, constraintSketchId, sketchById } = sketches;
+    const support = createSupport({ resetModelState, addPoint, addLine, dimensionFromAnchor: placement.dimensionFromAnchor,
+      addDistanceConstraintFromTarget, activeSketchId, currentScope, isDimensionConstraint,
+      dimensionLayout: (...args) => display.layout(...args), hypot2, targetFromConstraint, serializeModel, constraintTargetSession, pendingCommandSession,
+      dimensionValueInput, ctx, drawDimensions: () => layer.draw(), constraintSketchId, canvasSelection, viewport });
+    const fixtures = support.createFixtures({ isReadOnlyDimension, dimensionLabelForConstraint, defaultDimensionForTarget: placement.defaultDimensionForTarget,
+      startDistanceValueInput: pointer => dimensions.startDistanceValueInput(pointer), dimensionWithLabelAt: placement.dimensionWithLabelAt,
+      angleDimensionLabelBasis: placement.angleDimensionLabelBasis, angleDimensionLayout: layouts.angleDimensionLayout,
+      angleDimensionLabelOffsets: placement.angleDimensionLabelOffsets, setAngleDimensionLabelOffsets: placement.setAngleDimensionLabelOffsets,
+      angleDimensionFromLabelPoint: placement.angleDimensionFromLabelPoint, serializeDimension, rootSketchId, sketchById, isVisibleSketchId: appearance.isVisibleSketchId });
+    return Object.freeze({ support, fixtures });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createForEditing, createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
 })();

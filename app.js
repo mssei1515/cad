@@ -415,8 +415,8 @@
     submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
   });
   const { controller: dimensionInputController } = dimensionInput;
-  const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, dimensionWithLabelAt, angleDimensionFromLabelPoint, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
-  const { jisDimensionTextAngle, dimensionTextOffset, angleDimensionLayout } = dimensionLayouts;
+  const { dimensionFromAnchor, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
+  const { jisDimensionTextAngle, dimensionTextOffset } = dimensionLayouts;
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const { commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, geometry: geometryDisplay,
@@ -1617,15 +1617,11 @@
       currentScope: workspace.current, viewport, canvas, selection: canvasSelection, drag: annotationDrag, annotationLeaderAnchor,
       annotationLeaderTargetFromItem, draw, allGeometryBounds, resetModelState, resizeCanvas, hitAnnotationElement,
     });
-    const dimensionTestSupport = window.DimensionTestDriver.createSupport({
-      resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope: workspace.current,
-      isDimensionConstraint, dimensionLayout, hypot2, targetFromConstraint, serializeModel, constraintTargetSession, pendingCommandSession,
-      dimensionValueInput, ctx, drawDimensions: () => dimensionLayer.draw(), constraintSketchId, canvasSelection, viewport,
-    });
-    const dimensionFixtureSupport = dimensionTestSupport.createFixtures({
-      isReadOnlyDimension, dimensionLabelForConstraint, defaultDimensionForTarget, startDistanceValueInput, dimensionWithLabelAt,
-      angleDimensionLabelBasis, angleDimensionLayout, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, angleDimensionFromLabelPoint,
-      serializeDimension, rootSketchId: ROOT_SKETCH_ID, sketchById, isVisibleSketchId,
+    const { support: dimensionTestSupport, fixtures: dimensionFixtureSupport } = window.DimensionTestDriver.createForEditing({
+      geometry: geometryCreation, display: dimensionDisplay, sketches: sketchContext, appearance: geometryAppearance,
+      currentScope: workspace.current, viewport, canvasSelection, resetModelState, addDistanceConstraintFromTarget,
+      dimensions: dimensionPlacementCommand, serializeModel, serializeDimension, constraintTargetSession, pendingCommandSession,
+      dimensionValueInput, ctx, layer: dimensionLayer, dimensionLabelForConstraint,
     });
     const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint, currentScope: workspace.current,
