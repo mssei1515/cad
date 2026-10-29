@@ -47,6 +47,33 @@
         syncCanvasBitmapSize: surface.syncCanvasBitmapSize, applySketchTreeWidth, draw,
         isValueInputPending, syncDimensionValueInput, currentCanvasCenterWorld: viewport.currentCanvasCenterWorld, applicationText, readLanguage,
       });
+      function createScene({ Point, currentScope, sketches, readServices, pointUsage, commandTargets, sketchStyle,
+        canvasSelection, canvasHover, selectionHighlight, viewState, isSidebarHighlightedElement,
+        canvasThemeColor, applicationText, constructionAlpha, constructionExtensionScreenPx,
+        sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed,
+        editingQueries, annotationBounds, resolvedLoopBounds, hatchAppearanceForDisplay }) {
+        const { reads: geometryReads, geometryAppearance, hatches } = readServices;
+        const { effectiveAppearanceForElement, isVisibleSketchElement, isVisibleSketchId, isVisibleValue } = geometryAppearance;
+        const { activeSketchId, elementSketchId, sketchRelationToActive, sketchName, isEditableSketchElement } = sketches;
+        const { isSidebarHoveredElement, isSelectedConstraintRelatedElement } = selectionHighlight;
+        const { resolvedHatchBoundary } = hatches;
+        const { isDraggingArcEndpoint, isDraggingPoint, isDraggingCenter, editedSpline } = editingQueries;
+        const geometry = window.GeometryDisplay.create({
+          Point, ctx, viewport, surface, pointUsage, commandTargets, sketchStyle, canvasSelection, canvasHover, viewState,
+          isExporting: () => Boolean(exportRenderer.frame), effectiveAppearanceForElement, isEditableSketchElement,
+          isSidebarHighlightedElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement,
+          canvasThemeColor, constructionAlpha, constructionExtensionScreenPx,
+          fixedPointLabel: () => applicationText("固定", "Fixed"), geometryReads, isVisibleSketchElement,
+          handleQueries: { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, isDraggingArcEndpoint, editedSpline, currentScope },
+          pointQueries: { pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item, isDraggingPoint, isDraggingCenter },
+        });
+        const overlay = window.InteractionOverlayRenderer.create({ ctx, viewport, withCanvasState: surface.withCanvasState,
+          elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName });
+        const bounds = window.DrawingBounds.create({ currentScope, geometryReads, activeSketchId, elementSketchId, isVisibleSketchElement,
+          isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay, isVisibleValue });
+        const fit = createDrawingFit({ bounds, activeSketchId });
+        return Object.freeze({ geometry, overlay, bounds, fit });
+      }
       function createWorkspaceRendering(options) {
         return createRendering({ ...options, canvas, ctx, viewport, surface, zoomControl,
           readExportFrame: () => exportRenderer.frame });
@@ -70,7 +97,7 @@
           withGeometryReadCache, findSnap, flushPointerMove, setHint, draw });
       }
       const dragPointer = window.CanvasInputBinding.createDragPointer({ canvas });
-      return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
+      return Object.freeze({ surface, exportRenderer, layout, createScene, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
     }
     return Object.freeze({ viewport, navigation, zoomControl, createDrawingFit, createWorkspace });
   }

@@ -6,7 +6,7 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ['src/ui/number_display.js', 'src/ui/canvas_input_binding.js', 'src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js', 'src/geometry/export_region.js', 'src/persistence/document_files.js', 'src/persistence/png_file.js', 'src/commands/png_export_command.js', 'src/application/png_export.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
-function fixture(fitVisibleGeometry = () => true) {
+function fixture(fitVisibleGeometry = () => true, library = sandbox.window) {
   const calls = [], state = { ready: false, rect: { left: 0, top: 0, width: 200, height: 100 }, pending: false, dpr: 2, error: null, onDraw: null };
   const element = () => {
     const handlers = {};
@@ -20,7 +20,7 @@ function fixture(fitVisibleGeometry = () => true) {
   const document = { getElementById(id) { calls.push(['element', id]); return id === 'statusZoom' ? button : id === 'statusZoomInput' ? input : id === 'statusCoordinates' ? status : null; }, querySelector: () => null };
   const canvas = { ...element(), width: 0, height: 0, getBoundingClientRect() { ready(); calls.push('rect'); return state.rect; }, classList: { add() {}, remove() {} }, setPointerCapture() {} };
   const ctx = { setTransform(...args) { ready(); calls.push(['transform', ...args]); } };
-  const display = sandbox.window.CanvasDisplay.create({ canvas, document, initialScale: 2, minZoom: 0.1, maxZoom: 20, minLength: 1e-6,
+  const display = library.CanvasDisplay.create({ canvas, document, initialScale: 2, minZoom: 0.1, maxZoom: 20, minLength: 1e-6,
     draw: () => { ready(); calls.push('draw'); state.onDraw?.(); }, setHint: () => calls.push('hint'), fitVisibleGeometry,
     flushPointerMoves: () => { ready(); calls.push('flush'); if (state.error) throw state.error; }, syncDimensionValueInput: () => calls.push('input'),
   });
@@ -411,4 +411,87 @@ test('empty viewport reset preserves scale then X then Y updates and the existin
     assert.deepEqual({ ...f.display.viewport.snapshot() }, failAt === 'rect' ? { scale: 9, x: 10, y: 20 }
       : failAt === 'width' ? { scale: 2, x: 10, y: 20 } : { scale: 2, x: 160, y: 20 });
   }
+});
+
+const sceneSandbox = { window: {} }; vm.createContext(sceneSandbox);
+const sceneSources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+for (const file of sceneSources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sceneSandbox, { filename: file });
+const sceneWindow = sceneSandbox.window;
+function sceneFixture() {
+  const f = fixture(() => true, sceneWindow), reads = [], strokes = [], stack = [];
+  const state = { active: 'S1', sidebar: null, language: 'en', failure: null,
+    scope: Object.fromEntries(['points','lines','circles','arcs','splines','annotations','hatches','referenceImages'].map(key => [key, []])) };
+  const read = name => { assert.equal(f.state.ready, true); reads.push(name); if (state.failure) throw state.failure; };
+  const styles = ['strokeStyle','fillStyle','lineWidth','globalAlpha','shadowBlur','shadowColor','lineCap','lineJoin'];
+  f.ctx.save = () => { assert.equal(f.state.ready, true); f.calls.push('save'); stack.push(Object.fromEntries(styles.map(key => [key, f.ctx[key]]))); };
+  f.ctx.restore = () => { f.calls.push('restore'); Object.assign(f.ctx, stack.pop()); };
+  for (const name of ['beginPath','closePath','lineTo','fill','arc','fillText','setLineDash']) f.ctx[name] = (...args) => { assert.equal(f.state.ready, true); f.calls.push([name, ...args]); };
+  f.ctx.moveTo = (...args) => { assert.equal(f.state.ready, true); f.ctx.start = args; };
+  f.ctx.stroke = () => { assert.equal(f.state.ready, true);
+    strokes.push({ color: f.ctx.strokeStyle, width: f.ctx.lineWidth, start: f.ctx.start }); };
+  const selection = { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], geometryInstances: [] }, hover = { current: {} };
+  const visible = item => { read('visibility'); return item.visible !== false; }, active = item => item.sketchId === state.active;
+  const sketches = { activeSketchId: () => { read('active'); return state.active; }, elementSketchId: item => item.sketchId,
+    sketchRelationToActive: id => id === state.active ? 'active' : 'inactive', sketchName: id => id, isEditableSketchElement: active };
+  const geometryReads = Object.fromEntries(['points','lines','circles','arcs','splines'].map(key => [
+    'allGeometry' + key[0].toUpperCase() + key.slice(1), () => { read(key); return state.scope[key]; } ]));
+  Object.assign(geometryReads, { allAnnotations: () => { read('annotations'); return state.scope.annotations; }, allHatches: () => { read('hatches'); return state.scope.hatches; } });
+  const geometryAppearance = { effectiveAppearanceForElement: item => ({ color: '#334455', lineWidth: 1.5, lineType: 'solid', endpointOverhang: false, ...item.appearance }),
+    isVisibleSketchElement: visible, isVisibleSketchId: () => true, isVisibleValue: value => value !== false };
+  const sketchStyle = sceneWindow.GeometryPresentation.createSketchStyle({ isVisibleSketchElement: visible, isActiveSketchElement: active,
+    sketchHasSolveError: () => false, elementSketchId: sketches.elementSketchId, sketchRelationOfElement: item => active(item) ? 'active' : 'inactive', constraintStatusOf: () => 'under' });
+  const commandTargets = sceneWindow.GeometryPresentation.createCommandTargets({ readPanelSelection: () => null, readMode: () => 'select',
+    readOperands: () => [], readConstraintCommand: () => null, readPending: () => null, sameArcEndpoint: () => false });
+  f.state.ready = false;
+  const scene = f.workspace.createScene({ Point: sceneWindow.GeometrySolver.Point, currentScope: () => { read('scope'); return state.scope; }, sketches,
+    readServices: { reads: geometryReads, geometryAppearance, hatches: { resolvedHatchBoundary: () => { read('boundary'); return {}; } } },
+    pointUsage: { isSplineOnlyFitPoint: () => false, isEditableSplineFitPoint: () => false, isExplicitPoint: () => true,
+      isPointUsedByPrimitive: () => false, isReferencePoint: () => false, isAnyLineEndpoint: () => false, isEndpointPoint: () => false },
+    commandTargets, sketchStyle, canvasSelection: selection, canvasHover: hover,
+    selectionHighlight: { get current() { read('sidebar'); return state.sidebar; }, isSidebarHoveredElement: () => false, isSelectedConstraintRelatedElement: () => false },
+    viewState: {}, isSidebarHighlightedElement: () => false, canvasThemeColor: color => color,
+    applicationText: (ja,en) => state.language === 'en' ? en : ja, constructionAlpha: .72, constructionExtensionScreenPx: 10,
+    sameArcEndpoint: () => false, arcEndpointPoint: sceneWindow.GeometryKernel.arcEndpointPoint, findArcEndpointFixedConstraint: () => null, pointLockedByLineFixed: () => false,
+    editingQueries: { isDraggingArcEndpoint: () => { read('drag-arc'); return false; }, isDraggingPoint: () => { read('drag-point'); return false; },
+      isDraggingCenter: () => { read('drag-center'); return false; }, editedSpline: () => { read('spline-edit'); return null; } },
+    annotationBounds: () => { read('annotation-bounds'); return null; }, resolvedLoopBounds: () => { read('hatch-bounds'); return null; }, hatchAppearanceForDisplay: () => ({ visible: true }),
+  });
+  assert.deepEqual(reads, []); assert.deepEqual(f.calls, []); f.state.ready = true;
+  f.workspace.surface.syncCanvasBitmapSize(200,100); f.calls.length = 0;
+  return { ...f, scene, sceneState: state, reads, strokes, stack, selection };
+}
+
+test('workspace scene shares visibility, current scope and viewport across actual geometry rendering, bounds, fit and export', () => {
+  const f = sceneFixture(), { Point, Line } = sceneWindow.GeometrySolver;
+  assert.equal(Object.isFrozen(f.scene), true);
+  const p1 = Object.assign(new Point('P1',0,0), { sketchId: 'S1' }), p2 = Object.assign(new Point('P2',20,10), { sketchId: 'S1' });
+  const line = Object.assign(new Line('L1',p1,p2), { sketchId: 'S1' }), other = Object.assign(new Line('L2',new Point('P3',100,100),new Point('P4',200,150)), { sketchId: 'S2', visible: false });
+  f.sceneState.scope.points.push(p1,p2); f.sceneState.scope.lines.push(line,other); f.selection.lines.push(line);
+  f.scene.geometry.drawLines(); assert.equal(f.strokes.length, 1); assert.equal(f.strokes[0].color, '#1d4ed8');
+  assert.deepEqual({ ...f.scene.bounds.visibleGeometryBounds() }, { x1:0,y1:0,x2:20,y2:10 });
+  assert.deepEqual({ ...f.scene.bounds.allGeometryBounds() }, { x1:0,y1:0,x2:200,y2:150 });
+  assert.equal(f.scene.fit.fitVisibleGeometryToViewport(0), true); assert.equal(f.display.viewport.scale, 10);
+  f.state.onContent = () => f.scene.geometry.drawLines(); f.workspace.exportRenderer.render({ x:0,y:0,width:20,height:10 }, { x:2,y:2 });
+  assert.equal(f.strokes.at(-1).color, '#334455'); f.workspace.exportRenderer.restore(); f.scene.geometry.drawLines(); assert.equal(f.strokes.at(-1).color, '#1d4ed8');
+  other.visible = true; assert.equal(f.scene.fit.fitVisibleGeometryToViewport(0), true); assert.ok(f.display.viewport.scale < 10);
+  f.sceneState.active = 'S2'; assert.deepEqual({ ...f.scene.bounds.sketchGeometryBounds() }, { x1:100,y1:100,x2:200,y2:150 });
+  assert.equal(f.sceneState.scope.points[0], p1); assert.equal(f.sceneState.scope.lines[0], line); assert.equal(line.p2, p2);
+  assert.equal(p1.x, 0); assert.equal(p2.x, 20); assert.equal(f.stack.length, 0);
+});
+
+test('workspace scene propagates query errors and keeps the original overlay Canvas cleanup', () => {
+  const f = sceneFixture(), { Point, Line } = sceneWindow.GeometrySolver;
+  const p1 = Object.assign(new Point('P1',0,0), { sketchId: 'S1' }), p2 = Object.assign(new Point('P2',20,10), { sketchId: 'S1' }), line = Object.assign(new Line('L1',p1,p2), { sketchId: 'S1' });
+  f.sceneState.scope.lines.push(line); const points = f.sceneState.scope.points, lines = f.sceneState.scope.lines;
+  const before = { ...f.display.viewport.snapshot() }, marker = new Error('scene read'); f.sceneState.failure = marker;
+  assert.throws(() => f.scene.fit.fitAllGeometryToViewport(), error => error === marker);
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, before); assert.deepEqual(f.calls, []);
+  f.sceneState.failure = null; f.ctx.strokeStyle = 'overlay-original'; f.ctx.globalAlpha = .4; f.ctx.shadowBlur = 8;
+  f.ctx.fillRect = () => {}; f.ctx.strokeRect = () => { throw marker; };
+  assert.throws(() => f.scene.overlay.drawSelectionRect({ rect: { x1:0,y1:0,x2:10,y2:20 }, crossing: false }), error => error === marker);
+  assert.equal(f.ctx.strokeStyle, 'overlay-original'); assert.equal(f.ctx.globalAlpha, 1); assert.equal(f.ctx.shadowBlur, 0);
+  assert.equal(f.stack.length, 0);
+  assert.equal(f.calls.filter(call => call === 'save').length, f.calls.filter(call => call === 'restore').length);
+  assert.equal(f.sceneState.scope.lines, lines); assert.equal(f.sceneState.scope.points, points); assert.equal(lines[0], line); assert.equal(line.p1, p1);
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, before);
 });

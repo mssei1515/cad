@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,104行、非空白1,653行、root直下465文、条件付きtest hooks345行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,093行、非空白1,642行、root直下461文、条件付きtest hooks345行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：同じCanvas workspaceのGeometry Sceneを一括生成（2026-10-30、検証完了）
+
+基準develop／origin/developはef069e9。本単位はcodex/canvas-geometry-sceneで実施した。Canvas workspaceが返すcreateSceneが、同じcontext／Viewport／Surface／export frameと同じSketch・外観・Geometryのread ownerから、GeometryDisplay→InteractionOverlayRenderer→DrawingBounds→DrawingFitを元の順で生成する。実geometry／overlay／bounds／fitをfrozen bundleで返し、個別factoryとappのconsumerは維持する。後段のGeometry drag・Spline編集・Annotation boundsは従来の遅延callback／hoisted入口のまま。新state・cache・listenerやmutable contextは作らない。
+
+app.jsは2,104→2,093行（11行減）、非空白1,642行、root直下465→461文・関数111個、test hooks345行。対象構築4→1、引数46→24。TEMP cad-canvas-geometry-scene-proof.cjsで全46portとnested callback、同じWorkspaceのctx／Viewport／Surface／export rendererの由来、元の生成順、実四APIの返却、他のapp／既存CanvasDisplay全体およびraw七moduleの不変、root未使用binding 0を確認した。不要になったrootのcreateDrawingFit・resolvedLoopBounds・Selection照会の取込も整理した。
+
+canvas-display.test.jsへ実Geometry／Overlay／Bounds／Viewport fit／export rendererを使う二つの境界試験を追加した。生成時のquery／描画なし、同じ可視性での描画と範囲、全図形と可視図形の区別、現在active Sketch、同じViewportへのfitと実PNG frameによる描画状態切替、Point／Line参照と座標の無変更、query例外時のViewport無変更とoverlay描画例外時の元のSurface cleanupを確認した。既存fixtureはライブラリの任意差替えだけを追加し、既存期待値は変更しない。関連単体44件・全単体2,019件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新した。
+
+全E2E588件がfilterなしで全成功（22.5分、exit 0、runner84802）。製品の通常／PNG描画、Block／Sketch／Annotation／Hatch／Spline、保存互換性と画像比較、drag／authoring性能とUI等のtests/e2e全体を実行した。TEMP cad-canvas-geometry-scene-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、source-snapshot.json、hierarchy.{cjs,json}、tested-blobs.jsonへ証跡を保存。402の製品／E2E入力file（app.js・index.html・src・tests/e2e・tests/fixtures・serve／Playwright設定）のhashとHEAD ef069e91d313が実行中不変であること、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server10728停止を確認した。このScene変更後の最新の全体E2E結果であり、過去のreleaseや後続変更の結果とは区別する。UI・求解／描画アルゴリズム・モデル／保存形式・既存性能上限／timeout・期待値は変更しない。
+
+週枠使用22%／残量78%で開始し、検証後のusage tool最新表示は使用12%／残量88%。停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。hierarchy再集計ではroot構築147文815非空白行、hooks345行、単一call関数105個129行、その他208文348行（文外5行）。hooksと短い委譲を全て除く仮定でも1,168非空白行が残り、200〜500行へは未到達。既存ownerを共有する組立て階層を進め、単なるfactory一覧や別の巨大rootへの移動を避ける。
 
 ### 最新：固定操作・表示の静的型を同じnamespaceから接続（2026-10-30、検証完了）
 
