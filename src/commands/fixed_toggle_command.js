@@ -1,7 +1,11 @@
 /* Fixed-state toggles delegate constraints, snapshots, solving and history to their existing owners. */
 (() => {
   "use strict";
-  function createOperand({ guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText, findLineFixedConstraint, LineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint, currentScope, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh }) {
+  function createOperand({ modelTypes, guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit,
+    applicationText, findLineFixedConstraint, LineFixedConstraint = modelTypes?.LineFixedConstraint,
+    findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint = modelTypes?.ArcEndpointFixedConstraint,
+    currentScope, GeometryFixedConstraint = modelTypes?.GeometryFixedConstraint, sameConstraintDisplayElement,
+    deleteElements, commitNewConstraint, solveAndRefresh }) {
     function unfixPoint(point) {
       if (!guardSketchEdit(elementSketchId(point), "constraint")) return;
       point.fixed = false;
@@ -30,7 +34,12 @@
     return Object.freeze({ toggle, unfixPoint });
   }
 
-  function createSelection({ guardSelectionEdit, canvasSelection, blockDefinitionById, setHint, clearSelection, updateUI, draw, recordHistory, findArcEndpointFixedConstraint, deleteElements, log, arcEndpointPoint, guardSketchProjectionShapeEdit, applicationText, snapshotModelState, commitNewConstraint, ArcEndpointFixedConstraint, restoreModelState, selectedFixedBatchTargets, fixedBatchIsFullyFixed, findLineFixedConstraint, pushModelConstraint, LineFixedConstraint, currentScope, solveSketchAndDependents, acceptError, refreshConstraintAnalysis }) {
+  function createSelection({ modelTypes, guardSelectionEdit, canvasSelection, blockDefinitionById, setHint, clearSelection,
+    updateUI, draw, recordHistory, findArcEndpointFixedConstraint, deleteElements, log, arcEndpointPoint,
+    guardSketchProjectionShapeEdit, applicationText, snapshotModelState, commitNewConstraint,
+    ArcEndpointFixedConstraint = modelTypes?.ArcEndpointFixedConstraint, restoreModelState,
+    selectedFixedBatchTargets, fixedBatchIsFullyFixed, findLineFixedConstraint, pushModelConstraint,
+    LineFixedConstraint = modelTypes?.LineFixedConstraint, currentScope, solveSketchAndDependents, acceptError, refreshConstraintAnalysis }) {
     function toggle() {
       if (!guardSelectionEdit("constraint")) return false;
       const projectedSelection = [...canvasSelection.points, ...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs, ...canvasSelection.splines].filter((item) => item?.blockProjection);

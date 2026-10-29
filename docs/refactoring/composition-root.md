@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：固定操作・表示の静的型を同じnamespaceから接続（2026-10-30、検証完了）
+
+基準develop／origin/developは7ffca03。本単位はcodex/fixed-model-type-wiringで実施した。FixedToggleCommandのoperand／Selection生成とPropertiesTestDriverの固定観測は、明示したmodelTypesから必要なconstructorを生成時に捕捉する。個別constructorの明示を優先し、旧注入APIや部分生成を保持する。appは同じ既存GeometrySolver namespaceをこの三生成とToolbarView.createIconsのtypesへ渡す。暗黙のglobal照会や独自型registry・新型を追加しない。
+
+app.jsは2,110→2,104行（6行減）、非空白1,653行、root直下465文・関数111個、test hooks345行。型の個別指定12→namespace引数4、rootの不要な型取込五つを除いた。TEMP cad-fixed-model-type-wiring-proof.cjsで六constructor defaultとicon六型が元と同じ参照先であること、他の依存・操作本体とapp全statement、ToolbarView全体の不変、root未使用binding 0を確認した。静的な型の配線と、guard・現在scope／Selection・checkpoint・求解・通知／履歴の実行時依存を区別した。
+
+fixed-toggle-command.test.jsへ実Geometry型・固定拘束とToolbar icon／固定観測を組み合わせる二つの境界試験を追加した。生成時の操作なし、operand／batchの実constructor・対象参照の共有とicon／instanceofによる観測、生成後にnamespaceの型getterが例外になっても操作中に再照会しないこと、明示constructor優先、失敗したbatchの配列／Point状態の復元と履歴なしを確認した。既存fixtureは生成引数の任意差替えだけを追加し、既存期待値は変更しない。関連単体29件・全単体2,017件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapを更新した。
+
+関連E2E223件が全成功（3.2分、exit 0、runner80736）。既存UI、Block、phase0保存互換性／描画比較、Sketch権限／投影／Tree可視性、固定command、Block内図形の固定を実行した。TEMP cad-fixed-model-type-wiring-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server37296停止、app／command／観測driver三つのhash不変を確認した。今回は関連223件であり、最新コード全体のE2Eとは扱わない。UI・モデル／保存形式・求解／復元規則・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用22%／残量78%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。静的なlibrary namespaceは明示した引数であり、可変なapp contextへの置換ではない。機能の組立て階層・起動と公開境界に残作業があり、型配線や小callbackの整理だけで200〜500行へ到達したとは扱わない。
+
 ### 最新：空編集画面へのViewport復帰をCanvas表示側へ集約（2026-10-30、検証完了）
 
 基準develop／origin/developはf671a23。本単位はcodex/empty-viewport-resetで実施した。Block編集用にappで直接実装していた空画面のViewport復帰を、既存CanvasDisplay.createDrawingFit.resetEmptyViewportへ集約した。現在Canvasのrectを一度読み、同じViewportへinitialScale→X中央→Y中央を三回のupdateで適用する。appのinitialScaleは従来と同じCSS_PX_PER_MM。Block commandは同じ実methodを元の時機に呼び、scope・session・UI・履歴は従来のownerに残す。
