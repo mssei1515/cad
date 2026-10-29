@@ -57,6 +57,12 @@
       setHint(language() === "en" ? `Inserted ${item.parameterName}.` : `${item.parameterName} を挿入しました`);
       return true;
     }
+    const pointerReferences = Object.freeze({
+      insertDimensionParameter: insertClickedDimensionParameter,
+      referenceDimensionAt: point => focusedExpressionInputContext() ? hitDimension(point.x, point.y, { activeOnly: false }) : null,
+      insertAnnotationParameter: insertClickedAnnotationParameter,
+      referenceAnnotationAt: point => focusedExpressionInputContext() ? hitAnnotationElement(point.x, point.y, { activeOnly: false }) : null,
+    });
     function pickCanvasReference(event) {
       const rect = canvas.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
@@ -66,7 +72,7 @@
       else insertClickedAnnotationParameter(event, hitAnnotationElement(point.x, point.y, { activeOnly: false }));
     }
     return Object.freeze({ context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter,
-      insertAnnotation: insertClickedAnnotationParameter, pickCanvas: pickCanvasReference });
+      insertAnnotation: insertClickedAnnotationParameter, pointerReferences, pickCanvas: pickCanvasReference });
   }
   window.ExpressionInputController = Object.freeze({ create });
 })();
