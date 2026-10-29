@@ -169,13 +169,14 @@
   });
   const fileSession = window.DocumentFiles.create();
 
-  const drawOperationLifecycle = window.DrawOperationLifecycle.createSession();
-  const { exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode } = drawOperationLifecycle;
-  const selectionFeature = window.CanvasSelectionFeature.createEditing({
-    sketches: sketchContext, isGeometryMode, setHint, applicationText,
-    clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), clearSelection, updateGeometrySelectionUI, draw,
+  const canvasInteraction = window.CanvasInteractionFeature.create({
+    sketches: sketchContext, readServices: geometryReadServices, constraintReferencesPoint, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
+    isGeometryMode, setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null),
+    clearSelection, updateGeometrySelectionUI, draw,
   });
-  const { selection: canvasSelection, scope: selectionScopeQuery, identity: identitySelection, access: sketchEditAccess } = selectionFeature;
+  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, scope: selectionScopeQuery,
+    identity: identitySelection, access: sketchEditAccess, pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
+  const { exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode } = drawOperationLifecycle;
   const { guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation } = sketchEditAccess;
   const { selectionSketchId } = selectionScopeQuery;
   const {
@@ -184,11 +185,7 @@
     trimConstraintSelection,
     hasSelection,
   } = canvasSelection;
-  const pointUsage = geometryReadServices.createPointUsage({
-    constraintReferencesPoint, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
-  });
-  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isEndpointPoint, isExplicitPoint } = pointUsage;
-  const canvasHover = window.CanvasHover.create({ isEndpointPoint });
+  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isExplicitPoint } = pointUsage;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -235,34 +232,26 @@
     sketchProjectionEntryFromOperand } = sketchProjectionSources;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
     commit: commitSketchProjectionCommand } = sketchProjectionCommand;
-  const drawingPreview = window.DrawingPreview.create({ types: { Point, Line, Circle, Arc }, canvasHover,
-    canCreateInActiveSketch, clearSnap: () => clearSnap(), snapForDrawing, draw,
-    linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
+  const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
+    pointer: pointerInteractionController, createSelectionPresentation } = createOperationSessions({
+    snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
     readCenterline: () => centerlineCommand, projectPointToCenterlineSupport: point => projectPointToCenterlineSupport(point),
     readOffsetSelection: () => offsetSelection, computeTrimPreview,
     hits: { hitPoint: (x, y) => hitPoint(x, y), hitLine: (x, y) => hitLine(x, y),
       hitCircle: (x, y) => hitCircle(x, y), hitArc: (x, y) => hitArc(x, y) },
-  });
-
-  const pendingCommandSession = window.PendingCommandSession.create({
     clearPlacement: () => geometryInstanceCommand.clearPlacement(), cancelAnnotation: () => annotationCommand.cancel(),
     cancelPngExport: () => pngExportCommand.cancel(), resetOffset: () => offsetSelection.reset(),
-    clearPreviewPointer: () => drawingPreview.setPointer(null), hideInput: () => hideDimensionValueInput(),
-    setHint, updateToolbar, updateConstraintButtons, draw,
-  });
-  const constraintTargetSession = window.ConstraintTargetSession.create({
+    hideInput: () => hideDimensionValueInput(), updateToolbar, updateConstraintButtons,
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
-  const pointerInteractionController = window.PointerInteractionController.createSession();
   const constructionCommand = window.ConstructionCommand.create({
     cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
     synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), setHint, clearSelection, updateUI, draw, recordHistory,
     setLineMode: () => { drawOperationLifecycle.setMode("line"); }, resetLineInputs: () => drawOperationLifecycle.resetInputs("line"),
     clearSnap: () => clearSnap(), updateToolbar,
   });
-  const { highlight: selectionHighlight, clearing: selectionClearing, documentReset: documentCanvasReset } = selectionFeature.createPresentation({
-    hover: canvasHover, constraintTargets: constraintTargetSession, pointer: pointerInteractionController,
-    projections: blockProjections, constraintReferences, clearSnap: () => clearSnap(),
+  const { highlight: selectionHighlight, clearing: selectionClearing, documentReset: documentCanvasReset } = createSelectionPresentation({
+    projections: blockProjections, constraintReferences,
   });
   const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement } = selectionHighlight;
   const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
