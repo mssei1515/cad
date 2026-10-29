@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,139行、非空白1,689行、root直下473文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,135行、非空白1,684行、root直下471文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：寸法ラベルと描画を同じScene依存から生成（2026-10-29、検証完了）
+
+基準develop／origin/developはe3dd458。本単位はcodex/dimension-scene-compositionで実施した。既存DimensionDisplay.createForSceneが、同じ寸法外観owner／SketchContextを使って実DimensionPresentation label API→従来のDimensionDisplay APIを生成し、その実体をfrozen bundleとして返す。NumberDisplayとDimensionQueriesの静的な書式／測定APIも同じmoduleから接続する。元のDimensionDisplay.createと各描画／入力／Traversal／PreviewのAPIは維持し、新しい状態やsetterを持たない。
+
+app.jsは2,139→2,135行（4行減）、非空白1,684行、root直下473→471文・関数120→119個、test hooks351行。対象の二factoryのroot引数15→8。状態を読まないラベル生成だけを早期から既存描画生成位置へ遅らせ、最初のconsumerより前に実labelを直接捕捉した。不要なmeasuredDimensionValue取込とrootのlabel転送関数を除き、root未使用binding 0。TEMP cad-dimension-scene-composition-proof.cjsで全十五portの対応、直接labelの初期化順、他のappと既存DimensionDisplay全体のAST不変、raw DimensionPresentation／NumberDisplay／DimensionQueries／AppearanceQuery四moduleの不変を確認した。label→描画本体の相対生成順は維持し、model・外観・Canvasの読取りは実行時に行う。
+
+dimension-display.test.jsへ二つの境界試験を追加した。実外観query／Placement／Layout／Painterとlabelを使い、生成時の照会なし、現在Sketch・外観のprefix／precision／suffix・色とextension overshootが同じownerへ追従すること、同じPoint参照・Canvas状態の復元、外観例外の伝播と図形／寸法の無変更、解決済み外観を渡す経路を検証した。既存fixtureの生成だけを任意差替え可能にし、既存期待値は変更しない。関連単体21件・全単体2,007件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新し、mapの旧hoisted label説明を直接接続へ修正した。
+
+関連E2E187件が全成功（2.7分、exit 0、runner13712）。既存UI、複数寸法、dimension prefix、Slot寸法、Block、非表示可視性、phase0保存互換性／描画比較、注記表示寸法を実行した。TEMP cad-dimension-scene-composition-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server32980停止とsource二つのhash不変を確認した。今回は関連187件であり、最新コード全体のE2Eとは扱わない。UI・数値書式・寸法／描画計算・保存形式・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用16%／残量84%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。Canvas表示controlsは既に自身の状態とbind段階を持つため、別のfactory一覧へ包み直さず、本単位は同じSketch／外観を共有する寸法生成を選んだ。次も実ownerの共有と純粋な生成／起動の順序を監査し、巨大contextやsetterで初期化循環を隠さない。200〜500行の全体目標は未達であり、現在の中間成果で完了扱いにしない。
 
 ### 最新：注記の参照先照会をAnnotation機能から生成（2026-10-29、検証完了）
 
