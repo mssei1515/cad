@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,067行、非空白1,616行、root直下455文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,061行、非空白1,610行、root直下455文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Sketch投影を同じ編集ownerから組立て（2026-10-30、検証完了）
+
+基準develop／origin/developはd1c7e8a。本単位はcodex/sketch-projection-compositionで実施した。SketchProjectionFeature.createForEditingへ同じSketchContext・Geometry read／外観・ReferenceConstraintState・編集権限・Selection・DrawOperationLifecycle・ID・Hoverと限定操作を接続する。appの接続は36→24項目。投影先は同期済みeditingScopeBinding.currentへの明示reader、共有queryは従来のWorkspace scopeのままとし、混同しない。後段operand・RectangleSelectionQuery・snapの三callbackはappで生成して操作時にだけ初期化先を読む。ID採番とhover更新は同じownerのreceiver、hover解除は元の六fieldだけを維持する。旧createと既存query／command本体は変更しない。
+
+app.jsは2,067→2,061行（6行減）、非空白1,616→1,610行、root直下455文・関数108個、test hooks333行、可変参照三つを維持する。TEMP cad-sketch-projection-composition-proof.cjsで全36portと各owner・型／ref計算・Geometry読取り・遅延callbackの由来、上記以外のappと既存SketchProjectionFeature全体のAST不変を確認した。root未使用binding 0。hierarchy.{cjs,json}では構築147文802非空白行、hooks1文333行、一文call関数102個126行、その他205文344行（文外5行）。新file・global・モデル／cache／sessionは追加しない。数百行目標は未達のままとする。
+
+sketch-projection-feature.test.jsへ実Command／Queries・Geometry型／canonical ref・Selectionを使う二つの境界試験を追加した。生成時にscope・後段三callbackを読まないこと、同じ選択とsource参照／可視性・矩形readerのreceiver、Workspaceと異なる編集scopeへのInstance確定と同一Instanceの選択、現在active Sketchとcoverage、ID ownerのreceiverと一履歴、正規化例外時の既存の部分状態・同じerror、取消時のsource解除と六hover fieldだけの解除、作図拒否順を確認した。既存四テストの期待値は変更しない。関連単体6件・全単体2,031件・構文618ファイルが成功（exit 0）。正式モジュール構成とimplementation-mapを更新した。
+
+関連E2E209件が全成功（3.0分、exit 0、runner64671）。sketch-projection／sketch-projection-compatibility-driver／sketch-permissions／free-instance／blocks／file-safety／unified-uiを実行し、通常投影・旧形式の読込／互換性・Shape edit guard、Sketch権限、Block／Instance・保存再読込と通常UIを確認した。TEMP cad-sketch-projection-composition-{focused,check,unit,e2e}.log、proof.cjs、hierarchy.{cjs,json}、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保存。製品／E2E入力402fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。この単位で全E2Eは未実行。直前Scene単位の全588件成功を今回の全体結果として流用しない。UI・保存形式・既存期待値・性能上限／timeoutは変更しない。
+
+週枠使用14%／残量86%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この単位をCommit／Pushしてdevelopへ統合する。次も実依存を監査し、通常機能の組立てとtest APIの公開境界を適切なownerで整理する。後段constの参照を隠す汎用setter、Workspaceと同期済み編集scopeの一律化、取消／復元方針の一律化は行わない。
 
 ### 最新：注記テスト支援を同じ機能・表示ownerから組立て（2026-10-30、検証完了）
 
