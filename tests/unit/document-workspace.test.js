@@ -153,14 +153,15 @@ function persistenceFixture() {
   const references = w.ConstraintReferences.create({ resolveGeometryRef: () => null });
   const pointUsage = context.services.createPointUsage({ constraintReferencesPoint: references.constraintReferencesPoint, editedFitPoints: () => [] });
   const before = JSON.stringify(model.document);
-  const persistence = context.createPersistence({ placement: w.DimensionPlacement.create({ viewport: { scale: 2 } }), pointUsage,
-    readEditingScope: () => { check(); return state.bound; }, readBlockEditor: () => { check(); return state.block; }, version: 26,
+  const placement = w.DimensionPlacement.create({ viewport: { scale: 2 } });
+  const persistence = context.createPersistence({ placement, pointUsage,
+    readEditingScope: () => { check(); state.boundReads = (state.boundReads || 0) + 1; return state.bound; }, readBlockEditor: () => { check(); return state.block; }, version: 26,
     constraintReferencesPoint: references.constraintReferencesPoint,
     separateSharedSketchProjectionTargetPoints: () => { check(); calls.push('separate'); },
     normalizeArcSweeps: arcs => { check(); calls.push(['arcs', arcs]); },
   });
   assert.equal(JSON.stringify(model.document), before); assert.deepEqual(calls, []); state.ready = true;
-  return { model, state, calls, persistence };
+  return { model, state, calls, persistence, placement };
 }
 
 function addPersistedLine(scope, id, x = 0) {
@@ -218,4 +219,48 @@ test('read context preserves restoration before teardown and stops activation at
   assert.equal(binding.current, draft); assert.equal(binding.solver.model, draft);
   f.state.failure = null; binding.activate(model.document);
   assert.equal(binding.current, model.document); assert.equal(binding.solver.model, model.document);
+});
+
+function applicationCompositionFixture(composed){
+ const f=persistenceFixture(),events=[],state={tree:null},root=f.model.document;
+ const ensureDimensions=()=>w.DocumentState.normalizeDimensionState(f.state.bound,w.DimensionQueries.targetFromConstraint,(target,dimension)=>f.placement.normalizeDimension(target,dimension));
+ const ports={resetEditingState(){events.push('reset');f.model.workspace.activate(root);f.state.bound=root;w.DocumentState.clearContent(root);f.model.geometryIds.reset();f.model.documentIds.reset();},
+  sketchTreeView:{capture:()=>state.tree.capture(),restore:value=>state.tree.restore(value)},
+  refreshReferenceConstraintValidity:()=>events.push('references'),enforceMinimumLineLengths:()=>{events.push('lines');return{changed:0,failed:0};},log:message=>events.push(['log',message])};
+ const beforeReads=f.state.boundReads||0;
+ const application=composed?f.persistence.createApplication(ports):w.DocumentApplication.create({...ports,documentLoading:f.persistence.loading,document:root,model:f.state.bound,
+  ensureDimensionDefaults:ensureDimensions,restoreSequences:sequences=>{f.model.reservation.geometry(sequences.geometry);f.model.documentIds.restore(sequences);},
+  ensureAppearanceState:()=>f.persistence.preparation.appearance(),ensureBlockState:()=>f.persistence.preparation.blocks()});
+ assert.deepEqual(events,[]);assert.equal(state.tree,null);if(composed)assert.equal(f.state.boundReads,beforeReads+1);
+ const treeSnapshot={expanded:['S1']};state.tree={capture(){events.push('capture');return treeSnapshot;},restore(value){assert.equal(value,treeSnapshot);events.push('tree');}};
+ return{...f,events,application,ensureDimensions:composed?f.persistence.ensureDimensionDefaults:ensureDimensions};
+}
+
+test('persistence application matches direct load, defers Tree access and retains its captured target through reset and ID recovery',()=>{
+ const results=[];for(const composed of [false,true]){
+  const f=applicationCompositionFixture(composed),root=f.model.document,source=addPersistedLine(root,'L42');source.p1.id='P20';source.p2.id='P21';f.model.documentIds.restore({hatchSeq:12});const data=f.persistence.writer.serialize();
+  const local=w.DocumentState.create();addPersistedLine(local,'LOCAL');f.model.workspace.activate(local);f.state.bound=local;const localBefore=JSON.stringify(local);
+  f.application.load(data,{preserveSketchTreeState:true});assert.equal(JSON.stringify(local),localBefore);assert.equal(f.state.bound,root);assert.equal(root.lines[0].id,'L42');assert.equal(root.lines[0].p1,root.points[0]);assert.equal(root.constraints[0].p2,root.points[1]);
+  assert.deepEqual(f.events.slice(0,3),['capture','reset','tree']);assert.equal(f.model.geometryIds.allocate('point'),'P22');assert.equal(f.model.geometryIds.allocate('line'),'L43');assert.equal(f.model.documentIds.peek('hatch'),12);
+  const before=JSON.stringify(root);f.state.bound=local;f.ensureDimensions();assert.equal(JSON.stringify(root),before);
+  results.push(JSON.stringify({model:root,events:f.events,ids:f.model.geometryIds.snapshot(),documentIds:f.model.documentIds.snapshot()}));
+ }assert.equal(results[1],results[0]);
+});
+
+test('persistence application decode failures retain Document, counters and history-facing reset boundary',()=>{
+ for(const composed of [false,true]){
+  const f=applicationCompositionFixture(composed);addPersistedLine(f.model.document,'L5');const data=f.persistence.writer.serialize(),before=JSON.stringify(f.model.document),ids=JSON.stringify(f.model.documentIds.snapshot());data.units.length='inch';
+  assert.throws(()=>f.application.load(data,{preserveSketchTreeState:true}),/length unit|長さ単位/);assert.deepEqual(f.events,['capture']);assert.equal(JSON.stringify(f.model.document),before);assert.equal(JSON.stringify(f.model.documentIds.snapshot()),ids);
+  f.events.length=0;assert.throws(()=>f.application.load({}),/形式/);assert.deepEqual(f.events,[]);assert.equal(JSON.stringify(f.model.document),before);
+ }
+});
+
+test('persistence application retains geometry and attachment reservation before a failed Document counter restore',()=>{
+ const original=w.DocumentSequences,results=[];
+ try{for(const composed of [false,true]){
+  const f=applicationCompositionFixture(composed);addPersistedLine(f.model.document,'L5');const data=f.persistence.writer.serialize(),marker=new Error('counter restore failed');
+  w.DocumentSequences={recover(){return{geometry:{points:[{id:'P80'}],hatches:[{id:'H7'}],referenceImages:[{id:'IMG6'}]},get sketchSeq(){throw marker;}};}};
+  assert.throws(()=>f.application.load(data),error=>error===marker);assert.equal(f.model.geometryIds.peek('point'),81);assert.equal(f.model.documentIds.peek('hatch'),8);assert.equal(f.model.documentIds.peek('referenceImage'),7);assert.equal(f.model.documentIds.peek('sketch'),2);assert.equal(f.model.document.lines[0].id,'L5');
+  results.push(JSON.stringify({events:f.events,geometry:f.model.geometryIds.snapshot(),ids:f.model.documentIds.snapshot()}));w.DocumentSequences=original;
+ }}finally{w.DocumentSequences=original;}assert.equal(results[1],results[0]);
 });

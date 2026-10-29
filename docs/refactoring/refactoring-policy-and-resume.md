@@ -97,6 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
+### 最新：Document読込適用と正規化・採番復元の所有（2026-10-30、検証完了）
+
+基準developはd841cc5。既存DocumentWorkspace.createPersistenceがensureDimensionDefaultsとcreateApplicationを返し、実loading／Document／preparation／placement／ID ownerをDocumentApplicationへ接続する。寸法既定値の正規化はliveな編集scopeと同じplacementを使い、採番復元はreservation.geometry(sequences.geometry)→documentIds.restore(sequences)の順を所有する。appはreset・late Tree capture／restore・参照妥当性更新・最小線長補正・logの五つを渡す。適用先modelはcreateApplicationを呼ぶ元の後段位置で一度取得し、Treeはload時だけ参照する。通常のDocument読込／decode／install／codec／回復本体と返却実APIは変更せず、別model・ID／scope／sessionや汎用contextを追加しない。rootの寸法正規化をconst APIへ替える初期化時機は全利用より前で、準備構築時にmodel／scope／DOMを読まない。旧loading／DocumentApplication.createも維持する。
+
+app.jsは1,946→1,936行（10行減）、非空白1,496→1,486行、root420→417文／関数84→81個／hooks319行／可変参照三つ。Application生成へのroot接続は12→5項目。構築135文737非空白行、一文call関数77個99行、その他204文326行（文外5行）。TEMP cad-document-application-composition-{proof,hierarchy}.cjsで全子接続・正規化本体と採番復元順の一致、適用先modelの取得時機／live scope／late Tree、元の生成位置とraw API返却、その他appと既存DocumentWorkspaceのAST不変、root未使用bindingなしを確認。hooksと短い委譲を除いても1,068非空白行が残り、数百行目標は未達。
+
+単体へ三つの境界試験を追加した。実DocumentLoading／codec／DocumentApplication・DocumentState・Geometry／Document ID ownerを使って旧接続と比較し、late Treeとcapture先modelの維持、reset後の参照同一性と採番復元、Workspaceと異なるbound scopeだけの寸法正規化を確認した。不正units／形状のdecode拒否でDocument・counterとreset境界を保持すること、Document counter復元の失敗より前にGeometry／Hatch／Image予約が完了する既存の途中状態と例外の同一性も確認した。関連単体23件／全単体2,085件／構文624fileが成功。保存読込／Block／投影互換性／DXF等の関連14suite（file-safety／document-bookmarks／blocks／sketch-projection-compatibility-driver／sketch-projection／unified-ui／unified-annotations／annotation-anchors／fixed-command／dimension-prefix／view-visibility／phase0-characterization／dxf-import／derived-patterns）のE2E302件が全成功（4.7分、exit 0、実行session29066）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-document-application-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerを変更しない。今回の全E2Eは未実行であり、以前の全588件成功と区別する。
+
+全体目標active、開始時週枠残量73%／最終確認72%で停止条件未到達。mainは停止／releaseの最後に反映する。late参照の理由とmodelの取得時点を保持し、読込と新規Document reset・Sketch切替の異なる回復範囲を一律化しない。
+
+
 ### 最新：Workspace求解機能の実owner接続（2026-10-30、検証完了）
 
 基準developは72da23a。既存SketchSolvingFeature.createForWorkspaceが実DocumentWorkspace・編集scope・SolveScopeQuery・参照／参照状態・GeometryReadServices・投影編集・GeometryCreation・checkpoint・解析／表示・履歴ownerを共有し、従来のcreateへ接続する。返すのは元の実feature APIで、求解→Parameter安定化→保存定義安定化→求解後更新の生成順と位置は変えない。Workspace.currentと編集scope.currentを区別し、前者を求解／現在Parameter namespaceに、後者を保存定義の元scope読取りに使う。activateの全引数／receiver、解析refreshの既定Object・一引数とreceiver、Hatch採番peekの時機を維持する。受理predicate・結果state・閾値・求解algorithm・checkpointと回復のownerを作り直さず、生成時にscope／model／DOMを読まない。旧createも維持する。

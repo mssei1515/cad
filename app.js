@@ -535,7 +535,7 @@
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
   const { dimensions: { serialize: serializeDimension }, codecs: constraintCodecs, metadata: constraintMetadata,
-    preparation: documentPreparation, writer: documentWriter, loading: documentLoading, geometryInstances: geometryInstancePersistence } = createPersistence({
+    preparation: documentPreparation, writer: documentWriter, geometryInstances: geometryInstancePersistence, ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
   });
@@ -653,9 +653,6 @@
 
 
 
-  function ensureAppearanceState() {
-    return documentPreparation.appearance();
-  }
 
   function ensureBlockState() {
     return documentPreparation.blocks();
@@ -799,7 +796,6 @@
   function resetModelState() { return documentEditingReset.reset(); }
 
 
-  function reserveGeometryElementSequences(source) { return idReservation.geometry(source); }
 
 
   function serializeConstraint(c) {
@@ -826,15 +822,10 @@
   }
 
 
-  const documentApplication = window.DocumentApplication.create({
-    documentLoading, document: documentModel, model: editingScopeBinding.current, resetEditingState: resetModelState,
+  const documentApplication = createDocumentApplication({
+    resetEditingState: resetModelState,
     sketchTreeView: { capture: () => sketchTreeView.capture(), restore: state => sketchTreeView.restore(state) },
-    refreshReferenceConstraintValidity, enforceMinimumLineLengths, ensureDimensionDefaults,
-    restoreSequences: sequences => {
-      reserveGeometryElementSequences(sequences.geometry);
-      documentIds.restore(sequences);
-    },
-    ensureAppearanceState, ensureBlockState, log,
+    refreshReferenceConstraintValidity, enforceMinimumLineLengths, log,
   });
   function loadModelData(data, options = {}) {
     return documentApplication.load(data, options);
@@ -980,7 +971,6 @@
 
   function pasteGeometryClipboard() { return clipboardCommand.paste(); }
 
-  function ensureDimensionDefaults() { return window.DocumentState.normalizeDimensionState(editingScopeBinding.current, targetFromConstraint, (target, dimension) => dimensionPlacement.normalizeDimension(target, dimension)); }
 
   const { selectionBounds: dimensionSelectionBounds, layer: dimensionLayer } = dimensionDisplay.createTraversal({
     currentScope: dimensionPresentationScope, isActiveSketchConstraint, isVisibleSketchId, constraintSketchId, isVisibleValue, canvasSelection,

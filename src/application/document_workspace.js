@@ -43,7 +43,18 @@
           isPointUsedByArc: pointUsage.isPointUsedByArc, constraintReferencesPoint,
           defaultUnits: window.DocumentState.DEFAULT_DOCUMENT_UNITS, applicationText,
           invalidateProjection: services.projections.invalidateBlockProjectionCache, normalizeArcSweeps });
-        return Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances });
+        const { targetFromConstraint } = window.DimensionQueries;
+        function ensureDimensionDefaults() {
+          return window.DocumentState.normalizeDimensionState(readEditingScope(), targetFromConstraint,
+            (target, dimension) => placement.normalizeDimension(target, dimension));
+        }
+        function createApplication({ resetEditingState, sketchTreeView, refreshReferenceConstraintValidity, enforceMinimumLineLengths, log }) {
+          return window.DocumentApplication.create({ documentLoading: loading, document, model: readEditingScope(), resetEditingState, sketchTreeView,
+            refreshReferenceConstraintValidity, enforceMinimumLineLengths, ensureDimensionDefaults,
+            restoreSequences: sequences => { reservation.geometry(sequences.geometry); documentIds.restore(sequences); },
+            ensureAppearanceState: () => preparation.appearance(), ensureBlockState: () => preparation.blocks(), log });
+        }
+        return Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, ensureDimensionDefaults, createApplication });
       }
       return Object.freeze({ services, createScopeBinding, createPersistence });
     }
