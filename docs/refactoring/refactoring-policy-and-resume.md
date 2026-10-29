@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,051行、非空白1,600行、root直下447文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,040行、非空白1,590行、root直下441文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Canvas操作基盤を三段階で組立て（2026-10-30、検証完了）
+
+基準develop／origin/developは45a1ea5。本単位はcodex/canvas-interaction-foundationで実施した。src/application/canvas_interaction_feature.jsのCanvasInteractionFeature.createはLifecycle session→Selection feature／access→既存PointUsage→Hoverを生成する。createOperationSessionsはPreview→Pending→拘束対象→Pointer sessionを生成し、返されたcreateSelectionPresentationが同じSelection／Hover／拘束対象／Pointer／snapをHighlight・通常clearing・Document resetへ接続する。元の三箇所の生成時機と内部の生成順、後段command／hit／snap等への限定callbackを維持する。新しい操作state・汎用setter／可変app contextは持たず、既存ownerの実APIを返す。入力ルーティング・描画・保存読込は既存featureに残す。
+
+app.jsは2,051→2,040行（11行減）、非空白1,600→1,590行、root直下447→441文・関数98個、test hooks333行、可変参照三つ。対象9生成・41portをrootの三生成入口・29portへ集約した。TEMP cad-canvas-interaction-foundation-proof.cjsで全接続式・元の生成順・その他appのAST不変・九raw ownerのGit blob不変を確認した。root未使用binding 0。hierarchy.{cjs,json}では構築140文788非空白行、hooks1文333行、一文call関数92個116行、その他208文348行（文外5行）。bootstrap-boundary-auditに三段階の図と再集計を追加した。hooksと短い委譲を全て除く仮定でも1,141非空白行が残り、200〜500行目標は未達である。
+
+新しいcanvas-interaction-feature.test.jsは実Selection／Hover・PointUsage・Preview／Pending／拘束対象／Pointer・Presentationと、各段階の生成時のモデル／遅延callback照会なし、現在point役割／選択／権限／mode、同じtarget／pointer、offset取消時のpreview pointerだけの解除・独立した拘束対象の維持、通常clearingとDocument resetの異なる解除対象、snap例外時の同じerrorと途中状態を確認する。初回の新規試験ではDocument resetがPoint選択も解除すると仮定したが、元の実装はPoint選択を維持し、snap前後で解除対象も異なるため、新規期待だけを既存APIへ合わせた。既存期待値と操作本体は変更しない。関連単体21件・全単体2,035件・構文620ファイルと最終app構文再確認が成功（exit 0）。index／syntax／unit runner／unified-uiのsource期待一覧へ新module／testを登録し、正式モジュール構成とimplementation-mapも更新した。
+
+全E2E588件がfilterなしで全成功（22.6分、exit 0、runner39966）。拘束dragの長時間回帰file（10.4分）を含め、作図／drag性能・通常／PNG描画・Annotation／Hatch／Spline・Sketch／Block／Instance・保存互換性・画像比較とUI等のtests/e2e全体を実行した。TEMP cad-canvas-interaction-foundation-{focused,check,unit,e2e}.log、proof.cjs、hierarchy.{cjs,json}、run.ps1、source-hashes.json、source-snapshot.json、e2e-receipt.json、last-run.jsonへ証跡を保存。未追跡の新moduleを含む403製品／E2E入力file（app.js・index.html・src・tests/e2e・tests/fixtures・serve／Playwright設定）のhashと開始HEAD 45a1ea54c117が実行中不変であること、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server35240停止を確認した。コードは新moduleを含むworking treeで検証し、以前の全E2E結果を流用していない。初期化基盤の変更後の最新の全体結果であり、UI・保存形式・既存性能上限／timeout・worker・期待値は変更しない。既存333読込対象の順序不変、新module位置、334件のsource期待集合と実fileの存在、syntax／unitの三登録も確認した。
+
+開始時は週枠使用15%／残量85%、検証後は使用16%／残量84%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この検証結果を記録してCommit／Pushし、developへ統合する。新moduleの位置は既存src/application配下とし、個々のediting ownerとUI／保存の責務を移さない。次も既存ownerを同じ生成階層へまとめ、別の巨大rootへ移して行数目標を達成したことにしない。 次候補は同じ操作sessionを使うCanvasCommandInputsの生成とpointer bindへの重複portで、今回のfull検証と統合を済ませてから実依存を確認する。
 
 ### 最新：SelectionとSketch編集権限の生成依存を同じfeatureへ集約（2026-10-30、検証完了）
 

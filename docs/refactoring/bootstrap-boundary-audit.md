@@ -6,6 +6,38 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Canvas操作基盤の生成階層（2026-10-30、45a1ea5基準）
+
+CanvasInteractionFeatureが、同じCanvasの操作基盤を三段階で生成する。全ownerの操作本体と実状態は既存moduleに維持し、9生成・41portをappの三つの生成入口・29portへ整理する。TEMP cad-canvas-interaction-foundation-proof.cjsで全接続式・生成順と九raw ownerのGit blob不変、その他appのAST不変を確認した。全E2Eの進行・結果は再開資料section 8を優先する。
+
+~~~mermaid
+flowchart TD
+  C[create] --> L[Lifecycle session]
+  C --> S[Selection feature and access]
+  C --> U[PointUsage]
+  C --> H[Hover]
+  C -->|生成入口を返す| O[createOperationSessions]
+  O --> P[Preview and Pending]
+  O --> T[Constraint targets and Pointer session]
+  O -->|生成入口を返す| V[createSelectionPresentation]
+  V --> X[Highlight and clearing and Document reset]
+~~~
+
+三段階の公開値は同じAPI参照で、公開groupやoptions objectを可変app contextとして後から書き換えない。内部でmodel／sessionをコピーせず、callbackの実行時機を保つ。後段のLifecycle／Pointer bind、command取消の違い、通常clearとDocument resetの対象差は維持する。PointUsageは元のreadServicesのreaderを使い、Hoverは元のisEndpointPointを使う。
+
+| 分類 | 45a1ea5 | 操作基盤集約後 |
+| --- | ---: | ---: |
+| 物理行 | 2,051 | 2,040 |
+| 非空白行 | 1,600 | 1,590 |
+| root直下の文 | 447 | 441 |
+| root関数 | 98 | 98 |
+| 構築文／非空白行 | 146／799 | 140／788 |
+| test hooks／非空白行 | 1／333 | 1／333 |
+| 一文call関数／非空白行 | 92／116 | 92／116 |
+| その他の文／非空白行 | 208／347 | 208／348 |
+
+文外の5非空白行は両者共通。hooksと短い委譲を全て取り除く仮定でも1,141非空白行が残り、200〜500行目標は未達である。基盤を新たな巨大rootへせず、既存機能の責務に沿った生成階層を進める。
+
 ## Canvas Sceneの組立て階層（2026-10-30、ef069e9基準）
 
 同じ分類条件でef069e9とScene集約後を比較した。TEMP cad-canvas-geometry-scene-hierarchy.{cjs,json}に計測scriptと結果を保存した。構築はcreateで始まるmember／bare呼出しを直接initializerに持つroot文、hooksと一文call関数を先に分離し、残りをその他とする。表の非空白合計に含まない文外の5行は両者共通。全E2Eの進行・結果は再開資料section 8を優先する。
