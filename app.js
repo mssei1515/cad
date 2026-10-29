@@ -2013,21 +2013,10 @@
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       blockDefinitionDrawableSketchIds, invalidateBlockProjectionCache, blockProjectionBundle, updateUI, draw,
     });
+    const interactionProfilingTestApi = window.CanvasTestDriver.createInteractionProfiling({ profiler: interactionProfiler, scheduler: pointerMoveScheduler });
     window.__jot2dTest = {
       applicationThemeStateForTest: themeObservation.state,
-      startInteractionProfileForTest() {
-        flushScheduledCanvasPointerMove();
-        interactionProfiler.start();
-      },
-      stopInteractionProfileForTest() {
-        return interactionProfiler.stop();
-      },
-      resetInteractionFrameStatsForTest() {
-        return pointerMoveScheduler.resetStats();
-      },
-      interactionFrameStatsForTest() {
-        return pointerMoveScheduler.stats();
-      },
+      ...interactionProfilingTestApi,
       resetForResponsiveLineDragTest: responsiveDragFixture.reset,
       resetForSplineTest: splineTestDriver.reset,
       splineStateForTest: splineTestDriver.state,

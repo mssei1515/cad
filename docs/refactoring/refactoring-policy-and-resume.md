@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,158行、非空白1,708行、root直下476文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,147行、非空白1,697行、root直下476文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：入力計測のテストAPIをCanvasTestDriverへ集約（2026-10-29、検証完了）
+
+基準develop／origin/developはd64be0b。本単位はcodex/interaction-profile-test-apiで実施した。既存CanvasTestDriver.createInteractionProfilingへ実ProfilerとPointerMoveSchedulerの二ownerを明示して渡し、計測開始／停止・frame統計reset／取得の四つのブラウザテストAPIをまとめた。appは既存test flag内の最後で生成し、元の公開位置へ展開する。生成はObjectを返すだけで状態を読まない。計測stateと入力queue／coalescingは従来の診断／UI ownerに残し、新session・globalや通常機能の移管を行わない。
+
+app.jsは2,158→2,147行（11行減）、非空白1,697行、root直下476文・関数122個、installTestHooksは362→351行。TEMP cad-interaction-profile-test-api-proof.cjsでowner名とflush aliasを対応させた四method本体のAST不変、test flag・他のapp全体・公開property順、既存CanvasTestDriver全体と生Profiler／Scheduler二moduleの不変を確認した。startのflush→Profiler.start、停止と統計の戻り値、flush例外でstartしない手順を維持する。巨大な公開API Objectをcontext付きで丸ごと移す構成にはしない。
+
+canvas-test-driver.test.jsへ実InteractionProfiler／PointerMoveSchedulerを使う二つの境界試験を追加した。計測開始前の保留入力を新profileへ混ぜないこと、frame id 0の取消、同じqueueのcoalescing／draw統計と最新pointer、停止結果と再停止時null、flush失敗では既存profileを失わず新しい計測を始めないことを確認した。既存の期待値は変更していない。関連単体20件・全単体1,999件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新した。
+
+関連E2E136件が全成功（2.5分、exit 0、runner68648）。四APIの全E2E利用元であるadversarial-authoring-performanceと、既存UI、phase0保存互換性／描画比較を実行した。TEMP cad-interaction-profile-test-api-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server37564停止とsource二つのhash不変を確認した。今回は関連136件であり、最新コード全体のE2Eとは扱わない。UI・保存形式・診断集計・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用11%／残量89%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。今後もtest APIは同じowner／寿命を使う支援role単位で整理し、通常機能のstateやモデル編集の本体をtestingへ移さない。rootの構築・起動の依存も引き続き監査し、200〜500行の未達を転送や公開aliasの整理だけで完了扱いにしない。
 
 ### 最新：描画範囲を合わせる操作をCanvasDisplayへ統合（2026-10-29、検証完了）
 

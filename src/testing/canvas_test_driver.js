@@ -262,6 +262,18 @@
     return Object.freeze({ reset });
   }
 
+  function createInteractionProfiling({ profiler, scheduler }) {
+    return Object.freeze({
+      startInteractionProfileForTest() {
+        scheduler.flush();
+        profiler.start();
+      },
+      stopInteractionProfileForTest() { return profiler.stop(); },
+      resetInteractionFrameStatsForTest() { return scheduler.resetStats(); },
+      interactionFrameStatsForTest() { return scheduler.stats(); },
+    });
+  }
+
   function createViewObservation({ viewState, constraintStatusView }) {
     function state() {
       return {
@@ -273,5 +285,5 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createDisplaySupport, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation });
+  window.CanvasTestDriver = Object.freeze({ create, createDisplaySupport, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation, createInteractionProfiling });
 })();
