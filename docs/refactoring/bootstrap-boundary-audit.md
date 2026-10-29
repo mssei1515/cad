@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Document読込適用と正規化・採番復元の所有（2026-10-30、d841cc5基準）
+
+DocumentWorkspace.createPersistenceが実loading／Document／preparation／placement／ID ownerを持ち、createApplicationが外部のreset・late Tree・妥当性更新・線長補正・logから同じDocumentApplicationを生成する。modelは元の生成位置でreadEditingScopeから一度取得し、寸法正規化は呼出時の編集scopeだけを読む。late Treeのcallbackはそのまま渡し、予約→Document ID復元の順と途中失敗状態を維持する。旧createPersistence時のcold構築と全利用前の寸法正規化API公開、旧loading／DocumentApplication.createも維持する。新model／session・独自採番や可変contextは持たず、形式・decode／installとreset・回復は各既存ownerに残す。
+
+app.jsは1,946→1,936行、非空白1,496→1,486行、root420→417文／関数84→81個。構築135文737非空白行、hooks319行、一文call関数77個99行、その他204文326行（文外5行）。可変参照三つは不変。hooksと短い委譲を除いても1,068非空白行が残る。TEMP cad-document-application-composition-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
 ## Workspace求解機能の実owner接続（2026-10-30、72da23a基準）
 
 SketchSolvingFeature.createForWorkspaceは実DocumentWorkspace・編集scope・ScopeQuery・参照状態／read services・投影編集／Geometry／checkpoint・解析／表示・履歴等の18portから従来createの34項目を接続し、元の実APIを返す。Workspace.currentは求解／現在Parameter namespace、編集scope.currentは保存定義を安定化する前の元scopeとして区別する。生成時にはscope／model／DOMを照会せず、受理predicateと結果state・閾値／安定化上限は同じものを共有する。activateの全引数とreceiver、解析refreshの既定値とreceiver、Hatch採番peekの時機、private create内の四生成順と各ownerの回復・通知・履歴の境界は維持する。旧createの直接利用も維持し、別Solverやstate・model／namespace・cache、可変contextを追加しない。

@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- DocumentWorkspace.createPersistence.ensureDimensionDefaults／createApplication: 寸法既定値のlive scopeによる正規化、Geometry予約→Document ID復元、preparationと既存Applicationの接続を所有する。適用先modelは元の生成時点で取得し、Treeはlate callbackを維持する。形式・decode／install・reset／回復の各ownerは維持する。
+
 - SketchSolvingFeature.createForWorkspace: 実Workspace・編集scope・求解／参照／read services・checkpoint・解析／表示／履歴を同じ旧createへ接続する。Workspaceと編集scopeを区別し、結果state・受理predicate・数値方針と各ownerの回復／通知／履歴を維持する。旧createと実API返却も維持する。
 
 - DimensionTestDriver.createForEditing: 実Geometry・寸法描画／配置・Sketch・外観・sessionから寸法テストsupportとfixtureを元の順で生成し、元の実APIを返す。test指定時のみ生成し、通常機能の状態・modelを所有しない。旧APIと後段interaction／display支援を維持する。
