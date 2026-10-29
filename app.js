@@ -119,8 +119,7 @@
     localizeApplicationUI, applyDraft: (...args) => parameterApplication.apply(...args),
     recordHistory, setHint, updateUI, draw, pickDimension: event => expressionInputController.pickCanvas(event),
   });
-  const { draft: parameterDraft, setParameterDialogError, insertIdentifierIntoExpressionInput,
-    syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
+  const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
     isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
@@ -1343,10 +1342,8 @@
     blockView.render();
   }
 
-  const expressionInputController = window.ExpressionInputController.create({
-    document, types: { InputElement: HTMLInputElement, TextAreaElement: HTMLTextAreaElement }, currentNamespace: () => editingScopeBinding.current, dimensionValueInput,
-    pendingCommandSession, parameterDraft, ensureDimensionParameter, setParameterDialogError,
-    setHint, applicationText, language: () => applicationSettings.language, insertIdentifierIntoExpressionInput,
+  const expressionInputController = parameterEditor.createReferenceInput({
+    TextAreaElement: HTMLTextAreaElement, currentNamespace: () => editingScopeBinding.current, dimensionValueInput, pendingCommandSession,
     canvas, canvasPoint, hitDimension, hitAnnotationElement,
   });
   const { context: focusedExpressionInputContext, insertDimension: insertClickedDimensionParameter, insertAnnotation: insertClickedAnnotationParameter } = expressionInputController;
