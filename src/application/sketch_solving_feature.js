@@ -23,5 +23,23 @@
       refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory });
     return Object.freeze({ solving, parameters, storedDefinitions, refresh });
   }
-  window.SketchSolvingFeature = Object.freeze({ create });
+  // Preserve the distinction between Workspace scope and the last activated editing scope.
+  function createForWorkspace({ documentWorkspace, scopeQuery, references, referenceState, readServices, projectionEditing, geometry, checkpoint,
+    editingScope, analysis, presentation, historyController, recordHistory, resultIsAccepted, acceptError, solveState, maxPasses, relativeTolerance }) {
+    const { workspace, sketches, parameters: namespace, documentIds } = documentWorkspace;
+    const { activeSketchId, elementSketchId, constraintSketchId, orderedSketches } = sketches;
+    const { constraintGraphNodes } = references, { constraintIsOperational, refreshReferenceConstraintValidity } = referenceState;
+    const { geometryInstanceBundles } = readServices.reads, { blockDefinitionDrawableSketchIds: drawableSketchIds } = readServices.catalog;
+    const { synchronizeSketchProjectionMetadata } = projectionEditing, { normalizeArcSweeps } = geometry;
+    const { captureValues: snapshotModelState, restoreValues: restoreModelState } = checkpoint;
+    const { settings: { applicationText }, profiler, setSolveResultHint, updateUI, draw } = presentation;
+    return create({ currentScope: workspace.current, solver: editingScope.solver, scopeQuery, activeSketchId, elementSketchId,
+      constraintSketchId, constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
+      synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
+      resultIsAccepted, snapshotModelState, restoreModelState, acceptError, solveState,
+      namespace, currentParameterNamespace: workspace.current, maxPasses, relativeTolerance, applicationText, profiler,
+      readEditingScope: () => editingScope.current, activateEditingScope: (...args) => editingScope.activate(...args), nextHatchIndex: () => documentIds.peek("hatch"),
+      drawableSketchIds, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), setSolveResultHint, updateUI, draw, historyController, recordHistory });
+  }
+  window.SketchSolvingFeature = Object.freeze({ create, createForWorkspace });
 })();
