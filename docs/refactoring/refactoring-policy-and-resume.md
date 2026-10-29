@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,996行、非空白1,546行、root直下428文、条件付きtest hooks323行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,992行、非空白1,542行、root直下428文、条件付きtest hooks323行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Sketch求解結果の状態ownerと受理判定（2026-10-30、全E2E検証完了）
+
+基準developは6242858。SketchSolving.createStateへ既存のprivate結果Mapと四つの状態操作をまとめ、hasErrorの照会も同じownerへ集約した。appは最初の削除接続より前に純粋なMap ownerを生成し、SketchSolvingFeatureのsolveStateを経て実SketchSolvingへ渡す。モデルやscopeを読まず、実求解／Parameter／refreshの生成順は維持する。state未指定の旧createは従来どおり独立ownerを生成する。既存Mapのkey、source、result参照、errorNorm／reasonの記録とclearの戻り値を変えない。rootの結果判定は同じSketchSolvingのcreateResultAcceptanceへ移し、有限errorNormと許容値以下を判定する旧述語を束縛した。success flagを条件へ加えず、getter読取り順と例外も保持する。新規file・global・重複Map／cache、UI・保存形式の変更はない。
+
+app.jsは1,996→1,992行（4行減）、非空白1,546→1,542行、root428文／関数91→88個／hooks323行／可変参照三つ。構築136→138文・770非空白行は、明示した状態ownerと受理判定の生成が増えたため。一文call関数84個108行、その他205文336行（文外5行）。rootの三関数と不要なsketchSolveState別名を除いた。TEMP cad-sketch-solve-result-owners-{proof,hierarchy}.cjsで旧Mapと状態操作・受理述語の同値性、求解アルゴリズムとその他app／featureのAST不変、aliasの初期化後利用とroot未使用bindingなしを確認した。hooksと短い委譲を除いても1,111非空白行が残り、数百行目標は未達。
+
+単体へ四つの境界試験を追加した。有限・境界値・success無視とgetter回数／例外、結果参照と記録値の違い、key同一性とowner分離、同じownerを介した求解成功・失敗・checkpoint復元・reset、実featureのParameter／refreshとの状態共有を確認した。既存default APIの試験も維持し、関連単体14件／全単体2,058件／構文624fileが成功。フィルタなしの全E2E588件が全成功（21.8分、exit 0、runner80135）。拘束drag fileは10.1分で、R面取り3,744／Offset連鎖10,296／航空機1,872／連動線分5,304プレビューも失敗なし。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-sketch-solve-result-owners-{check,unit,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.json、verify.cjsへ証跡を保持する。既存期待値・性能上限／timeout・workerは変更しない。
+
+次は構築138文の機能依存の共有と、残る操作・表示callbackのownerを確認する。Mapをgetter／setterだけの可変contextとして公開せず、旧queryと取消／削除／resetの境界を保つ。全体目標active、開始時週枠残量78%／最終確認77%で停止条件未到達。mainは停止／releaseの最後に反映する。
 
 ### 最新：描画診断の遅延接続と実描画APIの共有（2026-10-30、全E2E検証完了）
 

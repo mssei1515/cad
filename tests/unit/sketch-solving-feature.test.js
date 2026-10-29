@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),test=require('node:test');
-function fixture(){
+function fixture(withSharedState=false){
  const sandbox={window:{},structuredClone};vm.createContext(sandbox);
  const sources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
  for(const file of sources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),sandbox,{filename:file});
@@ -11,7 +11,8 @@ function fixture(){
  const namespace={ensureParameterNamespace:scope=>{assert.equal(scope,read());},referenceDimensionValues:()=>new Map(),
   dimensionConstraintsInNamespace:scope=>scope.constraints,evaluateParameterNamespace:scope=>{assert.equal(scope,read());},parameterErrorText:error=>error.message};
  const solver={solveSubset(options){assert.equal(this,solver);read();events.push(['solve',options]);if(state.failure?.stage==='solve')throw state.failure.error;return state.result;}};
- const api=sandbox.window.SketchSolvingFeature.create({currentScope:read,solver,scopeQuery:{sketchSolveVariables:()=>[variable],
+ const solveState=withSharedState?sandbox.window.SketchSolving.createState():undefined;
+ const api=sandbox.window.SketchSolvingFeature.create({solveState,currentScope:read,solver,scopeQuery:{sketchSolveVariables:()=>[variable],
   sketchSolveConstraints:()=>read().constraints,sketchSolveLines:()=>[],localSolveContextFromSeeds:()=>({})},activeSketchId:()=>read().activeSketchId,
   elementSketchId:item=>item.sketchId,constraintSketchId:item=>item.sketchId,constraintGraphNodes:()=>new Set(),constraintIsOperational:()=>true,
   geometryInstanceBundles:()=>[],orderedSketches:()=>[{id:read().activeSketchId}],synchronizeSketchProjectionMetadata:id=>events.push(['sync',id]),
@@ -24,7 +25,7 @@ function fixture(){
   updateUI:options=>events.push(['ui',options]),draw:()=>{events.push(['draw']);if(state.restoringOnDraw)history.restoring=true;if(state.failure?.stage==='draw')throw state.failure.error;},
   historyController:history,recordHistory:label=>events.push(['history',label])});
  assert.deepEqual(events,[]);assert.equal(Object.isFrozen(api),true);state.ready=true;
- return {api,state,events,history,analysis,variable};
+ return {api,state,events,history,analysis,variable,solveState};
 }
 
 test('solving feature shares actual solve state through parameters and refresh, with live mode, profiling and ordered feedback',()=>{
@@ -56,4 +57,12 @@ test('stored-definition stabilization uses the editing scope and always restores
  const marker=new Error('solver failed');state.failure={stage:'solve',error:marker};events.length=0;definition.nextHatchIndex=9;
  assert.throws(()=>api.storedDefinitions.stabilize(definition),error=>error===marker);assert.equal(state.editing,previous);assert.equal(definition.nextHatchIndex,9);
  assert.equal(events.at(-1)[1],previous);
+});
+
+test('solving feature connects the same explicit result owner to parameter stabilization, refresh and model reset',()=>{
+ const f=fixture(true),{api,state,solveState}=f;assert.equal(solveState.sketchSolveState('A'),null);
+ solveState.setSketchSolveError('A',{errorNorm:2});assert.equal(api.solving.sketchSolveState('A'),solveState.sketchSolveState('A'));
+ api.parameters.stabilize();assert.equal(solveState.hasError('A'),false);assert.equal(solveState.sketchSolveState('A').result,state.result);
+ state.result={success:false,errorNorm:1};api.refresh.run('failed');assert.equal(solveState.hasError('A'),true);assert.equal(solveState.sketchSolveState('A').result,state.result);
+ api.solving.clearAll();assert.equal(solveState.sketchSolveState('A'),null);
 });

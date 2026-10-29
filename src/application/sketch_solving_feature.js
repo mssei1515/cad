@@ -4,14 +4,14 @@
   function create({ currentScope, solver, scopeQuery, activeSketchId, elementSketchId, constraintSketchId,
     constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
     synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
-    resultIsAccepted, snapshotModelState, restoreModelState, acceptError, namespace, currentParameterNamespace,
+    resultIsAccepted, snapshotModelState, restoreModelState, acceptError, solveState, namespace, currentParameterNamespace,
     maxPasses, relativeTolerance, applicationText, profiler, readEditingScope, activateEditingScope, nextHatchIndex,
     drawableSketchIds, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory }) {
     const { work: profileWork } = profiler;
     const solving = window.SketchSolving.create({ currentScope, solver, scopeQuery, activeSketchId, elementSketchId,
       constraintSketchId, constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
       synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
-      resultIsAccepted, restoreModelState, acceptError,
+      resultIsAccepted, restoreModelState, acceptError, state: solveState,
       profileDependencies: work => profiler.active ? profileWork("dependencies", work) : work() });
     const parameters = window.ParameterStabilization.create({ namespace, currentParameterNamespace, activeSketchId,
       solveSketchAndDependents: solving.solveSketchAndDependents, captureValues: snapshotModelState, restoreValues: restoreModelState,
