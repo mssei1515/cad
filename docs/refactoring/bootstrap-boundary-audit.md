@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Sketch求解の組立て階層（2026-10-30、5662046基準）
+
+SketchSolvingFeatureがSketchSolving、ParameterStabilization、stored-definition stabilization、SolveRefreshCommandの生成順と実API共有を所有する。appの四生成・40項目は一生成・33項目になる。求解状態Map・Parameter反復・scope復元・表示／履歴順は既存ownerに残る。通常model／Parameter namespaceと一時editing scopeを区別し、Profilerの二phaseと受理誤差・反復定数を維持する。証跡はTEMP cad-sketch-solving-feature-{proof,hierarchy}.cjs、検証は再開記録section 8を優先する。
+
+app.jsは2,039→2,028行、非空白1,589→1,578行、root441→438文。構築137文776非空白行、test hooks333行、一文call関数92個116行、その他208文348行（文外5行）。関数98個・可変参照三つは不変。hooksと短い委譲を全て除いても1,129非空白行であり、今回の四ownerの組立てだけで200〜500行目標を満たすとは扱わない。
+
 ## Canvas入力の操作基盤共有（2026-10-30、d562501基準）
 
 CanvasInteractionFeatureのoperation sessionsが、入力feature生成・Pointer bind・Keyboard生成でも実ownerを共有する。rootの指定項目は入力42→32、Pointer 11→10、Keyboard 25→20（計78→62）。同じ状態を渡す16項目を除き、入力固有のcommand／query、Keyboardの取消command、入力用clearSnapを明示portとして維持する。raw ownerに処理本体を残し、既存の生成・bind・start位置を維持する。APIや状態のコピー、可変context、後段setterは増やさない。

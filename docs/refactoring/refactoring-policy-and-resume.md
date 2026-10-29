@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,039行、非空白1,589行、root直下441文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,028行、非空白1,578行、root直下438文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Sketch求解とParameter安定化の組立て（2026-10-30、検証完了）
+
+基準develop／origin/developは5662046。本単位はcodex/sketch-solving-featureで実施した。src/application/sketch_solving_feature.jsのSketchSolvingFeature.createがSketchSolving→ParameterStabilization→stored-definition stabilization→SolveRefreshCommandを元の順で生成する。四APIを実参照のまま返し、同じ求解APIとstabilizeを接続する。通常currentScope／Parameter namespaceとreadEditingScope／activateEditingScopeの役割を区別し、前の編集scope復元とHatch ID保持、snapshot復元・受理誤差・反復上限／収束許容差、解析・表示・履歴の順序を維持する。Profilerは実activeを呼出し時に読み、同じwork関数をreceiverなしでdependencies／parametersへ使う。計算・モデル・履歴本体は既存ownerに残し、新state・scope stack・可変contextは持たない。初期化順と早期callbackのhoisted入口は保持する。
+
+app.jsは2,039→2,028行（11行減）、非空白1,589→1,578行、root441→438文／関数98個／test hooks333行／可変参照三つ。四生成・40項目を一生成・33項目にまとめた。TEMP cad-sketch-solving-feature-proof.cjsで四factoryの全接続式・生成順、その他appのAST、三raw ownerの差分なし、既存scriptの相対順不変を確認。hierarchy.cjsでは構築137文776非空白行、hooks333行、一文call関数92個116行、その他208文348行（文外5行）。hooksと短い委譲を全て除く仮定でも1,129非空白行であり、数百行目標は未達で全体目標activeのまま。
+
+新規単体は実SketchSolving／ParameterStabilization／SolveRefreshCommandを使い、生成時の状態照会・評価なし、現在Sketch／namespaceの切替、実resultと変数の参照、二つのProfiler phase、求解失敗時の表示と履歴抑止、描画例外の同一性・部分反映、描画中にrestoringが変わる場合の履歴抑止を確認する。stored-definitionは通常scopeと異なる前のediting scopeをfinallyで復元し、成功・求解例外の双方でHatch IDを維持し、通常UI更新／履歴を呼ばない。関連単体22件・全単体2,040件・構文622ファイルが成功。source／構文／単体runner／unified-uiの読込期待を更新済み。関連E2E203件は診断後の最終再実行で全成功（3.2分、exit 0、runner80236）。blocks／block-geometry-fixed／sketch-projection／parameter-dialog-controller／multiple-dimensions／dimension-prefix／slot-dimension／file-safety／unified-ui／adversarial-authoring-performanceを実行した。初回と二回目の性能超過・前後比較は下に保持し、変動が恒久解消したとは扱わない。今回の全体E2Eは未実行。UI・保存形式・既存期待値・性能上限／timeout・workerは変更しない。
+
+初回の関連E2Eは202成功・1失敗。selection／deletion／undo／redoの性能試験で中ボタンpanが178ms（上限175ms）となった。5662046をTEMPへGit archiveし、app・viewport・navigation・Profiler・serverの基準blob一致を確認して同じ試験を比較した。変更前は単独初回に選択160ms／150msで失敗、追加一回目は成功（pan137ms・矩形216ms）、二回目は矩形264ms／250msで失敗。変更後は単独初回の矩形252ms／250ms、追加二回も矩形282ms・266ms／250msで失敗した。両版で異なる操作の超過があり、測定変動の具体原因は未確定で、今回の接続だけを原因とは判断しない。コード・上限・入力条件を変えず関連203件を再実行した。TEMP cad-sketch-solving-{compare,repeat}-{current,baseline}*へ比較log／receiptを保持し、製品／E2E入力404fileのhash不変を再確認した。
+
+関連203件の二回目も202成功・1失敗で、pan181ms／175msだった。製品／E2E入力404fileは不変。TEMPの診断用specだけに操作全体・action・二frame待ち・既存InteractionProfilerの計測を追加し、既存上限は維持した。この診断結果は正式な既存試験の代わりにしない。作業ツリーの診断初回はpan158ms・矩形280msで、pan／矩形にdependencies／parametersのworkはなかった。変更前の診断二回は矩形212msで成功し、変更後も一時配信コピーでは196ms／212msで成功した。配信コード・CSS・画像354fileを作業ツリーとバイト一致にしても成功し、実行commit情報を同じ値にしたコピー、同じ作業ツリーへ定数metadataを返す一時serverでも成功した。最後に通常serverへ戻した変更後診断もpan140ms・矩形200msで成功した。配信場所・Git情報取得だけを原因とは断定できない。比較条件の差と時間変動を調査したうえで、製品・テスト・上限を変えず既存関連203件を最終再確認し、全203件が成功した。正式試験のpan141ms／175ms、矩形217ms／250msを確認した。TEMP cad-sketch-solving-feature-final-{e2e.log,e2e-receipt.json,last-run.json,run.ps1}へ最終証跡を保持し、404fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認。以前の全588件の結果を今回の全体検証として流用しない。TEMP cad-sketch-solving-diagnostic*へ診断spec／config／server／logを保持する。
+
+開始時の週枠使用17%／残量83%で停止条件未到達。main／origin/mainは5800850のまま、停止／releaseの最後に反映する。検証・差分確認・Commit／Push・develop統合後、残る生成階層を再確認する。次候補はGeometryCreation／Endpoint resolverとAuthoring基盤の共有境界。ただしhoisted snapshot callback、後段のhit query／BlankGesture、primitive入力と全Geometry編集・保存で使う実API参照を維持し、単に全作図commandを袋へ移す方法は取らない。
 
 ### 最新：Canvas入力へ操作基盤の実sessionを共有（2026-10-30、検証完了）
 

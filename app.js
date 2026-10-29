@@ -554,31 +554,20 @@
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
   });
-  const sketchSolving = window.SketchSolving.create({
+  const { solving: sketchSolving, parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization,
+    refresh: solveRefreshCommand } = window.SketchSolvingFeature.create({
     currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, activeSketchId, elementSketchId,
     constraintSketchId, constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
     synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
-    resultIsAccepted, restoreModelState, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    profileDependencies: work => interactionProfiler.active ? profileInteractionWork("dependencies", work) : work(),
+    resultIsAccepted, snapshotModelState, restoreModelState, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    namespace: parameterNamespace, currentParameterNamespace, maxPasses: PARAMETER_STABILIZATION_MAX_PASSES,
+    relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE, applicationText, profiler: interactionProfiler,
+    readEditingScope: () => editingScopeBinding.current, activateEditingScope, nextHatchIndex: () => documentIds.peek("hatch"),
+    drawableSketchIds: blockDefinitionDrawableSketchIds, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
   });
   const { setSketchSolveOk, setSketchSolveError, sketchSolveState, solveSketchById,
     solveReferenceDependentSketches, solveSketchAndDependents, solveConstraintComponentAndDependents } = sketchSolving;
-  const parameterStabilization = window.ParameterStabilization.create({
-    namespace: parameterNamespace, currentParameterNamespace, activeSketchId,
-    solveSketchAndDependents: sketchSolving.solveSketchAndDependents,
-    captureValues: snapshotModelState, restoreValues: restoreModelState,
-    maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
-    nonConvergenceReason: () => applicationText("Parameter計算が収束しません", "Parameter calculation did not converge"),
-    profile: work => interactionProfiler.active ? profileInteractionWork("parameters", work) : work(),
-  });
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
-  const storedDefinitionStabilization = window.ParameterStabilization.createStoredDefinition({
-    currentScope: () => editingScopeBinding.current, activateScope: activateEditingScope, nextHatchIndex: () => documentIds.peek("hatch"),
-    drawableSketchIds: blockDefinitionDrawableSketchIds, stabilizeNamespace: stabilizeActiveParameterNamespace,
-  });
-  const solveRefreshCommand = window.SolveRefreshCommand.create({
-    activeSketchId, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
-  });
   const filletCommand = authoringTools.createFillet({
     defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
     pending: pendingCommandSession, readPointer: pointerInteractionController.readLastPointer,
