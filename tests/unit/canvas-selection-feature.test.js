@@ -114,3 +114,39 @@ test('constraint operand conversion errors leave the existing Selection and targ
   assert.throws(() => bridge.syncSelection(), error => error === marker);
   assert.equal(f.feature.selection.points[0], item); assert.equal(f.targets.operands, operands); assert.deepEqual(f.calls, []);
 });
+
+function editingSelectionFixture() {
+ const calls=[],state={ready:false,active:'S1',locked:new Set(),geometryMode:true,snapFailure:null};let snap,preview;
+ const check=()=>assert.equal(state.ready,true,'no eager Sketch or Selection policy read');
+ const sketches={activeSketchId:()=>{check();return state.active;},canEditSketch:(id,operation)=>{check();calls.push(['permission',id,operation]);return id===state.active&&!state.locked.has(id);},
+  sketchById:id=>{check();calls.push(['lookup',id]);return {id,locked:state.locked.has(id)};},elementSketchId:item=>item.sketchId};
+ const feature=w.CanvasSelectionFeature.createEditing({sketches,isGeometryMode:()=>{check();return state.geometryMode;},setHint:(message,kind)=>calls.push(['hint',message,kind]),applicationText:(_ja,en)=>en,
+  clearSnap:()=>snap.clear(),clearPointerPreview:()=>preview.setPointer(null),clearSelection:()=>{calls.push('clear');feature.selection.clear();},
+  updateGeometrySelectionUI:()=>calls.push('ui'),draw:()=>calls.push('draw')});
+ assert.deepEqual(calls,[]);state.ready=true;
+ snap={clear(){assert.equal(this,snap);calls.push('snap');if(state.snapFailure)throw state.snapFailure;}};
+ preview={setPointer(value){assert.equal(this,preview);calls.push(['pointer',value]);}};
+ return {feature,state,calls};
+}
+
+test('editing Selection composition uses the same live scope for access and identity selection without an early app callback',()=>{
+ const f=editingSelectionFixture(),a=point('P1'),b=point('P2','S2');
+ assert.equal(Object.isFrozen(f.feature),true);assert.equal(Object.isFrozen(f.feature.access),true);
+ assert.deepEqual(Object.keys(f.feature),['selection','scope','identity','createConstraintOperands','createPresentation','access']);
+ f.feature.selection.set('points',[a]);assert.equal(f.feature.scope.selectionItems()[0],a);assert.equal(f.feature.access.guardSelectionEdit(),true);
+ f.calls.length=0;f.state.locked.add('S2');f.feature.identity.selectInactive({}, {kind:'point',item:b,sketchId:'S2'});
+ assert.equal(f.feature.selection.points[0],b);assert.equal(f.feature.scope.selectionSketchId(),'S2');assert.deepEqual(f.calls.slice(0,3),['clear','ui','draw']);
+ assert.equal(f.calls.at(-1)[0],'hint');assert.match(f.calls.at(-1)[1],/locked/);assert.equal(f.feature.access.guardSelectionEdit(),false);
+ f.state.active='S2';f.state.locked.delete('S2');assert.equal(f.feature.access.guardSelectionEdit(),true);
+ f.calls.length=0;assert.equal(f.feature.access.guardSketchEdit(undefined,'create'),true);assert.deepEqual(f.calls,[['permission','S2','create']]);
+ f.calls.length=0;f.state.geometryMode=false;assert.equal(f.feature.access.canCreateInActiveSketch(),false);assert.deepEqual(f.calls,[]);
+});
+
+test('editing Selection refusal keeps late snap/preview owners, cleanup order and the original partial state on failure',()=>{
+ const f=editingSelectionFixture(),item=point('P1');f.feature.selection.set('points',[item]);
+ assert.equal(f.feature.access.rejectRootSketchCreation(),false);f.calls.length=0;f.state.locked.add('S1');
+ assert.equal(f.feature.access.rejectRootSketchCreation(),true);assert.deepEqual(f.calls.slice(-3),['snap',['pointer',null],'draw']);assert.equal(f.feature.selection.points[0],item);
+ const marker=new Error('snap clear failed');f.state.snapFailure=marker;f.calls.length=0;
+ assert.throws(()=>f.feature.access.rejectRootSketchCreation(),error=>error===marker);assert.equal(f.calls.at(-1),'snap');assert.equal(f.calls.includes('draw'),false);
+ assert.equal(f.calls.some(call=>Array.isArray(call)&&call[0]==='pointer'),false);assert.equal(f.feature.selection.points[0],item);
+});

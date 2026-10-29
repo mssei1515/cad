@@ -130,11 +130,6 @@
     constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
     sketchRelationOfElement,
   } = sketchContext;
-  const sketchEditAccess = window.SketchCommand.createEditAccess({
-    activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId, isGeometryMode,
-    setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), draw,
-  });
-  const { guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation } = sketchEditAccess;
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
   const { services: geometryReadServices, createScopeBinding, createPersistence } = createReadContext({
@@ -176,10 +171,13 @@
 
   const drawOperationLifecycle = window.DrawOperationLifecycle.createSession();
   const { exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode } = drawOperationLifecycle;
-  const selectionFeature = window.CanvasSelectionFeature.create({
-    sketches: sketchContext, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw,
+  const selectionFeature = window.CanvasSelectionFeature.createEditing({
+    sketches: sketchContext, isGeometryMode, setHint, applicationText,
+    clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), clearSelection, updateGeometrySelectionUI, draw,
   });
-  const { selection: canvasSelection, scope: selectionScopeQuery, identity: identitySelection } = selectionFeature;
+  const { selection: canvasSelection, scope: selectionScopeQuery, identity: identitySelection, access: sketchEditAccess } = selectionFeature;
+  const { guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation } = sketchEditAccess;
+  const { selectionSketchId } = selectionScopeQuery;
   const {
     selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, effectiveSelectedConstraint, selectedPrimitives,
     toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
@@ -737,10 +735,8 @@
 
 
 
-  function selectionItems(...args) { return selectionScopeQuery.selectionItems(...args); }
 
 
-  function selectionSketchId(...args) { return selectionScopeQuery.selectionSketchId(...args); }
 
 
 

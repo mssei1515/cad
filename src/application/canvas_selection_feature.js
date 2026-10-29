@@ -1,9 +1,24 @@
 /* Assemble selection owners before connecting their later presentation/reset dependencies. */
 (() => {
   "use strict";
-  function create({ sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
+  function createOwners() {
     const selection = window.CanvasSelection.create();
     const scope = window.CanvasSelection.createScopeQuery({ canvasSelection: selection, selectedGeometryItems: selection.selectedGeometryItems });
+    return { selection, scope };
+  }
+  function create({ sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
+    return assemble({ ...createOwners(), sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw });
+  }
+  function createEditing({ sketches, isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview,
+    clearSelection, updateGeometrySelectionUI, draw }) {
+    const { selection, scope } = createOwners();
+    const access = window.SketchCommand.createEditAccess({ activeSketchId: sketches.activeSketchId, canEditSketch: sketches.canEditSketch,
+      sketchById: sketches.sketchById, selectionItems: scope.selectionItems, elementSketchId: sketches.elementSketchId,
+      isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview, draw });
+    const feature = assemble({ selection, scope, sketches, guardSketchEdit: access.guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw });
+    return Object.freeze({ ...feature, access });
+  }
+  function assemble({ selection, scope, sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
     const identity = window.CanvasSelectionInteraction.createIdentitySelection({
       canvasSelection: selection, selectionSketchId: (...args) => scope.selectionSketchId(...args),
       clearSelection, updateGeometrySelectionUI, draw, sketchById: sketches.sketchById, guardSketchEdit,
@@ -40,5 +55,5 @@
     }
     return Object.freeze({ selection, scope, identity, createConstraintOperands, createPresentation });
   }
-  window.CanvasSelectionFeature = Object.freeze({ create });
+  window.CanvasSelectionFeature = Object.freeze({ create, createEditing });
 })();
