@@ -174,5 +174,24 @@
     });
   }
 
-  window.AnnotationTestDriver = Object.freeze({ createSupport, createDragFixture, createSnapshot, createHitObservation, createDimensionObservation, createAppearanceObservation, createOwnershipObservation });
+  // Reuse the live annotation feature; the selection-aware hit policy stays explicit.
+  function createForFeature({ feature, geometry, readServices, dimensionDisplay, dimensionLabelForConstraint,
+    currentScope, viewport, canvas, selection, drag, annotationLeaderAnchor, annotationLeaderTargetFromItem,
+    draw, allGeometryBounds, resetModelState, resizeCanvas, hitAnnotationElement }) {
+    const { annotationTextMetrics, annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextWorldHeight } = feature.renderer;
+    return createSupport({ annotationDimensions: feature.dimensions, targetFromConstraint: window.DimensionQueries.targetFromConstraint,
+      dimensionLayout: (...args) => dimensionDisplay.layout(...args), effectiveDimensionAppearance: readServices.dimensionAppearance.effectiveDimensionAppearance,
+      dimensionLabelForConstraint, currentScope, viewport, clampZoom: viewport.clampZoom,
+      effectiveAnnotationStyle: readServices.annotationAppearance.effectiveAnnotationStyle, draw,
+      annotationTextMetrics, annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextWorldHeight,
+      screenPxPerMm: window.Appearance.CSS_PX_PER_MM, annotationDisplayFactor: window.Appearance.annotationDisplayFactor, annotationLeaderAnchor,
+      displayText: window.AnnotationRenderer.displayText, formatDisplayNumber: window.NumberDisplay.formatDisplayNumber,
+      serializeAnnotation: window.AnnotationData.serializeAnnotation, canvas, worldToCanvasScreen: viewport.worldToCanvasScreen,
+      allAnnotations: readServices.reads.allAnnotations, canvasSelection: selection, allGeometryBounds,
+      resetModelState, addPoint: geometry.addPoint, addLine: geometry.addLine, annotationLeaderTargetFromItem,
+      pushAnnotation: feature.command.pushAnnotation, defaultStyle: window.Appearance.DEFAULT_ANNOTATION_STYLE, resizeCanvas,
+      screenToWorld: viewport.screenToWorld, hitAnnotationElement, readDragState: () => drag.inspect() });
+  }
+
+  window.AnnotationTestDriver = Object.freeze({ createForFeature, createSupport, createDragFixture, createSnapshot, createHitObservation, createDimensionObservation, createAppearanceObservation, createOwnershipObservation });
 })();
