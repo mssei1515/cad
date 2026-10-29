@@ -809,15 +809,9 @@
 
 
 
-  const circleCenterCrossCommand = window.CircleCenterCrossCommand.create({
-    geometry: { addPoint, addLine, pushModelConstraint },
-    checkpoint: { capture: snapshotGeometryMutationState, restore: restoreGeometryMutationState },
-    solveSketchAndDependents, resultIsAccepted, minOrientationLength: MIN_ORIENTATION_LENGTH,
-    activeSketchId, isActiveSketchElement, selection: canvasSelection, selectedElementCount,
-    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    setMode: drawOperationLifecycle.setMode, clearPreview: () => drawingPreview.setPointer(null),
-    clearSnap, clearSelection, invalidateAnalysis: () => constraintAnalysis.invalidate(),
-    updateUI, draw, setHint, recordHistory, applicationText,
+  const circleCenterCrossCommand = authoringTools.createCircleCenterCross({
+    checkpoint: editingCheckpoint, solveSketchAndDependents, resultIsAccepted, minOrientationLength: MIN_ORIENTATION_LENGTH,
+    selectedElementCount, invalidateAnalysis: () => constraintAnalysis.invalidate(),
   });
   const { start: startCircleCenterCrossCommand } = circleCenterCrossCommand;
 

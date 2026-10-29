@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,093行、非空白1,642行、root直下461文、条件付きtest hooks345行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,087行、非空白1,636行、root直下461文、条件付きtest hooks345行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：円中心十字線の作図組立てを既存authoringへ集約（2026-10-30、検証完了）
+
+基準develop／origin/developは83aa8d8。本単位はcodex/circle-cross-authoringで実施した。BasicDrawingTools.createAuthoringの後段createCircleCenterCrossへ、既存Geometry生成・拘束挿入、SketchContext、Selection、preview／snap、開始guard・取消・mode・共通通知の接続を集約した。appは元の生成位置でEditingCheckpoint、Sketch連鎖求解・結果判定、最小方向長、選択数照会、解析無効化だけを明示する。primitive toolset用の遅延checkpointを流用せず、同じcaptureGeometry／restoreGeometryの実関数を渡す。commandの開始／作図／失敗復元／履歴・保存形式は変更しない。新file・global・操作stateを追加しない。
+
+app.jsは2,093→2,087行（6行減）、非空白1,642→1,636行、root直下461文・関数111個、test hooks345行、可変参照三つを維持する。対象のapp接続は23→6項目。TEMP cad-circle-cross-authoring-proof.cjsで子への全23port式の一致、他のapp／BasicDrawingToolsのAST不変を確認し、root未使用bindingは0。hierarchy.{cjs,json}で構築147文809非空白行、hooks1文345行、一文call関数105個129行、その他208文348行（文外5行）を再集計した。単なる委譲削除だけでは数百行へ届かず、既存ownerを共有する組立て階層を引き続き検討する。
+
+basic-drawing-tools.test.jsへ実CircleCenterCrossCommand／Geometry型を使う二つの境界試験を追加した。生成時の照会・操作なし、現在Sketchの変更、同じSelection／Geometry参照、十字線と八拘束の生成・一履歴、求解／依存求解／結果判定失敗時の同じ配列・Geometry参照と採番復元、作図拒否時の取消順を確認する。primitive checkpointは照会すると例外になるままで、混用していない。関連単体35件・全単体2,021件・構文618ファイルが成功（exit 0）。正式モジュール構成とimplementation-mapを更新した。
+
+関連E2E167件が全成功（3.0分、exit 0、runner93200）。centerline／circular-authoring／unified-ui／phase0-characterization／sketch-permissions／file-safety／adversarial-authoring-performanceを実行し、十字補助線の通常／複数事前選択・Undo／Redo・保存再読込、円弧作図、file URL起動とUI・画像比較、Sketch権限、ファイル安全性、既存作図性能上限を確認した。TEMP cad-circle-cross-authoring-{focused,check,unit,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.json、proof.cjs、hierarchy.{cjs,json}へ証跡を保存。製品／E2E入力402fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空と自己起動serverの停止を確認した。この単位では全E2Eは未実行で、直前Scene単位の全588件成功を今回の全体結果として流用しない。性能上限・timeout・既存期待値は変更しない。
+
+開始時は週枠使用12%／残量88%、検証後は使用13%／残量87%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この単位をCommit／Pushしてdevelopへ統合する。次は引き続き実依存を再監査し、作図以外も含めて同じ所有者を共有する生成・接続を機能単位でまとめる。三つの後段接続や異なる復元・取消方針を隠す汎用contextは導入しない。
 
 ### 最新：同じCanvas workspaceのGeometry Sceneを一括生成（2026-10-30、検証完了）
 

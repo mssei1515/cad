@@ -406,3 +406,57 @@ test('authoring Fillet retains its own checkpoint and raw stabilize, pointer and
  lifecycle={prepare(mode){assert.equal(this,lifecycle);f.events.push(mode);}};child.ports.prepareStart();
  assert.throws(()=>child.ports.stabilize(),error=>error===marker);assert.deepEqual(f.events,['FilletFeature','fillet']);
 });
+
+function circleCrossAuthoringFixture() {
+ const calls=[],state={sketch:'S1',allowed:true,accepted:true,result:{success:true,result:{}},seq:0,mode:'select',histories:[]};
+ const model={points:[],lines:[],constraints:[]},selection={circles:[],set(kind,items){assert.equal(this,selection);state.selected={kind,items};calls.push('select');}};
+ let types;
+ const f=authoringFixture({geometry:{addPoint(x,y,fixed,kind){const p=new types.Point('P'+(++state.seq),x,y,fixed,kind);model.points.push(p);return p;},
+  addLine(a,b,construction){const l=new types.Line('L'+(++state.seq),a,b,construction);model.lines.push(l);return l;}},
+  pushModelConstraint(c,sketch){c.sketchId=sketch;model.constraints.push(c);},selection,
+  sketchContext:{activeSketchId:()=>state.sketch,isActiveSketchElement:item=>item.sketchId===state.sketch},
+  canCreateInActiveSketch:()=>state.allowed,rejectRootSketchCreation:()=>calls.push('reject'),
+  cancelConstraintTargetCommand:value=>calls.push(['cancelConstraint',value]),cancelPendingCommand:value=>calls.push(['cancelPending',value]),
+  setMode:value=>{state.mode=value;calls.push('mode');},clearSelection:()=>{selection.circles=[];calls.push('clear');},
+  updateUI:()=>calls.push('ui'),draw:()=>calls.push('draw'),setHint:()=>calls.push('hint'),recordHistory:label=>state.histories.push(label)});
+ vm.createContext(f.sandbox);
+ for(const file of ['geometry/geometry_kernel.js','geometry/spline_geometry.js','solver/constraint_solver.js','commands/circle_center_cross_command.js'])
+  vm.runInContext(fs.readFileSync('src/'+file,'utf8'),f.sandbox);
+ types=f.sandbox.window.GeometrySolver;
+ const circle=new types.Circle('C1',new types.Point('P0',10,20),5);circle.sketchId='S1';model.points.push(circle.center);
+ const checkpoint={captureGeometry(){calls.push('capture');return {seq:state.seq,points:model.points.length,lines:model.lines.length,constraints:model.constraints.length};},
+  restoreGeometry(snapshot){calls.push('restore');state.seq=snapshot.seq;for(const key of ['points','lines','constraints'])model[key].length=snapshot[key];}};
+ const options={checkpoint,solveSketchAndDependents:sketch=>{calls.push(['solve',sketch]);return state.result;},resultIsAccepted:()=>state.accepted,
+  minOrientationLength:0.01,selectedElementCount:()=>selection.circles.length,invalidateAnalysis:()=>calls.push('analysis')};
+ calls.length=0;f.events.length=0;
+ const command=f.feature.createCircleCenterCross(options);
+ return {...f,calls,crossState:state,model,selection,circle,command,types};
+}
+
+test('authoring circle cross uses live Sketch, shared selection and the explicit geometry checkpoint without eager operations',()=>{
+ const f=circleCrossAuthoringFixture();assert.deepEqual(f.calls,[]);assert.deepEqual(f.events,[]);assert.equal(Object.isFrozen(f.command),true);
+ f.crossState.sketch='S2';assert.equal(f.command.click(f.circle),false);assert.equal(f.model.points.length,1);assert.equal(f.crossState.seq,0);
+ f.crossState.sketch='S1';f.selection.circles=[f.circle];f.calls.length=0;f.command.start();
+ assert.deepEqual(f.calls.slice(0,4),[['cancelConstraint',''],['cancelPending',''],'capture',['solve','S1']]);
+ assert.equal(f.model.points[0],f.circle.center);assert.equal(f.model.lines.length,2);assert.equal(f.model.constraints.length,8);
+ assert.equal(f.model.lines.every(line=>line.construction),true);assert.equal(f.model.constraints.every(c=>c.sketchId==='S1'),true);
+ assert.deepEqual(f.model.lines.map(l=>[l.p1.x,l.p1.y,l.p2.x,l.p2.y]),[[10,15,10,25],[5,20,15,20]]);
+ assert.equal(f.crossState.selected.kind,'lines');assert.equal(f.crossState.selected.items[0],f.model.lines[0]);
+ assert.equal(f.crossState.mode,'select');assert.deepEqual(f.crossState.histories,['円中心十字線']);assert.deepEqual(f.events,['pointer','snap']);
+});
+
+test('authoring circle cross preserves failed solve rollback and creation rejection without touching primitive checkpoints',()=>{
+ for(const failure of ['solver','dependent','accept']){
+  const f=circleCrossAuthoringFixture(),arrays={...f.model};
+  if(failure==='solver')f.crossState.result.success=false;
+  if(failure==='dependent')f.crossState.result.dependent={success:false};
+  if(failure==='accept')f.crossState.accepted=false;
+  f.crossState.mode='circle-center-cross';assert.equal(f.command.click(f.circle),false);
+  assert.deepEqual(f.calls.slice(0,4),['capture',['solve','S1'],'restore',['solve','S1']]);
+  for(const key of Object.keys(arrays))assert.equal(f.model[key],arrays[key]);
+  assert.equal(f.model.points[0],f.circle.center);assert.equal(f.model.points.length,1);assert.equal(f.model.lines.length,0);assert.equal(f.model.constraints.length,0);
+  assert.equal(f.crossState.seq,0);assert.equal(f.crossState.mode,'circle-center-cross');assert.deepEqual(f.crossState.histories,[]);
+  f.calls.length=0;f.crossState.allowed=false;f.command.start();
+  assert.deepEqual(f.calls,[['cancelConstraint',''],['cancelPending',''],'reject']);
+ }
+});
