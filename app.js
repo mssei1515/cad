@@ -114,14 +114,11 @@
     readLanguage: () => applicationSettings.language, setHint, log,
   });
   const {
-    evaluateDimensionExpressionDraft: evaluateNamedDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression,
+    evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
     dimensionConstraintsInNamespace, ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
     validateParameterNamespace,
   } = parameterNamespace;
-  function evaluateDimensionExpressionDraft(constraint, expression, namespace, options) {
-    return evaluateNamedDimensionExpressionDraft(constraint?.annotationOwner ? null : constraint, expression, namespace, options);
-  }
   const parameterEditor = window.ParameterEditor.create({
     document, window, InputElement: HTMLInputElement, Event,
     namespace: parameterNamespace, currentScope: () => editingScopeBinding.current,
@@ -734,7 +731,7 @@
   const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationFeature.createEditor({
     document, host: canvas.parentElement, capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
     readParameterNamespace: currentParameterNamespace, expressionFromUserInput,
-    stabilize: () => stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: editingScopeBinding.current.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }),
+    stabilize: stabilizeDocumentParameters,
     resetDrag: () => annotationDrag.reset(), toScreen: worldToCanvasScreen, expressionInputValue,
   });
 

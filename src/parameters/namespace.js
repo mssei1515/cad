@@ -319,6 +319,11 @@
       return value;
     }
 
+    // Annotation-backed display dimensions evaluate as expressions, not replacement constraint definitions.
+    function evaluateEditingExpressionDraft(constraint, expression, namespace, options) {
+      return evaluateDimensionExpressionDraft(constraint?.annotationOwner ? null : constraint, expression, namespace, options);
+    }
+
     function renameDimension(constraint, requestedName) {
       const namespace = currentParameterNamespace();
       ensureParameterNamespace(namespace);
@@ -340,7 +345,7 @@
     }
 
     return Object.freeze({
-      evaluateDimensionExpressionDraft, renameDimension, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
+      evaluateDimensionExpressionDraft, evaluateEditingExpressionDraft, renameDimension, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
       dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
       rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, symbolElementsInNamespace, allocateDimensionParameterName,
       prepareCopiedSymbols, rewriteCopiedConstraintSymbol, ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
