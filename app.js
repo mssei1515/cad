@@ -1730,9 +1730,8 @@
   keyboardInput.start();
   canvasViewControls.bindWindow();
 
-  const editingToolBinding = window.ToolbarView.createEditingBinding({
-    document, undo: undoHistory, redo: redoHistory, toggleVisibility: toggleSelectedVisibility,
-    isGeometryMode, deleteSelection: deleteCurrentSelection, updateUI, draw, annotation: annotationCommand,
+  const editingToolBinding = toolbarPresentation.createEditingBinding({
+    undo: undoHistory, redo: redoHistory, toggleVisibility: toggleSelectedVisibility, deleteSelection: deleteCurrentSelection, annotation: annotationCommand,
   });
   editingToolBinding.bind();
   canvasViewControls.bindControls();
@@ -1752,9 +1751,9 @@
   applicationSettings.start();
   blockView.bind();
 
-  const drawingToolBinding = window.ToolbarView.createBinding({
-    document, drawOperationLifecycle, startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand,
-    startGeometryInstanceCommand, constructionCommand, filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation,
+  const drawingToolBinding = toolbarPresentation.createDrawingBinding({
+    startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand, startGeometryInstanceCommand,
+    filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation,
   });
   drawingToolBinding.bind();
 

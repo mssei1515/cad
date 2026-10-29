@@ -75,7 +75,7 @@ function toolbarPresentationFixture() {
   const controls=toolbar.createControls({selectedVisibilityTargets:()=>{f.events.push('visibility');return[];},selectionVisibilityIsHidden:()=>false,canEditTarget:()=>true,
     syncFlyouts:()=>{f.events.push('flyouts');if(state.onFlyouts)state.onFlyouts();},updateCursor:value=>{f.events.push('cursor');state.cursor=value;}});
   assert.deepEqual(f.events,[]);
-  return{...f,state,nodes,toolbar,controls,controller,documentHistory,blockHistory,lifecycle,pending,constraints,marker,node};
+  return{...f,state,nodes,toolbar,controls,controller,documentHistory,blockHistory,lifecycle,pending,constraints,constructionCommand,marker,node};
 }
 
 test('toolbar composition follows real mode/pending/constraint owners, shared language and fresh state after flyout sync',()=>{
@@ -194,4 +194,57 @@ test("presentation only publishes completed panel construction and preserves its
   assert.equal(f.feature.readCommandPanel(), bundle.commandPanel); f.feature.draw();
   assert.equal(f.feature.selectedItem, selected);
   assert.deepEqual(f.events, ["previous panel", "input", "cache", "frame"]);
+});
+
+function toolbarInputFixture() {
+  const f = toolbarPresentationFixture();
+  for (const id of ['toolPoint', 'toolCircle', 'toolArc', 'toolConstructionLine', 'toolFillet', 'toolHatch', 'deleteSelectionBtn']) f.nodes.set(id, f.node());
+  for (const node of f.nodes.values()) {
+    node.listeners = new Set();
+    node.addEventListener = (type, handler) => { assert.equal(type, 'click'); node.listeners.add(handler); };
+    node.removeEventListener = (type, handler) => { assert.equal(type, 'click'); node.listeners.delete(handler); };
+    node.click = () => { for (const handler of node.listeners) handler.call(node); };
+  }
+  f.feature.bindUI(f.ui); f.feature.bindCanvas(f.canvas); f.controller.resetDocument();
+  const reset = () => {}, resettable = { reset };
+  f.lifecycle.bind({ line: resettable, rectangle: resettable, fillet: resettable,
+    circular: { resetCircle: reset, resetArcs: reset }, preview: { setPointer: reset },
+    clearSnap: reset, cancelConstraintTargetCommand: reset, updateToolbar: f.controls.view.update, setHint: reset, draw: f.feature.draw });
+  f.events.length = 0;
+  return f;
+}
+
+test('toolbar input assembly shares displayed lifecycle and construction while retaining separate binding phases and native handlers', () => {
+  const f = toolbarInputFixture(), calls = [];
+  function undo() { assert.equal(this, f.nodes.get('undoBtn')); calls.push('undo'); }
+  const annotation = { start() { assert.equal(this, annotation); calls.push('annotation'); } };
+  const editing = f.toolbar.createEditingBinding({ undo, redo() {}, toggleVisibility() {}, deleteSelection: () => false, annotation });
+  f.constructionCommand.toggle = function () { assert.equal(this, f.nodes.get('toolConstructionLine')); calls.push('construction'); };
+  const drawing = f.toolbar.createDrawingBinding({ filletCommand: { begin() { assert.equal(this, f.nodes.get('toolFillet')); calls.push('fillet'); } },
+    startHatchCreation: () => calls.push('hatch') });
+  assert.deepEqual(f.events, []); assert.equal([...f.nodes.values()].some(node => node.listeners.size), false);
+  editing.bind(); editing.bind();
+  assert.equal(f.nodes.get('toolLine').listeners.size, 0); assert.equal(f.nodes.get('undoBtn').listeners.size, 1);
+  f.nodes.get('undoBtn').click(); f.nodes.get('annotationTextBtn').click();
+  assert.deepEqual(calls.splice(0), ['undo', 'annotation']); assert.equal([...f.nodes.get('undoBtn').listeners][0], undo);
+  drawing.bind(); drawing.bind(); f.nodes.get('toolLine').click();
+  assert.equal(f.lifecycle.mode, 'line'); assert.equal(f.nodes.get('toolLine').attributes['aria-pressed'], 'true');
+  assert.ok(f.events.includes('frame'));
+  f.nodes.get('toolConstructionLine').click(); f.nodes.get('toolFillet').click(); f.nodes.get('toolHatch').click();
+  assert.deepEqual(calls.splice(0), ['construction', 'fillet', 'hatch']);
+  editing.dispose(); assert.equal(f.nodes.get('undoBtn').listeners.size, 0); assert.equal(f.nodes.get('toolLine').listeners.size, 1);
+  f.nodes.get('toolCircle').click(); assert.equal(f.lifecycle.mode, 'circle');
+  drawing.dispose(); drawing.dispose(); assert.equal([...f.nodes.values()].some(node => node.listeners.size), false);
+});
+
+test('toolbar deletion uses the shared mode permission and presentation refreshes, propagating command failure without refreshing', () => {
+  const f = toolbarInputFixture(), calls = [], marker = new Error('delete failure'); let result = false, fail = false;
+  const editing = f.toolbar.createEditingBinding({ deleteSelection() { calls.push('delete'); if (fail) throw marker; return result; } });
+  editing.bind(); f.events.length = 0; f.state.geometry = false;
+  f.nodes.get('deleteSelectionBtn').click(); assert.deepEqual(calls, []); assert.deepEqual(f.events, []);
+  f.state.geometry = true; f.nodes.get('deleteSelectionBtn').click(); assert.deepEqual(calls.splice(0), ['delete']); assert.deepEqual(f.events, []);
+  result = true; f.nodes.get('deleteSelectionBtn').click(); assert.deepEqual(calls.splice(0), ['delete']);
+  assert.ok(f.events.indexOf('annotation') >= 0); assert.ok(f.events.indexOf('annotation') < f.events.indexOf('frame'));
+  f.events.length = 0; fail = true; assert.throws(() => f.nodes.get('deleteSelectionBtn').click(), error => error === marker);
+  assert.deepEqual(calls, ['delete']); assert.deepEqual(f.events, []); editing.dispose();
 });
