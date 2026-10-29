@@ -54,13 +54,13 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,199行、非空白1,749行、root直下491文、条件付きtest hooks362行。可変参照は五つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,197行、非空白1,747行、root直下489文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
 前回2026-10-21の再監査基準（develop caf19a0）ではapp.jsは2,924行。非空白2,433行のうち、create系構築・接続1,266行、条件付きtest hooks438行、call一文の関数237行。root構築209文・複文callback30個・root let8個を確認した。旧46dd77dを同条件で再現して比較した。現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)とsection 8を参照する。全てを単純な移動・削除対象とは扱わない。
 
-Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続と操作固有のcallbackが残る。modeはDrawOperationLifecycle、最後の生pointerはPointerInteractionControllerのsessionへ移管した。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。現在のletは五つの後段接続参照だけ。後段接続は操作stateの重複とは区別する。
+Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続と操作固有のcallbackが残る。modeはDrawOperationLifecycle、最後の生pointerはPointerInteractionControllerのsessionへ移管した。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。現在のletは三つの後段接続参照だけ。後段接続は操作stateの重複とは区別する。
 
 残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。modeは複数のcommandとtestから更新されるため、既存Lifecycleの遷移APIと同じsessionで所有する。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：command panelの生成・Canvas更新と入力readerをPresentationへ接続（2026-10-29、検証完了）
+
+基準develop／origin/developは39d1398。本単位はcodex/command-panel-presentationで実施した。PresentationFeature.createCommandPanelsが既存CommandPanel.createFeatureを元の後段で生成し、完成したderivedPanel／commandPanelを保持する。CanvasRefreshへの既定readerと、入力bindingのreadCommandPanelを同じ所有者へ接続し、appにあった二つの可変参照とCanvas更新用の重複readerを除いた。モデルやcommandのdraftをPresentationへ移さず、汎用setterや状態を隠すだけのcontextは追加しない。CommandPanel／CanvasRefresh本体、panel内のroutingと各commandの確定・取消は変更していない。
+
+app.jsは2,199→2,197行（2行減）、rootの可変参照は五つから三つ（pngExportCommand／sketchMoveCommand／sketchContextController）。TEMP cad-command-panel-presentation-proof.cjsで元の23portの受渡し、共有documentの同一性、二つのUI moduleの不変、rootの未使用binding／初期化前直接参照0を確認した。panel生成のroot引数は23→22となり、documentはすでにPresentationへ注入した同じものを使う。行数だけの移動ではなく、生成・描画更新・入力からの読取を同じ表示ownerへ揃える単位である。
+
+presentation-feature.test.jsへ二つの境界試験を追加。生成前にDOM／panelを読まないこと、Canvas更新前後の実体と選択値、panel update→注記入力同期→derived選択→cache描画の順、入力readerが同じcommandPanelを返すこと、生成途中で不完全なpanelを公開しないことと例外伝播を確認した。既存の明示reader差替えも維持する。関連単体14件・全単体1,985件・構文618ファイルが成功（exit 0）。仕様のモジュール構成とimplementation-mapへ責務と後段接続を記録した。
+
+関連E2E259件が全成功（3.9分、exit 0、runner30771）。command panel、既存UI、Hatch、派生pattern／free Instance、PNG、注記／anchor、phase0保存互換性／描画比較を実行した。TEMP cad-command-panel-presentation-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server29624停止と製品source二つのhash不変を確認した。今回は関連259件であり、前回の全587件成功を現在の全体結果とは扱わない。既存期待値・UI操作・保存形式・性能上限／timeoutは変更していない。
+
+最新appは2,197行、非空白1,747行、root直下489文・関数143個、条件付きtest hooks362行。週枠使用4%／残量96%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を保持する。残る三つの後段参照と機能単位の生成・更新・終了、通常入力／描画／test APIの共通依存を監査し、同じscopeのportだけをまとめる。数百行の達成を装うための空白圧縮や既存ownerを包み直すだけの変更は行わない。
 
 ### 再開：Hatchの外観とパターン原点の純粋な照会を既存データownerへ移管（2026-10-29、検証完了）
 
