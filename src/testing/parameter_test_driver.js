@@ -1,6 +1,27 @@
 /* Parameter browser fixtures, observations and existing edit operations with explicit ownership. */
 (() => {
   "use strict";
+  function createBrowserSupport({ documentWorkspace, geometry, resetModelState,
+    pushModelConstraint, dimensionFromAnchor, createEmptyBlockDefinition, invalidateBlockProjectionCache,
+    stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw, blockProjectionBundle, serializeModel,
+    clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter,
+    deleteElements, document }) {
+    const { document: documentModel, workspace, parameters: namespace, documentIds } = documentWorkspace;
+    const currentScope = workspace.current;
+    const { Point, Line, HorizontalConstraint, DistanceConstraint } = window.GeometrySolver;
+    const fixture = createFixture({ resetModelState, addPoint: geometry.addPoint, addLine: geometry.addLine, pushModelConstraint,
+      HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, currentScope, formatParameterReference: window.ParameterEngine.formatReference,
+      createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID: window.SketchHierarchy.DEFAULT_SKETCH_ID,
+      ensureParameterNamespace: namespace.ensureParameterNamespace, appendDefinition: definition => documentModel.blockDefinitions.push(definition),
+      nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache,
+      stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw });
+    const observation = createObservation({ currentScope, readDocument: () => documentModel, validateParameterNamespace: namespace.validateParameterNamespace,
+      dimensionConstraintsInNamespace: namespace.dimensionConstraintsInNamespace, isReadOnlyDimension: window.DimensionQueries.isReadOnlyDimension,
+      dimensionExpressionValue: namespace.dimensionExpressionValue, blockProjectionBundle, serializeModel });
+    const interaction = createInteraction({ currentScope, clearSelection, canvasSelection, blockSelectionGeometry,
+      createBlockDefinitionFromSelection, blockSelectionBoundsCenter, dimensionConstraintsInNamespace: namespace.dimensionConstraintsInNamespace, deleteElements, document });
+    return Object.freeze({ fixture, observation, interaction });
+  }
   function createFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, currentScope, formatParameterReference, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, ensureParameterNamespace, appendDefinition, nextInstanceId, invalidateBlockProjectionCache, stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw }) {
     function reset() {
       resetModelState();
@@ -147,5 +168,5 @@
     }
     return Object.freeze({ freezeBlock, deleteDimension });
   }
-  window.ParameterTestDriver = Object.freeze({ createFixture, createObservation, createInteraction });
+  window.ParameterTestDriver = Object.freeze({ createBrowserSupport, createFixture, createObservation, createInteraction });
 })();

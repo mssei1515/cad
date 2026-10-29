@@ -94,20 +94,20 @@
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
-  const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
-    geometryIds, documentIds, reservation: idReservation, createReadContext } = window.DocumentWorkspace.create({
+  const documentWorkspace = window.DocumentWorkspace.create({
     applicationText, constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
   });
+  const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
+    geometryIds, documentIds, reservation: idReservation, createReadContext } = documentWorkspace;
   const currentParameterNamespace = workspace.current;
   const { guard: guardDimensionSymbolDeletion } = window.ParameterApplication.createDeletionGuard({
     currentNamespace: currentParameterNamespace, symbolDeletionDependents: parameterNamespace.symbolDeletionDependents,
     readLanguage: () => applicationSettings.language, setHint, log,
   });
   const {
-    evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression,
+    evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft, numericDimensionExpression,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
-    dimensionConstraintsInNamespace, ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
-    validateParameterNamespace,
+    ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
   } = parameterNamespace;
   const parameterEditor = window.ParameterEditor.create({
     document, window, InputElement: HTMLInputElement, Event,
@@ -1823,19 +1823,12 @@
     const fixedObservation = window.PropertiesTestDriver.createFixedObservation({
       currentScope: workspace.current, elementSketchId, findLineFixedConstraint, modelTypes: window.GeometrySolver, fixPointBtn, readHistory: readTestHistory,
     });
-    const parameterFixture = window.ParameterTestDriver.createFixture({
-      resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, currentScope: workspace.current,
-      formatParameterReference, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, ensureParameterNamespace,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      invalidateBlockProjectionCache, stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw,
-    });
-    const parameterObservation = window.ParameterTestDriver.createObservation({
-      currentScope: workspace.current, readDocument: () => documentModel, validateParameterNamespace, dimensionConstraintsInNamespace,
-      isReadOnlyDimension, dimensionExpressionValue, blockProjectionBundle, serializeModel,
-    });
-    const parameterInteraction = window.ParameterTestDriver.createInteraction({
-      currentScope: workspace.current, clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection,
-      blockSelectionBoundsCenter, dimensionConstraintsInNamespace, deleteElements, document,
+    const { fixture: parameterFixture, observation: parameterObservation,
+      interaction: parameterInteraction } = window.ParameterTestDriver.createBrowserSupport({
+      resetModelState, documentWorkspace, geometry: geometryCreation,
+      pushModelConstraint, dimensionFromAnchor, createEmptyBlockDefinition, invalidateBlockProjectionCache,
+      stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw, blockProjectionBundle, serializeModel,
+      clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, deleteElements, document,
     });
     const dimensionDisplaySupport = dimensionTestSupport.createDisplay({
       Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, circlePointAtAngle,

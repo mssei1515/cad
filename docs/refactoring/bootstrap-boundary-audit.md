@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Parameter test支援の実owner共有（2026-10-30、8d7dc17基準）
+
+ParameterTestDriver.createBrowserSupportが、同じ実DocumentWorkspaceからDocument root・workspace.current・Parameter namespace・DocumentIdsを受け、同じGeometryと限定操作でfixture／observation／interactionを元の順で生成する。rootの三生成・39項目は一生成・21項目になり、三つの不要なnamespace関数bindingを除いた。DocWorkspace返却値を保持する一constを加え、旧各APIの分解は同じ実objectから行う。新モデル・可変contextや採番は作らず、旧APIと公開test hooksは維持する。
+
+app.jsは2,026→2,019行、非空白1,576→1,569行、root437→438文、hooks333→326行。構築136文773非空白行、一文call関数92個116行、その他209文349行（文外5行）。関数98個・可変参照三つは不変。hooksと短い委譲を全て除いても1,127非空白行が残る。証跡はTEMP cad-parameter-browser-test-support-{proof,hierarchy}.cjs、検証と次は再開記録section 8を参照する。
+
 ## Geometry生成と作図の共有（2026-10-30、6b77cf0基準）
 
 BasicDrawingTools.createGeometryがGeometryCreation→Endpoint resolverを生成し、後段createAuthoringへ同じscope・ID・Geometry・endpoint・最小長を直接接続する。rootの三生成・45項目は二生成・38項目になる。唯一の利用先への端点接続を内側へ移し、他の編集・保存で使う実Geometry APIと既存の個別createAuthoringは維持する。snapshotや後段hit／BlankGestureへの遅延callback、二段階の生成位置、既存command／state ownerは変えない。
