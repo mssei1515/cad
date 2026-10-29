@@ -28,7 +28,13 @@
       function fitVisibleGeometryToViewport(paddingPx = 96) {
         return fitBoundsToViewport(visibleGeometryBounds(), paddingPx);
       }
-      return Object.freeze({ fitSketchToViewport, fitAllGeometryToViewport, fitVisibleGeometryToViewport });
+      function resetEmptyViewport() {
+        const rect = canvas.getBoundingClientRect();
+        viewport.update({ scale: initialScale });
+        viewport.update({ x: rect.width / 2 });
+        viewport.update({ y: rect.height / 2 });
+      }
+      return Object.freeze({ fitSketchToViewport, fitAllGeometryToViewport, fitVisibleGeometryToViewport, resetEmptyViewport });
     }
     function createWorkspace({ ctx, readPixelRatio, ResizeObserverClass, withGeometryReadCache, drawCanvas,
       isValueInputPending, window: browserWindow, updatePropertiesUI, closeContextMenu, applySketchTreeWidth, applicationText, readLanguage }) {

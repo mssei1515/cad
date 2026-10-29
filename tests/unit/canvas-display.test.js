@@ -374,3 +374,41 @@ test('drawing fit retains late navigation routing and stops on query failure bef
   state.fail = false; state.bounds = null;
   assert.equal(fit.fitVisibleGeometryToViewport(), false); assert.deepEqual({ ...f.display.viewport.snapshot() }, before);
 });
+
+test('empty viewport reset reads the current Canvas size only on demand and restores its initial scale and center', () => {
+  const f = fixture(); f.state.ready = false;
+  const fit = f.display.createDrawingFit({ activeSketchId: () => assert.fail('no Sketch query'), bounds: {
+    sketchGeometryBounds: () => assert.fail('no Sketch bounds'), allGeometryBounds: () => assert.fail('no drawing bounds'),
+    visibleGeometryBounds: () => assert.fail('no visible bounds'),
+  } });
+  assert.deepEqual(f.calls, []); f.state.ready = true;
+  f.display.viewport.update({ scale: 9, x: 10, y: 20 }); f.state.rect = { width: 320, height: 180 };
+  assert.equal(fit.resetEmptyViewport(), undefined); assert.deepEqual({ ...f.display.viewport.snapshot() }, { scale: 2, x: 160, y: 90 });
+  assert.deepEqual(f.calls, ['rect']); f.calls.length = 0;
+  f.display.viewport.update({ scale: 7, x: 1, y: 2 }); f.state.rect = { width: 0, height: 0 };
+  fit.resetEmptyViewport(); assert.deepEqual({ ...f.display.viewport.snapshot() }, { scale: 2, x: 0, y: 0 }); assert.deepEqual(f.calls, ['rect']);
+});
+
+test('empty viewport reset preserves scale then X then Y updates and the existing partial state on a Canvas read error', () => {
+  for (const failAt of ['rect','width','height']) {
+    const f = fixture(), marker = new Error(failAt), fit = f.display.createDrawingFit({ bounds: {}, activeSketchId: () => assert.fail('no Sketch query') });
+    f.display.viewport.update({ scale: 9, x: 10, y: 20 });
+    f.canvas.getBoundingClientRect = () => {
+      f.calls.push('rect'); if (failAt === 'rect') throw marker;
+      return {
+        get width() {
+          f.calls.push('width'); assert.deepEqual({ ...f.display.viewport.snapshot() }, { scale: 2, x: 10, y: 20 });
+          if (failAt === 'width') throw marker; return 320;
+        },
+        get height() {
+          f.calls.push('height'); assert.deepEqual({ ...f.display.viewport.snapshot() }, { scale: 2, x: 160, y: 20 });
+          throw marker;
+        },
+      };
+    };
+    assert.throws(() => fit.resetEmptyViewport(), error => error === marker);
+    assert.deepEqual(f.calls, ['rect','width','height'].slice(0, ['rect','width','height'].indexOf(failAt) + 1));
+    assert.deepEqual({ ...f.display.viewport.snapshot() }, failAt === 'rect' ? { scale: 9, x: 10, y: 20 }
+      : failAt === 'width' ? { scale: 2, x: 10, y: 20 } : { scale: 2, x: 160, y: 20 });
+  }
+});
