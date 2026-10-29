@@ -134,6 +134,7 @@
     activeSketchId, canEditSketch, sketchById, selectionItems, elementSketchId, isGeometryMode,
     setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null), draw,
   });
+  const { guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation } = sketchEditAccess;
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
   const { services: geometryReadServices, createScopeBinding, createPersistence } = createReadContext({
@@ -174,6 +175,7 @@
   const fileSession = window.DocumentFiles.create();
 
   const drawOperationLifecycle = window.DrawOperationLifecycle.createSession();
+  const { exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode } = drawOperationLifecycle;
   const selectionFeature = window.CanvasSelectionFeature.create({
     sketches: sketchContext, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw,
   });
@@ -740,9 +742,7 @@
 
   function selectionSketchId(...args) { return selectionScopeQuery.selectionSketchId(...args); }
 
-  function guardSketchEdit(...args) { return sketchEditAccess.guardSketchEdit(...args); }
 
-  function guardSelectionEdit(...args) { return sketchEditAccess.guardSelectionEdit(...args); }
 
   const sceneHitInteraction = window.CanvasHitInteraction.createScene({
     currentScope: workspace.current, dimensionScope: dimensionPresentationScope, viewport, pointUsage, sketchContext, geometryAppearance,
@@ -754,9 +754,7 @@
   });
   const { ordinarySelectionMode } = sceneHitInteraction.policy;
 
-  function canCreateInActiveSketch(...args) { return sketchEditAccess.canCreateInActiveSketch(...args); }
 
-  function rejectRootSketchCreation(...args) { return sketchEditAccess.rejectRootSketchCreation(...args); }
 
 
 
@@ -915,9 +913,6 @@
     fillet: filletCommand, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() },
     clearTrimHover: () => canvasHover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null }),
   });
-  function exitDrawMode() { return drawOperationLifecycle.exit(); }
-  function hasActiveDrawOperation() { return drawOperationLifecycle.active(); }
-  function cancelActiveDrawOperation() { return drawOperationLifecycle.cancel(); }
 
 
 
@@ -1603,7 +1598,6 @@
     },
   });
 
-  function isDrawToolMode() { return drawOperationLifecycle.isToolMode(); }
 
   const canvasInputBinding = createCanvasInputBinding({
     pointer: pointerInteractionController, readCommandPanel: presentation.readCommandPanel, readPngExportCommand: () => pngExportCommand,

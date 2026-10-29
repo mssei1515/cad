@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：準備済みのSketch権限・作図Lifecycle APIを直接接続（2026-10-30、検証完了）
+
+基準develop／origin/developはeff66c8。本単位はcodex/edit-operation-bindingsで実施した。SketchCommand.createEditAccess直後に四つの権限／作図拒否API、DrawOperationLifecycle.createSession直後にexit／active／cancel／isToolModeを同じ凍結APIから取得し、従来のapp名へ接続する。八つの純粋な委譲関数を除いた。Sketchの現在状態、Lifecycleの現在modeと後段bindへの委譲は既存ownerに残す。bind位置・開始／取消／reset・例外順は変更しない。早期登録に必要なselectionItems・履歴／command等のhoisted入口と独自判定は維持する。
+
+app.jsは2,061→2,055行（6行減）、非空白1,610→1,604行、root直下455→449文・関数108→100個、test hooks333行、可変参照三つ。TEMP cad-edit-operation-bindings-proof.cjsで八経路の元callee・引数転送、生成ownerの直後での接続、全root直接参照が定義後であること、他のappのAST不変、両owner moduleのGit blob不変、accessのthis／arguments非依存、Lifecycleの無引数実操作とthis／arguments非依存を確認した。guard群の定義137行に対する最初の直接参照は180行以降、Lifecycle群は定義178行に対して321行以降。root未使用binding 0。hierarchy.{cjs,json}では構築147文802非空白行、hooks1文333行、一文call関数94個118行、その他207文346行（文外5行）。新module・global・操作stateを増やさない。小さな委譲の整理だけで数百行目標を達成したとは扱わない。
+
+既存SketchCommandとDrawOperationLifecycleの関連単体31件・全単体2,031件・構文618ファイルが成功（exit 0）。単純な実API接続なので実装をなぞる追加試験は増やさず、既存の権限／拒否・mode／bind・取消／reset・部分状態／例外試験を維持した。編集時の改行混在はdiff検査で検出し、元の改行へ揃えて最終差分をappの八削除／二接続だけに限定した。正式モジュール構成とimplementation-mapを更新した。
+
+関連E2E199件が全成功（3.6分、exit 0、runner31288）。adversarial-authoring-performance／sketch-permissions／command-panel／circular-authoring／centerline／blocks／free-instance／unified-uiを実行し、既存作図性能上限・権限／拒否、各作図の開始／確定／取消と履歴、Block／Instance・保存再読込と通常UIを確認した。TEMP cad-edit-operation-bindings-{focused,check,unit,e2e}.log、proof.cjs、hierarchy.{cjs,json}、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保存。製品／E2E入力402fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。この単位で全E2Eは未実行。直前Scene単位の全588件成功を今回の全体結果として流用しない。UI・保存形式・既存期待値・性能上限／timeoutは変更しない。
+
+開始時は週枠使用14%／残量86%、検証後は使用15%／残量85%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この単位をCommit／Pushしてdevelopへ統合する。次は既存ownerの生成階層と通常／test公開境界を引き続き整理する。残るhoisted関数を一律にconstへ変えず、最初の利用と実APIのreceiver／default引数・状態読取りを個別に確認する。
+
 ### 最新：Sketch投影を同じ編集ownerから組立て（2026-10-30、検証完了）
 
 基準develop／origin/developはd1c7e8a。本単位はcodex/sketch-projection-compositionで実施した。SketchProjectionFeature.createForEditingへ同じSketchContext・Geometry read／外観・ReferenceConstraintState・編集権限・Selection・DrawOperationLifecycle・ID・Hoverと限定操作を接続する。appの接続は36→24項目。投影先は同期済みeditingScopeBinding.currentへの明示reader、共有queryは従来のWorkspace scopeのままとし、混同しない。後段operand・RectangleSelectionQuery・snapの三callbackはappで生成して操作時にだけ初期化先を読む。ID採番とhover更新は同じownerのreceiver、hover解除は元の六fieldだけを維持する。旧createと既存query／command本体は変更しない。
