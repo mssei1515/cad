@@ -1837,8 +1837,11 @@
       snapshotModelState, refreshConstraintAnalysis, dimensionDrag,
     });
     const themeObservation = window.PropertiesTestDriver.createThemeObservation({ applicationSettings, readDefaultGeometryColor: () => DEFAULT_APPEARANCE.color, canvasThemeColor, CanvasThemeColors: window.CanvasThemeColors });
-    const documentNameObservation = window.DocumentTestDriver.createNameObservation({ readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document });
-    const fileObservation = window.DocumentTestDriver.createFileObservation({ fileSession });
+    const documentTestApi = window.DocumentTestDriver.createFileApi({
+      performance, File, document, fileSession, readDocumentName: () => documentModel.documentName,
+      effectiveDocumentName, serializeModel, importFileData, loadModelData,
+      fileNameStem, resetHistory, updateUI, draw, currentScope: workspace.current,
+    });
     const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
     const responsiveDragFixture = window.GeometryDragTestDriver.createResponsiveFixture({
       resetModelState, addPoint, addLine, pushModelConstraint, modelTypes: window.GeometrySolver,
@@ -1891,10 +1894,6 @@
       invalidateBlockProjectionCache, fitSketchToViewport, resetHistory, clientPosition: canvasTestDriver.clientPosition, arcEndpointPoint,
       canvasHover, canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport,
     });
-    const documentTestImport = window.DocumentTestDriver.createImport({
-      performance, File, importFileData, readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document,
-    });
-    const documentTestLoad = window.DocumentTestDriver.createLoad({ loadModelData, fileNameStem, resetHistory, updateUI, draw, currentScope: workspace.current });
     const propertyAppearanceObservation = window.PropertiesTestDriver.createAppearanceObservation({
       allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle,
       normalizeAppearance, effectiveAppearanceForElement, isVisibleSketchElement,
@@ -2001,11 +2000,7 @@
       ...drawingOrderTestApi,
       commitConstraintWithForcedSolveResultForTest: forcedConstraintCommit.commit,
       ...clipboardTestSupport,
-      documentNameState: documentNameObservation.state,
-      fileSystemAccessStateForTest: fileObservation.state,
-      serializedModelForTest() {
-        return structuredClone(serializeModel());
-      },
+      ...documentTestApi.observations,
       ...derivedInstanceTestApi,
       ...sketchProjectionTestSupport,
       referenceImageStateForTest: referenceImageTestObservation.state,
@@ -2024,8 +2019,7 @@
       resetForMultipleFixedTest: propertiesFixture.resetFixed,
       multipleFixedStateForTest: fixedObservation.state,
       viewStateForTest: viewObservation.state,
-      importDocumentNameFixture: documentTestImport.importName,
-      loadDocumentFixtureForDragTest: documentTestLoad.load,
+      ...documentTestApi.fixtures,
       ...selectionTestApi,
       constraintInputStateForTest: constraintInputObservation.state,
       resolveConstraintIntentForTest: constraintIntentTestDriver.resolve,

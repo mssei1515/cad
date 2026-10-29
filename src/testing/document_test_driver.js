@@ -127,5 +127,21 @@
     return Object.freeze({ state });
   }
 
-  window.DocumentTestDriver = Object.freeze({ createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation, createHistoryObservation });
+  // Keep file fixture operations and their browser API names with the same document readers.
+  function createFileApi({ performance, File, document, fileSession, readDocumentName, effectiveDocumentName, serializeModel,
+    importFileData, loadModelData, fileNameStem, resetHistory, updateUI, draw, currentScope }) {
+    const names = createNameObservation({ readDocumentName, effectiveDocumentName, serializeModel, document });
+    const files = createFileObservation({ fileSession });
+    const importing = createImport({ performance, File, importFileData, readDocumentName, effectiveDocumentName, serializeModel, document });
+    const loading = createLoad({ loadModelData, fileNameStem, resetHistory, updateUI, draw, currentScope });
+    function serializedModelForTest() {
+      return structuredClone(serializeModel());
+    }
+    return Object.freeze({
+      observations: Object.freeze({ documentNameState: names.state, fileSystemAccessStateForTest: files.state, serializedModelForTest }),
+      fixtures: Object.freeze({ importDocumentNameFixture: importing.importName, loadDocumentFixtureForDragTest: loading.load }),
+    });
+  }
+
+  window.DocumentTestDriver = Object.freeze({ createFileApi, createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation, createHistoryObservation });
 })();

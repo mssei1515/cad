@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,121行、非空白1,670行、root直下465文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,115行、非空白1,664行、root直下465文、条件付きtest hooks345行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Documentファイル検証の組立てと公開APIを既存driverへ集約（2026-10-30、検証完了）
+
+基準develop／origin/developは8b3df20。本単位はcodex/document-file-test-apiで実施した。DocumentTestDriver.createFileApiが、同じDocument名・serializeModel・File sessionを使う名前／ファイル観測とimport／load fixtureを組み立て、観測三メソッドとfixture二メソッドをfrozenな二groupとして返す。appはtest flag内でのみ生成し、元の公開位置へ展開する。snapshot生成のstructuredClone(serializeModel())本体もdriverへ移した。History・Sketch fixtureや通常機能のstate／保存処理は取り込まない。
+
+app.jsは2,121→2,115行（6行減）、非空白1,664行、root直下465文・関数111個、test hooks351→345行。対象構築4→1、引数18→14。TEMP cad-document-file-test-api-proof.cjsで四factoryの全18port、元の相対生成順、五つの公開名／順序と実method、snapshot本体、既存driver全体と他のapp全statementの不変を確認した。遅延query・File作成・import／loadは元の操作時に実行し、純粋な二factoryの生成だけを前の二factoryと同じ場所へ寄せる。test hooks内の未使用binding 0も確認した。
+
+document-test-driver.test.jsへ実File・FileSessionとraw driverを使う二つの境界試験を追加した。生成時の読取りなし、liveな名前／title／handleと読込後scope、返却snapshotやload時cloneの独立性、実FileのJSONとimport await／計測、history→UI→draw→scope順、loadのfailure返値とimport／直列化例外の伝播・モデル無変更を確認した。既存期待値は変更しない。関連単体6件・全単体2,013件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapを更新した。
+
+関連E2E186件が全成功（3.2分、exit 0、runner4367）。既存UI、ファイル操作安全性、Block、phase0保存互換性／描画比較、authoring性能／復元を実行した。TEMP cad-document-file-test-api-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server10556停止、app／driver二つのhash不変を確認した。今回は関連186件であり、最新コード全体のE2Eとは扱わない。通常機能のUI・モデル／保存形式・求解規則・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用20%／残量80%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。test APIは責務groupごとに限定依存と公開境界を整理し、全driverを受け取る巨大contextや通常stateのtestingへの移管を避ける。上位の機能組立て・起動段階にも残作業があり、200〜500行の全体目標を現在の中間成果で完了扱いにしない。
 
 ### 最新：Sketch TreeのDocument行表示用readerを表示側へ集約（2026-10-30、検証完了）
 
