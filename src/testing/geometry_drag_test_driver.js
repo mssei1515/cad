@@ -217,8 +217,9 @@
     return Object.freeze({ path });
   }
 
-  function createResponsiveFixture({ resetModelState, addPoint, addLine, pushModelConstraint,
-    DistanceConstraint, ParallelConstraint, PerpendicularConstraint, ensureDimensionDefaults, solveAndRefresh, log,
+  function createResponsiveFixture({ modelTypes = {}, resetModelState, addPoint, addLine, pushModelConstraint,
+    DistanceConstraint = modelTypes.DistanceConstraint, ParallelConstraint = modelTypes.ParallelConstraint,
+    PerpendicularConstraint = modelTypes.PerpendicularConstraint, ensureDimensionDefaults, solveAndRefresh, log,
     fitAllGeometryToViewport, draw, resetHistory, serializeModel }) {
     function reset() {
       resetModelState();

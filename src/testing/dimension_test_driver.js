@@ -880,10 +880,11 @@
       });
     }
     function createInteraction({
-      clientPosition, startDimensionEditInput, clearSelection, updateUI, draw, addCircle, addArc, fitAllGeometryToViewport,
-      startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, dimensionAnchor, LineCircleDistanceConstraint,
-      ConcentricRadiusDifferenceConstraint, signedPointLineDistance, vectorNorm, solveSketchAndDependents, snapshotModelState,
-      refreshConstraintAnalysis, dimensionDrag,
+      modelTypes = {}, clientPosition, startDimensionEditInput, clearSelection, updateUI, draw, addCircle, addArc, fitAllGeometryToViewport,
+      startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, dimensionAnchor,
+      LineCircleDistanceConstraint = modelTypes.LineCircleDistanceConstraint,
+      ConcentricRadiusDifferenceConstraint = modelTypes.ConcentricRadiusDifferenceConstraint,
+      signedPointLineDistance, vectorNorm, solveSketchAndDependents, snapshotModelState, refreshConstraintAnalysis, dimensionDrag,
     }) {
       return createInteractionSupport({
         currentScope, isDimensionConstraint, targetFromConstraint, dimensionLayout, clientPosition, startDimensionEditInput, clearSelection,

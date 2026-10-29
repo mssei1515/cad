@@ -134,7 +134,7 @@ test('arc endpoint unavailable session preserves endpoint wrapper and initial sn
 });
 
 
-function responsiveFixture() {
+function responsiveFixture(configureTypes = types => types) {
  const events=[],state={scope:null,fail:false,result:{points:'serialized'}};
  class DistanceConstraint {constructor(a,b,value){Object.assign(this,{type:'distance',a,b,value});}}
  class ParallelConstraint {constructor(a,b){Object.assign(this,{type:'parallel',a,b});}}
@@ -143,7 +143,7 @@ function responsiveFixture() {
   resetModelState:()=>{events.push('reset');state.scope={points:[],lines:[],constraints:[]};},
   addPoint:(x,y,fixed,role)=>{const point={id:'P'+(state.scope.points.length+1),x,y,fixed,role};state.scope.points.push(point);return point;},
   addLine:(p1,p2)=>{const line={id:'L'+(state.scope.lines.length+1),p1,p2};state.scope.lines.push(line);return line;},
-  pushModelConstraint:constraint=>state.scope.constraints.push(constraint),DistanceConstraint,ParallelConstraint,PerpendicularConstraint,
+  pushModelConstraint:constraint=>state.scope.constraints.push(constraint),...configureTypes({DistanceConstraint,ParallelConstraint,PerpendicularConstraint}),
   ensureDimensionDefaults:()=>events.push('defaults'),solveAndRefresh:label=>{events.push(['solve',label]);if(state.fail)throw state.fail;},
   log:message=>events.push(['log',message]),fitAllGeometryToViewport:padding=>events.push(['fit',padding]),draw:()=>events.push('draw'),
   resetHistory:label=>events.push(['history',label]),serializeModel:()=>{events.push('serialize');return state.result;},
@@ -166,4 +166,28 @@ test('responsive sample solve errors propagate without fitting, resetting histor
  const f=responsiveFixture(),error=new Error('solve failed');f.state.fail=error;
  assert.throws(()=>f.driver.reset(),value=>value===error);assert.deepEqual(f.events,['reset','defaults',['solve','サンプル復元']]);
  assert.equal(f.state.scope.constraints.length,5);
+});
+
+test("responsive fixture captures explicit model types once and retains individual constructor overrides", () => {
+  for (const override of [false, true]) {
+    const reads = []; let captured, provider;
+    const f = responsiveFixture(types => {
+      captured = { ...types }; provider = { ...types };
+      const modelTypes = new Proxy(provider, { get(target, name) {
+        assert.equal(override, false, "individual constructors must take precedence"); reads.push(name); return target[name];
+      } });
+      return { modelTypes, ...(override ? types : {}) };
+    });
+    assert.deepEqual(f.events, []);
+    assert.deepEqual(reads, override ? [] : ["DistanceConstraint", "ParallelConstraint", "PerpendicularConstraint"]);
+    provider.DistanceConstraint = class Unexpected { constructor() { throw Error("types must be captured"); } };
+    f.driver.reset();
+    const constraints = f.state.scope.constraints;
+    assert.equal(constraints[0] instanceof captured.DistanceConstraint, true);
+    assert.equal(constraints[1].a, f.state.scope.points[1]);
+    assert.equal(constraints[2] instanceof captured.ParallelConstraint, true);
+    assert.equal(constraints[4] instanceof captured.PerpendicularConstraint, true);
+    f.driver.reset();
+    assert.deepEqual(reads, override ? [] : ["DistanceConstraint", "ParallelConstraint", "PerpendicularConstraint"]);
+  }
 });

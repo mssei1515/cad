@@ -52,8 +52,6 @@
     Arc,
     Spline,
     DistanceConstraint,
-    LineCircleDistanceConstraint,
-    ConcentricRadiusDifferenceConstraint,
     OffsetConstraint,
     OffsetChainConstraint,
     CoincidentConstraint,
@@ -67,8 +65,6 @@
     GeometryFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
-    ParallelConstraint,
-    PerpendicularConstraint,
     RadiusConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
@@ -1895,7 +1891,7 @@
     const dimensionInteractionSupport = dimensionTestSupport.createInteraction({
       clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput, clearSelection, updateUI, draw, addCircle, addArc,
       fitAllGeometryToViewport, startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, dimensionAnchor,
-      LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, signedPointLineDistance, vectorNorm, solveSketchAndDependents,
+      modelTypes: window.GeometrySolver, signedPointLineDistance, vectorNorm, solveSketchAndDependents,
       snapshotModelState, refreshConstraintAnalysis, dimensionDrag,
     });
     const themeObservation = window.PropertiesTestDriver.createThemeObservation({ applicationSettings, readDefaultGeometryColor: () => DEFAULT_APPEARANCE.color, canvasThemeColor, CanvasThemeColors: window.CanvasThemeColors });
@@ -1903,7 +1899,7 @@
     const fileObservation = window.DocumentTestDriver.createFileObservation({ fileSession });
     const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
     const responsiveDragFixture = window.GeometryDragTestDriver.createResponsiveFixture({
-      resetModelState, addPoint, addLine, pushModelConstraint, DistanceConstraint, ParallelConstraint, PerpendicularConstraint,
+      resetModelState, addPoint, addLine, pushModelConstraint, modelTypes: window.GeometrySolver,
       ensureDimensionDefaults, solveAndRefresh, log, fitAllGeometryToViewport, draw, resetHistory, serializeModel,
     });
     const offsetTestSupport = window.OffsetTestDriver.createSupport({
