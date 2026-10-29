@@ -97,6 +97,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
+### 最新：通常Parameter編集UIのモデル接続を既存ownerへ集約（2026-10-30、検証完了）
+
+基準developは02f473c。ParameterEditor.createForWorkspaceへ通常UIのモデル・設定・書式・browser型の接続をまとめた。実DocumentWorkspaceを共有し、編集scopeはeditingScopeBinding.currentの明示readerを保持する。生成順序、後段apply／pick callback、旧create本体、UI・保存形式を変えない。新規file・状態・cacheは追加していない。rootの対象接続は18→12項目となる。
+
+app.jsは2,015→2,008行（7行減）、非空白1,565→1,558行、root437→436文／関数98個／test hooks323行／可変参照三つ。構築136文769非空白行、一文call関数92個116行、その他207文345行（文外5行）。hooksと短い委譲を除く仮定でも1,119非空白行が残り、数百行目標は未達。TEMP cad-parameter-editor-workspace-{proof,hierarchy}.cjsで接続式の同値性、対象外appと旧editorのAST不変、root未使用bindingなしを確認した。
+
+既存ParameterEditor試験へ二つの境界試験を追加した。生成時のモデル照会なし、定義・言語・編集scopeのlive読取り、Block編集時のscope固定、実ExpressionInputController／挿入処理によるbrowser型・参照書式とevent通知を確認する。構文624file・全単体2,050件・関連単体7件が成功。関連8suite（parameter-dialog-controller／unified-ui／unified-annotations／blocks／free-text-input-drag／command-panel／file-safety／bolt-diameter）の215件が全成功（3.5分、exit 0、runner46120）。404製品／E2E入力fileと開始HEADの不変、自己起動server停止・listeners 0、last-run passed／failedTests空を確認した。証跡はTEMP cad-parameter-editor-workspace-{check,unit,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.json。週枠残量80%で停止条件未到達。全E2Eは本単位では未実行で、以前の588件成功を今回の全体検証として流用しない。
+
+次も既存ownerによる通常機能の生成・接続とtest支援の依存を確認し、巨大contextによる一括移動を避ける。全体目標active、mainは停止／releaseの最後に反映する。
+
 ### 最新：参照画像のブラウザ支援を実featureから組立て（2026-10-30、検証完了）
 
 基準develop／origin/developはc94f514。本単位はcodex/reference-image-browser-supportで実施した。既存ReferenceImageTestDriver.createBrowserSupportはReferenceImageFeatureの実interaction／input.importFileとBlockEditingFeatureの実session／editing.empty、Selection・scope・History・Viewportを使い、observation→data import→Block fixtureを生成する。serializer／Point／Line／既定Sketch IDは既存の静的namespaceを使い、open／complete操作は明示callbackのまま維持する。返却値は三つの旧factoryの実APIで、新しい画像・状態・採番／cache・可変contextは作らない。現在scopeと編集中Blockのlive画像を区別し、fetch／Blob／File／importの順序と例外、preserveDocumentによるreset抑止、完了後のserialize／cloneの順序を維持する。公開四API名、test query条件と生成位置、旧個別port APIの本体を変えない。

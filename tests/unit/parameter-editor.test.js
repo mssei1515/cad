@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs'); const path = require('node:path'); const vm = require('node:vm');
 const test = require('node:test');
-function fixture() {
+function fixture(fromWorkspace = false) {
   class InputElement {}
   const events = [], applyButton = new EventTarget(), openButton = new EventTarget();
   const state = { model: { parameters: [{ name: 'width' }], symbols: [{ parameterName: 'd1' }] }, definitions: [], editing: null, language: 'ja', ready: false, outcome: { success: true } };
@@ -16,16 +16,34 @@ function fixture() {
   } }; vm.createContext(sandbox);
   for (const file of ['src/ui/parameter_dialog_controller.js', 'src/ui/expression_input_controller.js', 'src/application/parameter_editor.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
   function read(value) { assert.equal(state.ready, true, 'no eager scope lookup'); return value; }
-  const namespace = { symbolElementsInNamespace: model => model.symbols || [] };
-  const editor = sandbox.window.ParameterEditor.create({ document, window: { confirm: () => true }, InputElement, Event,
+  const namespace = { symbolElementsInNamespace: model => model.symbols || [], parameterErrorText: error => error.message };
+  const options = { document, window: { confirm: () => true }, InputElement, Event,
     namespace, currentScope: () => read(state.model), readDefinitions: () => read(state.definitions), readBlockEditor: () => read(state.editing),
     applicationText: (ja, en) => state.language === 'en' ? en : ja, language: () => state.language,
     formatting: { escapeHtml: String, formatDisplayNumber: String, formatParameterReference: String, parameterErrorText: error => error.message, defaultSketchId: 'S1' },
     localizeApplicationUI() {}, applyDraft(session, committed) { events.push('apply'); assert.equal(session, draft.current); if (state.outcome.success) committed(); return state.outcome; },
     recordHistory: label => events.push(['history', label]), setHint: (...args) => events.push(['hint', ...args]), updateUI: () => events.push('ui'), draw: () => events.push('draw'), pickDimension() {},
-  });
+  };
+  let editor, EditorInputElement = InputElement;
+  if (fromWorkspace) {
+    class BrowserInputElement extends EventTarget {}
+    class BrowserEvent extends Event { constructor(...args) { super(...args); this.fromWorkspace = true; } }
+    const model = { get blockDefinitions() { return read(state.definitions); } };
+    const documentWorkspace = Object.freeze({ document: model, parameters: namespace,
+      workspace: { current() { throw Error('editor must use its explicit editing scope'); } } });
+    const settings = Object.freeze({ applicationText: options.applicationText, get language() { return read(state.language); }, localizeApplicationUI: options.localizeApplicationUI });
+    sandbox.window.HtmlText = { escapeHtml: String }; sandbox.window.NumberDisplay = { formatDisplayNumber: String };
+    sandbox.window.ParameterEngine = { formatReference: name => `"${name}"` }; sandbox.window.SketchHierarchy = { DEFAULT_SKETCH_ID: 'S1' };
+    const createView = sandbox.window.ExpressionInputView.create;
+    vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui/expression_input_view.js'), 'utf8'), sandbox);
+    sandbox.window.ExpressionInputView = { ...sandbox.window.ExpressionInputView, create: createView };
+    editor = sandbox.window.ParameterEditor.createForWorkspace({ document, window: { ...options.window, HTMLInputElement: BrowserInputElement, Event: BrowserEvent },
+      documentWorkspace, currentScope: options.currentScope, readBlockEditor: options.readBlockEditor, settings,
+      applyDraft: options.applyDraft, recordHistory: options.recordHistory, setHint: options.setHint, updateUI: options.updateUI, draw: options.draw, pickDimension: options.pickDimension });
+    EditorInputElement = BrowserInputElement;
+  } else editor = sandbox.window.ParameterEditor.create(options);
   assert.deepEqual(events, []); state.ready = true;
-  return { editor, state, draft, events, document, namespace, InputElement, openButton, applyButton, names: input => Array.from(namesForInput(input)), rendered: () => rendered };
+  return { editor, state, draft, events, document, namespace, InputElement: EditorInputElement, openButton, applyButton, names: input => Array.from(namesForInput(input)), rendered: () => rendered };
 }
 
 test('parameter editor binds once, reads live scopes and language, and disposes its dialog listeners', () => {
@@ -102,4 +120,25 @@ test('parameter reference input keeps mismatch feedback order and propagates nam
  assert.equal(f.command.insertAnnotation(f.event,{element:note}),true);assert.deepEqual(f.events.slice(0,2),['prevent','stop']);assert.equal(f.events[2][0],'error');
  f.events.length=0;f.draft.current.namespace=f.referenceState.namespace;const marker=new Error('name allocation failed');f.referenceState.failure=marker;
  assert.throws(()=>f.command.insertDimension(f.event,{constraint:{}}),error=>error===marker);assert.deepEqual(f.events,['ensure']);
+});
+
+test('workspace parameter editor reads live definitions and language while retaining its explicit editing scope',()=>{
+ const f=fixture(true),outside={closest:()=>null},definition={id:'BD1',name:'Part',parameters:[]};
+ assert.deepEqual(f.names(outside),['width','d1']);f.state.definitions=[definition];f.editor.start();f.openButton.dispatchEvent(new Event('click'));
+ assert.equal(f.rendered().scopes[0].namespace,f.state.model);assert.equal(f.rendered().scopes[1].namespace,definition);
+ f.state.model={parameters:[{name:'editing'}],symbols:[]};f.state.language='en';f.state.definitions=[{id:'BD2',name:'Other',parameters:[]}];
+ f.openButton.dispatchEvent(new Event('click'));assert.equal(f.rendered().scopes[1].label,'Block: Other');assert.deepEqual(f.names(outside),['editing']);
+ f.state.editing={draft:{id:'BD3',name:'Draft'}};f.openButton.dispatchEvent(new Event('click'));
+ assert.equal(f.rendered().scopes.length,1);assert.equal(f.rendered().scopes[0].namespace,f.state.model);assert.equal(f.rendered().scopes[0].key,'block:BD3');f.editor.dispose();
+});
+
+test('workspace parameter editor uses browser input and Event types with the shared reference formatter for input and blur/change',()=>{
+ const f=fixture(true),input=new f.InputElement(),observed=[];Object.assign(input,{value:'',selectionStart:0,selectionEnd:0,isConnected:true,
+  matches:selector=>selector==='#commandPanel [data-setting="expression"]',focus:()=>observed.push('focus'),setSelectionRange:(start,end)=>{input.selectionStart=start;input.selectionEnd=end;}});
+ f.document.activeElement=input;class TextAreaElement extends f.InputElement {}
+ const command=f.editor.createReferenceInput({TextAreaElement,currentNamespace:()=>f.state.model,dimensionValueInput:{},pendingCommandSession:{current:null}});
+ assert.equal(command.context().input,input);assert.equal(command.context().namespace,f.state.model);
+ for(const name of ['input','change'])input.addEventListener(name,event=>{assert.equal(event.fromWorkspace,true);assert.equal(event.bubbles,true);observed.push(name);});
+ f.editor.insertIdentifierIntoExpressionInput(input,'width');assert.equal(input.value,'="width"');assert.equal(input.selectionStart,input.value.length);assert.equal(input.selectionEnd,input.value.length);
+ input.dispatchEvent(new Event('blur'));assert.deepEqual(observed,['input','focus','change']);
 });

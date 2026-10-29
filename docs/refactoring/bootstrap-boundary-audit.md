@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 通常Parameter編集UIのworkspace接続（2026-10-30、02f473c基準）
+
+ParameterEditor.createForWorkspaceは実DocumentWorkspaceのDocument／ParameterNamespaceとApplicationSettingsを受け、既存の書式serviceとbrowserのInputElement／Eventを接続して同じcreateへ委譲する。編集中scopeとBlock Editor状態は明示read portのまま保持し、workspace.currentへ置き換えない。定義と言語は操作時に読み、applyDraftとpickDimensionは後段への遅延callbackを維持する。新しい状態・listener・contextやfileは増やさず、旧createによる個別port注入も維持する。
+
+app.jsは2,015→2,008行、非空白1,565→1,558行、root437→436文。構築136文769非空白行、hooks323行、一文call関数92個116行、その他207文345行（文外5行）。関数98個と可変参照三つは不変。hooksと短い委譲を除いても1,119非空白行が残り、目標は未達。接続式と旧本体のAST同値性・root未使用bindingなしをTEMP cad-parameter-editor-workspace-{proof,hierarchy}.cjsで確認した。
+
 ## 参照画像test支援の実feature共有（2026-10-30、c94f514基準）
 
 ReferenceImageTestDriver.createBrowserSupportが、実ReferenceImageFeatureのinteraction／inputとBlockEditingFeatureのsession／editing、Selection・scope・History・Viewportを使い、観測・読込・Block fixtureを元の順で生成する。rootの三生成・19項目は一生成・12項目になり、二つのtest専用bindingを除いた。旧API、画像状態、採番、公開四API名、Block open／completeの明示操作、非同期読込と例外・cloneの境界を維持する。
