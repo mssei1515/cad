@@ -47,7 +47,17 @@
           canvasHover, canvasPoint, pending, targets: session, placement: dimensions, constraints: targets,
         });
       }
-      return Object.freeze({ updateHover: hover.update, createFeature });
+      function createWithDragging({ viewport, currentScope, sketches, readServices, pointer, clearSnap, updateUI, recordHistory }) {
+        const input = createFeature();
+        const dragging = window.DimensionDragFeature.create({ placement, viewport, canvasSelection: selection, currentScope,
+          constraintSketchId: sketches.constraintSketchId, isEditableSketchId: sketches.isEditableSketchId,
+          isVisibleSketchId: readServices.geometryAppearance.isVisibleSketchId, effectiveDimensionAppearance: readServices.dimensionAppearance.effectiveDimensionAppearance,
+          isVisibleValue: readServices.geometryAppearance.isVisibleValue, guardSketchEdit, commandInput: input.dimension, setHint, clearSnap, hypot2: window.GeometrySolver.hypot2,
+          beginPointer: pointer.markThenCapture, endPointer: pointer.release,
+          draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput: valueInput.sync, recordHistory });
+        return Object.freeze({ input, dragging });
+      }
+      return Object.freeze({ updateHover: hover.update, createFeature, createWithDragging });
     }
     function createCommit({ isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle, ...options }) {
       const { command, readOnly } = window.ConstraintCommitCommand.createWithDimensions({ ...options,

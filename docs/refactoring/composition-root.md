@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：寸法入力とドラッグの生成接続（2026-10-30、検証完了）
+
+基準developはdaa1345。既存ConstraintEditing.createCommandInputのcreateWithDraggingが、同じplacement／Selection／guard／入力欄sync／通知へ実ConstraintCommandInputとDimensionDragFeatureを接続する。入力featureを生成してから寸法dragを生成する元の後段順序を維持し、返却input／draggingは実API。SketchContext・GeometryReadServices・DragPointerは実ownerを共有し、型とhypot2は既存namespaceを使う。新しいdrag状態・Selection・pendingやmutable contextを持たず、mode／scope／model／DOMを生成時に読まない。旧createFeature／DimensionDragFeature.createと各command本体・優先順位・threshold・履歴方針は維持する。親と子の共通契約の整理であり、入力の確定やdrag状態を組立て層へ移さない。
+
+app.jsは1,964→1,959行（5行減）、非空白1,514→1,509行、root422→421文／関数85個／hooks323行／可変参照三つ。drag接続へのroot引数は21→8項目。未使用になったisEditableSketchId aliasを削除。構築135文750非空白行、一文call関数81個105行、その他204文326行（文外5行）。TEMP cad-dimension-input-drag-composition-{proof,hierarchy}.cjsで全子接続21項目と生成順／raw API返却の一致、その他appと既存ConstraintEditingのAST不変、root未使用bindingなしを確認。hooksと短い委譲を除いても1,081非空白行が残り、数百行目標は未達。
+
+単体へ三つの境界試験を追加した。実DimensionDragFeature／DimensionDrag／ConstraintCommandInput／DimensionPlacementCommandによる旧接続との比較で、live scope／編集許可／可視性・寸法群選択の同一参照、群移動と履歴一件、distance command中の微小移動から値入力への継続と履歴なし、同じpending・Selection・resetを確認。入力→dragの生成順と双方の生成例外の同一性・短絡も確認した。関連単体28件／全単体2,073件／構文624fileと最終appのnode --checkが成功。関連9suite（multiple-dimensions／unified-ui／unified-annotations／dimension-prefix／blocks／phase0-characterization／drag-smoothness／geometry-drag-smoothness／slot-dimension）の206件が全成功（5.2分、exit 0、実行session81128）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-dimension-input-drag-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerを変更しない。今回は接続整理でraw drag／input／command本体を変更せず、全E2Eは未実行とし、以前の全588件成功とは区別する。
+
+全体目標active、開始時週枠残量75%／最終確認74%で停止条件未到達。mainは停止／releaseの最後に反映する。引き続き実ownerの共有依存と初期化phaseを確認し、薄い接続fileの増加や巨大contextへの単なる移動は避ける。
+
+
 ### 最新：Pointer commandの接続所有（2026-10-30、検証完了）
 
 基準developは3e5db6f。既存CanvasCommandInputs.createFeatureのbindPointerForEditingが、Hatch／Fillet／Offset／Spline、寸法値／配置、Annotation、Block、式参照入力とidentity選択の実ownerをPointerのpress／activationへ接続する。CanvasInteractionFeatureのbindEditingPointerが同じPointer session・Preview・SelectionFeature.identityを共有し、appは操作ownerと外部のquery／menu／gesture等を渡す。bindは従来の後段位置のまま行い、生成時にmode／scope／model／DOMを読まない。優先順位とイベント処理は既存PointerInteractionController、確定・取消・履歴は各commandに残し、別のpointer座標・Selection・sessionやmutable contextを追加しない。寸法編集・配置・target double-clickの三wrapperは元のmethod receiverと引数を保ち、ほかは従来の関数値を渡す。旧bindPointerとraw APIを維持する。
