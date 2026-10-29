@@ -6,6 +6,37 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Canvas Sceneの組立て階層（2026-10-30、ef069e9基準）
+
+同じ分類条件でef069e9とScene集約後を比較した。TEMP cad-canvas-geometry-scene-hierarchy.{cjs,json}に計測scriptと結果を保存した。構築はcreateで始まるmember／bare呼出しを直接initializerに持つroot文、hooksと一文call関数を先に分離し、残りをその他とする。表の非空白合計に含まない文外の5行は両者共通。全E2Eの進行・結果は再開資料section 8を優先する。
+
+| 分類 | ef069e9 | Scene集約後 |
+| --- | ---: | ---: |
+| 物理行 | 2,104 | 2,093 |
+| 非空白行 | 1,653 | 1,642 |
+| root直下の文 | 465 | 461 |
+| root関数 | 111 | 111 |
+| 構築文／非空白行 | 150／825 | 147／815 |
+| test hooks／非空白行 | 1／345 | 1／345 |
+| 一文call関数／非空白行 | 105／129 | 105／129 |
+| その他の文／非空白行 | 209／349 | 208／348 |
+
+このScene部分の生成関係は次のとおり。四つのAPIと元の生成順を保持し、同じ範囲APIをfitへ渡す。workspaceはViewport・Surface・export frameを既存ownerのまま共有し、Sceneはモデル・cache・操作sessionを新たに持たない。
+
+~~~mermaid
+flowchart TD
+  W[Canvas workspace] --> S[createScene]
+  S --> G[GeometryDisplay]
+  S --> O[InteractionOverlayRenderer]
+  S --> B[DrawingBounds]
+  S --> F[DrawingFit]
+  B -->|same bounds API| F
+~~~
+
+対象のroot生成4→1、入力46→24。TEMP proof.cjsで全portのowner／methodとnested callback、workspaceの実ctx／Viewport／Surface／export renderer、相対生成順、実四APIの返却と他のapp／CanvasDisplay不変を確認した。後段Geometry drag／Spline編集・Annotation boundsは生成時に読まず、既存callbackを使う。特にDrawingFitの可視fitを前段Navigationへ渡すhoisted入口は残し、新しいconnect setterや巨大contextで初期化順を隠さない。
+
+hooksと一文委譲を全て除く仮定でも1,642−345−129＝1,168非空白行が残る。147のroot構築と残る接続・起動を、既存ownerを共有する機能階層へさらに整理する必要がある。単に空白451行を削ったり、全factoryを別のrootへ移したりして200〜500行へ到達扱いにはしない。Sceneのように同じread ownerと基盤を使う具体的な部品のまとまり、段階ごとの生成とbind／start、通常機能とtest公開の境界を次も確認する。
+
 ## 求解入口整理後の再集計（2026-10-30、4f9fbc0基準）
 
 app.jsのworking treeをBabel ASTで再集計した。物理2,130行・非空白1,679行、root直下465文・関数111個。root各文を重複なしで、createで始まるmember／bare呼出しを直接initializerに持つ構築、installTestHooks、単一callを返す／実行する関数、その他の順に分類した。計測scriptと出力はTEMP cad-solve-operation-bindings-hierarchy.{cjs,json}。文外のIIFE・冒頭等5非空白行は表に含めない。

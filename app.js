@@ -272,7 +272,7 @@
     hover: canvasHover, constraintTargets: constraintTargetSession, pointer: pointerInteractionController,
     projections: blockProjections, constraintReferences, clearSnap: () => clearSnap(),
   });
-  const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement } = selectionHighlight;
+  const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement } = selectionHighlight;
   const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
     currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
   });
@@ -411,7 +411,7 @@
   });
   const { redundantConstraintInfo, constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
-  const { viewport, navigation: canvasNavigation, createDrawingFit, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
+  const { viewport, navigation: canvasNavigation, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
     draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
@@ -421,7 +421,7 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer } = createCanvasWorkspace({
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createScene: createCanvasScene, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer } = createCanvasWorkspace({
     ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
     window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
@@ -455,31 +455,20 @@
   });
   const { isConstraintOperandSelected } = commandTargetPresentation;
   const { constraintStatusColor, sketchStrokeWidth, sketchAlpha } = sketchPresentation;
-  const geometryDisplay = window.GeometryDisplay.create({
-    Point, ctx, viewport, surface: canvasSurface,
-    pointUsage, commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, canvasSelection, canvasHover, viewState,
-    isExporting: () => Boolean(pngRendering.frame),
-    effectiveAppearanceForElement, isEditableSketchElement,
-    isSidebarHighlightedElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement,
-    canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
-    fixedPointLabel: () => applicationText("固定", "Fixed"), geometryReads, isVisibleSketchElement,
-    handleQueries: { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint,
-      isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
-      editedSpline: () => splineEditing.current?.spline, currentScope: workspace.current },
-    pointQueries: { pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
-      isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point) },
+  const { geometry: geometryDisplay, overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit } = createCanvasScene({
+    Point, currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, pointUsage,
+    commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, canvasSelection, canvasHover, selectionHighlight, viewState,
+    isSidebarHighlightedElement, canvasThemeColor, applicationText,
+    constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
+    sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed,
+    editingQueries: { isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
+      isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point),
+      editedSpline: () => splineEditing.current?.spline },
+    annotationBounds, resolvedLoopBounds: window.HatchRegionEngine.resolvedLoopBounds, hatchAppearanceForDisplay,
   });
   const { geometryDisplayColor, geometryStrokeWidth, traceSplinePath } = geometryDisplay;
-  const interactionOverlay = window.InteractionOverlayRenderer.create({ ctx, viewport, withCanvasState,
-    elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName });
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
-  const { resolvedLoopBounds } = window.HatchRegionEngine;
-  const drawingBounds = window.DrawingBounds.create({
-    currentScope: workspace.current, geometryReads, activeSketchId, elementSketchId, isVisibleSketchElement,
-    isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay, isVisibleValue,
-  });
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
-  const drawingFit = createDrawingFit({ bounds: drawingBounds, activeSketchId });
   const { fitSketchToViewport, fitAllGeometryToViewport, resetEmptyViewport } = drawingFit;
   function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
   const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
