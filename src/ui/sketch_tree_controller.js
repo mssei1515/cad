@@ -6,7 +6,7 @@
     const { sketchTreeObjectSelected } = canvasSelection;
     const { selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection,
       setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint } = selectionHighlight;
-    const objects = window.SketchTreeObjects.create({ ...objectOptions, readServices, sketchContext, applicationSettings,
+    const objects = window.SketchTreeObjects.createForDocument({ ...objectOptions, readServices, sketchContext, applicationSettings,
       currentScope, escapeHtml, sketchTreeGutter: window.SketchTreeView.gutter, sketchTreeObjectSelected,
       readCanvasHover: () => canvasHover.current, readSidebarHover: () => selectionHighlight.current,
       selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection });

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,123行、非空白1,672行、root直下465文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,121行、非空白1,670行、root直下465文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Sketch TreeのDocument行表示用readerを表示側へ集約（2026-10-30、検証完了）
+
+基準develop／origin/developは27fa985。本単位はcodex/sketch-tree-object-readersで実施した。SketchTreeObjects.createForDocumentが、同じPointUsage・ConstraintAnalysis・ConstraintRedundancy・ReferenceConstraintState・SketchProjectionQueries・readServices.hatchesと静的moduleから、従来の行表示へ実readerを接続する。ControllerのcreateWithDocumentObjectsはこの入口を使う。既存createと明示portの優先を維持し、index／HTML／summary／Selection／hoverやTree操作、view／menuの生成・bind／start、二つのscopeは変更しない。新state・解析cache・context・fileを追加しない。
+
+app.jsは2,123→2,121行（2行減）、非空白1,670行、root直下465文・関数111個、test hooks351行。Object表示用port21→12。TEMP cad-sketch-tree-object-readers-proof.cjsで、十四defaultの元の参照先と五ownerの初期化順、残る明示port、不要になった取込二つ以外のapp全statementとraw Objects全体不変、Controllerの差分が生成入口だけ、root未使用binding 0を確認した。物理行の削減は小さいが、行表示の照会元をUI owner内で組み立てる境界を明確にした。
+
+sketch-tree-presentation.test.jsへ二つの境界試験を追加した。実Geometry型・数値書式・寸法判定・Hatch表示値と行表示を使い、生成時の照会なし、点の分類とObject同一性、現在の投影／解析／重複／参照エラー・Hatch境界の反映、明示引数の優先、例外時の配列／要素の無変更を確認した。既存fixtureの生成だけを任意差替え可能にし、既存期待値は変更しない。関連単体35件・全単体2,011件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapを更新した。
+
+関連E2E238件が全成功（3.4分、exit 0、runner80420）。既存UI、Treeの可視性／削除／移動／権限、Block、Hatch、Spline、phase0保存互換性／描画比較を実行した。TEMP cad-sketch-tree-object-readers-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server36412停止、app／Objects／Controllerのhash不変を確認した。今回は関連238件であり、最新コード全体のE2Eとは扱わない。UI・モデル／保存形式・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用19%／残量81%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。Treeの表示と編集の責務は分離したまま、上位の機能組立てには残作業がある。200〜500行の目標を小さな引数整理だけで達成できるとは見積もらず、実ownerの共有・操作と照会・起動段階を優先して次の境界を監査する。
 
 ### 最新：Geometry dragの編集環境への接続を機能内へ集約（2026-10-30、検証完了）
 
