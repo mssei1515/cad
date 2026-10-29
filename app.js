@@ -58,11 +58,6 @@
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
-    ParallelLinesCenterlineConstraint,
-    PointPairCenterlineConstraint,
-    ArcEndpointFixedConstraint,
-    LineFixedConstraint,
-    GeometryFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     RadiusConstraint,
@@ -1306,16 +1301,15 @@
 
 
   const { toolbarSvgMarkup, constraintToolbarIcon } = window.ToolbarView.createIcons({
-    document, isDimensionConstraint, types: { LineFixedConstraint, ArcEndpointFixedConstraint, GeometryFixedConstraint,
-      SketchProjectionConstraint, ParallelLinesCenterlineConstraint, PointPairCenterlineConstraint },
+    document, isDimensionConstraint, types: window.GeometrySolver,
   });
 
 
 
   const fixedOperandCommand = window.FixedToggleCommand.createOperand({
-    guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText,
-    findLineFixedConstraint, LineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint, ArcEndpointFixedConstraint,
-    currentScope: workspace.current, GeometryFixedConstraint, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
+    modelTypes: window.GeometrySolver, guardSketchEdit, elementSketchId, operandElement, guardSketchProjectionShapeEdit, applicationText,
+    findLineFixedConstraint, findArcEndpointFixedConstraint, arcEndpointPoint,
+    currentScope: workspace.current, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
   const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = sketchEditing.createTree({
@@ -1714,11 +1708,11 @@
   function toggleGeometryFixedOperand(operand) { return fixedOperandCommand.toggle(operand); }
 
   const fixedSelectionCommand = window.FixedToggleCommand.createSelection({
-    guardSelectionEdit, canvasSelection, blockDefinitionById, setHint, clearSelection,
+    modelTypes: window.GeometrySolver, guardSelectionEdit, canvasSelection, blockDefinitionById, setHint, clearSelection,
     updateUI, draw, recordHistory, findArcEndpointFixedConstraint, deleteElements,
     log, arcEndpointPoint, guardSketchProjectionShapeEdit, applicationText, snapshotModelState,
-    commitNewConstraint, ArcEndpointFixedConstraint, restoreModelState, selectedFixedBatchTargets, fixedBatchIsFullyFixed,
-    findLineFixedConstraint, pushModelConstraint, LineFixedConstraint, currentScope: workspace.current, solveSketchAndDependents,
+    commitNewConstraint, restoreModelState, selectedFixedBatchTargets, fixedBatchIsFullyFixed,
+    findLineFixedConstraint, pushModelConstraint, currentScope: workspace.current, solveSketchAndDependents,
     acceptError: CONSTRAINT_ACCEPT_ERROR, refreshConstraintAnalysis,
   });
   function toggleSelectedFixed() { return fixedSelectionCommand.toggle(); }
@@ -1900,7 +1894,7 @@
       selectedPropertiesTarget, canvasSelection, normalizeAppearance, effectiveAppearanceForElement, document, readHistory: readTestHistory,
     });
     const fixedObservation = window.PropertiesTestDriver.createFixedObservation({
-      currentScope: workspace.current, elementSketchId, findLineFixedConstraint, LineFixedConstraint, fixPointBtn, readHistory: readTestHistory,
+      currentScope: workspace.current, elementSketchId, findLineFixedConstraint, modelTypes: window.GeometrySolver, fixPointBtn, readHistory: readTestHistory,
     });
     const parameterFixture = window.ParameterTestDriver.createFixture({
       resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, currentScope: workspace.current,

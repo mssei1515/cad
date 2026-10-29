@@ -74,7 +74,8 @@
     return Object.freeze({ state });
   }
 
-  function createFixedObservation({ currentScope, elementSketchId, findLineFixedConstraint, LineFixedConstraint, fixPointBtn, readHistory }) {
+  function createFixedObservation({ modelTypes, currentScope, elementSketchId, findLineFixedConstraint,
+    LineFixedConstraint = modelTypes?.LineFixedConstraint, fixPointBtn, readHistory }) {
     function state() {
       const sketchPoints = currentScope().points.filter((point) => elementSketchId(point) === "S2");
       const sketchLines = currentScope().lines.filter((line) => elementSketchId(line) === "S2");
