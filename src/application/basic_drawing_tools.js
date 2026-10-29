@@ -95,7 +95,7 @@
     minLineLength, minArcLength, selection, preview, checkpoint, cancelConstraintTargetCommand, cancelPendingCommand,
     canCreateInActiveSketch, rejectRootSketchCreation, setMode, resetEditing, resetBlankCandidate, updateToolbar,
     projection, clearSelection, solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw, log }) {
-    const { isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, sketchName } = sketchContext;
+    const { isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, sketchName, activeSketchId } = sketchContext;
     const { isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint } = pointUsage;
     const snap = window.DrawingSnap.create({ annotationAnchors, geometryReads, isVisibleSketchElement, isActiveSketchElement,
       isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint,
@@ -149,6 +149,14 @@
         clearSnap: snap.clear, clearSelection, selectMode: () => { setMode("select"); }, updateToolbar, setHint, updateUI, draw,
         cancelConstraintTargetCommand, cancelPendingCommand, setMode });
     }
+    function createHatch({ hatchGeometryQuery, readMode, lastPointer, documentIds, updateStatusUI, hatchRegionErrorText }) {
+      return window.HatchCommand.create({ currentScope, hatchGeometryQuery, getMode: readMode, setMode, lastPointer,
+        getPointerPreview: () => preview.pointer, setPointerPreview: value => { preview.setPointer(value); },
+        activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
+        nextHatchId: () => documentIds.allocate("hatch"), hatchSequence: () => documentIds.peek("hatch"),
+        cancelConstraintTargetCommand, cancelPendingCommand, clearSnap: snap.clear, clearSelection, canvasSelection: selection,
+        updateToolbar, updateStatusUI, updateUI, setHint, draw, recordHistory, applicationText, hatchRegionErrorText });
+    }
     function createOffset({ currentScope: offsetScope, placement, sourceSelection, pending, valueInput, viewport, ctx,
       withCanvasState, drawDimension, readMode, commitNewConstraint, offsetChainErrorText, prepareStart, updateGeometrySelectionUI, invalidateAnalysis }) {
       return window.OffsetFeature.create({ currentScope: offsetScope, geometry, ids, placement, sourceSelection, selection, pending, preview,
@@ -194,7 +202,7 @@
         setHint, updateUI, draw, cancelActiveDrawOperation: () => lifecycle.cancel(), rollbackTransientPoint,
         hasActiveDrawOperation: () => lifecycle.active(), hasSelection: selection.hasSelection, updateGeometrySelectionUI });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createBlankGesture, createCanvasInput: createAuthoringInput });
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createHatch, createBlankGesture, createCanvasInput: createAuthoringInput });
   }
   window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createGeometry, createAuthoring, createCanvasInput });
 })();

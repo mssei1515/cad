@@ -508,3 +508,49 @@ test('geometry foundation preserves hit failure identity and stops before ID all
  assert.equal(f.ids.peek('point'),1);assert.equal(f.state.scope.points.length,0);assert.equal(f.tools.tools.line.startPoint,null);
  assert.deepEqual(f.events,[['beginTransientLineStartRollback'],['endpoint',2,3]]);
 });
+
+function hatchAuthoringFixture({allocateFailure}={}) {
+ const state={ready:false,scope:{hatches:[]},active:'S1',mode:'select',pointer:{x:2,y:3},preview:null,allowed:true,selected:null,history:[],faceReads:[]};
+ const read=value=>{assert.equal(state.ready,true,'no eager Hatch query');return value;},preview={get pointer(){return read(state.preview);},setPointer(value){assert.equal(this,preview);read();state.preview=value;if(state.previewFailure)throw state.previewFailure;}};
+ const sketches={activeSketchId:()=>read(state.active)};
+ const f=authoringFixture({currentScope:()=>read(state.scope),sketchContext:sketches,preview,
+  ids:{allocate(){throw Error('Hatch must use document IDs');},peek(){throw Error('Hatch must use document IDs');}},
+  canCreateInActiveSketch:()=>read(state.allowed),rejectRootSketchCreation:()=>f.events.push('reject'),
+  setMode:value=>{read();state.mode=value;f.events.push('mode');},clearSelection:()=>{state.selected=null;f.events.push('clear');},
+  selection:{set(key,items){state.selected={key,items};f.events.push('selection');}},recordHistory:label=>state.history.push(label)});
+ f.sandbox.window.Appearance={DEFAULT_HATCH_APPEARANCE:{spacing:5}};
+ for(const file of ['src/editing/geometry_ids.js','src/editing/document_ids.js','src/commands/hatch_command.js'])vm.runInNewContext(fs.readFileSync(file,'utf8'),f.sandbox);
+ const documentIds=f.sandbox.window.DocumentIds.create(),query={hatchFaceAt(pointer,options){read();assert.equal(options.includeConstruction,false);state.faceReads.push(pointer);return {ok:true,boundaryLoops:[{role:'outer',spans:[]}],resolved:{area:12}};},forget(item){state.forgotten=item;}};
+ const ids=allocateFailure?{allocate(){throw allocateFailure;},peek:documentIds.peek}:documentIds;
+ f.events.length=0;
+ const hatch=f.feature.createHatch({hatchGeometryQuery:query,readMode:()=>read(state.mode),lastPointer:()=>read(state.pointer),documentIds:ids,
+  updateStatusUI:()=>f.events.push('status'),hatchRegionErrorText:error=>error.code});
+ assert.deepEqual(f.events,[]);assert.equal(state.faceReads.length,0);state.ready=true;return {...f,state,hatch,documentIds};
+}
+
+test('authoring Hatch shares live scope, Sketch, preview, Selection and real document IDs without eager operations',()=>{
+ const f=hatchAuthoringFixture(),{state,hatch,documentIds}=f;assert(Object.isFrozen(hatch));hatch.startHatchCreation();
+ assert.equal(state.mode,'hatch');assert.equal(state.preview,state.pointer);assert.equal(state.faceReads[0],state.pointer);
+ assert.equal(hatch.commitHatchAt({x:8,y:9}),true);assert.equal(hatch.finish(),true);
+ const first=state.scope.hatches[0];assert.equal(first.id,'H1');assert.equal(first.sketchId,'S1');assert.equal(state.scope.nextHatchIndex,documentIds.peek('hatch'));assert.equal(state.selected.items[0],first);
+ const original=state.scope;state.scope={hatches:[]};state.active='BLOCK-S2';assert.equal(documentIds.allocate('hatch'),'H2');
+ assert.equal(hatch.commitHatchAt({x:10,y:11}),true);assert.equal(hatch.finish(),true);
+ assert.equal(state.scope.hatches[0].id,'H3');assert.equal(state.scope.hatches[0].sketchId,'BLOCK-S2');assert.equal(state.scope.nextHatchIndex,4);
+ assert.equal(original.hatches.length,1);assert.equal(state.selected.items[0],state.scope.hatches[0]);assert.equal(state.history.length,2);assert.equal(state.mode,'hatch');
+});
+
+test('authoring Hatch retains cancellation before rejection and preserves allocation and preview failure boundaries',()=>{
+ const f=hatchAuthoringFixture();f.state.allowed=false;f.hatch.startHatchCreation();assert.deepEqual(f.events,['cancelConstraint','cancelPending','reject']);
+ assert.equal(f.state.mode,'select');assert.equal(f.state.preview,null);assert.equal(f.documentIds.peek('hatch'),1);assert.equal(f.state.faceReads.length,0);
+ const marker=new Error('allocation failed'),failed=hatchAuthoringFixture({allocateFailure:marker});failed.hatch.startHatchCreation();failed.hatch.commitHatchAt({x:1,y:2});
+ assert.throws(()=>failed.hatch.finish(),error=>error===marker);assert.equal(failed.state.scope.hatches.length,0);assert.equal(failed.state.history.length,0);assert.equal(failed.hatch.regions.length,1);
+ const preview=hatchAuthoringFixture();preview.state.previewFailure=marker;assert.throws(()=>preview.hatch.startHatchCreation(),error=>error===marker);assert.equal(preview.state.mode,'hatch');assert.equal(preview.state.preview,preview.state.pointer);assert.deepEqual(preview.events,['cancelConstraint','cancelPending','mode']);
+});
+
+test('authoring Hatch repairs only a local hatch on the active Sketch without allocating a replacement',()=>{
+ const f=hatchAuthoringFixture(),item={id:'H9',sketchId:'other',seed:{x:1,y:2},boundaryLoops:[]};f.state.scope.hatches.push(item);
+ assert.equal(f.hatch.startHatchBoundaryRepair(item),false);assert.equal(f.state.active,'S1');assert.equal(f.state.mode,'select');
+ item.sketchId='S1';item.blockProjection=true;assert.equal(f.hatch.startHatchBoundaryRepair(item),false);item.blockProjection=false;
+ assert.equal(f.hatch.startHatchBoundaryRepair(item),true);assert.equal(f.state.mode,'hatch-repair');assert.equal(f.hatch.commitHatchAt({x:5,y:6}),true);assert.equal(f.hatch.finish(),true);
+ assert.equal(f.state.scope.hatches[0],item);assert.equal(f.state.forgotten,item);assert.equal(f.state.selected.items[0],item);assert.equal(f.state.mode,'select');assert.equal(f.documentIds.peek('hatch'),1);assert.equal(f.state.history.length,1);
+});
