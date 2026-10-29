@@ -97,6 +97,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
+### 最新：Pointerの式参照候補照会をControllerへ集約（2026-10-30、検証完了）
+
+基準developは0cdffa2。appに残っていた式入力のフォーカス判定付き候補照会を、既存ExpressionInputControllerのpointerReferencesへ集約した。四つのPointer接続と三つのroot別名を整理し、既存controller・namespace・hit serviceをそのまま共有する。ExpressionInputController.pointerReferencesはPointer pressへ接続する四つのread／insert portをfrozen groupで公開する。追加の寸法／注記hit照会は毎回のフォーカス入力が式入力として有効な場合に限り、activeOnly:falseを渡す。Parameter draftのnamespaceがCanvasと異なる場合も候補照会を抑制せず、挿入時の既存error処理へ渡す。生成時には入力・namespace・hitを読まない。Pointer側の通常dimension hit優先と、寸法挿入拒否後の注記fallbackはPointerInteractionControllerに残す。Parameter dialog用pickCanvasの、先にhitを読む順序と寸法hit時は注記へfallbackしない規則は維持する。 新しい状態・cache・file、UI／保存形式の変更はない。
+
+app.jsは2,008→2,004行（4行減）、非空白1,558→1,554行、root436→435文。構築136文769非空白行、hooks323行、一文call関数92個116行、その他206文341行（文外5行）。関数98個／可変参照三つは不変。hooksと短い委譲を除いても1,115非空白行が残る。TEMP cad-expression-pointer-references-{proof,hierarchy}.cjsで四接続の同値性、その他app／旧Controller本体のAST不変とroot未使用bindingなしを確認した。
+
+単体へ二つの境界試験を追加し、不適格・readonly／disabled入力で追加照会なし、live入力とParameter draft、非active対象、例外同一性、実PointerInteractionControllerの通常hit優先と寸法挿入拒否後の注記fallbackを確認する。関連単体37件／全単体2,052件／構文624fileが成功。関連6suite（parameter-dialog-controller／unified-ui／unified-annotations／blocks／free-text-input-drag／command-panel）の176件が全成功（2.6分、exit 0、runner87954）。404製品／E2E入力fileと開始HEADの不変、自己起動server停止・listeners 0、last-run passed／failedTests空を確認した。TEMP cad-expression-pointer-references-{check,unit,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。週枠残量79%で停止条件未到達。全E2Eは本単位では未実行で、以前の588件成功と区別する。
+
+次は既存機能ownerの生成階層とtest支援の実依存を引き続き確認する。短い委譲やtest hookを一括移動する巨大contextは作らない。全体目標active・数百行目標未達、mainは停止／releaseの最後に反映する。
+
 ### 最新：通常Parameter編集UIのモデル接続を既存ownerへ集約（2026-10-30、検証完了）
 
 基準developは02f473c。ParameterEditor.createForWorkspaceへ通常UIのモデル・設定・書式・browser型の接続をまとめた。実DocumentWorkspaceを共有し、編集scopeはeditingScopeBinding.currentの明示readerを保持する。生成順序、後段apply／pick callback、旧create本体、UI・保存形式を変えない。新規file・状態・cacheは追加していない。rootの対象接続は18→12項目となる。
