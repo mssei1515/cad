@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,026行、非空白1,576行、root直下437文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,019行、非空白1,569行、root直下438文、条件付きtest hooks326行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Parameterのブラウザテスト支援を実モデルownerから組立て（2026-10-30、検証完了）
+
+基準develop／origin/developは8d7dc17。本単位はcodex/parameter-browser-test-supportで実施した。既存ParameterTestDriver.createBrowserSupportは、DocumentWorkspace.createが返す実ownerからDocument／workspace.current／ParameterNamespace／DocumentIdsを受け、同じGeometryと限定操作を使ってfixture→observation→interactionを生成する。appは返却された実documentWorkspaceを保持して従来の各APIも分解する。返却値やモデルを複製したapp contextは作らない。Point／Line／Horizontal／Distanceの型、DEFAULT_SKETCH_ID、参照書式、read-only判定は既存の静的namespaceを使う。旧三生成APIと本体、公開五API名、test query条件と生成位置を維持し、三つの実APIをfrozen groupで返す。現在scopeとDocument rootのBlock定義は各呼出し時に読む。後段callbackの変更やnormal／testの起動条件変更はない。
+
+app.jsは2,026→2,019行（7行減）、非空白1,576→1,569行、root437→438文／関数98個／test hooks333→326行／可変参照三つ。root文が一つ増えたのは実DocumentWorkspace返却値の保持と従来の分解を分けたためで、生成回数・位置は同じ。Parameterの三生成・39項目は一生成・21項目となり、不要な三namespace関数のroot bindingを除いた。TEMP cad-parameter-browser-test-support-proof.cjsで全接続式、DocWorkspace生成と旧各APIの分解の同値性、変更対象以外のappと旧ParameterTestDriver本体のAST不変を確認。root未使用binding 0。test hook全体は54→52生成・847→829引数項目・外側288→284 binding参照となった。hierarchy.cjsでは構築136文773非空白行、hooks326行、一文call関数92個116行、その他209文349行（文外5行）。hooksと短い委譲を全て除く仮定でも1,127非空白行が残り、200〜500行目標は未達で全体目標activeのまま。
+
+新規parameter-test-driver.test.jsは実GeometryCreation／GeometryIds／ParameterNamespace／ConstraintCommitCommand insertion／Constraint型を使い、生成時のモデル照会・準備なし、直接Geometryとの採番共有、二つのBlock定義と動的配列参照、現在scope切替後もDocument rootの定義を読むことを確認する。式付き寸法のfreeze時のSelection・返却参照、名前での寸法削除とhint、reset／namespace検証／削除の例外同一性と未変更の状態を確認。関連単体25件・全単体2,045件・構文623fileが成功。新規単体をsyntax／unit runnerに登録し、既存script順とE2E期待は変更しない。関連E2E154件が全成功（2.4分、exit 0、runner84243）。五APIの参照元を検索してunified-ui／free-text-input-dragを確認し、parameter-dialog-controller／blocksも含めて実行した。TEMP cad-parameter-browser-test-support-{check,unit,e2e}.log、run.ps1、proof.cjs、hierarchy.cjs、hook-audit.json、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持。404製品／E2E入力fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server4364停止を確認した。今回は全E2E未実行で、直前8d7dc17の全588件成功を今回の全体検証として流用しない。UI・保存形式・既存期待値・性能上限／timeout・workerは変更しない。
+
+開始時の週枠使用19%／残量81%で停止条件未到達。main／origin/mainは5800850を保持し、停止／releaseの最後に反映する。検証・差分確認・Commit／Pushとdevelop統合後、fixtureが共有する実ownerと限定操作の境界を続けて整理する。test hookを一括移動し巨大contextを受ける案は採らず、normal機能の構築階層も引き続き対象とする。
 
 ### 最新：外観正規化の固定ルール再利用と性能再検証（2026-10-30、全E2E検証完了）
 
