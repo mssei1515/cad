@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,145行、非空白1,695行、root直下476文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,142行、非空白1,692行、root直下473文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：拘束対象とSelectionの接続をSelection機能へ集約（2026-10-29、検証完了）
+
+基準develop／origin/developは2fdfeac。本単位はcodex/constraint-selection-compositionで実施した。CanvasSelectionFeature.createConstraintOperandsが、同じSketchContextで実ConstraintCandidates→ConstraintOperandsを元の順序で生成し、実candidates／operandsとSelection→操作対象・対象session→Selectionの二入口を返す。現在Selectionはfeature内の同じ実体で、外部依存はtargets・pointer・solver・許容誤差の四つに限定した。候補判定と値表現は既存constraints module、対象session・Selection・Pointerの状態は既存ownerに残す。新state・UI／履歴通知・setterを追加しない。
+
+app.jsは2,145→2,142行（3行減）、非空白1,692行、root直下476→473文・関数122→120個、test hooks351行。元の二factoryのroot引数9→4。TEMP cad-constraint-selection-composition-proof.cjsで全生成portの対応、二変換の本体、他のappと従来SelectionFeature全体のAST不変、二つの新しい直接bindingの初期化順、不要になったSketch照会取込二つの削除とroot未使用binding 0、raw candidates／operands／Selection／Pointer四moduleの不変を確認した。ConstraintTargetSessionの早期acceptTarget callbackは従来どおり後段のconstraintOperandValuesを遅延参照する。候補・値のconstは既存callbackで早期捕捉される契約と、新たな変換入口の初期化後の利用を区別して監査した。
+
+canvas-selection-feature.test.jsへ、実Selection／ConstraintTargetSession／Pointer・候補・値を使う二つの境界試験を追加した。生成中のSketch照会やsolver hint読取りなし、選択Point／Arc endpointの参照と重複除外、対象sessionから同じSelectionへの反映、Sketch関係変更と最新PointerによるSpline parameter／endpoint、変換例外時のSelection／対象operand配列不変、UI通知なしを確認した。既存fixtureのSketch読取りだけを任意差替え可能にし、既存期待値は変更しない。関連単体25件・全単体2,003件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新した。
+
+関連E2E248件が全成功（3.8分、exit 0、runner96229）。既存UI、Annotation anchors、対称拘束、Sketch投影、Block、Spline、phase0保存互換性／描画比較、Sketch権限を実行した。TEMP cad-constraint-selection-composition-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server9236停止とsource二つのhash不変を確認した。今回は関連248件であり、最新コード全体のE2Eとは扱わない。UI・状態遷移・保存形式・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用13%／残量87%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。次も拘束・Selection・入力・描画等の共有ownerと構築段階を監査し、domainの値・判定にUIや編集stateを持ち込まない。rootの構築・起動とtest API公開には残作業があり、200〜500行の全体目標を現在の中間成果で達成扱いにしない。
 
 ### 最新：Keyboard生成を共有Canvas入力機能へ統合（2026-10-29、検証完了）
 

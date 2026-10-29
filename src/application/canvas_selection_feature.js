@@ -8,6 +8,16 @@
       canvasSelection: selection, selectionSketchId: (...args) => scope.selectionSketchId(...args),
       clearSelection, updateGeometrySelectionUI, draw, sketchById: sketches.sketchById, guardSketchEdit,
     });
+    function createConstraintOperands({ targets, pointer, solver, acceptError }) {
+      const candidates = window.ConstraintCandidates.create({ sameSketchElements: sketches.sameSketchElements,
+        syncLineOrientationHints: () => solver.syncLineOrientationHints?.(), constraintAcceptError: acceptError });
+      const operands = window.ConstraintOperands.create({ elementSketchId: sketches.elementSketchId,
+        operandRelationForSketch: sketches.operandRelationForSketch, sameArcEndpoint: candidates.sameArcEndpoint,
+        Arc: window.GeometrySolver.Arc, lineHasDirection: window.GeometryKernel.lineHasDirection, closestSplinePoint: window.SplineGeometry.closestPoint });
+      function fromSelection() { return operands.fromSelection(selection, pointer.lastWorld); }
+      function syncSelection() { selection.applyConstraintTargets(candidates.constraintTargetsFromOperands(targets.operands)); }
+      return Object.freeze({ candidates, operands, fromSelection, syncSelection });
+    }
     function createPresentation({ hover, constraintTargets, pointer, projections, constraintReferences, clearSnap }) {
       const { Point, Line, Circle, Arc, Spline, OffsetChainConstraint } = window.GeometrySolver;
       const { equals: geometryRefsEqual } = window.GeometryRef;
@@ -28,7 +38,7 @@
       });
       return Object.freeze({ highlight, clearing, documentReset });
     }
-    return Object.freeze({ selection, scope, identity, createPresentation });
+    return Object.freeze({ selection, scope, identity, createConstraintOperands, createPresentation });
   }
   window.CanvasSelectionFeature = Object.freeze({ create });
 })();

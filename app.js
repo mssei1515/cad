@@ -132,8 +132,8 @@
     orderedSketches, descendantSketchIds,
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
-    elementSketchId, membershipQuery: readSketchMembership, sameSketchElements, isEditableSketchId, canEditSketch,
-    sketchRelationToActive, operandRelationForSketch, constraintSketchId, isActiveSketchConstraint,
+    elementSketchId, membershipQuery: readSketchMembership, isEditableSketchId, canEditSketch,
+    sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
     constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
     sketchRelationOfElement,
   } = sketchContext;
@@ -392,12 +392,11 @@
   const { DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR } = window.DimensionLayout;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
-  const constraintCandidates = window.ConstraintCandidates.create({
-    sameSketchElements, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
-    constraintAcceptError: CONSTRAINT_ACCEPT_ERROR,
+  const { candidates: constraintCandidates, operands: constraintOperandValues,
+    fromSelection: constraintOperandsFromSelection, syncSelection: syncSelectionFromConstraintOperands } = selectionFeature.createConstraintOperands({
+    targets: constraintTargetSession, pointer: pointerInteractionController, solver, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
-  const { sameArcEndpoint, constraintTargetsFromOperands, linesAreParallel } = constraintCandidates;
-  const constraintOperandValues = window.ConstraintOperands.create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection, closestSplinePoint: window.SplineGeometry.closestPoint });
+  const { sameArcEndpoint, linesAreParallel } = constraintCandidates;
   const { operandElement, makeConstraintOperand, referenceTargetFromOperand, sameConstraintOperand } = constraintOperandValues;
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
@@ -792,9 +791,7 @@
 
 
 
-  function syncSelectionFromConstraintOperands() { canvasSelection.applyConstraintTargets(constraintTargetsFromOperands(constraintTargetSession.operands)); }
 
-  function constraintOperandsFromSelection() { return constraintOperandValues.fromSelection(canvasSelection, pointerInteractionController.lastWorld); }
 
   function resultIsAccepted(result) {
     return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
