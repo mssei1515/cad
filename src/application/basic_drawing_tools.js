@@ -144,6 +144,13 @@
         checkpoint: filletCheckpoint, clearSelection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
         applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand });
     }
+    function createTrim({ references, checkpoint: trimCheckpoint, hitSketchIdentityElement, guardSketchEdit, guardSketchProjectionShapeEdit,
+      stabilizeActiveParameterNamespace, acceptError, invalidateAnalysis, refreshConstraintAnalysis }) {
+      return window.TrimFeature.create({ currentScope, geometry, references, isActiveSketchElement, minLineLength, minArcLength,
+        pushModelConstraint, elementSketchId, isPointUsedByPrimitive, isReferencePoint, viewportScale: scale, preview, checkpoint: trimCheckpoint,
+        hitSketchIdentityElement, guardSketchEdit, activeSketchId: sketchContext.activeSketchId, setHint, draw, guardSketchProjectionShapeEdit, applicationText,
+        clearSelection, stabilizeActiveParameterNamespace, acceptError, invalidateAnalysis, refreshConstraintAnalysis, updateUI, recordHistory });
+    }
     function createAuthoringInput({ readMode, centerline, circleCenterCross, fillet, trim, offset }) {
       return createCanvasInput({ point: { transientAuthoring, snapForDrawing, drawingSnap: snap, addPoint: geometry.addPoint,
         addPointSnapConstraints: snapConstraints.addPointSnapConstraints, clearSnap: snap.clear, canvasSelection: selection, solveAndRefresh },
@@ -167,7 +174,7 @@
         setHint, updateUI, draw, cancelActiveDrawOperation: () => lifecycle.cancel(), rollbackTransientPoint,
         hasActiveDrawOperation: () => lifecycle.active(), hasSelection: selection.hasSelection, updateGeometrySelectionUI });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet, createBlankGesture, createCanvasInput: createAuthoringInput });
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet, createTrim, createBlankGesture, createCanvasInput: createAuthoringInput });
   }
   window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring, createCanvasInput });
 })();
