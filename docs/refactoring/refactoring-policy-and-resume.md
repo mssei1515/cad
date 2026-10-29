@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,194行、非空白1,744行、root直下488文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,190行、非空白1,740行、root直下488文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：寸法操作とドラッグfixtureの静的モデル型を実行時portから分離（2026-10-29、検証完了）
+
+基準develop／origin/developは53e727c。本単位はcodex/test-model-type-dependenciesで実施した。テスト支援だけで使うconstructorをappの先頭のbindingへ持ち上げている箇所を監査し、まずDimensionTestDriver.createSupport().createInteractionとGeometryDragTestDriver.createResponsiveFixtureへ明示的なmodelTypesを導入した。appは既存GeometrySolver namespaceを渡し、driverのglobal参照を増やさない。必要な型を入口で一度だけ捕捉し、scope／Selection／solver／draw等は従来の実行時portのままにする。既存の個別constructor引数は優先して利用し、型供給元を省略する既存の部分的構築も維持する。型の供給元へモデルや操作stateを詰めない。
+
+app.jsは2,194→2,190行（4行減）。LineCircleDistanceConstraint／ConcentricRadiusDifferenceConstraint／ParallelConstraint／PerpendicularConstraintの四つのroot取込を除き、二つの呼出しで五つのconstructor引数を二つの型供給元へ置換した。TEMP cad-test-model-type-dependencies-proof.cjsで、二つのdriver module全体が二入口の引数定義以外はAST不変、実行時portと公開hookの対応が不変、必要な五型の対応・root未使用binding 0を確認した。新たな暗黙のGeometrySolver global参照はない。fixture本体・Geometry参照・求解・履歴・保存値は変更していない。
+
+dimension-interaction-test-support.test.jsとgeometry-drag-test-driver.test.jsへ各一件の境界試験を追加。明示的な型供給元と個別注入の双方で同じconstructor実体を使うこと、型を一度だけ捕捉して供給元の後の変更を受けないこと、個別constructorが指定されたら型getterを読まないこと、現在scopeの交換を従来どおり読むことを確認した。既存responsive fixtureの型portだけを任意差替え可能にし、元の期待値を維持した。関連単体14件・全単体1,989件・構文618ファイルが成功（exit 0）。責務と依存はモジュール構成とimplementation-mapへ記録した。
+
+関連E2E146件が全成功（2.6分、exit 0、runner14617）。利用hookを検索し、既存UI、adversarial-authoring-performance、寸法prefix、view visibility、toolbar layoutとphase0保存互換性／描画比較を実行した。TEMP cad-test-model-type-dependencies-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server34736停止とsource三つのhash不変を確認した。今回は関連146件であり、前回の全体587件成功を現在の全体結果とは扱わない。性能上限・timeout・操作期待値を変えていない。
+
+最新appは2,190行、非空白1,740行、root直下488文・関数142個、条件付きtest hooks362行、可変参照三つ。週枠使用7%／残量93%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を保持する。静的な型／codecの依存と実行時scopeを区別しつつ、次も責務と生成段階を監査する。数百行へ寄せるために無関係な型や状態を巨大contextへ束ねず、既存ownerを包み直すだけの変更もしない。
 
 ### 最新：注記Parameter入力の評価対象と全Sketch安定化を既存Parameter ownerへ集約（2026-10-29、検証完了）
 
