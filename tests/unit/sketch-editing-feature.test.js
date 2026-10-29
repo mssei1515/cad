@@ -6,7 +6,7 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture(configureMove) {
+function fixture(configureMove, buildMove = (feature, options) => feature.createMove(options)) {
   const empty = () => ({ ...Object.fromEntries([...w.SketchMove.fields, 'constraints', 'geometryInstances'].map(field => [field, []])),
     activeSketchId: 'S1', sketches: [{ id: 'ROOT', kind: 'root', name: 'Root' },
       { id: 'S1', kind: 'sketch', name: 'Sketch-1', parentSketchId: 'ROOT' }, { id: 'S2', kind: 'sketch', name: 'Destination', parentSketchId: 'ROOT', visible: false }] });
@@ -28,7 +28,7 @@ function fixture(configureMove) {
     effectiveAppearanceForElement: item => ({ ...state.scope.sketches.find(sketch => sketch.id === item.sketchId)?.appearance, ...item.appearance }), clearTreeHover: notify('hover'), clearSnap: notify('snap'),
     guardEdit: () => true, prepareLockToggle: notify('lock') });
   const moveOptions = configureMove ? configureMove({ state, calls, geometryReads, projections }) : { refresh: () => { notify('refresh')(); if(state.refreshError) throw state.refreshError; } };
-  const move = feature.createMove({ prepare: notify('prepare'), ...moveOptions });
+  const move = buildMove(feature, { prepare: notify('prepare'), ...moveOptions });
   const deletion = feature.createDeletion({ rejectReferencedGeometryDeletion: items => items.length > 0, log: notify('log'),
     geometryElementKey: item => item?.id, guardDimensionSymbolDeletion: () => state.symbols,
     annotationReferencesRemovedGeometry: () => false, clearSketchSolveState: notify('clear-solve'),
@@ -170,4 +170,40 @@ test('Sketch feature Tree delegates visibility, lock, deletion and destination m
   f.tree.controller.click(f.event('S2','sketchDeleteBtn')); assert.equal(f.state.scope.sketches.includes(destination), false);
   assert.equal(f.state.scope.points.includes(f.point), false); assert.equal(f.state.scope.activeSketchId, 'S1');
   assert.equal(f.calls.filter(call => call[0] === 'history' && call[1] === 'スケッチ間の図形移動').length, 1);
+});
+
+test("Sketch move input follows the actual command through commit and scope replacement without binding during construction", () => {
+  const listeners = [], removed = [], blocked = []; let controls;
+  const document = {
+    addEventListener(type, handler, capture) { assert.equal(capture, true); listeners.push({ type, handler }); },
+    removeEventListener(type, handler, capture) { assert.equal(capture, true); assert.equal(listeners.some(item => item.type === type && item.handler === handler), true); removed.push(type); },
+  };
+  const f = fixture(undefined, (feature, options) => { controls = feature.createMoveWithInput({ document, ...options }); return controls.command; });
+  assert.equal(controls.command, f.move); assert.deepEqual(listeners, []);
+  controls.input.bind(); controls.input.bind();
+  assert.deepEqual(listeners.map(item => item.type), ["pointerdown", "click", "dblclick", "contextmenu", "input", "change"]);
+  const event = inside => ({ target: { closest(selector) { assert.equal(selector, "#sketchList, #sketchOverlayResizeHandle"); return inside ? {} : null; } },
+    preventDefault() { blocked.push("prevent"); }, stopImmediatePropagation() { blocked.push("stop"); } });
+  listeners[0].handler(event(false)); assert.deepEqual(blocked, []);
+  f.selection.set("points", [f.point]); assert.equal(f.move.start(), true);
+  for (const item of listeners) item.handler(event(false));
+  assert.deepEqual(blocked.splice(0), Array.from({ length: 6 }, () => ["prevent", "stop"]).flat());
+  listeners[0].handler(event(true)); assert.deepEqual(blocked, []);
+  assert.equal(f.move.choose("S2"), true); assert.equal(f.move.commit(), true);
+  assert.equal(f.point.sketchId, "S2"); assert.equal(f.state.scope.points[0], f.point);
+  listeners[0].handler(event(false)); assert.deepEqual(blocked, []);
+  f.feature.command.activate("S2"); f.selection.set("points", [f.point]); assert.equal(f.move.start(), true);
+  f.state.scope = f.empty(); listeners[0].handler(event(false));
+  assert.equal(f.move.active, false); assert.deepEqual(blocked, []);
+  controls.input.dispose(); controls.input.dispose(); assert.deepEqual(removed, listeners.map(item => item.type));
+});
+
+test("Sketch move command remains usable when the separately enabled input binding fails", () => {
+  const marker = new Error("listener registration"), document = { addEventListener() { throw marker; } }; let controls;
+  const f = fixture(undefined, (feature, options) => { controls = feature.createMoveWithInput({ document, ...options }); return controls.command; });
+  assert.equal(controls.command, f.move);
+  assert.throws(() => controls.input.bind(), error => error === marker);
+  f.selection.set("points", [f.point]); assert.equal(f.move.start(), true);
+  assert.equal(f.move.cancel(), true); assert.equal(f.move.active, false);
+  assert.equal(f.point.sketchId, "S1"); assert.equal(f.calls.some(call => call[0] === "history"), false);
 });

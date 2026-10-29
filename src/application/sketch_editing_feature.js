@@ -29,6 +29,12 @@
       return window.SketchMoveCommand.create({ currentScope, activeSketchId, selection, query, prepare, refresh: refresh === undefined ? refreshGeometry : refresh,
         clearSelection, updateUI, draw, setHint, recordHistory, applicationText });
     }
+    // Keep destination-only input tied to the same command; the application chooses when to bind it.
+    function createMoveWithInput({ document, prepare, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity }) {
+      const command = createMove({ prepare, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity });
+      const input = window.SketchTreeController.createMoveInputBinding({ document, isMoving: () => command.active });
+      return Object.freeze({ command, input });
+    }
     function createDeletion({ rejectReferencedGeometryDeletion, log, geometryElementKey, guardDimensionSymbolDeletion,
       annotationReferencesRemovedGeometry, clearSketchSolveState, invalidateAnalysis, solveSketchAndDependents,
       refreshConstraintAnalysis, confirmDeletion }) {
@@ -56,7 +62,7 @@
         updateSelectionUI, unfixPoint,
       });
     }
-    return Object.freeze({ command, createMove, createDeletion, createTree });
+    return Object.freeze({ command, createMove, createMoveWithInput, createDeletion, createTree });
   }
   window.SketchEditingFeature = Object.freeze({ create });
 })();
