@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,135行、非空白1,684行、root直下471文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,130行、非空白1,679行、root直下465文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -95,7 +95,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-10-29）
+## 8. 再開地点（2026-10-30）
+
+### 最新：求解とParameter安定化を実ownerへ直接接続（2026-10-30、検証完了）
+
+基準develop／origin/developは4f9fbc0。本単位はcodex/solve-operation-bindingsで実施した。SketchSolvingの結果状態三入口と求解四入口、およびParameterStabilization.stabilizeを、実owner生成直後のreadonly bindingへ接続した。八つの転送関数を除き、求解・依存Sketchの順序・Parameter反復・値復元・結果Mapの実装は変更しない。初期化より前にcallbackとして必要なclearSketchSolveStateはhoisted入口を保つ。
+
+app.jsは2,135→2,130行（5行減）、非空白1,679行、root直下471→465文・関数119→111個、test hooks351行。TEMP cad-solve-operation-bindings-proof.cjsで8 bindingのowner／method一致と全利用が初期化後であること、元のrest引数転送、frozen API／receiverとargumentsへの非依存、他のapp全statementおよびraw owner二module不変、root未使用binding 0を確認した。低影響の接続整理のため新しい模倣testは追加せず、既存の関連単体16件・全単体2,007件・構文618ファイルが成功（exit 0）。正式なモジュール構成とimplementation-mapを更新した。
+
+関連E2E194件が全成功（13.0分、exit 0、runner13022）。既存UI、Block、Sketch投影、Parameter dialog、拘束drag回帰群、phase0保存互換性／描画比較を実行した。Fillet・Offset chain・航空機形状の複数位置／方向／速度の反復dragと実Pointer／Undoを含む。TEMP cad-solve-operation-bindings-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server33592停止、appとraw owner二つのhash不変を確認した。今回は関連194件であり、最新コード全体のE2Eとは扱わない。UI・求解規則・保存形式・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用17%／残量83%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。bootstrap-boundary-auditへ同じsourceの構成再集計を追記した。構築150文840非空白行、hooks351行、単一call関数105個129行で、hooksと短い委譲を全て除く仮定でも1,199非空白行が残る。次は実機能の共有ownerと生成段階を優先して監査し、小さな転送関数整理の反復だけで200〜500行に届くとは見積もらない。巨大contextやsetterへの移動で達成扱いにしない。
 
 ### 最新：寸法ラベルと描画を同じScene依存から生成（2026-10-29、検証完了）
 

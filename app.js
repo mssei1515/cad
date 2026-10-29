@@ -597,6 +597,8 @@
     resultIsAccepted, restoreModelState, acceptError: CONSTRAINT_ACCEPT_ERROR,
     profileDependencies: work => interactionProfiler.active ? profileInteractionWork("dependencies", work) : work(),
   });
+  const { setSketchSolveOk, setSketchSolveError, sketchSolveState, solveSketchById,
+    solveReferenceDependentSketches, solveSketchAndDependents, solveConstraintComponentAndDependents } = sketchSolving;
   const parameterStabilization = window.ParameterStabilization.create({
     namespace: parameterNamespace, currentParameterNamespace, activeSketchId,
     solveSketchAndDependents: sketchSolving.solveSketchAndDependents,
@@ -605,6 +607,7 @@
     nonConvergenceReason: () => applicationText("Parameter計算が収束しません", "Parameter calculation did not converge"),
     profile: work => interactionProfiler.active ? profileInteractionWork("parameters", work) : work(),
   });
+  const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
   const storedDefinitionStabilization = window.ParameterStabilization.createStoredDefinition({
     currentScope: () => editingScopeBinding.current, activateScope: activateEditingScope, nextHatchIndex: () => documentIds.peek("hatch"),
     drawableSketchIds: blockDefinitionDrawableSketchIds, stabilizeNamespace: stabilizeActiveParameterNamespace,
@@ -792,9 +795,6 @@
   }
 
   function clearSketchSolveState(...args) { return sketchSolving.clearSketchSolveState(...args); }
-  function setSketchSolveOk(...args) { return sketchSolving.setSketchSolveOk(...args); }
-  function setSketchSolveError(...args) { return sketchSolving.setSketchSolveError(...args); }
-  function sketchSolveState(...args) { return sketchSolving.sketchSolveState(...args); }
 
   function sketchHasSolveError(sketchId) {
     return sketchSolveState(sketchId)?.status === "error";
@@ -804,7 +804,6 @@
 
   function solveAndRefresh(...args) { return solveRefreshCommand.run(...args); }
 
-  function stabilizeActiveParameterNamespace(...args) { return parameterStabilization.stabilize(...args); }
 
   function refreshConstraintAnalysis(options = {}) { return constraintAnalysis.refresh(options); }
 
@@ -1041,12 +1040,8 @@
   const { hitConstraintOperand: queryConstraintOperand } = sceneHitQueries.operands;
 
 
-  function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
 
 
-  function solveReferenceDependentSketches(...args) { return sketchSolving.solveReferenceDependentSketches(...args); }
-  function solveSketchAndDependents(...args) { return sketchSolving.solveSketchAndDependents(...args); }
-  function solveConstraintComponentAndDependents(...args) { return sketchSolving.solveConstraintComponentAndDependents(...args); }
 
   const deletionFeature = window.DeletionFeature.create({
     currentScope: workspace.current, pointUsage, constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,

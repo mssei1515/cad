@@ -6,6 +6,21 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 求解入口整理後の再集計（2026-10-30、4f9fbc0基準）
+
+app.jsのworking treeをBabel ASTで再集計した。物理2,130行・非空白1,679行、root直下465文・関数111個。root各文を重複なしで、createで始まるmember／bare呼出しを直接initializerに持つ構築、installTestHooks、単一callを返す／実行する関数、その他の順に分類した。計測scriptと出力はTEMP cad-solve-operation-bindings-hierarchy.{cjs,json}。文外のIIFE・冒頭等5非空白行は表に含めない。
+
+| 分類 | root文数 | 非空白行 |
+| --- | ---: | ---: |
+| 構築・接続 | 150 | 840 |
+| 条件付きtest hooks | 1 | 351 |
+| call一文の関数 | 105 | 129 |
+| その他（型／API取込、定数、起動等） | 209 | 354 |
+
+一文委譲とhooksを全て除く仮定でも1,679−129−351＝1,199非空白行が残る。今回の8入口直接接続は責務の再配置というより、既に分離されたownerへの接続整理であり、この方法だけを繰り返して200〜500行へ到達するとは見積もらない。空白451行を削っても責務分離は進まない。
+
+大きい構築はGeometryDragFeature19行、BlockEditingのcreateCommands18行、SketchEditingのcreateTree17行、ConstraintEditing16行、DimensionValueCommand15行。次はこの実機能と共有ownerの契約・生成段階を優先して監査する。全factoryを巨大contextに包む案や、早期依存をsetterで隠す案は採用しない。新しい機能階層を採用する場合は、共通の実ownerを持つ理由、root外へ移す判断／変換、狭い公開API、初期化前のcallback捕捉の有無を実コードから確認する。数百行への到達は未完了である。
+
 ## 保存基盤の集約後と次の生成段階（2026-10-24、2ed4adc基準）
 
 同じcad-document-workspace-hierarchy-audit.cjsの分類条件で、2ed4adc（app blob 872e0381338429ef34c7e534211af2ab35fde9fa）とDocument保存基盤を集約したworking tree（blob 9d126d5c55c9b5fad4836e036b271e862882bd11）を比較した。TEMP cad-document-persistence-hierarchy-audit.{cjs,json,log}へ結果を保存した。検証・統合の進行は再開資料section 8を優先する。

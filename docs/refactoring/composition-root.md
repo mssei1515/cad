@@ -4,7 +4,17 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-29）
+## 現在の再開地点（2026-10-30）
+
+### 最新：求解とParameter安定化を実ownerへ直接接続（2026-10-30、検証完了）
+
+基準develop／origin/developは4f9fbc0。本単位はcodex/solve-operation-bindingsで実施した。SketchSolvingの結果状態三入口と求解四入口、およびParameterStabilization.stabilizeを、実owner生成直後のreadonly bindingへ接続した。八つの転送関数を除き、求解・依存Sketchの順序・Parameter反復・値復元・結果Mapの実装は変更しない。初期化より前にcallbackとして必要なclearSketchSolveStateはhoisted入口を保つ。
+
+app.jsは2,135→2,130行（5行減）、非空白1,679行、root直下471→465文・関数119→111個、test hooks351行。TEMP cad-solve-operation-bindings-proof.cjsで8 bindingのowner／method一致と全利用が初期化後であること、元のrest引数転送、frozen API／receiverとargumentsへの非依存、他のapp全statementおよびraw owner二module不変、root未使用binding 0を確認した。低影響の接続整理のため新しい模倣testは追加せず、既存の関連単体16件・全単体2,007件・構文618ファイルが成功（exit 0）。正式なモジュール構成とimplementation-mapを更新した。
+
+関連E2E194件が全成功（13.0分、exit 0、runner13022）。既存UI、Block、Sketch投影、Parameter dialog、拘束drag回帰群、phase0保存互換性／描画比較を実行した。Fillet・Offset chain・航空機形状の複数位置／方向／速度の反復dragと実Pointer／Undoを含む。TEMP cad-solve-operation-bindings-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server33592停止、appとraw owner二つのhash不変を確認した。今回は関連194件であり、最新コード全体のE2Eとは扱わない。UI・求解規則・保存形式・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用17%／残量83%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。bootstrap-boundary-auditへ同じsourceの構成再集計を追記した。構築150文840非空白行、hooks351行、単一call関数105個129行で、hooksと短い委譲を全て除く仮定でも1,199非空白行が残る。次は実機能の共有ownerと生成段階を優先して監査し、小さな転送関数整理の反復だけで200〜500行に届くとは見積もらない。巨大contextやsetterへの移動で達成扱いにしない。
 
 ### 最新：寸法ラベルと描画を同じScene依存から生成（2026-10-29、検証完了）
 
