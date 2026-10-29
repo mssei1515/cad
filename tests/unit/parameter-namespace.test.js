@@ -313,3 +313,33 @@ test('nonfinite evaluator output uses the current language without committing va
   language = 'en'; assert.throws(() => api.validateNewDimensionParameter(draft, ns), error => error.message === 'Value could not be evaluated');
   assert.equal(JSON.stringify(ns), before); assert.equal(JSON.stringify(draft), draftBefore);
 });
+
+test("editing draft evaluation keeps annotation-backed display values separate from dimension replacement definitions", () => {
+  const driving = Object.assign(dimension(), { parameterName: "d1", expression: "12" });
+  const annotation = { parameterEnabled: true, parameterName: "note", expression: '"d1" / 2', text: "unchanged" };
+  const scope = namespace([driving]); scope.annotations = [annotation];
+  const api = create(() => scope), display = { annotationOwner: annotation, parameterName: "note" };
+  assert.equal(api.evaluateEditingExpressionDraft(display, '"d1" + 3'), 15);
+  assert.equal(api.evaluateDimensionExpressionDraft(display, '"d1" + 3'), 6);
+  assert.equal(api.evaluateEditingExpressionDraft(driving, "20"), 20);
+  assert.throws(() => api.evaluateEditingExpressionDraft(driving, '"d1"'), error => error.code === "CYCLE");
+  assert.equal(api.evaluateEditingExpressionDraft(null, "-30", scope, { signedAngle: true }), -30);
+  assert.throws(() => api.evaluateEditingExpressionDraft(display, "-30", scope), /Dimension value is out of range/);
+  assert.equal(driving.target, 12); assert.equal(driving.expression, "12");
+  assert.equal(annotation.expression, '"d1" / 2'); assert.equal(annotation.text, "unchanged");
+});
+
+test("editing draft evaluation selects annotation ownership before resolving the current namespace and preserves the original errors", () => {
+  const events = [], scope = namespace([]);
+  const api = create(() => { events.push("scope"); return scope; });
+  const display = { get annotationOwner() { events.push("owner"); return {}; } };
+  assert.deepEqual(events, []);
+  assert.equal(api.evaluateEditingExpressionDraft(display, "2"), 2);
+  assert.deepEqual(events.splice(0), ["owner", "scope"]);
+  const explicit = namespace([]); explicit.parameters = [{ name: "width", expression: "7" }];
+  assert.equal(api.evaluateEditingExpressionDraft(display, '"width"', explicit), 7);
+  assert.deepEqual(events.splice(0), ["owner"]);
+  const marker = new Error("annotation ownership");
+  assert.throws(() => api.evaluateEditingExpressionDraft({ get annotationOwner() { throw marker; } }, "2"), error => error === marker);
+  assert.deepEqual(events, []);
+});

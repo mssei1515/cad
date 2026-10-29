@@ -6,6 +6,20 @@
 
 ## 現在の再開地点（2026-10-29）
 
+### 最新：注記Parameter入力の評価対象と全Sketch安定化を既存Parameter ownerへ集約（2026-10-29、検証完了）
+
+基準develop／origin/developは2024666。本単位はcodex/annotation-parameter-inputで実施した。appに残っていたannotationOwner付き表示用寸法の評価対象選別をParameterNamespace.evaluateEditingExpressionDraftへ移し、従来名の評価portへ接続する。実寸法は元のconstraint、注記ownerを持つ表示値はnullを既存evaluateDimensionExpressionDraftへ渡す。既存の直接評価API・式エンジン・数値範囲は変更しない。また注記Parameter editorの全Sketch安定化callbackを、既存ParameterApplication.createEditingSupport.stabilizeDocumentへ接続した。共有するのは同じactive Sketchと編集中scopeの非Root全Sketchの安定化だけであり、注記のcheckpoint／復元／履歴はAnnotationParameterCommandに残す。
+
+app.jsは2,197→2,194行（3行減）。TEMP cad-annotation-parameter-input-proof.cjsで評価adapterの本体を識別子の対応付けだけで比較し、既存namespace内26関数、ParameterApplication module、安定化の式の不変を確認した。root未使用binding 0。新しいmutable state・module・global依存・script順変更は加えず、入力ごとの意味判断と重複した安定化式を既存ownerへ配置した。
+
+parameter-namespace.test.jsへ二つの境界試験を追加。注記表示値と実寸法の評価の違い、既存直接API、循環検出、signedAngle optionと明示namespace、所有者判定→現在namespace取得の順、所有者getterの元の例外、未確定式／寸法値／注記本文の不変を確認した。関連単体43件・全単体1,987件・構文618ファイルが成功（exit 0）。仕様のモジュール構成とimplementation-mapへ責務を記録した。
+
+関連E2E332件が全成功（4.8分、exit 0、runner52389）。Parameter dialog、既存UI、注記／anchor、Block、phase0保存互換性／描画比較、自由テキスト式／drag、Sketch権限、ボルト径、free Instance、複数寸法／Slot寸法、派生patternを実行した。TEMP cad-annotation-parameter-input-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server28880停止と製品source二つのhash不変を確認した。今回は関連332件であり、前回の全体587件成功を現在の全体結果とは扱わない。既存期待値・UI操作・保存形式・性能閾値／timeoutは変更していない。
+
+PNGの後段参照も調査したが、現状はPending取消・ファイル／mode制御・Canvas frame／入力・panelが別段階で接続されている。参照だけを移すhostやproviderを加える案は採用せず、今回の製品コードは変更していない。将来はcommandの生成・実行・取消を既存PNG／Canvas ownerの責務と照合してから選ぶ。残るroot参照三つを単なるsetterで隠さない。
+
+最新appは2,194行、非空白1,744行、root直下488文・関数142個、条件付きtest hooks362行、可変参照三つ。週枠使用5%／残量95%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を保持する。次も通常機能の生成／更新／終了と同じscopeの依存を監査し、既存ownerを包み直すだけの変更や空白圧縮では数百行の達成としない。
+
 ### 最新：command panelの生成・Canvas更新と入力readerをPresentationへ接続（2026-10-29、検証完了）
 
 基準develop／origin/developは39d1398。本単位はcodex/command-panel-presentationで実施した。PresentationFeature.createCommandPanelsが既存CommandPanel.createFeatureを元の後段で生成し、完成したderivedPanel／commandPanelを保持する。CanvasRefreshへの既定readerと、入力bindingのreadCommandPanelを同じ所有者へ接続し、appにあった二つの可変参照とCanvas更新用の重複readerを除いた。モデルやcommandのdraftをPresentationへ移さず、汎用setterや状態を隠すだけのcontextは追加しない。CommandPanel／CanvasRefresh本体、panel内のroutingと各commandの確定・取消は変更していない。
