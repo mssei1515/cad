@@ -194,7 +194,7 @@
   const pointUsage = geometryReadServices.createPointUsage({
     constraintReferencesPoint, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
   });
-  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint } = pointUsage;
+  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isEndpointPoint, isExplicitPoint } = pointUsage;
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
@@ -220,11 +220,8 @@
     isReadOnlyDimension, measuredDimensionValue, angleDegrees, dimensionDisplayState, constraintSketchId,
     formatDimensionLabel, formatMeasuredDimensionLabel,
   });
-  const { hitAnnotationTarget, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
-    isReferenceSourceSketchId,
-    selectedGeometryItems, elementSketchId, activeSketchId, resolveGeometryRef,
-    viewportScale: () => viewport.scale, isVisibleSketchElement, isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint,
-    geometry: { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines },
+  const { hitAnnotationTarget, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationFeature.createAnchorQuery({
+    sketches: sketchContext, readServices: geometryReadServices, pointUsage, selection: canvasSelection, viewportScale: () => viewport.scale,
   });
   const referenceConstraintState = window.ReferenceConstraintState.create({
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,

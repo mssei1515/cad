@@ -1,6 +1,16 @@
 /* Connect annotation presentation, anchors and placement over the same operation owners. */
 (() => {
   "use strict";
+  function createAnchorQuery({ sketches, readServices, pointUsage, selection, viewportScale }) {
+    const { reads, geometryAppearance } = readServices;
+    const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, resolveGeometryRef } = reads;
+    const { isReferenceSourceSketchId, elementSketchId, activeSketchId } = sketches;
+    const { isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint } = pointUsage;
+    return window.AnnotationAnchorQuery.create({ selectedGeometryItems: selection.selectedGeometryItems,
+      isReferenceSourceSketchId, elementSketchId, activeSketchId, resolveGeometryRef, viewportScale,
+      isVisibleSketchElement: geometryAppearance.isVisibleSketchElement, isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint,
+      geometry: { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } });
+  }
   function create({ ctx, viewport, surface, canvasSelection, readHover, readExportFrame, canvasThemeColor,
     effectiveAnnotationStyle, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement, resizeEnabled,
     activeSketchId, allAnnotations, isVisibleValue, isVisibleSketchId, currentScope, readEditingScope,
@@ -81,5 +91,5 @@
     return Object.freeze({ renderer: display.renderer, layer: display.layer, spatial, anchors, dimensions, command,
       placementAnchor, materialize, dimensionScope, startAnchorConstraint, createEditor, createDrag });
   }
-  window.AnnotationFeature = Object.freeze({ create });
+  window.AnnotationFeature = Object.freeze({ create, createAnchorQuery });
 })();

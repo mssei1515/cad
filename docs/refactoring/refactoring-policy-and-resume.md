@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,142行、非空白1,692行、root直下473文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,139行、非空白1,689行、root直下473文、条件付きtest hooks351行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：注記の参照先照会をAnnotation機能から生成（2026-10-29、検証完了）
+
+基準develop／origin/developはeaca5c4。本単位はcodex/annotation-anchor-compositionで実施した。既存AnnotationFeature.createAnchorQueryへSketchContext・GeometryReadServices・PointUsage・Selection・遅延viewportScaleを渡し、実AnnotationAnchorQueryを生成する。Geometry解決・可視性・点利用とSketch関係は同じ実ownerから捕捉し、raw queryへ渡すgeometryは従来の五readerに限定する。生成は従来の早期位置を維持し、まだ存在しないViewport・現在scope・Selectionを照会しない。後段の描画／編集commandへ渡す実queryのmethodと、既存の個別factoryを維持する。
+
+app.jsは2,142→2,139行（3行減）、非空白1,689行、root直下473文・関数120個、test hooks351行。rootの照会生成port12→5。不要になったPointUsageの取込二つも除き、root未使用binding 0を確認した。TEMP cad-annotation-anchor-composition-proof.cjsでroot／localのreadonly ownerとmethodの参照元を辿り、十二portとgeometry五readerの対応、他のapp全体／初期化順と既存AnnotationFeature全体のAST不変、raw AnnotationAnchorQuery・GeometryReadServices・AppearanceQuery三moduleの不変を確認した。新しいAnnotation・Selection・cache・mutable contextを追加しない。
+
+annotation-anchor-query.test.jsへ実AnnotationAnchorQueryとGeometry型を使う二つの境界試験を追加した。生成時の照会なし、操作時の倍率／可視性／PointUsage・active Sketch／参照可能性とSelection、Geometry reader交換、geometryRefと参照同一性、anchorの再解決と元のstartへのfallback、照会例外時の配列と要素の無変更を確認した。既存の期待値は変更しない。関連単体20件・全単体2,005件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新した。
+
+関連E2E268件が全成功（4.3分、exit 0、runner22594）。既存UI、注記、Annotation anchors、leader外観、自由テキスト式／drag、Spline、phase0保存互換性／描画比較、Blockを実行した。TEMP cad-annotation-anchor-composition-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server11456停止とsource二つのhash不変を確認した。今回は関連268件であり、最新コード全体のE2Eとは扱わない。UI・照会順と計算・保存形式・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用15%／残量85%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。引き続き、機能をまたぐ同じownerの重複接続と、appに残す起動順の接続を区別して監査する。通常機能のstateをtestingへ移したり、巨大contextやsetterで初期化循環を隠したりしない。200〜500行の全体目標は未達であり、現在の小さな分離だけで完了扱いにしない。
 
 ### 最新：拘束対象とSelectionの接続をSelection機能へ集約（2026-10-29、検証完了）
 
