@@ -222,18 +222,12 @@
     currentScope: workspace.current, constraintIsOperational,
   });
   const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
-  const sketchProjectionFeature = window.SketchProjectionFeature.create({
-    currentScope: () => editingScopeBinding.current, queries: sketchProjectionQueries, activeSketchId, geometryRefForItem, geometryRefsEqual,
-    constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem, elementSketchId,
-    isReferenceSourceSketchId, isVisibleSketchElement, operandElement: operand => operandElement(operand), guardSketchEdit,
-    readProjectionRectangle: (...args) => rectangleSelectionQuery.readProjection(...args),
-    geometry: { points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
-      arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches },
-    selectedGeometryItems, cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    clearSelection, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode, clearSnap: () => clearSnap(),
-    updateToolbar, setHint, applicationText, updateUI, draw, normalizeGeometryInstance,
-    nextId: () => documentIds.allocate("sketchProjection"), canvasSelection, refreshConstraintAnalysis, recordHistory,
-    clearHover: () => canvasHover.update({ point: null, line: null, circle: null, arc: null, spline: null, sketchIdentity: null }),
+  const sketchProjectionFeature = window.SketchProjectionFeature.createForEditing({
+    currentScope: () => editingScopeBinding.current, queries: sketchProjectionQueries, sketches: sketchContext, readServices: geometryReadServices,
+    referenceState: referenceConstraintState, access: sketchEditAccess, selection: canvasSelection, lifecycle: drawOperationLifecycle, ids: documentIds, hover: canvasHover,
+    operandElement: operand => operandElement(operand), readProjectionRectangle: (...args) => rectangleSelectionQuery.readProjection(...args),
+    cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, clearSnap: () => clearSnap(),
+    updateToolbar, setHint, applicationText, updateUI, draw, normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory,
   });
   const { command: sketchProjectionCommand, sources: sketchProjectionSources,
     guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
