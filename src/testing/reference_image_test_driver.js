@@ -1,6 +1,17 @@
 /* Reference-image browser observation, data import and Block fixtures through existing owners. */
 (() => {
   "use strict";
+  function createBrowserSupport({ feature, blocks, canvasSelection, currentScope, readHistory, viewport,
+    fetch, File, resetModelState, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel }) {
+    const { Point, Line } = window.GeometrySolver;
+    const observation = createObservation({ canvasSelection, currentScope, serializeReferenceImage: window.ReferenceImageData.serializeReferenceImage,
+      isEditingBlock: () => Boolean(blocks.session.current), liveBlockEditorDefinition: blocks.session.live,
+      referenceImageInteraction: feature.interaction, readHistory, viewport });
+    const dataImport = createImport({ fetch, File, importReferenceImageFile: feature.input.importFile });
+    const blockFixture = createBlockFixture({ resetModelState, createEmptyBlockDefinition: blocks.editing.empty, Point, Line,
+      DEFAULT_SKETCH_ID: window.SketchHierarchy.DEFAULT_SKETCH_ID, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel });
+    return Object.freeze({ observation, dataImport, blockFixture });
+  }
   function createObservation({ canvasSelection, currentScope, serializeReferenceImage, isEditingBlock, liveBlockEditorDefinition, referenceImageInteraction, readHistory, viewport }) {
     function state() {
       return {
@@ -46,5 +57,5 @@
     }
     return Object.freeze({ open, complete });
   }
-  window.ReferenceImageTestDriver = Object.freeze({ createObservation, createImport, createBlockFixture });
+  window.ReferenceImageTestDriver = Object.freeze({ createBrowserSupport, createObservation, createImport, createBlockFixture });
 })();

@@ -3,7 +3,6 @@
   "use strict";
   const { formatDisplayNumber, formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
   const { escapeHtml } = window.HtmlText;
-  const { serializeReferenceImage } = window.ReferenceImageData;
   const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageWorldToLocal } = window.ReferenceImageGeometry;
   const { serializeHatch, hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
@@ -874,7 +873,7 @@
   });
 
   referenceImageInput.bindClipboard();
-  const { importFile: importReferenceImageFile, clipboard: imageClipboard } = referenceImageInput;
+  const { clipboard: imageClipboard } = referenceImageInput;
 
 
 
@@ -1838,13 +1837,10 @@
       displayFactor: window.Appearance.annotationDisplayFactor, formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle,
       dimensionTextOffset,
     });
-    const referenceImageTestObservation = window.ReferenceImageTestDriver.createObservation({
-      canvasSelection, currentScope: workspace.current, serializeReferenceImage, isEditingBlock: () => Boolean(blockEditor.current),
-      liveBlockEditorDefinition, referenceImageInteraction, readHistory: readTestHistory, viewport,
-    });
-    const referenceImageTestImport = window.ReferenceImageTestDriver.createImport({ fetch, File, importReferenceImageFile });
-    const referenceImageBlockFixture = window.ReferenceImageTestDriver.createBlockFixture({
-      resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel,
+    const { observation: referenceImageTestObservation, dataImport: referenceImageTestImport,
+      blockFixture: referenceImageBlockFixture } = window.ReferenceImageTestDriver.createBrowserSupport({
+      feature: referenceImageFeature, blocks: blockEditingFeature, canvasSelection, currentScope: workspace.current, readHistory: readTestHistory, viewport,
+      fetch, File, resetModelState, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel,
     });
     const derivedInstanceTestApi = window.DerivedInstanceTestDriver.createBrowserApi({
       resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, resetHistory,

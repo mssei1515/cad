@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,019行、非空白1,569行、root直下438文、条件付きtest hooks326行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,015行、非空白1,565行、root直下437文、条件付きtest hooks323行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：参照画像のブラウザ支援を実featureから組立て（2026-10-30、検証完了）
+
+基準develop／origin/developはc94f514。本単位はcodex/reference-image-browser-supportで実施した。既存ReferenceImageTestDriver.createBrowserSupportはReferenceImageFeatureの実interaction／input.importFileとBlockEditingFeatureの実session／editing.empty、Selection・scope・History・Viewportを使い、observation→data import→Block fixtureを生成する。serializer／Point／Line／既定Sketch IDは既存の静的namespaceを使い、open／complete操作は明示callbackのまま維持する。返却値は三つの旧factoryの実APIで、新しい画像・状態・採番／cache・可変contextは作らない。現在scopeと編集中Blockのlive画像を区別し、fetch／Blob／File／importの順序と例外、preserveDocumentによるreset抑止、完了後のserialize／cloneの順序を維持する。公開四API名、test query条件と生成位置、旧個別port APIの本体を変えない。
+
+app.jsは2,019→2,015行（4行減）、非空白1,569→1,565行、root438→437文／関数98個／test hooks326→323行／可変参照三つ。三生成・19項目を一生成・12項目へ整理し、test専用のserializer／importFile bindingをrootから除いた。TEMP cad-reference-image-browser-support-proof.cjsで全接続式、変更対象以外のappと旧三factoryのAST不変を確認。root未使用binding 0。hierarchy.cjsでは構築136文773非空白行、hooks323行、一文call関数92個116行、その他208文348行（文外5行）。hooksと短い委譲を全て除く仮定でも1,126非空白行が残るため、数百行目標未達・全体目標activeのまま。
+
+新規reference-image-test-driver.test.jsは実Selection／serializer・Point／Lineと限定したfeature portを使い、生成時のscope・画像・editor・DOM処理なし、呼出しごとのSelection／scope／live Block／drag・calibration・History・Viewport読取りを確認する。非同期fetch→Blob→File→receiverなしのimport、既定／指定した名前・mime typeと四段階の同じ例外を確認する。Block fixtureのreset抑止、実Geometry参照とS1所属、完了後のclone、完了例外後にserializeを呼ばないことも確認。関連単体6件・全単体2,048件・構文624fileが成功。新規単体をsyntax／unit runnerへ登録し、script順やE2E期待は変更しない。関連E2E129件が全成功（2.0分、exit 0、runner69566）。公開四APIの参照元を検索してreference-images／dxf-import／png-export／sketch-moveを確認し、unified-uiも含めて実行した。TEMP cad-reference-image-browser-support-{check,unit,e2e}.log、run.ps1、proof.cjs、hierarchy.cjs、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持。404製品／E2E入力fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。今回は全E2E未実行で、以前の全588件成功を今回の全体検証として流用しない。UI・保存形式・既存期待値・性能上限／timeout・workerは変更しない。
+
+開始時の週枠使用20%／残量80%で停止条件未到達。main／origin/mainは5800850を保持し、停止／releaseの最後に反映する。検証・差分確認・Commit／Pushとdevelop統合後、実fixture ownerの共有とnormal機能の生成階層を継続して確認する。test hookを一括移動して巨大contextで隠さず、既存の用途別scope providerと各操作の責任を保つ。
 
 ### 最新：Parameterのブラウザテスト支援を実モデルownerから組立て（2026-10-30、検証完了）
 
