@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Canvasメニューを既存の編集ownerから組立て（2026-10-30、検証完了）
+
+基準develop／origin/developはfcc6c37。本単位はcodex/context-editing-ownersで実施した。CanvasContextInteraction.createMenuの後段createEditingInteractionは、同じSelection／Selection scope・SketchContext／編集access・拘束選択照会・Block照会・寸法ドラッグ・メニュー取消・Clipboard・履歴・pointer・Viewport・投影の13所有者を明示して受け取る。24入口を生成時に各公開APIから捕捉し、既存createへ限定したcapabilityとして渡す。appの接続は58→47項目。所有者を操作時のservice locatorにせず、新しいSelection／menu／command stateを持たない。旧createInteraction／個別createも維持する。
+
+app.jsは2,084→2,082行（2行減）、非空白1,633→1,631行、root直下461→458文・関数111→108個、test hooks345行、可変参照三つ。メニュー専用のhasCancellableCanvasCommand／cancelCanvasCommandFromContextMenu／hasCopyableCanvasSelectionという三つの単純委譲を削除し、不要になったBlockエラー照会と寸法groupのroot参照三つも除いた。TEMP cad-context-editing-owners-proof.cjsで全58portを元の所有者・純粋な委譲・aliasへ解決して照合し、上記以外のapp／既存CanvasContextInteractionのAST不変を確認した。root未使用binding 0。hierarchy.{cjs,json}で構築147文808非空白行、hooks1文345行、一文call関数102個126行、その他208文347行（文外5行）を再集計した。行数より既存ownerの共有と生成順を優先し、数百行目標は未達のままとする。
+
+canvas-context-interaction.test.jsへ既存Menu／Target／Presentation／Entry／Actionsと実Selection／Hoverを使う二つの境界試験を追加した。早いMenu生成と後段生成では照会・操作をせず、明示的start後だけlistenerが動くこと、同じ選択・hover snapshotの復元、現在拘束への候補振分けと同じtarget／pointer、取消可能時の候補query省略、元の取消・編集guard・現在寸法groupの整列／通知／履歴順、生成後のowner method置換を読み直さないこと、dispose時listener解除を確認した。既存六テストの期待値は変更しない。関連単体8件・全単体2,025件が成功（exit 0）。正式モジュール構成とimplementation-mapを更新した。
+
+関連E2E159件が最終コードで全成功（2.3分、exit 0、runner93861）。blocks／command-panel／sketch-permissions／selection-zoom-shadow／unified-uiを実行し、Canvas context menuの共通／対象別操作、重複候補preview／選択、Arc端点の拘束operand、取消とProperties・Drawing Order、Block／Sketch権限、Selection表示／ズームと通常UIを確認した。初回159件成功後に不要参照三つを整理し、最終構文618ファイル・同じ関連159件を確認し直した。実行中の製品／E2E入力は変更しない。TEMP cad-context-editing-owners-{focused,check,unit,e2e}.log、proof.cjs、hierarchy.{cjs,json}とcad-context-editing-owners-final-{check,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保存。最終製品／E2E入力402fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。この単位で全E2Eは未実行。直前Scene単位の全588件成功を今回の全体結果として流用しない。UI・保存形式・既存期待値・性能上限／timeoutは変更しない。
+
+週枠使用13%／残量87%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この単位をCommit／Pushしてdevelopへ統合する。Menuの取消方針はCanvasCommandCancellation、KeyboardのEscapeはKeyboardInputに維持し、統合しない。次は既存owner間の段階的な生成／接続を引き続き監査し、通常機能の組立てとtest API公開境界を別々に整理する。単に短い委譲や空白を消して目標達成とは扱わない。
+
 ### 最新：数式参照入力の組立てをParameterEditorへ集約（2026-10-30、検証完了）
 
 基準develop／origin/developはe3bd504。本単位はcodex/parameter-reference-inputで実施した。ParameterEditorの後段createReferenceInputは同じdocument／InputElement、draft、名前補完、識別子挿入、error／hintと言語設定を共有し、既存ExpressionInputControllerを元の位置で生成する。appからはTextAreaElement、Canvasの現在namespace、dimension input／pending、Canvas／座標変換／寸法hit／注記hitの8依存を明示する。Canvas namespaceは元の同期済みeditingScopeBinding.currentへのreaderを保持し、Parameterダイアログのdraftやworkspaceの値へ置換しない。ParameterNamespaceはfrozen APIで、同じensureDimensionParameter実関数を使用する。新file・global・session／listenerを追加しない。

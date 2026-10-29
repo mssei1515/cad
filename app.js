@@ -199,7 +199,7 @@
     updateStatusUI, updateConstraintButtons, syncDimensionInput: () => syncDimensionValueInput(),
     refreshSketchSelection: () => sketchTreeView.refreshSelection(),
   });
-  const { controller: canvasContextController, element: canvasContextMenu, createInteraction: createCanvasContextInteraction } = window.CanvasContextInteraction.createMenu({
+  const { controller: canvasContextController, element: canvasContextMenu, createEditingInteraction: createCanvasContextInteraction } = window.CanvasContextInteraction.createMenu({
     document, window, canvas, escapeHtml, applicationText, canvasHover, draw,
     readPresentation: () => canvasContextCandidatePresentation, readInteraction: () => canvasContextInteraction,
   });
@@ -299,7 +299,7 @@
   const { clone: cloneBlockDefinition, fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
-  const { blockDefinitionScopeError, blockDefinitionEditError, blockInstanceById } = blockEditingQueries;
+  const { blockDefinitionScopeError, blockInstanceById } = blockEditingQueries;
 
   const canvasRenderProbe = window.CanvasRenderProbe.create({
     ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
@@ -1489,7 +1489,7 @@
     endPointer: dragPointer.release,
     draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
   });
-  const { command: dimensionDrag, lineGroup: dimensionLineGroup, selectedLineGroup: selectedDimensionLineGroup } = dimensionDragFeature;
+  const { command: dimensionDrag } = dimensionDragFeature;
   const { begin: beginDimensionDrag } = dimensionDrag;
 
 
@@ -1535,10 +1535,7 @@
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
     applicationText, setHint, updateUI, draw,
   });
-  function hasCancellableCanvasCommand() { return canvasCommandCancellation.hasCancellable(); }
-  function cancelCanvasCommandFromContextMenu() { return canvasCommandCancellation.cancel(); }
 
-  function hasCopyableCanvasSelection() { return clipboardFeature.canOfferCopy(); }
 
   const { topmostOwner: topmostDrawingOrderOwner, state: drawingOrderCommandState, reorder: reorderSelectedDrawingObjects } = window.DrawingOrderCommand.create({
     currentScope: () => editingScopeBinding.current, canvasSelection, activeSketchId, selectionSketchId, ordinarySelectionMode,
@@ -1559,16 +1556,17 @@
 
 
   const canvasContextInteraction = createCanvasContextInteraction({
-    canvasSelection, sameArcEndpoint, clearSelection, arcEndpointPoint, selectedFixedBatchTargets, fixedBatchIsFullyFixed, findLineFixedConstraint,
-    findArcEndpointFixedConstraint, selectedGeometryItems, readMode: drawOperationLifecycle.readMode, sketchProjectionCommand,
-    canCreateInActiveSketch, visibleGeometryBounds, pendingCommandSession, constraintTargetSession, splineEditing, isReadOnlyDimension,
-    selectedDimensionLineGroup, blockDefinitionScopeError, blockDefinitionEditError, selectedConstructionTogglePrimitives, drawingOrderCommandState,
-    hasCopyableCanvasSelection, hasSelection, handleConstraintOperandClick, updateUI, isGeometryMode,
-    closeAppMenus: () => closeAppMenus(), canvasPoint, setLastPointer: pointerInteractionController.setLastPointer, hasCancellableCanvasCommand,
-    canvasContextCandidatesAt, guardSelectionEdit, guardSketchEdit, elementSketchId, selectionSketchId, activeSketchId,
-    commitSketchProjectionCommand, cancelCanvasCommandFromContextMenu, undoHistory, redoHistory, copySelectionToClipboard, imageClipboard,
+    selection: canvasSelection, selectionScope: selectionScopeQuery, sketches: sketchContext, access: sketchEditAccess,
+    constraintSelection: constraintSelectionQuery, blockQueries: blockEditingQueries, dimensions: dimensionDragFeature,
+    cancellation: canvasCommandCancellation, clipboard: clipboardFeature, history: historyController,
+    pointer: pointerInteractionController, viewport, projection: sketchProjectionCommand,
+    sameArcEndpoint, clearSelection, arcEndpointPoint, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    readMode: drawOperationLifecycle.readMode, visibleGeometryBounds, pendingCommandSession, constraintTargetSession, splineEditing, isReadOnlyDimension,
+    selectedConstructionTogglePrimitives, drawingOrderCommandState, handleConstraintOperandClick, updateUI, isGeometryMode,
+    closeAppMenus: () => closeAppMenus(), canvasContextCandidatesAt,
+    copySelectionToClipboard, imageClipboard,
     showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit,
-    setBlockInstanceRotationLocked, startDimensionEditInput, dimensionLineGroup, updateGeometrySelectionUI, recordHistory, setHint, sketchMoveCommand,
+    setBlockInstanceRotationLocked, startDimensionEditInput, updateGeometrySelectionUI, recordHistory, setHint, sketchMoveCommand,
     startHatchBoundaryRepair, reorderSelectedDrawingObjects, addSplineFitPointFromContext, deleteSplineFitPointFromContext, fitVisibleGeometryToViewport,
   });
   canvasContextController.start();

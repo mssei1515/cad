@@ -6,7 +6,7 @@ const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture({ withMenu = false } = {}) {
+function fixture({ withMenu = false, withEditingOwners = false } = {}) {
   const calls = [], selection = w.CanvasSelection.create(), hover = w.CanvasHover.create({ isEndpointPoint: point => point.kind === 'endpoint' });
   const state = { ready: false, candidates: [], pointer: { x: 10, y: 20 }, geometryMode: true, cancellable: false, mode: 'select', batch: null, allowed: true, group: null, opened: null };
   const constraintTargetSession = { command: null };
@@ -32,7 +32,7 @@ function fixture({ withMenu = false } = {}) {
     fixPointBtn: { click: notify('fix') }, dimensionLineGroup: { align: group => { calls.push(['align', group]); return true; } }, updateGeometrySelectionUI: () => calls.push('selection-ui'),
     recordHistory: notify('history'), setHint: notify('hint'), addSplineFitPointFromContext: notify('spline-add'), fitVisibleGeometryToViewport: () => true,
   };
-  let interaction, menuFeature, dom;
+  let interaction, menuFeature, dom, editingOwners;
   if (withMenu) {
     dom = menuSurfaces();
     menuFeature = w.CanvasContextInteraction.createMenu({
@@ -44,12 +44,30 @@ function fixture({ withMenu = false } = {}) {
         return { icon: '', type: target.kind, id: target.item.id, secondary: '' };
       }; },
     });
-    interaction = menuFeature.createInteraction(options);
+    if (withEditingOwners) {
+      editingOwners = { selection, selectionScope: { selectionSketchId: options.selectionSketchId },
+        sketches: { activeSketchId: options.activeSketchId, elementSketchId: options.elementSketchId },
+        access: { guardSketchEdit: options.guardSketchEdit, guardSelectionEdit: options.guardSelectionEdit, canCreateInActiveSketch: options.canCreateInActiveSketch },
+        constraintSelection: { fixedBatch: options.selectedFixedBatchTargets, fullyFixed: options.fixedBatchIsFullyFixed },
+        blockQueries: { blockDefinitionScopeError: options.blockDefinitionScopeError, blockDefinitionEditError: options.blockDefinitionEditError },
+        dimensions: { selectedLineGroup: options.selectedDimensionLineGroup, lineGroup: options.dimensionLineGroup },
+        cancellation: { hasCancellable: options.hasCancellableCanvasCommand, cancel: options.cancelCanvasCommandFromContextMenu },
+        clipboard: { canOfferCopy: options.hasCopyableCanvasSelection }, history: { undo: options.undoHistory, redo: options.redoHistory },
+        pointer: { setLastPointer: options.setLastPointer }, viewport: { canvasPoint: options.canvasPoint },
+        projection: { ...options.sketchProjectionCommand, commit: options.commitSketchProjectionCommand } };
+      const remaining = { ...options };
+      for (const key of ['canvasSelection','selectedGeometryItems','hasSelection','selectionSketchId','activeSketchId','elementSketchId',
+        'guardSketchEdit','guardSelectionEdit','canCreateInActiveSketch','selectedFixedBatchTargets','fixedBatchIsFullyFixed',
+        'blockDefinitionScopeError','blockDefinitionEditError','selectedDimensionLineGroup','dimensionLineGroup',
+        'hasCancellableCanvasCommand','cancelCanvasCommandFromContextMenu','hasCopyableCanvasSelection','undoHistory','redoHistory',
+        'setLastPointer','canvasPoint','sketchProjectionCommand','commitSketchProjectionCommand']) delete remaining[key];
+      interaction = menuFeature.createEditingInteraction({ ...remaining, ...editingOwners });
+    } else interaction = menuFeature.createInteraction(options);
   } else interaction = w.CanvasContextInteraction.create(options);
   assert.deepEqual(calls, []); state.ready = true;
   const event = { preventDefault: () => calls.push('prevent') };
   const point = id => Object.assign(new w.GeometrySolver.Point(id, 1, 2), { sketchId: 'S1' });
-  return { interaction, state, calls, selection, hover, constraintTargetSession, event, point, menuFeature, dom };
+  return { interaction, state, calls, selection, hover, constraintTargetSession, event, point, menuFeature, dom, editingOwners };
 }
 
 test('single-target entry preserves the selected set and computes current Fix items through the same selection', () => {
@@ -144,4 +162,32 @@ test('menu confirmation reads latest constraint command and forwards original ta
   const action = { disabled: false, dataset: { contextAction: 'undo' }, closest(selector) { return selector === '[data-context-action]' ? this : null; } };
   menu.fire('click', { target: action }); assert.equal(menu.hidden, true); assert.equal(f.calls.find(call => call[0] === 'undo').length, 1);
   controller.dispose();
+});
+
+test('editing-owner menu preserves shared selection, live command routing and preview restoration across its explicit lifecycle',()=>{
+ const f=fixture({withMenu:true,withEditingOwners:true}),{controller}=f.menuFeature,{canvas,menu,button}=f.dom;
+ const a=f.point('P1'),b=f.point('P2'),original={id:'L1'};f.selection.set('points',[a]);f.hover.update({line:original});
+ f.state.candidates=[{kind:'point',item:a},{kind:'point',item:b}];
+ canvas.fire('contextmenu',f.event);assert.equal(menu.hidden,true);assert.deepEqual(f.calls,[]);
+ controller.start();canvas.fire('contextmenu',f.event);assert.equal(menu.hidden,false);
+ menu.fire('pointerover',{target:button(1),relatedTarget:null});assert.equal(f.hover.current.point,b);assert.equal(f.selection.points[0],a);
+ controller.close();assert.equal(f.hover.current.line,original);assert.equal(f.selection.points[0],a);
+ canvas.fire('contextmenu',f.event);f.constraintTargetSession.command={type:'horizontal'};f.calls.length=0;
+ menu.fire('click',{target:button(1)});assert.equal(menu.hidden,true);assert.equal(f.selection.points[0],a);
+ const operand=f.calls.find(c=>c[0]==='operand');assert.equal(operand[1],f.state.pointer);assert.equal(operand[3].hitP,b);
+ controller.dispose();assert.equal(menu.count()+canvas.count()+f.dom.document.count()+f.dom.window.count(),0);
+});
+
+test('editing-owner menu uses original cancellation, guards, dimension group and history without live method replacement',()=>{
+ const f=fixture({withMenu:true,withEditingOwners:true}),target={kind:'dimension',item:{id:'D1',sketchId:'S1'}};
+ f.state.cancellable=true;f.state.mode='sketch-projection';f.interaction.open(f.event);
+ assert.equal(f.calls.some(c=>c[0]==='query'),false);
+ assert.deepEqual(Array.from(f.dom.menu.hidden?[]:f.dom.menu.innerHTML.match(/cancel-command/g)||[]),['cancel-command']);
+ f.calls.length=0;f.interaction.execute('cancel-command',null,f.state.pointer);assert.deepEqual(f.calls,[['cancel']]);
+ f.calls.length=0;f.state.allowed=false;f.interaction.execute('dimension-align',target,f.state.pointer);assert.deepEqual(f.calls,['guard-selection']);
+ f.calls.length=0;f.state.allowed=true;f.state.group={reference:{}};
+ f.interaction.execute('dimension-align',target,f.state.pointer);
+ assert.deepEqual(f.calls.slice(0,5),['guard-selection',['guard-sketch','S1'],['align',f.state.group],'selection-ui','draw']);assert.equal(f.calls[5][0],'history');
+ f.calls.length=0;f.editingOwners.history.undo=()=>{throw Error('replacement must not be read');};f.menuFeature.controller.close();
+ f.interaction.execute('undo',null,f.state.pointer);assert.equal(f.calls.at(-1)[0],'undo');
 });
