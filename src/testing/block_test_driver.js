@@ -439,5 +439,42 @@
     });
   }
 
-  window.BlockTestDriver = Object.freeze({ createObservationSupport, createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
+  // Compose Block browser fixtures from their existing live product owners.
+  function createBrowserSupport({ geometry, modelTypes, documentModel, currentScope, sketches, projections, reads, queries,
+    selection, editor, editorChain, placement, readMode, solver, canvas, viewport, worldToCanvasScreen,
+    resetModelState, pushModelConstraint, fitAllGeometryToViewport, updateUI, draw, commitBlockPlacement, solveSketchById,
+    recordHistory, serializeConstraint, createSketch, cancelBlockDefinitionEdit, completeBlockDefinitionEdit,
+    setBlockInstanceEnabledSketchIds, serializeModel, loadModelData, enterBlockDefinitionEdit, blockInstanceDisplayCenter,
+    buildDragSession, constraintTargetSession, canvasHover, blockSelectionGeometry, geometryRefForItem }) {
+    const { addPoint, addLine } = geometry;
+    const { HorizontalConstraint, VerticalConstraint, CoincidentConstraint, hypot2 } = modelTypes;
+    const { activeSketchId } = sketches;
+    const { blockProjectionBundle, invalidateBlockProjectionCache } = projections;
+    const { blockProjectionBundles, allGeometryLines } = reads;
+    const { blockInstanceById } = queries;
+    const readDefinitions = () => documentModel.blockDefinitions;
+    const creation = createCreationFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, VerticalConstraint,
+      canvasSelection: selection, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen });
+    const editing = createEditorSupport({ resetModelState, updateUI, draw, readDefinitions, currentScope, blockEditor: editor, blockEditorSessionChain: editorChain,
+      readMode, blockPlacementCommand: placement, commitBlockPlacement, blockProjectionBundle, HorizontalConstraint, VerticalConstraint,
+      pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, recordHistory, serializeConstraint, createSketch, activeSketchId, addLine, addPoint,
+      cancelBlockDefinitionEdit, completeBlockDefinitionEdit, setBlockInstanceEnabledSketchIds, serializeModel, loadModelData, allGeometryLines, enterBlockDefinitionEdit });
+    const observations = createObservationSupport({ blockInstanceById, currentScope, blockInstanceDisplayCenter,
+      readSolverVariables: () => solver.getVariables(), buildDragSession, blockProjectionBundle, worldToCanvasScreen, canvas,
+      constraintTargetSession, canvasHover, blockProjectionBundles, readDefinitions, canvasSelection: selection, readMode, serializeModel, viewport });
+    const rejection = createRejectionFixture({ resetModelState, addPoint, addLine, canvasSelection: selection, blockSelectionGeometry,
+      readDefinitionCount: () => documentModel.blockDefinitions.length, currentScope, activeSketchId, geometryRefForItem });
+    function createDimensionCases({ defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint, blockDefinitionById }) {
+      const dimension = createReadOnlyDimensionFixture({ currentScope, blockProjectionBundle, defaultDimensionForTarget,
+        readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint });
+      const external = createExternalConstraintFixture({ currentScope, blockDefinitionById, blockProjectionBundle, addPoint, CoincidentConstraint,
+        pushModelConstraint, solveSketchById, invalidateBlockProjectionCache, hypot2 });
+      return Object.freeze({ blockDefinitionUpdateCase: editing.blockDefinitionUpdateCase, blockReadOnlyDimensionCase: dimension.run,
+        blockExternalConstraintCase: external.run, ...editing.lifecycle, blockCreationRejectionCases: rejection.cases });
+    }
+    return Object.freeze({ resets: Object.freeze({ resetForBlockCreationUi: creation.reset, resetForEmptyBlockCreation: editing.resetForEmptyBlockCreation }),
+      observations, createDimensionCases });
+  }
+
+  window.BlockTestDriver = Object.freeze({ createBrowserSupport, createObservationSupport, createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
 })();
