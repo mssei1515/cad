@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,189行、非空白1,739行、root直下488文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,185行、非空白1,735行、root直下488文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：トリム生成を共有作図機能へ統合（2026-10-29、検証完了）
+
+基準develop／origin/developは9fa6827。本単位はcodex/trim-authoring-compositionで実施した。既存BasicDrawingTools.createAuthoringへcreateTrimを追加し、同じ現在scope・Geometry・SketchContext・PointUsage・最小長さ・倍率・preview・UI／履歴通知を実TrimFeatureへ接続する。appに残すのは参照照会、専用checkpoint、hit照会／編集・投影権限、Parameter安定化／許容誤差と分析更新の九依存。primitive作図用のcheckpointとトリム用Geometry checkpointは別のまま、生成位置は従来の後段を保持する。Trimのquery／編集／commandや既存作図の実装は変更せず、新session・mutable context・listenerは追加しない。
+
+app.jsは2,189→2,185行（4行減）、非空白1,735行。対象root引数27→9。TEMP cad-trim-authoring-composition-proof.cjsで全引数の対応、元のapp全体の他statementと構築位置、既存BasicDrawingTools全体のAST、raw Trim四moduleの不変を確認した。倍率は従来と同じviewport.scaleを操作時に読み、scopeも動的な同じWorkspace readerを使う。今回の小さな削減をもって数百行の目標達成とは扱わない。
+
+trim-feature.test.jsのfixtureに任意生成入口を加え、実TrimQuery／TrimEditing／TrimCommandとGeometry・ID・checkpointを使う二つの境界試験を追加した。他の作図constructorだけを非稼働にし、生成時のscope照会なし、倍率／scope交換への追従、拘束参照の引継ぎ、成功時のSelection／preview解除と履歴、失敗時の同じPoint・配列内容・ID復元と履歴なし、primitive用checkpointを誤用しないことを確認した。既存期待値は変更していない。関連単体28件・全単体1,995件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新した。
+
+関連E2E205件が全成功（2.9分、exit 0、runner69494）。既存UI、phase0保存互換性／描画比較、Sketch権限、Block、Hatch、円弧作図、中心線、Splineを実行した。加えてadversarial-authoring-performance全12件が成功（46.7秒、exit 0、runner94100）し、高密度図面のトリム／Fillet／Offsetを含む入力性能を確認した。合計217件は関連検証であり、最新コード全体のE2Eとは区別する。TEMP cad-trim-authoring-composition-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、performance-run.ps1、通常／performanceのe2e-receipt.jsonとlast-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。両receipt exitCode 0／listeners 0、両last-run passed／failedTests空、自己起動server13404／29820停止とsource二つのhash不変を確認した。UI・保存形式・性能上限／timeout・テスト期待値は変えていない。
+
+週枠使用9%／残量91%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。rootに残る実装の大半は一文委譲と構築・接続であり、最大の残る関数は362行のテストAPI組立てである。引き続き機能の起動段階と所有者の境界を監査し、API全体を巨大context付きで別fileへ移すだけの変更は行わない。残る三つのnullable参照の初期化順を維持する。
 
 ### 最新：Toolbar表示と入力の共有依存を同じ機能から接続（2026-10-29、検証完了）
 

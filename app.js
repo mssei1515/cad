@@ -1584,14 +1584,10 @@
 
 
 
-  const trimFeature = window.TrimFeature.create({
-    currentScope: workspace.current, geometry: geometryCreation, references: constraintReferences,
-    isActiveSketchElement, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
-    pushModelConstraint, elementSketchId, isPointUsedByPrimitive, isReferencePoint, viewportScale: () => viewport.scale,
-    preview: drawingPreview, checkpoint: editingCheckpoint,
-    hitSketchIdentityElement, guardSketchEdit, activeSketchId, setHint, draw, guardSketchProjectionShapeEdit, applicationText,
-    clearSelection, stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis, updateUI, recordHistory,
+  const trimFeature = authoringTools.createTrim({
+    references: constraintReferences, checkpoint: editingCheckpoint, hitSketchIdentityElement, guardSketchEdit, guardSketchProjectionShapeEdit,
+    stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis,
   });
 
   const { candidatesAt: canvasContextCandidatesAt } = sceneHitQueries.createContextQuery({
