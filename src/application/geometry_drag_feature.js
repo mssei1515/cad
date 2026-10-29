@@ -48,5 +48,38 @@
     return Object.freeze({ command, build: plan.build, prepare: editing.prepare, preview, finish, beginDerived, createBlockEntry,
       targetConstraintCount: dragSolver.targetConstraintCount });
   }
-  window.GeometryDragFeature = Object.freeze({ create });
+  // Connect the existing editing owners; drag state and numeric policy stay in create's components.
+  function createForEditing({ currentScope, solver, sketches, scopeQuery, solving, checkpoint, geometry, readServices,
+    viewport, pointer, profiler, acceptError, previewMaxModelError, minimumLength,
+    blockLocalGeometryBounds, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    projectionConstraintsForItems, projectionBlockedMessage, canEdit, canvasSelection,
+    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, applicationText, setHint, updateUI,
+    updateGeometrySelectionUI, draw, recordHistory, geometryInstanceSourceObjects, clearSelection, resolveDerivedDragSource }) {
+    const { activeSketchId, elementSketchId, isEditableSketchId } = sketches;
+    const { sketchSolveVariables, sketchSolveConstraints, localSolveContextFromSeeds } = scopeQuery;
+    const { solveSketchById, solveReferenceDependentSketches, clearSketchSolveState } = solving;
+    const { captureValues, restoreValues: restoreModelState } = checkpoint;
+    const { enforceMinimumLineLengths, normalizeArcSweeps } = geometry;
+    const { blockDefinitionById, blockInstanceEnabledSketchSet } = readServices.catalog;
+    const { invalidateBlockProjectionCache } = readServices.projections;
+    const { geometryInstanceSourcePoints } = readServices.instances;
+    const { arcEndpointPoint, arcEndpointDragValue } = window.GeometryKernel;
+    const { hypot2 } = window.GeometrySolver;
+    const { work: profileWork } = profiler;
+    return create({
+      solver, currentScope, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
+      viewScale: () => viewport.scale, arcEndpointPoint, acceptError, previewMaxModelError,
+      elementSketchId, isEditableSketchId, blockDefinitionById, blockLocalGeometryBounds, blockInstanceEnabledSketchSet,
+      blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+      arcEndpointDragValue, hypot2, minimumLength, contextFromSeeds: localSolveContextFromSeeds,
+      projectionConstraintsForItems, captureValues, enforceMinimumLineLengths, normalizeArcSweeps,
+      invalidateBlockProjectionCache, projectionBlockedMessage,
+      profileSolve: work => profiler.active ? profileWork("solve", work) : work(),
+      canEdit, beginPointer: pointer.markThenCapture, endPointer: pointer.release, canvasSelection, restoreModelState,
+      solveReferenceDependentSketches, clearSketchSolveState, stabilizeActiveParameterNamespace, refreshConstraintAnalysis,
+      applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+      geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
+    });
+  }
+  window.GeometryDragFeature = Object.freeze({ create, createForEditing });
 })();
