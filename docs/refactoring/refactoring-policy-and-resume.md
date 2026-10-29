@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,164行、非空白1,714行、root直下476文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,158行、非空白1,708行、root直下476文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：描画範囲を合わせる操作をCanvasDisplayへ統合（2026-10-29、検証完了）
+
+基準develop／origin/developは7abf6d1。本単位はcodex/canvas-drawing-fitで実施した。既存CanvasDisplay.createが返すcreateDrawingFitへDrawingBoundsとactive Sketch readerを接続し、Sketch／全図形／可視図形の範囲を同じViewportへ合わせる三つの実処理を集約した。境界の計算はDrawingBounds、倍率制限・中心配置はCanvasViewportのままで、旧三関数の本体と引数既定値をそのまま移した。appはDrawingBounds生成後に機能を生成し、早期CanvasNavigationへ渡す可視図形用の入口だけをhoisted委譲として残す。追加のmutable slot・setter・描画／履歴通知を作らない。
+
+app.jsは2,164→2,158行（6行減）、非空白1,708行、root直下476文、root関数124→122個。TEMP cad-canvas-drawing-fit-proof.cjsで三関数全体のAST不変、従来のCanvasDisplay処理と他のapp全statementの不変、Viewport／DrawingBounds／CanvasNavigation三moduleの不変、二つの直接bindingが初期化後にだけ使われることを確認した。新機能の生成では既存frozen APIのmethodを捕捉するだけで、境界・現在Sketch・Canvasサイズを照会しない。
+
+canvas-display.test.jsへ二つの境界試験を追加した。実Viewportで生成時の照会／変更なし、active Sketchと境界の操作時読取り、既定余白96と明示余白、全図形／可視図形の区別、空境界のfalseと無変更、倍率制限と中心座標、fit自体が描画／hintを行わないことを確認した。実CanvasNavigationから同じfitへ遅延接続し、二回目の中ボタン入力でだけfit→hint→drawとなること、照会例外ではViewportを変えず描画しないことも検証した。既存fixtureのfit callbackだけを任意差替え可能にし、期待値は変更しない。関連単体22件・全単体1,997件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新した。
+
+関連E2E194件が全成功（2.8分、exit 0、runner27486）。既存UI、phase0保存互換性／描画比較、Block、file safety、Canvas zoom入力、選択／zoom／shadow、非表示可視性、PNG出力を実行した。TEMP cad-canvas-drawing-fit-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server31876停止とsource二つのhash不変を確認した。今回は関連194件であり、最新コード全体のE2Eとは扱わない。UI・保存形式・可視性・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用10%／残量90%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。境界照会とヒット照会も監査したが、読取りserviceへ編集やViewport変更を持ち込まず、今回の表示範囲操作はCanvas機能の所有とした。次も共有する実ownerと生成段階を基準に構築・起動とtest API公開を整理する。三つのroot nullable参照と必要な遅延委譲を一括setterで隠さず、200〜500行の未達を小さな削減だけで完了扱いにしない。
 
 ### 最新：履歴操作を実コントローラーへ直接接続（2026-10-29、検証完了）
 
