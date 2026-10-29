@@ -276,6 +276,8 @@
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
   const { blockDefinitionScopeError, blockInstanceById } = blockEditingQueries;
 
+  const sketchSolveResultState = window.SketchSolving.createState();
+  const { hasError: sketchHasSolveError, clearSketchSolveState, setSketchSolveOk, setSketchSolveError } = sketchSolveResultState;
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
@@ -353,6 +355,7 @@
   const { DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR } = window.DimensionLayout;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
+  const resultIsAccepted = window.SketchSolving.createResultAcceptance(CONSTRAINT_ACCEPT_ERROR);
   const { candidates: constraintCandidates, operands: constraintOperandValues,
     fromSelection: constraintOperandsFromSelection, syncSelection: syncSelectionFromConstraintOperands } = selectionFeature.createConstraintOperands({
     targets: constraintTargetSession, pointer: pointerInteractionController, solver, acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -548,14 +551,14 @@
     currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, activeSketchId, elementSketchId,
     constraintSketchId, constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
     synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
-    resultIsAccepted, snapshotModelState, restoreModelState, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    resultIsAccepted, snapshotModelState, restoreModelState, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
     namespace: parameterNamespace, currentParameterNamespace, maxPasses: PARAMETER_STABILIZATION_MAX_PASSES,
     relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE, applicationText, profiler: interactionProfiler,
     readEditingScope: () => editingScopeBinding.current, activateEditingScope, nextHatchIndex: () => documentIds.peek("hatch"),
     drawableSketchIds: blockDefinitionDrawableSketchIds, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
   });
-  const { setSketchSolveOk, setSketchSolveError, sketchSolveState, solveSketchById,
-    solveReferenceDependentSketches, solveSketchAndDependents, solveConstraintComponentAndDependents } = sketchSolving;
+  const { solveSketchById, solveReferenceDependentSketches,
+    solveSketchAndDependents, solveConstraintComponentAndDependents } = sketchSolving;
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
   const filletCommand = authoringTools.createFillet({
     defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
@@ -726,15 +729,8 @@
 
 
 
-  function resultIsAccepted(result) {
-    return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
-  }
 
-  function clearSketchSolveState(...args) { return sketchSolving.clearSketchSolveState(...args); }
 
-  function sketchHasSolveError(sketchId) {
-    return sketchSolveState(sketchId)?.status === "error";
-  }
 
 
 

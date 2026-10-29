@@ -5,7 +5,7 @@ const test = require('node:test');
 const sandbox = { window: { GeometrySolver: { vectorNorm: values => Math.hypot(...values) } } };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync('src/solver/sketch_solving.js', 'utf8'), sandbox);
-function fixture() {
+function fixture(sharedState) {
   const events = [], state = { scope: { constraints: [] }, active: 'A', order: ['A', 'B', 'C', 'D'], bundles: [],
     results: [], residual: 0, variables: [{ prop: 'x' }, { prop: 'y' }], local: { local: true } };
   const scopeQuery = {
@@ -25,7 +25,7 @@ function fixture() {
     refreshReferenceConstraintValidity: () => events.push(['validity']), normalizeArcSweeps: () => events.push(['normalize']),
     resultIsAccepted: result => Number.isFinite(result?.errorNorm) && result.errorNorm <= 0.01,
     restoreModelState: snapshot => events.push(['restore', snapshot]),
-    profileDependencies: work => { events.push(['profile']); return work(); }, acceptError: 0.01 });
+    profileDependencies: work => { events.push(['profile']); return work(); }, acceptError: 0.01, state: sharedState });
   const edge = (source, destination, enabled = true) => ({ reference: true, referenceSketchId: source, sketchId: destination, enabled });
   return { service, state, events, edge };
 }
@@ -119,4 +119,37 @@ test('result state belongs to the service and clear APIs support deletion and mo
   a.service.clearAll(); assert.equal(a.service.sketchSolveState('B'), null);
   a.state.scope = { constraints: [a.edge('A', 'D')] };
   assert.deepEqual(Array.from(a.service.solveReferenceDependentSketches('A').results, r => r.sketchId), ['D']);
+});
+
+test('result acceptance retains finite inclusive tolerance, ignores success, and preserves getter reads and failures',()=>{
+ const accepts=sandbox.window.SketchSolving.createResultAcceptance(1e-4);
+ for(const value of [null,undefined,false,0,'',{},...['0',NaN,Infinity,-Infinity].map(errorNorm=>({errorNorm}))])assert.equal(accepts(value),false);
+ for(const errorNorm of [0,-1,1e-4])assert.equal(accepts({success:false,errorNorm}),true);
+ assert.equal(accepts({success:true,errorNorm:1e-4+Number.EPSILON}),false);
+ assert.equal(accepts({get success(){throw Error('success is not the acceptance policy');},errorNorm:0}),true);
+ let reads=0;assert.equal(accepts({get errorNorm(){return ++reads===1?0:1;}}),false);assert.equal(reads,2);
+ reads=0;assert.equal(accepts({get errorNorm(){reads++;return NaN;}}),false);assert.equal(reads,1);
+ const marker=new Error('error read failed');for(const failureRead of [1,2]){reads=0;assert.throws(()=>accepts({get errorNorm(){if(++reads===failureRead)throw marker;return 0;}}),error=>error===marker);assert.equal(reads,failureRead);}
+ assert.equal(sandbox.window.SketchSolving.createResultAcceptance(2)({errorNorm:1}),true);
+});
+
+test('result state retains original records and result identity while deletion and clear isolate owners',()=>{
+ const a=sandbox.window.SketchSolving.createState(),b=sandbox.window.SketchSolving.createState(),result={errorNorm:0.2,reason:'bad'},key={id:'A'};
+ assert(Object.isFrozen(a));assert.equal(a.sketchSolveState(key),null);assert.equal(a.hasError(key),false);
+ a.setSketchSolveError(key,result,'source');const record=a.sketchSolveState(key);
+ assert.equal(record.status,'error');assert.equal(record.sourceSketchId,'source');assert.equal(record.result,result);assert.equal(record.errorNorm,0.2);assert.equal(record.reason,'bad');assert.equal(a.hasError(key),true);
+ result.errorNorm=3;assert.equal(a.sketchSolveState(key),record);assert.equal(record.errorNorm,0.2);assert.equal(record.result.errorNorm,3);
+ assert.equal(a.sketchSolveState({id:'A'}),null);assert.equal(b.hasError(key),false);
+ a.setSketchSolveOk(key,result);assert.equal(a.hasError(key),false);assert.equal(a.sketchSolveState(key).sourceSketchId,key);assert.equal(a.sketchSolveState(key).result,result);
+ a.setSketchSolveError('B',{});assert.equal(a.sketchSolveState('B').errorNorm,Infinity);assert.equal(a.sketchSolveState('B').reason,'solve failed');
+ assert.equal(a.clearSketchSolveState(key),undefined);assert.equal(a.sketchSolveState(key),null);assert.equal(a.hasError('B'),true);
+ assert.equal(a.clearAll(),undefined);assert.equal(a.hasError('B'),false);assert.equal(b.sketchSolveState('B'),null);
+});
+
+test('injected result state is shared through solve, failure rollback and reset without changing default isolation',()=>{
+ const shared=sandbox.window.SketchSolving.createState(),f=fixture(shared),other=fixture();
+ const result={errorNorm:0};f.state.results=[result];f.service.solveSketchAndDependents('A');assert.equal(shared.sketchSolveState('A').result,result);assert.equal(other.service.sketchSolveState('A'),null);
+ const failed={errorNorm:1,reason:'failure'};f.state.results=[failed];assert.equal(f.service.solveSketchAndDependents('A').success,false);assert.equal(shared.hasError('A'),true);assert.equal(shared.sketchSolveState('A').result,failed);
+ f.state.results=[failed];const checkpoint={point:'original'};f.service.solveSketchAndDependents('A',checkpoint);assert.equal(shared.sketchSolveState('A'),null);assert(f.events.some(e=>e[0]==='restore'&&e[1]===checkpoint));
+ shared.setSketchSolveError('B',failed);assert.equal(f.service.sketchSolveState('B'),shared.sketchSolveState('B'));f.service.clearAll();assert.equal(shared.hasError('B'),false);
 });

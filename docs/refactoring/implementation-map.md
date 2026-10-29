@@ -58,7 +58,7 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 - `src/constraints/reference_constraint_state.js`: 参照拘束の範囲／循環判定、操作可否、非公開の参照エラー状態と読取りAPI。
 
-- `src/solver/sketch_solving.js`: Sketch／局所求解、依存順序に沿う伝播、失敗時の値復元と非公開の求解結果状態。通知・履歴は操作側。
+- `src/solver/sketch_solving.js`: Sketch／局所求解、依存順序に沿う伝播、失敗時の値復元と明示した共有ownerが持つ非公開の求解結果状態。createStateで同じMapを求解・削除・表示へ接続し、受理判定はcreateResultAcceptanceで同じ許容値を共有する。通知・履歴は操作側。
 
 - `src/solver/solve_scope_query.js`: 拘束連結成分と局所／Sketch全体の求解入力の照会。求解・変更・cacheの所有は行わない。
 
@@ -1603,6 +1603,8 @@ DimensionDisplay.createForSceneは、同じ寸法外観owner・SketchContextと�
 ### Sketch求解・Parameter安定化とアプリ更新の組立て
 
 SketchSolvingFeature（src/application/sketch_solving_feature.js）は、SketchSolving→ParameterStabilization→stored-definition stabilization→SolveRefreshCommandを元の順で生成するapplication層の組立てを担当する。返すsolving／parameters／storedDefinitions／refreshは各既存ownerの実APIであり、求解状態Map、モデル、Parameter名前空間、履歴やscope stackを新たに持たない。求解の通常currentScopeとParameterのcurrentParameterNamespace、一時Block定義評価のreadEditingScope／activateEditingScopeを区別した明示portとして接続する。
+
+SketchSolving.createStateは結果Mapを非公開で所有し、setSketchSolveOk／setSketchSolveError、sketchSolveState／hasError、単一clear／clearAllを公開する。appは最初の削除接続より前にこのownerを作り、SketchSolvingFeatureのsolveState portを経て実SketchSolvingへ同じownerを渡す。求解・削除・表示は同じMapを共有する。生成はMapの準備だけで、モデル・scope・UIを読まない。createへstateを渡さない従来の呼出しは独立ownerを生成し、既存APIを維持する。createResultAcceptanceは許容値を束縛した既存の判定を返し、resultの真偽、有限errorNorm、許容値以下という条件とgetter読取り順を維持する。success flagは受理条件へ追加しない。
 
 同じSketch求解APIをParameter安定化へ、同じstabilizeをstored-definition評価と求解後の更新commandへ渡す。値snapshot／復元、受理誤差・反復上限・収束許容差、結果同一性・失敗時復元・Hatch ID保持は既存ownerに残す。Profilerのactiveを実行時に読み、元のwork関数をreceiverなしでdependencies／parametersの二phaseへ使う。生成時には求解・名前空間評価・scope切替・通知を実行しない。求解後の解析→ヒント→UI→描画→成功かつ履歴復元中でない場合の記録順、例外時の途中状態とstored-definition評価のfinally復元も従来APIを使う。appの早期callbackが使うhoisted照会・solveAndRefresh入口は維持する。
 
