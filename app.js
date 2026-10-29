@@ -1321,13 +1321,13 @@
   });
   const { createSketch, activate: setActiveSketch, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
-  sketchMoveCommand = sketchEditing.createMove({
-    prepare: () => { cancelConstraintTargetCommand(""); cancelPendingCommand(""); exitDrawMode(); canvasHover.clear(); },
+  const { command: createdSketchMoveCommand, input: sketchMoveInputBinding } = sketchEditing.createMoveWithInput({
+    document, prepare: () => { cancelConstraintTargetCommand(""); cancelPendingCommand(""); exitDrawMode(); canvasHover.clear(); },
     readEditingScope: () => editingScopeBinding.current, hatches: hatchGeometryQuery, rebinding: constraintRebinding,
     analysis: constraintAnalysis, refreshReferenceConstraintValidity,
   });
-  // Destination mode keeps all editing input in the tree until commit or cancellation.
-  const sketchMoveInputBinding = window.SketchTreeController.createMoveInputBinding({ document, isMoving: () => sketchMoveCommand.active });
+  // Publish the command before enabling destination-only input.
+  sketchMoveCommand = createdSketchMoveCommand;
   sketchMoveInputBinding.bind();
   const hatchCommand = window.HatchCommand.create({
     currentScope: workspace.current, hatchGeometryQuery, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,

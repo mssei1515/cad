@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-29）
 
+### 最新：Sketch移動commandと移動中のTree入力を同じ機能から生成（2026-10-29、検証完了）
+
+基準develop／origin/developは1f99364。本単位はcodex/sketch-move-input-compositionで実施した。既存SketchEditingFeature.createMoveWithInputがcreateMoveで作った実際のcommandと、そのactive状態を読むSketchTreeController.createMoveInputBindingを組み合わせて返す。appは同じ位置でcommandを既存の後段参照へ公開してから入力をbindする。既存createMoveの単独利用と任意のrefresh差替えは残す。移動先選択のdraft／モデル編集／履歴は既存command、listenerは既存bindingが所有し、active値のコピーや新しいmutable stateを加えない。
+
+app.jsは2,190→2,190行（0行変化）。対象生成2→1、延べroot引数8→7。TEMP cad-sketch-move-input-composition-proof.cjsで既存の三factory、raw command／入力module、元の六move portとdocumentの不変、command公開後にbindする順序、root未使用binding 0を確認した。入力factoryは生成中にlistenerやscopeを読まない既存の形を保つ。中間のreadonly command参照は、既存nullable参照への公開をbind前に保つための接続であり、別のcommandやoperation stateではない。line削減ではなく、移動と専用入力の組合せを一つの所有者へ揃える単位とした。
+
+sketch-editing-feature.test.jsへ二つの境界試験を追加。実際の移動commandを使い、生成時の登録なし、六種eventの同じcapture登録、Tree内許容とTree外抑止、確定後の解除と同じPoint参照、scope交換での解除、同じhandlerのdispose、入力bind例外後もcommandが利用できることを確認した。既存fixtureのmove生成だけを任意差替え可能にし、既存期待値は変えていない。関連単体11件・全単体1,991件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapへ責務と初期化順を記録した。
+
+関連E2E237件が全成功（3.3分、exit 0、runner43591）。Sketch移動／編集／権限／Tree可視性／Tree削除／投影、Block、既存UI、phase0保存互換性／描画比較、command panelを実行した。TEMP cad-sketch-move-input-composition-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server17636停止とsource二つのhash不変を確認した。今回は関連237件であり、前回の全体587件成功を現在の全体結果とは扱わない。UI操作・保存形式・性能上限／timeout・既存期待値は変更していない。
+
+Sketchの早期scope接続は未生成menu／移動commandを許容する既存の順序を持つため、三つのroot nullable参照は維持した。これらをsetterで隠すのではなく、機能の生成・更新・終了と同じscopeの依存を引き続き監査する。週枠使用8%／残量92%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を保持する。数百行の達成を装う空白圧縮や単なるfactory一覧の移動は行わない。
+
 ### 最新：寸法操作とドラッグfixtureの静的モデル型を実行時portから分離（2026-10-29、検証完了）
 
 基準develop／origin/developは53e727c。本単位はcodex/test-model-type-dependenciesで実施した。テスト支援だけで使うconstructorをappの先頭のbindingへ持ち上げている箇所を監査し、まずDimensionTestDriver.createSupport().createInteractionとGeometryDragTestDriver.createResponsiveFixtureへ明示的なmodelTypesを導入した。appは既存GeometrySolver namespaceを渡し、driverのglobal参照を増やさない。必要な型を入口で一度だけ捕捉し、scope／Selection／solver／draw等は従来の実行時portのままにする。既存の個別constructor引数は優先して利用し、型供給元を省略する既存の部分的構築も維持する。型の供給元へモデルや操作stateを詰めない。
