@@ -74,6 +74,28 @@
         const fit = createDrawingFit({ bounds, activeSketchId });
         return Object.freeze({ geometry, overlay, bounds, fit });
       }
+      function createSceneForEditing({ currentScope, sketches, readServices, interaction, targets, pending, solveState, analysis,
+        readPanelSelection, instanceSources, projection, instances, operandElement, selectionHighlight, viewState,
+        isSidebarHighlightedElement, canvasThemeColor, applicationText, constructionAlpha, constructionExtensionScreenPx,
+        sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed, editingQueries, annotationBounds }) {
+        const commandTargets = window.GeometryPresentation.createCommandTargets({
+          readPanelSelection, readMode: interaction.lifecycle.readMode, instanceSourceCommand: instanceSources, sketchProjectionCommand: projection,
+          geometryInstanceCommand: instances, geometryRefsEqual: window.GeometryRef.equals, geometryRefForItem: window.GeometryObjects.geometryRefForItem,
+          readOperands: () => targets.operands, sameArcEndpoint, operandElement, readConstraintCommand: () => targets.command,
+          isActiveSketchElement: sketches.isActiveSketchElement, isReferenceSourceSketchId: sketches.isReferenceSourceSketchId,
+          elementSketchId: sketches.elementSketchId, readPending: () => pending.current,
+        });
+        const sketchStyle = window.GeometryPresentation.createSketchStyle({
+          sketchHasSolveError: solveState.hasError, elementSketchId: sketches.elementSketchId, sketchRelationOfElement: sketches.sketchRelationOfElement,
+          constraintStatusOf: analysis.statusOf, isVisibleSketchElement: readServices.geometryAppearance.isVisibleSketchElement, isActiveSketchElement: sketches.isActiveSketchElement,
+        });
+        const scene = createScene({ Point: window.GeometrySolver.Point, currentScope, sketches, readServices, pointUsage: interaction.pointUsage,
+          commandTargets, sketchStyle, canvasSelection: interaction.selection, canvasHover: interaction.hover, selectionHighlight, viewState,
+          isSidebarHighlightedElement, canvasThemeColor, applicationText, constructionAlpha, constructionExtensionScreenPx,
+          sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed, editingQueries, annotationBounds,
+          resolvedLoopBounds: window.HatchRegionEngine.resolvedLoopBounds, hatchAppearanceForDisplay: window.HatchData.hatchAppearanceForDisplay });
+        return Object.freeze({ ...scene, commandTargets, sketchStyle });
+      }
       function createWorkspaceRendering(options) {
         return createRendering({ ...options, canvas, ctx, viewport, surface, zoomControl,
           readExportFrame: () => exportRenderer.frame });
@@ -97,7 +119,7 @@
           withGeometryReadCache, findSnap, flushPointerMove, setHint, draw });
       }
       const dragPointer = window.CanvasInputBinding.createDragPointer({ canvas });
-      return Object.freeze({ surface, exportRenderer, layout, createScene, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
+      return Object.freeze({ surface, exportRenderer, layout, createScene, createSceneForEditing, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
     }
     return Object.freeze({ viewport, navigation, zoomControl, createDrawingFit, createWorkspace });
   }
