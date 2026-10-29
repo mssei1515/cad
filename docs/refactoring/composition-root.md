@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-29）
 
+### 最新：履歴操作を実コントローラーへ直接接続（2026-10-29、検証完了）
+
+基準develop／origin/developは7b48e07。本単位はcodex/history-operation-bindingsで実施した。HistoryController.createFeatureのcaptureDocumentとcontrollerのactive／resetBlock／resetDocument／undo／redoを生成直後かつ全consumerの前に捕捉し、六つのroot転送関数を除いた。同じ実closureを共有し、現在Block履歴の動的な選択、Documentを明示的に初期化する対象、label既定値initial、Undo／Redoの引数非依存、戻り値と例外・通知順は維持する。早期Block構築から渡すcreateBlockEditHistoryとrecordHistory、History生成後のToolbarへ通知するupdateHistoryButtonsは必要なhoisted委譲として残した。
+
+app.jsは2,178→2,164行（14行減）、非空白1,714行、root直下481→476文、root関数130→124個。TEMP cad-history-operation-bindings-proof.cjsで六bindingが不変で全参照が初期化後であること、引数と既定値の一致、実methodのreceiver／arguments非依存、他のapp全statementのASTとHistoryController moduleの不変を確認した。新たな履歴stack・復元flag・scope snapshotやglobalは追加しない。直接接続へ置換する単位であり、初期化順のために必要な委譲を一律に消さない。
+
+関連単体28件・全単体1,995件・構文618ファイルが成功（exit 0）。EditHistory、HistoryRestoration、PresentationFeatureの既存検証を実行した。単なる接続位置を固定する新テストや既存期待値の変更は加えていない。モジュール構成とimplementation-mapへ直接接続と残す早期委譲を記録した。
+
+関連E2E198件が全成功（3.4分、exit 0、runner2536）。既存UI、Block編集、phase0保存互換性／描画比較、file safety、Parameter dialog、Sketch編集／移動、adversarial-authoring-performanceを実行し、高密度図面のUndo／Redoも元の性能上限で成功した。TEMP cad-history-operation-bindings-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server7356停止とapp hash不変を確認した。今回の関連198件は最新コード全体のE2Eとは区別する。UI・保存形式・性能上限／timeout・テスト期待値は変更していない。
+
+週枠使用10%／残量90%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。次も残る機能の構築・起動とtest API公開の境界を監査する。直接接続可能なquery／commandでも初期化順・receiver・引数加工を個別に検証し、stateful ownerを別のmutable contextで隠さない。数百行の全体目標は未達であり、転送整理だけで達成したとは扱わない。
+
 ### 最新：外観・描画照会を実ownerから直接接続（2026-10-29、検証完了）
 
 基準develop／origin/developは7e13172。本単位はcodex/appearance-query-bindingsで実施した。GeometryReadServicesのGeometry／Dimension／Annotation外観とGeometryPresentationのcommand targets／Sketch styleが返す十二の実照会を、生成後かつ最初のconsumerより前に捕捉し、同名のroot転送関数を削除した。対象methodはfrozen ownerのclosureでreceiver／arguments objectに依存しない。生成時には照会を実行せず、現在scope・表示設定・cache・mode・Panel選択を操作時に読む構造は維持する。初期化順のために残る遅延委譲へ一律に適用しない。

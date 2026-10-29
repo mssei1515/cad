@@ -359,7 +359,9 @@
     constructionCommand, invalidateBlockProjectionCache, clearInteractionForSketchChange, solveAndRefresh, setHint,
     changed: updateHistoryButtons, log, limit: HISTORY_LIMIT, interactionProfiler,
   });
-  const { documentHistory, controller: historyController } = historyFeature;
+  const { documentHistory, controller: historyController, captureDocument: historySnapshot } = historyFeature;
+  const { active: activeEditHistory, resetBlock: resetBlockEditorHistory, resetDocument: resetHistory,
+    undo: undoHistory, redo: redoHistory } = historyController;
   const toolbarPresentation = presentation.createToolbar({
     lifecycle: drawOperationLifecycle, pending: pendingCommandSession, constraints: constraintTargetSession, constructionCommand,
     readSplineEditing: () => Boolean(splineEditing.current), readHistory: activeEditHistory,
@@ -906,33 +908,17 @@
 
   function serializeModel() { return documentWriter.serialize(); }
 
-  function historySnapshot() { return historyFeature.captureDocument(); }
 
-  function resetBlockEditorHistory() {
-    return historyController.resetBlock();
-  }
 
   function createBlockEditHistory() { return historyFeature.createBlockHistory(); }
 
-  function activeEditHistory() {
-    return historyController.active();
-  }
 
   function updateHistoryButtons() { return toolbarPresentation.updateHistory(); }
 
-  function resetHistory(label = "initial") {
-    return historyController.resetDocument(label);
-  }
 
   function recordHistory(label = "変更") { return historyFeature.record(label); }
 
-  function undoHistory() {
-    return historyController.undo();
-  }
 
-  function redoHistory() {
-    return historyController.redo();
-  }
 
   function deserializeConstraint(...args) {
     return constraintCodecs.deserialize(...args);

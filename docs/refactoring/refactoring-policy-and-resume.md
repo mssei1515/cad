@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,178行、非空白1,728行、root直下481文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,164行、非空白1,714行、root直下476文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：履歴操作を実コントローラーへ直接接続（2026-10-29、検証完了）
+
+基準develop／origin/developは7b48e07。本単位はcodex/history-operation-bindingsで実施した。HistoryController.createFeatureのcaptureDocumentとcontrollerのactive／resetBlock／resetDocument／undo／redoを生成直後かつ全consumerの前に捕捉し、六つのroot転送関数を除いた。同じ実closureを共有し、現在Block履歴の動的な選択、Documentを明示的に初期化する対象、label既定値initial、Undo／Redoの引数非依存、戻り値と例外・通知順は維持する。早期Block構築から渡すcreateBlockEditHistoryとrecordHistory、History生成後のToolbarへ通知するupdateHistoryButtonsは必要なhoisted委譲として残した。
+
+app.jsは2,178→2,164行（14行減）、非空白1,714行、root直下481→476文、root関数130→124個。TEMP cad-history-operation-bindings-proof.cjsで六bindingが不変で全参照が初期化後であること、引数と既定値の一致、実methodのreceiver／arguments非依存、他のapp全statementのASTとHistoryController moduleの不変を確認した。新たな履歴stack・復元flag・scope snapshotやglobalは追加しない。直接接続へ置換する単位であり、初期化順のために必要な委譲を一律に消さない。
+
+関連単体28件・全単体1,995件・構文618ファイルが成功（exit 0）。EditHistory、HistoryRestoration、PresentationFeatureの既存検証を実行した。単なる接続位置を固定する新テストや既存期待値の変更は加えていない。モジュール構成とimplementation-mapへ直接接続と残す早期委譲を記録した。
+
+関連E2E198件が全成功（3.4分、exit 0、runner2536）。既存UI、Block編集、phase0保存互換性／描画比較、file safety、Parameter dialog、Sketch編集／移動、adversarial-authoring-performanceを実行し、高密度図面のUndo／Redoも元の性能上限で成功した。TEMP cad-history-operation-bindings-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server7356停止とapp hash不変を確認した。今回の関連198件は最新コード全体のE2Eとは区別する。UI・保存形式・性能上限／timeout・テスト期待値は変更していない。
+
+週枠使用10%／残量90%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。次も残る機能の構築・起動とtest API公開の境界を監査する。直接接続可能なquery／commandでも初期化順・receiver・引数加工を個別に検証し、stateful ownerを別のmutable contextで隠さない。数百行の全体目標は未達であり、転送整理だけで達成したとは扱わない。
 
 ### 最新：外観・描画照会を実ownerから直接接続（2026-10-29、検証完了）
 
