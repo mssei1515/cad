@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,073行、非空白1,622行、root直下458文、条件付きtest hooks336行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,067行、非空白1,616行、root直下455文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：注記テスト支援を同じ機能・表示ownerから組立て（2026-10-30、検証完了）
+
+基準develop／origin/developは7030324。本単位はcodex/annotation-test-compositionで実施した。AnnotationTestDriver.createForFeatureは同じAnnotationFeatureのrenderer／dimensions／command、Geometry・外観／Annotation read・dimension display・Viewport・Selection／dragと限定照会を共有し、従来のcreateSupportへ接続する。appの接続は35→17項目。現在scopeと選択に応じたhitAnnotationElementを明示し、activeOnlyの判断を生spatial queryへ置換しない。寸法layoutはdimensionDisplay、drag観測はinspectのreceiverを維持する。既存の固定namespaceから定数・codec／formatを参照し、動的scopeやモデル値を複製しない。通常AnnotationFeatureは変更しない。
+
+app.jsは2,073→2,067行（6行減）、非空白1,622→1,616行、root直下458→455文・関数108個、test hooks336→333行、可変参照三つ。rootで不要になったserializeAnnotation・ANNOTATION_SCREEN_PX_PER_MM・clampZoom・annotationTextWorldHeight・pushAnnotationの取込／定義を除いた。TEMP cad-annotation-test-composition-proof.cjsで全35portと型／renderer／外観・Viewport・readerの由来、操作時callbackとreceiverを照合し、他のapp／全test API公開箇所と既存AnnotationTestDriver全体のAST不変を確認した。root未使用binding 0。hierarchy.{cjs,json}では構築147文808非空白行、hooks1文333行、一文call関数102個126行、その他205文344行（文外5行）。数百行目標は未達でtest guardも維持する。
+
+annotation-test-support.test.jsへ実Renderer・Viewport・Selection・Geometry型・codec／外観を使う二つの境界試験を追加した。生成時のscope／描画／hit照会なし、既存七公開名とgroup、同じ作成Geometryと選択・style templateの維持、現在注記／scope・表示倍率と画面座標、現在dragの同一参照、明示hit callback、寸法layoutのreceiverと実DistanceConstraint、同じhit／layout例外の伝播と無変更を確認した。既存二テストの期待値は変更しない。新規fixtureのViewport namespaceとownership観測keyを現行APIに合わせて修正した。関連単体12件・全単体2,029件・最終構文618ファイルが成功（exit 0）。正式モジュール構成とimplementation-mapを更新した。
+
+関連E2E190件が全成功（3.1分、exit 0、runner47434）。unified-annotations／annotation-display-size／annotation-anchors／unified-ui／file-safetyを実行し、注記の表示倍率・引出線・拘束／移動／ドラッグ・式表示とBlock名前空間、保存再読込と通常UIを確認した。TEMP cad-annotation-test-composition-{focused,check,unit,e2e}.log、proof.cjs、hierarchy.{cjs,json}、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保存。製品／E2E入力402fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。この単位で全E2Eは未実行。直前Scene単位の全588件成功を今回の全体結果として流用しない。UI・保存形式・既存期待値・性能上限／timeoutは変更しない。
+
+週枠使用14%／残量86%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この単位をCommit／Pushしてdevelopへ統合する。今後も既存ownerを用いる組立て階層を進め、通常機能の状態をtestingへ移さない。通常Annotationと拘束・参照注記の異なるscope、操作時readerとhit方針、取消・復元順を維持する。
 
 ### 最新：Blockのブラウザテスト支援を既存driverへ集約（2026-10-30、検証完了）
 

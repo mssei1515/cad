@@ -7,7 +7,6 @@
   const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageWorldToLocal } = window.ReferenceImageGeometry;
   const { serializeHatch, hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
-  const { serializeAnnotation } = window.AnnotationData;
 
   const {
     CSS_PX_PER_MM, DEFAULT_APPEARANCE,
@@ -376,7 +375,6 @@
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CENTERLINE_PARALLEL_TOLERANCE = 1e-5;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
-  const ANNOTATION_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const { DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR } = window.DimensionLayout;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
@@ -414,7 +412,7 @@
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
     draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
-  const { clampZoom, screenToWorld, worldToCanvasScreen, canvasPoint, visibleWorldBounds } = viewport;
+  const { screenToWorld, worldToCanvasScreen, canvasPoint, visibleWorldBounds } = viewport;
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
@@ -497,9 +495,8 @@
   const { layer: annotationLayer, anchors: annotationAnchorConstraints, dimensions: annotationDimensions, command: annotationCommand,
     materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope, startAnchorConstraint: startAnnotationAnchorConstraint } = annotationFeature;
   const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
-  const { pushAnnotation } = annotationCommand;
   const referenceImageFeature = window.ReferenceImageFeature.create({
     canvas, ctx, viewport, document, window, withCanvasState, createImage: () => new Image(),
     readImages: () => editingScopeBinding.current.referenceImages, currentScope: workspace.current, canvasSelection, readHover: () => canvasHover.current,
@@ -1718,13 +1715,10 @@
       feature: geometryDragFeature, solver, currentScope: workspace.current, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
       arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
     });
-    const annotationTestSupport = window.AnnotationTestDriver.createSupport({
-      annotationDimensions, targetFromConstraint, dimensionLayout, effectiveDimensionAppearance, dimensionLabelForConstraint,
-      currentScope: workspace.current, viewport, clampZoom, effectiveAnnotationStyle, draw, annotationTextMetrics, annotationTextLayout,
-      annotationLeaderDisplayGeometry, annotationTextWorldHeight, screenPxPerMm: ANNOTATION_SCREEN_PX_PER_MM, annotationDisplayFactor: window.Appearance.annotationDisplayFactor, annotationLeaderAnchor,
-      displayText: window.AnnotationRenderer.displayText, formatDisplayNumber, serializeAnnotation, canvas, worldToCanvasScreen, allAnnotations, canvasSelection, allGeometryBounds,
-      resetModelState, addPoint, addLine, annotationLeaderTargetFromItem, pushAnnotation, defaultStyle: DEFAULT_ANNOTATION_STYLE, resizeCanvas,
-      screenToWorld, hitAnnotationElement, readDragState: () => annotationDrag.inspect()
+    const annotationTestSupport = window.AnnotationTestDriver.createForFeature({
+      feature: annotationFeature, geometry: geometryCreation, readServices: geometryReadServices, dimensionDisplay, dimensionLabelForConstraint,
+      currentScope: workspace.current, viewport, canvas, selection: canvasSelection, drag: annotationDrag, annotationLeaderAnchor,
+      annotationLeaderTargetFromItem, draw, allGeometryBounds, resetModelState, resizeCanvas, hitAnnotationElement,
     });
     const dimensionTestSupport = window.DimensionTestDriver.createSupport({
       resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope: workspace.current,
