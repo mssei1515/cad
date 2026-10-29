@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-29の最新単位ではapp.jsは2,190行、非空白1,740行、root直下488文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-29の最新単位ではapp.jsは2,189行、非空白1,739行、root直下488文、条件付きtest hooks362行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-29）
+
+### 最新：Toolbar表示と入力の共有依存を同じ機能から接続（2026-10-29、検証完了）
+
+基準develop／origin/developは8e415b6。本単位はcodex/toolbar-input-compositionで実施した。既存PresentationFeature.createToolbarからcreateEditingBinding／createDrawingBindingを返し、Toolbar表示と同じDocument・DrawOperationLifecycle・ConstructionCommand・Geometry mode判定・UI通知を既存ToolbarViewの実bindingへ接続する。appは専用操作だけを追加で渡し、編集入力／作図入力の生成とbindは元の別々の位置に残す。新しいsession・listener・可変contextは追加しない。低水準factoryと独立したdisposeも維持する。
+
+app.jsは2,190→2,189行（1行減）、非空白1,739行。対象の延べroot引数21→14。TEMP cad-toolbar-input-composition-proof.cjsで全引数の対応、既存Presentation処理とraw ToolbarView moduleの不変、他のapp全体のASTとbind順の不変を確認した。元の共有ownerの捕捉を再利用し、earlyな生成段階でDOM／操作stateを読まない。行数の削減自体は小さく、数百行へ進めるには残る機能の初期化段階とテストAPIの組立てを引き続き監査する必要がある。
+
+presentation-feature.test.jsへ実ToolbarView／Lifecycle sessionを使う二つの境界試験を追加した。入力生成時の登録なし、別々のbind時機と重複防止、クリックによる同じmodeの表示反映、native handler receiver、共有Construction command、独立したdispose、削除のGeometry mode短絡と成功時だけのUI→描画、失敗時の例外伝播を確認した。既存の期待値は変更していない。関連単体30件・全単体1,993件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新した。
+
+関連E2E232件が全成功（3.3分、exit 0、runner55946）。既存UI、Toolbar layout、phase0保存互換性／描画比較、注記、Sketch投影、Hatch、中心線、円弧作図、Block、Flyout、メニューを実行した。TEMP cad-toolbar-input-composition-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server29324停止とsource二つのhash不変を確認した。今回の関連232件を最新コードの全体E2Eとは扱わない。UI・保存形式・性能上限／timeoutは変更していない。
+
+週枠使用8%／残量92%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。残る三つのnullable参照は初期化順を保持しており、setterで循環を隠す変更はしない。次は機能単位の起動段階と実行時依存を監査し、既存ownerを包むだけの再分割や巨大contextへ集約する変更は避ける。
 
 ### 最新：Sketch移動commandと移動中のTree入力を同じ機能から生成（2026-10-29、検証完了）
 

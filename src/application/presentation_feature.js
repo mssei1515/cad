@@ -41,7 +41,17 @@
           readMode: lifecycle.readMode, readPendingType: () => pending.current?.type, readConstraintCommand: () => constraints.command });
         return Object.freeze({ view, status });
       }
-      return Object.freeze({ updateHistory: history.update, createControls });
+      function createEditingBinding({ undo, redo, toggleVisibility, deleteSelection, annotation }) {
+        return window.ToolbarView.createEditingBinding({ document, undo, redo, toggleVisibility,
+          isGeometryMode, deleteSelection, updateUI, draw, annotation });
+      }
+      function createDrawingBinding({ startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand,
+        startGeometryInstanceCommand, filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation }) {
+        return window.ToolbarView.createBinding({ document, drawOperationLifecycle: lifecycle, constructionCommand,
+          startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand, startGeometryInstanceCommand,
+          filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation });
+      }
+      return Object.freeze({ updateHistory: history.update, createControls, createEditingBinding, createDrawingBinding });
     }
     function bindUI({ syncAnnotationResize, prepareParameterNamespace, refreshConstraintAnalysis, updateDocumentName,
       updateToolbar, renderSketch, updateBlockUI, renderProperties, readSketchMoving, updateStatusUI, updateConstraintButtons,
