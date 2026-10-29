@@ -339,3 +339,76 @@ test('fixed editing reads the current scope and shared query owner at operation 
  f.state.ready=false;const marker=new Error('batch lookup failed');f.state.queryError=marker;const selected=f.stage.createSelection(f.late);f.state.ready=true;
  const current=f.state.scope.constraints[0];assert.throws(()=>selected.toggle(),error=>error===marker);assert.equal(f.state.scope.constraints[0],current);assert.equal(f.p.fixed,false);assert.equal(f.state.history.length,0);
 });
+
+function dimensionInputDragFixture(composed) {
+  let assembled, ports;
+  const f = controlsFixture((w,input,{state,events}) => {
+    const note = name => (...args) => { assert.equal(state.ready,true); events.push([name,...args]); };
+    const viewport={scale:2};input.placement=w.DimensionPlacement.create({viewport});input.valueInput.sync=note('sync-value');input.readOnlyDimensionConstraintForPlacement=()=>null;
+    state.scope={constraints:[]};state.visible=true;
+    const editing=w.ConstraintEditing.create(input),support=editing.createCommandInput({canvasHover:w.CanvasHover.create({isEndpointPoint:()=>false}),
+      canvasPoint:event=>event.pointer,referenceTargetFromOperand:operand=>operand});
+    ports={viewport,currentScope:()=>{assert.equal(state.ready,true);return state.scope;},
+      sketches:{constraintSketchId:c=>c.sketchId,isEditableSketchId:()=>state.editable!==false},
+      readServices:{geometryAppearance:{isVisibleSketchId:()=>state.visible,isVisibleValue:v=>v!==false},dimensionAppearance:{effectiveDimensionAppearance:c=>({visible:c.dimension?.display?.visible!==false})}},
+      pointer:{markThenCapture:note('capture'),release:note('release')},clearSnap:note('snap'),updateUI:note('ui'),recordHistory:note('history')};
+    if(composed)assembled=support.createWithDragging(ports);
+    else {
+      const feature=support.createFeature();
+      assembled={input:feature,dragging:w.DimensionDragFeature.create({placement:input.placement,viewport,canvasSelection:input.selection,currentScope:ports.currentScope,
+        constraintSketchId:ports.sketches.constraintSketchId,isEditableSketchId:ports.sketches.isEditableSketchId,isVisibleSketchId:ports.readServices.geometryAppearance.isVisibleSketchId,
+        effectiveDimensionAppearance:ports.readServices.dimensionAppearance.effectiveDimensionAppearance,isVisibleValue:ports.readServices.geometryAppearance.isVisibleValue,
+        guardSketchEdit:input.guardSketchEdit,commandInput:feature.dimension,setHint:input.setHint,clearSnap:ports.clearSnap,hypot2:w.GeometrySolver.hypot2,
+        beginPointer:ports.pointer.markThenCapture,endPointer:ports.pointer.release,draw:input.draw,updateUI:ports.updateUI,
+        updateGeometrySelectionUI:input.updateGeometrySelectionUI,syncDimensionValueInput:input.valueInput.sync,recordHistory:ports.recordHistory})};
+    }
+    return editing;
+  });
+  function distance(id,y){const g=f.w.GeometrySolver,c=new g.DistanceConstraint(new g.Point(id+'a',0,y),new g.Point(id+'b',100,y),100);c.sketchId='S1';
+    const target=f.w.DimensionQueries.targetFromConstraint(c);c.dimension=f.input.placement.dimensionFromAnchor(target,{x:50,y:y-20});return {constraint:c,target,dimension:c.dimension};}
+  return {...f,...assembled,ports,distance};
+}
+
+test('dimension input and drag composition matches direct real owners for live groups, permissions, movement and one history entry',()=>{
+  const results=[];
+  for(const composed of [false,true]){
+    const f=dimensionInputDragFixture(composed),a=f.distance('a',0),b=f.distance('b',40),command=f.dragging.command;
+    assert.deepEqual(f.events,[]);f.state.scope.constraints=[a.constraint,b.constraint];f.selection.set('dimensionConstraints',[a.constraint,b.constraint]);
+    assert.equal(f.dragging.selectedLineGroup(a.constraint).members[1].constraint,b.constraint);
+    f.state.visible=false;assert.equal(f.dragging.selectedLineGroup(a.constraint),null);f.state.visible=true;
+    f.state.editable=false;command.begin({pointerId:3},a,{x:0,y:0});assert.equal(command.active,false);assert.deepEqual(f.events,[]);
+    f.state.editable=true;const selected=f.selection.dimensionConstraints;command.begin({pointerId:3},a,{x:0,y:0});command.update({x:12,y:8});command.finish({pointerId:3});
+    assert.equal(command.active,false);assert.equal(f.selection.dimensionConstraints,selected);assert.equal(f.events.filter(e=>e[0]==='history').length,1);
+    f.state.scope={constraints:[a.constraint]};assert.equal(f.dragging.selectedLineGroup(a.constraint),null);
+    results.push(JSON.stringify({events:f.events,dimensions:[a.constraint.dimension,b.constraint.dimension]}));
+  }
+  assert.equal(results[1],results[0]);
+});
+
+test('dimension input and drag composition preserves distance continuation, threshold, shared pending and reset without extra history',()=>{
+  const results=[];
+  for(const composed of [false,true]){
+    const f=dimensionInputDragFixture(composed),hit=f.distance('c',0),p={x:0,y:0},command=f.dragging.command;
+    f.state.pending={type:'distance-place',target:hit.target,dimension:hit.dimension,operands:[]};const pending=f.state.pending;f.session.begin('distance',[]);f.state.target=hit.target;
+    assert.equal(f.input.dimension.isActive(),true);command.begin({pointerId:8},hit,p,{hitD:hit});command.update({x:1,y:0});
+    f.events.length=0;command.finish({pointerId:8,pointer:p});assert.equal(f.state.pending.type,'distance-value');assert.notEqual(f.state.pending,pending);
+    assert.equal(f.selection.dimensionConstraint,null);assert.equal(f.events.some(e=>e[0]==='history'),false);assert.equal(command.active,false);
+    f.state.pending=null;command.begin({pointerId:9},hit,p);command.reset();f.events.length=0;assert.equal(command.finish({pointerId:9}),false);assert.deepEqual(f.events,[]);
+    results.push(JSON.stringify({dimension:hit.constraint.dimension,pending:f.state.pending}));
+  }
+  assert.equal(results[1],results[0]);
+});
+
+test('staged input construction precedes drag construction and propagates failures without reading or changing model state',()=>{
+  const order=[],marker=new Error('dimension drag construction');let received;
+  const f=fixture((input,_state,_events,context)=>{
+    context.window.GeometrySolver={hypot2:Math.hypot};
+    context.window.ConstraintCommandInput={createRetargetHover:()=>({update(){}}),createFeature:()=>{order.push('input');return {dimension:{}};}};
+    context.window.DimensionDragFeature={create:options=>{order.push('drag');received=options;throw marker;}};
+  });
+  const support=f.feature.createCommandInput({});assert.deepEqual(order,[]);
+  const scope=()=>assert.fail('early scope read'),ports={viewport:{},currentScope:scope,sketches:{},readServices:{geometryAppearance:{},dimensionAppearance:{}},pointer:{}};
+  assert.throws(()=>support.createWithDragging(ports),error=>error===marker);assert.deepEqual(order,['input','drag']);assert.equal(received.currentScope,scope);assert.deepEqual(f.events,['query','targets','dimensions']);
+  f.context.window.ConstraintCommandInput.createFeature=()=>{throw marker;};order.length=0;
+  assert.throws(()=>support.createWithDragging(ports),error=>error===marker);assert.deepEqual(order,[]);
+});

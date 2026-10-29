@@ -117,7 +117,7 @@
     orderedSketches, descendantSketchIds,
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
-    elementSketchId, membershipQuery: readSketchMembership, isEditableSketchId, canEditSketch,
+    elementSketchId, membershipQuery: readSketchMembership, canEditSketch,
     sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
     constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
   } = sketchContext;
@@ -1148,7 +1148,7 @@
   function startDistanceValueInput(pointer) { return dimensionPlacementCommand.startDistanceValueInput(pointer); }
 
 
-  const { updateHover: updatePendingDistanceRetargetHover, createFeature: createConstraintInputFeature } = createConstraintCommandInput({
+  const { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging } = createConstraintCommandInput({
     canvasHover, canvasPoint, referenceTargetFromOperand,
   });
 
@@ -1401,14 +1401,9 @@
   });
   const { command: geometryDrag, build: buildDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
 
-  const constraintInputFeature = createConstraintInputFeature();
-  const dimensionDragFeature = window.DimensionDragFeature.create({
-    placement: dimensionPlacement, viewport, canvasSelection, currentScope: workspace.current,
-    constraintSketchId, isEditableSketchId, isVisibleSketchId, effectiveDimensionAppearance, isVisibleValue,
-    guardSketchEdit, commandInput: constraintInputFeature.dimension, setHint, clearSnap, hypot2,
-    beginPointer: dragPointer.markThenCapture,
-    endPointer: dragPointer.release,
-    draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
+  const { input: constraintInputFeature, dragging: dimensionDragFeature } = createConstraintInputWithDragging({
+    viewport, currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, pointer: dragPointer,
+    clearSnap, updateUI, recordHistory,
   });
   const { command: dimensionDrag } = dimensionDragFeature;
   const { begin: beginDimensionDrag } = dimensionDrag;

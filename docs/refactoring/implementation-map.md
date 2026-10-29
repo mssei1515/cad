@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- ConstraintEditing.createCommandInput.createWithDragging: 同じplacement／Selection／guard／入力欄sync／通知を共有し、実寸法入力と寸法dragを元の順で生成する。Sketch・外観・pointerは実ownerを接続し、操作・状態・履歴は既存commandに残す。旧createFeatureも維持する。
+
 - CanvasCommandInputs.createFeature.bindPointerForEditing／CanvasInteractionFeature.bindEditingPointer: 実command・identity選択・式参照APIからPointerのpress／activationを接続する。同じPointer／Preview／Selectionを共有し、操作優先順はPointerInteractionController、確定・取消はcommandが所有する。寸法wrapperのreceiverと引数、旧bindPointerを維持する。
 
 - `src/application/derived_instance_feature.js`: 配置・source編集・確定後編集を共通scope／Selection・通知／履歴へ接続し、配置中／確定後のProperties変更を既存commandへ振り分ける。
