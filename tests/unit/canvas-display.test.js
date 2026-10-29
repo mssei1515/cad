@@ -417,7 +417,7 @@ const sceneSandbox = { window: {} }; vm.createContext(sceneSandbox);
 const sceneSources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sceneSources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sceneSandbox, { filename: file });
 const sceneWindow = sceneSandbox.window;
-function sceneFixture() {
+function sceneFixture(fromEditing = false) {
   const f = fixture(() => true, sceneWindow), reads = [], strokes = [], stack = [];
   const state = { active: 'S1', sidebar: null, language: 'en', failure: null,
     scope: Object.fromEntries(['points','lines','circles','arcs','splines','annotations','hatches','referenceImages'].map(key => [key, []])) };
@@ -438,12 +438,12 @@ function sceneFixture() {
   Object.assign(geometryReads, { allAnnotations: () => { read('annotations'); return state.scope.annotations; }, allHatches: () => { read('hatches'); return state.scope.hatches; } });
   const geometryAppearance = { effectiveAppearanceForElement: item => ({ color: '#334455', lineWidth: 1.5, lineType: 'solid', endpointOverhang: false, ...item.appearance }),
     isVisibleSketchElement: visible, isVisibleSketchId: () => true, isVisibleValue: value => value !== false };
-  const sketchStyle = sceneWindow.GeometryPresentation.createSketchStyle({ isVisibleSketchElement: visible, isActiveSketchElement: active,
-    sketchHasSolveError: () => false, elementSketchId: sketches.elementSketchId, sketchRelationOfElement: item => active(item) ? 'active' : 'inactive', constraintStatusOf: () => 'under' });
-  const commandTargets = sceneWindow.GeometryPresentation.createCommandTargets({ readPanelSelection: () => null, readMode: () => 'select',
+  const sketchStyle = fromEditing ? null : sceneWindow.GeometryPresentation.createSketchStyle({ isVisibleSketchElement: visible, isActiveSketchElement: active,
+    sketchHasSolveError: () => false, elementSketchId: sketches.elementSketchId, sketchRelationOfElement: item => active(item) ? 'active' : 'inactive', constraintStatusOf: () => { if(state.statusFailure)throw state.statusFailure;return 'under'; } });
+  const commandTargets = fromEditing ? null : sceneWindow.GeometryPresentation.createCommandTargets({ readPanelSelection: () => null, readMode: () => 'select',
     readOperands: () => [], readConstraintCommand: () => null, readPending: () => null, sameArcEndpoint: () => false });
   f.state.ready = false;
-  const scene = f.workspace.createScene({ Point: sceneWindow.GeometrySolver.Point, currentScope: () => { read('scope'); return state.scope; }, sketches,
+  const sceneOptions = { Point: sceneWindow.GeometrySolver.Point, currentScope: () => { read('scope'); return state.scope; }, sketches,
     readServices: { reads: geometryReads, geometryAppearance, hatches: { resolvedHatchBoundary: () => { read('boundary'); return {}; } } },
     pointUsage: { isSplineOnlyFitPoint: () => false, isEditableSplineFitPoint: () => false, isExplicitPoint: () => true,
       isPointUsedByPrimitive: () => false, isReferencePoint: () => false, isAnyLineEndpoint: () => false, isEndpointPoint: () => false },
@@ -455,10 +455,26 @@ function sceneFixture() {
     editingQueries: { isDraggingArcEndpoint: () => { read('drag-arc'); return false; }, isDraggingPoint: () => { read('drag-point'); return false; },
       isDraggingCenter: () => { read('drag-center'); return false; }, editedSpline: () => { read('spline-edit'); return null; } },
     annotationBounds: () => { read('annotation-bounds'); return null; }, resolvedLoopBounds: () => { read('hatch-bounds'); return null; }, hatchAppearanceForDisplay: () => ({ visible: true }),
-  });
+  };
+  let scene, editing;
+  if (fromEditing) {
+    Object.assign(state, { mode:'select', operands:[], command:null, pending:null, panel:null, status:'under', sourceRefs:[], projected:[], reference:null });
+    Object.assign(sketches, { isActiveSketchElement:active, isReferenceSourceSketchId:id=>id==='S0', sketchRelationOfElement:item=>active(item)?'active':'inactive' });
+    const { Point, commandTargets, sketchStyle, canvasSelection, canvasHover, pointUsage, resolvedLoopBounds, hatchAppearanceForDisplay, ...common } = sceneOptions;
+    const solveState=sceneWindow.SketchSolving.createState();
+    const interaction={selection:canvasSelection,hover:canvasHover,pointUsage,lifecycle:{readMode:()=>{read('mode');return state.mode;}}};
+    const targets={get operands(){read('operands');return state.operands;},get command(){read('command');return state.command;}},pending={get current(){read('pending');return state.pending;}};
+    scene=f.workspace.createSceneForEditing({...common,interaction,targets,pending,solveState,
+      analysis:{statusOf:()=>{read('status');if(state.statusFailure)throw state.statusFailure;return state.status;}},
+      readPanelSelection:()=>{read('panel');return state.panel;},operandElement:operand=>operand.element,
+      instanceSources:{includesRef:ref=>{read('sources');return state.sourceRefs.some(source=>sceneWindow.GeometryRef.equals(ref,source));}},
+      projection:{includes:item=>{read('projection');return state.projected.includes(item);}},
+      instances:{get reference(){read('reference');return state.reference;},get sources(){read('sources');return state.sourceRefs;}}});
+    editing={solveState,interaction,targets,pending,viewState:common.viewState};
+  } else scene=f.workspace.createScene(sceneOptions);
   assert.deepEqual(reads, []); assert.deepEqual(f.calls, []); f.state.ready = true;
   f.workspace.surface.syncCanvasBitmapSize(200,100); f.calls.length = 0;
-  return { ...f, scene, sceneState: state, reads, strokes, stack, selection };
+  return { ...f, scene, sceneState: state, reads, strokes, stack, selection, editing, viewState:sceneOptions.viewState };
 }
 
 test('workspace scene shares visibility, current scope and viewport across actual geometry rendering, bounds, fit and export', () => {
@@ -494,4 +510,36 @@ test('workspace scene propagates query errors and keeps the original overlay Can
   assert.equal(f.calls.filter(call => call === 'save').length, f.calls.filter(call => call === 'restore').length);
   assert.equal(f.sceneState.scope.lines, lines); assert.equal(f.sceneState.scope.points, points); assert.equal(lines[0], line); assert.equal(line.p1, p1);
   assert.deepEqual({ ...f.display.viewport.snapshot() }, before);
+});
+
+test('editing scene shares live result status and operands with actual rendering, bounds, fit and export',()=>{
+ const f=sceneFixture(true),{Point,Line}=sceneWindow.GeometrySolver,p=new Point('P1',0,0),q=new Point('P2',20,10),line=Object.assign(new Line('L1',p,q),{sketchId:'S1'});
+ f.sceneState.scope.lines.push(line);f.editing.viewState.constraintStatus=true;f.scene.geometry.drawLines();assert.equal(f.strokes.at(-1).color,'#f59e0b');
+ f.editing.solveState.setSketchSolveError('S1',{errorNorm:1});f.scene.geometry.drawLines();assert.equal(f.strokes.at(-1).color,'#dc2626');
+ f.editing.solveState.clearAll();f.sceneState.status='full';f.scene.geometry.drawLines();assert.equal(f.strokes.at(-1).color,'#111827');
+ f.sceneState.operands=[{element:line}];f.scene.geometry.drawLines();assert.equal(f.strokes.at(-1).color,'#1d4ed8');
+ assert.deepEqual({...f.scene.bounds.visibleGeometryBounds()},{x1:0,y1:0,x2:20,y2:10});assert.equal(f.scene.fit.fitAllGeometryToViewport(0),true);assert.equal(f.display.viewport.scale,10);
+ f.state.onContent=()=>f.scene.geometry.drawLines();f.workspace.exportRenderer.render({x:0,y:0,width:20,height:10},{x:2,y:2});assert.equal(f.strokes.at(-1).color,'#334455');f.workspace.exportRenderer.restore();f.scene.geometry.drawLines();assert.equal(f.strokes.at(-1).color,'#1d4ed8');
+ assert.equal(f.sceneState.scope.lines[0],line);assert.equal(line.p1,p);assert.equal(line.p2,q);assert.equal(p.x,0);assert.equal(q.y,10);assert.equal(f.stack.length,0);
+});
+
+test('editing scene keeps panel precedence and reads current mode, sources, projection and reference command owners',()=>{
+ const f=sceneFixture(true),{Point,Line}=sceneWindow.GeometrySolver,line=Object.assign(new Line('L1',new Point('P1',0,0),new Point('P2',1,1)),{sketchId:'S1'}),other=Object.assign(new Line('L2',line.p1,line.p2),{sketchId:'S0'}),query=f.scene.commandTargets;
+ f.sceneState.operands=[{element:line}];f.sceneState.panel=other;assert.equal(query.isConstraintOperandSelected(line),false);f.sceneState.panel=null;assert.equal(query.isConstraintOperandSelected(line),true);
+ f.sceneState.operands=[];f.sceneState.mode='instance-sources';f.sceneState.sourceRefs=[sceneWindow.GeometryObjects.geometryRefForItem(line)];assert.equal(query.isConstraintOperandSelected(line),true);
+ f.sceneState.mode='sketch-projection';f.sceneState.projected=[line];assert.equal(query.isConstraintOperandSelected(line),true);assert.equal(query.isConstraintOperandSelected(other),false);
+ f.sceneState.mode='pattern-placement-linear';f.sceneState.sourceRefs=[];f.sceneState.reference=line;assert.equal(query.isConstraintOperandSelected(line),true);f.sceneState.reference=null;assert.equal(query.isConstraintOperandSelected(line),false);
+ f.sceneState.command={};assert.equal(query.isReferenceHoverElement(other),true);f.sceneState.command=null;assert.equal(query.isReferenceHoverElement(other),false);
+});
+
+test('editing scene preserves legacy partial Canvas state and leaves model, viewport and result records unchanged on query failure',()=>{
+ for(const fromEditing of [false,true]){
+  const f=sceneFixture(fromEditing),{Point,Line}=sceneWindow.GeometrySolver,line=Object.assign(new Line('L1',new Point('P1',0,0),new Point('P2',1,1)),{sketchId:'S1'}),marker=new Error('status query');f.sceneState.scope.lines.push(line);
+  f.viewState.constraintStatus=true;
+  const solveState=f.editing?.solveState||sceneWindow.SketchSolving.createState();solveState.setSketchSolveOk('S1',{errorNorm:0});const record=solveState.sketchSolveState('S1'),before={...f.display.viewport.snapshot()},lines=f.sceneState.scope.lines;
+  f.sceneState.statusFailure=marker;
+  assert.throws(()=>f.scene.geometry.drawLines(),error=>error===marker);assert.equal(f.stack.length,1);assert.equal(f.strokes.length,0);f.ctx.restore();
+  f.sceneState.statusFailure=null;f.sceneState.failure=marker;assert.throws(()=>f.scene.fit.fitAllGeometryToViewport(),error=>error===marker);
+  assert.equal(solveState.sketchSolveState('S1'),record);assert.equal(f.sceneState.scope.lines,lines);assert.equal(lines[0],line);assert.deepEqual({...f.display.viewport.snapshot()},before);
+ }
 });

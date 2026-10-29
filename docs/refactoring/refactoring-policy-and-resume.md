@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,988行、非空白1,538行、root直下428文、条件付きtest hooks323行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,981行、非空白1,531行、root直下426文、条件付きtest hooks323行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：操作対象・Sketch状態・Canvas sceneの共有生成（2026-10-30、検証完了）
+
+基準developはb3cd0ca。既存CanvasDisplayのworkspace.createSceneForEditingが、操作対象強調→Sketch表示方針→Geometry／Overlay／Bounds／Fitを元の順に生成する。CanvasInteractionの実Lifecycle・Selection・Hover・PointUsageとtarget／pending、SketchContext／read service、求解結果owner／analysisを共有し、子には必要なread portだけを渡す。型・参照比較・Hatch表示は同じ既存静的APIを使う。Panel／mode／operands／constraint／pending・solve状態は描画・照会時に読み、後段drag・Splineのcallbackも維持する。返す六APIは実owner参照で、モデル・状態・cacheをコピーせず、旧createSceneを残す。生成時のmodel／UI照会、listenerやglobalは追加しない。
+
+app.jsは1,988→1,981行（7行減）、非空白1,538→1,531行、root428→426文／関数88個／hooks323行／可変参照三つ。三生成・合計45接続は一生成・26接続となり、未使用になったsketchRelationOfElementのroot別名も除いた。構築136文760非空白行、一文call関数84個108行、その他205文335行（文外5行）。TEMP cad-editing-canvas-scene-{proof,hierarchy}.cjsで全子接続を実ownerのaliasまで展開して比較し、型・関数・callback、生成順とその他app／既存CanvasDisplayのAST不変、root未使用bindingなしを確認した。hooksと短い委譲を除いても1,100非空白行が残り、数百行目標は未達。
+
+単体へ三つの統合境界試験を追加した。実描画・Bounds／Fit／PNGと求解状態ownerを使い、状態色とoperand強調の動的反映、出力時の強調抑止、Panel優先とsource／projection／placement mode、例外時のmodel／viewport／結果参照不変を確認した。status照会例外でrendererのCanvas saveが残る既存途中状態も旧経路と比較して維持した（本単位でrendererの復元処理を変更しない）。関連単体23件／全単体2,064件が成功。構文624fileが成功。関連11suite（unified-ui／blocks／sketch-projection／sketch-tree-visibility／view-visibility／hatching／png-export／derived-patterns／command-panel／phase0-characterization／sketch-move）の255件が全成功（3.2分、exit 0、runner62144）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-editing-canvas-scene-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存期待値・性能上限／timeout・workerは変更しない。今回は旧子の本体と求解アルゴリズムを変更せず、全E2Eは未実行とし、以前の全588件成功と区別する。
+
+次は機能単位の生成階層と公開境界を引き続き整理する。表示がmodelや操作状態を更新するownerにならず、workspace.currentと同期済みediting scope、read portと操作callbackの違いを維持する。全体目標active、開始時週枠残量77%／最終確認76%で停止条件未到達。mainは停止／releaseの最後に反映する。
 
 ### 最新：Hatch生成を共有作図ownerへ集約（2026-10-30、検証完了）
 

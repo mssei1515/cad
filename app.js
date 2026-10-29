@@ -120,7 +120,6 @@
     elementSketchId, membershipQuery: readSketchMembership, isEditableSketchId, canEditSketch,
     sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
     constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
-    sketchRelationOfElement,
   } = sketchContext;
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
@@ -396,7 +395,7 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createScene: createCanvasScene, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer } = createCanvasWorkspace({
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer } = createCanvasWorkspace({
     ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
     window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
@@ -420,27 +419,21 @@
   const { jisDimensionTextAngle, dimensionTextOffset, angleDimensionLayout } = dimensionLayouts;
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
-  const commandTargetPresentation = window.GeometryPresentation.createCommandTargets({
-    readPanelSelection: () => presentation.selectedItem, readMode: drawOperationLifecycle.readMode, instanceSourceCommand, sketchProjectionCommand,
-    geometryInstanceCommand, geometryRefsEqual, geometryRefForItem, readOperands: () => constraintTargetSession.operands, sameArcEndpoint, operandElement,
-    readConstraintCommand: () => constraintTargetSession.command, isActiveSketchElement, isReferenceSourceSketchId, elementSketchId, readPending: () => pendingCommandSession.current,
-  });
-  const sketchPresentation = window.GeometryPresentation.createSketchStyle({
-    sketchHasSolveError, elementSketchId, sketchRelationOfElement, constraintStatusOf, isVisibleSketchElement, isActiveSketchElement,
-  });
-  const { isConstraintOperandSelected } = commandTargetPresentation;
-  const { constraintStatusColor, sketchStrokeWidth, sketchAlpha } = sketchPresentation;
-  const { geometry: geometryDisplay, overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit } = createCanvasScene({
-    Point, currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, pointUsage,
-    commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, canvasSelection, canvasHover, selectionHighlight, viewState,
-    isSidebarHighlightedElement, canvasThemeColor, applicationText,
+  const { commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, geometry: geometryDisplay,
+    overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit } = createCanvasScene({
+    currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, interaction: canvasInteraction,
+    targets: constraintTargetSession, pending: pendingCommandSession, solveState: sketchSolveResultState, analysis: constraintAnalysis,
+    readPanelSelection: () => presentation.selectedItem, instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
+    selectionHighlight, viewState, isSidebarHighlightedElement, canvasThemeColor, applicationText,
     constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
     sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed,
     editingQueries: { isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
       isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point),
       editedSpline: () => splineEditing.current?.spline },
-    annotationBounds, resolvedLoopBounds: window.HatchRegionEngine.resolvedLoopBounds, hatchAppearanceForDisplay,
+    annotationBounds,
   });
+  const { isConstraintOperandSelected } = commandTargetPresentation;
+  const { constraintStatusColor, sketchStrokeWidth, sketchAlpha } = sketchPresentation;
   const { geometryDisplayColor, geometryStrokeWidth, traceSplinePath, drawLines, drawCircles, drawArcs, drawSplines } = geometryDisplay;
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
