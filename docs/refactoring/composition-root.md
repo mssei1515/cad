@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：空編集画面へのViewport復帰をCanvas表示側へ集約（2026-10-30、検証完了）
+
+基準develop／origin/developはf671a23。本単位はcodex/empty-viewport-resetで実施した。Block編集用にappで直接実装していた空画面のViewport復帰を、既存CanvasDisplay.createDrawingFit.resetEmptyViewportへ集約した。現在Canvasのrectを一度読み、同じViewportへinitialScale→X中央→Y中央を三回のupdateで適用する。appのinitialScaleは従来と同じCSS_PX_PER_MM。Block commandは同じ実methodを元の時機に呼び、scope・session・UI・履歴は従来のownerに残す。
+
+app.jsは2,115→2,110行（5行減）、非空白1,659行、root直下465文・関数111個、test hooks345行。TEMP cad-empty-viewport-reset-proof.cjsで、同じ初期倍率を渡すこと、元のcallback本体と三更新順、新しい直接bindingが初期化後に一か所から使われること、他のappとCanvasDisplay全体およびraw Viewport／Block二command／CanvasNavigation四moduleの不変を確認した。getterやsetterを追加して循環を隠さず、新state・context・fileを追加しない。
+
+canvas-display.test.jsへ実Viewportを使う二つの境界試験を追加した。生成時の読取りなし、最新のCanvasサイズ・倍率復帰と中心配置、0サイズ、返値undefinedとdraw／hintなしを確認した。rect例外で無変更、width例外で倍率のみ、height例外で倍率とXのみ更新済みという元の途中状態と同じ例外伝播も確認し、複数patchをまとめる変更は行わない。既存期待値は変更しない。関連単体45件・全単体2,015件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapも更新し、既存の範囲fit説明へ空編集用APIと計算責務を追記した。
+
+関連E2E189件が全成功（2.7分、exit 0、runner63397）。既存UI、Block、phase0保存互換性／描画比較、Sketch編集／移動、表示可視性、ファイル操作安全性を実行した。TEMP cad-empty-viewport-reset-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server23296停止、app／CanvasDisplayのhash不変を確認した。今回は関連189件であり、最新コード全体のE2Eとは扱わない。UI・モデル／保存形式・求解規則・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用21%／残量79%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。既存ownerに属する具体的な処理をappから除く段階であり、残る上位機能の組立て・起動と公開境界には引き続き作業がある。小callbackの整理だけで200〜500行へ届くとは見積もらず、全体目標を現在の中間成果で完了扱いにしない。
+
 ### 最新：Documentファイル検証の組立てと公開APIを既存driverへ集約（2026-10-30、検証完了）
 
 基準develop／origin/developは8b3df20。本単位はcodex/document-file-test-apiで実施した。DocumentTestDriver.createFileApiが、同じDocument名・serializeModel・File sessionを使う名前／ファイル観測とimport／load fixtureを組み立て、観測三メソッドとfixture二メソッドをfrozenな二groupとして返す。appはtest flag内でのみ生成し、元の公開位置へ展開する。snapshot生成のstructuredClone(serializeModel())本体もdriverへ移した。History・Sketch fixtureや通常機能のstate／保存処理は取り込まない。

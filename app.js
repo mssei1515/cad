@@ -485,7 +485,7 @@
   });
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const drawingFit = createDrawingFit({ bounds: drawingBounds, activeSketchId });
-  const { fitSketchToViewport, fitAllGeometryToViewport } = drawingFit;
+  const { fitSketchToViewport, fitAllGeometryToViewport, resetEmptyViewport } = drawingFit;
   function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
   const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
     currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
@@ -869,12 +869,7 @@
     canvasSelection, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
     setMode: drawOperationLifecycle.setMode, closeDefinitions: () => blockView.closeDefinitions(),
     setEditorActive: active => blockView.setEditorActive(active), fitAllGeometryToViewport,
-    resetEmptyViewport: () => {
-      const rect = canvas.getBoundingClientRect();
-      viewport.update({ scale: CSS_PX_PER_MM });
-      viewport.update({ x: rect.width / 2 });
-      viewport.update({ y: rect.height / 2 });
-    },
+    resetEmptyViewport,
     promptName: name => window.prompt("ブロック名", name), updateBlockUI, updateUI, draw, recordHistory, setHint,
     refreshReferenceConstraintValidity,
     hasInvalidReferenceConstraints: () => referenceConstraintState.errorCount > 0,
