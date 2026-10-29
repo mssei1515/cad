@@ -106,6 +106,16 @@
         selection, sameSketchElements: sketchContext.sameSketchElements, activeSketchId: sketchContext.activeSketchId, isActiveSketchElement,
         applicationText, minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw });
     }
+    function createCircleCenterCross({ checkpoint: crossCheckpoint, solveSketchAndDependents, resultIsAccepted,
+      minOrientationLength, selectedElementCount, invalidateAnalysis }) {
+      return window.CircleCenterCrossCommand.create({ geometry: { addPoint: geometry.addPoint, addLine: geometry.addLine, pushModelConstraint },
+        checkpoint: { capture: crossCheckpoint.captureGeometry, restore: crossCheckpoint.restoreGeometry },
+        solveSketchAndDependents, resultIsAccepted, minOrientationLength,
+        activeSketchId: sketchContext.activeSketchId, isActiveSketchElement, selection, selectedElementCount,
+        cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+        setMode, clearPreview: () => preview.setPointer(null), clearSnap: snap.clear, clearSelection, invalidateAnalysis,
+        updateUI, draw, setHint, recordHistory, applicationText });
+    }
     function createPreview({ ctx, viewport, withCanvasState, traceSplinePath, readMode, centerlineCommand, readCanvasSize }) {
       const { shortestAngleFrom, slotGeometry, threePointArcGeometry, angleAtArcParam } = window.GeometryKernel;
       const renderer = window.AuthoringPreviewRenderer.create({ ctx, viewport, withCanvasState,
@@ -174,7 +184,7 @@
         setHint, updateUI, draw, cancelActiveDrawOperation: () => lifecycle.cancel(), rollbackTransientPoint,
         hasActiveDrawOperation: () => lifecycle.active(), hasSelection: selection.hasSelection, updateGeometrySelectionUI });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet, createTrim, createBlankGesture, createCanvasInput: createAuthoringInput });
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createBlankGesture, createCanvasInput: createAuthoringInput });
   }
   window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring, createCanvasInput });
 })();
