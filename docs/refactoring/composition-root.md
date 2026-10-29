@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-29）
 
+### 最新：外観・描画照会を実ownerから直接接続（2026-10-29、検証完了）
+
+基準develop／origin/developは7e13172。本単位はcodex/appearance-query-bindingsで実施した。GeometryReadServicesのGeometry／Dimension／Annotation外観とGeometryPresentationのcommand targets／Sketch styleが返す十二の実照会を、生成後かつ最初のconsumerより前に捕捉し、同名のroot転送関数を削除した。対象methodはfrozen ownerのclosureでreceiver／arguments objectに依存しない。生成時には照会を実行せず、現在scope・表示設定・cache・mode・Panel選択を操作時に読む構造は維持する。初期化順のために残る遅延委譲へ一律に適用しない。
+
+app.jsは2,185→2,178行（7行減）、非空白1,728行、root直下488→481文、root関数142→130個。TEMP cad-appearance-query-bindings-proof.cjsで十二bindingの不変性と全参照が初期化後であること、他のapp全statementのAST不変、実照会methodにthis／arguments依存がなく元moduleが不変であることを確認した。新しい機能・state・global・context・adapterを追加しない。既存の所有者とconsumerを直結し、不要なhoisted転送の層を除く単位であり、機能そのものを新fileへ分割したとは扱わない。
+
+関連単体59件・全単体1,995件・構文618ファイルが成功（exit 0）。既存の外観、GeometryReadServices、GeometryPresentation、GeometryDisplay、DocumentWorkspaceの検証を実行した。この低影響の接続整理だけを固定する新テストや、既存期待値の変更は加えていない。モジュール構成とimplementation-mapへ直接接続と遅延readerの区別を記録した。
+
+関連E2E212件が全成功（3.2分、exit 0、runner84366）。既存UI、非表示可視性、注記、leader外観、注記表示寸法、phase0保存互換性／描画比較、PNG出力、Hatch、Sketch投影を実行した。非表示Block内部Sketchの中心線を外側で隠す既存回帰も含む。TEMP cad-appearance-query-bindings-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server28096停止とapp hash不変を確認した。今回は関連212件であり、最新コードの全体E2Eとは扱わない。UI・保存形式・性能上限／timeout・テスト期待値は変更していない。
+
+週枠使用9%／残量91%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。残るquery・commandの一文委譲にも直接接続可能なものがあるが、owner生成時機、receiver、引数加工と部分的構築の契約を個別に確認する。200〜500行の全体目標は未達であり、小さな転送整理だけで届くとは扱わない。次も機能単位の構築・起動とtest API公開の境界を監査する。
+
 ### 最新：トリム生成を共有作図機能へ統合（2026-10-29、検証完了）
 
 基準develop／origin/developは9fa6827。本単位はcodex/trim-authoring-compositionで実施した。既存BasicDrawingTools.createAuthoringへcreateTrimを追加し、同じ現在scope・Geometry・SketchContext・PointUsage・最小長さ・倍率・preview・UI／履歴通知を実TrimFeatureへ接続する。appに残すのは参照照会、専用checkpoint、hit照会／編集・投影権限、Parameter安定化／許容誤差と分析更新の九依存。primitive作図用のcheckpointとトリム用Geometry checkpointは別のまま、生成位置は従来の後段を保持する。Trimのquery／編集／commandや既存作図の実装は変更せず、新session・mutable context・listenerは追加しない。
