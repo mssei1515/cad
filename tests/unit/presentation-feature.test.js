@@ -156,3 +156,42 @@ for (const failure of ["menu", "flyout"]) {
     assert.equal(f.controls.syncFlyouts(), failure === "menu" ? undefined : f.syncResult);
   });
 }
+
+test("presentation connects the actual late command panels to canvas refresh and input without reading them during binding", () => {
+  const f = fixture(), host = {}, selected = {}, bundle = Object.freeze({
+    commandPanel: { update() { assert.equal(this, bundle.commandPanel); f.events.push("panel update"); } },
+    derivedPanel: { selectedItem() { assert.equal(this, bundle.derivedPanel); f.events.push("panel selection"); return selected; } },
+  });
+  const canvasPorts = { ...f.canvas }; delete canvasPorts.readCommandPanel; delete canvasPorts.readDerivedPanel;
+  f.events.length = 0; f.feature.bindCanvas(canvasPorts);
+  assert.equal(f.feature.readCommandPanel(), null); assert.equal(f.state.domReads, 0); assert.deepEqual(f.events, []);
+  assert.equal(f.feature.draw(), f.state.frame); assert.equal(f.feature.selectedItem, null);
+  assert.deepEqual(f.events.splice(0), ["input", "cache", "frame"]);
+  f.w.CommandPanel = { createFeature(ports) {
+    assert.equal(ports.document, f.document); assert.equal(ports.host, host); assert.equal(ports.readMode, f.canvas.readMode);
+    assert.equal(f.feature.readCommandPanel(), null); f.events.push("panel create"); return bundle;
+  } };
+  assert.equal(f.feature.createCommandPanels({ host, readMode: f.canvas.readMode }), bundle);
+  assert.equal(f.feature.readCommandPanel(), bundle.commandPanel); assert.equal(f.feature.selectedItem, null);
+  assert.deepEqual(f.events.splice(0), ["panel create"]);
+  assert.equal(f.feature.draw(), f.state.frame); assert.equal(f.feature.selectedItem, selected);
+  assert.deepEqual(f.events, ["panel update", "input", "panel selection", "cache", "frame"]);
+});
+
+test("presentation only publishes completed panel construction and preserves its previous owner on failure", () => {
+  const f = fixture(), marker = new Error("panel creation failed");
+  const canvasPorts = { ...f.canvas }; delete canvasPorts.readCommandPanel; delete canvasPorts.readDerivedPanel;
+  f.feature.bindCanvas(canvasPorts); f.events.length = 0;
+  f.w.CommandPanel = { createFeature() { assert.equal(f.feature.readCommandPanel(), null); f.feature.draw(); throw marker; } };
+  assert.throws(() => f.feature.createCommandPanels({}), error => error === marker);
+  assert.equal(f.feature.readCommandPanel(), null); assert.equal(f.feature.selectedItem, null);
+  assert.deepEqual(f.events.splice(0), ["input", "cache", "frame"]);
+  const selected = {}, bundle = { commandPanel: { update() { f.events.push("previous panel"); } }, derivedPanel: { selectedItem: () => selected } };
+  f.w.CommandPanel.createFeature = () => bundle;
+  f.feature.createCommandPanels({});
+  f.w.CommandPanel.createFeature = () => { assert.equal(f.feature.readCommandPanel(), bundle.commandPanel); throw marker; };
+  assert.throws(() => f.feature.createCommandPanels({}), error => error === marker);
+  assert.equal(f.feature.readCommandPanel(), bundle.commandPanel); f.feature.draw();
+  assert.equal(f.feature.selectedItem, selected);
+  assert.deepEqual(f.events, ["previous panel", "input", "cache", "frame"]);
+});

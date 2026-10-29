@@ -322,11 +322,9 @@
     drawLines, drawCircles, drawArcs, drawPoints, drawArcEndpointHandles, drawDimensions,
   });
   const HISTORY_LIMIT = 80;
-  let commandPanel = null;
-  let derivedPanel = null;
   presentation.bindCanvas({
     readPngCommand: () => pngExportCommand, readPending: () => pendingCommandSession.current, readMode: drawOperationLifecycle.readMode,
-    readCommandPanel: () => commandPanel, syncAnnotationInput: () => annotationInputController.sync(), readDerivedPanel: () => derivedPanel,
+    syncAnnotationInput: () => annotationInputController.sync(),
     withGeometryReadCache, drawCanvas,
   });
   const { command: geometryInstanceCommand, createSourceCommand: createInstanceSourceCommand, createEditing: createInstanceEditing } = window.DerivedInstanceFeature.create({
@@ -1712,7 +1710,7 @@
   function isDrawToolMode() { return drawOperationLifecycle.isToolMode(); }
 
   const canvasInputBinding = createCanvasInputBinding({
-    pointer: pointerInteractionController, readCommandPanel: () => commandPanel, readPngExportCommand: () => pngExportCommand,
+    pointer: pointerInteractionController, readCommandPanel: presentation.readCommandPanel, readPngExportCommand: () => pngExportCommand,
     blankCanvasGesture, isBlankCommandPanelPoint, scheduler: pointerMoveScheduler,
     profileCommit: work => profileInteractionPhase("commit", work),
   });
@@ -2165,13 +2163,13 @@
     };
   }
 
-  ({ derivedPanel, commandPanel } = window.CommandPanel.createFeature({
-    document, host: canvas.parentElement, readMode: drawOperationLifecycle.readMode, sketchContext, projectionCommand: sketchProjectionCommand,
+  presentation.createCommandPanels({
+    host: canvas.parentElement, readMode: drawOperationLifecycle.readMode, sketchContext, projectionCommand: sketchProjectionCommand,
     geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand, resolveGeometryRef, geometryRefForItem, applicationText, formatDisplayNumber,
     finishProjection: commitSketchProjectionCommand, finishSourceEdit: finishInstanceSourceEdit, exitDrawMode,
     changeFreeProperty: changeFreeInstanceProperty, hatchCommand, annotationCommand, effectiveAnnotationStyle, pngExportCommand,
     updateUI, updatePropertiesUI, setHint, draw,
-  }));
+  });
 
   const documentEditingReset = window.DocumentEditingReset.create({
     documentModel, sketchMoveCommand, activateEditingScope, flushPointerMoves: flushScheduledCanvasPointerMove,

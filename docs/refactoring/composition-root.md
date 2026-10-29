@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-29）
 
+### 最新：command panelの生成・Canvas更新と入力readerをPresentationへ接続（2026-10-29、検証完了）
+
+基準develop／origin/developは39d1398。本単位はcodex/command-panel-presentationで実施した。PresentationFeature.createCommandPanelsが既存CommandPanel.createFeatureを元の後段で生成し、完成したderivedPanel／commandPanelを保持する。CanvasRefreshへの既定readerと、入力bindingのreadCommandPanelを同じ所有者へ接続し、appにあった二つの可変参照とCanvas更新用の重複readerを除いた。モデルやcommandのdraftをPresentationへ移さず、汎用setterや状態を隠すだけのcontextは追加しない。CommandPanel／CanvasRefresh本体、panel内のroutingと各commandの確定・取消は変更していない。
+
+app.jsは2,199→2,197行（2行減）、rootの可変参照は五つから三つ（pngExportCommand／sketchMoveCommand／sketchContextController）。TEMP cad-command-panel-presentation-proof.cjsで元の23portの受渡し、共有documentの同一性、二つのUI moduleの不変、rootの未使用binding／初期化前直接参照0を確認した。panel生成のroot引数は23→22となり、documentはすでにPresentationへ注入した同じものを使う。行数だけの移動ではなく、生成・描画更新・入力からの読取を同じ表示ownerへ揃える単位である。
+
+presentation-feature.test.jsへ二つの境界試験を追加。生成前にDOM／panelを読まないこと、Canvas更新前後の実体と選択値、panel update→注記入力同期→derived選択→cache描画の順、入力readerが同じcommandPanelを返すこと、生成途中で不完全なpanelを公開しないことと例外伝播を確認した。既存の明示reader差替えも維持する。関連単体14件・全単体1,985件・構文618ファイルが成功（exit 0）。仕様のモジュール構成とimplementation-mapへ責務と後段接続を記録した。
+
+関連E2E259件が全成功（3.9分、exit 0、runner30771）。command panel、既存UI、Hatch、派生pattern／free Instance、PNG、注記／anchor、phase0保存互換性／描画比較を実行した。TEMP cad-command-panel-presentation-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server29624停止と製品source二つのhash不変を確認した。今回は関連259件であり、前回の全587件成功を現在の全体結果とは扱わない。既存期待値・UI操作・保存形式・性能上限／timeoutは変更していない。
+
+最新appは2,197行、非空白1,747行、root直下489文・関数143個、条件付きtest hooks362行。週枠使用4%／残量96%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を保持する。残る三つの後段参照と機能単位の生成・更新・終了、通常入力／描画／test APIの共通依存を監査し、同じscopeのportだけをまとめる。数百行の達成を装うための空白圧縮や既存ownerを包み直すだけの変更は行わない。
+
 ### 再開：Hatchの外観とパターン原点の純粋な照会を既存データownerへ移管（2026-10-29、検証完了）
 
 週枠残量97%で再開。最新develop／origin/developはdd83203で、前回release 5800850の後に非表示Block Sketchの補助図形表示修正が加わっていることを確認した。mainはdevelopの祖先、tracked treeはclean、worktreeはC:/dev/cadだけだった。この既存修正を基準にcodex/hatch-display-valuesを作成した。前回のHatch候補から、hatchAppearanceForDisplayとhatchPatternOriginの関数本体を既存HatchDataへそのまま移した。HatchDataはすでにAppearance.normalizeHatchAppearanceへ依存しており、新しいmodule・namespace・runtime port・script順の変更を加えない。appは同じ静的関数を各既存ownerへ注入する。
