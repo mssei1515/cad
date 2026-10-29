@@ -423,11 +423,11 @@
   });
   const { redundantConstraintInfo, constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
-  const { viewport, navigation: canvasNavigation, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
+  const { viewport, navigation: canvasNavigation, createDrawingFit, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
     draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
-  const { clampZoom, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, visibleWorldBounds } = viewport;
+  const { clampZoom, screenToWorld, worldToCanvasScreen, canvasPoint, visibleWorldBounds } = viewport;
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
@@ -491,6 +491,9 @@
     isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay, isVisibleValue,
   });
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
+  const drawingFit = createDrawingFit({ bounds: drawingBounds, activeSketchId });
+  const { fitSketchToViewport, fitAllGeometryToViewport } = drawingFit;
+  function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
   const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
     currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
   });
@@ -1001,17 +1004,8 @@
   const { regions: regionHitQuery, dimensions: dimensionHitQuery, instances: instanceHitQuery } = sceneHitQueries;
   const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = sceneHitQueries.geometry;
 
-  function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
-    return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
-  }
 
-  function fitAllGeometryToViewport(paddingPx = 96) {
-    return fitBoundsToViewport(allGeometryBounds(), paddingPx);
-  }
 
-  function fitVisibleGeometryToViewport(paddingPx = 96) {
-    return fitBoundsToViewport(visibleGeometryBounds(), paddingPx);
-  }
 
 
 

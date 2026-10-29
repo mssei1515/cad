@@ -16,6 +16,20 @@
         return applied;
       },
     });
+    function createDrawingFit({ bounds, activeSketchId }) {
+      const { fitBoundsToViewport } = viewport;
+      const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = bounds;
+      function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
+        return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
+      }
+      function fitAllGeometryToViewport(paddingPx = 96) {
+        return fitBoundsToViewport(allGeometryBounds(), paddingPx);
+      }
+      function fitVisibleGeometryToViewport(paddingPx = 96) {
+        return fitBoundsToViewport(visibleGeometryBounds(), paddingPx);
+      }
+      return Object.freeze({ fitSketchToViewport, fitAllGeometryToViewport, fitVisibleGeometryToViewport });
+    }
     function createWorkspace({ ctx, readPixelRatio, ResizeObserverClass, withGeometryReadCache, drawCanvas,
       isValueInputPending, window: browserWindow, updatePropertiesUI, closeContextMenu, applySketchTreeWidth, applicationText, readLanguage }) {
       const surface = window.CanvasSurface.create({ canvas, ctx, viewport, readPixelRatio, ResizeObserverClass,
@@ -52,7 +66,7 @@
       const dragPointer = window.CanvasInputBinding.createDragPointer({ canvas });
       return Object.freeze({ surface, exportRenderer, layout, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
     }
-    return Object.freeze({ viewport, navigation, zoomControl, createWorkspace });
+    return Object.freeze({ viewport, navigation, zoomControl, createDrawingFit, createWorkspace });
   }
   function createRendering({ canvas, ctx, viewport, surface, zoomControl, readExportFrame, recordDraw,
     geometry, dimensions, drawDimensionPreview, annotations, authoringPreview, placements, offsetPreview,

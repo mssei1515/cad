@@ -6,7 +6,7 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ['src/ui/number_display.js', 'src/ui/canvas_input_binding.js', 'src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js', 'src/geometry/export_region.js', 'src/persistence/document_files.js', 'src/persistence/png_file.js', 'src/commands/png_export_command.js', 'src/application/png_export.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
-function fixture() {
+function fixture(fitVisibleGeometry = () => true) {
   const calls = [], state = { ready: false, rect: { left: 0, top: 0, width: 200, height: 100 }, pending: false, dpr: 2, error: null, onDraw: null };
   const element = () => {
     const handlers = {};
@@ -21,7 +21,7 @@ function fixture() {
   const canvas = { ...element(), width: 0, height: 0, getBoundingClientRect() { ready(); calls.push('rect'); return state.rect; }, classList: { add() {}, remove() {} }, setPointerCapture() {} };
   const ctx = { setTransform(...args) { ready(); calls.push(['transform', ...args]); } };
   const display = sandbox.window.CanvasDisplay.create({ canvas, document, initialScale: 2, minZoom: 0.1, maxZoom: 20, minLength: 1e-6,
-    draw: () => { ready(); calls.push('draw'); state.onDraw?.(); }, setHint: () => calls.push('hint'), fitVisibleGeometry: () => true,
+    draw: () => { ready(); calls.push('draw'); state.onDraw?.(); }, setHint: () => calls.push('hint'), fitVisibleGeometry,
     flushPointerMoves: () => { ready(); calls.push('flush'); if (state.error) throw state.error; }, syncDimensionValueInput: () => calls.push('input'),
   });
   assert.deepEqual(calls, [['element', 'statusZoom'], ['element', 'statusZoomInput']]); calls.length = 0;
@@ -331,4 +331,46 @@ test('Workspace PNG captures through the existing renderer after fonts and image
     if (fail) { assert.equal(f.feature.command.readState().message.includes('capture failed'), true); f.feature.command.cancel(); }
     assert.equal(f.pending.current, null);
   }
+});
+
+test('drawing fit shares the actual viewport while deferring active Sketch, bounds and Canvas size reads', () => {
+  const f = fixture(), reads = [], state = { active: 'S1', selected: { x1: 0, y1: 0, x2: 100, y2: 50 },
+    all: { x1: -200, y1: -100, x2: 200, y2: 100 }, visible: null };
+  f.state.ready = false; f.calls.length = 0;
+  const fit = f.display.createDrawingFit({ activeSketchId: () => { reads.push('active'); return state.active; }, bounds: {
+    sketchGeometryBounds: id => { reads.push(['sketch', id]); return state.selected; },
+    allGeometryBounds: () => { reads.push('all'); return state.all; },
+    visibleGeometryBounds: () => { reads.push('visible'); return state.visible; },
+  } });
+  assert.ok(Object.isFrozen(fit)); assert.deepEqual(reads, []); assert.deepEqual(f.calls, []);
+  f.state.ready = true; f.state.rect = { left: 0, top: 0, width: 1000, height: 800 };
+  assert.equal(fit.fitSketchToViewport(), true); assert.deepEqual(reads.splice(0), ['active', ['sketch', 'S1']]);
+  assert.equal(f.display.viewport.scale, 8.08); assert.equal(f.display.viewport.x, 96); assert.equal(f.display.viewport.y, 198);
+  state.active = 'S2'; assert.equal(fit.fitSketchToViewport(undefined, 200), true);
+  assert.deepEqual(reads.splice(0), ['active', ['sketch', 'S2']]); assert.equal(f.display.viewport.scale, 6);
+  assert.equal(fit.fitAllGeometryToViewport(0), true); assert.deepEqual(reads.splice(0), ['all']); assert.equal(f.display.viewport.scale, 2.5);
+  const previous = { ...f.display.viewport.snapshot() };
+  assert.equal(fit.fitVisibleGeometryToViewport(), false); assert.deepEqual(reads.splice(0), ['visible']);
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, previous);
+  state.visible = { x1: 10, y1: 10, x2: 30, y2: 20 }; assert.equal(fit.fitVisibleGeometryToViewport(), true);
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, { x: 100, y: 100, scale: 20 });
+  assert.equal(f.calls.includes('draw'), false); assert.equal(f.calls.includes('hint'), false);
+});
+
+test('drawing fit retains late navigation routing and stops on query failure before changing viewport or redrawing', () => {
+  let fit; const f = fixture(() => fit.fitVisibleGeometryToViewport()), marker = new Error('bounds read');
+  const state = { bounds: { x1: 0, y1: 0, x2: 20, y2: 10 }, fail: false }; let reads = 0;
+  fit = f.display.createDrawingFit({ activeSketchId: () => 'S1', bounds: {
+    visibleGeometryBounds() { reads++; if (state.fail) throw marker; return state.bounds; },
+  } });
+  sandbox.performance = { now: () => 100 }; f.calls.length = 0;
+  const event = { button: 1, clientX: 20, clientY: 30 };
+  assert.equal(f.display.navigation.doubleClickFit(event), false); assert.equal(reads, 0);
+  assert.equal(f.display.navigation.doubleClickFit(event), true); assert.equal(reads, 1);
+  assert.deepEqual(f.calls.filter(call => ['hint', 'draw'].includes(call)), ['hint', 'draw']);
+  const before = { ...f.display.viewport.snapshot() }; f.calls.length = 0; state.fail = true;
+  assert.throws(() => fit.fitVisibleGeometryToViewport(), error => error === marker);
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, before); assert.deepEqual(f.calls, []);
+  state.fail = false; state.bounds = null;
+  assert.equal(fit.fitVisibleGeometryToViewport(), false); assert.deepEqual({ ...f.display.viewport.snapshot() }, before);
 });
