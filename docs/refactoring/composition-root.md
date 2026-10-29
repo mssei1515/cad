@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Blockのブラウザテスト支援を既存driverへ集約（2026-10-30、検証完了）
+
+基準develop／origin/developはfe395f0。本単位はcodex/block-browser-supportで実施した。BlockTestDriver.createBrowserSupportは同じGeometry／modelTypes・Document／現在scope・Sketch／投影／読取り／Block照会・Selection／editor／配置／Solverと限定操作を共有し、作成fixture→editor support→観測support→拒否fixtureの順に生成する。後段createDimensionCasesは元の生成位置で読取り専用寸法→外部拘束fixtureを生成する。resets二件・observations五件・後段actions十三件を凍結したgroupで返し、appは既存の公開位置にspreadする。旧六生成入口は維持し、新file・global・製品model／操作stateを追加しない。通常機能の所有は各製品ownerに残す。
+
+app.jsは2,082→2,073行（9行減）、非空白1,631→1,622行、root直下458文・関数108個、test hooks345→336行、可変参照三つ。対象六生成の延べ80接続を、共有39＋後段4の43項目に整理した。TEMP cad-block-browser-support-proof.cjsで全80portを元の型・Geometry／現在scope・投影・Block照会・readerへ解決して照合し、全公開APIの名前・順序、移管箇所以外のappと既存BlockTestDriver全体のAST不変を確認した。root未使用binding 0。hierarchy.{cjs,json}では構築147文808非空白行、hooks1文336行、一文call関数102個126行、その他208文347行（文外5行）。数百行目標は未達で、test guardも維持する。
+
+block-editor-test-support.test.jsへ実Geometry型・Selectionと既存Block driver群を使う二つの境界試験を追加した。生成時の現在scope／Document／Solver照会なし、groupの全二十公開名と順序、作成Geometry／拘束と選択の同一参照・reset→fit→UI→draw、現在scope／hover／拘束commandと配置ownerのreceiver、現在投影を使う寸法生成とInstanceのSketch、取消例外の同じerror伝播・部分状態を確認した。既存テストの期待値は変更しない。関連単体8件・全単体2,027件・構文618ファイルが成功（exit 0）。正式モジュール構成とimplementation-mapを更新した。
+
+関連E2E183件が全成功（2.7分、exit 0、runner73116）。blocks／block-geometry-fixed／free-instance／file-safety／unified-uiを実行し、Block作成／入れ子編集／取消／確定と投影・固有寸法／外部拘束、固定拘束・Instance、旧形式を含む保存読込と通常UIを確認した。TEMP cad-block-browser-support-{focused,check,unit,e2e}.log、proof.cjs、hierarchy.{cjs,json}、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保存。製品／E2E入力402fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。この単位で全E2Eは未実行。直前Scene単位の全588件成功を今回の全体結果として流用しない。通常機能の処理・保存形式・既存期待値・性能上限／timeoutは変更しない。
+
+開始時は週枠使用13%／残量87%、検証後は使用14%／残量86%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この単位をCommit／Pushしてdevelopへ統合する。次も既存ownerを共有する生成の階層と公開境界を確認し、通常機能とtest fixtureの所有を混同しない。readerを操作時に評価する時機、Block編集scopeとDocument全体、異なる取消／復元方針を維持する。
+
 ### 最新：Canvasメニューを既存の編集ownerから組立て（2026-10-30、検証完了）
 
 基準develop／origin/developはfcc6c37。本単位はcodex/context-editing-ownersで実施した。CanvasContextInteraction.createMenuの後段createEditingInteractionは、同じSelection／Selection scope・SketchContext／編集access・拘束選択照会・Block照会・寸法ドラッグ・メニュー取消・Clipboard・履歴・pointer・Viewport・投影の13所有者を明示して受け取る。24入口を生成時に各公開APIから捕捉し、既存createへ限定したcapabilityとして渡す。appの接続は58→47項目。所有者を操作時のservice locatorにせず、新しいSelection／menu／command stateを持たない。旧createInteraction／個別createも維持する。

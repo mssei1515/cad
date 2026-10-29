@@ -850,6 +850,8 @@ ConstraintTestDriver.createParentPointLineFixture／createSiblingPointLineFixtur
 
 BlockTestDriver（src/testing/block_test_driver.js）は作成UI fixture（createCreationFixture）、空作成fixture（createEmptyFixture）、回転lock／drag可否（createRotationObservation）、投影端点のclient位置（createEndpointObservation）、投影hover（createHoverObservation）を役割別に生成する。準備は既存reset／Geometry・拘束生成／Selection・fit→UI→drawへ、観測は現在scope／Definition数・既存Solver変数／drag session・投影／座標変換・Hoverへ委譲する。固定入力・同一Instance参照・null／boolean、変数filter／sortと呼出し順を保持し、空fixtureにGeometry生成・観測に作成／履歴依存を渡さない。独自Definition／採番／下書き・Solver／lock／hoverルール／履歴を持たず、appはtest query時だけ生成して既存五API名へ接続する。
 
+BlockTestDriver.createBrowserSupportは、同じGeometry／modelTypes・Document／現在scope・Sketch／投影／読取り／Block照会・Selection／editor／配置／Solverと限定操作を共有し、作成fixture→editor support→観測support→拒否fixtureの順に生成する。後段createDimensionCasesは元の生成位置で読取り専用寸法と外部拘束fixtureを生成する。resets二件・observations五件・後段actions十三件を凍結したgroupとして返し、appは従来の公開位置へそれぞれspreadする。既存公開APIの名前・順序・関数と各操作の戻り値を保持する。definitionsと現在scope／Solver／hoverは操作時に読み、生成時のモデル照会・新しいBlock／Selection／履歴状態を持たない。共有依存は子ごとの限定capabilityへ分け、空作成・観測・編集・寸法fixtureの異なる責務を混用しない。通常機能は各製品ownerに残し、この組立ても従来どおりtest query時だけ生成する。
+
 
 BlockTestDriverはeditor状態の観測（createEditorObservation）、配置（createPlacementAction）、nested拘束（createNestedConstraintAction）、子Sketch Geometry追加（createChildGeometryAction）、取消／確定（createCancelAction／createCompleteAction）、enabled Sketch変更（createEnabledSketchAction）、作成拒否fixture（createRejectionFixture）を役割別に生成する。既存editor／session chain・scope、配置／拘束生成・求解／cache・履歴／UI／draw、既存取消／確定・Sketch変更／Selection検査へ委譲し、操作後の現在状態・保存値と拒否理由を観測する。固定入力・同一Instance／投影参照・数値fallback／nullと更新／観測順を保持する。Definition数とmodeはappの明示した照会入口を使い、独自下書き／Definition／採番・namespace／履歴・拒否規則を持たない。appはtest query時だけ生成して既存八API名へ接続する。
 
