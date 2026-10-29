@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
+### 最新：外観正規化の固定ルール再利用と性能再検証（2026-10-30、全E2E検証完了）
+
+基準develop／origin/developは22b3f4b。本単位はcodex/appearance-normalization-tablesで実施した。前単位から残るselection／deletion／undo／redo性能失敗を調査し、TEMP cad-render-latency-cpuの実fixture矩形選択CPU profileでnormalizeDimensionAppearance、SketchHierarchy.ensureと繰返しの外観正規化がhot pathにあることを確認した。profile取得自体で時間は増えるため、その診断値を正式性能試験の代用にはしない。Appearanceの凍結済み数値ルールとTerminator keysから二つの数値entry群を初期化時に一度準備し、Terminatorの重複したmin／maxの宣言と、呼出しごとのObject.entries／除外判定を共通の固定表へ集約する。数値検査・正規化回数・返値の新規生成とgetterの読取り順は維持し、可変Document／Sketchの結果をcacheしない。計算式・外観・保存形式・時間上限は変更しない。
+
+app.jsは2,026→2,026行（0行差）、非空白1,576行、root437文／関数98個／test hooks333行／可変参照三つで不変。製品変更はsrc/document/appearance.jsだけ。TEMP cad-appearance-normalization-ast-proof.cjsで数値表の準備と同値なloop以外のAST不変を確認し、proof.cjs／proof.jsonで2,009入力×3API×partial/fullの12,054比較と変化するgetterの読取り順が一致した。参考の同じNode VM内で空寸法外観10万回は変更前236.4ms／変更後183.9msだが、この単独測定を実操作の保証とは扱わない。既存の関連単体23件・全単体2,042件・構文622fileが成功。既存の外観・Sketch階層・描画参照テストを使い、新規期待や上限変更は加えていない。
+
+同じ作業ツリー／Git情報／ファイルI/Oを使い、Appearanceだけを22b3f4bへ戻して配信するTEMP serverとの正式既存性能試験の三回比較で、変更前は2失敗（矩形253ms・265ms）／1成功（239ms）、変更後は3成功（矩形168ms・232ms・164ms）となった。250ms未満の上限、他の操作上限、worker／入力条件／期待値は同じ。cad-appearance-normalization-{baseline,current}のlog／receipt／wrapperとbaseline-server.cjsへ保持。全E2E588件をfilterなしで実行し、全成功（22.8分、exit 0、runner63376）。問題の正式性能項目も矩形199ms／250ms・pan151ms／175msで通過した。拘束dragの全file（10.0分）と航空機1,872preview（最大170ms、failures空）を含み、UI・外観・保存互換性・Block／Sketch／Instance・各作図と画像比較を検証した。前単位に残った性能失敗は今回のコードで再検証して通過しており、古い成功結果を流用していない。cad-appearance-normalization-full-{run.ps1,source-hashes.json,source-snapshot.json,e2e.log,e2e-receipt.json,last-run.json}へ証跡を保持。開始HEAD 22b3f4bと404製品／E2E入力fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server35048停止を確認した。実行中に製品・E2E sourceを変更していない。この結果と差分を確認し、Commit／Push・develop統合する。
+
+次の責務分離の読取り監査としてinstallTestHooksを解析し、333行・54生成・847引数項目・外側の288 binding参照を確認した（TEMP cad-test-hook-dependency-audit.json）。workspaceは34箇所、resetModelStateは26箇所、addPointは20箇所、addLineは18箇所で使われる。333行を一括移動して288項目のcontextを渡す案は採らない。共通fixtureのreset・Geometry・scopeを既存の所有者から接続する境界を先に検討し、用途別のscope provider、公開test API名、生成順とnormal／testの起動条件は維持する。hooksと短い委譲を全て除く仮定でも1,127非空白行が残るため、それだけで数百行目標へ到達するとは扱わない。
+
+開始時の週枠使用18%／残量82%、検証後は使用19%／残量81%で停止条件未到達。main／origin/mainは5800850を保持し、停止／releaseの最後に反映する。全体目標はactive・未完了で200〜500行目標は変えない。今回の性能対処を独立した区切りとしてCommit／Push・develop統合し、次は上記test fixtureの共有ownerと生成階層を検討する。
+
 ### 最新：Geometry生成と作図基盤の共有接続（2026-10-30、既存性能失敗を切り分け）
 
 基準develop／origin/developは6b77cf0。本単位はcodex/authoring-geometry-foundationで実施した。既存BasicDrawingTools.createGeometryはGeometryCreation→同じaddPointを使うEndpoint resolverを生成し、実Geometry APIと後段createAuthoring入口を返す。後段は同じscope／ID／Geometry／endpointAt／最小Line・Arc長を既存createAuthoringへ渡す。端点解決の唯一の利用先である作図基盤へ直接接続し、rootのendpointAt bindingを除いた。通常Geometry APIは他の編集・投影・保存へ引き続き同じ実参照で公開し、model・ID・draftを複製しない。Geometryと作図基盤の二つの生成位置、Endpoint hit／snapshot／BlankGesture等の遅延callback、旧createAuthoringの個別port APIと子生成順を維持する。新file・可変context・setterは追加しない。

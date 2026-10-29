@@ -286,6 +286,10 @@ ReferenceImageFeature（src/application/reference_image_feature.js）は同じCa
 
 `SlotCommand`（`src/commands/slot_command.js`）が入力段階と中心2点を所有し、appの`slotFirstCenter`／`slotSecondCenter`を廃止する。previewとmode終了は公開された読出し／reset APIを使う。`SlotConstruction`（`src/editing/slot_construction.js`）は長穴の図形・拘束・snap適用とcheckpoint復元を担当する。appのクリックadapterはsnap解決だけを行う。共通のGeometry追加、snapshot、solveと履歴の実装は移行用portとして引き続きappにあり、後続で所有者を整理する。
 
+### 外観の固定数値ルールの共有
+
+Appearance（src/document/appearance.js）は、凍結されたDIMENSION_APPEARANCE_NUMERIC_RULESとTERMINATOR_KEYSから、Terminator用と残りの寸法外観用の数値entryをmodule初期化時に一度だけ準備する。normalizeTerminatorとnormalizeDimensionAppearanceは同じ数値ルールを使い、各呼出しで入力値を読み取り、新しい正規化結果を返す。Document／Sketch／個別値の正規化結果や可変入力を保持するcacheは持たない。数値の受理・clamp、default／継承、Terminator優先、入力getterの順序、公開定数の凍結と保存形式は従来どおりである。
+
 ### Geometry生成と作図基盤の二段階の組立て
 
 BasicDrawingTools.createGeometry（src/application/basic_drawing_tools.js）はGeometryCreationと同じaddPointを使うEndpoint resolverを元の順で生成し、実Geometry APIと後段のcreateAuthoring入口を返す。後段入口は同じcurrentScope／GeometryIds／Geometry／endpointAt／Line・Arc最小長を既存createAuthoringへ接続する。端点解決は作図基盤だけで使い、appへ渡し直さない。端点優先のhit順、明示Pointとは別のendpoint生成、ID・所属Sketch・constructionの読取り時機、最小長補正は既存GeometryCreationとcommandに残す。
