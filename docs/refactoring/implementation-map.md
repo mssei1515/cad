@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- CanvasCommandInputs.createFeature.bindPointerForEditing／CanvasInteractionFeature.bindEditingPointer: 実command・identity選択・式参照APIからPointerのpress／activationを接続する。同じPointer／Preview／Selectionを共有し、操作優先順はPointerInteractionController、確定・取消はcommandが所有する。寸法wrapperのreceiverと引数、旧bindPointerを維持する。
+
 - `src/application/derived_instance_feature.js`: 配置・source編集・確定後編集を共通scope／Selection・通知／履歴へ接続し、配置中／確定後のProperties変更を既存commandへ振り分ける。
 - `src/application/constraint_editing.js`: Selection能力照会・拘束対象command・寸法配置commandを同じsession／入力／Lifecycleから生成し、実ownerを返す。開始guardを共有し、寸法への継続と取消をowner間で接続する。UI metadata・フォーカス解除とモデル編集・求解の各担当は維持する。後段createCommit→createIntentResolverが同じ選択・通知・参照関係の照会を確定／意図解決へ接続する。 createFixedEditingは初期operand固定と後段の選択固定を同じquery／guard／通知へ接続する。生成時機とモデル・求解の所有は既存commandに残す。
 

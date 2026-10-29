@@ -72,6 +72,19 @@
         press: { ...press, activation: { ...press.activation, selection: canvasSelection },
           worldPoint: viewport.canvasPoint, screenPoint: viewport.canvasScreenPoint, inputs } });
     }
+    function bindPointerForEditing(pointer, { canvasNavigation, drawingPreview, recordHistory, referenceImageInteraction, pointerHover,
+      hatch, fillet, offset, spline, splineEditing, blockPlacement, annotationInput, dimensionValues, dimensions,
+      identity, expressions, discardMoves, enterBlock, query, closeContextMenu, blankGesture,
+      updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement }) {
+      return bindPointer(pointer, { canvasNavigation, drawingPreview, recordHistory, referenceImageInteraction, pointerHover,
+        updateHatchPreview: hatch.updateHatchPreview, updateFilletRadiusPlacement: fillet.update, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
+        press: { discardMove: () => discardMoves({ discard: true }), selectInactive: identity.selectInactive, prepareSelection: identity.prepareSelection,
+          activation: { finalizeSpline: spline.doubleClick, submitOffset: offset.submit, startAnnotationEdit: annotationInput.start,
+            startDimensionEdit: hit => dimensionValues.startEdit(hit), startDistanceValue: point => dimensions.startDistanceValueInput(point), submitDistance: dimensionValues.submit,
+            constraintDoubleClick: (hitP, hitL, point) => dimensions.targetDoubleClick(hitP, hitL, point), enterBlock, beginSplineEdit: splineEditing.begin },
+          query, closeContextMenu, ...expressions.pointerReferences, commitHatch: hatch.commitHatchAt, calibrateImage: referenceImageInteraction.calibrationClick,
+          placeFilletRadius: fillet.submit, placeBlock: blockPlacement.click, blankGesture } });
+    }
     function createKeyboard({ window: browserWindow, menus, sketchMove, constraintStatusView, dimensionInput, shortcuts,
       isGeometryMode, projection, referenceImage, splineEditing, blockPlacement,
       pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand, drawing,
@@ -84,7 +97,7 @@
         finishSpline, finishProjection, finishHatch, removeSplinePoint, offset, readPointer, deleteSelection, completeLineLength,
         isTextEditingTarget, setHint, updateUI, draw });
     }
-    return Object.freeze({ inputs, bindPointer, createKeyboard });
+    return Object.freeze({ inputs, bindPointer, bindPointerForEditing, createKeyboard });
   }
   window.CanvasCommandInputs = Object.freeze({ create, createFeature });
 })();

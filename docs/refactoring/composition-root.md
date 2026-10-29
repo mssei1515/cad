@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Pointer commandの接続所有（2026-10-30、検証完了）
+
+基準developは3e5db6f。既存CanvasCommandInputs.createFeatureのbindPointerForEditingが、Hatch／Fillet／Offset／Spline、寸法値／配置、Annotation、Block、式参照入力とidentity選択の実ownerをPointerのpress／activationへ接続する。CanvasInteractionFeatureのbindEditingPointerが同じPointer session・Preview・SelectionFeature.identityを共有し、appは操作ownerと外部のquery／menu／gesture等を渡す。bindは従来の後段位置のまま行い、生成時にmode／scope／model／DOMを読まない。優先順位とイベント処理は既存PointerInteractionController、確定・取消・履歴は各commandに残し、別のpointer座標・Selection・sessionやmutable contextを追加しない。寸法編集・配置・target double-clickの三wrapperは元のmethod receiverと引数を保ち、ほかは従来の関数値を渡す。旧bindPointerとraw APIを維持する。
+
+app.jsは1,974→1,964行（10行減）、非空白1,524→1,514行、root424→422文／関数86→85個／hooks323行／可変参照三つ。未使用となった九つのaliasと一つの委譲関数を削除した。構築136文755非空白行、一文call関数81個105行、その他204文326行（文外5行）。TEMP cad-pointer-command-bindings-{proof,hierarchy}.cjsで旧接続packetとのAST一致（owner展開・wrapper引数／receiverを含む）、Pointer／Preview／identityの同一性、既存二moduleとその他appのAST不変、root未使用bindingなしを確認した。hooksと短い委譲を除いても1,086非空白行が残り、数百行目標は未達。
+
+境界テストを三つ追加し、実PointerInteractionControllerでダブルクリックのSpline／Offset／寸法編集・配置／拘束／Block／Spline編集の優先順、Parameter参照入力の先行、Hatchと画像較正、Fillet／Block配置、live previewとquery例外時の記憶座標、破棄要求を確認した。parent接続では無照会／無編集、同じPointer／identity／Preview、例外の同一性と無回復を確認した。関連単体42件／全単体2,070件／構文624fileが成功。電源接続後の関連10suite（unified-ui／unified-annotations／spline／hatching／reference-images／blocks／multiple-dimensions／command-panel／phase0-characterization／adversarial-authoring-performance）の233件が全成功（4.0分、exit 0、実行session4767）。Fillet半径確定129ms（上限350ms）、Offset開始129ms（上限250ms）を含み、以前の失敗原因が電源状態だったとは断定しない。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-pointer-command-bindings-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存期待値・性能上限／timeout・workerは変更しない。今回は接続整理でraw pointer／command本体は変更せず、全E2Eは未実行とし、以前の全588件成功と区別する。
+
+全体目標active、週枠残量75%で停止条件未到達。mainは停止／releaseの最後に反映する。次も実ownerの共有依存と初期化phaseを整理し、既存の接続moduleをさらに薄いfileで包むだけの分割は行わない。
+
+
 ### 最新：固定操作の共有依存と二段階生成（2026-10-30、検証完了）
 
 基準developはbc59973。既存ConstraintEditingのcreateFixedEditingが実query／Selection、編集guard／Sketch所属／Line固定照会と通知を共有してoperand固定commandを生成し、後段createSelectionが実選択固定commandを生成する。初期と後段それぞれのraw constructorは元の位置に保ち、snapshot／復元／求解／履歴の後段依存は明示portのまま渡す。対象batch／全固定判定は同じselectionQueryのmethodへ直接接続し、rootの二つの委譲を除いた。返却は各実APIで、新しい固定状態・session・model／scopeや可変contextは持たない。FixedToggleCommand本体・旧API、型constructor、受理閾値、拒否／例外／復元／履歴の境界を変更しない。
