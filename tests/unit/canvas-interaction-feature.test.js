@@ -49,3 +49,52 @@ test('Canvas interaction presentation shares original clearing/reset subsets and
  assert.equal(s.targets.command,command);assert.equal(s.targets.operands[0],operand);assert.deepEqual(f.events,['snap']);
  f.state.snapFailure=null;p.documentReset.reset();assert.equal(b.selection.annotations.length,0);assert.equal(b.selection.points[0],f.point);
 });
+function inputFixture(){
+ const f=fixture(),{sessions:s,foundation:b,events}=f;f.state.ready=false;
+ const viewport={scale:1,canvasPoint:()=>f.point,canvasScreenPoint:()=>f.point};
+ const inputs=s.createInputFeature({document:{activeElement:null},canvas:{setPointerCapture:()=>{}},updateUI:()=>events.push('input-ui'),
+  annotationCommand:{commitTextAnnotationAt:p=>events.push(['text',p])},annotationDrag:{},instanceSourceCommand:{finish:()=>{}},geometryInstanceCommand:{cancel:()=>false},
+  clearSnap:()=>events.push('input-snap'),selectionRectangle:{},drawingSnap:{},viewport,transientAuthoring:{},
+  createDrawingInput:()=>({}),geometryDrag:{},sameArcEndpoint:(a,b)=>a===b});
+ assert.deepEqual(events,[]);f.state.ready=true;return {...f,inputs,viewport};
+}
+
+test('Canvas input assembly binds the existing pointer and preview with live pending state and the explicit input snap port',()=>{
+ const f=inputFixture(),{sessions:s,foundation:b,events,inputs}=f;
+ f.state.ready=false;
+ assert.equal(s.bindPointer(inputs,{canvasNavigation:{movePan:()=>false},referenceImageInteraction:{},
+  updateHatchPreview:p=>events.push(['hatch',p]),press:{closeContextMenu:()=>events.push('close'),activation:{},query:{read:()=>({})}}}),s.pointer);
+ assert.deepEqual(events,[]);f.state.ready=true;
+ s.pending.replace({type:'annotation-text-place',annotationDraft:true});events.length=0;
+ s.pointer.down({button:0,preventDefault:()=>events.push('prevent')});
+ assert.equal(s.pointer.readLastPointer(),f.point);assert.deepEqual(events,['close','prevent',['text',f.point]]);
+ const next={x:7,y:9};s.pointer.move({},next,false);assert.equal(s.pending.current.pointer,next);assert.equal(s.pointer.readLastPointer(),next);
+ s.pending.replace(null);b.lifecycle.setMode('hatch');b.hover.update({point:f.point});events.length=0;
+ s.pointer.move({},f.point,false);assert.equal(s.preview.pointer,f.point);assert.equal(b.hover.current.point,null);
+ assert.deepEqual(events,['input-snap',['hatch',f.point],'draw']);
+});
+
+test('Canvas keyboard assembly retains one listener, pending before constraint cancellation and the latest mode/pointer',()=>{
+ const f=inputFixture(),{sessions:s,foundation:b,events,inputs}=f,listeners=new Map();
+ const browser={addEventListener:(name,listener)=>{assert.equal(listeners.has(name),false);listeners.set(name,listener);},
+  removeEventListener:(name,listener)=>{assert.equal(listeners.get(name),listener);listeners.delete(name);}};
+ const marker=new Error('pending failed');let failure=marker;
+ f.state.ready=false;
+ const keyboard=s.createKeyboard(inputs,{window:browser,menus:{closeSketch:()=>false,canvasVisible:()=>false},sketchMove:{active:false},
+  constraintStatusView:{hold:()=>false},dimensionInput:{handleKey:()=>false},shortcuts:{},projection:{},referenceImage:{},splineEditing:{},blockPlacement:{},
+  cancelPendingCommand:()=>{events.push('cancel-pending');if(failure)throw failure;s.pending.replace(null);},
+  cancelConstraintTargetCommand:()=>{events.push('cancel-target');s.targets.clearCommand();},
+  offset:{canConfirmSelection:()=>true,confirmSelection:p=>events.push(['confirm',p])},
+  isTextEditingTarget:()=>false,deleteSelection:()=>false,completeLineLength:()=>false});
+ assert.deepEqual(events,[]);assert.equal(listeners.size,0);keyboard.start();keyboard.start();assert.equal(listeners.size,1);f.state.ready=true;
+ function key(key){listeners.get('keydown')({key,target:{},preventDefault:()=>events.push('prevent')});}
+ s.pending.replace({type:'offset-value'});s.targets.begin('distance',[]);const command=s.targets.command;events.length=0;
+ assert.throws(()=>key('Escape'),error=>error===marker);assert.equal(s.pending.current.type,'offset-value');assert.equal(s.targets.command,command);
+ assert.deepEqual(events,['prevent','cancel-pending']);failure=null;events.length=0;
+ key('Escape');assert.equal(s.pending.current,null);assert.equal(s.targets.command,command);assert.deepEqual(events,['prevent','cancel-pending']);
+ events.length=0;key('Escape');assert.equal(s.targets.command,null);assert.deepEqual(events,['prevent','cancel-target']);
+ const point={x:11,y:12};s.pointer.setLastPointer(point);b.lifecycle.setMode('offset');events.length=0;
+ key('Enter');assert.equal(events[1][1],point);assert.deepEqual(events,['prevent',['confirm',point]]);
+ keyboard.dispose();keyboard.dispose();assert.equal(listeners.size,0);
+}
+);
