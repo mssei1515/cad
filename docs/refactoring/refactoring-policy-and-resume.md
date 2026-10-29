@@ -97,6 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
+### 最新：Propertiesの操作状態とcommand接続（2026-10-30、検証完了）
+
+基準developはd277dd8。既存PropertiesDisplay.createFeatureがoperationsとして実Lifecycle／InstanceSource／GeometryInstance／BlockPlacementを共有し、選択判定用の状態readerを所有する。後段createViewForEditingが表示用readerと実InstanceTransform／BlockConfiguration／DimensionValue／DimensionPlacement／ReferenceImage／Hatch／SplineEditingへの操作接続を所有する。選択用のmode→source→pending→definitionと、表示用のmode→pending→source→enabledSketchIds→rotationLockedという別の形と読取順を保ち、毎回最新状態を読む。モデル・draft・Selection・command状態は元ownerに残し、値snapshotの保持や第二状態、setter／listener、巨大contextを追加しない。従来のcreateFeatureの明示selectionOperation、createView／createWithControllerの直接接続は維持する。生成段階・通知・例外の境界とController／View本体は変更しない。
+
+app.jsは1,959→1,954行（5行減）、非空白1,509→1,504行、root421→420文／関数85→84個／hooks323行／可変参照三つ。viewへのroot接続は30→25項目。使わなくなった三aliasとInstance角度寸法の委譲関数を除いた。構築135文746非空白行、一文call関数80個104行、その他204文326行（文外5行）。TEMP cad-properties-operation-bindings-{proof,hierarchy}.cjsで両状態readerの形と全view接続（guard・角度寸法／Spline wrapperの引数とreceiverを含む）の一致、その他appと既存PropertiesDisplayのAST不変、root未使用bindingなしを確認。hooksと短い委譲を除いても1,077非空白行が残り、数百行目標は未達。
+
+単体へ三つの境界試験を追加した。実PropertiesのSelection／Controller／Viewを使い、構築時の無照会、選択／表示の別readerと読取順、live Block配置と参照元編集の優先順、選択・操作Objectの同一性、構造編集guard、角度寸法のmethod receiver／戻り値、参照画像較正とHatch修復、Block変更と寸法propertyの引数・UI通知、状態readerと操作例外の同一性を確認。関連単体26件／全単体2,076件／構文624fileが成功。直近のPointer／寸法drag接続も含む最新コードの全E2E588件が成功（22.4分、exit 0、実行session77670）。constraint-drag-regressions全file10.0分を含み、Fillet3,744preview最大29.5ms、Offset10,296最大45.5ms、aircraft1,872最大272.3ms、coupled-lines5,304最大45.7msが失敗なし。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-properties-operation-bindings-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerは変更しない。以前の全588件成功を今回の結果として流用していない。
+
+全体目標active、開始時週枠残量74%／最終確認73%で停止条件未到達。mainは停止／releaseの最後に反映する。次も実ownerの共有依存と初期化phaseを整理し、すでにあるmoduleを薄いfileで包むだけの分割は避ける。
+
+
 ### 最新：寸法入力とドラッグの生成接続（2026-10-30、検証完了）
 
 基準developはdaa1345。既存ConstraintEditing.createCommandInputのcreateWithDraggingが、同じplacement／Selection／guard／入力欄sync／通知へ実ConstraintCommandInputとDimensionDragFeatureを接続する。入力featureを生成してから寸法dragを生成する元の後段順序を維持し、返却input／draggingは実API。SketchContext・GeometryReadServices・DragPointerは実ownerを共有し、型とhypot2は既存namespaceを使う。新しいdrag状態・Selection・pendingやmutable contextを持たず、mode／scope／model／DOMを生成時に読まない。旧createFeature／DimensionDragFeature.createと各command本体・優先順位・threshold・履歴方針は維持する。親と子の共通契約の整理であり、入力の確定やdrag状態を組立て層へ移さない。

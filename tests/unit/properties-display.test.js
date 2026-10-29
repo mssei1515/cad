@@ -12,7 +12,7 @@ class Input {
   closest() { return null; }
 }
 class TextArea extends Input {}
-function fixture({ interactive = false, sharedScene = false, sharedOwners = false, featureComposition = false } = {}) {
+function fixture({ interactive = false, sharedScene = false, sharedOwners = false, featureComposition = false, operationBindings = false } = {}) {
   const model = w.DocumentState.create(), selection = w.CanvasSelection.create(), calls = [];
   const state = { ready: false, scope: model, operation: {}, controls: [{ disabled: false }], checkbox: {}, section: null };
   const panel = { innerHTML: '', querySelectorAll(selector) {
@@ -33,10 +33,24 @@ function fixture({ interactive = false, sharedScene = false, sharedOwners = fals
     applicationText, hatchGeometryQuery: { resolvedHatchBoundary: () => ({ ok: false }), hatchPrimitivesFromElements: () => [], hatchPrimitivesForScope: () => [] },
     sketchById, isRootSketch, activeSketchId, showHiddenElements: () => false });
   const appearance = w.Appearance;
+  const action = name => (...args) => { assert.equal(state.ready,true); calls.push([name,...args]); if(state.actionFailure)throw state.actionFailure; return name+'-result'; };
+  const readOperation = key => { assert.equal(state.ready,true); (state.operationReads ||= []).push(key); if(state.operationFailure)throw state.operationFailure; return state.operation[key]; };
+  const operations = { lifecycle: { get mode(){return readOperation('mode');} },
+    sources: { get current(){return readOperation('instanceSourceEdit');},startForInstance:action('source-edit') },
+    placement: { get pending(){return readOperation('freeInstancePlacement');},startEdit:action('placement-edit') },
+    blocks: { get definitionId(){return readOperation('blockPlacementDefinitionId');},get enabledSketchIds(){return readOperation('blockPlacementEnabledSketchIds');},
+      get rotationLocked(){return readOperation('blockPlacementRotationLocked');},setRotationLocked:action('placement-lock'),setEnabledSketchIds:action('placement-sketches') } };
+  const editingActors = { access: { guardSketchEdit: function(id,mode){'use strict';assert.equal(this,undefined);calls.push(['guard',id,mode]);return state.structureAllowed!==false;} },
+    instanceTransform: {setBlockInstanceRotationLocked:action('block-lock'),setBlockInstanceOrthogonalRotation:action('block-rotation')},
+    blockConfiguration:{setEnabledSketchIds:action('block-sketches')},dimensionValues:{commitProperty:action('dimension-property')},
+    dimensions:{startInstanceAngleDimension(instance){assert.equal(this,editingActors.dimensions);return action('angle-dimension')(instance);}},
+    referenceImages:{startCalibration:action('image-calibrate')},hatch:{startHatchBoundaryRepair:action('hatch-repair')},
+    splineEditing:{activate(spline){assert.equal(this,editingActors.splineEditing);return action('spline-edit')(spline);}} };
+  sketchContext.elementSketchId = item => item.sketchId;
   const composition = featureComposition ? w.PropertiesDisplay.createFeature({ document, documentModel: model,
     currentScope: () => { assert.equal(state.ready,true); state.scopeReads = (state.scopeReads || 0) + 1; return state.scope; },
     canvasSelection: selection, readServices: services, sketchContext, hatchAppearanceForDisplay: item => appearance.normalizeHatchAppearance(item.appearance),
-    selectionOperation: () => { assert.equal(state.ready,true); state.selectionReads = (state.selectionReads || 0) + 1; return state.selectionOperation || state.operation; } }) : null;
+    ...(operationBindings ? { operations } : { selectionOperation: () => { assert.equal(state.ready,true); state.selectionReads = (state.selectionReads || 0) + 1; return state.selectionOperation || state.operation; } }) }) : null;
   const propertySelection = composition ? composition.selection : sharedScene ? w.PropertiesDisplay.createSelection({ canvasSelection: selection, getOperation: () => state.operation,
     documentModel: model, readServices: services, sketchContext, hatchAppearanceForDisplay: item => appearance.normalizeHatchAppearance(item.appearance) })
     : w.PropertySelection.create({ Point, Line, canvasSelection: selection, getOperation: () => state.operation,
@@ -96,9 +110,9 @@ function fixture({ interactive = false, sharedScene = false, sharedOwners = fals
     applicationSettings: ownerPorts.applicationSettings || { applicationText, localizeApplicationUI: presentationPorts.localizeApplicationUI }, escapeHtml,
     invalidateBlockProjectionCache: services.projections.invalidateBlockProjectionCache, recordHistory: notify('history'),
     updateUI: interactivePorts.updateUI, updatePropertiesUI: interactivePorts.updatePropertiesUI, draw: interactivePorts.draw }) : null;
-  const view = editor ? editor.createView(viewOptions) : build(viewOptions);
+  const view = editor ? operationBindings ? editor.createViewForEditing({ ...viewOptions, ...editingActors }) : editor.createView(viewOptions) : build(viewOptions);
   function point(id, x = 1) { const item = Object.assign(new Point(id, x, 2), { sketchId: activeSketchId() }); state.scope.points.push(item); return item; }
-  return { model, state, panel, calls, controller, view, selection, propertySelection, point, services, sketchContext, composition, editor };
+  return { model, state, panel, calls, controller, view, selection, propertySelection, point, services, sketchContext, composition, editor, operations, editingActors };
 }
 
 test('shared scene owners preserve mixed markup, current locks and interactive property routing without construction reads', () => {
@@ -269,4 +283,43 @@ test('Properties feature keeps selection operation and presentation operation di
   const instance = { id: 'FI1', sketchId: f.model.activeSketchId }; f.state.selectionOperation = { freeInstancePlacement: instance }; f.state.operation = {};
   f.calls.length = 0; const action = { closest: selector => selector === '[data-property-action]' ? { dataset: { propertyAction: 'instance-anchor' } } : null };
   assert.equal(f.panel.onclick({ target: action }),'placement-result'); assert.equal(f.calls[1][1],instance);
+});
+
+function operationsFixture(){return fixture({interactive:true,sharedScene:true,sharedOwners:true,featureComposition:true,operationBindings:true});}
+function actionEvent(action){return {target:{closest:selector=>selector==='[data-property-action]'?{dataset:{propertyAction:action}}:null}};}
+
+test('Properties operation owners defer reads and retain distinct live selection and presentation snapshots',()=>{
+  const f=operationsFixture();assert.deepEqual(f.calls,[]);assert.equal(f.state.operationReads,undefined);f.state.ready=true;
+  const definition={...w.DocumentState.create(),id:'BD-new',name:'New block'};f.model.blockDefinitions.push(definition);
+  f.state.operation={mode:'block-place',blockPlacementDefinitionId:definition.id,blockPlacementEnabledSketchIds:[f.model.activeSketchId],blockPlacementRotationLocked:true};
+  const target=f.propertySelection.selectedDisplayTarget();assert.equal(target.item,definition);
+  assert.deepEqual(f.state.operationReads.slice(0,4),['mode','instanceSourceEdit','freeInstancePlacement','blockPlacementDefinitionId']);
+  f.state.operationReads=[];f.view.render(target);assert.match(f.panel.innerHTML,/data-placement-rotation-mode/);
+  assert.deepEqual(f.state.operationReads.slice(0,5),['mode','freeInstancePlacement','instanceSourceEdit','blockPlacementEnabledSketchIds','blockPlacementRotationLocked']);
+  const instance={id:'pending-instance',sketchId:f.model.activeSketchId};f.state.operation={freeInstancePlacement:instance};assert.equal(f.propertySelection.selectedDisplayTarget().item,instance);
+  const source={id:'source-instance'};f.state.operation={mode:'instance-sources',instanceSourceEdit:{instance:source},freeInstancePlacement:instance};assert.equal(f.propertySelection.selectedDisplayTarget().item,source);
+  const marker=new Error('operation read');f.state.operationFailure=marker;assert.throws(()=>f.propertySelection.selectedDisplayTarget(),error=>error===marker);assert.equal(f.state.operation.freeInstancePlacement,instance);
+});
+
+test('Properties editing view routes live command actions with original guards, receivers, results and exceptions',()=>{
+  const f=operationsFixture();f.state.ready=true;const point=f.point('initial');f.selection.set('points',[point]);f.view.render(f.propertySelection.selectedDisplayTarget());
+  const instance={id:'instance',sketchId:f.model.activeSketchId};f.state.operation={freeInstancePlacement:instance};f.calls.length=0;
+  assert.equal(f.panel.onclick(actionEvent('instance-anchor')),'placement-edit-result');assert.equal(f.calls[0][0],'guard');assert.equal(f.calls[0][1],instance.sketchId);assert.equal(f.calls[0][2],'structure');assert.equal(f.calls[1][1],instance);assert.equal(f.calls[1][2],'origin');
+  assert.equal(f.panel.onclick(actionEvent('instance-angle-dimension')),'angle-dimension-result');assert.equal(f.calls.at(-1)[1],instance);
+  assert.equal(f.panel.onclick(actionEvent('instance-sources')),'source-edit-result');
+  f.state.structureAllowed=false;f.calls.length=0;assert.equal(f.panel.onclick(actionEvent('instance-anchor')),false);assert.equal(f.calls.length,1);
+  f.state.structureAllowed=true;const marker=new Error('command failed');f.state.actionFailure=marker;
+  assert.throws(()=>f.panel.onclick(actionEvent('instance-angle-dimension')),error=>error===marker);assert.equal(f.state.operation.freeInstancePlacement,instance);f.state.actionFailure=null;
+  f.state.operation={};f.selection.clear();const image={id:'image',sketchId:f.model.activeSketchId};f.selection.set('referenceImages',[image]);assert.equal(f.panel.onclick(actionEvent('reference-image-calibrate')),'image-calibrate-result');assert.equal(f.calls.at(-1)[1],image);
+  f.selection.clear();const hatch={id:'hatch',sketchId:f.model.activeSketchId};f.selection.set('hatches',[hatch]);assert.equal(f.panel.onclick(actionEvent('hatch-repair')),'hatch-repair-result');assert.equal(f.calls.at(-1)[1],hatch);
+});
+
+test('Properties editing view retains Block changes and dimension property callback arguments through the real Controller',()=>{
+  const f=operationsFixture();f.state.ready=true;const point=f.point('initial');f.selection.set('points',[point]);f.view.render(f.propertySelection.selectedDisplayTarget());f.selection.clear();
+  const block={id:'block',definitionId:'BD1',sketchId:f.model.activeSketchId};f.selection.set('blockInstances',[block]);f.calls.length=0;
+  f.panel.onchange({target:new Input({blockRotationMode:'locked'},'')});assert.equal(f.calls[0][0],'block-lock');assert.equal(f.calls[0][1],block);assert.equal(f.calls[0][2],true);
+  const input=new Input({blockSketchId:'S1'},'');input.closest=()=>({querySelectorAll:()=>[{dataset:{blockSketchId:'S1'}}]});f.panel.onchange({target:input});assert.equal(f.calls.at(-1)[0],'block-sketches');assert.equal(f.calls.at(-1)[1],block);assert.deepEqual(Array.from(f.calls.at(-1)[2]),['S1']);
+  f.panel.onchange({target:new Input({property:'block-orthogonal-rotation'},'90')});assert.equal(f.calls.at(-1)[0],'block-rotation');assert.equal(f.calls.at(-1)[2],Math.PI/2);
+  f.selection.clear();const constraint=new w.GeometrySolver.DistanceConstraint(point,f.point('P2',12),10);constraint.dimension={};f.selection.set('dimensionConstraint',constraint);f.calls.length=0;
+  f.panel.onchange({target:new Input({property:'constraint-expression'},'=2+8')});assert.equal(f.calls[0][0],'dimension-property');assert.equal(f.calls[0][1],constraint);assert.deepEqual(f.calls[0].slice(2),['constraint-expression','=2+8']);assert.deepEqual(f.calls.slice(1),['ui','draw']);
 });
