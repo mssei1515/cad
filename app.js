@@ -1679,22 +1679,20 @@
   canvasInputBinding.bind();
   dimensionInput.bind();
 
-  const keyboardInput = window.KeyboardInput.create({
+  const keyboardInput = canvasInputFeature.createKeyboard({
     window, menus: { closeSketch: () => sketchContextController.close(),
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
-    readMode: drawOperationLifecycle.readMode, isGeometryMode, instances: geometryInstanceCommand, projection: sketchProjectionCommand,
-    referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand, annotationDrag,
+    isGeometryMode, projection: sketchProjectionCommand,
+    referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
     pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand,
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
-    hasSelection, clearSelection, annotation: annotationCommand, finishSources: finishInstanceSourceEdit,
     finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
     removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand, readPointer: pointerInteractionController.readLastPointer,
     deleteSelection: deleteCurrentSelection, completeLineLength: completePendingDimensionLineLength,
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
-    setHint, updateUI, draw,
   });
   keyboardInput.start();
   canvasViewControls.bindWindow();
