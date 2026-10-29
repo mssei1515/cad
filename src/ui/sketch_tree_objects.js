@@ -211,5 +211,23 @@
       selected: (category, entry) => sketchTreeObjectSelected(category === "dimension" ? "constraint" : category, entry),
       hovered: (category, entry) => sketchTreeObjectHovered(category === "dimension" ? "constraint" : category, entry) });
   }
-  window.SketchTreeObjects = Object.freeze({ create });
+  // Keep Document object-row readers with the row presentation; explicit ports still override defaults.
+  function createForDocument({ pointUsage, analysis, redundancy, referenceState, projectionQueries, ...options }) {
+    return create({
+      types: window.GeometrySolver,
+      isExplicitPoint: pointUsage?.isExplicitPoint, isPointUsedByLine: pointUsage?.isPointUsedByLine,
+      ensureAnalysis: analysis?.ensure, constraintStatusOf: analysis?.statusOf,
+      isSketchProjectedGeometry: projectionQueries?.isSketchProjectedGeometry,
+      resolvedHatchBoundary: options.readServices?.hatches?.resolvedHatchBoundary,
+      formatDisplayNumber: window.NumberDisplay?.formatDisplayNumber,
+      hatchAppearanceForDisplay: window.HatchData?.hatchAppearanceForDisplay,
+      isDimensionConstraint: window.DimensionQueries?.isDimensionConstraint,
+      constraintGeometryId: window.GeometryObjects?.geometryIdForItem,
+      isReadOnlyDimension: window.DimensionQueries?.isReadOnlyDimension,
+      constraintIsRedundant: redundancy?.constraintIsRedundant,
+      referenceConstraintErrorInfo: referenceState?.referenceConstraintErrorInfo,
+      ...options,
+    });
+  }
+  window.SketchTreeObjects = Object.freeze({ create, createForDocument });
 })();

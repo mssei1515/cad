@@ -10,7 +10,7 @@ for (const file of ['canvas_hover', 'selection_highlight']) vm.runInContext(fs.r
 for (const file of ['canvas_context_menu', 'sketch_tree_view', 'sketch_tree_objects', 'sketch_tree_controller']) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui', `${file}.js`), 'utf8'), sandbox);
 }
-function objectFixture({ sharedOwners = false, ...overrides } = {}) {
+function objectFixture({ sharedOwners = false, createObjects = ports => sandbox.window.SketchTreeObjects.create(ports), ...overrides } = {}) {
   const state = { canvasHover: {}, sidebarHover: null }, reads = [];
   const model = { sketches: [{ id: 'S1' }, { id: 'S2' }], points: [], lines: [], circles: [], arcs: [], splines: [], hatches: [], referenceImages: [], blockInstances: [], geometryInstances: [], constraints: [], annotations: [] };
   const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -33,7 +33,7 @@ function objectFixture({ sharedOwners = false, ...overrides } = {}) {
     for (const key of ['sidebarGeometryItem','geometryInstanceBundle','blockProjectionBundle','blockDefinitionById',
       'elementSketchId','constraintSketchId','activeSketchId','applicationText','getLanguage','localizedConstraintName']) delete ports[key];
   }
-  const objects = sandbox.window.SketchTreeObjects.create(ports);
+  const objects = createObjects(ports);
   return { model, objects, state, reads, settings };
 }
 
@@ -398,4 +398,66 @@ test('block, hatch and instance delete buttons target only their row without swi
     assert.equal(f.calls.filter(call => call === 'delete-selection').length, 1);
     assert.equal(f.active(), 'S1');
   }
+});
+
+const documentSandbox = { window: {} }; vm.createContext(documentSandbox);
+const documentSources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+for (const file of documentSources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), documentSandbox, { filename: file });
+const documentWindow = documentSandbox.window;
+function documentObjectFixture(explicitPorts = {}) {
+  const reads = [], state = { ready: false, projected: false, status: 'under', redundant: false, referenceError: false, boundary: true, failure: null };
+  const read = name => { assert.equal(state.ready, true); reads.push(name); };
+  const f = objectFixture({ sharedOwners: true, localizedConstraintName: String, constraintToolbarIcon: () => '',
+    hatchPatternTypeLabel: type => `type:${type}`, selectedConstraintReferenceElements: () => [], constraintDirectlyReferencesCanvasSelection: () => false,
+    createObjects: ports => {
+      const options = { ...ports };
+      for (const key of ['types','isExplicitPoint','isPointUsedByLine','ensureAnalysis','constraintStatusOf','isSketchProjectedGeometry',
+        'resolvedHatchBoundary','formatDisplayNumber','hatchAppearanceForDisplay','isDimensionConstraint','constraintGeometryId',
+        'isReadOnlyDimension','constraintIsRedundant','referenceConstraintErrorInfo']) delete options[key];
+      return documentWindow.SketchTreeObjects.createForDocument({ ...options,
+        pointUsage: { isExplicitPoint: item => { read('explicit'); return item.explicit; }, isPointUsedByLine: item => { read('line-point'); return item.used; } },
+        analysis: { ensure: () => read('analysis'), statusOf: item => { read(item.id); return state.status; } },
+        projectionQueries: { isSketchProjectedGeometry: () => { read('projection'); if (state.failure) throw state.failure; return state.projected; } },
+        redundancy: { constraintIsRedundant: () => { read('redundancy'); return state.redundant; } },
+        referenceState: { referenceConstraintErrorInfo: () => { read('references'); return state.referenceError ? { reason: 'cycle' } : null; } },
+        readServices: { ...options.readServices, hatches: { resolvedHatchBoundary: hatch => { read(hatch.id); return { ok: state.boundary }; } } },
+        ...explicitPorts,
+      });
+    } });
+  return { ...f, readerState: state, readerCalls: reads };
+}
+
+test('Document Tree object readers stay lazy and follow live point eligibility, projection, constraint analysis and boundary state', () => {
+  const f = documentObjectFixture(); assert.deepEqual(f.readerCalls, []); f.readerState.ready = true;
+  const point = Object.assign(new documentWindow.GeometrySolver.Point('P1', 1.00000004, 2), { sketchId: 'S1', explicit: true });
+  f.model.points.push(point); const groups = f.objects.index().get('S1'); assert.equal(groups.point[0], point);
+  const before = JSON.stringify(point); const row = f.objects.row('point', point, [], 'S1');
+  assert.match(row, /X 1 \/ Y 2/); assert.doesNotMatch(row, /Projected/); assert.equal(JSON.stringify(point), before);
+  f.readerState.projected = true; assert.match(f.objects.row('point', point, [], 'S1'), /Projected/);
+  assert.equal(f.objects.summaryCounts('S1', groups).under, 1); f.readerState.status = 'full';
+  assert.equal(f.objects.summaryCounts('S1', groups).full, 1); assert.ok(f.readerCalls.includes('analysis'));
+  point.explicit = false; assert.equal(f.objects.index().get('S1').point.length, 0); point.used = true;
+  assert.equal(f.objects.index().get('S1').point[0], point);
+  const other = new documentWindow.GeometrySolver.Point('P2', 4, 6);
+  const dimension = Object.assign(new documentWindow.GeometrySolver.DistanceConstraint(point, other, 5), { sketchId: 'S1', parameterName: 'D1', readOnlyDimension: true });
+  const entry = { constraint: dimension, modelIndex: 0 }; f.model.constraints.push(dimension);
+  f.readerState.redundant = true; f.readerState.referenceError = true;
+  const dimensionRow = f.objects.row('dimension', entry, [], 'S1'); assert.match(dimensionRow, /D1/);
+  assert.match(dimensionRow, /Read-only/); assert.match(dimensionRow, /Duplicate/); assert.match(dimensionRow, /Reference error/);
+  assert.equal(f.objects.index().get('S1').dimension[0].constraint, dimension);
+  const hatch = { id: 'H1', sketchId: 'S1' }; f.readerState.boundary = false;
+  const hatchRow = f.objects.row('hatch', hatch, [], 'S1'); assert.match(hatchRow, /type:solid/); assert.match(hatchRow, /Boundary error/);
+  assert.equal(f.model.points[0], point); assert.equal(f.model.constraints[0], dimension);
+});
+
+test('Document Tree explicit ports take precedence and reader failures preserve objects and model arrays', () => {
+  const f = documentObjectFixture({ isExplicitPoint: () => true, formatDisplayNumber: () => 'custom', isSketchProjectedGeometry: () => false });
+  assert.deepEqual(f.readerCalls, []); f.readerState.ready = true;
+  const point = { id: 'P1', sketchId: 'S1', x: 1, y: 2 }; f.model.points.push(point);
+  f.readerState.failure = new Error('unused owner'); assert.equal(f.objects.index().get('S1').point[0], point);
+  assert.match(f.objects.row('point', point, [], 'S1'), /X custom \/ Y custom/); assert.equal(f.readerCalls.includes('projection'), false);
+  const failing = documentObjectFixture(), marker = new Error('projection query failed'); failing.readerState.ready = true;
+  failing.model.points.push(point); failing.readerState.failure = marker; const points = failing.model.points, before = JSON.stringify(failing.model);
+  assert.throws(() => failing.objects.row('point', point, [], 'S1'), error => error === marker);
+  assert.equal(failing.model.points, points); assert.equal(points[0], point); assert.equal(JSON.stringify(failing.model), before);
 });

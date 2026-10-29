@@ -224,11 +224,11 @@
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
   });
   const { constraintIsOperational, wouldCreateReferenceCycle, refreshReferenceConstraintValidity,
-    referenceConstraintErrorInfo, referenceConstraintErrorCountForSketch } = referenceConstraintState;
+    referenceConstraintErrorCountForSketch } = referenceConstraintState;
   const sketchProjectionQueries = window.SketchProjectionQueries.create({
     currentScope: workspace.current, constraintIsOperational,
   });
-  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, isSketchProjectedGeometry, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
+  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
   const sketchProjectionFeature = window.SketchProjectionFeature.create({
     currentScope: () => editingScopeBinding.current, queries: sketchProjectionQueries, activeSketchId, geometryRefForItem, geometryRefsEqual,
     constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem, elementSketchId,
@@ -1325,11 +1325,9 @@
 
   const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = sketchEditing.createTree({
     readServices: geometryReadServices, canvasHover, selectionHighlight,
-    objectOptions: { constraintFeedback, isHidden: selectionVisibilityIsHidden,
-      ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver, isExplicitPoint, isPointUsedByLine,
-      constraintStatusOf, formatDisplayNumber, toolbarSvgMarkup, constraintToolbarIcon, isSketchProjectedGeometry,
-      findLineFixedConstraint, geometryInstanceTypeLabel, resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
-      isDimensionConstraint, constraintGeometryId, isReadOnlyDimension, constraintIsRedundant, referenceConstraintErrorInfo },
+    objectOptions: { constraintFeedback, isHidden: selectionVisibilityIsHidden, pointUsage, analysis: constraintAnalysis,
+      redundancy: constraintRedundancy, referenceState: referenceConstraintState, projectionQueries: sketchProjectionQueries,
+      toolbarSvgMarkup, constraintToolbarIcon, findLineFixedConstraint, geometryInstanceTypeLabel, hatchPatternTypeLabel },
     document, window, applicationSettings, escapeHtml, closeCanvasContextMenu,
     moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
     getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
