@@ -61,5 +61,14 @@
     };
   }
 
-  window.HatchData = Object.freeze({ normalizeHatches, validSerializedHatch, validSerializedHatchList, serializeHatch });
+  // Read normalized display values without mutating an element or caching projected getters.
+  function hatchAppearanceForDisplay(hatch) {
+    return normalizeHatchAppearance(hatch?.appearance);
+  }
+
+  function hatchPatternOrigin(hatch) {
+    return hatch?.patternOrigin || { x: 0, y: 0 };
+  }
+
+  window.HatchData = Object.freeze({ normalizeHatches, validSerializedHatch, validSerializedHatchList, serializeHatch, hatchAppearanceForDisplay, hatchPatternOrigin });
 })();
