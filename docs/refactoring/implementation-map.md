@@ -286,6 +286,12 @@ ReferenceImageFeature（src/application/reference_image_feature.js）は同じCa
 
 `SlotCommand`（`src/commands/slot_command.js`）が入力段階と中心2点を所有し、appの`slotFirstCenter`／`slotSecondCenter`を廃止する。previewとmode終了は公開された読出し／reset APIを使う。`SlotConstruction`（`src/editing/slot_construction.js`）は長穴の図形・拘束・snap適用とcheckpoint復元を担当する。appのクリックadapterはsnap解決だけを行う。共通のGeometry追加、snapshot、solveと履歴の実装は移行用portとして引き続きappにあり、後続で所有者を整理する。
 
+### Geometry生成と作図基盤の二段階の組立て
+
+BasicDrawingTools.createGeometry（src/application/basic_drawing_tools.js）はGeometryCreationと同じaddPointを使うEndpoint resolverを元の順で生成し、実Geometry APIと後段のcreateAuthoring入口を返す。後段入口は同じcurrentScope／GeometryIds／Geometry／endpointAt／Line・Arc最小長を既存createAuthoringへ接続する。端点解決は作図基盤だけで使い、appへ渡し直さない。端点優先のhit順、明示Pointとは別のendpoint生成、ID・所属Sketch・constructionの読取り時機、最小長補正は既存GeometryCreationとcommandに残す。
+
+appはGeometry APIを保存・投影・他の編集へ従来どおり接続し、作図基盤は従来の後段位置で生成する。後段hit query、hoisted snapshot／restore、BlankGesture等のcallbackは元の遅延入口を維持する。生成時にscope照会・hit・checkpointを実行せず、modelや採番・draftを複製しない。旧BasicDrawingTools.createAuthoringの個別port APIと既存の子生成順は維持する。
+
 ### 円・円弧command
 
 `CircularCommands`（`src/commands/circular_commands.js`）が円・中心指定円弧・3点円弧の5つの入力状態を所有する。appはsnap解決後のclickとmode変更時のresetを振り分け、previewは読出しAPIを使う。`CircularConstruction`（`src/editing/circular_construction.js`）が図形生成とsnap拘束を担当する。3点円弧の中心追加失敗時のPoint除去と採番復元もここへ移した。Geometry追加・採番・共通solveの移行用portは引き続きappに残る。

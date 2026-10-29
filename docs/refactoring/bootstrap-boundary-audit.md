@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Geometry生成と作図の共有（2026-10-30、6b77cf0基準）
+
+BasicDrawingTools.createGeometryがGeometryCreation→Endpoint resolverを生成し、後段createAuthoringへ同じscope・ID・Geometry・endpoint・最小長を直接接続する。rootの三生成・45項目は二生成・38項目になる。唯一の利用先への端点接続を内側へ移し、他の編集・保存で使う実Geometry APIと既存の個別createAuthoringは維持する。snapshotや後段hit／BlankGestureへの遅延callback、二段階の生成位置、既存command／state ownerは変えない。
+
+app.jsは2,028→2,026行、非空白1,578→1,576行、root438→437文。構築136文774非空白行、test hooks333行、一文call関数92個116行、その他208文348行（文外5行）、関数98個・可変参照三つ。hooksと短い委譲を全て除く仮定でも1,127非空白行が残る。証跡はTEMP cad-authoring-geometry-foundation-{proof,hierarchy}.cjs、検証は再開記録section 8を参照する。
+
 ## Sketch求解の組立て階層（2026-10-30、5662046基準）
 
 SketchSolvingFeatureがSketchSolving、ParameterStabilization、stored-definition stabilization、SolveRefreshCommandの生成順と実API共有を所有する。appの四生成・40項目は一生成・33項目になる。求解状態Map・Parameter反復・scope復元・表示／履歴順は既存ownerに残る。通常model／Parameter namespaceと一時editing scopeを区別し、Profilerの二phaseと受理誤差・反復定数を維持する。証跡はTEMP cad-sketch-solving-feature-{proof,hierarchy}.cjs、検証は再開記録section 8を優先する。

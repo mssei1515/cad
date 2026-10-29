@@ -460,3 +460,51 @@ test('authoring circle cross preserves failed solve rollback and creation reject
   assert.deepEqual(f.calls,[['cancelConstraint',''],['cancelPending',''],'reject']);
  }
 });
+function geometryFoundationFixture(){
+ const sandbox={window:{},structuredClone};vm.createContext(sandbox);
+ const sources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+ for(const file of sources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),sandbox,{filename:file});
+ const w=sandbox.window,events=[],empty=()=>({points:[],lines:[],circles:[],arcs:[],splines:[],constraints:[]});
+ const state={ready:false,scope:empty(),sketch:'S1',construction:false,endpoint:null,explicit:null,failure:null};
+ const read=()=>{assert.equal(state.ready,true,'no eager scope or hit read');return state.scope;},ids=w.GeometryIds.create();
+ const foundation=w.BasicDrawingTools.createGeometry({currentScope:read,ids,assignSketchId:item=>{read();item.sketchId=state.sketch;},
+  currentConstruction:()=>{read();return state.construction;},minLineLength:4,minArcLength:6,
+  hitEndpointPoint:(...args)=>{read();events.push(['endpoint',...args]);if(state.failure)throw state.failure;return state.endpoint;},
+  hitExplicitPoint:(...args)=>{read();events.push(['explicit',...args]);return state.explicit;}});
+ let checkpoint;
+ const noop=()=>{},pointUsage=Object.fromEntries(['isSplineOnlyFitPoint','isReferencePoint','isPrimitiveCenterPoint','isPointUsedByPrimitive'].map(k=>[k,()=>false]));
+ Object.assign(pointUsage,{isEndpointPoint:p=>p.kind==='endpoint',isExplicitPoint:p=>p.kind==='explicit'});
+ const sketchContext={isActiveSketchElement:p=>{read();return p.sketchId===state.sketch;},elementSketchId:p=>p.sketchId,isReferenceSourceSketchId:()=>false,
+  sketchName:id=>id,activeSketchId:()=>{read();return state.sketch;},sameSketchElements:()=>true};
+ const tools=foundation.createAuthoring({samePosition:(a,b)=>a.x===b.x&&a.y===b.y,sketchContext,pointUsage,
+  geometryReads:Object.fromEntries(['allGeometryPoints','allGeometryLines','allGeometryCircles','allGeometryArcs','allGeometrySplines'].map(k=>[k,()=>{read();return [];} ])),
+  isVisibleSketchElement:()=>true,annotationAnchors:()=>{read();return [];},scale:()=>1,
+  transientAuthoring:Object.fromEntries(['beginTransientLineStartRollback','beginTransientLineCompletionRollback','markCompletedLine','clearTransientLineStartRollback'].map(k=>[k,()=>events.push([k])])),
+  pushModelConstraint:noop,addConstraintIfMissing:noop,selection:w.CanvasSelection.create(),preview:{setPointer:noop},
+  checkpoint:{capture:(...args)=>checkpoint.capture(...args),restore:(...args)=>checkpoint.restore(...args)},
+  cancelConstraintTargetCommand:noop,cancelPendingCommand:noop,canCreateInActiveSketch:()=>true,rejectRootSketchCreation:noop,
+  setMode:noop,resetEditing:noop,resetBlankCandidate:noop,updateToolbar:noop,projection:{reset:noop},clearSelection:noop,
+  solveAndRefresh:()=>({success:true}),recordHistory:noop,applicationText:(_ja,en)=>en,setHint:noop,updateUI:noop,draw:noop,log:noop});
+ assert.deepEqual(events,[]);assert.equal(Object.isFrozen(foundation),true);state.ready=true;checkpoint={capture:noop,restore:noop};
+ return {foundation,tools,state,ids,events,empty};
+}
+
+test('geometry foundation shares IDs, scope and construction with real drawing tools and retains endpoint versus explicit Point identity',()=>{
+ const f=geometryFoundationFixture(),{foundation:b,tools,state,ids}=f,first=state.scope;
+ const endpoint=b.geometry.addPoint(0,0,false,'endpoint'),explicit=b.geometry.addPoint(10,0);state.endpoint=endpoint;
+ tools.tools.line.click({x:0,y:0});assert.equal(tools.tools.line.startPoint,endpoint);assert.equal(first.points.length,2);
+ state.endpoint=null;state.explicit=explicit;state.construction=true;tools.tools.line.click({x:10,y:0});
+ const line=first.lines[0];assert.equal(line.p1,endpoint);assert.notEqual(line.p2,explicit);assert.equal(line.p2.kind,'endpoint');
+ assert.equal(line.p2.x,explicit.x);assert.equal(line.p2.y,explicit.y);assert.equal(line.p2.sketchId,'S1');assert.equal(line.construction,true);
+ assert.equal(line.id,'L1');assert.equal(line.p2.id,'P3');assert.equal(ids.peek('point'),4);
+ tools.tools.line.reset();state.scope=f.empty();state.sketch='S2';state.endpoint=null;state.explicit=null;
+ tools.tools.line.click({x:20,y:0});assert.equal(state.scope.points[0].id,'P4');assert.equal(state.scope.points[0].sketchId,'S2');assert.equal(first.points.length,3);
+ tools.tools.line.click({x:21,y:0});assert.equal(state.scope.lines[0].length(),4);assert.equal(state.scope.lines[0].construction,true);
+});
+
+test('geometry foundation preserves hit failure identity and stops before ID allocation, explicit hits and model insertion',()=>{
+ const f=geometryFoundationFixture(),marker=new Error('hit failed');f.state.failure=marker;
+ assert.throws(()=>f.tools.tools.line.click({x:2,y:3}),error=>error===marker);
+ assert.equal(f.ids.peek('point'),1);assert.equal(f.state.scope.points.length,0);assert.equal(f.tools.tools.line.startPoint,null);
+ assert.deepEqual(f.events,[['beginTransientLineStartRollback'],['endpoint',2,3]]);
+});
