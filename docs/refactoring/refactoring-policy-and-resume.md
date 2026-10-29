@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,040行、非空白1,590行、root直下441文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,039行、非空白1,589行、root直下441文、条件付きtest hooks333行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Canvas入力へ操作基盤の実sessionを共有（2026-10-30、検証完了）
+
+基準develop／origin/developはd562501。本単位はcodex/canvas-input-session-compositionで実施した。既存CanvasInteractionFeatureのoperation sessionsにcreateInputFeature／bindPointer／createKeyboardを加え、入力生成・後段Pointer bind・Keyboard生成に同じSelection／Hover／Pending／拘束対象／Lifecycle／Pointer／Previewを接続する。入力featureとKeyboardは既存factoryの実APIを返し、既存raw APIと生成・bind・start位置は変えない。入力用clearSnapは元の明示portを維持し、初期生成で使う遅延snap callbackとは区別する。Keyboardの二つの取消command callbackは操作固有の方針として残し、context menuの累積取消とは統合しない。stateや新しい可変接続、汎用app context、ファイル追加はない。
+
+app.jsは2,040→2,039行（1行減）、非空白1,590→1,589行、root441文／関数98個／test hooks333行／可変参照三つ。入力生成の明示項目42→32、Pointer bind 11→10、Keyboard生成25→20で、合計78→62。行数減は小さいが、同じownerの状態参照16項目をrootが再指定する必要を除いた。TEMP cad-canvas-input-session-proof.cjsで残る全引数式とその他appのAST不変、共有接続式、四raw ownerの差分なしを確認した。hierarchy.cjsでは構築140文787非空白行、hooks333行、一文call関数92個116行、その他208文348行。200〜500行目標は未達で、全体目標はactiveのまま。
+
+実ownerを使う追加単体では、同じPointerからの注記配置、現在Pendingへのpointer反映、Hatch previewとHover、明示入力snapの呼出し、生成時の照会なし、listenerの一度だけのstart／disposeを確認する。KeyboardはPending優先の一段取消、取消例外の同一性と未解除の状態、次の拘束対象取消、最新mode／PointerによるOffset確定を確認する。関連単体22件・全単体2,037件・構文620ファイルが成功。関連E2E250件が全成功（4.2分、exit 0、runner22610）。sketch-permissions／selection-zoom-shadow／free-instance／sketch-projection／command-panel／file-safety／unified-ui／unified-annotations／annotation-anchors／annotation-display-size／splineを実行した。TEMP cad-canvas-input-session-{check,unit,e2e}.log、proof.cjs、hierarchy.cjs、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持。403製品／E2E入力fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空と自己起動server停止を確認した。この単位では全E2E未実行で、直前単位の全588件成功を今回の全体検証として流用しない。性能上限・timeout・worker・既存期待値・UI・保存形式は変更しない。
+
+開始時の週枠使用16%／残量84%、検証後は使用17%／残量83%で停止条件未到達。main／origin/mainは5800850を保持し、停止／releaseの最後に反映する。この単位の検証・差分確認・Commit／Pushとdevelop統合を先に完了する。次は残る初期化と機能所有者の境界を再確認する。小さな接続削減だけで数百行へ届くとは見積もらず、既存ownerを共有するまとまった機能の生成階層を優先する。
 
 ### 最新：Canvas操作基盤を三段階で組立て（2026-10-30、検証完了）
 

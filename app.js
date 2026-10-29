@@ -233,7 +233,8 @@
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
     commit: commitSketchProjectionCommand } = sketchProjectionCommand;
   const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
-    pointer: pointerInteractionController, createSelectionPresentation } = createOperationSessions({
+    pointer: pointerInteractionController, createSelectionPresentation, createInputFeature: createCanvasInputFeature,
+    bindPointer: bindCanvasPointer, createKeyboard: createCanvasKeyboard } = createOperationSessions({
     snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
     readCenterline: () => centerlineCommand, projectPointToCenterlineSupport: point => projectPointToCenterlineSupport(point),
     readOffsetSelection: () => offsetSelection, computeTrimPreview,
@@ -1542,9 +1543,8 @@
   });
   canvasContextController.start();
 
-  const canvasInputFeature = window.CanvasCommandInputs.createFeature({
-    readMode: drawOperationLifecycle.readMode, readPending: pendingCommandSession.read, readPendingConstraint: () => constraintTargetSession.command,
-    document, canvas, canvasSelection, clearSelection, canvasHover, draw, updateUI, updateGeometrySelectionUI, setHint, applicationText,
+  const canvasInputFeature = createCanvasInputFeature({
+    document, canvas, updateUI,
     annotationCommand, annotationDrag, startAnnotationAnchorConstraint, constraintInputFeature, dimensionDragging: dimensionDragFeature, beginDimensionDrag,
     constraintTargetHint,
     instanceSourceCommand, geometryInstanceCommand, sceneQueries: sceneHitQueries, operandElement, toggleSketchProjectionSource,
@@ -1564,8 +1564,8 @@
     canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget, blankCanvasGesture, instanceSourceCommand, hatchCommand,
   });
 
-  canvasInputFeature.bindPointer(pointerInteractionController, {
-    canvasNavigation, drawingPreview, recordHistory, referenceImageInteraction, pointerHover,
+  bindCanvasPointer(canvasInputFeature, {
+    canvasNavigation, recordHistory, referenceImageInteraction, pointerHover,
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
       selectInactive: identitySelection.selectInactive,
@@ -1592,18 +1592,17 @@
   canvasInputBinding.bind();
   dimensionInput.bind();
 
-  const keyboardInput = canvasInputFeature.createKeyboard({
+  const keyboardInput = createCanvasKeyboard(canvasInputFeature, {
     window, menus: { closeSketch: () => sketchContextController.close(),
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
-    isGeometryMode, projection: sketchProjectionCommand,
+    projection: sketchProjectionCommand,
     referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
-    pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand,
-    drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
+    cancelPendingCommand, cancelConstraintTargetCommand,
     finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
-    removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand, readPointer: pointerInteractionController.readLastPointer,
+    removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand,
     deleteSelection: deleteCurrentSelection, completeLineLength: completePendingDimensionLineLength,
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });

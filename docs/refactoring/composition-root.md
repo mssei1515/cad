@@ -6,6 +6,16 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Canvas入力へ操作基盤の実sessionを共有（2026-10-30、検証完了）
+
+基準develop／origin/developはd562501。本単位はcodex/canvas-input-session-compositionで実施した。既存CanvasInteractionFeatureのoperation sessionsにcreateInputFeature／bindPointer／createKeyboardを加え、入力生成・後段Pointer bind・Keyboard生成に同じSelection／Hover／Pending／拘束対象／Lifecycle／Pointer／Previewを接続する。入力featureとKeyboardは既存factoryの実APIを返し、既存raw APIと生成・bind・start位置は変えない。入力用clearSnapは元の明示portを維持し、初期生成で使う遅延snap callbackとは区別する。Keyboardの二つの取消command callbackは操作固有の方針として残し、context menuの累積取消とは統合しない。stateや新しい可変接続、汎用app context、ファイル追加はない。
+
+app.jsは2,040→2,039行（1行減）、非空白1,590→1,589行、root441文／関数98個／test hooks333行／可変参照三つ。入力生成の明示項目42→32、Pointer bind 11→10、Keyboard生成25→20で、合計78→62。行数減は小さいが、同じownerの状態参照16項目をrootが再指定する必要を除いた。TEMP cad-canvas-input-session-proof.cjsで残る全引数式とその他appのAST不変、共有接続式、四raw ownerの差分なしを確認した。hierarchy.cjsでは構築140文787非空白行、hooks333行、一文call関数92個116行、その他208文348行。200〜500行目標は未達で、全体目標はactiveのまま。
+
+実ownerを使う追加単体では、同じPointerからの注記配置、現在Pendingへのpointer反映、Hatch previewとHover、明示入力snapの呼出し、生成時の照会なし、listenerの一度だけのstart／disposeを確認する。KeyboardはPending優先の一段取消、取消例外の同一性と未解除の状態、次の拘束対象取消、最新mode／PointerによるOffset確定を確認する。関連単体22件・全単体2,037件・構文620ファイルが成功。関連E2E250件が全成功（4.2分、exit 0、runner22610）。sketch-permissions／selection-zoom-shadow／free-instance／sketch-projection／command-panel／file-safety／unified-ui／unified-annotations／annotation-anchors／annotation-display-size／splineを実行した。TEMP cad-canvas-input-session-{check,unit,e2e}.log、proof.cjs、hierarchy.cjs、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持。403製品／E2E入力fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空と自己起動server停止を確認した。この単位では全E2E未実行で、直前単位の全588件成功を今回の全体検証として流用しない。性能上限・timeout・worker・既存期待値・UI・保存形式は変更しない。
+
+開始時の週枠使用16%／残量84%、検証後は使用17%／残量83%で停止条件未到達。main／origin/mainは5800850を保持し、停止／releaseの最後に反映する。この単位の検証・差分確認・Commit／Pushとdevelop統合を先に完了する。次は残る初期化と機能所有者の境界を再確認する。小さな接続削減だけで数百行へ届くとは見積もらず、既存ownerを共有するまとまった機能の生成階層を優先する。
+
 ### 最新：Canvas操作基盤を三段階で組立て（2026-10-30、検証完了）
 
 基準develop／origin/developは45a1ea5。本単位はcodex/canvas-interaction-foundationで実施した。src/application/canvas_interaction_feature.jsのCanvasInteractionFeature.createはLifecycle session→Selection feature／access→既存PointUsage→Hoverを生成する。createOperationSessionsはPreview→Pending→拘束対象→Pointer sessionを生成し、返されたcreateSelectionPresentationが同じSelection／Hover／拘束対象／Pointer／snapをHighlight・通常clearing・Document resetへ接続する。元の三箇所の生成時機と内部の生成順、後段command／hit／snap等への限定callbackを維持する。新しい操作state・汎用setter／可変app contextは持たず、既存ownerの実APIを返す。入力ルーティング・描画・保存読込は既存featureに残す。

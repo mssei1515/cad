@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Canvas入力の操作基盤共有（2026-10-30、d562501基準）
+
+CanvasInteractionFeatureのoperation sessionsが、入力feature生成・Pointer bind・Keyboard生成でも実ownerを共有する。rootの指定項目は入力42→32、Pointer 11→10、Keyboard 25→20（計78→62）。同じ状態を渡す16項目を除き、入力固有のcommand／query、Keyboardの取消command、入力用clearSnapを明示portとして維持する。raw ownerに処理本体を残し、既存の生成・bind・start位置を維持する。APIや状態のコピー、可変context、後段setterは増やさない。
+
+app.jsは2,040→2,039行、非空白1,590→1,589行。root441文、構築140文787非空白行、test hooks333行、一文call関数92個116行、その他208文348行（文外5行）、可変参照三つ。hooksと短い委譲を全て除く仮定でも1,140非空白行が残るため、まとまった機能の生成階層とtest公開境界の整理が引き続き必要である。証跡はTEMP cad-canvas-input-session-{proof,hierarchy}.cjs、最新検証は再開手順section 8を参照する。
+
 ## Canvas操作基盤の生成階層（2026-10-30、45a1ea5基準）
 
 CanvasInteractionFeatureが、同じCanvasの操作基盤を三段階で生成する。全ownerの操作本体と実状態は既存moduleに維持し、9生成・41portをappの三つの生成入口・29portへ整理する。TEMP cad-canvas-interaction-foundation-proof.cjsで全接続式・生成順と九raw ownerのGit blob不変、その他appのAST不変を確認した。全E2Eの進行・結果は再開資料section 8を優先する。
