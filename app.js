@@ -6,14 +6,13 @@
   const { serializeReferenceImage } = window.ReferenceImageData;
   const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageWorldToLocal } = window.ReferenceImageGeometry;
-  const { serializeHatch } = window.HatchData;
+  const { serializeHatch, hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
   const { serializeAnnotation } = window.AnnotationData;
 
   const {
     CSS_PX_PER_MM, DEFAULT_APPEARANCE,
     DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
     normalizeAppearance, normalizeDimensionAppearance,
-    normalizeHatchAppearance,
   } = window.Appearance;
   const {
     drawingOrderOwner,
@@ -1145,14 +1144,6 @@
 
   function drawBlockInstanceHandles() {
     resetCanvasStrokeState();
-  }
-
-  function hatchAppearanceForDisplay(hatch) {
-    return normalizeHatchAppearance(hatch?.appearance);
-  }
-
-  function hatchPatternOrigin(hatch) {
-    return hatch?.patternOrigin || { x: 0, y: 0 };
   }
 
 

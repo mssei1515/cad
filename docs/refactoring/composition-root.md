@@ -4,7 +4,19 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-20）
+## 現在の再開地点（2026-10-29）
+
+### 再開：Hatchの外観とパターン原点の純粋な照会を既存データownerへ移管（2026-10-29、検証完了）
+
+週枠残量97%で再開。最新develop／origin/developはdd83203で、前回release 5800850の後に非表示Block Sketchの補助図形表示修正が加わっていることを確認した。mainはdevelopの祖先、tracked treeはclean、worktreeはC:/dev/cadだけだった。この既存修正を基準にcodex/hatch-display-valuesを作成した。前回のHatch候補から、hatchAppearanceForDisplayとhatchPatternOriginの関数本体を既存HatchDataへそのまま移した。HatchDataはすでにAppearance.normalizeHatchAppearanceへ依存しており、新しいmodule・namespace・runtime port・script順の変更を加えない。appは同じ静的関数を各既存ownerへ注入する。
+
+app.jsは2,208→2,199行（9行減）。二つの純粋な関数とappで不要になったnormalizeHatchAppearance取込を除いた。TEMP cad-hatch-display-values-proof.cjsで移した二関数と既存HatchData四関数のAST不変、rootの未使用binding 0を確認した。保存値の正規化や移行、pattern原点の投影計算を変更していない。原点はtruthyなら同じObject／値を返し、falsy時だけ新しいfallbackを返す。投影のgetterをcacheせず呼出しごとに読み、例外をそのまま伝える。責務配置をモジュール構成とimplementation-mapへ記録した。
+
+document-elements.test.jsへ二つの境界試験を追加。外観getter一度の読取、元の値を変えない正規化と戻り値の独立性、live外観交換、nullish時の既定値、原点の参照同一性と交換、独立したfallback、例外伝播、patternOriginを保存に追加しないことを確認した。関連単体30件・全単体1,983件・構文618ファイルが成功（exit 0）。既存の期待値やUI操作・保存形式を変えていない。
+
+関連E2E219件が全成功（3.0分、exit 0、runner31495）。Hatch、既存UI、phase0保存互換性／描画比較、Block、派生pattern／free Instance、view visibilityを実行し、dd83203の非表示Block補助図形の回帰ケースも含めた。TEMP cad-hatch-display-values-{focused,check,unit,e2e}.log、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server28644停止と製品source二つのhash不変を確認した。この単位は関連219件であり、前回10/24の全587件成功を最新コードの全体結果に流用しない。
+
+最新appは2,199行、非空白1,749行、root直下491文・関数143個、条件付きtest hooks362行、可変参照五つ。数百行への全体目標はactive・未完了。週枠使用4%／残量96%、停止条件未到達。main／origin/mainは5800850を保持し、停止／releaseの最後に反映する。次も通常入力・描画・test APIの生成と同じscopeの依存を監査し、機能の開始・更新・終了を所有者へ揃える。既に分離したものを包み直すだけの変更や、循環を隠すsetter・巨大contextを増やす変更は避ける。
 
 ### 停止地点：最新全体検証とmainへの最終反映（2026-10-24）
 
