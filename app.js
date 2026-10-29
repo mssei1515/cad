@@ -585,7 +585,7 @@
     invalidateBlockProjectionCache, updateBlockUI, refreshConstraintAnalysis, updateUI, draw,
     snappedBlockRotation, solveSketchAndDependents, updatePropertiesUI,
   });
-  const { setBlockInstanceRotationLocked, setBlockInstanceOrthogonalRotation } = instanceTransformCommand;
+  const { setBlockInstanceRotationLocked } = instanceTransformCommand;
   const constraintSolvePreparation = window.ConstraintSolvePreparation.createForSolver({
     solver, hasDirectRadiusDimension, offsetChainDraft, minimumOrientationLength: MIN_ORIENTATION_LENGTH, minimumLineLength: MIN_LINE_LENGTH,
   });
@@ -605,7 +605,7 @@
     addDistanceConstraintFromTarget,
     restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
-  const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
+  const { submit: submitDistanceValue } = dimensionValueCommand;
   const { stabilizeDocument: stabilizeDocumentParameters, createApplication: createParameterApplication } = window.ParameterApplication.createEditingSupport({
     namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
     readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
@@ -692,7 +692,7 @@
 
   function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
-  const { beginDrag: beginReferenceImageDrag, startCalibration: startReferenceImageCalibration } = referenceImageInteraction;
+  const { beginDrag: beginReferenceImageDrag } = referenceImageInteraction;
 
   function decorateSerializedConstraint(data, constraint) { return constraintMetadata.decorate(data, constraint); }
 
@@ -1140,7 +1140,6 @@
   function handleConstraintOperandClick(pointer, type, hits = {}) { return constraintTargetCommand.operandClick(pointer, type, hits); }
 
 
-  function startInstanceAngleDimension(instance) { return dimensionPlacementCommand.startInstanceAngleDimension(instance); }
   function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
 
   function cancelPendingCommand(message) { return pendingCommandSession.cancel(message); }
@@ -1281,10 +1280,10 @@
 
   const { selection: propertySelection, createEditing: createPropertyEditing } = window.PropertiesDisplay.createFeature({
     document, documentModel, currentScope: workspace.current, canvasSelection, readServices: geometryReadServices, sketchContext, hatchAppearanceForDisplay,
-    selectionOperation: () => ({ mode: drawOperationLifecycle.mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
+    operations: { lifecycle: drawOperationLifecycle, sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
   function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
-  const { editing: propertyEditing, appearanceUI, createView: createPropertiesView } = createPropertyEditing({
+  const { editing: propertyEditing, appearanceUI, createViewForEditing: createPropertiesView } = createPropertyEditing({
     appearanceScope: () => editingScopeBinding.current, viewport, checkpoint: editingCheckpoint, parameterStabilization,
     guardSketchProjectionShapeEdit, synchronizeSketchProjectionMetadata, materializeAnchor: materializeAnnotationAnchor,
     isGeometryMode, toggleSketchVisibility, guardSelectionEdit, applicationSettings, escapeHtml,
@@ -1292,18 +1291,14 @@
   });
   const { appearanceEditing, visibility: selectionVisibilityCommand } = propertyEditing;
   const propertiesView = createPropertiesView({
-    getOperation: () => ({ mode: drawOperationLifecycle.mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
     sketchProjectionConstraintForTarget,
     constraintGeometryId, constraintFeedback, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
     resolvedHatchBoundary, hatchRegionErrorText,
     geometryInstanceTypeLabel, parameterNamespace, installExpressionInputHighlights,
     HTMLTextAreaElement, HTMLInputElement,
-    canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
-    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, setHint,
-    blockPlacement: blockPlacementCommand,
-    setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    annotationCommand, startInstanceSourceEdit: instanceSourceCommand.startForInstance, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
-    startSplineEdit: spline => splineEditing.activate(spline),
+    changeFreeInstanceProperty, commitAnnotationParameterEdit, setHint, annotationCommand,
+    access: sketchEditAccess, instanceTransform: instanceTransformCommand, blockConfiguration: blockConfigurationCommand,
+    dimensionValues: dimensionValueCommand, dimensions: dimensionPlacementCommand, referenceImages: referenceImageInteraction, hatch: hatchCommand, splineEditing,
   });
 
 

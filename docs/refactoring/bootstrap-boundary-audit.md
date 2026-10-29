@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Propertiesの操作状態とcommand接続（2026-10-30、d277dd8基準）
+
+PropertiesDisplay.createFeatureは実Lifecycle／InstanceSource／GeometryInstance／BlockPlacementから選択判定用readerを作る。後段createViewForEditingが表示用readerと実commandへの操作を接続し、選択用のdefinition IDと表示用の有効Sketch／回転lockを同じsnapshotへ混ぜない。元の状態形・読取順とlive評価、guardの引数、寸法／Spline wrapperのreceiverと返却・例外を維持する。新stateや汎用app contextは持たず、操作・取消・履歴は各commandに残す。旧selectionOperationとcreateView／createWithControllerは直接利用でき、Controller／View本体・生成位置は不変。
+
+app.jsは1,959→1,954行、非空白1,509→1,504行、root421→420文／関数85→84個。構築135文746非空白行、hooks323行、一文call関数80個104行、その他204文326行（文外5行）。可変参照三つは不変。hooksと短い委譲を除いても1,077非空白行が残る。TEMP cad-properties-operation-bindings-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
 ## 寸法入力とドラッグの生成接続（2026-10-30、daa1345基準）
 
 ConstraintEditing.createCommandInput.createWithDraggingは、既存ConstraintCommandInputの生成直後にDimensionDragFeatureを生成する。同じplacement／Selection／guard／valueInput.sync／通知を共有し、明示portはviewport・currentScope・SketchContext・GeometryReadServices・DragPointer・snap解除・UI更新・履歴の八つ。元の子接続21項目と同等で、実入力／drag APIを返し、別の状態・model・Selection・scopeやlistenerを持たない。生成時の無照会、入力生成失敗でdrag未生成、drag生成失敗で例外の同一性を維持する。実操作の履歴・threshold・reset・寸法群照会・continuationは各既存ownerに残す。旧createFeatureとDimensionDragFeature.createも維持する。
