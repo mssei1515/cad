@@ -48,3 +48,33 @@ test('expression capture is probe-local; nested capture retains the existing cle
  f.handlers.drawDimensions=()=>{if(nesting){f.probe.captureExpressionMark(b);return;}f.probe.captureExpressionMark(a);assert.equal(other.probe.captureExpressionMark(c),undefined);nesting=true;inner=f.probe.dimensionExpressionMarks();nesting=false;assert.equal(f.probe.captureExpressionMark(c),undefined);};
  const outer=f.probe.dimensionExpressionMarks();assert.equal(outer.length,1);assert.equal(outer[0],a);assert.equal(inner.length,1);assert.equal(inner[0],b);assert.equal(f.probe.captureExpressionMark(c),undefined);
 });
+
+test('scene probe defers painter lookup, reads live geometry IDs, and preserves painter receivers and order',()=>{
+ const calls=[],ctx={fillText(){throw Error('labels must be captured');}},state={ready:false,points:[{id:'P1'}],geometry:null,dimensions:null};
+ const readServices={reads:{}};for(const [name,id]of [['Points','P'],['Lines','L'],['Circles','C'],['Arcs','A']])readServices.reads['allGeometry'+name]=()=>{assert(state.ready);calls.push('read'+name);return name==='Points'?state.points:[{id:id+'1'}];};
+ const native=ctx.fillText;
+ const probe=sandbox.window.CanvasRenderProbe.createForScene({ctx,readServices,
+  readGeometry:()=>{assert(state.ready);calls.push('geometry');return state.geometry;},readDimensions:()=>{assert(state.ready);calls.push('dimensions');return state.dimensions;}});
+ assert.deepEqual(calls,[]);state.ready=true;
+ const geometry={};for(const[name,id]of [['drawLines','L1'],['drawCircles','C1'],['drawArcs','A1'],['drawPoints','P1']])geometry[name]=function(...args){assert.equal(this,state.geometry);assert.deepEqual(args,[]);calls.push(name);ctx.fillText(id);};state.geometry=Object.freeze(geometry);
+ assert.deepEqual(Array.from(probe.geometryIdLabels()),['L1','C1','A1','P1']);assert.equal(ctx.fillText,native);
+ assert.deepEqual(calls,['readPoints','readLines','readCircles','readArcs','geometry','drawLines','geometry','drawCircles','geometry','drawArcs','geometry','drawPoints']);
+ calls.length=0;state.points=[{id:'P2'}];const next=Object.freeze({...geometry,drawPoints(){assert.equal(this,next);ctx.fillText('P1');ctx.fillText('P2');}});state.geometry=next;
+ assert.deepEqual(Array.from(probe.geometryIdLabels()),['L1','C1','A1','P2']);assert.equal(ctx.fillText,native);
+ const dimensions=Object.freeze({draw(){assert.equal(this,dimensions);ctx.fillText('42');}});state.dimensions=dimensions;
+ assert.deepEqual(Array.from(probe.dimensionLabels()),['42']);const mark={pointCount:2};state.dimensions=Object.freeze({draw(){assert.equal(this,state.dimensions);probe.captureExpressionMark(mark);}});
+ assert.equal(probe.dimensionExpressionMarks()[0],mark);assert.equal(probe.captureExpressionMark(mark),undefined);assert.equal(ctx.fillText,native);
+});
+
+test('scene probe restores instrumentation and expression capture after owner lookup or painter failures',()=>{
+ const f=fixture(),error=new Error('scene not available');let failLookup=true;
+ const geometry={};for(const name of ['drawLines','drawCircles','drawArcs','drawPoints','drawArcEndpointHandles'])geometry[name]=function(){assert.equal(this,geometry);throw error;};
+ const dimensions={draw(){assert.equal(this,dimensions);throw error;}};
+ const probe=sandbox.window.CanvasRenderProbe.createForScene({ctx:f.ctx,readServices:{reads:{allGeometryPoints:()=>f.points,allGeometryLines:()=>[],allGeometryCircles:()=>[],allGeometryArcs:()=>[]}},
+  readGeometry:()=>{if(failLookup)throw error;return geometry;},readDimensions:()=>{if(failLookup)throw error;return dimensions;}});
+ for(const failure of ['lookup','painter']){
+  failLookup=failure==='lookup';for(const[method,args]of [['geometryIdLabels',[]],['constraintEndpointMarkerCount',[]],['pointMarkerCount',[]],['arcEndpointHandleCount',[]],['pointDisplayState',['P1']],['dimensionLabels',[]],['dimensionExpressionMarks',[]]]){
+   assert.throws(()=>probe[method](...args),value=>value===error);restored(f);assert.equal(probe.captureExpressionMark({}),undefined);
+  }
+ }
+});

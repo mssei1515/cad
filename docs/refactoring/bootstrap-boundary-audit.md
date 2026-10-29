@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 描画診断の遅延接続（2026-10-30、eca6341基準）
+
+CanvasRenderProbe.createForSceneは実GeometryReadServicesとGeometryDisplay／dimension layerの遅延readerを受け、既存createへ接続する。Geometry ID照会は同じread serviceを使い、各診断描画の直前に現在のownerを取得してメソッドとして呼ぶ。生成時は後段の描画ownerを読まない。これによりappの前方参照用描画委譲を除き、通常のLine／Circle／Arc／Spline描画は同じGeometryDisplayの公開関数を直接共有する。これらの関数はreceiverに依存せず、描画filter・順序・options・戻り値を維持する。既存createの個別port API、計測とfinally復元、式マークのネスト時の解除規則は変更しない。
+
+app.jsは2,004→1,996行、非空白1,554→1,546行、root435→428文／関数98→91個。構築136文768非空白行、hooks323行、一文call関数85個109行、その他206文341行（文外5行）。可変参照三つは不変。hooksと短い委譲を除いても1,114非空白行が残る。TEMP cad-canvas-probe-scene-owners-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
+通常のroot関数90個のうち85個はcall一文の委譲である。残る五つはisGeometryMode（常時true）、resultIsAccepted（求解許容値）、sketchHasSolveError（solve状態）、hitBlockRotationHandle（常時null）、updateBlockUI（Block準備後にrender）と確認した。これらの削除だけで数百行には届かず、次は構築136文768非空白行の機能単位の依存共有を中心に扱う。resultIsAccepted／sketchHasSolveErrorは既存求解ownerの照会との重複を確認する候補であり、updateBlockUIの準備とrenderの順序、前方callbackの生成位置を維持する。定数応答の二関数を無断の機能廃止や仕様変更へ混ぜない。
+
 ## Pointerの式参照候補照会（2026-10-30、0cdffa2基準）
 
 ExpressionInputController.pointerReferencesはPointer pressへ接続する四つのread／insert portをfrozen groupで公開する。追加の寸法／注記hit照会は毎回のフォーカス入力が式入力として有効な場合に限り、activeOnly:falseを渡す。Parameter draftのnamespaceがCanvasと異なる場合も候補照会を抑制せず、挿入時の既存error処理へ渡す。生成時には入力・namespace・hitを読まない。Pointer側の通常dimension hit優先と、寸法挿入拒否後の注記fallbackはPointerInteractionControllerに残す。Parameter dialog用pickCanvasの、先にhitを読む順序と寸法hit時は注記へfallbackしない規則は維持する。
