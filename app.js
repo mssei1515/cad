@@ -276,9 +276,8 @@
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
   const { blockDefinitionScopeError, blockInstanceById } = blockEditingQueries;
 
-  const canvasRenderProbe = window.CanvasRenderProbe.create({
-    ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
-    drawLines, drawCircles, drawArcs, drawPoints, drawArcEndpointHandles, drawDimensions,
+  const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
+    ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
   const HISTORY_LIMIT = 80;
   presentation.bindCanvas({
@@ -439,7 +438,7 @@
       editedSpline: () => splineEditing.current?.spline },
     annotationBounds, resolvedLoopBounds: window.HatchRegionEngine.resolvedLoopBounds, hatchAppearanceForDisplay,
   });
-  const { geometryDisplayColor, geometryStrokeWidth, traceSplinePath } = geometryDisplay;
+  const { geometryDisplayColor, geometryStrokeWidth, traceSplinePath, drawLines, drawCircles, drawArcs, drawSplines } = geometryDisplay;
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { fitSketchToViewport, fitAllGeometryToViewport, resetEmptyViewport } = drawingFit;
@@ -1057,10 +1056,6 @@
 
 
 
-  function drawLines(...args) { return geometryDisplay.drawLines(...args); }
-  function drawCircles(...args) { return geometryDisplay.drawCircles(...args); }
-  function drawArcs(...args) { return geometryDisplay.drawArcs(...args); }
-  function drawSplines(...args) { return geometryDisplay.drawSplines(...args); }
 
 
 
@@ -1083,7 +1078,6 @@
 
 
 
-  function drawDimensions() { return dimensionLayer.draw(); }
 
 
 
@@ -1121,9 +1115,7 @@
   }
 
 
-  function drawArcEndpointHandles() { return geometryDisplay.drawArcEndpointHandles(); }
 
-  function drawPoints() { return geometryDisplay.drawPoints(); }
 
   function selectedVisibilityTargets() { return propertySelection.visibilityTargets(); }
   function selectionVisibilityIsHidden(targets) { return propertySelection.visibilityIsHidden(targets); }
@@ -1670,7 +1662,7 @@
     const dimensionTestSupport = window.DimensionTestDriver.createSupport({
       resetModelState, addPoint, addLine, dimensionFromAnchor, addDistanceConstraintFromTarget, activeSketchId, currentScope: workspace.current,
       isDimensionConstraint, dimensionLayout, hypot2, targetFromConstraint, serializeModel, constraintTargetSession, pendingCommandSession,
-      dimensionValueInput, ctx, drawDimensions, constraintSketchId, canvasSelection, viewport,
+      dimensionValueInput, ctx, drawDimensions: () => dimensionLayer.draw(), constraintSketchId, canvasSelection, viewport,
     });
     const dimensionFixtureSupport = dimensionTestSupport.createFixtures({
       isReadOnlyDimension, dimensionLabelForConstraint, defaultDimensionForTarget, startDistanceValueInput, dimensionWithLabelAt,

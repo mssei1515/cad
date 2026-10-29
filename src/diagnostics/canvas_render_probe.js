@@ -1,6 +1,14 @@
 /* Observe Canvas rendering through reversible instrumentation; no model or UI ownership. */
 (() => {
   "use strict";
+  function createForScene({ ctx, readServices, readGeometry, readDimensions }) {
+    const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs } = readServices.reads;
+    return create({ ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
+      drawLines: (...args) => readGeometry().drawLines(...args), drawCircles: (...args) => readGeometry().drawCircles(...args),
+      drawArcs: (...args) => readGeometry().drawArcs(...args), drawPoints: () => readGeometry().drawPoints(),
+      drawArcEndpointHandles: () => readGeometry().drawArcEndpointHandles(), drawDimensions: () => readDimensions().draw(),
+    });
+  }
   function create({ ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
     drawLines, drawCircles, drawArcs, drawPoints, drawArcEndpointHandles, drawDimensions }) {
     let expressionMarkCapture = null;
@@ -129,5 +137,5 @@
     function captureExpressionMark(mark) { return expressionMarkCapture?.(mark); }
     return Object.freeze({ geometryIdLabels, constraintEndpointMarkerCount, pointMarkerCount, arcEndpointHandleCount, pointDisplayState, dimensionLabels, dimensionExpressionMarks, captureExpressionMark });
   }
-  window.CanvasRenderProbe = Object.freeze({ create });
+  window.CanvasRenderProbe = Object.freeze({ createForScene, create });
 })();

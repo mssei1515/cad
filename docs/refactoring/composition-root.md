@@ -6,6 +6,16 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：描画診断の遅延接続と実描画APIの共有（2026-10-30、全E2E検証完了）
+
+基準developはeca6341。CanvasRenderProbe.createForSceneが実GeometryReadServicesと後段GeometryDisplay／dimension layerのreaderを接続する。生成時は描画ownerを照会せず、各診断描画時に同じownerのmethodを呼ぶ。通常描画では同じfrozen GeometryDisplayの公開Line／Circle／Arc／Spline関数を直接使い、前方参照のためだけに残っていたroot委譲七つを除いた。DimensionTestDriverの診断描画はその生成位置で明示callbackを渡す。描画順、引数・options、ID照会、既存計測とfinally復元・式マーク解除規則を維持する。新規file・状態・cacheやUI／保存形式の変更はない。
+
+app.jsは2,004→1,996行（8行減）、非空白1,554→1,546行、root435→428文／関数98→91個／hooks323行／可変参照三つ。構築136文768非空白行、一文call関数85個109行、その他206文341行（文外5行）。Probe接続は11→4項目。TEMP cad-canvas-probe-scene-owners-{proof,hierarchy}.cjsで遅延接続の同値性、各raw描画関数にreceiver依存がないこと、その他appと旧Probe本体のAST不変、root未使用bindingなしを確認した。hooksと短い委譲を除いても1,114非空白行が残り、数百行目標は未達。
+
+単体へ二つの境界試験を追加した。生成時の照会なし、live Geometry IDと描画owner、呼出し順・receiver、寸法ラベル／式マーク、owner照会・描画の各例外で同じ例外とCanvas関数の復元・式マーク解除を確認する。関連単体20件／全単体2,054件／構文624fileが成功。通常描画に関係するため、フィルタなしの全E2E588件が全成功（21.7分、exit 0、runner45141）。拘束drag fileは9.9分で、R面取り3,744／Offset連鎖10,296／航空機1,872／連動線分5,304プレビューも失敗なし。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-canvas-probe-scene-owners-{check,unit,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.json、verify.cjsへ証跡を保持する。既存期待値・性能上限／timeout・workerは変更しない。
+
+次は機能ownerの生成階層と条件付きtest支援の公開境界を確認する。残るhoisted関数は前方参照の用途を調べて扱い、巨大contextや単なるcallbackの一括移動で隠さない。全体目標active、開始時の週枠残量79%／最終確認78%で停止条件未到達。mainは停止／releaseの最後に反映する。
+
 ### 最新：Pointerの式参照候補照会をControllerへ集約（2026-10-30、検証完了）
 
 基準developは0cdffa2。appに残っていた式入力のフォーカス判定付き候補照会を、既存ExpressionInputControllerのpointerReferencesへ集約した。四つのPointer接続と三つのroot別名を整理し、既存controller・namespace・hit serviceをそのまま共有する。ExpressionInputController.pointerReferencesはPointer pressへ接続する四つのread／insert portをfrozen groupで公開する。追加の寸法／注記hit照会は毎回のフォーカス入力が式入力として有効な場合に限り、activeOnly:falseを渡す。Parameter draftのnamespaceがCanvasと異なる場合も候補照会を抑制せず、挿入時の既存error処理へ渡す。生成時には入力・namespace・hitを読まない。Pointer側の通常dimension hit優先と、寸法挿入拒否後の注記fallbackはPointerInteractionControllerに残す。Parameter dialog用pickCanvasの、先にhitを読む順序と寸法hit時は注記へfallbackしない規則は維持する。 新しい状態・cache・file、UI／保存形式の変更はない。
