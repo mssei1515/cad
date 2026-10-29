@@ -62,6 +62,21 @@
       }
       return Object.freeze({ command, readOnly, createIntentResolver });
     }
+    function createFixedEditing({ operandElement, guardSketchProjectionShapeEdit, findArcEndpointFixedConstraint, arcEndpointPoint,
+      currentScope, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh }) {
+      const operand = window.FixedToggleCommand.createOperand({ modelTypes: window.GeometrySolver, guardSketchEdit, elementSketchId,
+        operandElement, guardSketchProjectionShapeEdit, applicationText, findLineFixedConstraint, findArcEndpointFixedConstraint,
+        arcEndpointPoint, currentScope, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh });
+      function createSelection({ blockDefinitionById, updateUI, recordHistory, snapshotModelState, restoreModelState,
+        pushModelConstraint, solveSketchAndDependents, acceptError, refreshConstraintAnalysis }) {
+        return window.FixedToggleCommand.createSelection({ modelTypes: window.GeometrySolver, guardSelectionEdit, canvasSelection: selection,
+          blockDefinitionById, setHint, clearSelection, updateUI, draw, recordHistory, findArcEndpointFixedConstraint, deleteElements,
+          log, arcEndpointPoint, guardSketchProjectionShapeEdit, applicationText, snapshotModelState, commitNewConstraint, restoreModelState,
+          selectedFixedBatchTargets: () => selectionQuery.fixedBatch(), fixedBatchIsFullyFixed: batch => selectionQuery.fullyFixed(batch),
+          findLineFixedConstraint, pushModelConstraint, currentScope, solveSketchAndDependents, acceptError, refreshConstraintAnalysis });
+      }
+      return Object.freeze({ operand, createSelection });
+    }
     function createControls({ document, constraintButtons, constraintMenuButtons, fixPointBtn, hasSelection, translatedExactText }) {
       const view = window.ConstraintControlsView.create({ document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
         prepareGeometryControls: () => {
@@ -83,7 +98,7 @@
       }
       return Object.freeze({ view, createBinding });
     }
-    return Object.freeze({ selectionQuery, targets, dimensions, createControls, createCommit, createCommandInput });
+    return Object.freeze({ selectionQuery, targets, dimensions, createControls, createCommit, createCommandInput, createFixedEditing });
   }
   // Construct feedback first and share its live session with editing and staged input.
   function createWithFeedback({ constraintButtons, feedback, readLanguage, session, applicationText, ...options }) {

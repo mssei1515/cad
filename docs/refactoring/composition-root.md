@@ -6,6 +6,16 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：固定操作の共有依存と二段階生成（2026-10-30、検証完了）
+
+基準developはbc59973。既存ConstraintEditingのcreateFixedEditingが実query／Selection、編集guard／Sketch所属／Line固定照会と通知を共有してoperand固定commandを生成し、後段createSelectionが実選択固定commandを生成する。初期と後段それぞれのraw constructorは元の位置に保ち、snapshot／復元／求解／履歴の後段依存は明示portのまま渡す。対象batch／全固定判定は同じselectionQueryのmethodへ直接接続し、rootの二つの委譲を除いた。返却は各実APIで、新しい固定状態・session・model／scopeや可変contextは持たない。FixedToggleCommand本体・旧API、型constructor、受理閾値、拒否／例外／復元／履歴の境界を変更しない。
+
+app.jsは1,981→1,974行（7行減）、非空白1,531→1,524行、root426→424文／関数88→86個／hooks323行／可変参照三つ。固定二生成へのroot接続は合計40→18項目。構築136文755非空白行、一文call関数82個106行、その他205文335行（文外5行）。TEMP cad-fixed-constraint-composition-{proof,hierarchy}.cjsで全子接続とquery method receiver、二つの生成位置とraw API返却、その他appと既存ConstraintEditingのAST不変、root未使用bindingなしを確認した。hooksと短い委譲を除いても1,095非空白行が残り、数百行目標は未達。
+
+単体へ三つの境界試験を追加した。実GeometrySolver型・Selection・FixedToggleCommandを使い、二段階生成中の無照会／無編集、raw API共有、単一対象から選択集合までの固定／解除、失敗求解のsnapshot復元と履歴なし、編集／投影guard拒否、live scopeとquery receiver、query例外の同一性を確認した。関連単体21件／全単体2,067件／構文624fileが成功。関連7suite（fixed-command／block-geometry-fixed／unified-ui／blocks／sketch-tree-visibility／command-panel／phase0-characterization）の200件が全成功（2.8分、exit 0、runner13463）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-fixed-constraint-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存期待値・性能上限／timeout・workerは変更しない。今回は旧commandの本体と求解を変更せず、全E2Eは未実行とし、以前の全588件成功と区別する。
+
+次も実ownerが持つ共通依存と初期化phaseを確認して機能単位にまとめる。前段で後段のcommandを生成したり、model／Selectionの値を先に読んで保持したりせず、scope readerと操作callbackの違いを維持する。全体目標active、開始時週枠残量76%／最終確認75%で停止条件未到達。mainは停止／releaseの最後に反映する。
+
 ### 最新：操作対象・Sketch状態・Canvas sceneの共有生成（2026-10-30、検証完了）
 
 基準developはb3cd0ca。既存CanvasDisplayのworkspace.createSceneForEditingが、操作対象強調→Sketch表示方針→Geometry／Overlay／Bounds／Fitを元の順に生成する。CanvasInteractionの実Lifecycle・Selection・Hover・PointUsageとtarget／pending、SketchContext／read service、求解結果owner／analysisを共有し、子には必要なread portだけを渡す。型・参照比較・Hatch表示は同じ既存静的APIを使う。Panel／mode／operands／constraint／pending・solve状態は描画・照会時に読み、後段drag・Splineのcallbackも維持する。返す六APIは実owner参照で、モデル・状態・cacheをコピーせず、旧createSceneを残す。生成時のmodel／UI照会、listenerやglobalは追加しない。

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 
-function fixture() {
+function fixture(configure = () => {}) {
   const events = [], ports = {}, state = { sketch: 'S1', editable: true, selectionAllowed: true, failure: null, result: {} };
   const invoke = (owner, name) => function (...args) { assert.equal(this, owner); events.push([name, ...args]); if (state.failure) throw state.failure; return state.result; };
   const query = {}, targets = {}, dimensions = {};
@@ -23,8 +23,9 @@ function fixture() {
     guardSelectionEdit: (...args) => { events.push(['selection-guard', ...args]); return state.selectionAllowed; },
     resolveConstraintIntent() {}, constraintOperandsFromSelection() {}, syncSelectionFromConstraintOperands() {},
     startAnnotationAnchorConstraint() {}, cancelPendingCommand() {}, blurConstraintControl() {} };
+  configure(input, state, events, context, query);
   const feature = context.window.ConstraintEditing.create(input);
-  return { feature, input, state, events, ports, query, targets, dimensions };
+  return { feature, input, state, events, ports, query, targets, dimensions, context };
 }
 
 test('constraint assembly preserves construction order, real owners, shared sessions and distinct lifecycle/input callbacks', () => {
@@ -283,4 +284,58 @@ test('staged constraint input matches direct hover and real dimension retargetin
     return JSON.parse(JSON.stringify(f.events));
   }
   assert.deepEqual(run(true),run(false));
+});
+
+function fixedEditingFixture() {
+ const model={window:{},structuredClone};vm.createContext(model);
+ const sources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+ for(const file of sources.filter(file=>file.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),model,{filename:file});
+ const types=model.window.GeometrySolver,p=Object.assign(new types.Point('P1',0,0),{sketchId:'S1'}),q=Object.assign(new types.Point('P2',10,0),{sketchId:'S1'}),line=Object.assign(new types.Line('L1',p,q),{sketchId:'S1'});
+ const f=fixture((input,state,events,context,query)=>{
+  Object.assign(state,{ready:false,scope:{constraints:[]},history:[],fullyFixed:false,projectionAllowed:true,batch:{points:[p],lines:[line],sketchId:'S1'},solved:{success:true,result:{success:true,errorNorm:0},dependent:{success:true}}});
+  const ready=()=>assert.equal(state.ready,true,'fixed command construction must not query or edit');state.readyCheck=ready;
+  input.selection=model.window.CanvasSelection.create();input.selection.set('points',[p]);input.selection.set('lines',[line]);
+  Object.assign(input,{guardSketchEdit:()=>{ready();events.push('guard-sketch');return state.editable;},guardSelectionEdit:()=>{ready();events.push('guard-selection');return state.selectionAllowed;},
+   elementSketchId:item=>{ready();return item.sketchId;},findLineFixedConstraint:item=>{ready();return state.scope.constraints.find(c=>c instanceof types.LineFixedConstraint&&c.line===item);},
+   applicationText:(_ja,en)=>en,setHint:()=>events.push('hint'),draw:()=>events.push('draw'),log:()=>events.push('log'),clearSelection:()=>{ready();input.selection.set('points',[]);input.selection.set('lines',[]);}});
+  query.fixedBatch=function(){assert.equal(this,query);ready();events.push('batch');if(state.queryError)throw state.queryError;return state.batch;};
+  query.fullyFixed=function(batch){assert.equal(this,query);assert.equal(batch,state.batch);ready();events.push('fully-fixed');return state.fullyFixed;};
+  context.window.GeometrySolver=types;context.window.FixedToggleCommand=Object.freeze({
+   createOperand(options){events.push('fixed-operand');state.rawOperand=model.window.FixedToggleCommand.createOperand(options);return state.rawOperand;},
+   createSelection(options){events.push('fixed-selection');state.rawSelection=model.window.FixedToggleCommand.createSelection(options);return state.rawSelection;}});
+ });
+ const {state,events}=f,ready=state.readyCheck;
+ const shared={operandElement:operand=>{ready();return operand.element;},guardSketchProjectionShapeEdit:()=>{ready();events.push('projection');return state.projectionAllowed;},findArcEndpointFixedConstraint:()=>null,arcEndpointPoint:model.window.GeometryKernel.arcEndpointPoint,
+  currentScope:()=>{ready();return state.scope;},sameConstraintDisplayElement:(a,b)=>a===b,
+  deleteElements:({constraints})=>{ready();for(const c of constraints)state.scope.constraints.splice(state.scope.constraints.indexOf(c),1);return true;},
+  commitNewConstraint:(_type,c)=>{ready();state.scope.constraints.push(c);events.push('commit');return true;},solveAndRefresh:()=>{ready();events.push('refresh');}};
+ const late={blockDefinitionById:()=>null,updateUI:()=>events.push('ui'),recordHistory:label=>state.history.push(label),
+  snapshotModelState:()=>{ready();events.push('snapshot');return {scope:state.scope,fixed:p.fixed,constraints:[...state.scope.constraints]};},
+  restoreModelState:snapshot=>{ready();events.push('restore');state.scope=snapshot.scope;p.fixed=snapshot.fixed;state.scope.constraints.splice(0,Infinity,...snapshot.constraints);},
+  pushModelConstraint:c=>{ready();state.scope.constraints.push(c);},solveSketchAndDependents:(id,snapshot)=>{ready();assert.equal(id,'S1');assert.equal(snapshot.scope,state.scope);events.push('solve');return state.solved;},acceptError:.01,refreshConstraintAnalysis:()=>events.push('analysis')};
+ events.length=0;const stage=f.feature.createFixedEditing(shared);assert.deepEqual(events,['fixed-operand']);assert.equal(stage.operand,state.rawOperand);
+ return {...f,stage,late,p,line,types};
+}
+
+test('fixed editing builds real operand and selection commands in separate cold stages and shares actual model and Selection',()=>{
+ const f=fixedEditingFixture();assert(Object.isFrozen(f.stage));f.state.ready=true;
+ assert.equal(f.stage.operand.toggle({kind:'line',element:f.line}),true);const fixed=f.state.scope.constraints[0];assert(fixed instanceof f.types.LineFixedConstraint);assert.equal(fixed.line,f.line);
+ f.state.ready=false;f.events.length=0;const selected=f.stage.createSelection(f.late);assert.deepEqual(f.events,['fixed-selection']);assert.equal(selected,f.state.rawSelection);assert(Object.isFrozen(selected));
+ f.state.ready=true;assert.equal(selected.toggle(),true);assert.equal(f.p.fixed,true);assert.equal(f.state.scope.constraints[0],fixed);assert.equal(f.state.scope.constraints.length,1);assert.equal(f.state.history.length,1);assert.equal(f.input.selection.points[0],f.p);
+ f.state.fullyFixed=true;assert.equal(selected.toggle(),true);assert.equal(f.p.fixed,false);assert.equal(f.state.scope.constraints.length,0);
+});
+
+test('fixed editing retains failed solve restoration and selection/projection refusal before mutation',()=>{
+ const f=fixedEditingFixture(),selected=f.stage.createSelection(f.late);f.state.ready=true;f.state.solved={success:false,result:{success:false,errorNorm:1}};
+ assert.equal(selected.toggle(),false);assert.equal(f.p.fixed,false);assert.equal(f.state.scope.constraints.length,0);assert.equal(f.state.history.length,0);assert.equal(f.events.filter(e=>e==='restore').length,1);
+ f.events.length=0;f.state.selectionAllowed=false;assert.equal(selected.toggle(),false);assert.deepEqual(f.events,['guard-selection']);
+ f.state.selectionAllowed=true;f.state.projectionAllowed=false;f.events.length=0;assert.equal(selected.toggle(),false);assert.equal(f.events.includes('snapshot'),false);assert.equal(f.p.fixed,false);assert.equal(f.state.scope.constraints.length,0);
+ f.state.editable=false;f.events.length=0;assert.equal(f.stage.operand.toggle({kind:'line',element:f.line}),false);assert.deepEqual(f.events,['guard-sketch']);
+});
+
+test('fixed editing reads the current scope and shared query owner at operation time and propagates query failures',()=>{
+ const f=fixedEditingFixture();f.state.ready=true;f.stage.operand.toggle({kind:'line',element:f.line});const first=f.state.scope;
+ f.state.scope={constraints:[]};f.stage.operand.toggle({kind:'line',element:f.line});assert.equal(first.constraints.length,1);assert.equal(f.state.scope.constraints.length,1);assert.notEqual(first.constraints[0],f.state.scope.constraints[0]);
+ f.state.ready=false;const marker=new Error('batch lookup failed');f.state.queryError=marker;const selected=f.stage.createSelection(f.late);f.state.ready=true;
+ const current=f.state.scope.constraints[0];assert.throws(()=>selected.toggle(),error=>error===marker);assert.equal(f.state.scope.constraints[0],current);assert.equal(f.p.fixed,false);assert.equal(f.state.history.length,0);
 });

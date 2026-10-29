@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 固定操作の二段階生成（2026-10-30、bc59973基準）
+
+ConstraintEditing.createFixedEditingは共有する編集guard・Sketch所属・Line固定照会・Selection・通知と、明示されたcurrentScope／固定操作portから既存FixedToggleCommand.createOperandを生成する。返すoperandは実APIで、後段createSelectionはsnapshot／restore・求解・履歴などの遅い依存を受けて既存選択固定commandを生成する。二つのraw commandの生成位置・順序はappが従来どおり選ぶ。固定対象batchと全固定判定は同じConstraintSelectionQueryのmethodを操作時に呼び、戻り値・receiverを維持する。scope／Selectionを生成時に読まず、モデル・固定状態・採番・cacheや第二sessionは所有しない。guard拒否・投影対象・Block固定・失敗復元・履歴は既存FixedToggleCommandに残し、旧createOperand／createSelectionも変更しない。
+
+app.jsは1,981→1,974行、非空白1,531→1,524行、root426→424文／関数88→86個。構築136文755非空白行、hooks323行、一文call関数82個106行、その他205文335行（文外5行）。可変参照三つは不変。hooksと短い委譲を除いても1,095非空白行が残る。TEMP cad-fixed-constraint-composition-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
 ## 編集Canvas sceneの生成階層（2026-10-30、b3cd0ca基準）
 
 CanvasDisplayのworkspace.createSceneForEditingは操作対象のGeometryPresentation、Sketch状態の表示方針、既存createSceneのGeometry／Overlay／Bounds／Fitをこの順に生成する。実CanvasInteractionのLifecycle・Selection・Hover・PointUsage、Constraint target／pending、SketchContext・GeometryReadServices、求解結果owner・ConstraintAnalysisを共有し、子へ必要な照会だけを接続する。Panel選択とmode・operands・constraint／pendingは操作時に読む。型・参照比較・Hatch表示の静的関数は既存namespaceの同じAPIを使う。六つの返却値は各実APIへの参照で、モデル・操作状態や描画cacheを複製しない。旧createSceneの直接注入API、可視性・順序・強調の優先順位とPNG表示を維持する。照会例外は同じまま伝播し、rendererの既存途中状態を組立て層で復元する処理は追加しない。
