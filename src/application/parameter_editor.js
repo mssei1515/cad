@@ -46,8 +46,14 @@
       draft: parameterDraft, application: { apply: applyDraft }, recordHistory, applicationText, setHint,
       loadScope: controller.loadScope, setError: setParameterDialogError, parameterErrorText, updateUI, draw,
     });
+    function createReferenceInput({ TextAreaElement, currentNamespace, dimensionValueInput, pendingCommandSession,
+      canvas, canvasPoint, hitDimension, hitAnnotationElement }) {
+      return window.ExpressionInputController.create({ document, types: { InputElement, TextAreaElement }, currentNamespace, dimensionValueInput,
+        pendingCommandSession, parameterDraft, ensureDimensionParameter: namespace.ensureDimensionParameter, setParameterDialogError,
+        setHint, applicationText, language, insertIdentifierIntoExpressionInput, canvas, canvasPoint, hitDimension, hitAnnotationElement });
+    }
     return Object.freeze({
-      draft: parameterDraft, setParameterDialogError, insertIdentifierIntoExpressionInput,
+      draft: parameterDraft, createReferenceInput, setParameterDialogError, insertIdentifierIntoExpressionInput,
       syncExpressionInputHighlight, installExpressionInputHighlights,
       start: controller.start, dispose: controller.dispose, apply: application.apply,
     });

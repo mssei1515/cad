@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは2,087行、非空白1,636行、root直下461文、条件付きtest hooks345行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは2,084行、非空白1,633行、root直下461文、条件付きtest hooks345行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：数式参照入力の組立てをParameterEditorへ集約（2026-10-30、検証完了）
+
+基準develop／origin/developはe3bd504。本単位はcodex/parameter-reference-inputで実施した。ParameterEditorの後段createReferenceInputは同じdocument／InputElement、draft、名前補完、識別子挿入、error／hintと言語設定を共有し、既存ExpressionInputControllerを元の位置で生成する。appからはTextAreaElement、Canvasの現在namespace、dimension input／pending、Canvas／座標変換／寸法hit／注記hitの8依存を明示する。Canvas namespaceは元の同期済みeditingScopeBinding.currentへのreaderを保持し、Parameterダイアログのdraftやworkspaceの値へ置換しない。ParameterNamespaceはfrozen APIで、同じensureDimensionParameter実関数を使用する。新file・global・session／listenerを追加しない。
+
+app.jsは2,087→2,084行（3行減）、非空白1,636→1,633行、root直下461文・関数111個、test hooks345行、可変参照三つを維持する。対象接続は16→8項目。不要になったrootのparameterDraft・setParameterDialogError・insertIdentifierIntoExpressionInputの取込も除いた。TEMP cad-parameter-reference-input-proof.cjsで子への全16port式、namespace／型／readerの由来、他のapp／ParameterEditorのAST不変を確認した。root未使用binding 0。hierarchy.{cjs,json}で構築147文807非空白行、hooks1文345行、一文call関数105個129行、その他208文347行（文外5行）を再集計した。
+
+parameter-editor.test.jsへ実ExpressionInputControllerを使う二つの境界試験を追加した。生成時のscope照会なし、dialog draftとCanvas namespaceの同一参照／不一致、現在言語、寸法名補完→event抑止→挿入／error解除／hint、注記の存在・Parameter判定、TextArea／距離入力、寸法と注記で異なる不一致の通知順、命名例外を同じerrorで伝播しeventを消費しないことを確認した。既存fixtureは型と依存を公開し挿入を観測可能にしただけで、既存三テストの期待値は維持した。追加試験の初回にstubのhint引数へ存在しないnormalを期待したため失敗し、新規期待だけを実APIに合わせた。関連単体12件・全単体2,023件・最終コードで構文618ファイルが成功（exit 0）。正式モジュール構成とimplementation-mapも更新した。
+
+関連E2E156件が全成功（2.4分、exit 0、runner83192）。parameter-dialog-controller／unified-annotations／unified-ui／file-safety／free-instanceを実行し、Parameter dialogとCanvas参照、注記表示・式入力と保存再読込、file URL起動、Block／Instance名前空間と通常UIを確認した。TEMP cad-parameter-reference-input-{focused,check,unit,e2e}.log、run.ps1、source-hashes.json、proof.cjs、hierarchy.{cjs,json}、e2e-receipt.json、last-run.jsonへ証跡を保存。製品／E2E入力402fileのhash不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server7412停止を確認した。この単位では全E2Eは未実行。直前Scene単位の全588件成功を今回の全体結果として流用しない。UI・保存形式・既存期待値・性能上限／timeoutは変更しない。
+
+週枠使用13%／残量87%で停止条件未到達。全体目標はactive・未完了でmain／origin/mainは5800850を維持する。この単位をCommit／Pushしてdevelopへ統合する。今回の再監査では通常処理のroot関数は最大4行で大半が委譲、主な残量は構築・接続とhooksであることを確認した。数百行へは未到達であり、既存ownerを共有する組立て階層を引き続き検討する。Context menuとKeyboardでは異なる取消方針、Block／GeometryとAnnotationでは異なる求解・復元scopeを保持し、一括の汎用contextへ置き換えない。次はこれらの初期化段階・owner共有とテストAPI公開境界から実依存を確認する。
 
 ### 最新：円中心十字線の作図組立てを既存authoringへ集約（2026-10-30、検証完了）
 
