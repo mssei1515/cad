@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Geometry dragの編集環境への接続を機能内へ集約（2026-10-30、検証完了）
+
+基準develop／origin/developは3411cfe。本単位はcodex/geometry-drag-editing-compositionで実施した。GeometryDragFeature.createForEditingへ、SketchContext・SolveScopeQuery・SketchSolving・Checkpoint・GeometryCreation・GeometryReadServicesとViewport／Pointer／Profilerの接続を集約した。静的なArc endpoint計算とhypot2は既存moduleから捕捉し、倍率とsolve計測は操作時に同じownerを読む。既存のcreateを保持し、同じ実featureを返す。新しいsession・model・mutable contextやsetterは作らない。
+
+app.jsは2,130→2,123行（7行減）、非空白1,672行、root直下465文・関数111個、test hooks351行。root生成引数49→34。TEMP cad-geometry-drag-editing-composition-proof.cjsで、全49portの元の参照先とcallback／引数の一致、32個の直接bindingの初期化順、他のapp全statement／既存feature全体とraw module六つのAST／source不変、不要になった取込二つの削除、root未使用binding 0を確認した。既存のSolveScopeQuery実体とconstrained Annotationの追加変数を保持する。
+
+geometry-drag-feature.test.jsへ実drag Plan／Editing／Solver／Command、実Pointer capture helper・Profilerを使う二つの境界試験を追加した。生成時のscope／倍率／通知なし、最新の倍率・Sketch・scopeとPoint参照、mark→capture／解除→release、activeな時だけsolve計測、一回の履歴、失敗時の同じsnapshot復元、例外時のPointer解放・onEndと計測／session終了を確認した。既存fixtureの生成だけを任意差替え可能にし、既存六件の期待値は変更しない。関連単体47件・全単体2,009件・構文618ファイルが成功（exit 0）。モジュール構成とimplementation-mapを更新した。
+
+関連E2E214件が全成功（13.8分、exit 0、runner86508）。既存UI、Block、Sketch投影、Parameter dialog、拘束drag回帰群、phase0保存互換性／描画比較、派生pattern、Splineを実行した。Fillet・Offset chain・航空機形状等の反復dragと実Pointer／Undoを含む。TEMP cad-geometry-drag-editing-composition-{focused,check,unit,e2e}.log、proof.cjs、run.ps1、e2e-receipt.json、last-run.json、source-hashes.json、tested-blobs.jsonへ証跡を保存。receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server32936停止、appとfeature二つのhash不変を確認した。今回は関連214件であり、最新コード全体のE2Eとは扱わない。UI・求解／snapshot／復元規則・保存形式・性能上限／timeout・既存期待値は変更しない。
+
+週枠使用18%／残量82%、停止条件未到達で全体目標はactive・未完了。main／origin/mainは5800850を維持する。現在の単位は既存の機能と編集ownerの境界を明示する段階であり、34portの接続も残る。200〜500行へは未到達で、次も機能間の共有ownerと生成段階を見て、巨大contextや単なるfactory一覧へ包む移動を避ける。
+
 ### 最新：求解とParameter安定化を実ownerへ直接接続（2026-10-30、検証完了）
 
 基準develop／origin/developは4f9fbc0。本単位はcodex/solve-operation-bindingsで実施した。SketchSolvingの結果状態三入口と求解四入口、およびParameterStabilization.stabilizeを、実owner生成直後のreadonly bindingへ接続した。八つの転送関数を除き、求解・依存Sketchの順序・Parameter反復・値復元・結果Mapの実装は変更しない。初期化より前にcallbackとして必要なclearSketchSolveStateはhoisted入口を保つ。

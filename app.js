@@ -24,7 +24,7 @@
 
   const {
     MIN_ORIENTATION_LENGTH, samePosition,
-    arcEndpointPoint, arcEndpointDragValue,
+    arcEndpointPoint,
     circlePointAtAngle,
     arcSweep,
     lineHasDirection,
@@ -407,7 +407,7 @@
     geometryReads, activeSketchId, elementSketchId, constraintSketchId,
     isVisibleSketchElement, constraintIsOperational, constraintGraphNodes: constraint => constraint.annotationGeometryNodes || constraintGraphNodes(constraint), geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
   });
-  const { connectedComponentFromSeeds, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = solveScopeQuery;
+  const { connectedComponentFromSeeds, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines } = solveScopeQuery;
   const { analysis: constraintAnalysis, redundancy: constraintRedundancy } = window.ConstraintAnalysis.createWithRedundancy({
     currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, sketchContext, readServices: geometryReadServices, constraintIsOperational,
     refreshReferenceConstraintValidity, sketchHasSolveError,
@@ -1499,24 +1499,17 @@
 
   function addConstraint(type) { return constraintCommitCommand.fromSelection(type); }
 
-  const geometryDragFeature = window.GeometryDragFeature.create({
-    solver, currentScope: workspace.current, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
-    viewScale: () => viewport.scale, arcEndpointPoint, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
-    elementSketchId, isEditableSketchId, blockDefinitionById, blockLocalGeometryBounds, blockInstanceEnabledSketchSet,
-    blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
-    arcEndpointDragValue, hypot2, minimumLength: MIN_ORIENTATION_LENGTH,
-    contextFromSeeds: localSolveContextFromSeeds, projectionConstraintsForItems: sketchProjectionConstraintsAffectingItems,
-    captureValues: snapshotModelState, enforceMinimumLineLengths, normalizeArcSweeps, invalidateBlockProjectionCache,
+  const geometryDragFeature = window.GeometryDragFeature.createForEditing({
+    solver, currentScope: workspace.current, sketches: sketchContext, scopeQuery: solveScopeQuery, solving: sketchSolving,
+    checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
+    viewport, pointer: dragPointer, profiler: interactionProfiler, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR, minimumLength: MIN_ORIENTATION_LENGTH,
+    blockLocalGeometryBounds, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    projectionConstraintsForItems: sketchProjectionConstraintsAffectingItems,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
-    profileSolve: work => interactionProfiler.active ? profileInteractionWork("solve", work) : work(),
-    canEdit: guardSketchEdit,
-    beginPointer: dragPointer.markThenCapture,
-    endPointer: dragPointer.release,
-    canvasSelection, restoreModelState, solveReferenceDependentSketches, clearSketchSolveState,
-    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, applicationText, setHint, updateUI,
-    updateGeometrySelectionUI, draw, recordHistory,
-    geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
+    canEdit: guardSketchEdit, canvasSelection, stabilizeActiveParameterNamespace, refreshConstraintAnalysis,
+    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+    geometryInstanceSourceObjects, clearSelection, resolveDerivedDragSource,
   });
   const { command: geometryDrag, build: buildDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
 
