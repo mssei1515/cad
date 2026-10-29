@@ -84,7 +84,7 @@
     document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
   });
   const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
-    log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw } = presentation;
+    log, setHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw } = presentation;
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const { applicationText, translatedExactText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
@@ -114,7 +114,7 @@
   const {
     isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
-    orderedSketches, descendantSketchIds,
+    descendantSketchIds,
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
     elementSketchId, membershipQuery: readSketchMembership, canEditSketch,
@@ -540,15 +540,11 @@
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
   });
   const { solving: sketchSolving, parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization,
-    refresh: solveRefreshCommand } = window.SketchSolvingFeature.create({
-    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, activeSketchId, elementSketchId,
-    constraintSketchId, constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
-    synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
-    resultIsAccepted, snapshotModelState, restoreModelState, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
-    namespace: parameterNamespace, currentParameterNamespace, maxPasses: PARAMETER_STABILIZATION_MAX_PASSES,
-    relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE, applicationText, profiler: interactionProfiler,
-    readEditingScope: () => editingScopeBinding.current, activateEditingScope, nextHatchIndex: () => documentIds.peek("hatch"),
-    drawableSketchIds: blockDefinitionDrawableSketchIds, refreshConstraintAnalysis, setSolveResultHint, updateUI, draw, historyController, recordHistory,
+    refresh: solveRefreshCommand } = window.SketchSolvingFeature.createForWorkspace({
+    documentWorkspace, scopeQuery: solveScopeQuery, references: constraintReferences, referenceState: referenceConstraintState, readServices: geometryReadServices,
+    projectionEditing: sketchProjectionEditing, geometry: geometryCreation, checkpoint: editingCheckpoint, editingScope: editingScopeBinding,
+    analysis: constraintAnalysis, presentation, historyController, recordHistory, resultIsAccepted, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
+    maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
   const { solveSketchById, solveReferenceDependentSketches,
     solveSketchAndDependents, solveConstraintComponentAndDependents } = sketchSolving;

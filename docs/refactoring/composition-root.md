@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Workspace求解機能の実owner接続（2026-10-30、検証完了）
+
+基準developは72da23a。既存SketchSolvingFeature.createForWorkspaceが実DocumentWorkspace・編集scope・SolveScopeQuery・参照／参照状態・GeometryReadServices・投影編集・GeometryCreation・checkpoint・解析／表示・履歴ownerを共有し、従来のcreateへ接続する。返すのは元の実feature APIで、求解→Parameter安定化→保存定義安定化→求解後更新の生成順と位置は変えない。Workspace.currentと編集scope.currentを区別し、前者を求解／現在Parameter namespaceに、後者を保存定義の元scope読取りに使う。activateの全引数／receiver、解析refreshの既定Object・一引数とreceiver、Hatch採番peekの時機を維持する。受理predicate・結果state・閾値・求解algorithm・checkpointと回復のownerを作り直さず、生成時にscope／model／DOMを読まない。旧createも維持する。
+
+app.jsは1,950→1,946行（4行減）、非空白1,500→1,496行、root420文／関数84個／hooks319行／可変参照三つ。root接続は34→18項目、不要なorderedSketches／setSolveResultHint aliasを除去。構築135文742非空白行、一文call関数80個104行、その他204文326行（文外5行）。TEMP cad-workspace-solving-composition-{proof,hierarchy}.cjsで全34子接続とwrapperの一致、元の生成位置とraw feature返却、その他appと既存SketchSolvingFeatureのAST不変、root未使用bindingなしを確認。hooksと短い委譲を除いても1,073非空白行が残り、数百行目標は未達。
+
+単体へ三つの境界試験を追加した。既存の実SketchSolving／ParameterStabilization／保存定義安定化／SolveRefreshCommandを用い、旧接続との結果・イベント比較、構築時の無照会／無編集、live Workspaceと共有結果state、profiling／通知の順序、Workspaceと異なる編集scopeへのsuccess／failure両方の復元、Hatch採番のreceiverと成功時のみ更新、失敗求解／描画例外と復元中の履歴抑制を確認した。関連単体19件／全単体2,082件／構文624fileが成功。Block／Parameter／Sketch・保存読込を含む関連13suite（unified-ui／blocks／sketch-projection／sketch-projection-compatibility-driver／parameter-dialog-controller／sketch-edit／sketch-permissions／sketch-move／unified-annotations／phase0-characterization／file-safety／fixed-command／multiple-dimensions）のE2E253件が全成功（3.7分、exit 0、実行session64473）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-workspace-solving-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerを変更しない。今回の全E2Eは未実行であり、以前の全588件成功と区別する。
+
+全体目標active、開始時週枠残量73%で停止条件未到達。mainは停止／releaseの最後に反映する。次もstateの実ownerと初期化phaseを確認し、Workspace.currentと編集scopeの違いやrollback境界を巨大な共通contextで隠さない。
+
+
 ### 最新：寸法テスト支援の実owner接続（2026-10-30、検証完了）
 
 基準developは4b2925a。既存DimensionTestDriver.createForEditingが実GeometryCreation／DimensionDisplay／SketchContext／外観・Selection・viewport・寸法配置command／layerと既存sessionを共有し、createSupport→createFixturesを元のtest bootstrap位置と順で生成する。supportとfixturesは元の実APIで、後段createInteraction／createDisplayも元のsupportに接続する。配置・角度layout・Geometryの関数値は同じownerから取り、layout／draw／値入力継続のwrapperは元のreceiverと引数を保つ。共通の静的query・hypot2・ROOT定数は既存namespaceを使う。旧API・fixture本体・window.__jot2dTestの公開順と内容は維持し、test指定時のみ生成する。通常起動のmodel／scope／DOM照会やlistener、独自の採番・model／session・汎用contextは追加しない。
