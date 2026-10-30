@@ -6,6 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：作図開始許可とTrim hover解除の所有（2026-10-30、検証完了）
+
+基準developはfec6c9a。既存BasicDrawingTools.createAuthoringのcreateLifecycleが任意interactionを受け、未指定のlifecycle／canStart／clearTrimHoverを同じ実CanvasInteractionから接続する。開始許可はSelectの無条件通過、現在Sketchのcreate guard、Trim時だけのselection structure guardという元の短絡順を所有する。Trim hover解除は元の七fieldだけをnullにし、Annotation／Sketch identity等は保持する。明示されたcanStart／clearTrimHover／lifecycleは優先し、interaction未指定の旧createLifecycleも維持する。modeは同じ早期Lifecycle sessionで持ち、別stateを作らない。後段Hatchのreset callbackはappで遅延のまま渡し、bind時に操作状態・model／scope／DOMやHatchを読まない。raw DrawOperationLifecycle本体・取消／履歴／通知は変更しない。
+
+app.jsは1,928→1,926行（2行減）、非空白1,478→1,476行、root417文／関数81個／hooks319行／可変参照三つ。root接続は9→7項目。構築134文726非空白行、一文call関数77個99行、その他205文327行（文外5行）。TEMP cad-authoring-lifecycle-policy-{proof,hierarchy}.cjsで既定値に用いる実Lifecycle・guard短絡順／receiverとTrim hover subsetの旧接続一致、明示入力優先、その他appと既存BasicDrawingToolsのAST不変、root未使用bindingなしを確認した。今回の行数減は小さいが、開始／部分解除という操作ルールをownerへ移した。hooksと短い委譲を除いても1,058非空白行が残り、数百行目標は未達。
+
+単体へ三つの境界試験を追加した。実DrawOperationLifecycle sessionとCanvasHoverを使って旧接続と比較し、構築時の無照会、未知modeとSelectの短絡、create拒否／Trim selection拒否時の無変更、live Sketch、Trim hoverの部分解除、最新Hatch ownerの遅延resetと明示policy上書きを確認した。active Sketch取得／create guard／selection guardの各例外はmode・draft・hover・UIを更新せず同じまま伝播する。関連単体50件／全単体2,091件／構文624fileが成功。作図・権限・取消・preview等の関連14suite（unified-ui／sketch-permissions／sketch-edit／circular-authoring／hatching／centerline／spline／command-panel／derived-patterns／phase0-characterization／fixed-command／multiple-dimensions／slot-dimension／adversarial-authoring-performance）のE2E214件が全成功（3.7分、exit 0、実行session36918）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-authoring-lifecycle-policy-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerは変更しない。今回の全E2Eは未実行であり、基準fec6c9aの全588件成功とは区別する。
+
+全体目標active、開始時週枠残量71%／最終確認70%で停止条件未到達。mainは停止／releaseの最後に反映する。行数だけを圧縮せず、共有ownerのAPIと初期化phaseを整理し、異なる取消・hover解除の範囲を統一しない。
+
+
 ### 最新：Sketch切替resetと編集開始の組立て（2026-10-30、検証完了）
 
 基準developは6bd13ab。既存SketchEditingFeature.createForInteractionが、実DocumentWorkspace／read services、CanvasInteractionと同じOperationSessions、実拘束command／値入力／通知を共有し、SketchCommand.createInteractionReset→従来createを元の順と位置で生成する。返却reset／editingは各実API。ロック変更はpending取消→拘束取消→描画終了、移動開始は拘束取消→pending取消→描画終了→hover全解除という別順序を所有し、Sketch切替resetの部分解除と統一しない。既存createのprepareMoveはcreateMoveのprepare未指定時だけ使う既定値で、明示prepareと旧createは維持する。Move commandを公開してから入力bindするroot順は不変。前段利用のためのhoisted clearInteractionForSketchChangeと後段drag／Tree／nullable move参照のcallbackは維持する。

@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 作図開始許可とTrim hover解除の所有（2026-10-30、fec6c9a基準）
+
+BasicDrawingTools.createLifecycleは実CanvasInteractionから未指定のLifecycle／開始許可／Trim hover解除を接続する。Select→create guard→Trim時のみselection structure guardという短絡、現在Sketchの呼出時評価と七fieldだけのhover解除を保ち、同じmode sessionへbindする。明示入力と旧直接注入APIは優先して維持し、後段Hatch callbackも遅延のまま渡す。構築時にstate／model／scope／DOMを照会せず、raw Lifecycle本体・通知と履歴・取消を変更しない。新file・state／setterや汎用contextを増やさない。
+
+app.jsは1,928→1,926行、非空白1,478→1,476行、root417文／関数81個。構築134文726非空白行、hooks319行、一文call関数77個99行、その他205文327行（文外5行）。可変参照三つは不変。hooksと短い委譲を除いても1,058非空白行が残る。TEMP cad-authoring-lifecycle-policy-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
 ## Sketch切替resetと編集開始の組立て（2026-10-30、6bd13ab基準）
 
 SketchEditingFeature.createForInteractionは実Workspace／read services、CanvasInteractionとOperationSessions、実拘束command／値入力／通知を共有し、reset→Sketch編集を元の順・位置で生成して実APIを返す。lockのpending→拘束→描画終了と、moveの拘束→pending→描画終了→hover全解除を別に持ち、Sketch切替resetの18操作・hover部分解除と統合しない。prepareMoveはprepare未指定時だけの既定値で、旧createと明示prepareは維持する。前段利用のclear callbackと後段drag／Tree／move参照は遅延のまま残し、Move公開→input bindの順を変えない。rootは既存sessionsの実返却を保持するだけで、新stateや汎用context・listenerを持たない。

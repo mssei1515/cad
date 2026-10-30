@@ -846,11 +846,9 @@
 
   function clearSelection() { return selectionClearing.clear(); }
 
-  authoringTools.createLifecycle({ lifecycle: drawOperationLifecycle,
-    canStart: nextMode => nextMode === "select" || guardSketchEdit(activeSketchId(), "create") && (nextMode !== "trim" || guardSelectionEdit("structure")),
+  authoringTools.createLifecycle({ interaction: canvasInteraction,
     instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, centerline: centerlineCommand,
     fillet: filletCommand, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() },
-    clearTrimHover: () => canvasHover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null }),
   });
 
 

@@ -248,8 +248,8 @@ test('shared authoring snap reads scale on every input and preserves post-resolu
  assert.equal(f.state.selected.key,'splines');assert.equal(f.state.selected.items[0],spline);assert.equal(f.state.mode,'select');assert.deepEqual(f.events,['selected','mode']);
 });
 
-function lifecycleFixture() {
- const f=authoringFixture(),external={};
+function lifecycleFixture(overrides = {}) {
+ const f=authoringFixture(overrides),external={};
  for(const name of ['instances','instanceSources','centerline','fillet','offset']){
   const owner={reset(){assert.equal(this,owner);f.events.push(name);},clearSources(){assert.equal(this,owner);f.events.push('sources');}};
   external[name]=owner;
@@ -553,4 +553,54 @@ test('authoring Hatch repairs only a local hatch on the active Sketch without al
  item.sketchId='S1';item.blockProjection=true;assert.equal(f.hatch.startHatchBoundaryRepair(item),false);item.blockProjection=false;
  assert.equal(f.hatch.startHatchBoundaryRepair(item),true);assert.equal(f.state.mode,'hatch-repair');assert.equal(f.hatch.commitHatchAt({x:5,y:6}),true);assert.equal(f.hatch.finish(),true);
  assert.equal(f.state.scope.hatches[0],item);assert.equal(f.state.forgotten,item);assert.equal(f.state.selected.items[0],item);assert.equal(f.state.mode,'select');assert.equal(f.documentIds.peek('hatch'),1);assert.equal(f.state.history.length,1);
+});
+
+function interactionLifecycleFixture(composed){
+ const state={ready:false,sketch:'S1',allowed:true,selectionAllowed:true,failure:null},guardEvents=[];
+ const step=name=>{assert.equal(state.ready,true);guardEvents.push(name);if(state.failure?.stage===name)throw state.failure.error;};
+ const f=lifecycleFixture({sketchContext:{activeSketchId:function(){'use strict';assert.equal(this,undefined);step('active');return state.sketch;}}});
+ vm.runInNewContext(fs.readFileSync('src/editing/canvas_hover.js','utf8'),f.sandbox);
+ const hover=f.sandbox.window.CanvasHover.create({isEndpointPoint:()=>false}),session=f.createLifecycleSession();session.setMode('circle');
+ const access={guardSketchEdit:function(id,operation){'use strict';assert.equal(this,undefined);step('guard');assert.equal(id,state.sketch);assert.equal(operation,'create');return state.allowed;},
+  guardSelectionEdit:function(operation){'use strict';assert.equal(this,undefined);step('selection');assert.equal(operation,'structure');return state.selectionAllowed;}};
+ const clearTrimHover=()=>hover.update({point:null,endpointPoint:null,line:null,circle:null,arcEndpoint:null,arc:null,dimension:null});
+ const {activeSketchId}=f.ports.sketchContext,{guardSketchEdit,guardSelectionEdit}=access;
+ const canStart=nextMode=>nextMode==='select'||guardSketchEdit(activeSketchId(),'create')&&(nextMode!=='trim'||guardSelectionEdit('structure'));
+ const stage={...f.external,hatch:{reset:()=>f.state.hatch.reset()}};f.state.hatch=null;f.events.length=0;
+ assert.equal(f.feature.createLifecycle(composed?{...stage,interaction:{lifecycle:session,access,hover}}:{...stage,lifecycle:session,canStart,clearTrimHover}),session);
+ assert.deepEqual(f.events,[]);assert.deepEqual(guardEvents,[]);assert.equal(session.mode,'circle');
+ f.state.hatch={reset(){assert.equal(this,f.state.hatch);f.events.push('hatch');}};state.ready=true;
+ return{...f,session,hover,access,guardEvents,policyState:state,stage};
+}
+
+test('authoring interaction policy preserves select bypass, guard short circuits and live Sketch permissions',()=>{
+ const results=[];for(const composed of [false,true]){
+  const f=interactionLifecycleFixture(composed),s=f.policyState;
+  assert.equal(f.session.start('unknown'),false);assert.deepEqual(f.guardEvents,[]);assert.deepEqual(f.events,[]);
+  assert.equal(f.session.start('select'),true);assert.deepEqual(f.guardEvents,[]);assert.equal(f.session.mode,'select');
+  s.allowed=false;f.events.length=0;assert.equal(f.session.start('line'),false);assert.deepEqual(f.guardEvents,['active','guard']);assert.deepEqual(f.events,[]);assert.equal(f.session.mode,'select');
+  s.allowed=true;s.selectionAllowed=false;f.guardEvents.length=0;assert.equal(f.session.start('trim'),false);assert.deepEqual(f.guardEvents,['active','guard','selection']);assert.deepEqual(f.events,[]);
+  s.sketch='S9';f.guardEvents.length=0;assert.equal(f.session.start('line'),true);assert.deepEqual(f.guardEvents,['active','guard']);assert.equal(f.session.mode,'line');
+  results.push(JSON.stringify({events:f.events,guards:f.guardEvents,mode:f.session.mode}));
+ }assert.equal(results[1],results[0]);
+});
+
+test('authoring interaction policy clears only the original Trim hover fields and retains late Hatch reset and explicit overrides',()=>{
+ const results=[];for(const composed of [false,true]){
+  const f=interactionLifecycleFixture(composed),annotation={},identity={},point={};f.hover.update({point,line:{},dimension:{},annotation,sketchIdentity:identity});f.events.length=0;
+  assert.equal(f.session.start('trim'),true);assert.equal(f.hover.current.point,null);assert.equal(f.hover.current.line,null);assert.equal(f.hover.current.dimension,null);assert.equal(f.hover.current.annotation,annotation);assert.equal(f.hover.current.sketchIdentity,identity);
+  f.state.hatch={reset(){assert.equal(this,f.state.hatch);f.events.push('latest-hatch');}};f.session.exit();assert.equal(f.events.includes('latest-hatch'),true);results.push(JSON.stringify({events:f.events,hover:f.hover.current}));
+ }assert.equal(results[1],results[0]);
+ const f=interactionLifecycleFixture(true),point={};f.hover.update({point});let calls=0;
+ f.feature.createLifecycle({...f.stage,interaction:{lifecycle:f.session,access:f.access,hover:f.hover},canStart:()=>{calls++;return false;},clearTrimHover:()=>f.events.push('custom-hover')});
+ f.guardEvents.length=0;assert.equal(f.session.start('line'),false);assert.equal(calls,1);assert.deepEqual(f.guardEvents,[]);f.session.prepare('trim');assert.equal(f.hover.current.point,point);assert.equal(f.events.includes('custom-hover'),true);
+});
+
+test('authoring interaction policy propagates each guard failure before mode, draft, hover or UI changes',()=>{
+ for(const stage of ['active','guard','selection']){
+  const results=[];for(const composed of [false,true]){
+   const f=interactionLifecycleFixture(composed),point={};f.hover.update({point});const snapshot=f.hover.current,marker=new Error(stage);f.policyState.failure={stage,error:marker};f.events.length=0;
+   assert.throws(()=>f.session.start('trim'),error=>error===marker);assert.equal(f.session.mode,'circle');assert.equal(f.hover.current,snapshot);assert.deepEqual(f.events,[]);results.push(JSON.stringify(f.guardEvents));
+  }assert.equal(results[1],results[0]);
+ }
 });
