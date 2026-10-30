@@ -6,7 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
-### 最新：拘束確定の共有owner接続（2026-10-30、検証完了）
+### 最新：参照画像の共有owner接続（2026-10-30、検証完了）
+
+基準developはc249623。ReferenceImageFeature.createForWorkspaceがDocumentWorkspace／editing scope／CanvasInteraction／Presentation／geometry appearanceとの接続を担当する。描画画像はeditingScope.current.referenceImages、取込・挿入先はworkspace.currentであり、両者を統合しない。実Selection・live hover・Sketch／作成権限・通知を共有し、viewport.screenToWorldと既存の数値表示／hypot2を使う。画像IDは操作時に同じdocumentIds.allocateをmember呼出しする。renderer→layer→interaction→inputの生成順と、後段のhit／snap／clipboard callback、Image生成、text編集判定、bind／dispose時機を維持する。既存createと実renderer／layer／interaction／input／prepareImages APIを維持し、画像cache・model／Selection／scope・採番・listenerを重複させない。
+
+app.jsは1,715→1,713行（2行減）、非空白1,266→1,264行。root399文・構築123文・関数77個・hooks233行・一文call委譲73個93行は据置。構築の非空白621→620行、その他202文314→313行、通常core940→938行。明示入力32→20項目とし、不要root alias二個を除去した。TEMP cad-reference-image-owners-{proof,hierarchy}.cjsで他app AST・raw ReferenceImageFeature不変、未使用root bindingなし、前段九入力の初期化済みを確認した。行数より既存機能での所有者共有を優先し、200〜500行目標は未達である。
+
+旧createと新窓口を実ReferenceImage renderer／layer／interaction／input・Selectionで比較する単体三件を追加した。cold生成・同じAPI／browser／Selection、明示bind／dispose、取込中Workspace差替えと別の表示scope、live hover／可視性、ドラッグ・較正と表示／cache readinessのtrace、四段階のconstructor例外同一性・後段短絡、非同期取込の権限拒否を確認した。既存三件の期待値は変更していない。構文626file・最終appのnode --check・全単体2,176件・関連単体6件が成功。関連E2E225件が成功（9file、3.4m、exit 0、実行session54238）。選択したfile内の全testをfilterなしで実行し、三つのCAD filter環境変数が未設定、405製品／E2E入力fileと開始HEADが不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-reference-image-owners-{check,unit,e2e}.log／run.ps1／selection.json／source-hashes.json／filter-environment.json／e2e-receipt.json／last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標はactive・未完了。開始時週枠残量51%／最終確認51%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/reference-image-owners。最新全E2Eは28ac1f1の588件成功（22.4m）、その後のc249623は関連294件成功（16.5m）である。次は固定拘束operand／Selection commandの二段階接続とDocument resetを比較する。固定状態の照会はbound editing scope、操作用currentScopeはWorkspace.current、Projection guardとSelectionHighlightの比較を別の依存として維持する。rootの行数だけを減らす入力の束や巨大なcontextに置換しない。現単位の検証・Commit／develop統合後に、実益のある境界を選ぶ。
+
+### 直前：拘束確定の共有owner接続（2026-10-30、検証完了）
 
 基準developは28ac1f1。ConstraintEditing.createForEditingの後段窓口createCommitForWorkspaceが拘束確定の接続を担当する。先行したSelection／Sketch／Presentation／Operand候補を共有し、後段Workspace／checkpoint／挿入／redundancy／solving／安定化／reference stateと求解準備・line collapse・分析更新・履歴・clockだけを受ける。Workspace.currentの動的照会とbound editing scopeの挿入・snapshot／restoreは元の別参照を維持する。従来createCommit→DimensionConstraintFactory／Command→readOnly query→intent resolverの順と後段Commandへの遅延callback、裸関数参照・clockの呼出し時機を変えない。既存createCommitとraw ConstraintCommitCommandを維持し、実APIを再利用する。可変app context・新model／Selection／session・cache・listenerは増やさない。
 

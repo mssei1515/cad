@@ -36,7 +36,6 @@
 
 
   const {
-    hypot2,
     vectorNorm,
     Point,
     Line,
@@ -347,7 +346,7 @@
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
     draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
-  const { screenToWorld, worldToCanvasScreen, canvasPoint, visibleWorldBounds } = viewport;
+  const { worldToCanvasScreen, canvasPoint, visibleWorldBounds } = viewport;
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
@@ -417,12 +416,11 @@
   const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
   const { annotationLeaderDisplayGeometry, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
-  const referenceImageFeature = window.ReferenceImageFeature.create({
+  const referenceImageFeature = window.ReferenceImageFeature.createForWorkspace({
     canvas, ctx, viewport, document, window, withCanvasState, createImage: () => new Image(),
-    readImages: () => editingScopeBinding.current.referenceImages, currentScope: workspace.current, canvasSelection, readHover: () => canvasHover.current,
-    isVisibleValue, isVisibleSketchId, activeSketchId, guardSketchEdit, clearSelection, applicationText, setHint, updateUI, draw, clearSnap: () => clearSnap(), hypot2,
-    hitReferenceImageAt, formatDisplayNumber, recordHistory, screenToWorld, nextId: () => documentIds.allocate("referenceImage"),
-    canCreateInActiveSketch, pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard, isGeometryMode,
+    documentWorkspace, editingScope: editingScopeBinding, interaction: canvasInteraction, presentation, appearance: geometryAppearance,
+    clearSelection, clearSnap: () => clearSnap(), hitReferenceImageAt, recordHistory,
+    pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard, isGeometryMode,
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
   const { renderer: referenceImageRenderer, interaction: referenceImageInteraction, input: referenceImageInput } = referenceImageFeature;
