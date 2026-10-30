@@ -97,6 +97,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
+### 最新：Sketch切替resetと編集開始の組立て（2026-10-30、検証完了）
+
+基準developは6bd13ab。既存SketchEditingFeature.createForInteractionが、実DocumentWorkspace／read services、CanvasInteractionと同じOperationSessions、実拘束command／値入力／通知を共有し、SketchCommand.createInteractionReset→従来createを元の順と位置で生成する。返却reset／editingは各実API。ロック変更はpending取消→拘束取消→描画終了、移動開始は拘束取消→pending取消→描画終了→hover全解除という別順序を所有し、Sketch切替resetの部分解除と統一しない。既存createのprepareMoveはcreateMoveのprepare未指定時だけ使う既定値で、明示prepareと旧createは維持する。Move commandを公開してから入力bindするroot順は不変。前段利用のためのhoisted clearInteractionForSketchChangeと後段drag／Tree／nullable move参照のcallbackは維持する。
+
+appはcreateOperationSessionsの実frozen返却値を同じ位置で一度保持し、従来の同じAPIを直後に分解して共有する。mode／pending／Selection／pointerを複製せず、汎用contextやsetter・listenerを追加しない。構築時にmodel／scope／DOMや取消・resetを呼ばず、初期化順と例外時の途中状態を維持する。raw SketchCommand／Move／reset本体は変更しない。
+
+app.jsは1,936→1,928行（8行減）、非空白1,486→1,478行、root417文／関数81個／hooks319行／可変参照三つ。二生成へのroot接続は合計38→23項目。構築135→134文／737→726非空白行、一文call関数77個99行、その他205文329行（文外5行）。TEMP cad-sketch-interaction-composition-{proof,hierarchy}.cjsでreset／編集と両prepareの接続・実行順の一致、実sessionsと元の生成位置／raw API返却、その他appと既存SketchEditingFeatureのAST不変（prepareMoveの任意既定値追加を除く）、root未使用bindingなしを確認。hooksと短い委譲を除いても1,060非空白行が残り、数百行目標は未達。
+
+単体へ三つの境界試験を追加した。実SketchCommand／SketchMoveCommand／移動入力binding・Selection／Hover／Pointerで旧接続と比較し、resetの18操作と部分hover／pointer解除、ロック／移動の別取消順、moveのGeometry参照維持と履歴一件、生成時listenerなし・後段bindを確認。pending取消／拘束取消／描画終了それぞれの例外でlock／move状態変更と後続UI／履歴へ進まないこと、途中状態と例外同一性も確認した。関連単体24件／全単体2,088件／構文624fileが成功。Sketch切替を含む一連の変更を最新の全E2E588件で検証し、全成功（22.9分、exit 0、実行session83350）。constraint-drag-regressions全file9.9分を含み、Fillet3,744preview最大30.2ms、Offset10,296最大56.3ms、aircraft1,872最大273ms、coupled-lines5,304最大23.3msが失敗なし。CLIのtest対象を絞らず、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHの未設定も確認した。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-sketch-interaction-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerは変更せず、以前の全588件成功を今回の結果として流用していない。
+
+全体目標active、開始時週枠残量72%／最終確認71%で停止条件未到達。mainは停止／releaseの最後に反映する。状態と初期化phaseを確認し、異なる操作終了順を汎用resetへ統合しない。
+
+
 ### 最新：Document読込適用と正規化・採番復元の所有（2026-10-30、検証完了）
 
 基準developはd841cc5。既存DocumentWorkspace.createPersistenceがensureDimensionDefaultsとcreateApplicationを返し、実loading／Document／preparation／placement／ID ownerをDocumentApplicationへ接続する。寸法既定値の正規化はliveな編集scopeと同じplacementを使い、採番復元はreservation.geometry(sequences.geometry)→documentIds.restore(sequences)の順を所有する。appはreset・late Tree capture／restore・参照妥当性更新・最小線長補正・logの五つを渡す。適用先modelはcreateApplicationを呼ぶ元の後段位置で一度取得し、Treeはload時だけ参照する。通常のDocument読込／decode／install／codec／回復本体と返却実APIは変更せず、別model・ID／scope／sessionや汎用contextを追加しない。rootの寸法正規化をconst APIへ替える初期化時機は全利用より前で、準備構築時にmodel／scope／DOMを読まない。旧loading／DocumentApplication.createも維持する。
