@@ -174,7 +174,7 @@
     updateStatusUI, updateConstraintButtons, syncDimensionInput: () => syncDimensionValueInput(),
     refreshSketchSelection: () => sketchTreeView.refreshSelection(),
   });
-  const { controller: canvasContextController, element: canvasContextMenu, createEditingInteraction: createCanvasContextInteraction } = window.CanvasContextInteraction.createMenu({
+  const { controller: canvasContextController, element: canvasContextMenu, createSceneForEditing: createCanvasContextScene } = window.CanvasContextInteraction.createMenu({
     document, window, canvas, escapeHtml, applicationText, canvasHover, draw,
     readPresentation: () => canvasContextCandidatePresentation, readInteraction: () => canvasContextInteraction,
   });
@@ -1316,13 +1316,11 @@
     invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis,
   });
 
-  const { candidatesAt: canvasContextCandidatesAt } = sceneHitQueries.createContextQuery({
-    editedFitPoints: () => splineEditing.current?.spline?.fitPoints, canvasContextAnnotationHit,
-  });
-
-  const canvasContextCandidatePresentation = window.CanvasContextPresentation.create({
-    toolbarSvgMarkup, applicationText, formatDisplayNumber, constraintToolbarIcon, localizedConstraintName,
-    blockDefinitionById, geometryInstanceTypeLabel, hatchPatternTypeLabel, hatchAppearanceForDisplay,
+  const { presentCandidate: canvasContextCandidatePresentation, createInteraction: createCanvasContextInteraction } = createCanvasContextScene({
+    sceneQueries: sceneHitQueries, splineEditing, canvasContextAnnotationHit, documentWorkspace, readServices: geometryReadServices,
+    interaction: canvasInteraction, sessions: operationSessions,
+    candidates: { toolbarSvgMarkup, formatDisplayNumber, constraintToolbarIcon, localizedConstraintName,
+      geometryInstanceTypeLabel, hatchPatternTypeLabel, hatchAppearanceForDisplay },
   });
 
 
@@ -1364,14 +1362,13 @@
 
 
   const canvasContextInteraction = createCanvasContextInteraction({
-    selection: canvasSelection, selectionScope: selectionScopeQuery, sketches: sketchContext, access: sketchEditAccess,
     constraintSelection: constraintSelectionQuery, blockQueries: blockEditingQueries, dimensions: dimensionDragFeature,
     cancellation: canvasCommandCancellation, clipboard: clipboardFeature, history: historyController,
-    pointer: pointerInteractionController, viewport, projection: sketchProjectionCommand,
+    viewport, projection: sketchProjectionCommand,
     sameArcEndpoint, clearSelection, arcEndpointPoint, findLineFixedConstraint, findArcEndpointFixedConstraint,
-    readMode: drawOperationLifecycle.readMode, visibleGeometryBounds, pendingCommandSession, constraintTargetSession, splineEditing, isReadOnlyDimension,
+    visibleGeometryBounds, isReadOnlyDimension,
     selectedConstructionTogglePrimitives, drawingOrderCommandState, handleConstraintOperandClick, updateUI, isGeometryMode,
-    closeAppMenus: () => closeAppMenus(), canvasContextCandidatesAt,
+    closeAppMenus: () => closeAppMenus(),
     copySelectionToClipboard, imageClipboard,
     showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit,
     setBlockInstanceRotationLocked, startDimensionEditInput, updateGeometrySelectionUI, recordHistory, setHint, sketchMoveCommand,

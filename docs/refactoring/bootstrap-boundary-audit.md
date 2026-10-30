@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Canvasコンテキストメニューの候補準備と後段接続（2026-10-30、9a3bfdc基準）
+
+基準developは9a3bfdc。CanvasContextInteraction.createMenuが返すcreateSceneForEditingは、既存scene queryのcontext queryとCanvasContextPresentationの候補formatterを従来順に生成する。実DocumentWorkspace／read services／CanvasInteraction／OperationSessionsと限定した候補表示の七関数を受け、実formatterと後段のcreateInteraction窓口を凍結公開APIとして返す。後段窓口は同じSelection／selection scope／Sketch／access／Pointer／Lifecycle／pending／targets、Spline editingと生成済み候補queryを既存createEditingInteractionへ接続する。編集fit pointとDocument定義・操作状態は実行時に読む。既存createMenu／createInteraction／createEditingInteractionを維持し、前段DOM生成、候補query・formatter生成、途中の取消／描画順command生成、後段の操作生成、controller.startの順を変えない。model／Selection／Menu stateやcache・可変contextを複製しない。
+
+app.jsは1,762→1,759行（3行減）、非空白1,312→1,310行。root404→403文、構築124→123文／657→655非空白行。後段操作のroot明示入力は47→37項目となった。関数80個、条件付きhooks235行、一文call委譲76個98行、その他203文317行、可変参照三つ・文外5行を維持する。prepareControlsは既存部品の生成として引き続き構築に数える。TEMP cad-context-menu-scene-{proof,hierarchy,stage-audit}.cjsでquery／formatterの入力とquery factoryのreceiver、Spline遅延参照、旧後段四十七入力、途中のcommand生成を含む他app／raw Menu ASTの不変、未使用root bindingなしと早期直接捕捉なしを確認した。hooksと短い委譲を除いても977非空白行あり、200〜500行目標は未達。
+
+全体目標はactive・未完了。開始時週枠残量59%で停止条件未到達。mainは最終反映時まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/context-menu-scene。再開時はGit現物・入力hash・検証receiptとusageを確認する。最後の全E2Eはdevelop 7e473dfで588件成功（24.3m）、以後の関連検証は今回の範囲と区別する。残存実装の再監査では、通常rootの非委譲関数はisGeometryModeのtrue、hitBlockRotationHandleのnull、ensureBlockState後にViewをrenderするupdateBlockUIで、もう一つは235行のinstallTestHooksだった。残る中心は生成・接続・bindとtest支援の組立てである。小さなstub移動やtest hooks削減だけで全体完了とはせず、機能ownerと初期化段階を整理して数百行の目標へ進む。
+
 ## Toolbarの拘束要素とカーソルの段階的な準備（2026-10-30、a63ce0c基準）
 
 基準developはa63ce0c。PresentationFeature.createToolbarが返すprepareControlsは、従来と同じ順で拘束ボタン群・メニュー拘束ボタン群・Fixボタンを取得し、同じDocument／Canvasと取得済み要素で既存CommandCursorを生成する。要素ArrayとFix node・実Cursor、後段のcreateControls窓口を凍結公開APIとして返し、後段窓口は既存Toolbar View／CommandStatusへ同じcursor.updateをbare callbackとして接続する。元の単独createControls／各binding APIも維持する。要素の取得・Cursor生成、tooltip等の初期化、View／Status生成、イベントbindの既存段階を変えない。取得済みArray／nodeとCursorのcacheは実体を共有し、DOM再照会・SVG先読み・mode／pendingの複製、追加listenerや可変contextを作らない。

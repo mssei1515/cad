@@ -6,7 +6,7 @@ const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture({ withMenu = false, withEditingOwners = false } = {}) {
+function fixture({ withMenu = false, withEditingOwners = false, buildScene = null } = {}) {
   const calls = [], selection = w.CanvasSelection.create(), hover = w.CanvasHover.create({ isEndpointPoint: point => point.kind === 'endpoint' });
   const state = { ready: false, candidates: [], pointer: { x: 10, y: 20 }, geometryMode: true, cancellable: false, mode: 'select', batch: null, allowed: true, group: null, opened: null };
   const constraintTargetSession = { command: null };
@@ -32,14 +32,14 @@ function fixture({ withMenu = false, withEditingOwners = false } = {}) {
     fixPointBtn: { click: notify('fix') }, dimensionLineGroup: { align: group => { calls.push(['align', group]); return true; } }, updateGeometrySelectionUI: () => calls.push('selection-ui'),
     recordHistory: notify('history'), setHint: notify('hint'), addSplineFitPointFromContext: notify('spline-add'), fitVisibleGeometryToViewport: () => true,
   };
-  let interaction, menuFeature, dom, editingOwners;
+  let interaction, menuFeature, dom, editingOwners, scene;
   if (withMenu) {
     dom = menuSurfaces();
     menuFeature = w.CanvasContextInteraction.createMenu({
       document: dom.document, window: dom.window, canvas: dom.canvas, escapeHtml: String,
       applicationText: options.applicationText, canvasHover: hover, draw: options.draw,
       readInteraction: () => { assert.equal(state.ready, true); return interaction; },
-      readPresentation: () => { assert.equal(state.ready, true); return function(target) {
+      readPresentation: () => { assert.equal(state.ready, true); return scene ? scene.presentCandidate : function(target) {
         'use strict'; assert.equal(this, undefined);
         return { icon: '', type: target.kind, id: target.item.id, secondary: '' };
       }; },
@@ -61,13 +61,14 @@ function fixture({ withMenu = false, withEditingOwners = false } = {}) {
         'blockDefinitionScopeError','blockDefinitionEditError','selectedDimensionLineGroup','dimensionLineGroup',
         'hasCancellableCanvasCommand','cancelCanvasCommandFromContextMenu','hasCopyableCanvasSelection','undoHistory','redoHistory',
         'setLastPointer','canvasPoint','sketchProjectionCommand','commitSketchProjectionCommand']) delete remaining[key];
-      interaction = menuFeature.createEditingInteraction({ ...remaining, ...editingOwners });
+      if (buildScene) { const built = buildScene({ menuFeature, remaining, editingOwners, options, state, calls }); scene = built.scene; interaction = built.interaction; }
+      else interaction = menuFeature.createEditingInteraction({ ...remaining, ...editingOwners });
     } else interaction = menuFeature.createInteraction(options);
   } else interaction = w.CanvasContextInteraction.create(options);
   assert.deepEqual(calls, []); state.ready = true;
   const event = { preventDefault: () => calls.push('prevent') };
   const point = id => Object.assign(new w.GeometrySolver.Point(id, 1, 2), { sketchId: 'S1' });
-  return { interaction, state, calls, selection, hover, constraintTargetSession, event, point, menuFeature, dom, editingOwners };
+  return { interaction, state, calls, selection, hover, constraintTargetSession, event, point, menuFeature, dom, editingOwners, scene };
 }
 
 test('single-target entry preserves the selected set and computes current Fix items through the same selection', () => {
@@ -190,4 +191,94 @@ test('editing-owner menu uses original cancellation, guards, dimension group and
  assert.deepEqual(f.calls.slice(0,5),['guard-selection',['guard-sketch','S1'],['align',f.state.group],'selection-ui','draw']);assert.equal(f.calls[5][0],'history');
  f.calls.length=0;f.editingOwners.history.undo=()=>{throw Error('replacement must not be read');};f.menuFeature.controller.close();
  f.interaction.execute('undo',null,f.state.pointer);assert.equal(f.calls.at(-1)[0],'undo');
+});
+
+
+function sceneFixture(composed, probe = {}) {
+  probe.order = []; probe.ports = {}; probe.results = {};
+  const f = fixture({ withMenu: true, withEditingOwners: true, buildScene({ menuFeature, remaining, editingOwners, options, state, calls }) {
+    state.sceneScope = Object.fromEntries(['points', 'lines', 'circles', 'arcs', 'splines', 'constraints', 'annotations', 'hatches', 'blockInstances', 'geometryInstances', 'referenceImages'].map(key => [key, []]));
+    state.definitions = []; const ready = () => assert.equal(state.ready, true), allow = () => { ready(); return true; };
+    const sceneQueries = { createContextQuery(input) { assert.equal(this, sceneQueries); probe.order.push('query'); probe.ports.query = input; if (probe.failAt === 'query') throw probe.error;
+      return probe.results.query = w.CanvasContextQuery.create({ ...input, currentScope: () => { ready(); if (state.queryError) throw state.queryError; calls.push('scene-query'); return state.sceneScope; },
+        viewportScale: () => 1, canvasContextPointIsSelectable: allow, sketches: { isEditableSketchId: allow, isVisibleSketchId: allow, isEditableSketchElement: allow,
+          isVisibleSketchElement: allow, activeSketchId: editingOwners.sketches.activeSketchId, isActiveSketchConstraint: allow, constraintSketchId: item => item.sketchId },
+        projections: {}, dimensions: {}, annotations: { canvasContextAnnotationHit: input.canvasContextAnnotationHit }, hatches: {} }); } };
+    const catalog = w.BlockCatalog.create({ definitions: () => { ready(); return state.definitions; } });
+    const candidates = { toolbarSvgMarkup: selector => { ready(); return selector; }, formatDisplayNumber: value => { ready(); return String(value); },
+      constraintToolbarIcon: () => { ready(); return 'icon'; }, localizedConstraintName: value => { ready(); return value; },
+      geometryInstanceTypeLabel: () => 'instance', hatchPatternTypeLabel: () => 'hatch', hatchAppearanceForDisplay: () => ({}) };
+    const input = { sceneQueries, splineEditing: options.splineEditing, canvasContextAnnotationHit: () => null,
+      documentWorkspace: { sketches: editingOwners.sketches }, readServices: { catalog },
+      interaction: { selection: editingOwners.selection, scope: editingOwners.selectionScope, access: editingOwners.access, lifecycle: { readMode: options.readMode } },
+      sessions: { pointer: editingOwners.pointer, pending: options.pendingCommandSession, targets: options.constraintTargetSession }, candidates };
+    probe.input = input; const originals = new Map();
+    for (const [namespace, method, name] of [['CanvasContextPresentation', 'create', 'presentation'], ['CanvasContextMenu', 'createEntry', 'entry'], ['CanvasContextActions', 'create', 'actions']]) {
+      const original = w[namespace]; originals.set(namespace, original); w[namespace] = { ...original, [method](ports) {
+        probe.order.push(name); probe.ports[name] = ports; if (probe.failAt === name) throw probe.error;
+        return probe.results[name] = original[method](ports);
+      } };
+    }
+    try {
+      let scene;
+      if (composed) scene = menuFeature.createSceneForEditing(input);
+      else {
+        const { candidatesAt } = sceneQueries.createContextQuery({ editedFitPoints: () => options.splineEditing.current?.spline?.fitPoints, canvasContextAnnotationHit: input.canvasContextAnnotationHit });
+        const presentCandidate = w.CanvasContextPresentation.create({ ...candidates, applicationText: options.applicationText, blockDefinitionById: catalog.blockDefinitionById });
+        scene = { presentCandidate, createInteraction: options => menuFeature.createEditingInteraction({ ...options, ...editingOwners,
+          readMode: input.interaction.lifecycle.readMode, pendingCommandSession: input.sessions.pending, constraintTargetSession: input.sessions.targets,
+          splineEditing: input.splineEditing, canvasContextCandidatesAt: candidatesAt }) };
+      }
+      assert.deepEqual(probe.order, ['query', 'presentation']); assert.deepEqual(calls, []); probe.order.push('between');
+      const later = { ...remaining, ...editingOwners };
+      for (const key of ['selection', 'selectionScope', 'sketches', 'access', 'pointer', 'readMode', 'pendingCommandSession', 'constraintTargetSession', 'splineEditing', 'canvasContextCandidatesAt']) delete later[key];
+      return { scene, interaction: scene.createInteraction(later) };
+    } finally { for (const [namespace, original] of originals) w[namespace] = original; }
+  } });
+  return { ...f, probe };
+}
+
+test('context scene constructs actual query and candidate formatter before later menu interaction without eager scope or presentation reads', () => {
+  for (const composed of [false, true]) {
+    const f = sceneFixture(composed), { ports, results, input } = f.probe;
+    assert.deepEqual(f.probe.order, ['query', 'presentation', 'between', 'entry', 'actions']); assert.deepEqual(f.calls, []);
+    assert.equal(f.scene.presentCandidate, results.presentation); assert.equal(ports.entry.canvasContextCandidatesAt, results.query.candidatesAt);
+    assert.equal(ports.query.canvasContextAnnotationHit, input.canvasContextAnnotationHit); assert.equal(ports.actions.activeSketchId, input.documentWorkspace.sketches.activeSketchId);
+    assert.equal(f.dom.canvas.count(), 0); const point = f.point('P1'); Object.assign(point, f.state.pointer); f.state.sceneScope.points.push(point);
+    assert.equal(results.query.candidatesAt(f.state.pointer)[0].item, point);
+    assert.equal(f.scene.presentCandidate({ kind: 'point', item: point }).secondary, 'X 10 / Y 20');
+    f.state.definitions.push({ id: 'BD1', name: 'Live part' });
+    assert.match(JSON.stringify(f.scene.presentCandidate({ kind: 'block', item: { id: 'B1', definitionId: 'BD1' } })), /Live part/);
+    if (composed) assert.equal(Object.isFrozen(f.scene), true);
+  }
+});
+
+test('context scene keeps current spline ranking, menu hover restoration and late constraint selection with original Geometry and pointer identities', () => {
+  for (const composed of [false, true]) {
+    const f = sceneFixture(composed), a = f.point('P1'), b = f.point('P2'), line = { id: 'hover-line' };
+    Object.assign(a, { x: 10, y: 20 }); Object.assign(b, { x: 10.5, y: 20 }); f.state.sceneScope.points.push(a, b); f.selection.set('points', [a]);
+    f.probe.input.splineEditing.current = { spline: { fitPoints: [b] } };
+    assert.equal(f.probe.results.query.candidatesAt(f.state.pointer)[0].item, b); f.probe.input.splineEditing.current = null;
+    f.hover.update({ line }); f.menuFeature.controller.start(); f.dom.canvas.fire('contextmenu', f.event);
+    assert.equal(f.dom.menu.hidden, false); assert.match(f.dom.menu.innerHTML, /P1/); assert.match(f.dom.menu.innerHTML, /P2/);
+    const second = f.probe.results.query.candidatesAt(f.state.pointer)[1].item;
+    f.dom.menu.fire('pointerover', { target: f.dom.button(1), relatedTarget: null }); assert.equal(f.hover.current.point, second); assert.deepEqual(Array.from(f.selection.points), [a]);
+    f.menuFeature.controller.close(); assert.equal(f.hover.current.line, line);
+    f.constraintTargetSession.command = { type: 'horizontal' }; f.calls.length = 0; f.dom.canvas.fire('contextmenu', f.event);
+    const first = f.probe.results.query.candidatesAt(f.state.pointer)[0].item; f.dom.menu.fire('click', { target: f.dom.button(0) });
+    const operand = f.calls.find(call => Array.isArray(call) && call[0] === 'operand'); assert.equal(operand[1], f.state.pointer); assert.equal(operand[2], 'horizontal'); assert.equal(operand[3].hitP, first);
+    assert.equal(f.dom.menu.hidden, true); assert.deepEqual(Array.from(f.selection.points), [a]);
+  }
+});
+
+test('context scene preserves query and formatter failure stages and leaves selection intact when the runtime query throws', () => {
+  const sequence = ['query', 'presentation', 'between', 'entry', 'actions'];
+  for (const composed of [false, true]) {
+    for (const failAt of ['query', 'presentation', 'entry', 'actions']) {
+      const probe = { failAt, error: new Error(failAt) }; assert.throws(() => sceneFixture(composed, probe), error => error === probe.error);
+      assert.deepEqual(probe.order, sequence.slice(0, sequence.indexOf(failAt) + 1));
+    }
+    const f = sceneFixture(composed), point = f.point('P1'); f.selection.set('points', [point]); f.state.queryError = new Error('query runtime');
+    assert.throws(() => f.interaction.open(f.event), error => error === f.state.queryError); assert.deepEqual(Array.from(f.selection.points), [point]); assert.equal(f.dom.menu.hidden, true);
+  }
 });

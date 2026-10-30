@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,762行、非空白1,312行、root直下404文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,759行、非空白1,310行、root直下403文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
-### 最新：Toolbarの拘束要素とカーソルの段階的な準備（2026-10-30、検証完了）
+### 最新：Canvasコンテキストメニューの候補準備と後段接続（2026-10-30、検証完了）
+
+基準developは9a3bfdc。CanvasContextInteraction.createMenuが返すcreateSceneForEditingは、既存scene queryのcontext queryとCanvasContextPresentationの候補formatterを従来順に生成する。実DocumentWorkspace／read services／CanvasInteraction／OperationSessionsと限定した候補表示の七関数を受け、実formatterと後段のcreateInteraction窓口を凍結公開APIとして返す。後段窓口は同じSelection／selection scope／Sketch／access／Pointer／Lifecycle／pending／targets、Spline editingと生成済み候補queryを既存createEditingInteractionへ接続する。編集fit pointとDocument定義・操作状態は実行時に読む。既存createMenu／createInteraction／createEditingInteractionを維持し、前段DOM生成、候補query・formatter生成、途中の取消／描画順command生成、後段の操作生成、controller.startの順を変えない。model／Selection／Menu stateやcache・可変contextを複製しない。
+
+app.jsは1,762→1,759行（3行減）、非空白1,312→1,310行。root404→403文、構築124→123文／657→655非空白行。後段操作のroot明示入力は47→37項目となった。関数80個、条件付きhooks235行、一文call委譲76個98行、その他203文317行、可変参照三つ・文外5行を維持する。prepareControlsは既存部品の生成として引き続き構築に数える。TEMP cad-context-menu-scene-{proof,hierarchy,stage-audit}.cjsでquery／formatterの入力とquery factoryのreceiver、Spline遅延参照、旧後段四十七入力、途中のcommand生成を含む他app／raw Menu ASTの不変、未使用root bindingなしと早期直接捕捉なしを確認した。hooksと短い委譲を除いても977非空白行あり、200〜500行目標は未達。
+
+境界単体三件を追加し、実CanvasContextQuery／候補formatter／Menu entry／actionを旧直接生成と新窓口で比較した。前段query→formatterと後段entry→action、構築時のscope／表示無照会、同じquery・Sketch・annotation hit、live Block名、編集中Spline fit pointの順位、Geometry／pointer同一性、hover復元・Selection保持、後から始まった拘束commandへの候補転送、constructor短絡とruntime query例外時の無選択変更を確認した。構文626file、全単体2,148件、関連単体39件が成功。関連E2E223件が全成功（4.0m、exit 0、実行session34864）。drawing-order／hatching／multiple-dimensions／sketch-move／sketch-edit／reference-images／sketch-permissions／spline／unified-ui／blocks／phase0-characterizationの11suiteを実施した。実際のcontext／contextmenu操作を持つ既存specを検索して対象に含めた。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-context-menu-scene-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。今回の全E2Eは未実施で、develop 7e473dfの588件全成功と区別する。
+
+全体目標はactive・未完了。開始時週枠残量59%／最終確認58%で停止条件未到達。mainは最終反映時まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/context-menu-scene。再開時はGit現物・入力hash・検証receiptとusageを確認する。最後の全E2Eはdevelop 7e473dfで588件成功（24.3m）、以後の関連検証は今回の範囲と区別する。残存実装の再監査では、通常rootの非委譲関数はisGeometryModeのtrue、hitBlockRotationHandleのnull、ensureBlockState後にViewをrenderするupdateBlockUIで、もう一つは235行のinstallTestHooksだった。残る中心は生成・接続・bindとtest支援の組立てである。小さなstub移動やtest hooks削減だけで全体完了とはせず、機能ownerと初期化段階を整理して数百行の目標へ進む。
+
+### 直前：Toolbarの拘束要素とカーソルの段階的な準備（2026-10-30、検証完了）
 
 基準developはa63ce0c。PresentationFeature.createToolbarが返すprepareControlsは、従来と同じ順で拘束ボタン群・メニュー拘束ボタン群・Fixボタンを取得し、同じDocument／Canvasと取得済み要素で既存CommandCursorを生成する。要素ArrayとFix node・実Cursor、後段のcreateControls窓口を凍結公開APIとして返し、後段窓口は既存Toolbar View／CommandStatusへ同じcursor.updateをbare callbackとして接続する。元の単独createControls／各binding APIも維持する。要素の取得・Cursor生成、tooltip等の初期化、View／Status生成、イベントbindの既存段階を変えない。取得済みArray／nodeとCursorのcacheは実体を共有し、DOM再照会・SVG先読み・mode／pendingの複製、追加listenerや可変contextを作らない。
 
