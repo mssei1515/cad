@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Blockコマンドの編集環境からの生成（2026-10-30、検証完了）
+
+基準developは336e4f1。BlockEditingFeatureの既存実体へcreateCommandsForEditingを追加し、CanvasInteractionのSelection／access／Lifecycle、DrawingFit、Presentation、参照状態、SketchSolving／SketchContext、ChoiceDialog、ConstraintReferencesとSolveResultStateから作成／完了commandの32項目を接続する。app側は20項目のowner・操作依存を渡す。同じBlockEditorSession／draft編集／catalog／queriesを使い、別model・Selection・求解stateや巨大contextは作らない。後段BlockViewはreadViewで操作時に読む。作成guardはisGeometryMode→canCreateInActiveSketch→guardSelectionEdit(structure)の短絡順を維持し、View・ChoiceDialog・window.promptのreceiver、現在のreferenceState.errorCount、元のWorkspace.currentと採番・history・viewport復元を維持する。旧createCommandsとcreateViewのAPI・生成時機、raw Definition／Completion commandは変更しない。
+
+app.jsは1,828→1,821行（7行減）、非空白1,378→1,371行。root417文／関数81個／hooks235行／可変参照三つを維持し、構築134文708非空白行、一文call関数77個99行、その他205文324行（文外5行）。setSketchSolveOk／setSketchSolveError／resetEmptyViewport／solveReferenceDependentSketchesの不要root aliasを除いた。TEMP cad-block-command-composition-{proof,hierarchy}.cjsで旧32子portの一致、BlockViewの遅延参照と直接依存の初期化順、他app／raw FeatureのAST不変、未使用root bindingなしを確認する。hooksと短い委譲を除いても1,037非空白行あり、200〜500行目標は未達。
+
+境界単体四件を追加し、旧構成と実commandを比較する。生成時のView／reference無照会、三つの作成guardの短絡、同じSelection／Lifecycleと後段Viewのreceiver、open／cancelのhost／viewport復元とrename prompt、現在参照エラーでの拒否、solver例外でsession／scope／registry／historyを維持する範囲、確認dialogの一件pending・古いsessionの無効化・再開後のrotationLockedと作成Selectionを確認した。関連単体45件が成功。全単体2,118件／構文626fileが成功。関連12suite（unified-ui／blocks／block-geometry-fixed／sketch-projection／sketch-permissions／sketch-edit／sketch-move／sketch-tree-delete／sketch-tree-visibility／phase0-characterization／derived-selection-copy／parameter-dialog-controller）のE2E253件が全成功（3.6m、exit 0、実行session82765）。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-block-command-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更しない。今回は全E2E未実行。直近の全体検証cbc5c2cでの588件成功と、今回／前回の分離後の関連検証は区別する。
+
+全体目標active。開始時週枠残量65%／最終確認65%で停止条件未到達。mainは停止／releaseの最後に反映する。次はSketch Tree等の通常機能の広い接続とinit phaseを実ownerから再確認し、直近二単位以後の全体E2Eも次の区切りで実施する。少ない行数差を過大評価せず、操作stateや同じ機能の巨大な別コピーを増やさない。
+
+
+
 ### 最新：注記機能の編集環境からの生成（2026-10-30、検証完了）
 
 基準developはcbc5c2c。既存AnnotationFeatureにcreateForEditingを追加し、実DocumentWorkspace／editing scope・read services・CanvasInteraction・OperationSessions・Anchor query・DimensionPlacement・Presentation／Appearance編集からraw createへ限定APIを接続する。appの48項目を22項目のowner・操作依存へ整理した。Anchor queryは従来の位置で一度だけ生成した実体をannotationTargetsとして保持し、既存hit／anchor参照と共有する。modelのWorkspace.currentとreadEditingScopeの同期済みbinding.currentを区別し、同じSelection・Hover・Target／Pending・Pointerを使う。後段のAppearance編集はreadAppearanceで適用時まで取得を遅らせる。style適用は呼出時のviewport.scaleとeffectiveを元のoptionsでAppearance編集へ渡し、注記IDは同じDocumentIds.allocateへ依頼する。後段AnnotationDragのresizeEnabledとConstraintTargetCommand取消callbackはappの遅延参照のまま残す。raw create／createAnchorQuery、描画・Anchor／Command／editor／dragの順序、Parameterコピー・取消・guardの差は変更せず、新file・state／setter・modelの別コピーを増やさない。

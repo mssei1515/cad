@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- BlockEditingFeature.createCommandsForEditingは実CanvasInteraction／DrawingFit／Presentation／参照状態／SketchSolving／SketchContext／ChoiceDialog／拘束参照／求解状態から、同じBlockEditorSessionを使う作成・完了commandを生成する。BlockViewは後段生成のためreadViewで操作時に取得する。作成guardの短絡順、View・dialog・promptのmethod receiver、live reference error、Workspace scope、選択・history・viewport復元・確認pending／stale sessionを維持する。旧createCommands／createViewとraw commandは保持し、新たな編集stateは作らない。
+
 - AnnotationFeature.createForEditing（src/application/annotation_feature.js）はWorkspace／editing scope、read、Selection／Hover／session、早期に生成した実Anchor query、寸法配置と表示／Appearance編集を接続する。Workspace.currentによるcommand／editor modelと、同期済みeditingScope.currentによるanchor／drag／dimension viewを区別する。Parameterは同じNamespace、IDは同じDocumentIdsで扱い、後段生成のAppearance編集はreadAppearanceで適用時まで取得せず、viewport.scale・effectiveをstyle適用時に評価してmethod receiverとoptionsを維持する。Anchor queryは一度だけ生成してhit／anchorと共有し、late resizeEnabled／取消callbackを構築時に照会しない。返却は元のraw Feature APIで、既存create／createAnchorQuery、各子の生成順・共有実体・Parameterコピー／scope再取得・取消／guard／失敗範囲を維持する。
 
 - ConstraintTestDriver.createBrowserFactories（src/testing/constraint_test_driver.js）は実Workspace／Sketch・geometry／read・solve scope／solving・analysis／solver・参照状態・operand値・Selection／Target session・寸法配置／checkpointとUI／操作callbackから、拘束観測・参照fixture・入力／intent・強制commitの7creatorを返す。窓口とcreatorの生成時はmodel・分析・Solver・DOMを照会せず、各支援をappの従来の位置で生成する。解析更新のoptions={}・一引数呼出し、analysis／solverのreceiver、Workspace.currentのlive scopeを維持する。同じ実ownerを共有し、旧直接注入API・公開名、raw観測／fixtureと例外・強制solveSubset復元の範囲を変更しない。

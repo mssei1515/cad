@@ -75,7 +75,28 @@
       }
       return Object.freeze({ definition, completion, createView });
     }
-    return Object.freeze({ editing, session, queries, createCommands, createPropagation });
+    // Read the later Block view only when an editor operation needs it.
+    function createCommandsForEditing({ interaction, isGeometryMode, selectionQuery, guardDimensionSymbolDeletion,
+      resetBlockEditorHistory, clearSelection, readView, drawingFit, updateBlockUI, presentation, recordHistory,
+      referenceState, solving, resultIsAccepted, sketches, choiceDialog, blockLocalGeometryBounds, references, acceptError, solveState }) {
+      const { canCreateInActiveSketch, guardSelectionEdit } = interaction.access;
+      const { fitAllGeometryToViewport, resetEmptyViewport } = drawingFit;
+      const { settings: { applicationText }, updateUI, draw, setHint, log } = presentation;
+      const { refreshReferenceConstraintValidity } = referenceState;
+      const { solveSketchById, solveReferenceDependentSketches } = solving, { sketchName } = sketches;
+      const { constraintGraphNodes } = references, { setSketchSolveOk, setSketchSolveError } = solveState;
+      const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
+      return createCommands({ canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
+        canvasSelection: interaction.selection, selectionQuery, guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
+        setMode: interaction.lifecycle.setMode, closeDefinitions: () => readView().closeDefinitions(),
+        setEditorActive: active => readView().setEditorActive(active), fitAllGeometryToViewport, resetEmptyViewport,
+        promptName: name => window.prompt("ブロック名", name), updateBlockUI, updateUI, draw, recordHistory, setHint,
+        refreshReferenceConstraintValidity, hasInvalidReferenceConstraints: () => referenceState.errorCount > 0,
+        solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
+        requestChoice: options => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
+        constraintGraphNodes, annotationReferencesRemovedGeometry, acceptError, setSketchSolveOk, setSketchSolveError, log });
+    }
+    return Object.freeze({ editing, session, queries, createCommands, createCommandsForEditing, createPropagation });
   }
   window.BlockEditingFeature = Object.freeze({ create });
 })();
