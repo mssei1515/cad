@@ -8,8 +8,7 @@
   const { serializeHatch, hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
 
   const {
-    CSS_PX_PER_MM, DEFAULT_APPEARANCE,
-    DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
+    CSS_PX_PER_MM, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
     normalizeAppearance, normalizeDimensionAppearance,
   } = window.Appearance;
   const {
@@ -137,7 +136,7 @@
   const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
-  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
+  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryLines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
@@ -171,12 +170,12 @@
   const { guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation } = sketchEditAccess;
   const { selectionSketchId } = selectionScopeQuery;
   const {
-    selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, effectiveSelectedConstraint, selectedPrimitives,
+    selectedElementCount, selectedGeometryItems, selectedPrimitives,
     toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
     trimConstraintSelection,
     hasSelection,
   } = canvasSelection;
-  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isExplicitPoint } = pointUsage;
+  const { isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isExplicitPoint } = pointUsage;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -246,7 +245,7 @@
   const { highlight: selectionHighlight, clearing: selectionClearing, documentReset: documentCanvasReset } = createSelectionPresentation({
     projections: blockProjections, constraintReferences,
   });
-  const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement } = selectionHighlight;
+  const { constraintDefiningGeometryEntries, sameConstraintDisplayElement } = selectionHighlight;
   const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
     currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
   });
@@ -435,7 +434,7 @@
   });
   const { isConstraintOperandSelected } = commandTargetPresentation;
   const { constraintStatusColor, sketchStrokeWidth, sketchAlpha } = sketchPresentation;
-  const { geometryDisplayColor, geometryStrokeWidth, traceSplinePath, drawLines, drawCircles, drawArcs, drawSplines } = geometryDisplay;
+  const { geometryDisplayColor, traceSplinePath, drawLines, drawCircles, drawArcs, drawSplines } = geometryDisplay;
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { fitSketchToViewport, fitAllGeometryToViewport, resetEmptyViewport } = drawingFit;
@@ -1608,7 +1607,14 @@
       drawLines, canvasHover, invalidateBlockProjectionCache, blockProjectionBundle, allGeometryLines, effectiveAppearanceForElement,
     });
     const sketchDeletionFixture = window.DocumentTestDriver.createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch });
-    const strokeStyleCases = window.PropertiesTestDriver.createStrokeStyleCases({ resetModelState, addLine, addPoint, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, geometryStrokeWidth, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA });
+    const propertiesTestFactories = window.PropertiesTestDriver.createBrowserFactories({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, blockQueries: blockEditingQueries,
+      selectionHighlight, presentation, display: geometryDisplay, placement: dimensionPlacement, viewport, document, canvas, fixPointBtn,
+      readHistory: readTestHistory, resetModelState, clearSelection, resetHistory, fitAllGeometryToViewport, pushModelConstraint,
+      assignConstraintSketchId, recordHistory, canvasThemeColor, isSidebarHighlightedElement, selectedPropertiesTarget,
+      findLineFixedConstraint, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+    });
+    const strokeStyleCases = propertiesTestFactories.createStrokeStyleCases();
     const sketchTreeTestApi = window.SketchTreeTestDriver.createBrowserApi({
       resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine,
       refreshReferenceConstraintValidity, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive,
@@ -1643,8 +1649,8 @@
       setBlockInstanceEnabledSketchIds, serializeModel, loadModelData, enterBlockDefinitionEdit, blockInstanceDisplayCenter,
       buildDragSession, constraintTargetSession, canvasHover, blockSelectionGeometry, geometryRefForItem,
     });
-    const sidebarHighlightObservation = window.PropertiesTestDriver.createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover });
-    const sidebarHoverKeyObservation = window.PropertiesTestDriver.createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey });
+    const sidebarHighlightObservation = propertiesTestFactories.createHighlightObservation();
+    const sidebarHoverKeyObservation = propertiesTestFactories.createHoverKeyObservation();
     const blockTestActions = blockTestSupport.createDimensionCases({
       defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint, blockDefinitionById,
     });
@@ -1654,7 +1660,7 @@
       modelTypes: window.GeometrySolver, signedPointLineDistance, vectorNorm, solveSketchAndDependents,
       snapshotModelState, refreshConstraintAnalysis, dimensionDrag,
     });
-    const themeObservation = window.PropertiesTestDriver.createThemeObservation({ applicationSettings, readDefaultGeometryColor: () => DEFAULT_APPEARANCE.color, canvasThemeColor, CanvasThemeColors: window.CanvasThemeColors });
+    const themeObservation = propertiesTestFactories.createThemeObservation();
     const documentTestApi = window.DocumentTestDriver.createFileApi({
       performance, File, document, fileSession, readDocumentName: () => documentModel.documentName,
       effectiveDocumentName, serializeModel, importFileData, loadModelData,
@@ -1673,12 +1679,8 @@
       offsetSelection, drawingPreview, offsetDistanceFromPointer, pendingCommandSession, addOffsetChainGeometry, clearSelection,
       fitAllGeometryToViewport, resetHistory, solveAndRefresh, draw, canvas, worldToCanvasScreen, document
     });
-    const sidebarInspectionFixture = window.PropertiesTestDriver.createInspectionFixture({
-      resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, assignConstraintSketchId, activeSketchId, currentScope: workspace.current, updateUI, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen,
-    });
-    const appearanceTestAction = window.PropertiesTestDriver.createAppearanceAction({
-      appearanceSelectionTarget, normalizeAppearance, invalidateBlockProjectionCache, updatePropertiesUI, draw, recordHistory,
-    });
+    const sidebarInspectionFixture = propertiesTestFactories.createInspectionFixture();
+    const appearanceTestAction = propertiesTestFactories.createAppearanceAction();
     const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createSupport({
       types: { Point, Line, Circle, Arc, Spline }, currentScope: workspace.current, readMode: drawOperationLifecycle.readMode, readStagedCount: () => sketchProjectionCommand.count, readConstraints: sketchProjectionConstraints,
       constraintGeometryId, constraintSketchId, effectiveAppearanceForElement, geometryDisplayColor,
@@ -1696,10 +1698,7 @@
       readSelectedGeometry: readTestSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
     });
     const constraintIntentTestDriver = window.ConstraintTestDriver.createIntentResolution({ currentScope: workspace.current, makeConstraintOperand, resolveConstraintIntent, serializeConstraint });
-    const hoverDisplayObservation = window.PropertiesTestDriver.createHoverObservation({
-      allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle, effectiveAppearanceForElement,
-      isSidebarHighlightedElement, Point, isAnyLineEndpoint, isSidebarHoveredElement, canvasHover, geometryDisplayColor, geometryStrokeWidth,
-    });
+    const hoverDisplayObservation = propertiesTestFactories.createHoverObservation();
     const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
       readMode: drawOperationLifecycle.readMode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
@@ -1712,19 +1711,10 @@
       invalidateBlockProjectionCache, fitSketchToViewport, resetHistory, clientPosition: canvasTestDriver.clientPosition, arcEndpointPoint,
       canvasHover, canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport,
     });
-    const propertyAppearanceObservation = window.PropertiesTestDriver.createAppearanceObservation({
-      allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle,
-      normalizeAppearance, effectiveAppearanceForElement, isVisibleSketchElement,
-    });
-    const propertiesFixture = window.PropertiesTestDriver.createFixture({
-      resetModelState, clearSelection, addPoint, addLine, addCircle, canvasSelection, currentScope: workspace.current, ROOT_SKETCH_ID, resetHistory, updateUI, draw,
-    });
-    const propertiesObservation = window.PropertiesTestDriver.createPropertiesObservation({
-      selectedPropertiesTarget, canvasSelection, normalizeAppearance, effectiveAppearanceForElement, document, readHistory: readTestHistory,
-    });
-    const fixedObservation = window.PropertiesTestDriver.createFixedObservation({
-      currentScope: workspace.current, elementSketchId, findLineFixedConstraint, modelTypes: window.GeometrySolver, fixPointBtn, readHistory: readTestHistory,
-    });
+    const propertyAppearanceObservation = propertiesTestFactories.createAppearanceObservation();
+    const propertiesFixture = propertiesTestFactories.createFixture();
+    const propertiesObservation = propertiesTestFactories.createPropertiesObservation();
+    const fixedObservation = propertiesTestFactories.createFixedObservation();
     const { fixture: parameterFixture, observation: parameterObservation,
       interaction: parameterInteraction } = window.ParameterTestDriver.createBrowserSupport({
       resetModelState, documentWorkspace, geometry: geometryCreation,

@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Propertiesテスト支援の段階的な生成接続（2026-10-30、検証完了）
+
+基準developはc35fa1c。既存PropertiesTestDriverにcreateBrowserFactoriesを追加し、実Workspace／Sketch、GeometryCreation、read services、CanvasInteraction、selection highlight、Presentation、GeometryDisplay、DimensionPlacementとviewportから子へ必要なAPIを接続する。共通26項目から11creatorの95個の子portを組み立てる。返すのは生成用関数だけで、各支援の生成は元のapp内の位置で呼び、他TestDriverとの順序を変えない。生のcreateAppearanceObservation等11入口も保持し、同じ実Selection／Hover・Workspace scopeと関数／actorを使う。生成窓口の構築やcreator呼出時にmodel・DOM・theme・履歴を照会せず、観測・fixture・編集操作は既存raw helperに残す。Default Appearanceの色照会とTheme、modelTypesによるFixed型の既定値は元の照会時点を維持する。新file・状態・model／sessionの別コピーやsetterを増やさない。
+
+app.jsは1,852→1,842行（10行減）、非空白1,402→1,392行、root416文／関数81個／可変参照三つ。test hooksは253→244行、外側bindingは275→262個（局所関数34、ObjectPattern alias 198、CallExpression初期化binding 25、その他5）。構築134文719非空白行、一文call関数77個99行、その他204文325行（文外5行）。移管で不要になったroot alias十一個を除去した。TEMP cad-properties-test-factories-{proof,hierarchy,hook-audit}.cjsで11creatorの全子portと元の呼出位置・順序、その他appとraw PropertiesTestDriverのAST不変、未使用root bindingとfactoryの未定義globalなしを確認した。hooksと短い委譲を除いても1,049非空白行が残り、数百行目標は未達。
+
+境界単体四件を追加した。実CanvasSelection／CanvasHoverと既存raw helperを用い、窓口生成・全creator呼出時の無照会、独立した生成段階と同じowner、切替後のWorkspace／Selection／hover／appearance／theme／DOM／履歴のlive観測、fixtureによるreset後のmodelと実選択Objectを旧接続と比較した。複数Properties／Fixed／Sidebar inspection／strokeのGeometry生成・選択・履歴・画面更新順と、Block appearanceの正規化・cache無効化→Properties→draw→履歴、各失敗時の途中反映範囲・外部actor receiverも維持する。関連単体30件／全単体2,105件／構文626fileが成功。関連7suite（unified-ui／blocks／sketch-projection／sketch-tree-visibility／sketch-tree-delete／view-visibility／phase0-characterization）のE2E216件が全成功（3.1m、exit 0、実行session7428）。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-properties-test-factories-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更しない。今回は全E2E未実行であり、基準c35fa1cの全588件成功とは区別する。
+
+全体目標active、開始時週枠残量68%／最終確認67%で停止条件未到達。mainは停止／releaseの最後に反映する。次も役割別TestDriverと通常機能の実ownerから生成接続を整理する。単にhook全体を別fileへ渡さず、生成・観測・fixture実行・公開schemaとinit phaseの違いを保持する。
+
+
+
 ### 最新：ブラウザテスト公開契約の分離（2026-10-30、検証完了）
 
 基準developはb02cda6。src/testing/browser_test_api.jsのBrowserTestApi.createへ、window.__jot2dTestの公開名割当てとspreadの結合順を移した。既に準備されたTestDriver支援・診断API・履歴関数54個だけを14の用途別入力で受け、Document／モデル／Solver／session・DOMを渡さない。公開contractの追加・改名・上書き規則を通常appの組立てから独立して検証できる。返却値は従来どおり書換え可能な通常objectで、公開関数は元の参照・呼出時receiverを保ち、bindやwrapperで置き換えない。getter／spreadの評価順とlast-write優先、propertyの挿入順・通常data descriptorも維持する。構築途中の読取り例外では以前のwindow.__jot2dTestを保持する。module定義読込だけではAPI・fixtureを生成せず、test指定のguardとDocumentEditingReset生成後のinstall phaseはappのまま。indexの既存classic-script／cache回避queryと他script順は維持し、構文・単体の明示listへ新module／testを登録した。
