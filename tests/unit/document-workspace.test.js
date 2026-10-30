@@ -103,7 +103,7 @@ test('Document read assembly retains cache lifetime, explicit invalidation and l
   });
 });
 
-function readContextFixture() {
+function readContextFixture(buildBinding = (context, options) => context.createScopeBinding(options)) {
   const { model } = fixture(), calls = [], state = { failure: null }; let binding;
   const context = model.createReadContext({ currentSketches: () => binding.current.sketches,
     prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() });
@@ -112,8 +112,8 @@ function readContextFixture() {
     calls.push({ name, bound: binding.current, workspace: model.workspace.current(), solver: binding.solver.model });
     if (state.failure === name) throw state.error;
   };
-  binding = context.createScopeBinding({ Solver: w.GeometrySolver.ConstraintSolver,
-    closeSketchContext: () => stage('close'), resetSketchMove: () => stage('move') });
+  binding = buildBinding(context, { Solver: w.GeometrySolver.ConstraintSolver,
+    closeSketchContext: () => stage('close'), resetSketchMove: () => stage('move') }, model);
   assert.deepEqual(calls, []); assert.ok(Object.isFrozen(binding));
   return { model, context, binding, calls, state };
 }
@@ -263,4 +263,76 @@ test('persistence application retains geometry and attachment reservation before
   assert.throws(()=>f.application.load(data),error=>error===marker);assert.equal(f.model.geometryIds.peek('point'),81);assert.equal(f.model.documentIds.peek('hatch'),8);assert.equal(f.model.documentIds.peek('referenceImage'),7);assert.equal(f.model.documentIds.peek('sketch'),2);assert.equal(f.model.document.lines[0].id,'L5');
   results.push(JSON.stringify({events:f.events,geometry:f.model.geometryIds.snapshot(),ids:f.model.documentIds.snapshot()}));w.DocumentSequences=original;
  }}finally{w.DocumentSequences=original;}assert.equal(results[1],results[0]);
+});
+
+function editingScopeFixture(composed) {
+  let editing;
+  const f = readContextFixture((context, options, model) => {
+    if (composed) editing = context.createEditingScope(options);
+    else {
+      const binding = context.createScopeBinding(options), { solver } = binding;
+      const { activeSketchId, constraintSketchId, isDrawableSketch, firstDrawableSketchId } = model.sketches;
+      const dimensionQueries = w.DimensionQueries.createModelQueries({ currentScope: () => binding.current, activeSketchId, constraintSketchId });
+      const insertion = w.ConstraintCommitCommand.createInsertion({ currentScope: () => binding.current, currentParameterNamespace: model.workspace.current,
+        activeSketchId, isDrawableSketch, firstDrawableSketchId, ensureDimensionParameter: model.parameters.ensureDimensionParameter });
+      editing = { binding, solver, dimensionQueries, insertion };
+    }
+    return editing.binding;
+  });
+  return { ...f, editing };
+}
+function radiusDimension(id) {
+  const circle = new w.GeometrySolver.Circle(id, new w.GeometrySolver.Point('P-' + id, 0, 0), 8);
+  const constraint = new w.GeometrySolver.RadiusConstraint(circle, 8); constraint.dimension = { offset: 2 }; return { circle, constraint };
+}
+
+test('Document editing scope constructs binding, model queries and insertion once in order and preserves their actual owners', () => {
+  const original = { binding: w.EditingScopeBinding, dimensions: w.DimensionQueries, insertion: w.ConstraintCommitCommand };
+  try { for (const composed of [false, true]) for (const failure of [null, 'dimensions']) {
+    const events = [], ports = {}, marker = new Error('model query construction');
+    w.EditingScopeBinding = { ...original.binding, create(input) { events.push('binding'); ports.binding = input; return original.binding.create(input); } };
+    w.DimensionQueries = { ...original.dimensions, createModelQueries(input) { events.push('dimensions'); ports.dimensions = input; if (failure) throw marker; return original.dimensions.createModelQueries(input); } };
+    w.ConstraintCommitCommand = { ...original.insertion, createInsertion(input) { events.push('insertion'); ports.insertion = input; return original.insertion.createInsertion(input); } };
+    if (failure) { assert.throws(() => editingScopeFixture(composed), error => error === marker); assert.deepEqual(events, ['binding', 'dimensions']); continue; }
+    const f = editingScopeFixture(composed); assert.deepEqual(events, ['binding', 'dimensions', 'insertion']); assert.deepEqual(f.calls, []);
+    assert.equal(f.editing.binding, f.binding); assert.equal(f.editing.solver, f.binding.solver); assert.equal(f.binding.solver.model, f.model.document);
+    if (composed) assert.equal(Object.isFrozen(f.editing), true);
+    assert.equal(ports.binding.workspace, f.model.workspace); assert.equal(ports.dimensions.activeSketchId, f.model.sketches.activeSketchId);
+    assert.equal(ports.dimensions.constraintSketchId, f.model.sketches.constraintSketchId); assert.equal(ports.insertion.ensureDimensionParameter, f.model.parameters.ensureDimensionParameter);
+    assert.equal(ports.insertion.currentParameterNamespace, f.model.workspace.current); assert.equal(ports.insertion.firstDrawableSketchId, f.model.sketches.firstDrawableSketchId);
+    assert.equal(ports.dimensions.currentScope(), f.binding.current); assert.equal(ports.insertion.currentScope(), f.binding.current);
+  } } finally { w.EditingScopeBinding = original.binding; w.DimensionQueries = original.dimensions; w.ConstraintCommitCommand = original.insertion; }
+});
+
+test('Document editing queries and insertion follow bound scope while sketch choice and Parameter allocation follow current Workspace', () => {
+  for (const composed of [false, true]) {
+    const f = editingScopeFixture(composed), { model, binding, editing } = f, draft = w.DocumentState.create(), solver = editing.solver;
+    binding.activate(draft); assert.equal(editing.solver, solver); assert.equal(solver.model, draft);
+    const first = radiusDimension('C1'); draft.circles.push(first.circle); assert.equal(editing.insertion.push(first.constraint, 'ROOT'), first.constraint);
+    assert.equal(first.constraint.sketchId, 'S1'); assert.equal(first.constraint.parameterName, 'd1'); assert.equal(first.constraint.expression, '8');
+    assert.equal(draft.constraints[0], first.constraint); assert.equal(model.document.constraints.length, 0);
+    assert.equal(editing.dimensionQueries.sketchHasDimensionConstraint(), true); assert.equal(editing.dimensionQueries.hasDirectRadiusDimension(first.circle), true);
+    const other = w.DocumentState.create(); other.sketches[1].id = 'S9'; other.activeSketchId = 'S9'; other.nextDimensionParameterIndex = 7; model.workspace.activate(other);
+    const second = radiusDimension('C2'); draft.circles.push(second.circle); editing.insertion.push(second.constraint);
+    assert.equal(second.constraint.sketchId, 'S9'); assert.equal(second.constraint.parameterName, 'd7'); assert.equal(other.nextDimensionParameterIndex, 8);
+    assert.equal(draft.nextDimensionParameterIndex, 2); assert.equal(draft.constraints[1], second.constraint); assert.equal(other.constraints.length, 0);
+    assert.equal(binding.current, draft); assert.equal(solver.model, draft); assert.equal(model.workspace.current(), other);
+    assert.equal(editing.dimensionQueries.sketchHasDimensionConstraint(), true); assert.equal(editing.dimensionQueries.hasDirectRadiusDimension(second.circle), true);
+    assert.equal(editing.insertion.assignSketch(null, 'ROOT'), null);
+    binding.activate(other); assert.equal(editing.dimensionQueries.sketchHasDimensionConstraint(), false); assert.equal(editing.dimensionQueries.hasDirectRadiusDimension(second.circle), false);
+  }
+});
+
+test('Document editing scope keeps failed activation and insertion partial effects at their original boundaries', () => {
+  for (const composed of [false, true]) {
+    const f = editingScopeFixture(composed), { model, binding, editing } = f, draft = w.DocumentState.create(), marker = new Error('boundary');
+    binding.activate(draft); model.workspace.activate(model.document); f.state.failure = 'move'; f.state.error = marker;
+    assert.throws(() => binding.activate(model.document), error => error === marker); assert.equal(binding.current, draft); assert.equal(editing.solver.model, draft);
+    assert.equal(model.workspace.current(), model.document); assert.deepEqual(f.calls.slice(-2).map(call => call.name), ['close', 'move']);
+    Object.defineProperty(model.document, 'nextDimensionParameterIndex', { configurable: true, get() { throw marker; } });
+    const { circle, constraint } = radiusDimension('C-failure');
+    assert.throws(() => editing.insertion.push(constraint), error => error === marker); assert.equal(draft.constraints[0], constraint);
+    assert.equal(constraint.sketchId, 'S1'); assert.equal(constraint.parameterName, undefined); assert.equal(model.document.constraints.length, 0);
+    assert.equal(editing.dimensionQueries.hasDirectRadiusDimension(circle), true); assert.equal(binding.current, draft); assert.equal(editing.solver.model, draft);
+  }
 });
