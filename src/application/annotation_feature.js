@@ -1,6 +1,22 @@
 /* Connect annotation presentation, anchors and placement over the same operation owners. */
 (() => {
   "use strict";
+  function prepareForWorkspace({ documentWorkspace, readServices, interaction, presentation, viewportScale }) {
+    const { workspace, sketches } = documentWorkspace;
+    const targets = createAnchorQuery({ sketches, readServices, pointUsage: interaction.pointUsage, selection: interaction.selection, viewportScale });
+    function createConstrainedDrag({ placementAnchor, buildPlan, beginGeometryDrag, leaderDisplay, invalidateAnalysis }) {
+      const { settings: { applicationText }, setHint, updateUI, draw } = presentation;
+      return window.AnnotationDrag.createConstrained({ currentScope: workspace.current, placementAnchor, resolveGeometryRef: readServices.reads.resolveGeometryRef,
+        buildPlan, beginGeometryDrag, leaderDisplay, leaderAnchor: targets.annotationLeaderAnchor, invalidateAnalysis, applicationText, setHint, updateUI, draw });
+    }
+    function createFeature({ ctx, viewport, surface, editingScope, sessions, placement, readAppearance, readExportFrame, canvasThemeColor,
+      resizeEnabled, constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand, startDistanceResolution, clearSelection, updateToolbar }) {
+      return createForEditing({ documentWorkspace, readServices, interaction, presentation, targets,
+        ctx, viewport, surface, editingScope, sessions, placement, readAppearance, readExportFrame, canvasThemeColor,
+        resizeEnabled, constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand, startDistanceResolution, clearSelection, updateToolbar });
+    }
+    return Object.freeze({ targets, createConstrainedDrag, createFeature });
+  }
   function createAnchorQuery({ sketches, readServices, pointUsage, selection, viewportScale }) {
     const { reads, geometryAppearance } = readServices;
     const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, resolveGeometryRef } = reads;
@@ -116,5 +132,5 @@
       parameterErrorText, exitDrawMode: interaction.lifecycle.exit, nextAnnotationId: () => documentIds.allocate("annotation"),
       canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar, annotationLeaderTargetFromHit });
   }
-  window.AnnotationFeature = Object.freeze({ create, createAnchorQuery, createForEditing });
+  window.AnnotationFeature = Object.freeze({ create, createAnchorQuery, createForEditing, prepareForWorkspace });
 })();

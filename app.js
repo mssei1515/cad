@@ -183,8 +183,8 @@
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, interaction: canvasInteraction, editingScope: editingScopeBinding, presentation,
   });
 
-  const annotationTargets = window.AnnotationFeature.createAnchorQuery({
-    sketches: sketchContext, readServices: geometryReadServices, pointUsage, selection: canvasSelection, viewportScale: () => viewport.scale,
+  const { targets: annotationTargets, createConstrainedDrag: createConstrainedAnnotationDrag, createFeature: createAnnotationFeature } = window.AnnotationFeature.prepareForWorkspace({
+    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation, viewportScale: () => viewport.scale,
   });
   const { hitAnnotationTarget, annotationLeaderTargetFromItem, annotationLeaderAnchor } = annotationTargets;
   const referenceConstraintState = window.ReferenceConstraintState.create({
@@ -333,11 +333,10 @@
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
-  const constrainedAnnotationDrag = window.AnnotationDrag.createConstrained({
-    currentScope: workspace.current, placementAnchor: annotationPlacementAnchor, resolveGeometryRef,
+  const constrainedAnnotationDrag = createConstrainedAnnotationDrag({
+    placementAnchor: annotationPlacementAnchor,
     buildPlan: (...args) => buildDragSession(...args), beginGeometryDrag: (event, plan) => geometryDrag.begin(event, plan),
-    leaderDisplay: annotation => annotationLeaderDisplayGeometry(annotation), leaderAnchor: annotationLeaderAnchor,
-    invalidateAnalysis: () => constraintAnalysis.invalidate(), applicationText, setHint, updateUI, draw,
+    leaderDisplay: annotation => annotationLeaderDisplayGeometry(annotation), invalidateAnalysis: () => constraintAnalysis.invalidate(),
   });
   const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving } = window.SketchSolvingFeature.createContextForWorkspace({
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, referenceState: referenceConstraintState,
@@ -408,10 +407,9 @@
     readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRendering.frame),
     sketchAlpha, readMode: drawOperationLifecycle.readMode, readCommand: () => hatchCommand,
   });
-  const annotationFeature = window.AnnotationFeature.createForEditing({
-    ctx, viewport, surface: canvasSurface, documentWorkspace, editingScope: editingScopeBinding,
-    readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions, targets: annotationTargets,
-    placement: dimensionPlacement, presentation, readAppearance: () => appearanceEditing,
+  const annotationFeature = createAnnotationFeature({
+    ctx, viewport, surface: canvasSurface, editingScope: editingScopeBinding, sessions: operationSessions,
+    placement: dimensionPlacement, readAppearance: () => appearanceEditing,
     readExportFrame: () => pngRendering.frame, canvasThemeColor, resizeEnabled: element => annotationDrag.resizeEnabled(element),
     constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand,
     startDistanceResolution, clearSelection, updateToolbar,
