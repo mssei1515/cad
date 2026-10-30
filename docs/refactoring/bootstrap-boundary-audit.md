@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 派生形状test APIの共有owner接続（2026-10-30、fea2642基準）
+
+DerivedInstanceTestDriver.createForWorkspaceが派生形状のbrowser test APIの接続を担当する。DocumentWorkspace／Geometry creation／geometry read／CanvasInteraction／Presentationと実Canvas test driver／Sketch presentation／Hatch queryを共有し、三つの既存fixture／interactionを同じ順で生成する。動的Workspace.current、実Selection・Geometryの同一性、裸のfocus／clientPosition・描画通知、操作時のdocumentIds.allocateのmember呼出しを維持する。型・既定Sketch／Hatch外観・参照とarc sweep計算は既存namespaceを再利用し、model／scope／採番／Hatch cacheを複製しない。既存createBrowserApiと公開する六操作を維持し、通常モードのtest gate・BrowserTestApi公開順・公開衝突処理を変更しない。
+
+app.jsは1,713→1,709行（4行減）、非空白1,264→1,260行。root399文・構築123文620非空白行・関数77個・一文call委譲73個93行は据置。hooks233→230行、その他202文313→312行、通常core938→937行。明示入力31→16項目とし、不要root alias一個を除去した。TEMP cad-derived-test-owners-{proof,hierarchy}.cjsで他app／test gate AST・raw DerivedInstanceTestDriver不変、未使用root bindingなし、前段九入力の初期化済みを確認した。test専用の接続整理を通常機能の全体完了と混同せず、200〜500行目標は未達である。
+
+全体目標はactive・未完了。開始時週枠残量51%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/derived-test-owners。固定拘束はoperand／Selectionがそれぞれ九項目の明確な別段階で、DocumentEditingResetも既に順序を所有するため、少数portを包み直す追加層は見送った。test installer全体の移動も巨大な依存の束になるため採用せず、派生形状の既存ownerへ限定した。次は通常機能のSplineEditCommand生成24項目を、Geometry／checkpoint／現在scopeと構造編集の責務から再監査する。test helperだけの整理に偏らず、raw CommandにDOMや巨大contextを持ち込まない接続先を比較する。現単位の全E2E・Commit／develop統合後に着手する。 現物ではBasicDrawingTools.createAuthoringが既にSpline作成・pointUsage・実Geometry／ids・Sketch context・Selection／通知を所有しているため、同Featureへ後段createSplineEditingを置く案を優先する。既存SplineEditCommandの生成位置を維持し、editingScope／値checkpoint／安定化／analysis／accessとProjection guard・constraint reference・dimension symbol guardだけを後段入力にできるか比較する。特に親のcurrentScopeはWorkspace.current、構造編集はeditingScope.current、親checkpointはgeometry mutation用wrapper、構造編集checkpointはcaptureValues／restoreValuesであり、同じものと扱わない。
+
 ## 参照画像の共有owner接続（2026-10-30、c249623基準）
 
 ReferenceImageFeature.createForWorkspaceがDocumentWorkspace／editing scope／CanvasInteraction／Presentation／geometry appearanceとの接続を担当する。描画画像はeditingScope.current.referenceImages、取込・挿入先はworkspace.currentであり、両者を統合しない。実Selection・live hover・Sketch／作成権限・通知を共有し、viewport.screenToWorldと既存の数値表示／hypot2を使う。画像IDは操作時に同じdocumentIds.allocateをmember呼出しする。renderer→layer→interaction→inputの生成順と、後段のhit／snap／clipboard callback、Image生成、text編集判定、bind／dispose時機を維持する。既存createと実renderer／layer／interaction／input／prepareImages APIを維持し、画像cache・model／Selection／scope・採番・listenerを重複させない。
