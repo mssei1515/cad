@@ -6,6 +6,22 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Sketch Treeの共有ownerからの生成（2026-10-30、検証完了）
+
+基準developは08062cd。SketchEditingFeature.createForInteractionが既に保持するread services／CanvasInteraction／Presentationから、後段Treeを生成するcreateTreeForEditingを提供する。既存editingのcommand／move／deletion／raw Tree factoryの関数実体はそのまま新しい凍結公開APIへ載せ、追加の操作state・scope／Selectionの別コピーは作らない。appの26項目を16項目に整理し、objectOptionsもconstraintFeedback／PointUsageを同じownerから共有するため12→10項目へ減らした。Treeの表示viewScopeは同期済みbinding、一覧・選択のcurrentScopeはdimension scope、commandは元のWorkspace scopeを維持する。getScopeKeyは現在BlockEditorを元の回数で読んでdocument／block:idを返す。Selection／Hover・scope query・固定操作、参照／重複／求解状態、GeometrySelection／Sketch UI更新は同じownerへ接続し、raw createTree・TreeController／Objects／Viewの実装とメニューstartの元の段階を維持する。
+
+app.jsは1,821→1,814行（7行減）、非空白1,371→1,364行。root417文／関数81個／hooks235行／可変参照三つを維持する。構築134文702非空白行、一文call関数77個99行、その他205文323行（文外5行）。updateSketchUI／toggleBlockInstanceSelection／referenceConstraintErrorCountForSketch／constraintDuplicateCountForSketchの不要root aliasを除いた。TEMP cad-sketch-tree-composition-{proof,hierarchy}.cjsで旧26子port・objectOptionsの一致、同じTree生成段階と直接依存の初期化順、他app／raw FeatureのAST不変、未使用root bindingなしを確認した。hooksと短い委譲を除いても1,030非空白行あり、200〜500行目標は未達。
+
+待機中にrootの全create呼出しを再走査し、groupの先頭だけでなく全callを入力項目数で並べ直した。ConstraintEditing.createWithFeedbackは50項目、createCanvasContextInteractionは47項目、DimensionValueCommand.createWithEditingSupportは37項目、GeometryDragFeature.createForEditingは34項目が残る。TEMP cad-sketch-tree-composition-root-audit.cjs／root-constructors.jsonへ保存した。次は拘束編集／Canvasメニュー等を共有owner・init phase・操作callbackの意味から検討し、単なる項目数順や別の巨大contextへの移動で境界を決めない。
+
+構築文134個とroot417文は今回も減っていない。入力項目の短縮だけで200〜500行へ到達するとは見積もらない。次の再監査では、同じ機能に属する複数部品の生成・接続・bind／startを実ownerへまとめる段階境界を優先して探し、初期化循環・遅延参照・reset／取消の責務を明示してrootの構築自体を減らす。
+
+境界単体三件を追加し、旧raw Treeと新窓口から同じ実TreeController／View／Objectsを生成して比較した。構築時のscope／表示キー／menu無起動、共有Selection／Hover・親command／move／deletion・表示関数のidentity、異なる三scopeと置換後の一覧／label、Block表示キーの現在値・読取回数・例外、hover置換とBlock選択、visibility／lock・削除拒否・移動確定のGeometry identityと一件historyを確認した。関連単体50件／全単体2,121件が成功。構文626fileが成功。全E2E588件が全成功（22.2m、exit 0、実行session70462）。対象file／test名を絞らず、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを保存した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-sketch-tree-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更しない。
+
+全体目標active。開始時週枠残量65%／最終確認64%で停止条件未到達。mainは停止／releaseの最後に反映する。今回の全E2Eで、前回の注記・Blockコマンド分離を含む現在の構成をまとめて検証した。次も通常機能の構築・接続とinit phaseを現物から再監査する。小さい行数差を過大評価せず、巨大contextや単純な大量ファイル分割で数百行を達成したことにしない。
+
+
+
 ### 最新：Blockコマンドの編集環境からの生成（2026-10-30、検証完了）
 
 基準developは336e4f1。BlockEditingFeatureの既存実体へcreateCommandsForEditingを追加し、CanvasInteractionのSelection／access／Lifecycle、DrawingFit、Presentation、参照状態、SketchSolving／SketchContext、ChoiceDialog、ConstraintReferencesとSolveResultStateから作成／完了commandの32項目を接続する。app側は20項目のowner・操作依存を渡す。同じBlockEditorSession／draft編集／catalog／queriesを使い、別model・Selection・求解stateや巨大contextは作らない。後段BlockViewはreadViewで操作時に読む。作成guardはisGeometryMode→canCreateInActiveSketch→guardSelectionEdit(structure)の短絡順を維持し、View・ChoiceDialog・window.promptのreceiver、現在のreferenceState.errorCount、元のWorkspace.currentと採番・history・viewport復元を維持する。旧createCommandsとcreateViewのAPI・生成時機、raw Definition／Completion commandは変更しない。
