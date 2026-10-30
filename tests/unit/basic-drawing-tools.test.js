@@ -604,3 +604,85 @@ test('authoring interaction policy propagates each guard failure before mode, dr
   }assert.equal(results[1],results[0]);
  }
 });
+function splineEditingOwnersFixture(composed, probe = {}) {
+  const model = { window:{}, structuredClone }; vm.createContext(model);
+  const sources = vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+  for(const file of sources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),model,{filename:file});
+  const w=model.window,g=w.GeometrySolver,ids=w.GeometryIds.create(),selection=w.CanvasSelection.create(),calls=[];
+  const points=Array.from({length:4},(_,i)=>Object.assign(new g.Point('P'+(i+1),i*10,i%2*10,false,'endpoint'),{sketchId:'S1'}));
+  const spline=Object.assign(new g.Spline('SP1',points.slice()),{sketchId:'S1'}),bound=Object.assign(w.DocumentState.create(),{points:points.slice(),splines:[spline]});
+  ids.reserve(bound);
+  const state={ready:false,bound,workspace:w.DocumentState.create(),success:true,editable:true,projectionAllowed:true,symbolAllowed:true,shared:false,stabilizeError:null};
+  const ready=()=>assert.equal(state.ready,true),note=name=>(...args)=>{ready();calls.push([name,...args]);};
+  const geometry=w.GeometryCreation.create({currentScope:()=>state.workspace,ids,assignSketchId:item=>{item.sketchId='S1';},currentConstruction:()=>false,minLineLength:1e-6,minArcLength:1e-6});
+  const valueCheckpoint={
+    captureValues:function(){'use strict';assert.equal(this,undefined);ready();calls.push(['values-capture']);return points.map(p=>[p,p.x,p.y]);},
+    restoreValues:function(snapshot){'use strict';assert.equal(this,undefined);ready();calls.push(['values-restore']);for(const[p,x,y]of snapshot){p.x=x;p.y=y;}},
+  };
+  const parameters={stabilize:function(id){'use strict';assert.equal(this,undefined);ready();calls.push(['stabilize',id]);if(state.stabilizeError)throw state.stabilizeError;if(!state.success)points[0].x=999;return{success:state.success,dependent:{success:state.success}};}};
+  const access={guardSketchEdit:(id,operation)=>{ready();calls.push(['guard',id,operation]);return state.editable;}};
+  const pointUsage=Object.fromEntries(['isSplineOnlyFitPoint','isReferencePoint','isPrimitiveCenterPoint','isEndpointPoint','isPointUsedByPrimitive','isExplicitPoint'].map(name=>[name,()=>assert.fail('no eager point query')]));
+  Object.assign(pointUsage,{isPointUsedByLine:()=>state.shared,isPointUsedByCircle:()=>false,isPointUsedByArc:()=>false});
+  const sketchContext=Object.fromEntries(['isActiveSketchElement','isReferenceSourceSketchId','sketchName','sameSketchElements','activeSketchId'].map(name=>[name,()=>assert.fail('no eager sketch query')]));
+  sketchContext.elementSketchId=item=>{ready();return item.sketchId;};
+  const clearSelection=()=>{ready();calls.push(['clear']);selection.clear();},analysis={invalidate(){assert.equal(this,analysis);ready();calls.push(['analysis']);}};
+  const parent=authoringFixture({currentScope:()=>{ready();return state.workspace;},ids,geometry,selection,pointUsage,sketchContext,clearSelection,
+    recordHistory:note('history'),applicationText:(_ja,en)=>en,setHint:note('hint'),updateUI:note('ui'),draw:note('draw')});
+  parent.sandbox.window.GeometryObjects=w.GeometryObjects;parent.sandbox.window.AnnotationAnchorData=w.AnnotationAnchorData;
+  parent.sandbox.window.SplineEditCommand={create(options){probe.options=options;parent.events.push('spline-edit');if(probe.error)throw probe.error;return probe.actual=w.SplineEditCommand.create(options);}};
+  const constraintReferences={constraintReferencesPoint:(c,p)=>c.point===p},guardSketchProjectionShapeEdit=()=>{ready();calls.push(['projection']);return state.projectionAllowed;};
+  const guardDimensionSymbolDeletion=()=>{ready();calls.push(['symbol-guard']);return state.symbolAllowed;};
+  const editingScope={get current(){ready();return state.bound;}};
+  const input={editingScope,checkpoint:valueCheckpoint,parameters,analysis,access,guardSketchProjectionShapeEdit,constraintReferences,guardDimensionSymbolDeletion};
+  const {guardSketchEdit}=access,{elementSketchId}=sketchContext;
+  const raw={canEditStructure:item=>guardSketchEdit(elementSketchId(item),'structure'),currentScope:()=>editingScope.current,ids,clearSelection,canvasSelection:selection,
+    applicationText:parent.ports.applicationText,setHint:parent.ports.setHint,updateUI:parent.ports.updateUI,draw:parent.ports.draw,
+    restoreModelState:valueCheckpoint.restoreValues,snapshotModelState:valueCheckpoint.captureValues,stabilizeActiveParameterNamespace:parameters.stabilize,elementSketchId,
+    invalidateAnalysis:()=>analysis.invalidate(),recordHistory:parent.ports.recordHistory,guardSketchProjectionShapeEdit,addPoint:geometry.addPoint,
+    isPointUsedByLine:pointUsage.isPointUsedByLine,isPointUsedByCircle:pointUsage.isPointUsedByCircle,isPointUsedByArc:pointUsage.isPointUsedByArc,
+    constraintReferencesPoint:constraintReferences.constraintReferencesPoint,guardDimensionSymbolDeletion,geometryElementKey:w.GeometryObjects.geometryKeyForItem,
+    annotationReferencesRemovedGeometry:w.AnnotationAnchorData.referencesRemovedGeometry};
+  parent.events.length=0;Object.assign(probe,{parent,state,calls,bound,selection,input,raw});
+  const command=composed?parent.feature.createSplineEditing(input):parent.sandbox.window.SplineEditCommand.create(raw);
+  assert.deepEqual(calls,[]);assert.deepEqual(parent.events,['spline-edit']);state.ready=true;
+  return{...parent,w,command,probe,state,calls,bound,points,spline,ids,selection,input};
+}
+
+test('Spline editing assembly retains the late real command, bare value checkpoint and separate live editing/Workspace scopes',()=>{
+  for(const composed of [false,true]){
+    const f=splineEditingOwnersFixture(composed),p=f.probe.options;
+    assert.equal(f.command,f.probe.actual);for(const[name,value]of Object.entries(f.probe.raw).filter(([name])=>!['canEditStructure','currentScope','invalidateAnalysis'].includes(name)))assert.equal(p[name],value,name);
+    assert.notEqual(p.snapshotModelState,f.ports.checkpoint.capture);assert.notEqual(p.restoreModelState,f.ports.checkpoint.restore);
+    assert.equal(p.currentScope(),f.bound);assert.equal(f.ports.currentScope(),f.state.workspace);assert.notEqual(f.bound,f.state.workspace);
+    f.command.begin(f.spline);assert.equal(f.command.current.spline,f.spline);assert.equal(f.selection.splines[0],f.spline);
+    assert.deepEqual(f.calls[0],['guard','S1','structure']);const next=f.w.DocumentState.create();f.state.bound=next;assert.equal(p.currentScope(),next);
+    assert.equal(f.command.addPoint(f.spline,{x:5,y:3}),false);assert.equal(f.bound.points.length,4);
+  }
+});
+
+test('Spline editing assembly preserves actual fit-point add/delete identities, solver rollback, IDs and history traces',()=>{
+  for(const operation of ['addPoint','deletePoint'])for(const success of [false,true]){
+    const traces=[];
+    for(const composed of [false,true]){
+      const f=splineEditingOwnersFixture(composed);f.state.workspace=f.bound;f.state.success=success;f.command.activate(f.spline);const seq=f.ids.peek('point');
+      const result=f.command[operation](f.spline,operation==='addPoint'?{x:5,y:3}:f.points[1]);assert.equal(result,success);
+      assert.equal(f.points[0].x,0);assert.equal(f.command.current.spline,f.spline);assert.equal(f.calls.filter(c=>c[0]==='history').length,success?1:0);
+      assert.equal(f.spline.fitPoints.length,success?(operation==='addPoint'?5:3):4);
+      if(!success){assert.equal(f.ids.peek('point'),seq);assert.deepEqual(f.spline.fitPoints,f.points);assert.ok(f.calls.some(c=>c[0]==='values-restore'));}
+      traces.push(JSON.stringify({calls:f.calls,ids:f.ids.snapshot(),points:f.bound.points.map(p=>[p.id,p.x,p.y]),fit:f.spline.fitPoints.map(p=>p.id)}));
+    }assert.equal(traces[1],traces[0]);
+  }
+});
+
+test('Spline editing assembly retains permission refusals and constructor/solver exception identity and partial state',()=>{
+  for(const composed of [false,true]){
+    const probe={error:new Error('construction failed')};assert.throws(()=>splineEditingOwnersFixture(composed,probe),error=>error===probe.error);
+    assert.deepEqual(probe.calls,[]);assert.equal(probe.state.ready,false);assert.equal(probe.bound.points.length,4);assert.equal(probe.selection.hasSelection(),false);
+    const f=splineEditingOwnersFixture(composed);f.state.workspace=f.bound;f.state.editable=false;assert.equal(f.command.begin(f.spline),false);assert.equal(f.command.current,null);
+    f.state.editable=true;f.command.activate(f.spline);f.state.projectionAllowed=false;assert.equal(f.command.addPoint(f.spline,{x:5,y:3}),false);assert.equal(f.bound.points.length,4);
+    f.state.projectionAllowed=true;f.state.symbolAllowed=false;assert.equal(f.command.deletePoint(f.spline,f.points[1]),false);assert.equal(f.spline.fitPoints.length,4);
+    f.state.symbolAllowed=true;const marker=new Error('solve failed');f.state.stabilizeError=marker;
+    assert.throws(()=>f.command.addPoint(f.spline,{x:5,y:3}),error=>error===marker);assert.equal(f.command.current.spline,f.spline);assert.equal(f.spline.fitPoints.length,5);
+    assert.equal(f.calls.filter(c=>c[0]==='history').length,0);
+  }
+});

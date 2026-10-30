@@ -159,7 +159,6 @@
     selectedElementCount,
     selectedConstructionTogglePrimitives,
   } = canvasSelection;
-  const { isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc } = pointUsage;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -675,13 +674,9 @@
     connectedComponentFromSeeds, constraintGraphNodes, localSolveLines, minLineLength: MIN_LINE_LENGTH,
   });
 
-  const splineEditing = window.SplineEditCommand.create({
-    canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
-    currentScope: () => editingScopeBinding.current, ids: geometryIds, clearSelection, canvasSelection, applicationText, setHint, updateUI, draw,
-    restoreModelState, snapshotModelState, stabilizeActiveParameterNamespace, elementSketchId,
-    invalidateAnalysis: () => constraintAnalysis.invalidate(), recordHistory, guardSketchProjectionShapeEdit,
-    addPoint, isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint,
-    guardDimensionSymbolDeletion, geometryElementKey, annotationReferencesRemovedGeometry,
+  const splineEditing = authoringTools.createSplineEditing({
+    editingScope: editingScopeBinding, checkpoint: editingCheckpoint, parameters: parameterStabilization, analysis: constraintAnalysis,
+    access: sketchEditAccess, guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion,
   });
   const { addPoint: addSplineFitPointFromContext, deletePoint: deleteSplineFitPointFromContext } = splineEditing;
 

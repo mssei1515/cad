@@ -6,7 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
-### 最新：派生形状test APIの共有owner接続（2026-10-30、検証完了）
+### 最新：Spline構造編集の共有owner接続・停止checkpoint（2026-10-30、検証完了）
+
+基準developはa9bad06。BasicDrawingTools.createAuthoringの後段窓口createSplineEditingがSpline構造編集の接続を担当する。既存のGeometry／ids／pointUsage／Sketch context／Selection／通知を共有し、editing scope・値checkpoint・Parameter安定化・analysis・access・Projection guard・constraint reference・dimension symbol guardを明示入力にする。親のWorkspace.currentと構造編集のeditingScope.current、親のgeometry mutation checkpointと構造編集のcaptureValues／restoreValuesを区別する。guardのstructure引数、値checkpoint／安定化の裸関数、分析無効化のmember呼出し、既存参照・Annotation照会を維持する。raw SplineEditCommand、生成位置、後段Canvas context操作・作図取消との接続を変えず、session／Geometry／Selection／採番を複製しない。
+
+app.jsは1,709→1,704行（5行減）、非空白1,260→1,255行。root399→398文、構築123文は据置で620→616非空白行、その他202→201文／312→311非空白行。関数77個・hooks230行・一文call委譲73個93行は据置、通常core937→932行。明示入力24→8項目、不要root alias三個を除去した。TEMP cad-spline-editing-owners-{proof,hierarchy}.cjsで他app AST・既存Authoring／raw Spline command不変、未使用root bindingなし、八入力の初期化済みを確認した。200〜500行の全体目標は未達である。
+
+BasicDrawingTools単体へ旧raw Commandと新窓口を比較する三件を追加した。実Spline／Geometry creation／ID／DocumentState／Selectionでcoldな後段生成・同じCommand／port参照、値checkpointとGeometry checkpointの区別、Workspaceとediting scopeの差替え、構造編集guard、通過点追加／削除と求解失敗の復元・Object同一性・採番・履歴traceを検証した。constructor例外・権限／Projection／symbol拒否、Solver例外の同一性と従来の途中状態も維持する。既存期待値は変更していない。構文626file・全単体2,182件・関連単体35件が成功。構文626file・全E2E588件が成功（21.8m、exit 0、実行session46450）。全file／testをfilterなしで実行し、三つのCAD filter環境変数が未設定、405製品／E2E入力fileと開始HEADが不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-spline-editing-owners-{check,unit,e2e}.log／run.ps1／source-hashes.json／filter-environment.json／e2e-receipt.json／last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標は未完了。開始時週枠残量50%、全単体完了後の確認49%で停止条件に到達した。全E2E完了時の確認49%。新たな分離は停止し、このSpline単位の全E2E・Commit／Push・develop統合の後、mainへ最後に反映してmain／developを同期し、一時停止する。mainの停止前基準は5800850、今回の基準developはa9bad06、作業branchはcodex/spline-editing-ownersである。最終commit／local・origin refはGit現物で照合する。再開時はusageとAGENTS.md・この文書・最新Git状態を確認し、最新developから新しい作業branchを作る。残る中心は機能単位の構築・接続、初期化／bindの段階とtest API接続であり、200〜500行目標を現在の途中成果へ縮小しない。次はCanvasCommandCancellationの15項目を、OperationSessionsと作図lifecycleが所有する開始／取消の責務から再監査する。既存ownerとの接続を減らせるか比較し、単なる入力の包み直し・巨大なbootstrap／app contextへの移動は採用しない。
+
+### 直前：派生形状test APIの共有owner接続（2026-10-30、検証完了）
 
 基準developはfea2642。DerivedInstanceTestDriver.createForWorkspaceが派生形状のbrowser test APIの接続を担当する。DocumentWorkspace／Geometry creation／geometry read／CanvasInteraction／Presentationと実Canvas test driver／Sketch presentation／Hatch queryを共有し、三つの既存fixture／interactionを同じ順で生成する。動的Workspace.current、実Selection・Geometryの同一性、裸のfocus／clientPosition・描画通知、操作時のdocumentIds.allocateのmember呼出しを維持する。型・既定Sketch／Hatch外観・参照とarc sweep計算は既存namespaceを再利用し、model／scope／採番／Hatch cacheを複製しない。既存createBrowserApiと公開する六操作を維持し、通常モードのtest gate・BrowserTestApi公開順・公開衝突処理を変更しない。
 
