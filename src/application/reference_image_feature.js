@@ -26,5 +26,21 @@
     }
     return Object.freeze({ renderer, layer, interaction, input, prepareImages });
   }
-  window.ReferenceImageFeature = Object.freeze({ create });
+  function createForWorkspace({ canvas, ctx, viewport, document, window: browserWindow, withCanvasState, createImage,
+    documentWorkspace, editingScope, interaction, presentation, appearance, clearSelection, clearSnap,
+    hitReferenceImageAt, recordHistory, pasteGeometry, copyGeometry, isGeometryMode, isTextEditingTarget }) {
+    const { workspace, sketches, documentIds } = documentWorkspace;
+    const { selection: canvasSelection, hover, access } = interaction;
+    const { settings: { applicationText }, setHint, updateUI, draw } = presentation;
+    return create({
+      canvas, ctx, viewport, document, window: browserWindow, withCanvasState, createImage,
+      readImages: () => editingScope.current.referenceImages, currentScope: workspace.current, canvasSelection, readHover: () => hover.current,
+      isVisibleValue: appearance.isVisibleValue, isVisibleSketchId: appearance.isVisibleSketchId, activeSketchId: sketches.activeSketchId,
+      guardSketchEdit: access.guardSketchEdit, clearSelection, applicationText, setHint, updateUI, draw, clearSnap, hypot2: window.GeometrySolver.hypot2,
+      hitReferenceImageAt, formatDisplayNumber: window.NumberDisplay.formatDisplayNumber, recordHistory, screenToWorld: viewport.screenToWorld,
+      nextId: () => documentIds.allocate("referenceImage"), canCreateInActiveSketch: access.canCreateInActiveSketch,
+      pasteGeometry, copyGeometry, isGeometryMode, isTextEditingTarget,
+    });
+  }
+  window.ReferenceImageFeature = Object.freeze({ create, createForWorkspace });
 })();

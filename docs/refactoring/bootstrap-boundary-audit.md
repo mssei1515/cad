@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 参照画像の共有owner接続（2026-10-30、c249623基準）
+
+ReferenceImageFeature.createForWorkspaceがDocumentWorkspace／editing scope／CanvasInteraction／Presentation／geometry appearanceとの接続を担当する。描画画像はeditingScope.current.referenceImages、取込・挿入先はworkspace.currentであり、両者を統合しない。実Selection・live hover・Sketch／作成権限・通知を共有し、viewport.screenToWorldと既存の数値表示／hypot2を使う。画像IDは操作時に同じdocumentIds.allocateをmember呼出しする。renderer→layer→interaction→inputの生成順と、後段のhit／snap／clipboard callback、Image生成、text編集判定、bind／dispose時機を維持する。既存createと実renderer／layer／interaction／input／prepareImages APIを維持し、画像cache・model／Selection／scope・採番・listenerを重複させない。
+
+app.jsは1,715→1,713行（2行減）、非空白1,266→1,264行。root399文・構築123文・関数77個・hooks233行・一文call委譲73個93行は据置。構築の非空白621→620行、その他202文314→313行、通常core940→938行。明示入力32→20項目とし、不要root alias二個を除去した。TEMP cad-reference-image-owners-{proof,hierarchy}.cjsで他app AST・raw ReferenceImageFeature不変、未使用root bindingなし、前段九入力の初期化済みを確認した。行数より既存機能での所有者共有を優先し、200〜500行目標は未達である。
+
+全体目標はactive・未完了。開始時週枠残量51%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/reference-image-owners。最新全E2Eは28ac1f1の588件成功（22.4m）、その後のc249623は関連294件成功（16.5m）である。次は固定拘束operand／Selection commandの二段階接続とDocument resetを比較する。固定状態の照会はbound editing scope、操作用currentScopeはWorkspace.current、Projection guardとSelectionHighlightの比較を別の依存として維持する。rootの行数だけを減らす入力の束や巨大なcontextに置換しない。現単位の検証・Commit／develop統合後に、実益のある境界を選ぶ。
+
 ## 拘束確定の共有owner接続（2026-10-30、28ac1f1基準）
 
 ConstraintEditing.createForEditingの後段窓口createCommitForWorkspaceが拘束確定の接続を担当する。先行したSelection／Sketch／Presentation／Operand候補を共有し、後段Workspace／checkpoint／挿入／redundancy／solving／安定化／reference stateと求解準備・line collapse・分析更新・履歴・clockだけを受ける。Workspace.currentの動的照会とbound editing scopeの挿入・snapshot／restoreは元の別参照を維持する。従来createCommit→DimensionConstraintFactory／Command→readOnly query→intent resolverの順と後段Commandへの遅延callback、裸関数参照・clockの呼出し時機を変えない。既存createCommitとraw ConstraintCommitCommandを維持し、実APIを再利用する。可変app context・新model／Selection／session・cache・listenerは増やさない。
