@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
-### 最新：Canvasの表示支援と描画観測テストの組立て（2026-10-30、検証完了）
+### 最新：求解照会・拘束解析と後段求解の組立て（2026-10-30、検証完了）
+
+基準developは0520da7。SketchSolvingFeature.createContextForWorkspaceが、従来のSolveScopeQuery→ConstraintAnalysis.createWithRedundancyを前段で生成し、実scopeQuery／analysis／redundancyと後段createSolvingを凍結APIとして返す。DocumentWorkspace／read services／ConstraintReferences／ReferenceConstraintState／PointUsage／Presentation／solve stateを実体で共有する。AnnotationDragの仮scope／追加変数は照会へ、Workspace.currentと前段solverは解析へ渡す。後段は従来位置でcreateForWorkspaceへ接続し、editingScope.solverをその時点で取得する。Workspace.currentとeditingScope.current、profileの遅延active読取り・bare work callback、数値閾値と失敗時の境界を維持する。元のraw create／createForWorkspaceを残し、モデル・解析cache・Selectionや可変app contextを複製しない。
+
+app.jsは1,757→1,749行（8行減）、非空白1,308→1,300行。root403→402文、構築123→122文／655→647非空白行。関数80個、条件付きhooks233行、一文call委譲76個98行、その他203文317行を維持する。通常coreは977→969非空白行で、200〜500行目標は未達。未使用となったgeometryInstanceDependencyRefs／isExplicitPoint／sketchHasSolveErrorのroot aliasを除去した。TEMP cad-sketch-solving-context-{proof,hierarchy}.cjsで他app AST／既存raw factory不変・未使用root bindingなし・前段入力の初期化済みを確認した。
+
+実SolveScopeQuery／ConstraintAnalysis／ConstraintRedundancyと既存の求解・安定化を旧経路と新経路で比較する境界単体二件を追加した。cold生成、前段query→analysisと後段solver取得、仮scopeのGeometry／追加変数同一性とannotation graph優先、別のWorkspace scope／前段solver、実API同一性、live profile、共有solve state／履歴と失敗・例外短絡を確認した。新fixtureのSketch一覧不足を補正し、既存の期待値は変更していない。構文626file・全単体2,153件・関連単体25件が成功。全E2E588件が全成功（22.4m、exit 0、実行session24987）。全file／testを対象に、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを実行process内で記録した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-sketch-solving-context-{check,unit,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標はactive・未完了。開始時週枠残量57%／最終確認57%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/sketch-solving-context。次候補は既存GeometryDragFeature.createForEditingに接続するownerの整理である。DocumentWorkspaceからWorkspace.current／Sketch、Presentationからprofiler／翻訳／表示更新、CanvasInteractionからaccess.guardSketchEdit／Selection、derivedDragQueriesからsourceObjects／resolve、sketchProjectionQueriesから影響拘束の照会を取得できるか比較する。通常scopeと固定拘束照会のbound editing scope、MIN_ORIENTATION_LENGTHとdrag previewの数値閾値を維持する。clearSelectionはselectionClearing.clearへ委譲する現行callbackを明示入力として残し、Selectionだけの消去に置換しない。GeometryDrag生成→Constraint入力・DimensionDrag生成→createBlockEntryの既存段階も維持する。Block layout／固定拘束の照会と投影拒否messageは限定した依存として残す。現単位の全E2E・Commit／develop統合後に実装を検討し、巨大なbootstrapやapp contextへ単に移さない。
+
+### 直前：Canvasの表示支援と描画観測テストの組立て（2026-10-30、検証完了）
 
 基準developはf49cb6f。既存CanvasTestDriverへcreateForSceneを追加し、従来のcreateDisplaySupport→CanvasRenderTestDriver.createRenderingSupportを同じtest hooks内の隣接位置で一度ずつ生成する。実DocumentWorkspace／GeometryReadServices／GeometryCreation／CanvasInteraction／OperationSessions／Presentationと、限定した作図・描画owner群を共有する。返すdisplay／renderingは従来の実支援APIで、BrowserTestApiの公開method・順序を変更しない。共通viewport／Canvas／Geometry／Selection／Preview／hover／描画関数を再利用し、単位とDocument全体のBlock registryは操作時まで評価しない。DOM elementFromPointのreceiver、registry pushのreceiver、Workspace.currentとDocumentの区別を保つ。raw driver APIを維持し、URLのtest guard内だけで構築する。新しいmodel／viewport／fixture状態や可変app contextは作らない。
 
