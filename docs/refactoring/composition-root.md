@@ -6,6 +6,20 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：削除の編集環境からの組立て（2026-10-30、検証完了）
+
+基準developはcce412f。既存DeletionFeatureにcreateForEditingを追加し、DocumentWorkspaceのWorkspace／Sketch、Geometry read services、CanvasInteractionの実Selection／access／scope／hover／PointUsage、OperationSessions、GeometryCreation、SketchSolvingとPresentationから既存三ownerへ限定APIを接続する。appの個別47項目を22項目のowner・操作依存へ整理し、既存createと同じremove／removeSelection／rejectReferencesを元の生成位置で返す。削除はWorkspace.currentを読む設計を維持し、Clipboardのediting scopeへ置き換えない。Geometry／Dimension／Annotation dragは後段生成なので、三reset callbackをappで遅延のまま渡す。analysis.stableも操作時に読み、生成時にscope・状態・drag・DOMを照会しない。Geometry／Selection削除のraw command・計画／適用・拒否通知・求解・履歴は変更せず、新file・可変context・状態の複製を増やさない。
+
+app.jsは1,922→1,918行（4行減）、非空白1,472→1,468行、root416文／関数81個／hooks319行／可変参照三つ。構築134文719非空白行、一文call関数77個99行、その他204文326行（文外5行）。移管で不要になった三aliasをrootから除き、TEMP cad-deletion-editing-composition-{proof,hierarchy}.cjsで47の子接続の旧構成一致、その他appとraw DeletionFeatureのAST不変、root未使用bindingなしを確認した。hooksと短い委譲を除いても1,050非空白行が残り、数百行目標は未達。
+
+条件付きtest hooksは319行に対してroot外側の275 bindingを参照する（局所関数34、ObjectPattern alias 213、CallExpression初期化binding 23、その他5）。TEMP cad-deletion-editing-composition-hook-audit.cjsとhook-{dependencies,alias-sources}.jsonに現物監査を保存した。275依存をまとめて新fileへ渡す抽出は採用せず、既存の役割別TestDriverへ共有ownerからの接続を集めてから公開境界を縮める。通常起動ではtest支援を生成せず、installTestHooksの実行はDocumentEditingReset生成後というphaseを維持する。
+
+境界単体四件を追加した。実GeometryDeletion／GeometryDeletionCommand／SelectionDeletionCommand、CanvasSelection／Hover、Pending／Target／Preview／Lifecycleを用い、共有API、live Workspace scopeとanalysis、未生成dragの遅延reset・receiver、削除に限ったsession／hoverの部分解除を旧構成と比較した。求解不成立でも削除と履歴を確定する既存挙動、権限・symbol拒否、reset例外前の無変更、solve例外時の削除済み状態と未更新UI／履歴、画像除去のforget→UI→draw→履歴、先行注記を除去した後にBlock依存で拒否される途中状態も維持した。関連単体44件／全単体2,098件／構文624fileが成功。全E2E588件が全成功（22.2m、exit 0、実行session29485）。対象file／test名を絞らず、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを保存した。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。長時間の拘束回帰も全成功（fillets 3744preview／最大32.4ms、offsets 10296preview／最大47.4ms、aircraft 1872preview／最大178.3ms、coupled-lines 5304preview／最大34.9ms、horizontal-line 936preview／最大20.0ms、vertical-line 936preview／最大93.4ms、全てfailures空）。TEMP cad-deletion-editing-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerは変更しない。
+
+全体目標active、開始時週枠残量70%／最終確認69%で停止条件未到達。mainは停止／releaseの最後に反映する。次は残る機能組立てと初期化phase／test hooksの公開境界を実ownerから確認する。異なるscope・取消・reset・失敗復元を一律化せず、薄いwrapperや巨大なapp contextへの移動だけで行数目標を満たしたことにしない。
+
+
+
 ### 最新：Clipboardの編集環境からの組立て（2026-10-30、検証完了）
 
 基準developは020f7db。既存ClipboardFeatureにcreateForEditingを追加し、DocumentWorkspaceの採番・Sketch・Parameter、Geometry read services、CanvasInteractionの実Selection／access／Lifecycle、GeometryCreation、Annotation rendererとPresentationから各子へ必要なAPIを接続する。appの個別45項目を23項目のowner・操作依存へ整理し、既存createと同じ七owner・同じsession／commandを元の生成位置で返す。同期済みediting scopeは呼出時のeditingScope.current、Parameter namespaceはWorkspace.currentとして区別し、viewport倍率・Block namespaceの反復照会・guard短絡とreceiverも維持する。拘束codec／装飾とGeometry Instance正規化は既存callbackの引数・既定値を保つ。新fileや全app context、状態の複製、早期model／DOM照会は増やさない。削除ownerとの統合は行わず、拒否されたCutのpayload保持と、append失敗／solve失敗で異なるmode・pasteCountの復元範囲も変更しない。

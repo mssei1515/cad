@@ -47,5 +47,30 @@
     });
     return Object.freeze({ remove, removeSelection: () => selectionCommand.remove(), rejectReferences });
   }
-  window.DeletionFeature = Object.freeze({ create });
+  // Deletion follows Workspace scope; drag resets remain late callbacks from the root.
+  function createForEditing({ documentWorkspace, readServices, interaction, references, annotationDimensions, splineEditing,
+    guardDimensionSymbolDeletion, geometry, sessions, lineCommand, circularCommands, solving, analysis, presentation,
+    updateToolbar, recordHistory, referenceImageInteraction, clearSelection, solveAndRefresh,
+    resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag }) {
+    const { workspace, sketches } = documentWorkspace;
+    const { constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive, constraintGraphNodes, geometryInstanceDependencyRefs } = references;
+    const { geometryKeyForItem: geometryElementKey, geometryRefForItem } = window.GeometryObjects;
+    const { key: geometryRefKey } = window.GeometryRef;
+    const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
+    const { geometryInstanceBundle } = readServices.reads, { blockAllProjectionBundle, invalidateBlockProjectionCache } = readServices.projections;
+    const { selection: canvasSelection, hover: canvasHover, pointUsage } = interaction;
+    const { guardSketchEdit, guardSelectionEdit } = interaction.access, { selectionSketchId } = interaction.scope;
+    const { elementSketchId, activeSketchId } = sketches, { normalizeArcSweeps } = geometry, { solveSketchAndDependents } = solving;
+    const { settings: { applicationText }, updateUI, draw, setHint, log } = presentation;
+    return create({ currentScope: workspace.current, pointUsage, constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
+      geometryElementKey, annotationReferencesRemovedGeometry, geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes,
+      annotationDimensions, canvasSelection, splineEditing, canvasHover, guardSketchEdit, elementSketchId,
+      geometryInstanceDependencyRefs, geometryRefKey, guardDimensionSymbolDeletion, applicationText,
+      resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag, pendingCommandSession: sessions.pending, constraintTargetSession: sessions.targets,
+      lineCommand, circularCommands, drawingPreview: sessions.preview, selectMode: interaction.lifecycle.selectMode, solveSketchAndDependents, normalizeArcSweeps,
+      updateToolbar, updateUI, draw, analysisStable: () => analysis.stable, setHint, log, recordHistory,
+      referenceImageInteraction, guardSelectionEdit, selectionSketchId, activeSketchId, geometryRefForItem,
+      invalidateBlockProjectionCache, effectiveSelectedConstraint: canvasSelection.effectiveSelectedConstraint, clearSelection, solveAndRefresh });
+  }
+  window.DeletionFeature = Object.freeze({ create, createForEditing });
 })();
