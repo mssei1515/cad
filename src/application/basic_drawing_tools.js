@@ -209,7 +209,21 @@
         setHint, updateUI, draw, cancelActiveDrawOperation: () => lifecycle.cancel(), rollbackTransientPoint,
         hasActiveDrawOperation: () => lifecycle.active(), hasSelection: selection.hasSelection, updateGeometrySelectionUI });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createHatch, createBlankGesture, createCanvasInput: createAuthoringInput });
+    function createSplineEditing({ editingScope, checkpoint: valueCheckpoint, parameters, analysis, access,
+      guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion }) {
+      const { guardSketchEdit } = access;
+      return window.SplineEditCommand.create({
+        canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
+        currentScope: () => editingScope.current, ids, clearSelection, canvasSelection: selection, applicationText, setHint, updateUI, draw,
+        restoreModelState: valueCheckpoint.restoreValues, snapshotModelState: valueCheckpoint.captureValues,
+        stabilizeActiveParameterNamespace: parameters.stabilize, elementSketchId, invalidateAnalysis: () => analysis.invalidate(), recordHistory,
+        guardSketchProjectionShapeEdit, addPoint: geometry.addPoint,
+        isPointUsedByLine: pointUsage.isPointUsedByLine, isPointUsedByCircle: pointUsage.isPointUsedByCircle, isPointUsedByArc: pointUsage.isPointUsedByArc,
+        constraintReferencesPoint: constraintReferences.constraintReferencesPoint, guardDimensionSymbolDeletion,
+        geometryElementKey: window.GeometryObjects.geometryKeyForItem, annotationReferencesRemovedGeometry: window.AnnotationAnchorData.referencesRemovedGeometry,
+      });
+    }
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createHatch, createBlankGesture, createCanvasInput: createAuthoringInput, createSplineEditing });
   }
   window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createGeometry, createAuthoring, createCanvasInput });
 })();
