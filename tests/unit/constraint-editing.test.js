@@ -107,8 +107,8 @@ function controlsFixture(build = (w, input) => w.ConstraintEditing.create(input)
     toggleSelectedFixed: note('selected-fixed'), updateGeometrySelectionUI: note('selection-ui'), types: w.GeometrySolver,
     isPlacingInstance: () => false, cancelPendingCommand: message => { ready(); events.push(['cancel-pending',message]); state.pending = null; },
     selectedPrimitives: () => [], applicationText: (_ja,en) => en, log: note('log') };
-  const feature = build(w, input, { buttons, state, events });
-  controls = feature.createControls({ document, constraintButtons: buttons, constraintMenuButtons: menu, fixPointBtn: fix,
+  const feature = build(w, input, { buttons, state, events, controls: { document, constraintMenuButtons: menu, fixPointBtn: fix, translatedExactText: value => value } });
+  controls = feature.controls || feature.createControls({ document, constraintButtons: buttons, constraintMenuButtons: menu, fixPointBtn: fix,
     hasSelection: () => selection.selectedElementCount() > 0, translatedExactText: value => value });
   const binding = controls.createBinding(); buttons[0].click(); assert.equal(session.command,null); assert.deepEqual(events, []);
   binding.bind(); binding.bind(); assert.deepEqual(events, []); state.ready = true;
@@ -411,4 +411,89 @@ test('staged input construction precedes drag construction and propagates failur
   assert.throws(()=>support.createWithDragging(ports),error=>error===marker);assert.deepEqual(order,['input','drag']);assert.equal(received.currentScope,scope);assert.deepEqual(f.events,['query','targets','dimensions']);
   f.context.window.ConstraintCommandInput.createFeature=()=>{throw marker;};order.length=0;
   assert.throws(()=>support.createWithDragging(ports),error=>error===marker);assert.deepEqual(order,[]);
+});
+
+function controlsAssemblyFixture(composed, probe = {}) {
+  let hover;
+  probe.order = []; probe.ports = {}; probe.results = {};
+  const f = controlsFixture((w, input, { buttons, state, events, controls }) => {
+    probe.state = state; probe.input = input; state.language = 'en';
+    const readLanguage = () => { assert.equal(state.ready, true); return state.language; };
+    const feedback = w.ConstraintFeedback.create({ applicationText: input.applicationText, readLanguage });
+    hover = w.CanvasHover.create({ isEndpointPoint: () => false });
+    input.hitConstraintOperand = (pointer, type) => { assert.equal(state.ready, true); events.push(['hit', pointer, type]); if (state.hitError) throw state.hitError; return state.operand; };
+    input.sameConstraintOperand = (a, b) => a === b;
+    const retargeting = { canvasHover: hover, canvasPoint: event => { assert.equal(state.ready, true); return event.pointer; },
+      referenceTargetFromOperand: operand => ({ kind: 'line', line: operand.line }) };
+    const originals = new Map();
+    for (const [namespace, method, name] of [['ConstraintControlsView', 'createFeedback', 'feedback'], ['ConstraintSelectionQuery', 'create', 'query'],
+      ['ConstraintTargetCommand', 'create', 'targets'], ['DimensionPlacementCommand', 'create', 'dimensions'],
+      ['ConstraintCommandInput', 'createRetargetHover', 'retarget'], ['ConstraintControlsView', 'create', 'controls']]) {
+      if (!originals.has(namespace)) { originals.set(namespace, w[namespace]); w[namespace] = { ...w[namespace] }; }
+      const factory = originals.get(namespace)[method];
+      w[namespace][method] = options => { probe.order.push(name); probe.ports[name] = options; if (probe.failAt === name) throw probe.error;
+        return probe.results[name] = factory(options); };
+    }
+    try {
+      const options = { ...input, constraintButtons: buttons, feedback, readLanguage };
+      let result;
+      if (composed) result = w.ConstraintEditing.createWithControls({ ...options, retargeting, controls });
+      else {
+        const editing = w.ConstraintEditing.createWithFeedback(options), support = editing.createCommandInput(retargeting);
+        const presentation = editing.createControls({ ...controls, constraintButtons: buttons, hasSelection: input.selection.hasSelection });
+        result = { ...editing, input: support, controls: presentation };
+      }
+      assert.deepEqual(events, []); buttons[0].click(); assert.deepEqual(events, []); assert.equal(input.session.command, null);
+      return result;
+    } finally { for (const [namespace, original] of originals) w[namespace] = original; }
+  });
+  return { ...f, hover, probe, support: f.feature.input };
+}
+
+test('constraint control assembly constructs shared feedback, targets, provisional input and View once without binding early', () => {
+  for (const composed of [false, true]) {
+    const f = controlsAssemblyFixture(composed), { ports, results, order } = f.probe;
+    assert.deepEqual(order, ['feedback', 'query', 'targets', 'dimensions', 'retarget', 'controls']); assert.deepEqual(f.events, []);
+    assert.equal(f.feature.selectionQuery, results.query); assert.equal(f.feature.targets, results.targets); assert.equal(f.feature.dimensions, results.dimensions);
+    assert.equal(f.support.updateHover, results.retarget.update); assert.equal(f.controls.view, results.controls);
+    assert.equal(f.feature.constraintTargetHint, results.feedback.targetHint); assert.equal(ports.retarget.canvasHover, f.hover);
+    assert.equal(ports.retarget.getPending, f.input.pending.read); assert.equal(ports.retarget.hitConstraintOperand, f.input.hitConstraintOperand);
+    assert.equal(ports.controls.constraintButtons, f.buttons); assert.equal(ports.controls.hasSelection, f.selection.hasSelection);
+    assert.equal(ports.targets.session, f.session); assert.equal(ports.dimensions.selection, f.selection);
+    if (composed) assert.equal(Object.isFrozen(f.feature), true);
+    f.binding.dispose(); f.buttons[0].click(); assert.equal(f.session.command, null); f.binding.bind(); f.buttons[0].click(); assert.equal(f.session.command.type, 'horizontal');
+  }
+});
+
+test('assembled constraint controls and retarget hover share live Selection, target and pending sessions through refusal and errors', () => {
+  const traces = [];
+  for (const composed of [false, true]) {
+    const f = controlsAssemblyFixture(composed), g = f.w.GeometrySolver;
+    f.menu[0].click(); assert.equal(f.session.command.type, 'horizontal'); f.menu[0].click(); assert.equal(f.session.command, null);
+    const line = id => new g.Line(id, new g.Point(id + 'a', 0, 0), new g.Point(id + 'b', 10, 0)), first = line('a'), second = line('b');
+    const base = { kind: 'line', line: first }, operand = { kind: 'line', line: second }, target = { kind: 'line-length', line: second };
+    f.state.operand = operand; f.state.resolveIntent = () => ({ target, operands: [base, operand] });
+    f.session.begin('distance', [base]); const pending = f.state.pending = { type: 'distance-place', target: { kind: 'line-length', line: first }, dimension: {}, operands: [base] };
+    assert.equal(f.support.updateHover({ x: 1, y: 2 }), true); assert.equal(f.hover.current.line, second); assert.equal(f.state.pending, pending);
+    assert.equal(f.session.operands[0], base); assert.equal(f.session.operands.length, 1);
+    f.state.language = 'ja'; assert.equal(f.probe.ports.feedback.readLanguage(), 'ja'); assert.equal(f.probe.ports.feedback.readOperands(), f.session.operands);
+    const marker = new Error('hit'); f.state.hitError = marker; const priorHover = f.hover.current;
+    assert.throws(() => f.support.updateHover({ x: 3, y: 4 }), error => error === marker); assert.equal(f.hover.current, priorHover); assert.equal(f.state.pending, pending);
+    f.state.hitError = null; f.state.queryError = marker; f.buttons[0].attrs['aria-pressed'] = 'before';
+    assert.throws(() => f.controls.view.update(), error => error === marker); assert.equal(f.buttons[0].attrs['aria-pressed'], 'before'); assert.equal(f.state.pending, pending);
+    f.state.queryError = null; f.state.pending = { type: 'distance-value', target: { annotationAnchor: true } }; f.events.length = 0; f.controls.view.update();
+    assert.equal(f.state.pending.target.annotationAnchor, true); assert.equal(f.events.some(event => event[0] === 'distance-target'), false);
+    traces.push(JSON.stringify(f.events));
+  }
+  assert.equal(traces[1], traces[0]);
+});
+
+test('constraint control assembly stops at input or View construction failure before binding or changing sessions', () => {
+  for (const composed of [false, true]) for (const failAt of ['retarget', 'controls']) {
+    const marker = new Error(failAt), probe = { failAt, error: marker };
+    assert.throws(() => controlsAssemblyFixture(composed, probe), error => error === marker);
+    assert.deepEqual(probe.order, ['feedback', 'query', 'targets', 'dimensions', 'retarget', ...(failAt === 'controls' ? ['controls'] : [])]);
+    assert.equal(probe.state.ready, false); assert.equal(probe.state.pending, null); assert.equal(probe.input.session.command, null);
+    assert.equal(probe.input.selection.hasSelection(), false);
+  }
 });

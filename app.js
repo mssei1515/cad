@@ -165,7 +165,6 @@
     selectedElementCount, selectedGeometryItems, selectedPrimitives,
     selectedConstructionTogglePrimitives,
     trimConstraintSelection,
-    hasSelection,
   } = canvasSelection;
   const { isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isExplicitPoint } = pointUsage;
   presentation.bindUI({
@@ -1072,8 +1071,12 @@
   });
   function updateToolbar() { toolbarView.update(); }
 
-  const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand, createControls: createConstraintControls,
-    createCommit: createConstraintCommit, createCommandInput: createConstraintCommandInput, createFixedEditing, constraintTargetHint } = window.ConstraintEditing.createWithFeedback({
+  const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
+    createCommit: createConstraintCommit, createFixedEditing, constraintTargetHint,
+    input: { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging },
+    controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createWithControls({
+    retargeting: { canvasHover, canvasPoint, referenceTargetFromOperand },
+    controls: { document, constraintMenuButtons, fixPointBtn, translatedExactText },
     constraintButtons, feedback: constraintFeedback, readLanguage: () => applicationSettings.language,
     session: constraintTargetSession, selection: canvasSelection, pending: pendingCommandSession, candidates: constraintCandidates,
     lifecycle: drawOperationLifecycle, valueInput: dimensionInputController,
@@ -1104,15 +1107,9 @@
   function startDistanceValueInput(pointer) { return dimensionPlacementCommand.startDistanceValueInput(pointer); }
 
 
-  const { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging } = createConstraintCommandInput({
-    canvasHover, canvasPoint, referenceTargetFromOperand,
-  });
 
   function startDimensionEditInput(hit) { return dimensionValueCommand.startEdit(hit); }
 
-  const { view: constraintControlsView, createBinding: createConstraintControlBinding } = createConstraintControls({
-    document, constraintButtons, constraintMenuButtons, fixPointBtn, hasSelection, translatedExactText,
-  });
   function updateConstraintButtons() { constraintControlsView.update(); }
 
   const { reset: sketchInteractionReset, editing: sketchEditing } = window.SketchEditingFeature.createForInteraction({

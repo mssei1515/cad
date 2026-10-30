@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 拘束操作の表示と入力準備の組立て（2026-10-30、ddf292b基準）
+
+基準developはddf292b。ConstraintEditingへcreateWithControlsを追加し、従来のcreateWithFeedback→createCommandInput→createControlsを一度ずつ呼ぶ。実際の生成順はfeedback→selection query→target command→dimension placement→retarget hover→control Viewである。retargetingのHover／canvas座標／reference targetとcontrol用DOM・翻訳を限定した二群で受け、constraintButtonsとhasSelectionは同じ既存入力／Selectionから共有する。返すinput／controlsと既存query／targets／dimensions／factoryは元の実体で、操作stateを複製しない。raw create／createWithFeedbackと各段のAPIは保持する。前後で越えるのはhoistされる関数宣言だけで、後段のcontrol binding・dimension input／drag生成とCanvas入力bindの時機は変更しない。
+
+app.jsは1,808→1,805行（3行減）、非空白1,358→1,355行。root416→414文、構築132→130文／695→693非空白行へ減った。関数81個／hooks235行／可変参照三つ、一文call関数77個99行、その他206文323行（文外5行）。createConstraintControls／createConstraintCommandInput／hasSelectionの不要root aliasを除いた。TEMP cad-constraint-controls-assembly-{proof,hierarchy}.cjsで各段の旧接続、同じButtons／Selection.hasSelection、生成順・関数宣言だけを越える段階と後段変数の早期参照なし、raw module内this依存なし、他app／raw ConstraintEditingのAST不変、未使用root bindingなしを確認した。hooksと短い委譲を除いても1,021非空白行あり、200〜500行目標は未達。
+
 ## Documentの編集scopeとモデル操作の組立て（2026-10-30、ca5ffd3基準）
 
 基準developはca5ffd3。既存DocumentWorkspace.createReadContextへcreateEditingScopeを追加し、同じWorkspace／read servicesに対するEditingScopeBinding・寸法のmodel queries・ConstraintCommitCommand.createInsertionの三部品を一度ずつ生成する。生成順はbinding→同じSolverの読取り→model queries→insertionで、先行するread context生成と後段UI／commandのinit phaseは維持する。公開するbinding／solver／dimensionQueries／insertionは実体そのもので、追加のmodel・scope／Solver・採番stateやsetterは作らない。モデル照会と拘束pushはbinding.currentを読み、active Sketch・fallback先と寸法Parameterの採番namespaceは元のworkspace.currentを使う。Workspaceだけが先に切り替わった場面でも両者を同一化しない。close／move reset callbackはappで遅延参照を保持し、raw createScopeBinding／DimensionQueries／InsertionのAPI・実装、cache失効と活性化失敗・push後のParameter失敗境界は変更しない。

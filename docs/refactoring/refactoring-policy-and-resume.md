@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,808行、非空白1,358行、root直下416文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,805行、非空白1,355行、root直下414文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：拘束操作の表示と入力準備の組立て（2026-10-30、検証完了）
+
+基準developはddf292b。ConstraintEditingへcreateWithControlsを追加し、従来のcreateWithFeedback→createCommandInput→createControlsを一度ずつ呼ぶ。実際の生成順はfeedback→selection query→target command→dimension placement→retarget hover→control Viewである。retargetingのHover／canvas座標／reference targetとcontrol用DOM・翻訳を限定した二群で受け、constraintButtonsとhasSelectionは同じ既存入力／Selectionから共有する。返すinput／controlsと既存query／targets／dimensions／factoryは元の実体で、操作stateを複製しない。raw create／createWithFeedbackと各段のAPIは保持する。前後で越えるのはhoistされる関数宣言だけで、後段のcontrol binding・dimension input／drag生成とCanvas入力bindの時機は変更しない。
+
+app.jsは1,808→1,805行（3行減）、非空白1,358→1,355行。root416→414文、構築132→130文／695→693非空白行へ減った。関数81個／hooks235行／可変参照三つ、一文call関数77個99行、その他206文323行（文外5行）。createConstraintControls／createConstraintCommandInput／hasSelectionの不要root aliasを除いた。TEMP cad-constraint-controls-assembly-{proof,hierarchy}.cjsで各段の旧接続、同じButtons／Selection.hasSelection、生成順・関数宣言だけを越える段階と後段変数の早期参照なし、raw module内this依存なし、他app／raw ConstraintEditingのAST不変、未使用root bindingなしを確認した。hooksと短い委譲を除いても1,021非空白行あり、200〜500行目標は未達。
+
+境界単体三件を追加し、元の三段の直接生成と新窓口で同じ実command／Input／Viewを比較した。六部品の一回生成順と実体、構築中のstate無照会・未bindボタンの無動作、後段bind／dispose／再bind、同じTarget／Pending／Selection／Hover、live operandsとlanguage、retarget previewでpendingと元operandを変えないこと、hit例外でHoverを保持・View query例外でDOMとpendingを保持する範囲、annotation anchorで距離取消しを省略する条件、Input／View生成例外で後続／bindを行わないことを確認した。関連単体44件／全単体2,127件が成功。構文626fileが成功。関連11suite（unified-ui／unified-annotations／blocks／sketch-projection／sketch-permissions／phase0-characterization／dimension-prefix／multiple-dimensions／slot-dimension／drag-smoothness／geometry-drag-smoothness）のE2E232件が全成功（5.4m、exit 0、実行session97487）。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-constraint-controls-assembly-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更しない。今回は全E2E未実行であり、直近ca5ffd3での全588件成功とは区別する。
+
+全体目標active。開始時週枠残量64%／最終確認63%で停止条件未到達。mainは停止／releaseの最後に反映する。次も同じ機能に属する複数部品の構築・接続・bind／startの段階境界を実ownerから確認する。今回も多数の個別callbackは残っており、この単位で数百行目標を達成したことにしない。
+
+
 
 ### 最新：Documentの編集scopeとモデル操作の組立て（2026-10-30、検証完了）
 
