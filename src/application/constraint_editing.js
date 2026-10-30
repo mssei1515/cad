@@ -120,5 +120,13 @@
       constraintTargetHint: presentation.targetHint, invalidConstraintTargetHint: presentation.invalidTargetHint });
     return Object.freeze({ ...editing, constraintTargetHint: presentation.targetHint });
   }
-  window.ConstraintEditing = Object.freeze({ create, createWithFeedback });
+  // Assemble control presentation and provisional input together; binding stays explicit.
+  function createWithControls({ retargeting, controls, ...options }) {
+    const editing = createWithFeedback(options);
+    const input = editing.createCommandInput(retargeting);
+    const controlPresentation = editing.createControls({ ...controls,
+      constraintButtons: options.constraintButtons, hasSelection: options.selection.hasSelection });
+    return Object.freeze({ ...editing, input, controls: controlPresentation });
+  }
+  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls });
 })();
