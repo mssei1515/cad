@@ -107,13 +107,12 @@
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
     isRootSketch,
-    sketchName, sketchById,
-    descendantSketchIds,
+    sketchById,
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
     elementSketchId, canEditSketch,
     sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
-    constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
+    isActiveSketchElement, isEditableSketchElement,
   } = sketchContext;
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
@@ -188,7 +187,7 @@
   const referenceConstraintState = window.ReferenceConstraintState.create({
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
   });
-  const { constraintIsOperational, wouldCreateReferenceCycle, refreshReferenceConstraintValidity } = referenceConstraintState;
+  const { constraintIsOperational, refreshReferenceConstraintValidity } = referenceConstraintState;
   const sketchProjectionQueries = window.SketchProjectionQueries.create({
     currentScope: workspace.current, constraintIsOperational,
   });
@@ -326,7 +325,7 @@
   });
   const { candidates: constraintCandidates, operands: constraintOperandValues,
     fromSelection: constraintOperandsFromSelection } = constraintOperandFeature;
-  const { sameArcEndpoint, linesAreParallel } = constraintCandidates;
+  const { sameArcEndpoint } = constraintCandidates;
   const { operandElement } = constraintOperandValues;
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
@@ -342,7 +341,7 @@
     annotationDrag: constrainedAnnotationDrag, solver, pointUsage, presentation, solveState: sketchSolveResultState, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { connectedComponentFromSeeds, localSolveLines, sketchSolveConstraints } = solveScopeQuery;
-  const { redundantConstraintInfo, constraintIsRedundant } = constraintRedundancy;
+  const { constraintIsRedundant } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
   const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
@@ -496,7 +495,7 @@
     maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
   const { solveSketchById,
-    solveSketchAndDependents, solveConstraintComponentAndDependents } = sketchSolving;
+    solveSketchAndDependents } = sketchSolving;
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
   const filletCommand = authoringTools.createFillet({
     defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
@@ -1008,7 +1007,7 @@
   function updateToolbar() { toolbarView.update(); }
 
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
-    createCommit: createConstraintCommit, createFixedEditing, constraintTargetHint,
+    createCommitForWorkspace: createConstraintCommit, createFixedEditing, constraintTargetHint,
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging },
     controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForEditing({
     document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, sketches: sketchContext, presentation,
@@ -1215,16 +1214,10 @@
   function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
   const { command: constraintCommitCommand, readOnly: dimensionReadOnlyQuery, createIntentResolver: createConstraintIntentResolver } = createConstraintCommit({
-    linesAreParallel, assignSketch: assignConstraintSketchId, probeRedundancy: constraintRedundancy.probeCandidate,
-    currentScope: workspace.current, forgetConstraint: constraintRedundancy.forgetConstraint,
-    constraintTargetsAreActive, snapshotModelState, restoreModelState,
-    solvePreparation: constraintSolvePreparation, pushModelConstraint,
-    solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
-    constraintSketchId, lineCollapseQuery, redundantConstraintInfo, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    measuredConstraintTargetValue,
-    refreshConstraintAnalysis, updateUI,
-    recordHistory, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
-    sketchName, now: () => performance.now(),
+    workspace, checkpoint: editingCheckpoint, insertion: constraintInsertion, redundancy: constraintRedundancy,
+    solving: sketchSolving, stabilization: parameterStabilization, referenceState: referenceConstraintState,
+    solvePreparation: constraintSolvePreparation, lineCollapseQuery, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    refreshConstraintAnalysis, recordHistory, now: () => performance.now(),
   });
   function commitNewConstraint(...args) { return constraintCommitCommand.ordinary(...args); }
   function markReferenceConstraint(...args) { return constraintCommitCommand.markReference(...args); }

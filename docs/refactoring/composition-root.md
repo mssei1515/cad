@@ -6,7 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
-### 最新：寸法値編集の接続（2026-10-30、検証完了）
+### 最新：拘束確定の共有owner接続（2026-10-30、検証完了）
+
+基準developは28ac1f1。ConstraintEditing.createForEditingの後段窓口createCommitForWorkspaceが拘束確定の接続を担当する。先行したSelection／Sketch／Presentation／Operand候補を共有し、後段Workspace／checkpoint／挿入／redundancy／solving／安定化／reference stateと求解準備・line collapse・分析更新・履歴・clockだけを受ける。Workspace.currentの動的照会とbound editing scopeの挿入・snapshot／restoreは元の別参照を維持する。従来createCommit→DimensionConstraintFactory／Command→readOnly query→intent resolverの順と後段Commandへの遅延callback、裸関数参照・clockの呼出し時機を変えない。既存createCommitとraw ConstraintCommitCommandを維持し、実APIを再利用する。可変app context・新model／Selection／session・cache・listenerは増やさない。
+
+app.jsは1,722→1,715行（7行減）、非空白1,273→1,266行。root399文・構築123文・関数77個・hooks233行・一文call委譲73個93行は据置。構築の非空白627→621行、その他202文315→314行、通常core947→940行。明示入力27→13項目、不要root alias七個を除去した。TEMP cad-constraint-commit-owners-{proof,hierarchy}.cjsで他app AST・既存構築経路／raw Command不変、未使用root bindingなし、前段十入力の初期化済みを確認した。200〜500行の全体目標は未達である。
+
+旧createCommitと新窓口を実Command／dimension factory／readOnly／intent resolver／Selection／sessionで比較する単体三件を追加した。cold生成と同じport参照、Workspace差替え時にbound挿入／checkpointを混同しないこと、重複拒否、実Selectionの解決と求解失敗復元、既存の履歴・性能traceと参照拒否、四段階のconstructor例外同一性・後段短絡を確認した。新テストの呼出し名を実APIのifMissingへ修正し、resolutionからordinaryを通る既存の履歴通知二回を旧経路と同じに検証する。製品側の履歴仕様や既存期待値は変更していない。構文626file・最終app／assemblyのnode --check・全単体2,173件・関連単体24件が成功。関連E2E294件が成功（13file、16.5m、exit 0、実行session68500）。選択したfile内の全testをfilterなしで実行し、三つのCAD filter環境変数が未設定、405製品／E2E入力fileと開始HEADが不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-constraint-commit-owners-{check,unit,e2e}.log／run.ps1／selection.json／source-hashes.json／filter-environment.json／e2e-receipt.json／last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標はactive・未完了。開始時週枠残量52%／最終確認51%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/constraint-commit-owners。直前の全E2Eは28ac1f1の588件成功（22.4m）で、今回の関連E2Eとは区別する。次は残る固定拘束操作の構築とDocument resetの接続を比較する。既存ownerへの集約で依存やroot aliasを減らせるかを実コードで判断し、引数の包み直しや巨大なbootstrapへの移動で行数目標を装わない。現単位の検証・Commit／develop統合前に次の製品変更を始めない。 現物では固定拘束operand生成はSketch Treeより前、Selection用command生成はcontrols.bind直前という別段階である。Projectionのshape guard、SelectionHighlightの表示要素比較、Workspace.currentと後段commitのcallbackを区別する。DocumentEditingResetは既に単一のreset順序を所有し、ReferenceImage Feature等の実ownerから接続を減らせる余地はあるが、30項目をまとめた巨大なcontextを受けるだけの置換は採用しない。現在のresetには前後二回のReferenceImage interaction resetがあるため、重複と決めつけて削除しない。
+
+### 直前：寸法値編集の接続（2026-10-30、検証完了）
 
 基準developは9c87ef9。ConstraintEditing.createDimensionValuesが寸法値編集の接続を担当する。実Parameter namespace／Sketch／CanvasInteraction／pending session／value input／checkpoint／Presentation、Annotation Feature／model query／安定化とViewport／Bounds／placementを受け、従来のDimensionValueCommand.createWithEditingSupportへ同じ参照を渡す。raw Commandの特殊寸法support→通常Commandの構築順、求解・失敗復元・first-dimension scaling・履歴は変更しない。入力UIとcheckpoint・Parameterの裸関数参照、guardの二引数、footprintの呼出し時の既定SketchとViewportのmember receiverを維持する。後段DimensionDrag.resetと拘束追加は従来の遅延callbackで接続し、未生成owner・可変context・session複製・追加listenerは導入しない。
 

@@ -143,8 +143,8 @@ test('constraint control preparation retains distance exceptions, cancellation a
   assert.throws(update,error => error === f.state.queryError); assert.equal(f.state.pending,pending); assert.equal(f.buttons[0].attrs['aria-pressed'],'unchanged');
 });
 
-function commitCompositionFixture(bound = true) {
-  const f = controlsFixture(), g = f.w.GeometrySolver, model = { constraints: [] }, history = [];
+function commitCompositionFixture(bound = true, ownerCommit = null, probe = {}) {
+  const f = ownerCommit === null ? controlsFixture() : editingOwnersFixture(true), g = f.w.GeometrySolver, model = { constraints: [] }, history = [];
   const a = Object.assign(new g.Point('P1',0,0), { sketchId:'S1' }), b = Object.assign(new g.Point('P2',10,0), { sketchId:'S1' });
   const line = Object.assign(new g.Line('L1',a,b), { sketchId:'S1' }); f.selection.set('lines',[line]);
   f.state.createdConstraint = Object.assign(new g.HorizontalConstraint(line), { sketchId:'S1' });
@@ -164,12 +164,41 @@ function commitCompositionFixture(bound = true) {
     targetFromConstraint:f.input.targetFromConstraint, clearSelection:f.input.clearSelection, setHint:f.input.setHint, draw:f.input.draw, log:f.input.log, applicationText:f.input.applicationText,
     resolveSelection:type=>f.feature.selectionQuery.resolution(type), startDistanceResolution:(resolution,pointer)=>f.feature.dimensions.startDistanceResolution(resolution,pointer) };
   f.state.ready=false;
-  const support = bound ? f.feature.createCommit(options) : f.w.ConstraintCommitCommand.createWithDimensions({...options,...common});
+  let ownerInputs;
+  if (ownerCommit !== null) {
+    const shared = f.probe.ownerInputs;
+    f.state.workspace = model; options.currentScope = () => f.state.workspace;
+    Object.assign(shared.sketches, { constraintTargetsAreActive: options.constraintTargetsAreActive, constraintSketchId: options.constraintSketchId,
+      isReferenceSourceSketchId: options.isReferenceSourceSketchId, descendantSketchIds: options.descendantSketchIds, sketchName: options.sketchName });
+    shared.operands.candidates.linesAreParallel = options.linesAreParallel; shared.presentation.updateUI = options.updateUI;
+    Object.assign(options, { isDimensionConstraint: f.w.DimensionQueries.isDimensionConstraint, isReadOnlyDimension: f.w.DimensionQueries.isReadOnlyDimension,
+      measuredConstraintTargetValue: f.w.DimensionQueries.measuredConstraintTargetValue,
+      solvePreparation: { stepNorm: options.solveStepNormForConstraint, precondition: options.preconditionNewConstraint, withStepNorm: options.withTemporarySolveStepNorm } });
+    delete options.solveStepNormForConstraint; delete options.preconditionNewConstraint; delete options.withTemporarySolveStepNorm;
+    ownerInputs = { workspace: { current: options.currentScope }, checkpoint: { captureValues: options.snapshotModelState, restoreValues: options.restoreModelState },
+      insertion: { assignSketch: options.assignSketch, push: options.pushModelConstraint }, redundancy: { probeCandidate: options.probeRedundancy,
+        forgetConstraint: options.forgetConstraint, redundantConstraintInfo: options.redundantConstraintInfo },
+      solving: { solveConstraintComponentAndDependents: options.solveConstraintComponentAndDependents }, stabilization: { stabilize: options.stabilizeActiveParameterNamespace },
+      referenceState: { wouldCreateReferenceCycle: options.wouldCreateReferenceCycle }, solvePreparation: options.solvePreparation,
+      lineCollapseQuery: options.lineCollapseQuery, acceptError: options.acceptError, refreshConstraintAnalysis: options.refreshConstraintAnalysis,
+      recordHistory: options.recordHistory, now: options.now };
+  }
+  probe.order = []; probe.options = options; probe.inputs = ownerInputs; probe.f = f;
+  const originals = [];
+  for (const [namespace, method, name] of [['ConstraintCommitCommand','createWithDimensions','commit'],['DimensionConstraintFactory','create','dimension-factory'],['DimensionReadOnlyQuery','create','read-only'],['ConstraintIntentResolver','create','intent']]) {
+    const original = f.w[namespace][method]; originals.push([namespace, f.w[namespace]]);
+    f.w[namespace] = { ...f.w[namespace], [method]: ports => { probe.order.push(name); if (probe.failAt === name) throw probe.error;
+      if (name === 'commit') probe.commitPorts = ports; return original(ports); } };
+  }
+  let support, resolver;
+  try {
+  support = ownerCommit ? f.feature.createCommitForWorkspace(ownerInputs) : bound ? f.feature.createCommit(options) : f.w.ConstraintCommitCommand.createWithDimensions({...options,...common});
   const intentOptions = { operands:{subjectFromOperand:o=>o,referenceTargetFromOperand:o=>o,referenceSubjectElement:o=>o.item,referenceSubjectSketchId:o=>o.sketchId},
     types:g, isActiveSketchElement:()=>true, isEditableSketchElement:()=>true };
-  const resolver = bound ? support.createIntentResolver(intentOptions) : f.w.ConstraintIntentResolver.create({...intentOptions,candidates:f.input.candidates,
+  resolver = bound ? support.createIntentResolver(intentOptions) : f.w.ConstraintIntentResolver.create({...intentOptions,candidates:f.input.candidates,
     activeSketchId:f.input.activeSketchId,isReferenceSourceSketchId:options.isReferenceSourceSketchId,descendantSketchIds:options.descendantSketchIds,
     wouldCreateReferenceCycle:options.wouldCreateReferenceCycle,applicationText:f.input.applicationText,invalidConstraintTargetHint:f.input.invalidConstraintTargetHint});
+  } finally { for (const [namespace, original] of originals) f.w[namespace] = original; }
   f.state.resolveIntent=(type,operands)=>resolver.resolve(type,operands); assert.deepEqual(f.events,[]); f.state.ready=true;
   return{...f,...support,resolver,model,history,line,a,b};
 }
@@ -571,5 +600,46 @@ test('constraint editing owners retain failure identity and stop before later co
     const probe={failAt,error:new Error(failAt)};assert.throws(()=>editingOwnersFixture(composed,probe),error=>error===probe.error);
     assert.deepEqual(probe.order,order.slice(0,order.indexOf(failAt)+1));assert.equal(probe.state.ready,false);assert.equal(probe.state.pending,null);
     assert.equal(probe.input.session.command,null);assert.equal(probe.input.selection.hasSelection(),false);assert.notEqual(probe.commandsReady,true);
+  }
+});
+test('commit owner assembly stays cold, retains staged APIs and shares live Workspace separately from bound insertion and checkpoint', () => {
+  for (const composed of [false, true]) {
+    const probe = {}, f = commitCompositionFixture(true, composed, probe);
+    assert.deepEqual(probe.order, ['commit','dimension-factory','read-only','intent']); assert.deepEqual(f.events, []);
+    for (const [name, value] of Object.entries(probe.options)) assert.equal(probe.commitPorts[name], value, name);
+    assert.equal(Object.isFrozen(f.feature), true); assert.equal(Object.isFrozen(f.readOnly), true);
+    const duplicate = {}, otherScope = { constraints: [duplicate] }; f.state.workspace = otherScope;
+    assert.equal(f.command.ifMissing(f.state.createdConstraint, c => c === duplicate), false); assert.equal(f.model.constraints.length, 0);
+    assert.equal(f.command.ifMissing(f.state.createdConstraint, () => false), true);
+    assert.equal(f.model.constraints[0], f.state.createdConstraint); assert.equal(otherScope.constraints[0], duplicate); assert.equal(otherScope.constraints.length, 1);
+    const snapshot = probe.commitPorts.snapshotModelState(); f.b.y = 31; probe.commitPorts.restoreModelState(snapshot); assert.equal(f.b.y, 0);
+    assert.equal(f.state.workspace, otherScope); assert.equal(f.history.length, 0);
+  }
+});
+
+test('commit owner assembly retains actual selection resolution, solver rollback, history and reference guard traces', () => {
+  for (const rejectSolve of [false, true]) {
+    const traces = [];
+    for (const composed of [false, true]) {
+      const f = commitCompositionFixture(true, composed), operand = { kind:'line', line:f.line, item:f.line, relation:'active', sketchId:'S1' };
+      f.session.begin('horizontal', [operand]); f.state.rejectSolve = rejectSolve; f.command.fromSelection('horizontal');
+      assert.equal(f.b.y, 0); assert.equal(f.model.constraints.length, rejectSolve ? 0 : 1); assert.equal(f.history.length, rejectSolve ? 0 : 2);
+      if (rejectSolve) assert.equal(f.selection.lines[0], f.line); else assert.equal(f.model.constraints[0].line, f.line);
+      const rejected = f.resolver.resolve('horizontal', [{relation:'descendant', kind:'line', line:f.line, sketchId:'child'}]); assert.match(rejected.error, /子孫/);
+      f.state.editable = false; const before = f.events.length;
+      assert.equal(f.command.ordinary('horizontal', f.state.createdConstraint), false); assert.equal(f.events.length, before);
+      traces.push(JSON.stringify({ events:f.events, history:f.history, trace:f.command.readPerformance() }));
+    }
+    assert.equal(traces[1], traces[0]);
+  }
+});
+
+test('commit owner assembly propagates constructor failure identity without starting later stages or editing the model', () => {
+  const order = ['commit','dimension-factory','read-only','intent'];
+  for (const composed of [false, true]) for (const failAt of order) {
+    const probe = { failAt, error:new Error(failAt) };
+    assert.throws(() => commitCompositionFixture(true, composed, probe), error => error === probe.error);
+    assert.deepEqual(probe.order, order.slice(0, order.indexOf(failAt) + 1)); assert.deepEqual(probe.f.events, []);
+    assert.equal(probe.f.state.ready, false); assert.equal(probe.f.session.command, null); assert.equal(probe.f.selection.lines.length, 1);
   }
 });
