@@ -62,7 +62,7 @@
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const {
     constraintReferencesPoint,
-    constraintGraphNodes, geometryInstanceDependencyRefs,
+    constraintGraphNodes,
   } = constraintReferences;
 
   const {
@@ -164,7 +164,7 @@
     selectedConstructionTogglePrimitives,
     trimConstraintSelection,
   } = canvasSelection;
-  const { isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isExplicitPoint } = pointUsage;
+  const { isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc } = pointUsage;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -260,7 +260,7 @@
   const { blockDefinitionScopeError } = blockEditingQueries;
 
   const sketchSolveResultState = window.SketchSolving.createState();
-  const { hasError: sketchHasSolveError, clearSketchSolveState } = sketchSolveResultState;
+  const { clearSketchSolveState } = sketchSolveResultState;
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
@@ -340,18 +340,11 @@
     leaderDisplay: annotation => annotationLeaderDisplayGeometry(annotation), leaderAnchor: annotationLeaderAnchor,
     invalidateAnalysis: () => constraintAnalysis.invalidate(), applicationText, setHint, updateUI, draw,
   });
-  const solveScopeQuery = window.SolveScopeQuery.create({
-    currentScope: constrainedAnnotationDrag.scope, additionalVariables: constrainedAnnotationDrag.additionalVariables,
-    geometryReads, activeSketchId, elementSketchId, constraintSketchId,
-    isVisibleSketchElement, constraintIsOperational, constraintGraphNodes: constraint => constraint.annotationGeometryNodes || constraintGraphNodes(constraint), geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
+  const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving } = window.SketchSolvingFeature.createContextForWorkspace({
+    documentWorkspace, readServices: geometryReadServices, references: constraintReferences, referenceState: referenceConstraintState,
+    annotationDrag: constrainedAnnotationDrag, solver, pointUsage, presentation, solveState: sketchSolveResultState, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { connectedComponentFromSeeds, localSolveLines, sketchSolveConstraints } = solveScopeQuery;
-  const { analysis: constraintAnalysis, redundancy: constraintRedundancy } = window.ConstraintAnalysis.createWithRedundancy({
-    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, sketchContext, readServices: geometryReadServices, constraintIsOperational,
-    refreshReferenceConstraintValidity, sketchHasSolveError,
-    isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    profileAnalysis: work => interactionProfiler.active ? profileInteractionWork("analysis", work) : work(),
-  });
   const { redundantConstraintInfo, constraintIsRedundant } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
   const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
@@ -501,10 +494,9 @@
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
   });
   const { solving: sketchSolving, parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization,
-    refresh: solveRefreshCommand } = window.SketchSolvingFeature.createForWorkspace({
-    documentWorkspace, scopeQuery: solveScopeQuery, references: constraintReferences, referenceState: referenceConstraintState, readServices: geometryReadServices,
+    refresh: solveRefreshCommand } = createSolving({
     projectionEditing: sketchProjectionEditing, geometry: geometryCreation, checkpoint: editingCheckpoint, editingScope: editingScopeBinding,
-    analysis: constraintAnalysis, presentation, historyController, recordHistory, resultIsAccepted, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
+    historyController, recordHistory, resultIsAccepted,
     maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
   const { solveSketchById,
