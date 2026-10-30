@@ -100,7 +100,7 @@
   const {
     evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft, numericDimensionExpression,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
-    ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
+    ensureParameterNamespace, parameterErrorText,
   } = parameterNamespace;
   const parameterEditor = window.ParameterEditor.createForWorkspace({
     document, window, documentWorkspace, currentScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
@@ -109,8 +109,8 @@
   });
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
-    isRootSketch, isDrawableSketch,
-    firstDrawableSketchId, sketchName, sketchById,
+    isRootSketch,
+    sketchName, sketchById,
     descendantSketchIds,
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
@@ -120,7 +120,7 @@
   } = sketchContext;
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
-  const { services: geometryReadServices, createScopeBinding, createPersistence } = createReadContext({
+  const { services: geometryReadServices, createEditingScope, createPersistence } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
@@ -141,20 +141,14 @@
   });
   let sketchMoveCommand = null;
   let sketchContextController = null;
-  const editingScopeBinding = createScopeBinding({
+  const { binding: editingScopeBinding, solver, dimensionQueries: dimensionModelQueries, insertion: constraintInsertion } = createEditingScope({
     Solver: ConstraintSolver,
     closeSketchContext: () => sketchContextController?.close(), resetSketchMove: () => sketchMoveCommand?.reset(),
   });
-  const { solver } = editingScopeBinding;
-  const { sketchHasDimensionConstraint, hasDirectRadiusDimension } = window.DimensionQueries.createModelQueries({
-    currentScope: () => editingScopeBinding.current, activeSketchId, constraintSketchId,
-  });
+  const { sketchHasDimensionConstraint, hasDirectRadiusDimension } = dimensionModelQueries;
   function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
-  const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = window.ConstraintCommitCommand.createInsertion({
-    currentScope: () => editingScopeBinding.current, currentParameterNamespace,
-    activeSketchId, isDrawableSketch, firstDrawableSketchId, ensureDimensionParameter,
-  });
+  const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = constraintInsertion;
   const fileSession = window.DocumentFiles.create();
 
   const canvasInteraction = window.CanvasInteractionFeature.create({

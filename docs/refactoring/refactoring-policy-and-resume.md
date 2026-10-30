@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,814行、非空白1,364行、root直下417文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,808行、非空白1,358行、root直下416文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Documentの編集scopeとモデル操作の組立て（2026-10-30、検証完了）
+
+基準developはca5ffd3。既存DocumentWorkspace.createReadContextへcreateEditingScopeを追加し、同じWorkspace／read servicesに対するEditingScopeBinding・寸法のmodel queries・ConstraintCommitCommand.createInsertionの三部品を一度ずつ生成する。生成順はbinding→同じSolverの読取り→model queries→insertionで、先行するread context生成と後段UI／commandのinit phaseは維持する。公開するbinding／solver／dimensionQueries／insertionは実体そのもので、追加のmodel・scope／Solver・採番stateやsetterは作らない。モデル照会と拘束pushはbinding.currentを読み、active Sketch・fallback先と寸法Parameterの採番namespaceは元のworkspace.currentを使う。Workspaceだけが先に切り替わった場面でも両者を同一化しない。close／move reset callbackはappで遅延参照を保持し、raw createScopeBinding／DimensionQueries／InsertionのAPI・実装、cache失効と活性化失敗・push後のParameter失敗境界は変更しない。
+
+app.jsは1,814→1,808行（6行減）、非空白1,364→1,358行。root417→416文、構築134→132文／702→695非空白行へ減り、単一factoryへの引数整理に加えて同じ編集モデルに属する複数部品の生成を移管した。関数81個／hooks235行／可変参照三つ、一文call関数77個99行、その他206文324行（文外5行）。ensureDimensionParameter／isDrawableSketch／firstDrawableSketchIdの不要root aliasを除いた。TEMP cad-document-editing-scope-{proof,hierarchy}.cjsで各子の旧接続・生成順、異なるscope／Parameter namespace、他app／raw WorkspaceのAST不変、未使用root bindingなしを確認した。hooksと短い委譲を除いても1,024非空白行あり、200〜500行目標は未達。
+
+境界単体三件を追加し、元の三部品の直接生成と新窓口で比較した。生成順と一回生成、実binding／Solver・Sketch／Parameter関数identity、model queries生成例外で後続を生成しないこと、同じSolverのscope切替、Workspaceとbindingの不一致時の拘束挿入先・Sketch所属とd1／d7採番先、失敗した活性化による旧scope保持、Parameter採番例外で挿入・所属だけが残る範囲を確認した。関連単体48件／全単体2,124件が成功。構文626fileが成功。関連13suite（unified-annotations／unified-ui／blocks／block-geometry-fixed／sketch-projection／sketch-permissions／sketch-edit／sketch-move／sketch-tree-delete／sketch-tree-visibility／phase0-characterization／derived-selection-copy／parameter-dialog-controller）のE2E272件が全成功（3.9m、exit 0、実行session33927）。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-document-editing-scope-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更しない。今回は全E2E未実行。基準ca5ffd3での全588件成功と、今回の分離後の関連検証は区別する。
+
+全体目標active。開始時週枠残量64%／最終確認64%で停止条件未到達。mainは停止／releaseの最後に反映する。次も同じ機能に属する複数部品の構築・接続・bind／startの段階を実ownerへまとめる候補を確認する。拘束編集50項目・Canvasメニュー47項目等の監査結果も保持するが、単なる引数短縮だけで数百行を達成したことにしない。
+
+
 
 ### 最新：Sketch Treeの共有ownerからの生成（2026-10-30、検証完了）
 

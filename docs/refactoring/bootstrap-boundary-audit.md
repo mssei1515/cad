@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Documentの編集scopeとモデル操作の組立て（2026-10-30、ca5ffd3基準）
+
+基準developはca5ffd3。既存DocumentWorkspace.createReadContextへcreateEditingScopeを追加し、同じWorkspace／read servicesに対するEditingScopeBinding・寸法のmodel queries・ConstraintCommitCommand.createInsertionの三部品を一度ずつ生成する。生成順はbinding→同じSolverの読取り→model queries→insertionで、先行するread context生成と後段UI／commandのinit phaseは維持する。公開するbinding／solver／dimensionQueries／insertionは実体そのもので、追加のmodel・scope／Solver・採番stateやsetterは作らない。モデル照会と拘束pushはbinding.currentを読み、active Sketch・fallback先と寸法Parameterの採番namespaceは元のworkspace.currentを使う。Workspaceだけが先に切り替わった場面でも両者を同一化しない。close／move reset callbackはappで遅延参照を保持し、raw createScopeBinding／DimensionQueries／InsertionのAPI・実装、cache失効と活性化失敗・push後のParameter失敗境界は変更しない。
+
+app.jsは1,814→1,808行（6行減）、非空白1,364→1,358行。root417→416文、構築134→132文／702→695非空白行へ減り、単一factoryへの引数整理に加えて同じ編集モデルに属する複数部品の生成を移管した。関数81個／hooks235行／可変参照三つ、一文call関数77個99行、その他206文324行（文外5行）。ensureDimensionParameter／isDrawableSketch／firstDrawableSketchIdの不要root aliasを除いた。TEMP cad-document-editing-scope-{proof,hierarchy}.cjsで各子の旧接続・生成順、異なるscope／Parameter namespace、他app／raw WorkspaceのAST不変、未使用root bindingなしを確認した。hooksと短い委譲を除いても1,024非空白行あり、200〜500行目標は未達。
+
 ## Sketch Treeの共有ownerからの生成（2026-10-30、08062cd基準）
 
 基準developは08062cd。SketchEditingFeature.createForInteractionが既に保持するread services／CanvasInteraction／Presentationから、後段Treeを生成するcreateTreeForEditingを提供する。既存editingのcommand／move／deletion／raw Tree factoryの関数実体はそのまま新しい凍結公開APIへ載せ、追加の操作state・scope／Selectionの別コピーは作らない。appの26項目を16項目に整理し、objectOptionsもconstraintFeedback／PointUsageを同じownerから共有するため12→10項目へ減らした。Treeの表示viewScopeは同期済みbinding、一覧・選択のcurrentScopeはdimension scope、commandは元のWorkspace scopeを維持する。getScopeKeyは現在BlockEditorを元の回数で読んでdocument／block:idを返す。Selection／Hover・scope query・固定操作、参照／重複／求解状態、GeometrySelection／Sketch UI更新は同じownerへ接続し、raw createTree・TreeController／Objects／Viewの実装とメニューstartの元の段階を維持する。

@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Documentの編集scopeとモデル操作の組立て（2026-10-30、検証完了）
+
+基準developはca5ffd3。既存DocumentWorkspace.createReadContextへcreateEditingScopeを追加し、同じWorkspace／read servicesに対するEditingScopeBinding・寸法のmodel queries・ConstraintCommitCommand.createInsertionの三部品を一度ずつ生成する。生成順はbinding→同じSolverの読取り→model queries→insertionで、先行するread context生成と後段UI／commandのinit phaseは維持する。公開するbinding／solver／dimensionQueries／insertionは実体そのもので、追加のmodel・scope／Solver・採番stateやsetterは作らない。モデル照会と拘束pushはbinding.currentを読み、active Sketch・fallback先と寸法Parameterの採番namespaceは元のworkspace.currentを使う。Workspaceだけが先に切り替わった場面でも両者を同一化しない。close／move reset callbackはappで遅延参照を保持し、raw createScopeBinding／DimensionQueries／InsertionのAPI・実装、cache失効と活性化失敗・push後のParameter失敗境界は変更しない。
+
+app.jsは1,814→1,808行（6行減）、非空白1,364→1,358行。root417→416文、構築134→132文／702→695非空白行へ減り、単一factoryへの引数整理に加えて同じ編集モデルに属する複数部品の生成を移管した。関数81個／hooks235行／可変参照三つ、一文call関数77個99行、その他206文324行（文外5行）。ensureDimensionParameter／isDrawableSketch／firstDrawableSketchIdの不要root aliasを除いた。TEMP cad-document-editing-scope-{proof,hierarchy}.cjsで各子の旧接続・生成順、異なるscope／Parameter namespace、他app／raw WorkspaceのAST不変、未使用root bindingなしを確認した。hooksと短い委譲を除いても1,024非空白行あり、200〜500行目標は未達。
+
+境界単体三件を追加し、元の三部品の直接生成と新窓口で比較した。生成順と一回生成、実binding／Solver・Sketch／Parameter関数identity、model queries生成例外で後続を生成しないこと、同じSolverのscope切替、Workspaceとbindingの不一致時の拘束挿入先・Sketch所属とd1／d7採番先、失敗した活性化による旧scope保持、Parameter採番例外で挿入・所属だけが残る範囲を確認した。関連単体48件／全単体2,124件が成功。構文626fileが成功。関連13suite（unified-annotations／unified-ui／blocks／block-geometry-fixed／sketch-projection／sketch-permissions／sketch-edit／sketch-move／sketch-tree-delete／sketch-tree-visibility／phase0-characterization／derived-selection-copy／parameter-dialog-controller）のE2E272件が全成功（3.9m、exit 0、実行session33927）。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-document-editing-scope-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更しない。今回は全E2E未実行。基準ca5ffd3での全588件成功と、今回の分離後の関連検証は区別する。
+
+全体目標active。開始時週枠残量64%／最終確認64%で停止条件未到達。mainは停止／releaseの最後に反映する。次も同じ機能に属する複数部品の構築・接続・bind／startの段階を実ownerへまとめる候補を確認する。拘束編集50項目・Canvasメニュー47項目等の監査結果も保持するが、単なる引数短縮だけで数百行を達成したことにしない。
+
+
+
 ### 最新：Sketch Treeの共有ownerからの生成（2026-10-30、検証完了）
 
 基準developは08062cd。SketchEditingFeature.createForInteractionが既に保持するread services／CanvasInteraction／Presentationから、後段Treeを生成するcreateTreeForEditingを提供する。既存editingのcommand／move／deletion／raw Tree factoryの関数実体はそのまま新しい凍結公開APIへ載せ、追加の操作state・scope／Selectionの別コピーは作らない。appの26項目を16項目に整理し、objectOptionsもconstraintFeedback／PointUsageを同じownerから共有するため12→10項目へ減らした。Treeの表示viewScopeは同期済みbinding、一覧・選択のcurrentScopeはdimension scope、commandは元のWorkspace scopeを維持する。getScopeKeyは現在BlockEditorを元の回数で読んでdocument／block:idを返す。Selection／Hover・scope query・固定操作、参照／重複／求解状態、GeometrySelection／Sketch UI更新は同じownerへ接続し、raw createTree・TreeController／Objects／Viewの実装とメニューstartの元の段階を維持する。
