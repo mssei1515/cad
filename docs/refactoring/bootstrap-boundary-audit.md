@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 派生Instanceの照会と編集コマンドの段階的な組立て（2026-10-30、2e7d9ca基準）
+
+基準developは2e7d9ca。既存DerivedInstanceFeatureへcreateForEditingを追加し、実DocumentWorkspace／GeometryReadServices／ConstraintReferences／CanvasInteraction／EditingScopeBinding／Presentationを共有する。前段でDragSourceQueryとSourceSelectionを従来順に一度ずつ生成し、後段のcreateCommandsで配置commandと参照元編集commandを従来位置・順序で生成する。前段六ownerと後段十入力に限定し、dragSources／sourceSelection／command／sources／createEditingは実APIを保持する。単独createと各raw APIも維持する。Selection読取りは同期済みeditingScope.current、配置・参照元commandはworkspace.currentを使い分け、IDのpeek／allocateのreceiver、零引数sourceSelection.read、後段commitDraftの遅延参照を保つ。確定済みInstance編集の生成・接続は従来のさらに後段に残し、構築中のmodel／mode／ID照会、第二Selection／session／モデル、可変contextやsetterを追加しない。
+
+app.jsは1,801→1,786行（15行減）、非空白1,351→1,336行。root412→410文、構築128→126文／689→676非空白行、関数81→80個。一文call委譲77→76個／99→98行、その他206→207文／323→322行、条件付きhooks235行・可変参照三つ・文外5行は維持した。hooksと短い委譲を除いても1,003非空白行あり、200〜500行目標は未達。TEMP cad-derived-instance-stages-{proof,hierarchy}.cjsで四段の旧入力、scopeの使い分け・ID receiverと遅延commit、他app／raw featureのAST不変、未使用root bindingなしを確認した。
+
 ## Canvasと寸法表示・入力Workspaceの組立て（2026-10-30、123313b基準）
 
 基準developは123313b。CanvasDisplayの既存viewport ownerへcreateEditingWorkspaceを追加し、従来のWorkspace（Surface／Export／Layout／drag pointer）、DimensionDisplay.createForScene、DimensionInput.createForDocumentを一度ずつ同じ順で生成する。描画context・viewport・Document・座標変換・外観／Sketch query・翻訳／表示更新を同じownerから共有する。dimensionSceneは線の読取り・最小長・色／描画観測・外観／Sketch、dimensionInputはhighlight／frame scheduling・Pending・式評価／取消／確定callbackに限定した二群で渡す。返すdimensionsのdisplay／labels／input feature／elementは実体であり、Workspaceの既存scene／render／PNG／input factoryも同じ関数を保持する。単独createWorkspaceとDimensionDisplay／DimensionInputのAPIは維持し、入力bindとSurface.startは従来の後段のまま、操作state／model／viewport・描画cacheの複製やsetterは作らない。

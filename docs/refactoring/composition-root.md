@@ -6,7 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
-### 最新：Canvasと寸法表示・入力Workspaceの組立て（2026-10-30、検証完了）
+### 最新：派生Instanceの照会と編集コマンドの段階的な組立て（2026-10-30、検証完了）
+
+基準developは2e7d9ca。既存DerivedInstanceFeatureへcreateForEditingを追加し、実DocumentWorkspace／GeometryReadServices／ConstraintReferences／CanvasInteraction／EditingScopeBinding／Presentationを共有する。前段でDragSourceQueryとSourceSelectionを従来順に一度ずつ生成し、後段のcreateCommandsで配置commandと参照元編集commandを従来位置・順序で生成する。前段六ownerと後段十入力に限定し、dragSources／sourceSelection／command／sources／createEditingは実APIを保持する。単独createと各raw APIも維持する。Selection読取りは同期済みeditingScope.current、配置・参照元commandはworkspace.currentを使い分け、IDのpeek／allocateのreceiver、零引数sourceSelection.read、後段commitDraftの遅延参照を保つ。確定済みInstance編集の生成・接続は従来のさらに後段に残し、構築中のmodel／mode／ID照会、第二Selection／session／モデル、可変contextやsetterを追加しない。
+
+app.jsは1,801→1,786行（15行減）、非空白1,351→1,336行。root412→410文、構築128→126文／689→676非空白行、関数81→80個。一文call委譲77→76個／99→98行、その他206→207文／323→322行、条件付きhooks235行・可変参照三つ・文外5行は維持した。hooksと短い委譲を除いても1,003非空白行あり、200〜500行目標は未達。TEMP cad-derived-instance-stages-{proof,hierarchy}.cjsで四段の旧入力、scopeの使い分け・ID receiverと遅延commit、他app／raw featureのAST不変、未使用root bindingなしを確認した。
+
+境界単体三件を追加し、実Query／Selection／配置・参照元commandを旧直接生成と新二段生成で比較した。四部品の生成順と同一実体、生成時のmodel／mode／ID無照会、mirror／patternのpreviewと採番なし、同期済みscopeだけのHatch選択とactive Sketch絞込み、Geometryの同一性と逆変換drag・例外、既存Instanceの求解失敗復元、pending draftの変更・取消、参照元command生成失敗の短絡を確認した。構文626file、全単体2,133件、関連単体33件が成功。関連E2E277件が全成功（6.9m、exit 0、実行session36075）。free-instance／derived-patterns／derived-selection-copy／blocks／block-geometry-fixed／sketch-projection／sketch-permissions／phase0-characterization／drag-smoothness／geometry-drag-smoothness／sketch-move／hatching／unified-uiの13suiteを実施した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-derived-instance-stages-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。今回の全E2Eは未実施で、直前develop 2e7d9caの588件全成功と区別する。
+
+全体目標はactive・未完了。開始時週枠残量61%／最終確認61%を確認し、停止条件には未到達。mainは最後の検証・反映時まで5800850に保持する。この検証済み差分の統合先はdevelop（作業branch codex/derived-instance-stages）で、Commit／Pushと通常merge／Push、検証済みblobとの一致確認を一単位として扱う。再開時はGit現物・入力hash・検証receiptと最新usageを確認する。次はrootの構築／接続／bind段階を既存ownerごとに再監査し、callback引数を短縮するだけでなく構築数と起動責務を減らせる境界を選ぶ。遅延参照を早期評価せず、数百行の達成を装わない。
+
+### 直前：Canvasと寸法表示・入力Workspaceの組立て（2026-10-30、検証完了）
 
 基準developは123313b。CanvasDisplayの既存viewport ownerへcreateEditingWorkspaceを追加し、従来のWorkspace（Surface／Export／Layout／drag pointer）、DimensionDisplay.createForScene、DimensionInput.createForDocumentを一度ずつ同じ順で生成する。描画context・viewport・Document・座標変換・外観／Sketch query・翻訳／表示更新を同じownerから共有する。dimensionSceneは線の読取り・最小長・色／描画観測・外観／Sketch、dimensionInputはhighlight／frame scheduling・Pending・式評価／取消／確定callbackに限定した二群で渡す。返すdimensionsのdisplay／labels／input feature／elementは実体であり、Workspaceの既存scene／render／PNG／input factoryも同じ関数を保持する。単独createWorkspaceとDimensionDisplay／DimensionInputのAPIは維持し、入力bindとSurface.startは従来の後段のまま、操作state／model／viewport・描画cacheの複製やsetterは作らない。
 
