@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,759行、非空白1,310行、root直下403文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,757行、非空白1,308行、root直下403文、条件付きtest hooks233行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
-### 最新：Canvasコンテキストメニューの候補準備と後段接続（2026-10-30、検証完了）
+### 最新：Canvasの表示支援と描画観測テストの組立て（2026-10-30、検証完了）
+
+基準developはf49cb6f。既存CanvasTestDriverへcreateForSceneを追加し、従来のcreateDisplaySupport→CanvasRenderTestDriver.createRenderingSupportを同じtest hooks内の隣接位置で一度ずつ生成する。実DocumentWorkspace／GeometryReadServices／GeometryCreation／CanvasInteraction／OperationSessions／Presentationと、限定した作図・描画owner群を共有する。返すdisplay／renderingは従来の実支援APIで、BrowserTestApiの公開method・順序を変更しない。共通viewport／Canvas／Geometry／Selection／Preview／hover／描画関数を再利用し、単位とDocument全体のBlock registryは操作時まで評価しない。DOM elementFromPointのreceiver、registry pushのreceiver、Workspace.currentとDocumentの区別を保つ。raw driver APIを維持し、URLのtest guard内だけで構築する。新しいmodel／viewport／fixture状態や可変app contextは作らない。
+
+app.jsは1,759→1,757行（2行減）、非空白1,310→1,308行。installTestHooksは235→233行、同支援の構築二箇所を一窓口へまとめた。通常root403文／構築123文655非空白行／関数80個、一文call委譲76個98行、その他203文317行、可変参照三つ・文外5行は据置である。共有ownerから取得できるsnapCandidates／allGeometryLines／rectangleCommand／slotCommandの未使用root aliasを除去した。TEMP cad-canvas-test-scene-{proof,hierarchy,stage-audit}.cjsで旧display十九入力・rendering三十五入力、遅延units／registry・DOM receiver・共有viewport・固定snap関数、test guardと他app／raw driver ASTの不変、root／hookの未使用bindingなしを確認した。prepareControlsは引き続き部品生成として数える。通常coreは977非空白行のままで、200〜500行目標は未達。test側の短縮だけで全体完了とは扱わない。
+
+境界単体三件を追加し、実CanvasViewport／display support／rendering supportを旧直接生成と新窓口で比較した。生成順とcold model／units／viewport／描画無照会、実API／ctx／scope／Selection／Preview／Geometry同一性、world-to-client／focusとlive単位読取り、同じviewport・現在Document registryによる十二描画case、Block投影のLine同一性、live倍率・外観とCanvas method復元、constructor失敗の短絡と描画例外時の部分反映を確認した。比較fixtureのappendはappと同じDocument registry pushへ揃え、既存テストの期待値は維持した。構文626file、全単体2,151件、関連単体19件が成功。全E2E588件が全成功（24.8m、exit 0、実行session60278）。対象file／test名を絞らず、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを実行process内で記録した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-canvas-test-scene-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標はactive・未完了。開始時週枠残量58%／最終確認57%で停止条件未到達。mainは最終反映時まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/canvas-test-scene。再開時はGit現物・入力hash・検証receiptとusageを確認する。今回のtest組立ては専用ownerへ集約する単位であり、通常機能の責務分離完了を示さない。 次候補は、既存SketchSolvingFeatureでSolveScopeQuery→ConstraintAnalysis.createWithRedundancyの前段生成と、後段createForWorkspaceへの接続をまとめる境界である。現物では二生成の間はplain APIの分解だけで、AnnotationDrag.createConstrainedは先行した位置に残せる。Annotationの仮scope／additionalVariablesとWorkspace.current、前段のsolverと後段editingScope.solver、profileの遅延読取り・数値閾値を区別し、共通ownerを保持する後段factoryで重複した入力を減らせるか比較する。現在の全E2E終了・Commit／develop統合前には実装しない。次も通常機能の構築・接続・bindと状態更新の所有者を再監査し、巨大な別bootstrap／app contextへ移さず数百行の目標へ進む。
+
+### 直前：Canvasコンテキストメニューの候補準備と後段接続（2026-10-30、検証完了）
 
 基準developは9a3bfdc。CanvasContextInteraction.createMenuが返すcreateSceneForEditingは、既存scene queryのcontext queryとCanvasContextPresentationの候補formatterを従来順に生成する。実DocumentWorkspace／read services／CanvasInteraction／OperationSessionsと限定した候補表示の七関数を受け、実formatterと後段のcreateInteraction窓口を凍結公開APIとして返す。後段窓口は同じSelection／selection scope／Sketch／access／Pointer／Lifecycle／pending／targets、Spline editingと生成済み候補queryを既存createEditingInteractionへ接続する。編集fit pointとDocument定義・操作状態は実行時に読む。既存createMenu／createInteraction／createEditingInteractionを維持し、前段DOM生成、候補query・formatter生成、途中の取消／描画順command生成、後段の操作生成、controller.startの順を変えない。model／Selection／Menu stateやcache・可変contextを複製しない。
 

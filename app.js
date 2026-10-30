@@ -132,7 +132,7 @@
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds } = blockCatalog;
   const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
-  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryLines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
+  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
@@ -474,11 +474,11 @@
     solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw, log,
   });
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
-  const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
+  const { clear: clearSnap } = drawingSnap;
   function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
   const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation } = splineCommand;
   const { addPointSnapConstraints } = snapConstraints;
-  const { line: lineCommand, rectangle: rectangleCommand, circular: circularCommands, slot: slotCommand } = basicDrawingTools;
+  const { line: lineCommand, circular: circularCommands } = basicDrawingTools;
   const offsetFeature = authoringTools.createOffset({
     currentScope: () => editingScopeBinding.current, placement: dimensionPlacement, sourceSelection: offsetSelection,
     pending: pendingCommandSession, valueInput: dimensionInputController, viewport, ctx, withCanvasState, drawDimension, readMode: drawOperationLifecycle.readMode,
@@ -1523,18 +1523,16 @@
     const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint, currentScope: workspace.current,
     });
-    const canvasTestDriver = window.CanvasTestDriver.createDisplaySupport({
-      viewport, canvas, resizeCanvas, draw, resetModelState, geometry: geometryCreation, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID,
-      fitAllGeometryToViewport, allGeometryBounds, visibleGeometryBounds, isVisibleSketchId, updateUI, readUnits: () => documentModel.units, cssPxPerMm: CSS_PX_PER_MM,
-      snapCandidates, hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
-      evaluateSpline: window.SplineGeometry.evaluate, elementFromPoint: (x, y) => document.elementFromPoint(x, y),
-    });
-    const canvasRenderingTestSupport = window.CanvasRenderTestDriver.createRenderingSupport({
-      setMode: drawOperationLifecycle.setMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
-      authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer, createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), blockPlacementCommand, activeSketchId, currentScope: workspace.current,
-      canvasSelection, drawBlockInstanceHandles, resetModelState, viewport, selectionRectangle, ctx, drawSelectionRect, drawAnnotationLeader, draw,
-      drawLines, canvasHover, invalidateBlockProjectionCache, blockProjectionBundle, allGeometryLines, effectiveAppearanceForElement,
+    const { display: canvasTestDriver, rendering: canvasRenderingTestSupport } = window.CanvasTestDriver.createForScene({
+      document, canvas, viewport, documentWorkspace, readServices: geometryReadServices, geometry: geometryCreation,
+      interaction: canvasInteraction, sessions: operationSessions, presentation,
+      authoring: { tools: basicDrawingTools, snap: drawingSnap, offsetSelection },
+      display: { bounds: drawingBounds, fit: drawingFit, geometry: geometryDisplay }, ctx, selectionRectangle,
+      layers: { authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer },
+      blocks: { createEmptyBlockDefinition, blockPlacementCommand, drawBlockInstanceHandles },
+      drawSelectionRect, drawAnnotationLeader, resizeCanvas, resetModelState, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID,
+      cssPxPerMm: CSS_PX_PER_MM, types: { Point, Line }, evaluateSpline: window.SplineGeometry.evaluate,
+      hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
     });
     const sketchDeletionFixture = window.DocumentTestDriver.createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch });
     const propertiesTestFactories = window.PropertiesTestDriver.createBrowserFactories({
