@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## BlockのWorkspace接続と配置組立て（2026-10-30、7e473df基準）
+
+基準developは7e473df。既存BlockEditingFeatureへcreateForWorkspaceを追加し、実DocumentWorkspace／GeometryReadServices／ConstraintRebinding／編集scopeと、CanvasInteraction／OperationSessions／Presentationを共有する。既存createによる定義編集→session→queryの生成位置・順序を保持し、返すcreatePlacementから後段の既存BlockPlacementCommandを生成する。raw createとcommand／View／propagation等の実APIを維持する。Workspace.currentと同期済みeditingScope.currentを区別し、viewportは元のreadViewportのまま操作時まで評価しない。採番は同じDocumentIdsのreceiverを保ち、配置は同じSelection／Lifecycle／Preview／Pointer、catalog／projection、外観正規化・Parameter関数を使う。layoutとpane・求解・履歴のcallbackだけを後段へ明示し、二つ目のsession／model／viewport／IDや可変contextを作らない。
+
+app.jsは1,774→1,766行（8行減）、非空白1,324→1,316行。二つのroot構築入力は21＋25項目から12＋7項目へ減り、不要なnormalizedSketchCopyのroot aliasを除いた。root407文／構築124文／関数80個は据置で、構築の非空白666→658行。条件付きhooks235行、一文call委譲76個98行、その他206文320行、可変参照三つ・文外5行を維持する。TEMP cad-block-workspace-placement-{proof,hierarchy,stage-audit}.cjsで元の四十六入力・遅延viewport／同期済みscope／ID receiver／Preview callbackの同値、他app／raw Block feature ASTの不変、未使用root bindingなしと早期直接捕捉なしを確認した。hooksと短い委譲を除いても983非空白行あり、200〜500行目標は未達。
+
 ## DXF読込の操作状態判定と後段接続（2026-10-30、9233ee9基準）
 
 基準developは9233ee9。DocumentFileFeatureへcreateDxfForEditingを追加し、実DocumentWorkspaceのWorkspace.current／GeometryIds／active Sketch、CanvasInteractionのaccess／Lifecycle、OperationSessionsのpending／targetsを既存createDxfへ接続する。読込可否は権限、作図中、pending、拘束対象、block-placeの順に短絡し、既存のbare function呼出しと操作時のgetter評価を保つ。構築時にmodel／mode／sessionを照会せず、非同期読込の開始時と完了前の再判定には同じpredicateを渡す。返すcommand／createControlsは実APIのまま、追加のbindControlsは元の後段位置でcontrolsを生成してbindし、dispose可能な実controlsを返す。旧createDxfと個別createControlsの直接利用、共通fileSession／選択dialog／parser／挿入・復元・ID採番・履歴・saved checkpointを維持し、model／状態／listenerの別コピーや可変contextを追加しない。

@@ -98,5 +98,32 @@
     }
     return Object.freeze({ editing, session, queries, createCommands, createCommandsForEditing, createPropagation });
   }
-  window.BlockEditingFeature = Object.freeze({ create });
+  function createForWorkspace({ documentWorkspace, readServices, rebinding, editingScope, normalizeGeometryInstance,
+    readViewport, activateScope, reserveScopeSequences, createHistory, interaction, sessions, presentation }) {
+    const { workspace, document: documentModel, documentIds: ids, sketches: { activeSketchId }, parameters } = documentWorkspace;
+    const { catalog, projections, instances, reads: { blockProjectionBundles } } = readServices;
+    const { copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
+    const { isDimensionConstraint, isReadOnlyDimension } = window.DimensionQueries;
+    const { numericDimensionExpression, ensureParameterNamespace } = parameters;
+    const { geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
+    const feature = create({ workspace, documentModel, ids, catalog, projections, instances, rebinding,
+      readEditingScope: () => editingScope.current, normalizedSketchCopy, normalizeGeometryInstance,
+      isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
+      activeSketchId, blockProjectionBundles, geometryElementKey, readViewport, activateScope, reserveScopeSequences, createHistory });
+    function createPlacement({ layout, isGeometryMode, clearSelection, isPropertiesCollapsed, setPropertiesPanelCollapsed, solveAndRefresh, recordHistory }) {
+      const { canCreateInActiveSketch } = interaction.access, { selection: canvasSelection, lifecycle } = interaction;
+      const { preview, pointer } = sessions, { setHint, updateUI, draw } = presentation;
+      const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds } = catalog;
+      const { blockDefinitionScopeError } = feature.queries;
+      const { snappedBlockRotation, blockInstanceTranslationForAnchor } = layout;
+      return window.BlockPlacementCommand.create({ isGeometryMode, canCreateInActiveSketch, blockDefinitionById, blockDefinitionScopeError,
+        blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, snappedBlockRotation, blockInstanceTranslationForAnchor,
+        activeSketchId, currentScope: workspace.current, nextInstanceId: () => ids.allocate("blockInstance"), clearSelection, canvasSelection,
+        invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache, isPropertiesCollapsed, setPropertiesPanelCollapsed,
+        getPointerPreview: () => preview.pointer, setPointerPreview: value => { preview.setPointer(value); }, getLastPointerWorld: pointer.readLastPointer,
+        setMode: lifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory });
+    }
+    return Object.freeze({ ...feature, createPlacement });
+  }
+  window.BlockEditingFeature = Object.freeze({ create, createForWorkspace });
 })();
