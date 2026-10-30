@@ -21,7 +21,7 @@ function fixture(){
  assert.deepEqual(events,['pointUsage:create']);assert.equal(Object.isFrozen(foundation),true);assert.equal(Object.isFrozen(sessions),true);
  lateSnap=()=>{events.push('snap');if(state.snapFailure)throw state.snapFailure;};latePreview=p=>p;lateOperand=(_type,operands,candidate)=>({ok:true,operands:[...operands,candidate]});state.ready=true;events.length=0;
  const point=new w.GeometrySolver.Point('P1',0,0,false,'endpoint');point.sketchId='S1';state.scope.points.push(point);
- return {w,foundation,sessions,presentation,state,events,point};
+ return {w,foundation,sessions,presentation,state,events,point,readServices};
 }
 
 test('Canvas interaction stages retain live owners, deferred ports and independent pending, constraint and pointer state',()=>{
@@ -108,4 +108,77 @@ test('editing pointer connection shares the existing identity, preview and point
  }};
  assert.equal(s.bindEditingPointer(inputs,{}),s.pointer);assert.equal(calls,1);assert.equal(s.pointer.readLastPointer(),initial);assert.deepEqual(f.events,[]);
  failure=true;assert.throws(()=>s.bindEditingPointer(inputs,{}),error=>error===marker);assert.equal(calls,2);assert.equal(s.pointer.readLastPointer(),initial);assert.deepEqual(f.events,[]);
+});
+
+function editingInputsFixture(composed,probe={}){
+ const f=fixture(),{w,sessions:s,foundation:b,events}=f;f.state.ready=false;probe.order=[];probe.error=new Error(probe.failAt||'input construction failed');
+ const record=name=>function(){'use strict';assert.equal(this,undefined);assert.equal(f.state.ready,true);events.push([name,...arguments]);};
+ const dimensionDragging={selectedLineGroup:()=>null,command:{begin:record('dimension')}},geometryDragging={command:{},build:record('plan'),beginDerived:record('derived')},
+  blockDragging={begin:record('block')},referenceImage={beginDrag:record('image')},annotationFeature={command:{},startAnchorConstraint:()=>false};
+ annotationFeature.command.commitTextAnnotationAt=function(point){assert.equal(this,annotationFeature.command);record('text')(point);};
+ const drawingCommands=Object.fromEntries(['centerline','circleCenterCross','fillet','trim','offset'].map(name=>[name,{name}]));
+ const authoring={snap:{clear:record('input-snap')},snapForDrawing(point){assert.equal(this,authoring);assert.equal(arguments.length,1);return point;},
+  createCanvasInput(options){assert.equal(this,authoring);probe.order.push('drawingFactory');probe.drawingOptions=options;if(probe.failAt==='drawingFactory')throw probe.error;
+   return probe.drawing=w.BasicDrawingTools.createCanvasInput({point:{},drawing:{getMode:options.readMode,rejectRootSketchCreation:()=>false,handleLineClick:record('line')}});}};
+ const constraint=w.ConstraintCommandInput.createFeature({pending:s.pending,targets:s.targets,canvasHover:b.hover,canvasPoint:()=>f.point,
+  placement:{retargetDistancePlaceWithOperand:()=>false,startDistanceValueInput:()=>{}},constraints:{operandClick:()=>false}});
+ const constraintInputFeature={createInput(options){probe.order.push('ConstraintCommandInput');assert.equal(options.dragging,dimensionDragging);return constraint.createInput(options);}};
+ const source={document:{activeElement:null},canvas:{setPointerCapture(id){assert.equal(this,source.canvas);events.push(['capture',id]);}},updateUI:()=>events.push('input-ui'),annotationFeature,annotationDrag:{},constraintInputFeature,dimensionDragging,
+  constraintTargetHint:()=>{},instanceSourceCommand:{finish:()=>{}},geometryInstanceCommand:{cancel:()=>false},
+  sceneQueries:{operands:{hitReferenceTarget:()=>null,hitDerivedProjectionOperand:()=>null,hitBlockProjectionOperand:()=>null},regions:{hitHatchAt:()=>null}},
+  operandElement:value=>value,toggleSketchProjectionSource:()=>{},selectionRectangle:{},viewport:{scale:2,canvasPoint:()=>f.point,canvasScreenPoint:()=>f.point},
+  transientAuthoring:{hasLineStart:false},authoring,drawingCommands,sameArcEndpoint:(a,c)=>a===c,
+  topmostDrawingOrderOwner:()=>f.state.top,drawingOrderOwner:item=>item,geometryDragging,blockDragging,referenceImage};
+ f.readServices.reads={resolveGeometryRef:()=>f.point};
+ for(const name of ['AnnotationCommandInput','InstanceCommandInput','PointCommand','DrawingCommandInput','CanvasSelectionInteraction']){
+  const owner=w[name];w[name]={...owner,create(...args){probe.order.push(name);if(probe.failAt===name)throw probe.error;return owner.create(...args);}};
+ }
+ const raw=w.CanvasCommandInputs;w.CanvasCommandInputs={...raw,createFeature(options){probe.ports=options;return raw.createFeature(options);}};
+ const inputs=composed?s.createInputForEditing(source):s.createInputFeature({document:source.document,canvas:source.canvas,updateUI:source.updateUI,
+  annotationCommand:annotationFeature.command,annotationDrag:source.annotationDrag,startAnnotationAnchorConstraint:annotationFeature.startAnchorConstraint,
+  constraintInputFeature,dimensionDragging,beginDimensionDrag:dimensionDragging.command.begin,constraintTargetHint:source.constraintTargetHint,
+  instanceSourceCommand:source.instanceSourceCommand,geometryInstanceCommand:source.geometryInstanceCommand,sceneQueries:source.sceneQueries,
+  operandElement:source.operandElement,toggleSketchProjectionSource:source.toggleSketchProjectionSource,clearSnap:authoring.snap.clear,
+  selectionRectangle:source.selectionRectangle,drawingSnap:authoring.snap,viewport:source.viewport,geometryRefForItem:w.GeometryObjects.geometryRefForItem,
+  resolveGeometryRef:f.readServices.reads.resolveGeometryRef,snapForDrawing:point=>authoring.snapForDrawing(point),transientAuthoring:source.transientAuthoring,
+  createDrawingInput:()=>authoring.createCanvasInput({readMode:b.lifecycle.readMode,...drawingCommands}),
+  sameArcEndpoint:source.sameArcEndpoint,topmostDrawingOrderOwner:source.topmostDrawingOrderOwner,drawingOrderOwner:source.drawingOrderOwner,
+  beginDerivedGeometryDrag:geometryDragging.beginDerived,beginBlockDrag:blockDragging.begin,beginReferenceImageDrag:referenceImage.beginDrag,
+  buildDragSession:geometryDragging.build,geometryDrag:geometryDragging.command});
+ assert.deepEqual(events,[]);f.state.ready=true;return{...f,inputs,source,probe};
+}
+
+test('editing input owners preserve real input order, drawing factory stage and shared state without eager model access',()=>{
+ for(const composed of [false,true]){
+  const f=editingInputsFixture(composed),{probe:p,source:o,foundation:b}=f;
+  assert.deepEqual(p.order,['AnnotationCommandInput','ConstraintCommandInput','InstanceCommandInput','drawingFactory','PointCommand','DrawingCommandInput','CanvasSelectionInteraction']);
+  assert.equal(f.inputs.inputs.drawing,p.drawing);assert.equal(p.ports.canvasSelection,b.selection);assert.equal(p.ports.canvasHover,b.hover);
+  assert.equal(p.ports.transientAuthoring,o.transientAuthoring);assert.equal(p.ports.geometryDrag,o.geometryDragging.command);
+  assert.equal(p.ports.beginDimensionDrag,o.dimensionDragging.command.begin);assert.equal(p.ports.beginBlockDrag,o.blockDragging.begin);
+  assert.equal(p.ports.geometryRefForItem,f.w.GeometryObjects.geometryRefForItem);assert.equal(p.ports.resolveGeometryRef,f.readServices.reads.resolveGeometryRef);
+  assert.equal(p.drawingOptions.readMode,b.lifecycle.readMode);for(const name of Object.keys(o.drawingCommands))assert.equal(p.drawingOptions[name],o.drawingCommands[name]);
+  assert.equal(p.ports.snapForDrawing(f.point,'ignored'),f.point);b.lifecycle.setMode('line');f.events.length=0;
+  f.inputs.inputs.drawing.click({pointerId:1},f.point,{});assert.equal(f.events.at(-1)[0],'line');assert.equal(f.events.at(-1)[1],f.point);
+ }
+});
+
+test('editing input owners keep pending annotation pointer routing and dimension, Block and derived Selection drag entry points',()=>{
+ for(const composed of [false,true]){
+  const f=editingInputsFixture(composed),{sessions:s,inputs,events}=f;
+  s.bindPointer(inputs,{canvasNavigation:{movePan:()=>false},referenceImageInteraction:{},press:{closeContextMenu:()=>events.push('close'),activation:{},query:{read:()=>({})}}});
+  s.pending.replace({type:'annotation-text-place',annotationDraft:true});events.length=0;
+  s.pointer.down({button:0,preventDefault:()=>events.push('prevent')});assert.equal(s.pointer.readLastPointer(),f.point);assert.equal(events.at(-1)[0],'text');assert.equal(events.at(-1)[1],f.point);
+  s.pending.replace(null);events.length=0;const event={pointerId:2},dimension={constraint:{id:'C1'}};
+  f.foundation.selection.set('points',[f.point]);inputs.inputs.selection.begin(event,f.point,{hitD:dimension});
+  assert.equal(events.find(e=>Array.isArray(e)&&e[0]==='dimension')[2],dimension);assert.equal(f.foundation.selection.points.length,0);
+  const block={id:'BI1'};f.state.top=block;inputs.inputs.selection.begin(event,f.point,{hitBlock:block});assert.equal(events.find(e=>Array.isArray(e)&&e[0]==='block')[2],block);
+  const instance={id:'GI1'},hit={instance};f.state.top=instance;inputs.inputs.selection.begin(event,f.point,{hitDerivedGeometry:hit});assert.equal(events.find(e=>Array.isArray(e)&&e[0]==='derived')[2],hit);
+ }
+});
+
+test('editing input construction preserves failure identity and short circuits before later components',()=>{
+ const order=['AnnotationCommandInput','ConstraintCommandInput','InstanceCommandInput','drawingFactory','PointCommand','DrawingCommandInput','CanvasSelectionInteraction'];
+ for(const composed of [false,true])for(const failAt of ['AnnotationCommandInput','InstanceCommandInput','drawingFactory','CanvasSelectionInteraction']){
+  const probe={failAt};assert.throws(()=>editingInputsFixture(composed,probe),error=>error===probe.error);assert.deepEqual(probe.order,order.slice(0,order.indexOf(failAt)+1));
+ }
 });
