@@ -51,9 +51,9 @@ function fixture({ realRebinding = false, sharedScope = false } = {}) {
   return { state, events, document, workspace, feature, geometry };
 }
 
-function commands(f, overrides = {}) {
+function commands(f, overrides = {}, build = (feature, options) => feature.createCommands(options)) {
   const selection = w.CanvasSelection.create();
-  return { selection, ...f.feature.createCommands({
+  return { selection, ...build(f.feature, {
     canStartCreation: () => true, canvasSelection: selection,
     selectionQuery: { read: () => ({ ...Object.fromEntries(Object.entries(f.workspace.current())
       .map(([key, value]) => [key, Array.isArray(value) ? [...value] : value])), externalConstraints: [] }), center: () => ({ x: 0, y: 0 }) },
@@ -274,4 +274,88 @@ test('Block lookup and parameter propagation share the current bound scope while
   const rebuiltSecond=second.constraints[0];const explicit=f.feature.createPropagation({...options,readEditingScope:()=>override});explicit.propagate(scope('changed-again'));
   assert.notEqual(override.constraints[0],originalOverride);assert.equal(second.constraints[0],rebuiltSecond);assert.equal(f.feature.queries.blockInstanceById('BI1'),two);
   assert.equal(f.workspace.current(),f.document);assert.equal(f.document.blockInstances[0],decoy);assert.equal(f.document.constraints.length,0);assert.ok(f.events.includes('shared-bound'));
+});
+
+function editingCommands(f, composed = true, overrides = {}) {
+  let lateView;
+  const state = { modeAllowed: true, creationAllowed: true, selectionAllowed: true, errors: 0, choiceResult: null };
+  const drawing = w.DrawOperationLifecycle.createSession();
+  const result = commands(f, overrides, (feature, ports) => {
+    const isGeometryMode = () => { f.events.push('mode-guard'); return state.modeAllowed; };
+    const access = { canCreateInActiveSketch: () => { f.events.push('creation-guard'); return state.creationAllowed; },
+      guardSelectionEdit: operation => { f.events.push(['selection-guard', operation]); return state.selectionAllowed; } };
+    const referenceState = { refreshReferenceConstraintValidity: ports.refreshReferenceConstraintValidity,
+      get errorCount() { assert.equal(f.state.ready, true); f.events.push('reference-errors'); return state.errors; } };
+    const choiceDialog = { show(options) { assert.equal(this, choiceDialog); f.events.push('choice'); state.choiceOptions = options; return state.choiceResult; } };
+    const readView = () => { assert.ok(lateView, 'Block view is created after its commands'); return lateView; };
+    Object.assign(ports, { canStartCreation: () => isGeometryMode() && access.canCreateInActiveSketch() && access.guardSelectionEdit('structure'),
+      setMode: drawing.setMode, closeDefinitions: () => readView().closeDefinitions(), setEditorActive: active => readView().setEditorActive(active),
+      promptName: name => w.prompt('ブロック名', name), hasInvalidReferenceConstraints: () => referenceState.errorCount > 0,
+      requestChoice: options => choiceDialog.show(options), annotationReferencesRemovedGeometry: w.AnnotationAnchorData.referencesRemovedGeometry });
+    const options = { interaction: { selection: ports.canvasSelection, access, lifecycle: drawing }, isGeometryMode,
+      selectionQuery: ports.selectionQuery, guardDimensionSymbolDeletion: ports.guardDimensionSymbolDeletion,
+      resetBlockEditorHistory: ports.resetBlockEditorHistory, clearSelection: ports.clearSelection, readView,
+      drawingFit: { fitAllGeometryToViewport: ports.fitAllGeometryToViewport, resetEmptyViewport: ports.resetEmptyViewport },
+      updateBlockUI: ports.updateBlockUI, presentation: { settings: { applicationText: ports.applicationText }, updateUI: ports.updateUI, draw: ports.draw, setHint: ports.setHint, log: ports.log },
+      recordHistory: ports.recordHistory, referenceState, solving: { solveSketchById: ports.solveSketchById, solveReferenceDependentSketches: ports.solveReferenceDependentSketches },
+      resultIsAccepted: ports.resultIsAccepted, sketches: { sketchName: ports.sketchName }, choiceDialog, blockLocalGeometryBounds: ports.blockLocalGeometryBounds,
+      references: { constraintGraphNodes: ports.constraintGraphNodes }, acceptError: ports.acceptError,
+      solveState: { setSketchSolveOk: ports.setSketchSolveOk, setSketchSolveError: ports.setSketchSolveError } };
+    return composed ? feature.createCommandsForEditing(options) : feature.createCommands(ports);
+  });
+  function replaceView() { const view = { closeDefinitions() { assert.equal(this, view); f.events.push('close-definitions'); },
+    setEditorActive(active) { assert.equal(this, view); f.events.push(['editor-active', active]); } }; lateView = view; }
+  replaceView(); return { ...result, state, drawing, replaceView };
+}
+
+test('Block editing composition defers later View and reference reads and preserves creation guard short circuits', () => {
+  for (const composed of [false, true]) for (const rejected of ['modeAllowed', 'creationAllowed', 'selectionAllowed']) {
+    const f = fixture(), c = editingCommands(f, composed); assert.deepEqual(f.events, []); c.state[rejected] = false;
+    c.definition.startCreation(); assert.equal(f.feature.session.current, null); assert.equal(f.workspace.current(), f.document);
+    assert.deepEqual(f.events, rejected === 'modeAllowed' ? ['mode-guard'] : rejected === 'creationAllowed' ? ['mode-guard', 'creation-guard'] : ['mode-guard', 'creation-guard', ['selection-guard', 'structure']]);
+  }
+});
+
+test('Block editing commands share Selection and lifecycle and use the later View for opening, cancellation and rename', () => {
+  for (const composed of [false, true]) {
+    const f = fixture(), c = editingCommands(f, composed); f.state.ready = true; c.replaceView(); c.drawing.setMode('line');
+    c.definition.startCreation(); const draft = f.workspace.current(); assert.notEqual(draft, f.document); assert.equal(c.drawing.readMode(), 'select');
+    assert.ok(f.events.includes('reset-history')); assert.deepEqual(f.events.filter(e => Array.isArray(e) && e[0] === 'editor-active'), [['editor-active', true]]);
+    assert.deepEqual(f.state.viewport, { x: 0, y: 0, scale: 1 }); c.replaceView(); c.definition.cancel();
+    assert.equal(f.workspace.current(), f.document); assert.equal(f.feature.session.current, null); assert.deepEqual(f.state.viewport, { x: 1, y: 2, scale: 3 });
+    assert.deepEqual(f.events.filter(e => Array.isArray(e) && e[0] === 'editor-active'), [['editor-active', true], ['editor-active', false]]);
+    const stored = scope('stored'); f.document.blockDefinitions.push(stored); const priorPrompt = w.prompt;
+    try { w.prompt = function(title, name) { assert.equal(this, w); assert.equal(title, 'ブロック名'); assert.equal(name, stored.name); return ' Renamed '; };
+      c.definition.rename(stored.id); assert.equal(stored.name, 'Renamed'); assert.equal(f.events.at(-1), 'history');
+    } finally { w.prompt = priorPrompt; }
+    assert.equal(c.selection.lines.length, 0);
+  }
+});
+
+test('Block completion uses current reference validity and keeps validation and solver failures inside the editor', () => {
+  for (const composed of [false, true]) {
+    const marker = new Error('solve failed'), f = fixture(); let fail = false;
+    const c = editingCommands(f, composed, { solveSketchById: function(id) { 'use strict'; assert.equal(this, undefined); f.events.push(['solve', id]); if (fail) throw marker; return { success: true, errorNorm: 0 }; } });
+    f.state.ready = true; c.definition.startCreation(); const session = f.feature.session.current; f.geometry(f.workspace.current()); f.events.length = 0;
+    c.state.errors = 1; c.completion.complete(); assert.equal(f.feature.session.current, session); assert.equal(f.document.blockDefinitions.length, 0); assert.equal(f.events.some(e => Array.isArray(e) && e[0] === 'solve'), false);
+    c.state.errors = 0; fail = true; assert.throws(() => c.completion.complete(), error => error === marker);
+    assert.equal(f.feature.session.current, session); assert.equal(f.workspace.current(), session.draft); assert.equal(f.events.includes('history'), false);
+    fail = false; c.completion.complete(); assert.equal(f.feature.session.current, null); assert.equal(f.workspace.current(), f.document);
+    assert.equal(f.document.blockDefinitions[0], session.draft); assert.equal(f.events.filter(e => e === 'history').length, 1);
+    assert.ok(f.events.indexOf('restore-view') < f.events.indexOf('history'));
+  }
+});
+
+test('Block completion confirmation keeps the dialog receiver, one pending request and stale-session rejection', async () => {
+  for (const composed of [false, true]) {
+    const f = fixture(), c = editingCommands(f, composed); f.state.ready = true; f.geometry(f.document); c.selection.set('lines', f.document.lines);
+    let resolveChoice; c.state.choiceResult = new Promise(resolve => { resolveChoice = resolve; }); c.definition.startCreation();
+    c.completion.complete(); c.completion.complete(); assert.equal(f.events.filter(e => e === 'choice').length, 1);
+    assert.equal(c.state.choiceOptions.defaultValue, true); assert.deepEqual(Array.from(c.state.choiceOptions.choices, choice => choice.value), [true, false]);
+    c.definition.cancel(); resolveChoice(true); await Promise.resolve(); assert.equal(f.feature.session.current, null);
+    assert.equal(f.workspace.current(), f.document); assert.equal(f.document.blockDefinitions.length, 0); assert.equal(f.events.includes('history'), false);
+    f.events.length = 0; c.selection.set('lines', f.document.lines); c.state.choiceResult = Promise.resolve(false); c.definition.startCreation(); c.completion.complete(); await Promise.resolve();
+    assert.equal(f.document.blockDefinitions.length, 1); assert.equal(f.document.blockInstances.length, 1); assert.equal(f.document.blockInstances[0].rotationLocked, false);
+    assert.equal(c.selection.blockInstances[0], f.document.blockInstances[0]); assert.equal(f.events.filter(e => e === 'history').length, 1);
+  }
 });

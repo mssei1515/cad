@@ -275,7 +275,7 @@
   const { blockDefinitionScopeError } = blockEditingQueries;
 
   const sketchSolveResultState = window.SketchSolving.createState();
-  const { hasError: sketchHasSolveError, clearSketchSolveState, setSketchSolveOk, setSketchSolveError } = sketchSolveResultState;
+  const { hasError: sketchHasSolveError, clearSketchSolveState } = sketchSolveResultState;
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
@@ -436,7 +436,7 @@
   const { geometryDisplayColor, traceSplinePath, drawLines, drawCircles, drawArcs, drawSplines } = geometryDisplay;
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
-  const { fitSketchToViewport, fitAllGeometryToViewport, resetEmptyViewport } = drawingFit;
+  const { fitSketchToViewport, fitAllGeometryToViewport } = drawingFit;
   function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
   const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
     currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
@@ -541,7 +541,7 @@
     analysis: constraintAnalysis, presentation, historyController, recordHistory, resultIsAccepted, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
     maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
-  const { solveSketchById, solveReferenceDependentSketches,
+  const { solveSketchById,
     solveSketchAndDependents, solveConstraintComponentAndDependents } = sketchSolving;
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
   const filletCommand = authoringTools.createFillet({
@@ -768,18 +768,11 @@
   function reserveBlockEditorSequences(draft) { return idReservation.scope(draft); }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
-  const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView } = blockEditingFeature.createCommands({
-    canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
-    canvasSelection, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
-    setMode: drawOperationLifecycle.setMode, closeDefinitions: () => blockView.closeDefinitions(),
-    setEditorActive: active => blockView.setEditorActive(active), fitAllGeometryToViewport,
-    resetEmptyViewport,
-    promptName: name => window.prompt("ブロック名", name), updateBlockUI, updateUI, draw, recordHistory, setHint,
-    refreshReferenceConstraintValidity,
-    hasInvalidReferenceConstraints: () => referenceConstraintState.errorCount > 0,
-    solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
-    requestChoice: options => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
-    constraintGraphNodes, annotationReferencesRemovedGeometry, acceptError: CONSTRAINT_ACCEPT_ERROR, setSketchSolveOk, setSketchSolveError, log,
+  const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView } = blockEditingFeature.createCommandsForEditing({
+    interaction: canvasInteraction, isGeometryMode, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion,
+    resetBlockEditorHistory, clearSelection, readView: () => blockView, drawingFit, updateBlockUI, presentation, recordHistory,
+    referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, sketches: sketchContext, choiceDialog,
+    blockLocalGeometryBounds, references: constraintReferences, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
   });
   const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit,
     cancel: cancelBlockDefinitionEdit } = blockDefinitionCommand;
