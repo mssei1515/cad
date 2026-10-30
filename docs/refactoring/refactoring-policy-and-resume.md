@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,757行、非空白1,308行、root直下403文、条件付きtest hooks233行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,722行、非空白1,273行、root直下399文、条件付きtest hooks233行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
-### 最新：拘束編集の共有owner接続（2026-10-30、検証完了）
+### 最新：寸法値編集の接続（2026-10-30、検証完了）
+
+基準developは9c87ef9。ConstraintEditing.createDimensionValuesが寸法値編集の接続を担当する。実Parameter namespace／Sketch／CanvasInteraction／pending session／value input／checkpoint／Presentation、Annotation Feature／model query／安定化とViewport／Bounds／placementを受け、従来のDimensionValueCommand.createWithEditingSupportへ同じ参照を渡す。raw Commandの特殊寸法support→通常Commandの構築順、求解・失敗復元・first-dimension scaling・履歴は変更しない。入力UIとcheckpoint・Parameterの裸関数参照、guardの二引数、footprintの呼出し時の既定SketchとViewportのmember receiverを維持する。後段DimensionDrag.resetと拘束追加は従来の遅延callbackで接続し、未生成owner・可変context・session複製・追加listenerは導入しない。
+
+app.jsは1,730→1,722行（8行減）、非空白1,281→1,273行。root399文・構築123文・関数77個・hooks233行・一文call委譲73個93行は据置。構築の非空白635→627行、その他202文315行、通常core955→947行。明示入力37→20項目とし、不要root alias五個を除去した。TEMP cad-dimension-value-assembly-{proof,hierarchy}.cjsで他app ASTと既存ConstraintEditing／raw Command不変、未使用root bindingなし、前段17入力の初期化済みを確認した。200〜500行の全体目標は未達である。
+
+旧接続と新窓口を実DimensionValueCommand／Selection／pending sessionで比較する単体三件を追加した。cold生成、入力UI／checkpointの裸関数、live Sketchとfootprint／Viewport receiver、編集対象の同一性、権限拒否、求解失敗復元、first-dimension scaling順、間隔／注記／anchor寸法と例外時のpending保持を検証する。テスト補助のstrict関数receiverと旧経路のBounds裸関数呼出しを修正し、製品の挙動は変更していない。関連単体21件・全単体2,170件成功。構文626file・全E2E588件が成功（22.4m、exit 0、実行session3401）。全file／testをfilterなしで実行し、三つのCAD filter環境変数が未設定、405製品／E2E入力fileと開始HEADが不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-dimension-value-assembly-{check,unit,e2e}.log／run.ps1／source-hashes.json／filter-environment.json／e2e-receipt.json／last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標はactive・未完了。開始時週枠残量52%／最終確認52%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/dimension-value-assembly。次候補はCanvas context操作の接続を再監査する。現在の操作開始／取消・selection／hover・hit queryの所有と後段commandへの遅延callbackを整理し、既存ownerの再利用で依存を減らせるか検討する。入力数や行数だけで分離を選ばず、現単位の検証・Commit／develop統合後に着手する。 再監査ではCanvas contextの37項目は既存createMenu→createSceneForEditing→createInteractionの段階で、Selection／権限／session等が既に共有されている。単にownerを受け直す層を増やす案は保留する。代替候補は拘束commitの27項目で、既存ConstraintEditing.createCommitのclosureが保持するSelection／Sketch／Presentationと、checkpoint／挿入／redundancy／reference stateの所有を照合する。Workspace.currentとbound editing scope、clock callback、commit→readOnly→intent resolverの生成順を変えずに依存を減らせるか、実コードで比較してから選ぶ。
+
+### 直前：拘束編集の共有owner接続（2026-10-30、検証完了）
 
 基準developはed4f85e。ConstraintEditing.createForEditingがCanvasInteraction／OperationSessions／Sketch／Presentationと実Operand Feature／prepared toolbar controls、Annotation Feature／Instance commandを受け、既存createWithControlsへ接続する。Selection照会・guard／lifecycle／session、Operand変換、feedback／live language・翻訳、準備済みbutton Array／menu Array／Fix node、Annotation anchor APIを同じownerから取得する。Circle／ArcとDimensionQueriesの既存静的計算を再利用し、createWithFeedback→createCommandInput→createControlsと後段createCommit／Fixed操作・controls.bindの順を変えない。後段commandへのcommit／add／toggle callback、bound editing scopeの固定拘束照会、isGeometryMode、blur callbackは同じ意味と参照時機を維持する。Operand Featureとtoolbar controlsの生成結果を保持して同じ実APIから分解し、DOM再照会・locale snapshot・model／Selection／session複製・可変app contextやsetterを作らない。元のcreate／createWithFeedback／createWithControlsを維持し、返すFeatureも従来の実APIである。
 

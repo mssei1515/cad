@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 寸法値編集の接続（2026-10-30、9c87ef9基準）
+
+ConstraintEditing.createDimensionValuesが寸法値編集の接続を担当する。実Parameter namespace／Sketch／CanvasInteraction／pending session／value input／checkpoint／Presentation、Annotation Feature／model query／安定化とViewport／Bounds／placementを受け、従来のDimensionValueCommand.createWithEditingSupportへ同じ参照を渡す。raw Commandの特殊寸法support→通常Commandの構築順、求解・失敗復元・first-dimension scaling・履歴は変更しない。入力UIとcheckpoint・Parameterの裸関数参照、guardの二引数、footprintの呼出し時の既定SketchとViewportのmember receiverを維持する。後段DimensionDrag.resetと拘束追加は従来の遅延callbackで接続し、未生成owner・可変context・session複製・追加listenerは導入しない。
+
+app.jsは1,730→1,722行（8行減）、非空白1,281→1,273行。root399文・構築123文・関数77個・hooks233行・一文call委譲73個93行は据置。構築の非空白635→627行、その他202文315行、通常core955→947行。明示入力37→20項目とし、不要root alias五個を除去した。TEMP cad-dimension-value-assembly-{proof,hierarchy}.cjsで他app ASTと既存ConstraintEditing／raw Command不変、未使用root bindingなし、前段17入力の初期化済みを確認した。200〜500行の全体目標は未達である。
+
+全体目標はactive・未完了。開始時週枠残量52%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/dimension-value-assembly。次候補はCanvas context操作の接続を再監査する。現在の操作開始／取消・selection／hover・hit queryの所有と後段commandへの遅延callbackを整理し、既存ownerの再利用で依存を減らせるか検討する。入力数や行数だけで分離を選ばず、現単位の検証・Commit／develop統合後に着手する。 再監査ではCanvas contextの37項目は既存createMenu→createSceneForEditing→createInteractionの段階で、Selection／権限／session等が既に共有されている。単にownerを受け直す層を増やす案は保留する。代替候補は拘束commitの27項目で、既存ConstraintEditing.createCommitのclosureが保持するSelection／Sketch／Presentationと、checkpoint／挿入／redundancy／reference stateの所有を照合する。Workspace.currentとbound editing scope、clock callback、commit→readOnly→intent resolverの生成順を変えずに依存を減らせるか、実コードで比較してから選ぶ。
+
 ## 拘束編集の共有owner接続（2026-10-30、ed4f85e基準）
 
 ConstraintEditing.createForEditingがCanvasInteraction／OperationSessions／Sketch／Presentationと実Operand Feature／prepared toolbar controls、Annotation Feature／Instance commandを受け、既存createWithControlsへ接続する。Selection照会・guard／lifecycle／session、Operand変換、feedback／live language・翻訳、準備済みbutton Array／menu Array／Fix node、Annotation anchor APIを同じownerから取得する。Circle／ArcとDimensionQueriesの既存静的計算を再利用し、createWithFeedback→createCommandInput→createControlsと後段createCommit／Fixed操作・controls.bindの順を変えない。後段commandへのcommit／add／toggle callback、bound editing scopeの固定拘束照会、isGeometryMode、blur callbackは同じ意味と参照時機を維持する。Operand Featureとtoolbar controlsの生成結果を保持して同じ実APIから分解し、DOM再照会・locale snapshot・model／Selection／session複製・可変app contextやsetterを作らない。元のcreate／createWithFeedback／createWithControlsを維持し、返すFeatureも従来の実APIである。

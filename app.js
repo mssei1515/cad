@@ -95,9 +95,9 @@
     readLanguage: () => applicationSettings.language, setHint, log,
   });
   const {
-    evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft, numericDimensionExpression,
+    evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
-    ensureParameterNamespace, parameterErrorText,
+    ensureParameterNamespace,
   } = parameterNamespace;
   const parameterEditor = window.ParameterEditor.createForWorkspace({
     document, window, documentWorkspace, currentScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
@@ -142,7 +142,7 @@
     Solver: ConstraintSolver,
     closeSketchContext: () => sketchContextController?.close(), resetSketchMove: () => sketchMoveCommand?.reset(),
   });
-  const { sketchHasDimensionConstraint, hasDirectRadiusDimension } = dimensionModelQueries;
+  const { hasDirectRadiusDimension } = dimensionModelQueries;
   function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
   const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = constraintInsertion;
@@ -372,7 +372,7 @@
   const { controller: dimensionInputController } = dimensionInput;
   const { dimensionFromAnchor, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
   const { jisDimensionTextAngle, dimensionTextOffset } = dimensionLayouts;
-  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
+  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const { commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, geometry: geometryDisplay,
     overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit } = createCanvasScene({
@@ -413,7 +413,7 @@
     constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand,
     startDistanceResolution, clearSelection, updateToolbar,
   });
-  const { layer: annotationLayer, anchors: annotationAnchorConstraints, dimensions: annotationDimensions, command: annotationCommand,
+  const { layer: annotationLayer, dimensions: annotationDimensions, command: annotationCommand,
     materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
   const { annotationLeaderDisplayGeometry, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
@@ -526,20 +526,12 @@
     solver, hasDirectRadiusDimension, offsetChainDraft, minimumOrientationLength: MIN_ORIENTATION_LENGTH, minimumLineLength: MIN_LINE_LENGTH,
   });
   const { precondition: preconditionNewConstraint } = constraintSolvePreparation;
-  const dimensionValueCommand = window.DimensionValueCommand.createWithEditingSupport({
-    synchronizedInstanceEditing, annotationDimensions, annotationAnchorConstraints, canvasSelection, resetDimensionDrag: () => dimensionDrag.reset(),
-    canEdit: (id, operation) => guardSketchEdit(id, operation),
-    renameDimension: parameterNamespace.renameDimension,
-    getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
-    expressionFromUserInput, evaluateDimensionExpressionDraft, applicationText, parameterErrorText,
-    setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint,
-    captureSketchScreenFootprint: (sketchId = activeSketchId()) => viewport.captureBoundsFootprint(sketchGeometryBounds(sketchId)),
-    snapshotModelState, restoreModelState, solvePreparation: constraintSolvePreparation,
-    stabilizeActiveParameterNamespace, constraintSketchId, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
-    targetFromConstraint, isReadOnlyDimension, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput,
-    addDistanceConstraintFromTarget,
-    restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
+  const dimensionValueCommand = window.ConstraintEditing.createDimensionValues({
+    parameters: parameterNamespace, sketches: sketchContext, interaction: canvasInteraction, pending: pendingCommandSession,
+    valueInput: dimensionInputController, checkpoint: editingCheckpoint, presentation, annotationFeature,
+    modelQueries: dimensionModelQueries, stabilization: parameterStabilization, viewport, bounds: drawingBounds, placement: dimensionPlacement,
+    synchronizedInstanceEditing, solvePreparation: constraintSolvePreparation, scaleSketchForFirstDimension,
+    acceptError: CONSTRAINT_ACCEPT_ERROR, recordHistory, resetDimensionDrag: () => dimensionDrag.reset(), addDistanceConstraintFromTarget,
   });
   const { submit: submitDistanceValue } = dimensionValueCommand;
   const { stabilizeDocument: stabilizeDocumentParameters, createApplication: createParameterApplication } = window.ParameterApplication.createEditingSupport({
