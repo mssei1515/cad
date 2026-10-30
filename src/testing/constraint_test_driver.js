@@ -415,5 +415,54 @@
     return publicAPI;
   }
 
-  window.ConstraintTestDriver = Object.freeze({ createModelSupport, createEditingCases, createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture, createParentPointLineFixture, createSiblingPointLineFixture, createSiblingReferenceMove, createPointLineObservation });
+  // Share real owners while keeping each browser-support creation at its current stage.
+  function createBrowserFactories({ documentWorkspace, geometry, readServices, scopeQuery, solving, analysis: constraintAnalysis,
+    solver, referenceState, blockQueries, operandValues, interaction, sessions, placement, checkpoint,
+    presentation, viewport, sketchPresentation, canvas, document, readSelectedGeometry, commitNewConstraint,
+    markReferenceConstraint, serializeModel, serializeConstraint, resolveConstraintIntent, resetModelState,
+    pushModelConstraint, fitAllGeometryToViewport, acceptError }) {
+    const { workspace, sketches } = documentWorkspace;
+    const { membershipQuery: readSketchMembership, activeSketchId, elementSketchId, sketchById, constraintSketchId } = sketches;
+    const { sketchSolveVariables, sketchSolveConstraints, sketchSolveLines } = scopeQuery;
+    const { solveSketchAndDependents, solveReferenceDependentSketches } = solving;
+    const { refreshReferenceConstraintValidity, wouldCreateReferenceCycle } = referenceState;
+    const { blockProjectionBundles } = readServices.reads, { blockProjectionBundle } = readServices.projections;
+    const { blockInstanceById } = blockQueries, { operandElement, makeConstraintOperand } = operandValues;
+    const { selection: canvasSelection } = interaction, { isExplicitPoint } = interaction.pointUsage;
+    const { targets: constraintTargetSession } = sessions, { dimensionFromAnchor } = placement;
+    const { captureValues: snapshotModelState } = checkpoint, { worldToCanvasScreen } = viewport;
+    const { updateUI, draw } = presentation, { statusOf: constraintStatusOf } = constraintAnalysis;
+    const { constraintStatusColor } = sketchPresentation, { addPoint, addLine, addArc } = geometry;
+    const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
+    const { vectorNorm, PointOnLineConstraint, CoincidentConstraint, DistanceConstraint, HorizontalConstraint, RadiusConstraint } = window.GeometrySolver;
+    const { signedPointLineDistance } = window.GeometryKernel;
+    const refreshConstraintAnalysis = (options = {}) => constraintAnalysis.refresh(options);
+    return Object.freeze({
+      createModelSupport: () => createModelSupport({
+        refreshConstraintAnalysis, readMembership: readSketchMembership, activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines,
+        analyzeConstraintState: options => solver.analyzeConstraintState(options), acceptError, vectorNorm, currentScope: workspace.current, elementSketchId, blockProjectionBundles,
+        blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, serializeModel,
+      }),
+      createReferenceLineMove: () => createReferenceLineMove({ currentScope: workspace.current, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId: DEFAULT_SKETCH_ID, isExplicitPoint }),
+      createDependencyOrderFixture: () => createDependencyOrderFixture({
+        resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addLine, addPoint, markReferenceConstraint, PointOnLineConstraint, CoincidentConstraint, refreshReferenceConstraintValidity, solveReferenceDependentSketches,
+      }),
+      createEditingCases: () => createEditingCases({
+        resetModelState, addPoint, addLine, DistanceConstraint, dimensionFromAnchor, pushModelConstraint,
+        canvasSelection, constraintTargetSession, updateUI, fitAllGeometryToViewport, draw, canvas,
+        HorizontalConstraint, PointOnLineConstraint, addArc, RadiusConstraint, solveSketchAndDependents, activeSketchId,
+        snapshotModelState, refreshConstraintAnalysis, constraintStatusOf, constraintStatusColor, readSummary: () => constraintAnalysis.summary(), currentScope: workspace.current,
+        worldToCanvasScreen, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, elementSketchId, solveReferenceDependentSketches, isExplicitPoint,
+        wouldCreateReferenceCycle, signedPointLineDistance, constraintSketchId,
+      }),
+      createInputObservation: () => createInputObservation({
+        readSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
+      }),
+      createIntentResolution: () => createIntentResolution({ currentScope: workspace.current, makeConstraintOperand, resolveConstraintIntent, serializeConstraint }),
+      createForcedCommit: () => createForcedCommit({
+        resetModelState, addPoint, DistanceConstraint, solver, commitNewConstraint, currentScope: workspace.current, document,
+      }),
+    });
+  }
+  window.ConstraintTestDriver = Object.freeze({ createBrowserFactories, createModelSupport, createEditingCases, createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture, createParentPointLineFixture, createSiblingPointLineFixture, createSiblingReferenceMove, createPointLineObservation });
 })();

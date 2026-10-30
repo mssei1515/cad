@@ -45,13 +45,11 @@
     Circle,
     Arc,
     Spline,
-    DistanceConstraint,
     OffsetConstraint,
     OffsetChainConstraint,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
-    PointOnLineConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     RadiusConstraint,
@@ -116,7 +114,7 @@
     descendantSketchIds,
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
-    elementSketchId, membershipQuery: readSketchMembership, canEditSketch,
+    elementSketchId, canEditSketch,
     sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
     constraintTargetsAreActive, isActiveSketchElement, isEditableSketchElement,
   } = sketchContext;
@@ -273,7 +271,7 @@
   const { clone: cloneBlockDefinition, fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
-  const { blockDefinitionScopeError, blockInstanceById } = blockEditingQueries;
+  const { blockDefinitionScopeError } = blockEditingQueries;
 
   const sketchSolveResultState = window.SketchSolving.createState();
   const { hasError: sketchHasSolveError, clearSketchSolveState, setSketchSolveOk, setSketchSolveError } = sketchSolveResultState;
@@ -1570,11 +1568,15 @@
     const { readSelectedGeometry: readTestSelectedGeometry, createApi: createSelectionTestApi } = window.CanvasSelectionTestDriver.createSupport({
       canvasSelection, currentScope: workspace.current, clearSelection, updateUI, draw,
     });
-    const { readStatuses: readTestConstraintStatuses, publicAPI: constraintModelTestApi } = window.ConstraintTestDriver.createModelSupport({
-      refreshConstraintAnalysis, readMembership: readSketchMembership, activeSketchId, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines,
-      analyzeConstraintState: options => solver.analyzeConstraintState(options), acceptError: CONSTRAINT_ACCEPT_ERROR, vectorNorm, currentScope: workspace.current, elementSketchId, blockProjectionBundles,
-      blockInstanceById, blockProjectionBundle, commitNewConstraint, PointOnLineConstraint, serializeModel,
+    const constraintTestFactories = window.ConstraintTestDriver.createBrowserFactories({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, scopeQuery: solveScopeQuery,
+      solving: sketchSolving, analysis: constraintAnalysis, solver, referenceState: referenceConstraintState, blockQueries: blockEditingQueries,
+      operandValues: constraintOperandValues, interaction: canvasInteraction, sessions: operationSessions, placement: dimensionPlacement,
+      checkpoint: editingCheckpoint, presentation, viewport, sketchPresentation, canvas, document, readSelectedGeometry: readTestSelectedGeometry,
+      commitNewConstraint, markReferenceConstraint, serializeModel, serializeConstraint, resolveConstraintIntent, resetModelState,
+      pushModelConstraint, fitAllGeometryToViewport, acceptError: CONSTRAINT_ACCEPT_ERROR,
     });
+    const { readStatuses: readTestConstraintStatuses, publicAPI: constraintModelTestApi } = constraintTestFactories.createModelSupport();
     const dragExecutionSupport = window.GeometryDragTestDriver.createExecutionSupport({
       feature: geometryDragFeature, solver, currentScope: workspace.current, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
       arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
@@ -1624,22 +1626,13 @@
       nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, viewport, dimensionLayout, targetFromConstraint,
       clientPosition: canvasTestDriver.clientPosition, blockInstanceDisplayCenter, canvasHover, addCircle, addArc, blockProjectionBundle,
     });
-    const referenceLineMove = window.ConstraintTestDriver.createReferenceLineMove({ currentScope: workspace.current, elementSketchId, solveReferenceDependentSketches, refreshConstraintAnalysis, updateUI, draw, defaultSketchId: DEFAULT_SKETCH_ID, isExplicitPoint });
-    const dependencyOrderFixture = window.ConstraintTestDriver.createDependencyOrderFixture({
-      resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addLine, addPoint, markReferenceConstraint, PointOnLineConstraint, CoincidentConstraint, refreshReferenceConstraintValidity, solveReferenceDependentSketches,
-    });
+    const referenceLineMove = constraintTestFactories.createReferenceLineMove();
+    const dependencyOrderFixture = constraintTestFactories.createDependencyOrderFixture();
     const cyclicReferenceFixture = window.DocumentTestDriver.createCyclicReferenceFixture({
       resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, addPoint, markReferenceConstraint, CoincidentConstraint, serializeModel, loadModelData,
       refreshConstraintAnalysis, updateUI, constraintIsOperational, readReferenceErrors: () => referenceConstraintState.errorReasons(), document,
     });
-    const constraintCaseTestApi = window.ConstraintTestDriver.createEditingCases({
-      resetModelState, addPoint, addLine, DistanceConstraint, dimensionFromAnchor, pushModelConstraint,
-      canvasSelection, constraintTargetSession, updateUI, fitAllGeometryToViewport, draw, canvas,
-      HorizontalConstraint, PointOnLineConstraint, addArc, RadiusConstraint, solveSketchAndDependents, activeSketchId,
-      snapshotModelState, refreshConstraintAnalysis, constraintStatusOf, constraintStatusColor, readSummary: () => constraintAnalysis.summary(), currentScope: workspace.current,
-      worldToCanvasScreen, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, elementSketchId, solveReferenceDependentSketches, isExplicitPoint,
-      wouldCreateReferenceCycle, signedPointLineDistance, constraintSketchId,
-    });
+    const constraintCaseTestApi = constraintTestFactories.createEditingCases();
     const blockTestSupport = window.BlockTestDriver.createBrowserSupport({
       geometry: geometryCreation, modelTypes: window.GeometrySolver, documentModel, currentScope: workspace.current, sketches: sketchContext,
       projections: blockProjections, reads: geometryReads, queries: blockEditingQueries, selection: canvasSelection,
@@ -1694,10 +1687,8 @@
       CURRENT_JSON_VERSION, sketchProjectionEntryFromOperand, copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter
     });
-    const constraintInputObservation = window.ConstraintTestDriver.createInputObservation({
-      readSelectedGeometry: readTestSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
-    });
-    const constraintIntentTestDriver = window.ConstraintTestDriver.createIntentResolution({ currentScope: workspace.current, makeConstraintOperand, resolveConstraintIntent, serializeConstraint });
+    const constraintInputObservation = constraintTestFactories.createInputObservation();
+    const constraintIntentTestDriver = constraintTestFactories.createIntentResolution();
     const hoverDisplayObservation = propertiesTestFactories.createHoverObservation();
     const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
       readMode: drawOperationLifecycle.readMode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
@@ -1750,9 +1741,7 @@
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
       invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, resetHistory, updateUI, draw,
     });
-    const forcedConstraintCommit = window.ConstraintTestDriver.createForcedCommit({
-      resetModelState, addPoint, DistanceConstraint, solver, commitNewConstraint, currentScope: workspace.current, document,
-    });
+    const forcedConstraintCommit = constraintTestFactories.createForcedCommit();
     const drawingOrderTestApi = window.DrawingOrderTestDriver.createBrowserApi({
       drawingOrder: window.DrawingOrder, resetModelState, viewport, addPoint, addLine, currentScope: workspace.current,
       hatchGeometryQuery, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, ROOT_SKETCH_ID, createEmptyBlockDefinition, Point,

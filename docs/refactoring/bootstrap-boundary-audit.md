@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 拘束テスト支援の段階的な生成接続（2026-10-30、c9ae976基準）
+
+基準developはc9ae976。既存ConstraintTestDriverにcreateBrowserFactoriesを追加し、実Workspace／Sketch・Geometry・read services・solve scope／solving・analysis／solver・参照状態・operand値・Selection／Target session・寸法配置／checkpoint・Presentation等から子portを接続する。共通29項目から7creatorの85個の子portを組み立て、各生成呼出しは元のapp内の位置に残す。解析更新は元のoptions={}の既定値と一引数のanalysis.refresh(options)呼出しを窓口内で接続し、毎回の新しい既定objectとactor receiverを保つ。readSummaryとsolver分析も元のreceiver・引数数を保つ。modelはWorkspace.currentを操作時に読み、同期済みediting scopeや生成時modelへ置き換えない。全creatorと生のcreateModelSupport等の旧APIを維持し、観測・fixture実行・強制Solver結果注入の実装は既存raw helperに残す。新file・状態・scope／Selection／Solverの別コピーを増やさない。
+
+app.jsは1,842→1,831行（11行減）、非空白1,392→1,381行、root416文／関数81個／可変参照三つ。test hooksは244→235行、外側bindingは262→256個（局所関数34、ObjectPattern alias 189、CallExpression初期化binding 28、その他5）。構築134文719非空白行、一文call関数77個99行、その他204文323行（文外5行）。移管で不要になったDistanceConstraint／PointOnLineConstraint／readSketchMembership／blockInstanceByIdの四aliasをrootから除去した。TEMP cad-constraint-test-factories-{proof,hierarchy,hook-audit}.cjsで全子port、refresh callbackの既定値・引数／receiver、元の呼出位置・順序、他appとraw helperのAST不変、未使用root bindingとfactory未定義globalなしを確認した。hooksと短い委譲を除いても1,047非空白行が残り、数百行目標は未達。
+
+通常起動の構築は依然134文719非空白行ある。TEMP cad-constraint-test-factories-root-audit.cjs／root-constructors.jsonで再確認し、AnnotationFeature.createの48項目、blockEditingFeature.createCommandsの32項目、sketchEditing.createTreeの26項目など、通常機能側にも広い接続が残ると分かった。test生成だけを縮め続けず、次はこれらの実owner・循環参照・late callbackを調べ、まとまった通常機能の組立てへ重点を戻す。単に巨大な初期化fileや汎用contextへ移す構成は採用しない。
+
 ## Propertiesテスト支援の段階的な生成接続（2026-10-30、c35fa1c基準）
 
 基準developはc35fa1c。既存PropertiesTestDriverにcreateBrowserFactoriesを追加し、実Workspace／Sketch、GeometryCreation、read services、CanvasInteraction、selection highlight、Presentation、GeometryDisplay、DimensionPlacementとviewportから子へ必要なAPIを接続する。共通26項目から11creatorの95個の子portを組み立てる。返すのは生成用関数だけで、各支援の生成は元のapp内の位置で呼び、他TestDriverとの順序を変えない。生のcreateAppearanceObservation等11入口も保持し、同じ実Selection／Hover・Workspace scopeと関数／actorを使う。生成窓口の構築やcreator呼出時にmodel・DOM・theme・履歴を照会せず、観測・fixture・編集操作は既存raw helperに残す。Default Appearanceの色照会とTheme、modelTypesによるFixed型の既定値は元の照会時点を維持する。新file・状態・model／sessionの別コピーやsetterを増やさない。
