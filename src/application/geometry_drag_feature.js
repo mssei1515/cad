@@ -81,5 +81,19 @@
       geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
     });
   }
-  window.GeometryDragFeature = Object.freeze({ create, createForEditing });
+  function createForWorkspace({ documentWorkspace, interaction, presentation, sourceQueries, projectionQueries,
+    solver, scopeQuery, solving, checkpoint, geometry, readServices, viewport, pointer, acceptError, previewMaxModelError, minimumLength,
+    blockLocalGeometryBounds, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    projectionBlockedMessage, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection }) {
+    const { workspace, sketches } = documentWorkspace;
+    const { access: { guardSketchEdit: canEdit }, selection: canvasSelection } = interaction;
+    const { profiler, settings: { applicationText }, setHint, updateUI, updateGeometrySelectionUI, draw } = presentation;
+    return createForEditing({ currentScope: workspace.current, solver, sketches, scopeQuery, solving, checkpoint, geometry, readServices,
+      viewport, pointer, profiler, acceptError, previewMaxModelError, minimumLength,
+      blockLocalGeometryBounds, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+      projectionConstraintsForItems: projectionQueries.sketchProjectionConstraintsAffectingItems, projectionBlockedMessage, canEdit, canvasSelection,
+      stabilizeActiveParameterNamespace, refreshConstraintAnalysis, applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+      geometryInstanceSourceObjects: sourceQueries.sourceObjects, clearSelection, resolveDerivedDragSource: sourceQueries.resolve });
+  }
+  window.GeometryDragFeature = Object.freeze({ create, createForEditing, createForWorkspace });
 })();

@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
-### 最新：求解照会・拘束解析と後段求解の組立て（2026-10-30、検証完了）
+### 最新：GeometryDragのWorkspace・操作・表示owner接続（2026-10-30、検証完了）
+
+基準developは3b0fc86。GeometryDragFeature.createForWorkspaceは、実DocumentWorkspace／CanvasInteraction／Presentationと派生元・Sketch投影の照会APIから、既存createForEditingへの接続を組み立てる。Workspace.current／Sketch、access.guardSketchEdit／Selection、profiler／翻訳／表示更新、sourceObjects／resolve、影響拘束の照会を同じownerから取得する。元のcreate／createForEditingと実drag plan／editing／solver／commandを維持し、返すfeatureも従来の実APIである。clearSelectionはselectionClearing.clearへ委譲する既存callbackを明示入力として保持する。Block layout／固定拘束照会・投影拒否message・安定化と解析callbackは限定した依存として受ける。通常Workspace scopeと固定拘束照会のbound editing scopeを混同せず、操作時の倍率・profile・現在scopeの読取り、Geometry同一性、数値閾値、pointer捕捉・失敗復元・履歴確定を維持する。GeometryDrag生成→Constraint入力・DimensionDrag生成→後段createBlockEntryの順を変えず、model／Selection／session／cacheや可変app contextを複製しない。
+
+app.jsは1,749→1,746行（3行減）、非空白1,300→1,297行。root402→401文、構築122文のまま647→645非空白行、その他203→202文／317→316非空白行。関数80個、条件付きhooks233行、一文call委譲76個98行を維持する。通常coreは969→966非空白行で、200〜500行目標は未達。rootの明示入力は34→26項目。未使用となったresolveDerivedDragSource／geometryInstanceSourceObjects／sketchProjectionConstraintsAffectingItemsのroot aliasを除去した。TEMP cad-geometry-drag-workspace-{proof,hierarchy}.cjsで他app AST／既存raw factory不変・未使用root bindingなし・入力の初期化済みを確認した。
+
+旧createForEditingと新窓口を実GeometryDrag plan／editing／数値solver／command、実Pointer／Profilerで比較する単体二件を追加した。cold owner、live scope／倍率、同じGeometryとSelection、pointer捕捉・解放と履歴一回、派生元へのpointer変換、ハイライトも消す既存clear callbackの維持、遅延Block入口の固定拒否、失敗復元とsolve例外時の後処理を確認した。既存テストの期待値は変更していない。構文626file・全単体2,155件・関連単体49件が成功。関連E2E312件が全成功（17.5m、exit 0、実行session29019）。選択した15file内の全testを対象に、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを実行process内で記録した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-geometry-drag-workspace-{check,unit,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標はactive・未完了。開始時週枠残量56%／最終確認56%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/geometry-drag-workspace。次候補は既存AnnotationFeatureで共通ownerを準備する境界である。現在はcreateAnchorQuery→AnnotationDrag.createConstrained→createForEditing→feature.createDragが別段階にある。DocumentWorkspace／read services／CanvasInteraction／Presentationを同じownerで保持し、実targetsと前段拘束drag・後段Featureのfactoryを返す案を比較する。早期viewportScaleは()=>viewport.scaleのままにし、未生成viewportを直接渡さない。拘束dragに渡すplacementAnchor／buildPlan／beginGeometryDrag／leaderDisplay／invalidateAnalysisと、後段のreadAppearance／resizeEnabledも遅延参照のまま保つ。targets／constrained drag／Featureは既存の実APIを返し、後段createDragは既存Feature APIとbeginConstrainedDragの明示接続を維持する。Workspace.currentとbound editing scopeを区別し、新しい可変contextやconstrained drag保持用setterを作らない。現単位の関連E2E・Commit／develop統合後に着手し、巨大なbootstrapへの移動で目標達成とは扱わない。
+
+### 直前：求解照会・拘束解析と後段求解の組立て（2026-10-30、検証完了）
 
 基準developは0520da7。SketchSolvingFeature.createContextForWorkspaceが、従来のSolveScopeQuery→ConstraintAnalysis.createWithRedundancyを前段で生成し、実scopeQuery／analysis／redundancyと後段createSolvingを凍結APIとして返す。DocumentWorkspace／read services／ConstraintReferences／ReferenceConstraintState／PointUsage／Presentation／solve stateを実体で共有する。AnnotationDragの仮scope／追加変数は照会へ、Workspace.currentと前段solverは解析へ渡す。後段は従来位置でcreateForWorkspaceへ接続し、editingScope.solverをその時点で取得する。Workspace.currentとeditingScope.current、profileの遅延active読取り・bare work callback、数値閾値と失敗時の境界を維持する。元のraw create／createForWorkspaceを残し、モデル・解析cache・Selectionや可変app contextを複製しない。
 
