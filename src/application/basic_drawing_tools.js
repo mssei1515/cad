@@ -80,12 +80,22 @@
     });
   }
 
+  function createGeometry({ currentScope, ids, assignSketchId, currentConstruction, minLineLength, minArcLength,
+    hitEndpointPoint, hitExplicitPoint }) {
+    const geometry = window.GeometryCreation.create({ currentScope, ids, assignSketchId, currentConstruction, minLineLength, minArcLength });
+    const { endpointAt } = window.GeometryCreation.createEndpointResolver({ addPoint: geometry.addPoint, hitEndpointPoint, hitExplicitPoint });
+    function createTools(options) {
+      return createAuthoring({ ...options, currentScope, ids, geometry, endpointAt, minLineLength, minArcLength });
+    }
+    return Object.freeze({ geometry, createAuthoring: createTools });
+  }
+
   function createAuthoring({ currentScope, ids, geometry, endpointAt, samePosition, sketchContext, pointUsage, geometryReads,
     isVisibleSketchElement, annotationAnchors, scale, transientAuthoring, pushModelConstraint, addConstraintIfMissing,
     minLineLength, minArcLength, selection, preview, checkpoint, cancelConstraintTargetCommand, cancelPendingCommand,
     canCreateInActiveSketch, rejectRootSketchCreation, setMode, resetEditing, resetBlankCandidate, updateToolbar,
     projection, clearSelection, solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw, log }) {
-    const { isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, sketchName } = sketchContext;
+    const { isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, sketchName, activeSketchId } = sketchContext;
     const { isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint } = pointUsage;
     const snap = window.DrawingSnap.create({ annotationAnchors, geometryReads, isVisibleSketchElement, isActiveSketchElement,
       isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint,
@@ -106,6 +116,16 @@
         selection, sameSketchElements: sketchContext.sameSketchElements, activeSketchId: sketchContext.activeSketchId, isActiveSketchElement,
         applicationText, minLineLength, snapForDrawing, snap, preview, setMode, invalidateAnalysis, setHint, updateUI, draw });
     }
+    function createCircleCenterCross({ checkpoint: crossCheckpoint, solveSketchAndDependents, resultIsAccepted,
+      minOrientationLength, selectedElementCount, invalidateAnalysis }) {
+      return window.CircleCenterCrossCommand.create({ geometry: { addPoint: geometry.addPoint, addLine: geometry.addLine, pushModelConstraint },
+        checkpoint: { capture: crossCheckpoint.captureGeometry, restore: crossCheckpoint.restoreGeometry },
+        solveSketchAndDependents, resultIsAccepted, minOrientationLength,
+        activeSketchId: sketchContext.activeSketchId, isActiveSketchElement, selection, selectedElementCount,
+        cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+        setMode, clearPreview: () => preview.setPointer(null), clearSnap: snap.clear, clearSelection, invalidateAnalysis,
+        updateUI, draw, setHint, recordHistory, applicationText });
+    }
     function createPreview({ ctx, viewport, withCanvasState, traceSplinePath, readMode, centerlineCommand, readCanvasSize }) {
       const { shortestAngleFrom, slotGeometry, threePointArcGeometry, angleAtArcParam } = window.GeometryKernel;
       const renderer = window.AuthoringPreviewRenderer.create({ ctx, viewport, withCanvasState,
@@ -119,7 +139,14 @@
         projectPointToCenterlineSupport: centerlineCommand.projectPointToCenterlineSupport, readCanvasSize });
       return Object.freeze({ renderer, layer });
     }
-    function createLifecycle({ lifecycle, canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
+    function createLifecycle({ interaction, lifecycle = interaction?.lifecycle, canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
+      if (canStart === undefined && interaction) {
+        const { guardSketchEdit, guardSelectionEdit } = interaction.access;
+        canStart = nextMode => nextMode === "select" || guardSketchEdit(activeSketchId(), "create") && (nextMode !== "trim" || guardSelectionEdit("structure"));
+      }
+      if (clearTrimHover === undefined && interaction) {
+        clearTrimHover = () => interaction.hover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null });
+      }
       const construct = lifecycle ? lifecycle.bind : window.DrawOperationLifecycle.create;
       return construct({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover,
         line: tools.line, rectangle: tools.rectangle, slot: tools.slot, circular: tools.circular, spline: spline.draft,
@@ -128,6 +155,14 @@
           clearLineCompletion: transientAuthoring.clearTransientLineCompletionRollback, rollbackLineStart: transientAuthoring.rollbackTransientLineStart },
         clearSnap: snap.clear, clearSelection, selectMode: () => { setMode("select"); }, updateToolbar, setHint, updateUI, draw,
         cancelConstraintTargetCommand, cancelPendingCommand, setMode });
+    }
+    function createHatch({ hatchGeometryQuery, readMode, lastPointer, documentIds, updateStatusUI, hatchRegionErrorText }) {
+      return window.HatchCommand.create({ currentScope, hatchGeometryQuery, getMode: readMode, setMode, lastPointer,
+        getPointerPreview: () => preview.pointer, setPointerPreview: value => { preview.setPointer(value); },
+        activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
+        nextHatchId: () => documentIds.allocate("hatch"), hatchSequence: () => documentIds.peek("hatch"),
+        cancelConstraintTargetCommand, cancelPendingCommand, clearSnap: snap.clear, clearSelection, canvasSelection: selection,
+        updateToolbar, updateStatusUI, updateUI, setHint, draw, recordHistory, applicationText, hatchRegionErrorText });
     }
     function createOffset({ currentScope: offsetScope, placement, sourceSelection, pending, valueInput, viewport, ctx,
       withCanvasState, drawDimension, readMode, commitNewConstraint, offsetChainErrorText, prepareStart, updateGeometrySelectionUI, invalidateAnalysis }) {
@@ -143,6 +178,13 @@
         pending, selection, readPointer, prepareStart, clearSnap: snap.clear, updateToolbar, guardSketchProjectionShapeEdit, valueInput,
         checkpoint: filletCheckpoint, clearSelection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
         applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand });
+    }
+    function createTrim({ references, checkpoint: trimCheckpoint, hitSketchIdentityElement, guardSketchEdit, guardSketchProjectionShapeEdit,
+      stabilizeActiveParameterNamespace, acceptError, invalidateAnalysis, refreshConstraintAnalysis }) {
+      return window.TrimFeature.create({ currentScope, geometry, references, isActiveSketchElement, minLineLength, minArcLength,
+        pushModelConstraint, elementSketchId, isPointUsedByPrimitive, isReferencePoint, viewportScale: scale, preview, checkpoint: trimCheckpoint,
+        hitSketchIdentityElement, guardSketchEdit, activeSketchId: sketchContext.activeSketchId, setHint, draw, guardSketchProjectionShapeEdit, applicationText,
+        clearSelection, stabilizeActiveParameterNamespace, acceptError, invalidateAnalysis, refreshConstraintAnalysis, updateUI, recordHistory });
     }
     function createAuthoringInput({ readMode, centerline, circleCenterCross, fillet, trim, offset }) {
       return createCanvasInput({ point: { transientAuthoring, snapForDrawing, drawingSnap: snap, addPoint: geometry.addPoint,
@@ -167,7 +209,21 @@
         setHint, updateUI, draw, cancelActiveDrawOperation: () => lifecycle.cancel(), rollbackTransientPoint,
         hasActiveDrawOperation: () => lifecycle.active(), hasSelection: selection.hasSelection, updateGeometrySelectionUI });
     }
-    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createPreview, createLifecycle, createOffset, createFillet, createBlankGesture, createCanvasInput: createAuthoringInput });
+    function createSplineEditing({ editingScope, checkpoint: valueCheckpoint, parameters, analysis, access,
+      guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion }) {
+      const { guardSketchEdit } = access;
+      return window.SplineEditCommand.create({
+        canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
+        currentScope: () => editingScope.current, ids, clearSelection, canvasSelection: selection, applicationText, setHint, updateUI, draw,
+        restoreModelState: valueCheckpoint.restoreValues, snapshotModelState: valueCheckpoint.captureValues,
+        stabilizeActiveParameterNamespace: parameters.stabilize, elementSketchId, invalidateAnalysis: () => analysis.invalidate(), recordHistory,
+        guardSketchProjectionShapeEdit, addPoint: geometry.addPoint,
+        isPointUsedByLine: pointUsage.isPointUsedByLine, isPointUsedByCircle: pointUsage.isPointUsedByCircle, isPointUsedByArc: pointUsage.isPointUsedByArc,
+        constraintReferencesPoint: constraintReferences.constraintReferencesPoint, guardDimensionSymbolDeletion,
+        geometryElementKey: window.GeometryObjects.geometryKeyForItem, annotationReferencesRemovedGeometry: window.AnnotationAnchorData.referencesRemovedGeometry,
+      });
+    }
+    return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createHatch, createBlankGesture, createCanvasInput: createAuthoringInput, createSplineEditing });
   }
-  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createAuthoring, createCanvasInput });
+  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createGeometry, createAuthoring, createCanvasInput });
 })();

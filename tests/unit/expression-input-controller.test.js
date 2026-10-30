@@ -114,3 +114,36 @@ test('Canvas reference picker falls back to annotation only for absent dimension
  assert.equal(f.controller.pickCanvas(f.event),undefined);assert.deepEqual(calls,['dimension','annotation']);
  assert.deepEqual(f.events.slice(0,2),[['prevent'],['stop']]);assert.equal(f.events.find(e=>e[0]==='insert')[2],'note1');
 });
+
+test('pointer references skip ineligible focus and query live inputs and both namespaces without filtering inactive targets',()=>{
+ const calls=[],hit={constraint:{}},note={element:{}},point={x:8,y:9},marker=new Error('hit failed');let fail=false;
+ const f=fixture({hitDimension:(x,y,options)=>{calls.push(['dimension',x,y,options.activeOnly]);if(fail)throw marker;return hit;},
+  hitAnnotationElement:(x,y,options)=>{calls.push(['annotation',x,y,options.activeOnly]);return note;}});
+ const refs=f.controller.pointerReferences;assert(Object.isFrozen(refs));assert.deepEqual(calls,[]);assert.equal(f.state.reads,0);
+ for(const input of [null,{},new Input(),Object.assign(new Input([commandSelector]),{readOnly:true}),Object.assign(new TextArea([propertySelector]),{disabled:true})]){
+  f.document.activeElement=input;assert.equal(refs.referenceDimensionAt(point),null);assert.equal(refs.referenceAnnotationAt(point),null);
+ }
+ assert.deepEqual(calls,[]);assert.equal(f.state.reads,0);
+ f.document.activeElement=new TextArea([propertySelector]);assert.equal(refs.referenceDimensionAt(point),hit);assert.equal(f.state.reads,1);
+ const parameter=new Input([parameterSelector]);parameter.inDialog=true;f.document.activeElement=parameter;f.draft.current={namespace:{id:'other'}};
+ assert.equal(refs.referenceAnnotationAt(point),note);assert.equal(f.state.reads,1);
+ assert.deepEqual(calls,[['dimension',8,9,false],['annotation',8,9,false]]);
+ fail=true;assert.throws(()=>refs.referenceDimensionAt(point),error=>error===marker);assert.deepEqual(f.events,[]);
+ assert.equal(refs.insertDimensionParameter,f.controller.insertDimension);assert.equal(refs.insertAnnotationParameter,f.controller.insertAnnotation);
+});
+
+test('pointer reference ports retain direct-hit priority and annotation fallback after declined dimension insertion',()=>{
+ vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../../src/editing/pointer_interaction_controller.js'),'utf8'),sandbox);
+ const calls=[],note={parameterEnabled:true,parameterName:'note1'},point={x:3,y:4};let dimension={constraint:{parameterName:'d9'}},hitD=dimension;
+ const f=fixture({hitDimension:()=>{calls.push('dimension');return dimension;},hitAnnotationElement:()=>{calls.push('annotation');return {element:note};}});
+ f.state.namespace.annotations.push(note);f.event.button=0;
+ const pointer=sandbox.window.PointerInteractionController.create({canvasHover:{update(){}},setLastPointer:p=>assert.equal(p,point),
+  getPendingCommand:()=>{calls.push('pending');return {type:'annotation-value'};},press:{...f.controller.pointerReferences,
+   closeContextMenu(){},worldPoint:()=>point,query:{read:()=>({hitD})}}});
+ pointer.down(f.event);assert.deepEqual(calls,[]);assert.equal(f.events.find(e=>e[0]==='insert')[2],'d9');
+ f.events.length=0;hitD=null;pointer.down(f.event);assert.deepEqual(calls,['dimension']);
+ calls.length=0;f.events.length=0;dimension={constraint:{annotationOwner:{}}};pointer.down(f.event);
+ assert.deepEqual(calls,['dimension','annotation']);assert.equal(f.events.find(e=>e[0]==='insert')[2],'note1');
+ calls.length=0;f.events.length=0;f.document.activeElement=null;pointer.down(f.event);
+ assert.deepEqual(calls,['pending']);assert.deepEqual(f.events,[['prevent']]);
+});

@@ -59,3 +59,32 @@ test('placement observations follow live pending/drag state and fit keeps viewpo
   assert.equal(drag.dragging,true);assert.equal(drag.anchor.y,4);assert.equal(drag.selectedLineIds[0],'L4');
   f.support.selection.fitForMultipleDimensionsForTest();assert.deepEqual(f.events,[['viewport',{scale:2,x:350,y:250}],['ui',null],'draw']);
 });
+
+test("dimension interaction separates explicit model types from live scope and keeps constructor overrides", () => {
+  for (const override of [false, true]) {
+    const reads = [];
+    class LineCircle { rawError() { return [0]; } }
+    class RadiusDifference { rawError() { return [0]; } }
+    const provider = { LineCircleDistanceConstraint: LineCircle, ConcentricRadiusDifferenceConstraint: RadiusDifference };
+    const modelTypes = new Proxy(provider, { get(target, name) {
+      assert.equal(override, false, "individual constructors must take precedence"); reads.push(name); return target[name];
+    } });
+    const f = fixture(ports => {
+      ports.constraintTargetSession.operands = [];
+      const shared = sandbox.window.DimensionTestDriver.createSupport({ ...ports, hypot2: Math.hypot, serializeModel: () => ({ constraints: [] }) });
+      return shared.createInteraction({ ...ports, modelTypes, ...(override ? provider : {}), signedPointLineDistance: () => 4, vectorNorm: () => 0 });
+    });
+    assert.deepEqual(reads, override ? [] : ["LineCircleDistanceConstraint", "ConcentricRadiusDifferenceConstraint"]);
+    provider.LineCircleDistanceConstraint = class Unexpected {};
+    provider.ConcentricRadiusDifferenceConstraint = class Unexpected {};
+    const lineCircle = Object.assign(new LineCircle(), { circle: { center: { x: 0, y: 0 } }, line: {}, target: 4 });
+    const radial = Object.assign(new RadiusDifference(), { a: { center: { x: 0, y: 0 }, radius: () => 1 }, b: { center: { x: 0, y: 0 }, radius: () => 3 }, target: 2 });
+    f.state.scope = { constraints: [lineCircle, radial] };
+    const result = f.support.placement.lineCircleAndRadiusDifferenceState();
+    assert.deepEqual(Array.from(result.geometry, item => item.type), ["lineCircleDistance", "concentricRadiusDifferenceDimension"]);
+    assert.equal(result.geometry[0].centerDistance, 4); assert.equal(result.geometry[1].radiusDifference, 2);
+    f.state.scope = { constraints: [] };
+    assert.equal(f.support.placement.lineCircleAndRadiusDifferenceState().geometry.length, 0);
+    assert.deepEqual(reads, override ? [] : ["LineCircleDistanceConstraint", "ConcentricRadiusDifferenceConstraint"]);
+  }
+});

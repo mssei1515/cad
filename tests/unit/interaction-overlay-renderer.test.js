@@ -7,11 +7,11 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/rendering/interaction_overlay_renderer.js'), 'utf8'), sandbox);
 function fixture() {
   const calls=[],ctx={},relations={ref:'reference',child:'descendant',other:'inactive',active:'active'};
-  for(const name of ['save','restore','beginPath','moveTo','lineTo','stroke','fill','arc','fillRect','strokeRect','fillText'])ctx[name]=(...args)=>calls.push([name,...args]);
+  for(const name of ['save','restore','beginPath','moveTo','lineTo','stroke','fill','arc','fillRect','strokeRect','fillText','setLineDash'])ctx[name]=(...args)=>calls.push([name,...args]);
   ctx.measureText=text=>({width:text.length*5});
   const selection={points:[],lines:[],circles:[],arcs:[],splines:[]};
-  const f={calls,ctx,selection,language:'en',active:'active'};
-  f.renderer=sandbox.window.InteractionOverlayRenderer.create({ctx,viewport:{scale:2},elementSketchId:item=>item.sketchId,
+  const f={calls,ctx,selection,viewport:{scale:2},language:'en',active:'active'};
+  f.renderer=sandbox.window.InteractionOverlayRenderer.create({ctx,viewport:f.viewport,withCanvasState:work=>{ctx.save();try{return work();}finally{ctx.restore();}},elementSketchId:item=>item.sketchId,
     sketchRelationToActive:id=>relations[id],applicationText:(ja,en)=>f.language==='en'?en:ja,
     isVisibleSketchId:id=>id!=='hidden',activeSketchId:()=>f.active,sketchName:id=>'Sketch '+id});
   f.draw=(hoveredIdentity=null,pointer={x:10,y:20})=>f.renderer.drawSketchIdentityLabel({hoveredIdentity,selection,pointer});
@@ -76,4 +76,66 @@ test('selection rectangle paints crossing/enclosing states at current zoom, pres
   calls.length = 0; viewport.scale = 4; preview.crossing = false; renderer.drawSelectionRect(preview);
   assert.equal(ctx.strokeStyle, '#2563eb'); assert.equal(ctx.fillStyle, 'rgba(37, 99, 235, 0.08)'); assert.equal(ctx.lineWidth, 0.3);
   assert.equal(JSON.stringify(calls[1]), '["setLineDash",[1.25,1]]');
+});
+
+function layerFor(composed, {renderer,rectangle,snap,hover,selection,pointer}) {
+  return composed ? sandbox.window.InteractionOverlayRenderer.createLayer({renderer,rectangle,snap,hover,selection,pointer}) : {
+    drawSelectionRect() { return renderer.drawSelectionRect(rectangle.preview()); },
+    drawSnapMarker() { renderer.drawSnapMarker(snap.active); },
+    drawSketchIdentityLabel() { renderer.drawSketchIdentityLabel({hoveredIdentity:hover.current.sketchIdentity,selection,pointer:pointer.lastWorld}); },
+  };
+}
+
+function observedLayer(composed) {
+  const events=[],observed=[],token=Symbol('renderer result'),error=new Error('overlay failure');
+  const state={ready:false,preview:{id:'rectangle'},snap:{id:'snap'},identity:{id:'identity'},pointer:{x:1,y:2},failAt:null};
+  const visit=(name,value)=>{assert.equal(state.ready,true,'construction must not read live owners');events.push(name);if(state.failAt===name)throw error;return value;};
+  const renderer={};for(const name of ['rectangle','snap','identity']){
+    const method={rectangle:'drawSelectionRect',snap:'drawSnapMarker',identity:'drawSketchIdentityLabel'}[name];
+    Object.defineProperty(renderer,method,{get(){visit(name+':method');return function(value){assert.equal(this,renderer);observed.push([name,value]);visit(name+':paint');return token;};}});
+  }
+  const rectangle={get preview(){visit('preview:get');return function(){assert.equal(this,rectangle);return visit('preview:call',state.preview);};}},
+    snap={get active(){assert.equal(this,snap);return visit('snap:read',state.snap);}},
+    hovered={get sketchIdentity(){return visit('identity:read',state.identity);}},
+    hover={get current(){assert.equal(this,hover);return visit('hover:read',hovered);}},
+    pointer={get lastWorld(){assert.equal(this,pointer);return visit('pointer:read',state.pointer);}},selection={points:[]};
+  const layer=layerFor(composed,{renderer,rectangle,snap,hover,selection,pointer});assert.deepEqual(events,[]);state.ready=true;
+  return {layer,state,events,observed,token,error,selection};
+}
+
+test('overlay layer defers all owner reads and retains member receivers, returns and live input identities',()=>{
+  for(const composed of [false,true]){
+    const f=observedLayer(composed);assert.equal(f.layer.drawSelectionRect(),f.token);assert.equal(f.layer.drawSnapMarker(),undefined);assert.equal(f.layer.drawSketchIdentityLabel(),undefined);
+    assert.deepEqual(f.events,['rectangle:method','preview:get','preview:call','rectangle:paint','snap:method','snap:read','snap:paint','identity:method','hover:read','identity:read','pointer:read','identity:paint']);
+    assert.equal(f.observed[0][1],f.state.preview);assert.equal(f.observed[1][1],f.state.snap);
+    assert.equal(f.observed[2][1].hoveredIdentity,f.state.identity);assert.equal(f.observed[2][1].selection,f.selection);assert.equal(f.observed[2][1].pointer,f.state.pointer);
+    f.state.preview={id:'next rectangle'};f.state.snap=null;f.state.identity={id:'next identity'};f.state.pointer={x:8,y:9};f.selection.points.push({id:'P1'});
+    f.layer.drawSelectionRect();f.layer.drawSnapMarker();f.layer.drawSketchIdentityLabel();
+    assert.equal(f.observed[3][1],f.state.preview);assert.equal(f.observed[4][1],null);assert.equal(f.observed[5][1].selection.points[0],f.selection.points[0]);assert.equal(f.observed[5][1].pointer,f.state.pointer);
+    if(composed)assert.equal(Object.isFrozen(f.layer),true);
+  }
+});
+
+test('overlay layer matches actual rectangle, snap and Sketch identity Canvas operations across zoom and live replacements',()=>{
+  const results=[];for(const composed of [false,true]){
+    const f=fixture(),state={preview:{rect:{x1:10,y1:20,x2:40,y2:60},crossing:true},snap:{x:12,y:15,label:'point',priority:1,data:{point:{}}},identity:{id:'G1',sketchId:'ref'},pointer:{x:10,y:20}};
+    const layer=layerFor(composed,{renderer:f.renderer,rectangle:{preview:()=>state.preview},snap:{get active(){return state.snap;}},hover:{get current(){return {sketchIdentity:state.identity};}},selection:f.selection,pointer:{get lastWorld(){return state.pointer;}}});
+    assert.deepEqual(f.calls,[]);const paint=()=>{layer.drawSelectionRect();layer.drawSnapMarker();layer.drawSketchIdentityLabel();};
+    const before=JSON.stringify(state.preview);paint();assert.equal(JSON.stringify(state.preview),before);
+    const first=JSON.stringify(f.calls);assert.ok(f.calls.some(call=>call[0]==='setLineDash'));assert.ok(f.calls.some(call=>call[0]==='fillText'&&call[1]==='point'));
+    f.calls.length=0;f.viewport.scale=4;state.preview={rect:{x1:2,y1:3,x2:9,y2:11},crossing:false};state.snap={x:30,y:40,label:'line'};state.identity={id:'G2',sketchId:'child'};state.pointer={x:50,y:60};paint();
+    const second=JSON.stringify(f.calls);assert.equal(JSON.stringify(f.calls.find(call=>call[0]==='setLineDash')), '["setLineDash",[1.25,1]]');
+    f.calls.length=0;state.preview=null;state.snap=null;state.identity=null;state.pointer=null;paint();assert.deepEqual(f.calls,[]);
+    results.push([first,second]);
+  }assert.deepEqual(results[1],results[0]);
+});
+
+test('overlay layer keeps getter and paint failure identity, evaluation order and partial effects',()=>{
+  const orders={drawSelectionRect:['rectangle:method','preview:get','preview:call','rectangle:paint'],drawSnapMarker:['snap:method','snap:read','snap:paint'],drawSketchIdentityLabel:['identity:method','hover:read','identity:read','pointer:read','identity:paint']};
+  for(const composed of [false,true])for(const[method,order]of Object.entries(orders))for(const failAt of order){
+    const f=observedLayer(composed),preview=f.state.preview,snap=f.state.snap;f.state.failAt=failAt;
+    assert.throws(()=>f.layer[method](),error=>error===f.error);assert.deepEqual(f.events,order.slice(0,order.indexOf(failAt)+1));
+    assert.equal(f.state.preview,preview);assert.equal(f.state.snap,snap);assert.deepEqual(f.selection.points,[]);
+    assert.equal(f.observed.length,failAt.endsWith(':paint')?1:0);
+  }
 });

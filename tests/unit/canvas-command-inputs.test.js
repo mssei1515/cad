@@ -253,3 +253,122 @@ test('constraint and selection adapters keep shared selection identity, group dr
   f.calls.length = 0; f.state.pending = null; f.state.top = line; f.api.selection.begin({ ...f.event, ctrlKey: true }, f.p, { hitL: line });
   assert.equal(f.selection.lines[0], line); f.api.selection.begin({ ...f.event, shiftKey: true }, f.p, { hitL: line }); assert.equal(f.selection.lines.length, 0);
 });
+
+function keyboardFixture() {
+  const f = fixture({}, true), listeners = new Set();
+  const record = name => (...args) => f.calls.push([name, ...args]);
+  const browser = {
+    addEventListener(type, handler) { assert.equal(type, 'keydown'); listeners.add(handler); },
+    removeEventListener(type, handler) { assert.equal(type, 'keydown'); listeners.delete(handler); },
+  };
+  Object.assign(f.options.annotationDrag, { handlesActive: false, resizing: false,
+    begin(event, hit, point) { assert.equal(this, f.options.annotationDrag); this.handlesActive = true; f.calls.push(['annotation-begin', hit, point]); },
+    reset() { assert.equal(this, f.options.annotationDrag); this.handlesActive = false; f.calls.push(['annotation-reset']); } });
+  f.command.cancel = () => false;
+  f.options.instanceSourceCommand.finish = record('finish-sources');
+  f.state.ready = false;
+  const keyboard = f.feature.createKeyboard({ window: browser,
+    menus: { closeSketch: () => false, canvasVisible: () => false }, sketchMove: { active: false },
+    constraintStatusView: { hold: () => false }, dimensionInput: { handleKey: () => false }, shortcuts: {},
+    isGeometryMode: () => true, projection: {}, referenceImage: {}, splineEditing: {}, blockPlacement: {},
+    pendingCommandSession: { get current() { assert.equal(f.state.ready, true); return f.state.pending; } },
+    constraintTargetSession: { get command() { assert.equal(f.state.ready, true); return f.state.constraint; } },
+    cancelPendingCommand: message => { f.calls.push(['cancel-pending', message]); if (f.state.cancelFailure) throw f.state.cancelFailure; },
+    cancelConstraintTargetCommand: record('cancel-constraint'), drawing: { active: () => false, isToolMode: () => false },
+    completeLineLength: () => false, isTextEditingTarget: () => false,
+  });
+  assert.deepEqual(f.calls, []); assert.equal(listeners.size, 0); f.state.ready = true;
+  function key(key) { const event = { key, target: {}, preventDefault: record('key-prevent') }; for (const handler of listeners) handler(event); }
+  return { ...f, keyboard, browser, listeners, key };
+}
+
+test('staged keyboard shares pointer annotation handles and Selection, retaining explicit listener lifetime', () => {
+  const f = keyboardFixture(), annotation = { id: 'AN', type: 'text' };
+  f.keyboard.start(); f.keyboard.start(); assert.equal(f.listeners.size, 1);
+  f.api.annotation.select(f.event, f.p, { blankAnnotationHit: { element: annotation, part: 'frame' } });
+  assert.equal(f.options.annotationDrag.handlesActive, true); assert.ok(f.names().includes('annotation-begin'));
+  f.calls.length = 0; f.command.cancel = () => assert.fail('annotation handles have cancellation priority');
+  f.key('Escape'); assert.equal(f.options.annotationDrag.handlesActive, false);
+  assert.deepEqual(f.names(), ['key-prevent', 'annotation-reset', 'ui', 'draw']);
+  f.command.cancel = () => false; f.selection.set('points', [f.p]); f.calls.length = 0;
+  f.key('Escape'); assert.equal(f.selection.hasSelection(), false);
+  assert.deepEqual(f.names(), ['key-prevent', 'clear', 'hint', 'ui', 'draw']);
+  let external = 0; f.browser.addEventListener('keydown', () => external++);
+  f.keyboard.dispose(); f.keyboard.dispose(); f.calls.length = 0; f.key('Escape');
+  assert.deepEqual(f.calls, []); assert.equal(f.listeners.size, 1); assert.equal(external, 1);
+});
+
+test('keyboard finishes the same pointer source command and annotation, retaining live cancellation priority and errors', () => {
+  const f = keyboardFixture(), source = { id: 'source' }; f.keyboard.start(); f.state.mode = 'instance-sources';
+  f.api.instance.click(f.event, f.p, { hitL: source }); assert.equal(f.calls.at(-1)[1], source);
+  f.calls.length = 0; f.key('Enter'); assert.deepEqual(f.calls, [['key-prevent'], ['finish-sources', true]]);
+  f.state.mode = 'select'; f.options.annotationCommand.active = true;
+  f.options.annotationCommand.finish = function () { assert.equal(this, f.options.annotationCommand); f.calls.push(['finish-annotation']); };
+  f.calls.length = 0; f.key('Enter'); assert.deepEqual(f.names(), ['key-prevent', 'finish-annotation']);
+  f.options.annotationCommand.active = false; f.state.pending = {}; f.state.constraint = {}; f.calls.length = 0;
+  f.key('Escape'); assert.deepEqual(f.calls, [['key-prevent'], ['cancel-pending', undefined]]);
+  f.state.pending = null; f.calls.length = 0; f.key('Escape'); assert.deepEqual(f.calls, [['key-prevent'], ['cancel-constraint']]);
+  f.state.pending = {}; f.state.cancelFailure = new Error('pending cancellation'); f.calls.length = 0;
+  assert.throws(() => f.key('Escape'), error => error === f.state.cancelFailure);
+  assert.deepEqual(f.calls, [['key-prevent'], ['cancel-pending', undefined]]); f.keyboard.dispose();
+});
+
+function editingPointerFixture() {
+  const f = fixture({ dimensionDragging: { command: { active: false } } }, true);
+  const pointer = w.PointerInteractionController.createSession(), events = [], live = { hits: {}, consume: false, fail: null };
+  const record = name => (...args) => { assert.equal(f.state.ready, true); events.push([name, ...args]); return live.consume; };
+  const dimensions = { startDistanceValueInput(point) { assert.equal(this, dimensions); return record('distance-value')(point); },
+    targetDoubleClick(...args) { assert.equal(this, dimensions); return record('target')(...args); } };
+  const dimensionValues = { startEdit(hit) { assert.equal(this, dimensionValues); return record('edit')(hit); }, submit: record('distance-submit') };
+  const actors = { hatch: { updateHatchPreview: record('hatch-preview'), commitHatchAt: record('hatch') }, fillet: { update: record('fillet-preview'), submit: record('fillet') },
+    offset: { submit: record('offset') }, spline: { doubleClick: record('spline') }, splineEditing: { begin: record('spline-edit') }, blockPlacement: { click: record('block') },
+    annotationInput: { start: record('annotation') }, dimensions, dimensionValues,
+    identity: { selectInactive: record('inactive'), prepareSelection: record('prepare') },
+    referenceImageInteraction: { calibrating: false, calibrationClick: record('calibrate') } };
+  const references = { referenceDimensionAt: record('reference-hit'), insertDimensionParameter: record('reference-insert'), referenceAnnotationAt: () => null };
+  const initial = { x: -1, y: -2 }; pointer.setLastPointer(initial);
+  f.viewport.canvasPoint = function() { assert.equal(this.inputs, f.api); assert.equal(this.activation.selection, f.selection); return f.p; };
+  f.viewport.canvasScreenPoint = () => f.p;
+  let bound;
+  f.state.ready = false;
+  assert.equal(f.feature.bindPointerForEditing({ bind(options) { bound = options; return pointer.bind(options); } }, {
+    ...actors, canvasNavigation: { movePan: () => false }, drawingPreview: { setPointer: record('preview') },
+    expressions: { pointerReferences: references }, discardMoves: record('discard'), enterBlock: record('enter'),
+    query: { read() { if (live.fail) throw live.fail; return live.hits; }, readDoubleClick: () => live.hits },
+    closeContextMenu: record('close'), blankGesture: { isRepeated: () => false, takeSuppression: () => false, handle: () => false },
+  }), pointer);
+  assert.deepEqual(events, []); assert.equal(pointer.lastWorld, initial); f.state.ready = true;
+  return { ...f, pointer, actors, live, events, bound, references, initial, names: () => events.map(e => e[0]) };
+}
+
+test('editing pointer binding retains command receivers and live double-click priority without replacing the session', () => {
+  const f = editingPointerFixture(), { pointer, live, actors, events } = f;
+  const click = () => { events.length = 0; pointer.doubleClick(f.event); };
+  f.state.mode = 'spline'; click(); assert.deepEqual(f.names(), ['spline']); assert.equal(events[0][1], f.p);
+  f.state.mode = 'select'; f.state.pending = { type: 'offset-value' }; click(); assert.deepEqual(f.names(), ['offset']);
+  f.state.pending = { type: 'distance-place' }; click(); assert.deepEqual(f.names(), ['distance-value', 'distance-submit']); assert.equal(events[0][1], f.p);
+  f.state.pending = null; const hitD = {}; live.hits = { hitD }; live.consume = true; click(); assert.deepEqual(f.names(), ['edit']); assert.equal(events[0][1], hitD);
+  const hitP = {}, hitL = {}; live.hits = { hitP, hitL }; click(); assert.deepEqual(events, [['target', hitP, hitL, f.p]]);
+  live.consume = false; live.hits = { hitBlock: { definitionId: 'B1' } }; click(); assert.deepEqual(f.names(), ['target', 'enter']); assert.equal(events[1][1], 'B1');
+  live.hits = { hitS: {} }; click(); assert.deepEqual(f.names(), ['target', 'spline-edit']); assert.equal(events[1][1], live.hits.hitS);
+  assert.equal(pointer.lastWorld, f.initial);
+  assert.equal(f.bound.press.activation.finalizeSpline, actors.spline.doubleClick);
+  assert.equal(f.bound.press.prepareSelection, actors.identity.prepareSelection);
+  assert.equal(f.bound.press.activation.submitDistance, actors.dimensionValues.submit);
+});
+
+test('editing pointer binding preserves parameter interception, placement priority, shared preview and query failure state', () => {
+  const f = editingPointerFixture(), { pointer, live, actors, events } = f;
+  const down = () => { events.length = 0; pointer.down({ ...f.event, button: 0 }); };
+  f.state.mode = 'hatch'; actors.referenceImageInteraction.calibrating = true; const hitD = {}; live.hits = { hitD }; live.consume = true;
+  down(); assert.deepEqual(f.names(), ['close', 'reference-insert']); assert.equal(events[1][2], hitD);
+  live.consume = false; live.hits = {}; down(); assert.deepEqual(f.names(), ['close', 'reference-hit', 'hatch']); assert.equal(events.at(-1)[1], f.p);
+  f.state.mode = 'select'; down(); assert.deepEqual(f.names(), ['close', 'reference-hit', 'calibrate']);
+  actors.referenceImageInteraction.calibrating = false; f.state.pending = { type: 'fillet-radius-place' }; down(); assert.equal(events.at(-1)[0], 'fillet');
+  f.state.pending = null; f.state.mode = 'block-place'; down(); assert.equal(events.at(-1)[0], 'block');
+  f.state.mode = 'hatch'; events.length = 0; pointer.move({}, f.p, false); assert.deepEqual(f.names(), ['preview', 'hatch-preview']);
+  f.state.mode = 'select'; f.state.pending = { type: 'fillet-radius-place' }; events.length = 0; pointer.move({}, f.p, false); assert.deepEqual(f.names(), ['fillet-preview']);
+  const error = new Error('hit query failed'); live.fail = error; events.length = 0;
+  assert.throws(() => pointer.down({ ...f.event, button: 0 }), value => value === error); assert.deepEqual(f.names(), ['close']); assert.equal(pointer.lastWorld, f.p);
+  events.length = 0; f.bound.press.discardMove(); assert.equal(events[0][0], 'discard'); assert.equal(events[0][1].discard, true);
+});

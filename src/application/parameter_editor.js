@@ -1,6 +1,17 @@
 /* Assemble parameter editing UI and expression presentation around existing owners. */
 (() => {
   "use strict";
+  function createForWorkspace({ document, window: browserWindow, documentWorkspace, currentScope, readBlockEditor, settings,
+    applyDraft, recordHistory, setHint, updateUI, draw, pickDimension }) {
+    const { document: model, parameters: namespace } = documentWorkspace;
+    return create({ document, window: browserWindow, InputElement: browserWindow.HTMLInputElement, Event: browserWindow.Event,
+      namespace, currentScope, readDefinitions: () => model.blockDefinitions, readBlockEditor,
+      applicationText: settings.applicationText, language: () => settings.language,
+      formatting: { escapeHtml: window.HtmlText.escapeHtml, formatDisplayNumber: window.NumberDisplay.formatDisplayNumber,
+        formatParameterReference: window.ParameterEngine.formatReference, parameterErrorText: namespace.parameterErrorText,
+        defaultSketchId: window.SketchHierarchy.DEFAULT_SKETCH_ID },
+      localizeApplicationUI: settings.localizeApplicationUI, applyDraft, recordHistory, setHint, updateUI, draw, pickDimension });
+  }
   function create({ document, window: browserWindow, InputElement, Event: EventType,
     namespace, currentScope, readDefinitions, readBlockEditor, applicationText, language,
     formatting: { escapeHtml, formatDisplayNumber, formatParameterReference, parameterErrorText, defaultSketchId },
@@ -46,11 +57,17 @@
       draft: parameterDraft, application: { apply: applyDraft }, recordHistory, applicationText, setHint,
       loadScope: controller.loadScope, setError: setParameterDialogError, parameterErrorText, updateUI, draw,
     });
+    function createReferenceInput({ TextAreaElement, currentNamespace, dimensionValueInput, pendingCommandSession,
+      canvas, canvasPoint, hitDimension, hitAnnotationElement }) {
+      return window.ExpressionInputController.create({ document, types: { InputElement, TextAreaElement }, currentNamespace, dimensionValueInput,
+        pendingCommandSession, parameterDraft, ensureDimensionParameter: namespace.ensureDimensionParameter, setParameterDialogError,
+        setHint, applicationText, language, insertIdentifierIntoExpressionInput, canvas, canvasPoint, hitDimension, hitAnnotationElement });
+    }
     return Object.freeze({
-      draft: parameterDraft, setParameterDialogError, insertIdentifierIntoExpressionInput,
+      draft: parameterDraft, createReferenceInput, setParameterDialogError, insertIdentifierIntoExpressionInput,
       syncExpressionInputHighlight, installExpressionInputHighlights,
       start: controller.start, dispose: controller.dispose, apply: application.apply,
     });
   }
-  window.ParameterEditor = Object.freeze({ create });
+  window.ParameterEditor = Object.freeze({ createForWorkspace, create });
 })();

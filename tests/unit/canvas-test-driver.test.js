@@ -221,3 +221,48 @@ test('selection browser fixtures share geometry and notifications, and point ins
   assert.throws(() => api.addIsolatedFixedPointForContextTest({ x: 15, y: 27 }), error => error === f.marker);
   assert.equal(calls.at(-1)[0], 'ui'); assert.equal(calls.some(call => call[0] === 'draw'), false);
 });
+
+function interactionProfilingFixture() {
+  const context = { window: {} }; vm.createContext(context);
+  for (const file of ['src/diagnostics/interaction_profiler.js', 'src/ui/pointer_move_scheduler.js', 'src/testing/canvas_test_driver.js']) {
+    vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
+  }
+  const frames = new Map(), moves = [], state = { time: 0, next: 0, fail: false }, marker = new Error('pointer flush');
+  const profiler = context.window.InteractionProfiler.create(() => state.time);
+  const scheduler = context.window.PointerMoveScheduler.create({
+    requestFrame: callback => { const id = state.next++; frames.set(id, callback); return id; }, cancelFrame: id => frames.delete(id),
+    processMove(pointer) {
+      moves.push(pointer); if (state.fail) throw marker;
+      profiler.phase('preview', () => profiler.work('geometryReads', () => { state.time += 5; })); scheduler.recordDraw();
+    },
+  });
+  const api = context.window.CanvasTestDriver.createInteractionProfiling({ profiler, scheduler });
+  function tick() { const [id, callback] = frames.entries().next().value; frames.delete(id); callback(); }
+  return { api, profiler, scheduler, frames, moves, state, marker, tick };
+}
+
+test('interaction profiling starts after pending pointer work and shares live coalescing and draw statistics', () => {
+  const f = interactionProfilingFixture(); assert.ok(Object.isFrozen(f.api));
+  assert.equal(f.api.interactionFrameStatsForTest(), null); assert.deepEqual(f.moves, []); assert.equal(f.profiler.stop(), null);
+  const initial = f.api.resetInteractionFrameStatsForTest(); assert.equal(initial.receivedMoves, 0);
+  f.scheduler.schedule({ offsetX: 1, offsetY: 2 }); assert.equal(f.frames.has(0), true);
+  assert.equal(f.api.startInteractionProfileForTest(), undefined); assert.equal(f.frames.size, 0); assert.equal(f.moves.length, 1);
+  assert.equal(f.api.interactionFrameStatsForTest().synchronousFlushes, 1);
+  f.scheduler.schedule({ offsetX: 3, offsetY: 4 }); f.scheduler.schedule({ offsetX: 5, offsetY: 6 }); f.tick();
+  const profile = f.api.stopInteractionProfileForTest();
+  assert.equal(profile.preview.samples, 1); assert.equal(profile.preview.work.geometryReads.calls, 1); assert.equal(profile.preview.totalMs, 5);
+  const stats = f.api.interactionFrameStatsForTest();
+  assert.equal(stats.receivedMoves, 3); assert.equal(stats.processedMoves, 2); assert.equal(stats.coalescedMoves, 1);
+  assert.equal(stats.animationFrames, 1); assert.equal(stats.synchronousFlushes, 1); assert.equal(stats.canvasDraws, 2);
+  assert.equal(stats.pendingMove, false); assert.equal(stats.frameScheduled, false); assert.equal(f.moves[1].offsetX, 5);
+  assert.equal(f.api.stopInteractionProfileForTest(), null);
+});
+
+test('a failed pointer flush preserves the previous profile and never starts a replacement session', () => {
+  const f = interactionProfilingFixture(); f.profiler.start(); f.profiler.phase('prior', () => { f.state.time += 2; });
+  f.scheduler.schedule({ offsetX: 1, offsetY: 2 }); f.state.fail = true;
+  assert.throws(() => f.api.startInteractionProfileForTest(), error => error === f.marker);
+  assert.equal(f.frames.size, 0); assert.equal(f.moves.length, 1);
+  const profile = f.api.stopInteractionProfileForTest(); assert.equal(profile.prior.samples, 1); assert.equal(profile.prior.totalMs, 2);
+  assert.equal(profile.preview, undefined); assert.equal(f.api.interactionFrameStatsForTest(), null);
+});

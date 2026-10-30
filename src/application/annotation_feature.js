@@ -1,6 +1,32 @@
 /* Connect annotation presentation, anchors and placement over the same operation owners. */
 (() => {
   "use strict";
+  function prepareForWorkspace({ documentWorkspace, readServices, interaction, presentation, viewportScale }) {
+    const { workspace, sketches } = documentWorkspace;
+    const targets = createAnchorQuery({ sketches, readServices, pointUsage: interaction.pointUsage, selection: interaction.selection, viewportScale });
+    function createConstrainedDrag({ placementAnchor, buildPlan, beginGeometryDrag, leaderDisplay, invalidateAnalysis }) {
+      const { settings: { applicationText }, setHint, updateUI, draw } = presentation;
+      return window.AnnotationDrag.createConstrained({ currentScope: workspace.current, placementAnchor, resolveGeometryRef: readServices.reads.resolveGeometryRef,
+        buildPlan, beginGeometryDrag, leaderDisplay, leaderAnchor: targets.annotationLeaderAnchor, invalidateAnalysis, applicationText, setHint, updateUI, draw });
+    }
+    function createFeature({ ctx, viewport, surface, editingScope, sessions, placement, readAppearance, readExportFrame, canvasThemeColor,
+      resizeEnabled, constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand, startDistanceResolution, clearSelection, updateToolbar }) {
+      return createForEditing({ documentWorkspace, readServices, interaction, presentation, targets,
+        ctx, viewport, surface, editingScope, sessions, placement, readAppearance, readExportFrame, canvasThemeColor,
+        resizeEnabled, constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand, startDistanceResolution, clearSelection, updateToolbar });
+    }
+    return Object.freeze({ targets, createConstrainedDrag, createFeature });
+  }
+  function createAnchorQuery({ sketches, readServices, pointUsage, selection, viewportScale }) {
+    const { reads, geometryAppearance } = readServices;
+    const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, resolveGeometryRef } = reads;
+    const { isReferenceSourceSketchId, elementSketchId, activeSketchId } = sketches;
+    const { isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint } = pointUsage;
+    return window.AnnotationAnchorQuery.create({ selectedGeometryItems: selection.selectedGeometryItems,
+      isReferenceSourceSketchId, elementSketchId, activeSketchId, resolveGeometryRef, viewportScale,
+      isVisibleSketchElement: geometryAppearance.isVisibleSketchElement, isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint,
+      geometry: { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } });
+  }
   function create({ ctx, viewport, surface, canvasSelection, readHover, readExportFrame, canvasThemeColor,
     effectiveAnnotationStyle, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement, resizeEnabled,
     activeSketchId, allAnnotations, isVisibleValue, isVisibleSketchId, currentScope, readEditingScope,
@@ -81,5 +107,30 @@
     return Object.freeze({ renderer: display.renderer, layer: display.layer, spatial, anchors, dimensions, command,
       placementAnchor, materialize, dimensionScope, startAnchorConstraint, createEditor, createDrag });
   }
-  window.AnnotationFeature = Object.freeze({ create });
+  // Keep Workspace reads separate from the activated editing scope and late drag callbacks.
+  function createForEditing({ ctx, viewport, surface, documentWorkspace, editingScope, readServices, interaction, sessions, targets,
+    placement, presentation, readAppearance, readExportFrame, canvasThemeColor, resizeEnabled, constraintOperandsFromSelection,
+    recordHistory, cancelPendingCommand, cancelConstraintTargetCommand, startDistanceResolution, clearSelection, updateToolbar }) {
+    const { workspace, sketches, parameters: parameterNamespace, documentIds } = documentWorkspace;
+    const { activeSketchId, elementSketchId, isEditableSketchElement, isReferenceSourceSketchId } = sketches;
+    const { effectiveAnnotationStyle } = readServices.annotationAppearance, { resolveGeometryRef, allAnnotations } = readServices.reads;
+    const { isVisibleValue, isVisibleSketchId } = readServices.geometryAppearance;
+    const { annotationLeaderAnchor, annotationLeaderTargetFromHit } = targets;
+    const { guardSketchEdit, canCreateInActiveSketch, rejectRootSketchCreation } = interaction.access;
+    const { defaultDimensionForTarget, normalizeDimension } = placement;
+    const { evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft, ensureDimensionParameter, parameterErrorText } = parameterNamespace;
+    const { settings: { applicationText }, updateUI, draw, setHint } = presentation;
+    const { geometryRefForItem } = window.GeometryObjects;
+    return create({ ctx, viewport, surface, canvasSelection: interaction.selection, readHover: () => interaction.hover.current,
+      readExportFrame, canvasThemeColor, effectiveAnnotationStyle, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement, resizeEnabled,
+      activeSketchId, allAnnotations, isVisibleValue, isVisibleSketchId, currentScope: workspace.current, readEditingScope: () => editingScope.current,
+      constraintTargetSession: sessions.targets, pendingCommandSession: sessions.pending, lastPointer: sessions.pointer.readLastPointer,
+      elementSketchId, guardSketchEdit, isReferenceSourceSketchId, geometryRefForItem, constraintOperandsFromSelection,
+      recordHistory, updateUI, draw, setHint, cancelPendingCommand, cancelConstraintTargetCommand, applicationText, startDistanceResolution,
+      defaultDimensionForTarget, normalizeDimension, evaluateDimensionExpressionDraft, parameterNamespace, ensureDimensionParameter,
+      applyStyle: (style, key, value, effective) => readAppearance().applyLeaderAppearanceValue(style, key, value, { viewportScale: viewport.scale, effective }),
+      parameterErrorText, exitDrawMode: interaction.lifecycle.exit, nextAnnotationId: () => documentIds.allocate("annotation"),
+      canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar, annotationLeaderTargetFromHit });
+  }
+  window.AnnotationFeature = Object.freeze({ create, createAnchorQuery, createForEditing, prepareForWorkspace });
 })();

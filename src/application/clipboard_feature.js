@@ -52,5 +52,29 @@
     return Object.freeze({ session, command, copyableSelectionPayload,
       canOfferCopy: () => payload.canOfferCopy(currentScope(), canvasSelection) });
   }
-  window.ClipboardFeature = Object.freeze({ create });
+  // Clipboard models follow the activated editing scope; Parameters follow Workspace scope.
+  function createForEditing({ documentWorkspace, editingScope, readServices, interaction, geometry, annotationRenderer,
+    references, annotationLeaderAnchor, viewport, serializeConstraint, decorateSerializedConstraint, normalizeGeometryInstance,
+    deserializeConstraint, blockScopeId, blockDefinitionScopeError, presentation, pasteOffsetScreenPx, imageClipboard,
+    updateToolbar, deleteSelection, isGeometryMode, clearSelection, solveAndRefresh }) {
+    const { workspace, sketches, geometryIds, documentIds, parameters } = documentWorkspace;
+    const { blockProjectionBundle, blockProjectionLocalId, invalidateBlockProjectionCache } = readServices.projections;
+    const { resolveGeometryRef, geometryInstanceBundle } = readServices.reads;
+    const { geometryInstanceSourcePoints } = readServices.instances, { blockDefinitionById } = readServices.catalog;
+    const { effectiveAnnotationStyle } = readServices.annotationAppearance;
+    const { annotationTextLayout, annotationTextMetrics, annotationLeaderDisplayGeometry } = annotationRenderer;
+    const { ensureLineMinimumLength, normalizeArcSweep } = geometry, { constraintGraphNodes } = references;
+    const { activeSketchId, sketchName } = sketches, { canCreateInActiveSketch, guardSketchEdit } = interaction.access;
+    const { settings: { applicationText }, setHint, updateUI, draw } = presentation;
+    const { serializeGeometryInstance } = window.DocumentSnapshot;
+    return create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle,
+      applicationText, annotationTextLayout, annotationTextMetrics, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle,
+      viewport, serializeGeometryInstance, constraintGraphNodes, serializeConstraint, decorateSerializedConstraint,
+      currentScope: () => editingScope.current, canvasSelection: interaction.selection, blockScopeId, setHint,
+      pasteOffsetScreenPx, imageClipboard, updateToolbar, deleteSelection, geometryIds, ensureLineMinimumLength, normalizeArcSweep,
+      blockDefinitionById, documentIds, normalizeGeometryInstance, parameters, deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache,
+      isGeometryMode, blockDefinitionScopeError, canCreateInActiveSketch, guardSketchEdit, activeSketchId, currentParameterNamespace: workspace.current,
+      clearSelection, selectMode: interaction.lifecycle.selectMode, solveAndRefresh, updateUI, draw, sketchName });
+  }
+  window.ClipboardFeature = Object.freeze({ create, createForEditing });
 })();

@@ -1,6 +1,16 @@
 /* Compose shared dimension measurement, placement, layout and painting services. */
 (() => {
   "use strict";
+  function createForScene({ ctx, viewport, currentLines, minLineLength, canvasThemeColor, onExpressionMark, appearance, sketches }) {
+    const { isReadOnlyDimension, measuredDimensionValue, angleDegrees } = window.DimensionQueries;
+    const { formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
+    const labels = window.DimensionPresentation.createLabel({ isReadOnlyDimension, measuredDimensionValue, angleDegrees,
+      dimensionDisplayState: appearance.dimensionDisplayState, constraintSketchId: sketches.constraintSketchId,
+      formatDimensionLabel, formatMeasuredDimensionLabel });
+    const display = create({ ctx, viewport, currentLines, minLineLength, canvasThemeColor, onExpressionMark,
+      effectiveDimensionAppearance: appearance.effectiveDimensionAppearance, activeSketchId: sketches.activeSketchId });
+    return Object.freeze({ display, labels });
+  }
   function create({ ctx, viewport, currentLines, minLineLength, canvasThemeColor, onExpressionMark,
     effectiveDimensionAppearance, activeSketchId }) {
     const metrics = window.DimensionMetrics.create({ ctx, viewport });
@@ -40,5 +50,5 @@
     }
     return Object.freeze({ metrics, placement, layouts, painter, layout, createTraversal, createPreview });
   }
-  window.DimensionDisplay = Object.freeze({ create });
+  window.DimensionDisplay = Object.freeze({ create, createForScene });
 })();

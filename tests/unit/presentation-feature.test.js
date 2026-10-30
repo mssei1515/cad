@@ -5,7 +5,7 @@ function fixture(){
   const settings={language:'ja',localizeApplicationUI:()=>events.push('localize'),applicationText:(ja,en)=>settings.language==='en'?en:ja},profiler={active:false,work:(category,work)=>{events.push('profile:'+category);return work();}};
   const feedback={constraints:{id:'formatter'},log(message){assert.equal(this,feedback);events.push(['log',message]);return state.frame;},hint(...args){assert.equal(this,feedback);events.push(['hint',...args]);return state.frame;},solveResult(...args){assert.equal(this,feedback);events.push(['solve',...args]);}};
   const sandbox={window:{ApplicationSettings:{create(ports){events.push('settings');created.settings=ports;return settings;}},InteractionProfiler:{create(){events.push('profiler');return profiler;}},ApplicationFeedback:{create(ports){events.push('feedback');created.feedback=ports;return feedback;}}}};
-  vm.createContext(sandbox);for(const file of ['src/application/application_refresh.js','src/ui/canvas_refresh.js','src/application/presentation_feature.js','src/ui/toolbar_view.js','src/editing/edit_history.js','src/editing/history_controller.js','src/editing/draw_operation_lifecycle.js','src/editing/pending_command_session.js','src/editing/constraint_target_session.js'])vm.runInContext(fs.readFileSync(file,'utf8'),sandbox);
+  vm.createContext(sandbox);for(const file of ['src/application/application_refresh.js','src/ui/canvas_refresh.js','src/application/presentation_feature.js','src/ui/toolbar_view.js','src/ui/command_cursor.js','src/editing/edit_history.js','src/editing/history_controller.js','src/editing/draw_operation_lifecycle.js','src/editing/pending_command_session.js','src/editing/constraint_target_session.js'])vm.runInContext(fs.readFileSync(file,'utf8'),sandbox);
   const storage=()=>assert.fail('no eager storage read by assembly'),version=()=>events.push('version'),duplicates=()=>assert.fail('no eager duplicate query');
   const feature=sandbox.window.PresentationFeature.create({document,storage,refreshVersion:version,readDuplicateCount:duplicates});
   const step=name=>()=>{events.push(name);if(state.fail===name)throw state.marker;};
@@ -54,7 +54,7 @@ test('settings callbacks dispatch into bound views and profiling still uses the 
   f.created.settings.refreshVersion();assert.equal(f.events.at(-1),'version');
 });
 
-function toolbarPresentationFixture() {
+function toolbarPresentationFixture(buildControls = (toolbar, options) => toolbar.createControls(options)) {
   const f=fixture(), w=f.w, nodes=new Map(); f.events.length=0;
   function node() { const classes=new Set(), attributes={}; return { disabled:null, textContent:'', classes, attributes,
     classList:{toggle(name,value){if(value)classes.add(name);else classes.delete(name);}}, setAttribute(name,value){attributes[name]=value;} }; }
@@ -72,10 +72,10 @@ function toolbarPresentationFixture() {
     readHistory:()=>{f.events.push('history');if(state.historyFailure)throw marker;return controller.active();},
     updateDocumentStatus:()=>{f.events.push('name');if(state.statusFailure)throw marker;}});
   assert.deepEqual(f.events,[]);
-  const controls=toolbar.createControls({selectedVisibilityTargets:()=>{f.events.push('visibility');return[];},selectionVisibilityIsHidden:()=>false,canEditTarget:()=>true,
-    syncFlyouts:()=>{f.events.push('flyouts');if(state.onFlyouts)state.onFlyouts();},updateCursor:value=>{f.events.push('cursor');state.cursor=value;}});
+  const controls=buildControls(toolbar, {selectedVisibilityTargets:()=>{f.events.push('visibility');return[];},selectionVisibilityIsHidden:()=>false,canEditTarget:()=>true,
+    syncFlyouts:()=>{f.events.push('flyouts');if(state.onFlyouts)state.onFlyouts();},updateCursor:value=>{f.events.push('cursor');state.cursor=value;}}, { f, state, nodes, node });
   assert.deepEqual(f.events,[]);
-  return{...f,state,nodes,toolbar,controls,controller,documentHistory,blockHistory,lifecycle,pending,constraints,marker,node};
+  return{...f,state,nodes,toolbar,controls,controller,documentHistory,blockHistory,lifecycle,pending,constraints,constructionCommand,marker,node};
 }
 
 test('toolbar composition follows real mode/pending/constraint owners, shared language and fresh state after flyout sync',()=>{
@@ -156,3 +156,175 @@ for (const failure of ["menu", "flyout"]) {
     assert.equal(f.controls.syncFlyouts(), failure === "menu" ? undefined : f.syncResult);
   });
 }
+
+test("presentation connects the actual late command panels to canvas refresh and input without reading them during binding", () => {
+  const f = fixture(), host = {}, selected = {}, bundle = Object.freeze({
+    commandPanel: { update() { assert.equal(this, bundle.commandPanel); f.events.push("panel update"); } },
+    derivedPanel: { selectedItem() { assert.equal(this, bundle.derivedPanel); f.events.push("panel selection"); return selected; } },
+  });
+  const canvasPorts = { ...f.canvas }; delete canvasPorts.readCommandPanel; delete canvasPorts.readDerivedPanel;
+  f.events.length = 0; f.feature.bindCanvas(canvasPorts);
+  assert.equal(f.feature.readCommandPanel(), null); assert.equal(f.state.domReads, 0); assert.deepEqual(f.events, []);
+  assert.equal(f.feature.draw(), f.state.frame); assert.equal(f.feature.selectedItem, null);
+  assert.deepEqual(f.events.splice(0), ["input", "cache", "frame"]);
+  f.w.CommandPanel = { createFeature(ports) {
+    assert.equal(ports.document, f.document); assert.equal(ports.host, host); assert.equal(ports.readMode, f.canvas.readMode);
+    assert.equal(f.feature.readCommandPanel(), null); f.events.push("panel create"); return bundle;
+  } };
+  assert.equal(f.feature.createCommandPanels({ host, readMode: f.canvas.readMode }), bundle);
+  assert.equal(f.feature.readCommandPanel(), bundle.commandPanel); assert.equal(f.feature.selectedItem, null);
+  assert.deepEqual(f.events.splice(0), ["panel create"]);
+  assert.equal(f.feature.draw(), f.state.frame); assert.equal(f.feature.selectedItem, selected);
+  assert.deepEqual(f.events, ["panel update", "input", "panel selection", "cache", "frame"]);
+});
+
+test("presentation only publishes completed panel construction and preserves its previous owner on failure", () => {
+  const f = fixture(), marker = new Error("panel creation failed");
+  const canvasPorts = { ...f.canvas }; delete canvasPorts.readCommandPanel; delete canvasPorts.readDerivedPanel;
+  f.feature.bindCanvas(canvasPorts); f.events.length = 0;
+  f.w.CommandPanel = { createFeature() { assert.equal(f.feature.readCommandPanel(), null); f.feature.draw(); throw marker; } };
+  assert.throws(() => f.feature.createCommandPanels({}), error => error === marker);
+  assert.equal(f.feature.readCommandPanel(), null); assert.equal(f.feature.selectedItem, null);
+  assert.deepEqual(f.events.splice(0), ["input", "cache", "frame"]);
+  const selected = {}, bundle = { commandPanel: { update() { f.events.push("previous panel"); } }, derivedPanel: { selectedItem: () => selected } };
+  f.w.CommandPanel.createFeature = () => bundle;
+  f.feature.createCommandPanels({});
+  f.w.CommandPanel.createFeature = () => { assert.equal(f.feature.readCommandPanel(), bundle.commandPanel); throw marker; };
+  assert.throws(() => f.feature.createCommandPanels({}), error => error === marker);
+  assert.equal(f.feature.readCommandPanel(), bundle.commandPanel); f.feature.draw();
+  assert.equal(f.feature.selectedItem, selected);
+  assert.deepEqual(f.events, ["previous panel", "input", "cache", "frame"]);
+});
+
+function toolbarInputFixture() {
+  const f = toolbarPresentationFixture();
+  for (const id of ['toolPoint', 'toolCircle', 'toolArc', 'toolConstructionLine', 'toolFillet', 'toolHatch', 'deleteSelectionBtn']) f.nodes.set(id, f.node());
+  for (const node of f.nodes.values()) {
+    node.listeners = new Set();
+    node.addEventListener = (type, handler) => { assert.equal(type, 'click'); node.listeners.add(handler); };
+    node.removeEventListener = (type, handler) => { assert.equal(type, 'click'); node.listeners.delete(handler); };
+    node.click = () => { for (const handler of node.listeners) handler.call(node); };
+  }
+  f.feature.bindUI(f.ui); f.feature.bindCanvas(f.canvas); f.controller.resetDocument();
+  const reset = () => {}, resettable = { reset };
+  f.lifecycle.bind({ line: resettable, rectangle: resettable, fillet: resettable,
+    circular: { resetCircle: reset, resetArcs: reset }, preview: { setPointer: reset },
+    clearSnap: reset, cancelConstraintTargetCommand: reset, updateToolbar: f.controls.view.update, setHint: reset, draw: f.feature.draw });
+  f.events.length = 0;
+  return f;
+}
+
+test('toolbar input assembly shares displayed lifecycle and construction while retaining separate binding phases and native handlers', () => {
+  const f = toolbarInputFixture(), calls = [];
+  function undo() { assert.equal(this, f.nodes.get('undoBtn')); calls.push('undo'); }
+  const annotation = { start() { assert.equal(this, annotation); calls.push('annotation'); } };
+  const editing = f.toolbar.createEditingBinding({ undo, redo() {}, toggleVisibility() {}, deleteSelection: () => false, annotation });
+  f.constructionCommand.toggle = function () { assert.equal(this, f.nodes.get('toolConstructionLine')); calls.push('construction'); };
+  const drawing = f.toolbar.createDrawingBinding({ filletCommand: { begin() { assert.equal(this, f.nodes.get('toolFillet')); calls.push('fillet'); } },
+    startHatchCreation: () => calls.push('hatch') });
+  assert.deepEqual(f.events, []); assert.equal([...f.nodes.values()].some(node => node.listeners.size), false);
+  editing.bind(); editing.bind();
+  assert.equal(f.nodes.get('toolLine').listeners.size, 0); assert.equal(f.nodes.get('undoBtn').listeners.size, 1);
+  f.nodes.get('undoBtn').click(); f.nodes.get('annotationTextBtn').click();
+  assert.deepEqual(calls.splice(0), ['undo', 'annotation']); assert.equal([...f.nodes.get('undoBtn').listeners][0], undo);
+  drawing.bind(); drawing.bind(); f.nodes.get('toolLine').click();
+  assert.equal(f.lifecycle.mode, 'line'); assert.equal(f.nodes.get('toolLine').attributes['aria-pressed'], 'true');
+  assert.ok(f.events.includes('frame'));
+  f.nodes.get('toolConstructionLine').click(); f.nodes.get('toolFillet').click(); f.nodes.get('toolHatch').click();
+  assert.deepEqual(calls.splice(0), ['construction', 'fillet', 'hatch']);
+  editing.dispose(); assert.equal(f.nodes.get('undoBtn').listeners.size, 0); assert.equal(f.nodes.get('toolLine').listeners.size, 1);
+  f.nodes.get('toolCircle').click(); assert.equal(f.lifecycle.mode, 'circle');
+  drawing.dispose(); drawing.dispose(); assert.equal([...f.nodes.values()].some(node => node.listeners.size), false);
+});
+
+test('toolbar deletion uses the shared mode permission and presentation refreshes, propagating command failure without refreshing', () => {
+  const f = toolbarInputFixture(), calls = [], marker = new Error('delete failure'); let result = false, fail = false;
+  const editing = f.toolbar.createEditingBinding({ deleteSelection() { calls.push('delete'); if (fail) throw marker; return result; } });
+  editing.bind(); f.events.length = 0; f.state.geometry = false;
+  f.nodes.get('deleteSelectionBtn').click(); assert.deepEqual(calls, []); assert.deepEqual(f.events, []);
+  f.state.geometry = true; f.nodes.get('deleteSelectionBtn').click(); assert.deepEqual(calls.splice(0), ['delete']); assert.deepEqual(f.events, []);
+  result = true; f.nodes.get('deleteSelectionBtn').click(); assert.deepEqual(calls.splice(0), ['delete']);
+  assert.ok(f.events.indexOf('annotation') >= 0); assert.ok(f.events.indexOf('annotation') < f.events.indexOf('frame'));
+  f.events.length = 0; fail = true; assert.throws(() => f.nodes.get('deleteSelectionBtn').click(), error => error === marker);
+  assert.deepEqual(calls, ['delete']); assert.deepEqual(f.events, []); editing.dispose();
+});
+
+
+function preparedToolbarFixture(composed, probe = {}) {
+  probe.steps = []; probe.ports = {}; probe.results = {}; probe.svgReads = [];
+  const mark = name => { probe.steps.push(name); if (probe.failAt === name) throw probe.error; };
+  const f = toolbarPresentationFixture((toolbar, options, { f, state, nodes, node }) => {
+    const writes = [], canvas = { dataset: {}, style: { setProperty(name, value) { writes.push({ name, value }); } }, classList: { add() {} } };
+    function button(id, label = id, constraint) {
+      const item = node(); Object.assign(item, { id, dataset: { constraint }, svg: label, querySelector(selector) {
+        assert.equal(selector, 'svg'); probe.svgReads.push(this); return { innerHTML: this.svg };
+      } }); return item;
+    }
+    for (const id of ['toolLine', 'toolSpline', 'toolFillet', 'annotationTextBtn']) nodes.set(id, button(id));
+    const fixed = button('fixPointBtn', 'fixed-captured'), distance = button('', 'distance-captured', 'distance'), menu = button('menuDistance');
+    nodes.set('fixPointBtn', fixed); const lists = { constraints: [distance], menu: [menu] };
+    f.document.querySelectorAll = selector => { const name = selector === '[data-constraint]' ? 'constraints' : 'menu';
+      assert.ok(['[data-constraint]', '[data-menu-constraint]'].includes(selector)); mark('query-' + name); f.events.push('query:' + selector); return lists[name]; };
+    const getElement = f.document.getElementById; f.document.getElementById = id => { if (id === 'fixPointBtn') mark('fix'); return getElement(id); };
+    const originalCursor = f.w.CommandCursor, originalView = f.w.ToolbarView;
+    f.w.CommandCursor = { ...originalCursor, create(input) { mark('cursor'); probe.ports.cursor = input; return probe.results.cursor = originalCursor.create(input); } };
+    f.w.ToolbarView = { ...originalView, create(input) { mark('view'); probe.ports.view = input; return probe.results.view = originalView.create(input); },
+      createCommandStatus(input) { mark('status'); probe.ports.status = input; return probe.results.status = originalView.createCommandStatus(input); } };
+    try {
+      let prepared;
+      if (composed) prepared = toolbar.prepareControls({ canvas });
+      else {
+        const constraintButtons = Array.from(f.document.querySelectorAll('[data-constraint]'));
+        const constraintMenuButtons = Array.from(f.document.querySelectorAll('[data-menu-constraint]'));
+        const fixPointBtn = f.document.getElementById('fixPointBtn');
+        const cursor = f.w.CommandCursor.create({ document: f.document, canvas, fixPointBtn, constraintButtons });
+        prepared = { constraintButtons, constraintMenuButtons, fixPointBtn, cursor,
+          createControls: options => toolbar.createControls({ ...options, updateCursor: cursor.update }) };
+      }
+      assert.deepEqual(probe.steps, ['query-constraints', 'query-menu', 'fix', 'cursor']); assert.deepEqual(probe.svgReads, []);
+      probe.prepared = prepared; probe.canvas = canvas; probe.writes = writes; probe.fixed = fixed; probe.distance = distance; probe.menu = menu;
+      probe.preparationReads = [...f.events]; assert.deepEqual(probe.preparationReads, ['query:[data-constraint]', 'query:[data-menu-constraint]', 'dom:fixPointBtn']);
+      if (probe.afterPrepare) probe.afterPrepare({ prepared, lists, nodes, button });
+      f.events.length = 0; return prepared.createControls(options);
+    } finally { f.w.CommandCursor = originalCursor; f.w.ToolbarView = originalView; }
+  });
+  return { ...f, probe };
+}
+
+test('toolbar preparation retains early DOM identity and actual Cursor, with View and Status constructed only at the later stage', () => {
+  for (const composed of [false, true]) {
+    const probe = { afterPrepare({ lists, nodes, button }) { lists.constraints = [button('', 'replacement', 'distance')]; nodes.set('fixPointBtn', button('fixPointBtn', 'replacement-fixed')); } };
+    const f = preparedToolbarFixture(composed, probe), { prepared, ports, results } = probe;
+    assert.deepEqual(probe.steps, ['query-constraints', 'query-menu', 'fix', 'cursor', 'view', 'status']); assert.deepEqual(probe.svgReads, []);
+    assert.equal(prepared.cursor, results.cursor); assert.equal(f.controls.view, results.view); assert.equal(f.controls.status, results.status);
+    assert.equal(prepared.fixPointBtn, probe.fixed); assert.equal(prepared.constraintButtons[0], probe.distance); assert.equal(prepared.constraintMenuButtons[0], probe.menu);
+    assert.equal(ports.cursor.constraintButtons, prepared.constraintButtons); assert.equal(ports.cursor.fixPointBtn, prepared.fixPointBtn); assert.equal(ports.view.updateCursor, prepared.cursor.update);
+    assert.equal(ports.cursor.document, f.document); assert.equal(ports.view.document, f.document); assert.deepEqual(probe.writes, []);
+    f.controller.resetDocument(); f.constraints.begin('fixed', []); f.controls.view.update();
+    assert.equal(probe.canvas.dataset.commandCursorSource, 'fixPointBtn'); assert.match(decodeURIComponent(probe.writes.at(-1).value), /fixed-captured/);
+    if (composed) assert.equal(Object.isFrozen(prepared), true);
+  }
+});
+
+test('prepared toolbar keeps live interaction after flyout sync and the same cursor cache, priority, language and status updates', () => {
+  for (const composed of [false, true]) {
+    const f = preparedToolbarFixture(composed), { canvas, writes, distance } = f.probe; f.controller.resetDocument(); f.events.length = 0;
+    f.lifecycle.setMode('line'); f.state.onFlyouts = () => { f.pending.replace({ type: 'distance-value' }); f.state.spline = true; };
+    f.controls.view.update(); assert.equal(f.nodes.get('toolLine').classes.has('active'), true); assert.equal(canvas.dataset.commandCursorSource, 'constraint:distance');
+    assert.match(decodeURIComponent(writes.at(-1).value), /distance-captured/); const count = writes.length;
+    distance.svg = 'changed-after-cache'; f.controls.view.update(); assert.equal(writes.length, count);
+    f.state.onFlyouts = null; f.pending.replace(null); f.constraints.begin('fixed', []); f.settings.language = 'en'; f.controls.status.update();
+    assert.equal(f.nodes.get('statusCommand').textContent, 'Constraint'); f.controls.view.update(); assert.equal(canvas.dataset.commandCursorSource, 'fixPointBtn');
+    f.constraints.reset(); f.state.spline = false; f.lifecycle.setMode('select'); f.controls.view.update(); assert.equal(canvas.dataset.commandCursorSource, undefined);
+  }
+});
+
+test('toolbar preparation preserves DOM lookup and constructor failure order without eager state refresh or later construction', () => {
+  const sequence = ['query-constraints', 'query-menu', 'fix', 'cursor', 'view', 'status'];
+  for (const composed of [false, true]) for (const failAt of sequence) {
+    const probe = { failAt, error: new Error(failAt) };
+    assert.throws(() => preparedToolbarFixture(composed, probe), error => error === probe.error);
+    assert.deepEqual(probe.steps, sequence.slice(0, sequence.indexOf(failAt) + 1)); assert.deepEqual(probe.svgReads, []);
+    if (probe.writes) assert.deepEqual(probe.writes, []);
+  }
+});

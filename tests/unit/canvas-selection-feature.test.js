@@ -7,11 +7,11 @@ vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(source => source.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture() {
+function fixture(extraSketches = {}) {
   const calls = [], state = { sketches: new Map(), snapFailure: null };
   let presentation;
   const feature = w.CanvasSelectionFeature.create({
-    sketches: { sketchById: id => { calls.push('lookup:' + id); return state.sketches.get(id); } },
+    sketches: { sketchById: id => { calls.push('lookup:' + id); return state.sketches.get(id); }, ...extraSketches },
     guardSketchEdit: id => { calls.push('guard:' + id); return false; },
     clearSelection: () => { calls.push('clear'); return presentation.clearing.clear(); },
     updateGeometrySelectionUI: () => calls.push('ui'), draw: () => calls.push('draw'),
@@ -76,4 +76,77 @@ test('reset propagates a snap failure after pointer cleanup and before clearing 
   assert.throws(() => f.presentation.documentReset.reset(), error => error === failure);
   assert.equal(f.pointer.readLastPointer(), null); assert.equal(f.hover.current.point, null);
   assert.equal(f.feature.selection.annotations[0], item); assert.deepEqual(f.calls, ['snap']);
+});
+
+test('constraint operand assembly keeps the actual Selection, target session, live Sketch relation and latest spline pointer', () => {
+  const relations = new Map([['S1', 'active'], ['S2', 'reference']]); let ready = false;
+  const f = fixture({ elementSketchId: item => { assert.equal(ready, true); return item.sketchId; },
+    operandRelationForSketch: id => { assert.equal(ready, true); return relations.get(id); },
+    sameSketchElements: () => { assert.equal(ready, true); return true; } });
+  const bridge = f.feature.createConstraintOperands({ targets: f.targets, pointer: f.pointer,
+    solver: { get syncLineOrientationHints() { assert.fail('no eager solver access'); } }, acceptError: 1e-4 });
+  assert.ok(Object.isFrozen(bridge)); assert.deepEqual(f.calls, []); ready = true;
+  const first = point('P1'), second = point('P2', 'S2'), arc = { id: 'A1', sketchId: 'S1' };
+  f.feature.selection.set('points', [first]); f.feature.selection.set('arcs', [arc]);
+  f.feature.selection.set('arcEndpoint', { arc, endpoint: 'end' });
+  const operands = bridge.fromSelection(); assert.deepEqual(Array.from(operands, value => value.kind), ['point', 'arc-endpoint']);
+  assert.equal(operands[0].point, first); assert.equal(operands[1].arc, arc);
+  f.targets.begin('distance', [bridge.operands.makeConstraintOperand('point', { point: second })]);
+  assert.equal(bridge.syncSelection(), undefined); assert.equal(f.feature.selection.points[0], second);
+  assert.equal(f.feature.selection.arcEndpoint, null); assert.equal(f.feature.selection.arcs.length, 0);
+  relations.set('S2', 'active'); assert.equal(bridge.fromSelection()[0].relation, 'active');
+  f.feature.selection.clear();
+  const curve = w.SplineGeometry.build([{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 100, y: 0 }]);
+  const spline = { id: 'SP', sketchId: 'S1', curve: () => curve, startPoint: () => ({ x: 0, y: 0 }) };
+  f.feature.selection.set('splines', [spline]); f.pointer.setLastPointer({ x: 5, y: 0 });
+  const left = bridge.fromSelection()[0]; f.pointer.setLastPointer({ x: 95, y: 0 }); const right = bridge.fromSelection()[0];
+  assert.equal(left.spline, spline); assert.equal(right.spline, spline); assert.equal(left.endpoint, 'start'); assert.equal(right.endpoint, 'end');
+  assert.ok(left.parameter < 0.1); assert.ok(right.parameter > 0.9); assert.deepEqual(f.calls, []);
+});
+
+test('constraint operand conversion errors leave the existing Selection and target operands untouched', () => {
+  const marker = new Error('operand read'); let fail = false;
+  const f = fixture({ elementSketchId: item => { if (fail) throw marker; return item.sketchId; }, operandRelationForSketch: () => 'active' });
+  const bridge = f.feature.createConstraintOperands({ targets: f.targets, pointer: f.pointer, solver: {}, acceptError: 1e-4 });
+  const item = point('P1'); f.feature.selection.set('points', [item]); fail = true;
+  assert.throws(() => bridge.fromSelection(), error => error === marker); assert.equal(f.feature.selection.points[0], item);
+  fail = false; const invalid = { get kind() { throw marker; } }, operands = [invalid]; f.targets.begin('distance', operands);
+  assert.throws(() => bridge.syncSelection(), error => error === marker);
+  assert.equal(f.feature.selection.points[0], item); assert.equal(f.targets.operands, operands); assert.deepEqual(f.calls, []);
+});
+
+function editingSelectionFixture() {
+ const calls=[],state={ready:false,active:'S1',locked:new Set(),geometryMode:true,snapFailure:null};let snap,preview;
+ const check=()=>assert.equal(state.ready,true,'no eager Sketch or Selection policy read');
+ const sketches={activeSketchId:()=>{check();return state.active;},canEditSketch:(id,operation)=>{check();calls.push(['permission',id,operation]);return id===state.active&&!state.locked.has(id);},
+  sketchById:id=>{check();calls.push(['lookup',id]);return {id,locked:state.locked.has(id)};},elementSketchId:item=>item.sketchId};
+ const feature=w.CanvasSelectionFeature.createEditing({sketches,isGeometryMode:()=>{check();return state.geometryMode;},setHint:(message,kind)=>calls.push(['hint',message,kind]),applicationText:(_ja,en)=>en,
+  clearSnap:()=>snap.clear(),clearPointerPreview:()=>preview.setPointer(null),clearSelection:()=>{calls.push('clear');feature.selection.clear();},
+  updateGeometrySelectionUI:()=>calls.push('ui'),draw:()=>calls.push('draw')});
+ assert.deepEqual(calls,[]);state.ready=true;
+ snap={clear(){assert.equal(this,snap);calls.push('snap');if(state.snapFailure)throw state.snapFailure;}};
+ preview={setPointer(value){assert.equal(this,preview);calls.push(['pointer',value]);}};
+ return {feature,state,calls};
+}
+
+test('editing Selection composition uses the same live scope for access and identity selection without an early app callback',()=>{
+ const f=editingSelectionFixture(),a=point('P1'),b=point('P2','S2');
+ assert.equal(Object.isFrozen(f.feature),true);assert.equal(Object.isFrozen(f.feature.access),true);
+ assert.deepEqual(Object.keys(f.feature),['selection','scope','identity','createConstraintOperands','createPresentation','access']);
+ f.feature.selection.set('points',[a]);assert.equal(f.feature.scope.selectionItems()[0],a);assert.equal(f.feature.access.guardSelectionEdit(),true);
+ f.calls.length=0;f.state.locked.add('S2');f.feature.identity.selectInactive({}, {kind:'point',item:b,sketchId:'S2'});
+ assert.equal(f.feature.selection.points[0],b);assert.equal(f.feature.scope.selectionSketchId(),'S2');assert.deepEqual(f.calls.slice(0,3),['clear','ui','draw']);
+ assert.equal(f.calls.at(-1)[0],'hint');assert.match(f.calls.at(-1)[1],/locked/);assert.equal(f.feature.access.guardSelectionEdit(),false);
+ f.state.active='S2';f.state.locked.delete('S2');assert.equal(f.feature.access.guardSelectionEdit(),true);
+ f.calls.length=0;assert.equal(f.feature.access.guardSketchEdit(undefined,'create'),true);assert.deepEqual(f.calls,[['permission','S2','create']]);
+ f.calls.length=0;f.state.geometryMode=false;assert.equal(f.feature.access.canCreateInActiveSketch(),false);assert.deepEqual(f.calls,[]);
+});
+
+test('editing Selection refusal keeps late snap/preview owners, cleanup order and the original partial state on failure',()=>{
+ const f=editingSelectionFixture(),item=point('P1');f.feature.selection.set('points',[item]);
+ assert.equal(f.feature.access.rejectRootSketchCreation(),false);f.calls.length=0;f.state.locked.add('S1');
+ assert.equal(f.feature.access.rejectRootSketchCreation(),true);assert.deepEqual(f.calls.slice(-3),['snap',['pointer',null],'draw']);assert.equal(f.feature.selection.points[0],item);
+ const marker=new Error('snap clear failed');f.state.snapFailure=marker;f.calls.length=0;
+ assert.throws(()=>f.feature.access.rejectRootSketchCreation(),error=>error===marker);assert.equal(f.calls.at(-1),'snap');assert.equal(f.calls.includes('draw'),false);
+ assert.equal(f.calls.some(call=>Array.isArray(call)&&call[0]==='pointer'),false);assert.equal(f.feature.selection.points[0],item);
 });

@@ -1,13 +1,38 @@
 /* Assemble selection owners before connecting their later presentation/reset dependencies. */
 (() => {
   "use strict";
-  function create({ sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
+  function createOwners() {
     const selection = window.CanvasSelection.create();
     const scope = window.CanvasSelection.createScopeQuery({ canvasSelection: selection, selectedGeometryItems: selection.selectedGeometryItems });
+    return { selection, scope };
+  }
+  function create({ sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
+    return assemble({ ...createOwners(), sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw });
+  }
+  function createEditing({ sketches, isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview,
+    clearSelection, updateGeometrySelectionUI, draw }) {
+    const { selection, scope } = createOwners();
+    const access = window.SketchCommand.createEditAccess({ activeSketchId: sketches.activeSketchId, canEditSketch: sketches.canEditSketch,
+      sketchById: sketches.sketchById, selectionItems: scope.selectionItems, elementSketchId: sketches.elementSketchId,
+      isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview, draw });
+    const feature = assemble({ selection, scope, sketches, guardSketchEdit: access.guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw });
+    return Object.freeze({ ...feature, access });
+  }
+  function assemble({ selection, scope, sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
     const identity = window.CanvasSelectionInteraction.createIdentitySelection({
       canvasSelection: selection, selectionSketchId: (...args) => scope.selectionSketchId(...args),
       clearSelection, updateGeometrySelectionUI, draw, sketchById: sketches.sketchById, guardSketchEdit,
     });
+    function createConstraintOperands({ targets, pointer, solver, acceptError }) {
+      const candidates = window.ConstraintCandidates.create({ sameSketchElements: sketches.sameSketchElements,
+        syncLineOrientationHints: () => solver.syncLineOrientationHints?.(), constraintAcceptError: acceptError });
+      const operands = window.ConstraintOperands.create({ elementSketchId: sketches.elementSketchId,
+        operandRelationForSketch: sketches.operandRelationForSketch, sameArcEndpoint: candidates.sameArcEndpoint,
+        Arc: window.GeometrySolver.Arc, lineHasDirection: window.GeometryKernel.lineHasDirection, closestSplinePoint: window.SplineGeometry.closestPoint });
+      function fromSelection() { return operands.fromSelection(selection, pointer.lastWorld); }
+      function syncSelection() { selection.applyConstraintTargets(candidates.constraintTargetsFromOperands(targets.operands)); }
+      return Object.freeze({ candidates, operands, fromSelection, syncSelection });
+    }
     function createPresentation({ hover, constraintTargets, pointer, projections, constraintReferences, clearSnap }) {
       const { Point, Line, Circle, Arc, Spline, OffsetChainConstraint } = window.GeometrySolver;
       const { equals: geometryRefsEqual } = window.GeometryRef;
@@ -28,7 +53,7 @@
       });
       return Object.freeze({ highlight, clearing, documentReset });
     }
-    return Object.freeze({ selection, scope, identity, createPresentation });
+    return Object.freeze({ selection, scope, identity, createConstraintOperands, createPresentation });
   }
-  window.CanvasSelectionFeature = Object.freeze({ create });
+  window.CanvasSelectionFeature = Object.freeze({ create, createEditing });
 })();

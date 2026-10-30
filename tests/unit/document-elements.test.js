@@ -62,3 +62,43 @@ test("Hatch saved data validates boundaries, appearance and duplicate IDs withou
   assert.equal(translucent.appearance.patternType, "parallel");
   assert.equal(translucent.appearance.opacity, 0.5);
 });
+
+test("Hatch display appearance reads the live value once, normalizes a copy and preserves projection getter errors", () => {
+  let reads = 0;
+  let appearance = Object.freeze({ visible: false, patternType: "cross", angle: 5000, spacing: 0, color: "#AbCdEf", lineWidth: 0, opacity: 2 });
+  const hatch = Object.freeze({ get appearance() { reads++; return appearance; } });
+  const first = HatchData.hatchAppearanceForDisplay(hatch);
+  assert.equal(reads, 1);
+  assert.equal(JSON.stringify(first), JSON.stringify({ visible: false, patternType: "cross", angle: 3600, spacing: 0.25, color: "#abcdef", lineWidth: 0.5, opacity: 1 }));
+  first.opacity = 0;
+  assert.equal(HatchData.hatchAppearanceForDisplay(hatch).opacity, 1); assert.equal(reads, 2);
+  assert.equal(appearance.opacity, 2);
+  appearance = Object.freeze({ patternType: "solid", opacity: 0.25 });
+  assert.equal(HatchData.hatchAppearanceForDisplay(hatch).opacity, 0.25); assert.equal(reads, 3);
+  assert.equal(HatchData.hatchAppearanceForDisplay(null).opacity, 0.5);
+  assert.equal(HatchData.hatchAppearanceForDisplay(undefined).visible, true);
+  const marker = new Error("projected appearance");
+  assert.throws(() => HatchData.hatchAppearanceForDisplay({ get appearance() { throw marker; } }), error => error === marker);
+});
+
+test("Hatch pattern origin retains live projection identity and fresh fallbacks without adding a saved field", () => {
+  let reads = 0, origin = { x: 12, y: -3 };
+  const hatch = { get patternOrigin() { reads++; return origin; } };
+  assert.equal(HatchData.hatchPatternOrigin(hatch), origin); assert.equal(reads, 1);
+  origin = { x: 30, y: 40 };
+  assert.equal(HatchData.hatchPatternOrigin(hatch), origin); assert.equal(reads, 2);
+  for (const value of [null, undefined, false, 0, NaN, ""]) {
+    origin = value;
+    const a = HatchData.hatchPatternOrigin(hatch), b = HatchData.hatchPatternOrigin(hatch);
+    assert.notEqual(a, b); assert.equal(a.x, 0); assert.equal(a.y, 0);
+    a.x = 99; assert.equal(b.x, 0);
+  }
+  assert.equal(HatchData.hatchPatternOrigin({ patternOrigin: "unchanged" }), "unchanged");
+  assert.equal(HatchData.hatchPatternOrigin(null).x, 0);
+  const marker = new Error("projected origin");
+  const savedHatch = { id: "H1", sketchId: "S1", boundaryLoops: [{ role: "outer", spans: [{ source: { kind: "circle", path: ["C1"] }, fullCircle: true }] }], get patternOrigin() { throw marker; } };
+  assert.throws(() => HatchData.hatchPatternOrigin(savedHatch), error => error === marker);
+  const saved = HatchData.serializeHatch(savedHatch);
+  assert.equal(Object.hasOwn(saved, "patternOrigin"), false);
+  assert.equal(HatchData.validSerializedHatch(saved), true);
+});

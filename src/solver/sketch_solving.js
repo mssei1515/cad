@@ -2,12 +2,13 @@
 (() => {
   "use strict";
   const { vectorNorm } = window.GeometrySolver;
-  function create({ currentScope, solver, scopeQuery, activeSketchId, elementSketchId, constraintSketchId,
-    constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
-    synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
-    resultIsAccepted, restoreModelState, profileDependencies, acceptError }) {
+  function createResultAcceptance(acceptError) {
+    return function resultIsAccepted(result) {
+      return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= acceptError;
+    };
+  }
+  function createState() {
     const sketchSolveStates = new Map();
-    const { sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = scopeQuery;
     function clearSketchSolveState(sketchId) {
       sketchSolveStates.delete(sketchId);
     }
@@ -30,6 +31,15 @@
       return sketchSolveStates.get(sketchId) || null;
     }
 
+    function hasError(sketchId) { return sketchSolveState(sketchId)?.status === "error"; }
+    return Object.freeze({ clearSketchSolveState, setSketchSolveOk, setSketchSolveError, sketchSolveState, hasError, clearAll: () => sketchSolveStates.clear() });
+  }
+  function create({ currentScope, solver, scopeQuery, activeSketchId, elementSketchId, constraintSketchId,
+    constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
+    synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
+    resultIsAccepted, restoreModelState, profileDependencies, acceptError, state = createState() }) {
+    const { clearSketchSolveState, setSketchSolveOk, setSketchSolveError, sketchSolveState, clearAll } = state;
+    const { sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = scopeQuery;
     function solveActiveSketch(extra = []) {
       const sketchId = activeSketchId();
       synchronizeSketchProjectionMetadata(sketchId);
@@ -184,7 +194,7 @@
     }
 
 
-    return Object.freeze({ clearSketchSolveState, setSketchSolveOk, setSketchSolveError, sketchSolveState, solveActiveSketch, solveSketchById, solveReferenceDependentSketches, solveSketchAndDependents, solveConstraintComponentAndDependents, clearAll: () => sketchSolveStates.clear() });
+    return Object.freeze({ clearSketchSolveState, setSketchSolveOk, setSketchSolveError, sketchSolveState, solveActiveSketch, solveSketchById, solveReferenceDependentSketches, solveSketchAndDependents, solveConstraintComponentAndDependents, clearAll });
   }
-  window.SketchSolving = Object.freeze({ create });
+  window.SketchSolving = Object.freeze({ createResultAcceptance, createState, create });
 })();

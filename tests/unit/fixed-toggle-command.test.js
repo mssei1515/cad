@@ -10,7 +10,7 @@ const { FixedToggleCommand } = sandbox.window;
 class LineFixedConstraint { constructor(line) { this.line = line; } }
 class ArcEndpointFixedConstraint { constructor(arc, endpoint, x, y) { Object.assign(this, { arc, endpoint, x, y }); } }
 class GeometryFixedConstraint { constructor(geometry) { this.geometry = geometry; } }
-function fixture() {
+function fixture(configurePorts = ports => ports) {
   const f = { calls: [], selection: { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], arcEndpoint: null },
     scope: { constraints: [] }, allowed: true, projectionAllowed: true, commit: true, deleted: false, fullyFixed: false,
     solved: { success: true, result: { success: true, errorNorm: 0 } } };
@@ -35,7 +35,8 @@ function fixture() {
     solveSketchAndDependents: (id, snapshot) => { f.calls.push(['solve', id, snapshot]); return f.solved; },
     acceptError: 1e-4, refreshConstraintAnalysis: record('analysis'),
   };
-  f.operand = FixedToggleCommand.createOperand(ports); f.command = FixedToggleCommand.createSelection(ports);
+  const configured = configurePorts(ports, f);
+  f.operand = FixedToggleCommand.createOperand(configured); f.command = FixedToggleCommand.createSelection(configured);
   return f;
 }
 
@@ -135,4 +136,60 @@ test('batch unfix removes only matched fixed constraints and records history aft
   assert.deepEqual(f.calls.map(call => call[0]), ['snapshot', 'solve', 'analysis', 'hint', 'ui', 'draw', 'log', 'history']);
   assert.equal(f.calls[4][1].refreshAnalysis, false);
   assert.equal(f.calls.at(-1)[1], '固定状態変更');
+});
+
+const modelSandbox = { window: {} }; vm.createContext(modelSandbox);
+for (const file of ['src/geometry/geometry_kernel.js','src/geometry/spline_geometry.js','src/solver/constraint_solver.js',
+  'src/ui/toolbar_view.js','src/testing/properties_test_driver.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), modelSandbox, { filename: file });
+const modelWindow = modelSandbox.window, models = modelWindow.GeometrySolver;
+function typedFixture() {
+  return fixture((ports, f) => {
+    const configured = { ...ports, modelTypes: { ...models },
+      findLineFixedConstraint: line => f.scope.constraints.find(item => item instanceof models.LineFixedConstraint && item.line === line),
+      findArcEndpointFixedConstraint: (arc, endpoint) => f.scope.constraints.find(item => item instanceof models.ArcEndpointFixedConstraint && item.arc === arc && item.endpoint === endpoint),
+      arcEndpointPoint: modelWindow.GeometryKernel.arcEndpointPoint };
+    for (const name of ['LineFixedConstraint','ArcEndpointFixedConstraint','GeometryFixedConstraint']) delete configured[name];
+    f.types = configured.modelTypes; f.findLine = configured.findLineFixedConstraint; return configured;
+  });
+}
+
+test('model namespace shares actual fixed constructors across operand, batch, icon and observation without live type lookup', () => {
+  const f = typedFixture(), dom = [];
+  const icons = modelWindow.ToolbarView.createIcons({ types: f.types, isDimensionConstraint: () => false,
+    document: { querySelector: selector => { dom.push(selector); return { querySelector: () => ({ outerHTML: `<svg data-button="${selector}"></svg>` }) }; } } });
+  const observation = modelWindow.PropertiesTestDriver.createFixedObservation({ modelTypes: f.types, currentScope: () => f.scope,
+    elementSketchId: item => item.sketchId, findLineFixedConstraint: f.findLine, fixPointBtn: { getAttribute: () => 'false' }, readHistory: () => ({ undoCount: 1 }) });
+  assert.deepEqual(f.calls, []); assert.deepEqual(dom, []);
+  for (const name of ['LineFixedConstraint','ArcEndpointFixedConstraint','GeometryFixedConstraint']) Object.defineProperty(f.types, name, { get: () => assert.fail('type lookup after construction') });
+  const p1 = Object.assign(new models.Point('P1', 0, 0), { sketchId: 'S2' }), p2 = Object.assign(new models.Point('P2', 20, 10), { sketchId: 'S2' });
+  const line = Object.assign(new models.Line('L1', p1, p2), { sketchId: 'S2' }), circle = new models.Circle('C1', p1, 5), arc = new models.Arc('A1', p1, 10, 0, Math.PI / 2);
+  f.scope.points = [p1,p2]; f.scope.lines = [line];
+  for (const [kind, element, Type] of [['line',line,models.LineFixedConstraint],['circle',circle,models.GeometryFixedConstraint],['arc-endpoint',arc,models.ArcEndpointFixedConstraint]]) {
+    f.calls.length = 0; assert.equal(f.operand.toggle({ kind, element, endpoint: 'start' }), true);
+    const fixed = f.calls.find(call => call[0] === 'commit')[2]; assert.equal(fixed instanceof Type, true);
+    assert.equal(fixed.line || fixed.geometry || fixed.arc, element); f.scope.constraints.push(fixed);
+    assert.match(icons.constraintToolbarIcon(fixed), /#fixPointBtn/);
+  }
+  const next = Object.assign(new models.Line('L2', p1, p2), { sketchId: 'S2' }); f.scope.lines.push(next);
+  f.batch = { points: [], lines: [next], sketchId: 'S2' }; f.calls.length = 0;
+  assert.equal(f.command.toggle(), true); assert.equal(f.calls.filter(call => call[0] === 'history').length, 1);
+  assert.equal(f.scope.constraints.at(-1) instanceof models.LineFixedConstraint, true); assert.equal(f.scope.constraints.at(-1).line, next);
+  const state = observation.state(); assert.deepEqual(Array.from(state.fixedLineIds), ['L1','L2']); assert.equal(state.constraintCount, 2);
+  assert.equal(f.scope.lines[0], line); assert.equal(f.scope.points[0], p1);
+});
+
+test('explicit fixed constructors override a namespace and failed typed batches keep original objects and history unchanged', () => {
+  const explicit = fixture(ports => ({ ...ports, modelTypes: new Proxy({}, { get: () => assert.fail('explicit constructor must win') }) }));
+  const line = { id: 'L1' }; assert.equal(explicit.operand.toggle({ kind: 'line', element: line }), true);
+  assert.equal(explicit.calls[0][2] instanceof LineFixedConstraint, true);
+  const observation = modelWindow.PropertiesTestDriver.createFixedObservation({ modelTypes: new Proxy({}, { get: () => assert.fail('explicit observation type must win') }),
+    LineFixedConstraint, currentScope: () => ({ points: [], lines: [], constraints: [new LineFixedConstraint(line)] }),
+    elementSketchId: () => 'S2', findLineFixedConstraint: () => null, fixPointBtn: { getAttribute: () => 'false' }, readHistory: () => ({}) });
+  assert.equal(observation.state().constraintCount, 1);
+  const f = typedFixture(), point = new models.Point('P1', 0, 0), other = new models.Point('P2', 10, 20), typedLine = new models.Line('L2', point, other), original = {};
+  point.fixed = false; f.selection.points.push(point); f.batch = { points: [point], lines: [typedLine], sketchId: 'S2' };
+  f.scope.constraints.push(original); const constraints = f.scope.constraints; f.solved = { success: false, result: { errorNorm: 1 } };
+  assert.equal(f.command.toggle(), false); assert.equal(point.fixed, false); assert.equal(f.scope.constraints, constraints); assert.deepEqual(constraints, [original]);
+  assert.equal(f.calls.find(call => call[0] === 'push')[1] instanceof models.LineFixedConstraint, true);
+  assert.equal(f.calls.some(call => call[0] === 'restore'), true); assert.equal(f.calls.some(call => call[0] === 'history'), false);
 });

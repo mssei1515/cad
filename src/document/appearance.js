@@ -99,7 +99,7 @@
     const source = value && typeof value === "object" ? value : {};
     const result = partial ? {} : { ...DEFAULT_TERMINATOR };
     if (["arrow", "filledArrow", "dot", "none"].includes(source.terminatorType)) result.terminatorType = source.terminatorType;
-    for (const [key, min, max] of [["terminatorSize", 0.1, 1000], ["arrowheadAngle", 1, 179]]) {
+    for (const [key, { min, max }] of TERMINATOR_NUMERIC_ENTRIES) {
       if (source[key] == null || source[key] === "") continue;
       const numeric = Number(source[key]);
       if (Number.isFinite(numeric)) result[key] = Math.max(min, Math.min(max, numeric));
@@ -160,6 +160,10 @@
     dimensionTextHeight: { min: 0.1, max: 1000 },
     dimensionTextGap: { min: 0, max: 1000 },
   };
+  // Numeric rules and terminator keys are frozen shared policy, not document state.
+  const numericEntries = Object.entries(DIMENSION_APPEARANCE_NUMERIC_RULES);
+  const TERMINATOR_NUMERIC_ENTRIES = numericEntries.filter(([key]) => TERMINATOR_KEYS.includes(key));
+  const DIMENSION_NUMERIC_ENTRIES = numericEntries.filter(([key]) => !TERMINATOR_KEYS.includes(key));
 
   function normalizeAppearance(value, { partial = true } = {}) {
     const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -201,8 +205,8 @@
       result.toleranceLower = source.toleranceLower == null || source.toleranceLower === "" || !Number.isFinite(tolerance) ? null : tolerance;
     }
     Object.assign(result, normalizeTerminator(source));
-    for (const [key, rule] of Object.entries(DIMENSION_APPEARANCE_NUMERIC_RULES)) {
-      if (TERMINATOR_KEYS.includes(key) || !Object.prototype.hasOwnProperty.call(source, key)) continue;
+    for (const [key, rule] of DIMENSION_NUMERIC_ENTRIES) {
+      if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
       if (source[key] == null || source[key] === "") continue;
       const numeric = Number(source[key]);
       if (Number.isFinite(numeric)) result[key] = Math.max(rule.min, Math.min(rule.max, numeric));

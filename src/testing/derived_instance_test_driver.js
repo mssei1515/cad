@@ -112,5 +112,22 @@
     });
   }
 
-  window.DerivedInstanceTestDriver = Object.freeze({ createBrowserApi, createFixture, createInteraction, createCommandFixture });
+  function createForWorkspace({ documentWorkspace, geometry, readServices, interaction, presentation, canvasTestDriver, document,
+    hatchGeometryQuery, sketchPresentation, resetModelState, resetHistory, serializeModel, loadModelData,
+    deleteElements, deleteCurrentSelection, normalizeGeometryInstance }) {
+    const { workspace, sketches, documentIds } = documentWorkspace;
+    const { addPoint, addLine, addCircle, addArc } = geometry;
+    const { updateUI, draw } = presentation;
+    return createBrowserApi({
+      resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, resetHistory,
+      updateUI, draw, currentScope: workspace.current, serializeModel, geometryInstanceBundle: readServices.reads.geometryInstanceBundle,
+      constraintStatusColor: sketchPresentation.constraintStatusColor, arcSweep: window.GeometryKernel.arcSweep,
+      canvasSelection: interaction.selection, resolvedHatchBoundary: hatchGeometryQuery.resolvedHatchBoundary, document, loadModelData,
+      deleteElements, deleteCurrentSelection, addCircle, addArc, DEFAULT_SKETCH_ID: window.SketchHierarchy.DEFAULT_SKETCH_ID,
+      DEFAULT_HATCH_APPEARANCE: window.Appearance.DEFAULT_HATCH_APPEARANCE, normalizeGeometryInstance, activeSketchId: sketches.activeSketchId,
+      geometryRefForItem: window.GeometryObjects.geometryRefForItem, parseGeometryRefId: window.GeometryRef.parseId, hatchGeometryQuery,
+      nextProjectionId: () => documentIds.allocate("sketchProjection"), nextMirrorId: () => documentIds.allocate("mirror"), nextPatternId: () => documentIds.allocate("pattern"),
+    });
+  }
+  window.DerivedInstanceTestDriver = Object.freeze({ createBrowserApi, createFixture, createInteraction, createCommandFixture, createForWorkspace });
 })();

@@ -2,6 +2,11 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "tests/unit/browser-test-api.test.js",
+  "tests/unit/reference-image-test-driver.test.js",
+  "tests/unit/parameter-test-driver.test.js",
+ "src/application/sketch_solving_feature.js", "tests/unit/sketch-solving-feature.test.js",
+ "tests/unit/canvas-interaction-feature.test.js",
  "tests/unit/derived-patterns.test.js", "tests/e2e/derived-patterns.spec.js",
  "src/commands/derived_instance_editing.js",
   "src/geometry/pattern_instance_model.js",
@@ -69,7 +74,7 @@ const files = [
   "src/persistence/constraint_codec_registry.js",
   "src/parameters/parameter_engine.js",
   "src/editing/edit_history.js", "src/editing/history_controller.js", "src/editing/history_restoration.js", "src/editing/document_application.js",
-  "src/diagnostics/interaction_profiler.js", "src/diagnostics/canvas_render_probe.js", "src/testing/spline_test_driver.js", "src/testing/hatch_test_driver.js", "src/testing/drawing_order_test_driver.js", "src/testing/constraint_test_driver.js", "src/testing/clipboard_test_driver.js", "src/testing/derived_instance_test_driver.js", "src/testing/canvas_test_driver.js", "src/testing/geometry_drag_test_driver.js", "src/testing/annotation_test_driver.js", "src/testing/trim_test_driver.js", "src/testing/offset_test_driver.js", "src/testing/canvas_render_test_driver.js", "src/testing/sketch_tree_test_driver.js", "src/testing/block_test_driver.js", "src/testing/sketch_projection_test_driver.js", "src/testing/reference_image_test_driver.js", "src/testing/dimension_test_driver.js", "src/testing/parameter_test_driver.js", "src/testing/properties_test_driver.js", "src/testing/document_test_driver.js", "src/testing/canvas_selection_test_driver.js",
+  "src/diagnostics/interaction_profiler.js", "src/diagnostics/canvas_render_probe.js", "src/testing/browser_test_api.js", "src/testing/spline_test_driver.js", "src/testing/hatch_test_driver.js", "src/testing/drawing_order_test_driver.js", "src/testing/constraint_test_driver.js", "src/testing/clipboard_test_driver.js", "src/testing/derived_instance_test_driver.js", "src/testing/canvas_test_driver.js", "src/testing/geometry_drag_test_driver.js", "src/testing/annotation_test_driver.js", "src/testing/trim_test_driver.js", "src/testing/offset_test_driver.js", "src/testing/canvas_render_test_driver.js", "src/testing/sketch_tree_test_driver.js", "src/testing/block_test_driver.js", "src/testing/sketch_projection_test_driver.js", "src/testing/reference_image_test_driver.js", "src/testing/dimension_test_driver.js", "src/testing/parameter_test_driver.js", "src/testing/properties_test_driver.js", "src/testing/document_test_driver.js", "src/testing/canvas_selection_test_driver.js",
   "src/ui/choice_dialog.js",
   "tests/e2e/choice-dialog.spec.js",
   "tests/e2e/dimension-prefix.spec.js",
@@ -151,7 +156,7 @@ const files = [
   "tests/unit/block-layout.test.js", "tests/unit/block-projection.test.js",
   "src/geometry/read_model.js", "src/geometry/appearance_query.js",
   "tests/unit/geometry-read-model.test.js",
-  "src/constraints/candidates.js", "src/constraints/intent_resolver.js", "tests/unit/constraint-intent-resolver.test.js", "src/constraints/operands.js", "src/editing/constraint_target_session.js", "src/editing/pending_command_session.js", "src/editing/constraint_selection_query.js", "tests/unit/constraint-selection-query.test.js", "src/commands/constraint_target_command.js", "src/application/constraint_editing.js", "src/application/rectangle_selection_feature.js", "src/application/canvas_selection_feature.js", "src/commands/constraint_commit_command.js", "tests/unit/constraint-target-session.test.js", "tests/unit/pending-command-session.test.js", "tests/unit/constraint-target-command.test.js",
+  "src/constraints/candidates.js", "src/constraints/intent_resolver.js", "tests/unit/constraint-intent-resolver.test.js", "src/constraints/operands.js", "src/editing/constraint_target_session.js", "src/editing/pending_command_session.js", "src/editing/constraint_selection_query.js", "tests/unit/constraint-selection-query.test.js", "src/commands/constraint_target_command.js", "src/application/constraint_editing.js", "src/application/rectangle_selection_feature.js", "src/application/canvas_selection_feature.js", "src/application/canvas_interaction_feature.js", "src/commands/constraint_commit_command.js", "tests/unit/constraint-target-session.test.js", "tests/unit/pending-command-session.test.js", "tests/unit/constraint-target-command.test.js",
   "tests/unit/constraint-editing.test.js", "tests/unit/constraint-commit-command.test.js",
   "tests/unit/constraint-candidates.test.js",
   "src/geometry/bounds.js", "src/geometry/block_layout.js", "src/geometry/reference_image_geometry.js", "src/rendering/drawing_bounds.js", "src/rendering/viewport.js",

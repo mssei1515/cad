@@ -6,13 +6,13 @@ const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
 for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js',
   'src/geometry/pattern_instance_model.js', 'src/constraints/references.js', 'src/editing/geometry_ids.js',
   'src/editing/geometry_creation.js', 'src/editing/checkpoint.js', 'src/editing/selection.js', 'src/editing/trim_query.js',
-  'src/editing/trim_editing.js', 'src/commands/trim_command.js', 'src/application/trim_feature.js', 'src/testing/trim_test_driver.js']) {
+  'src/editing/trim_editing.js', 'src/commands/trim_command.js', 'src/application/trim_feature.js', 'src/application/basic_drawing_tools.js', 'src/testing/trim_test_driver.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
 const w = sandbox.window, g = w.GeometrySolver;
 const scope = () => ({ points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], annotations: [],
   blockInstances: [], geometryInstances: [], parameters: [], nextDimensionParameterIndex: 1 });
-function fixture() {
+function fixture(buildFeature = options => w.TrimFeature.create(options)) {
   const state = { scope: scope(), scale: 2, reads: 0, solved: true }, events = [], ids = w.GeometryIds.create();
   const currentScope = () => { state.reads++; return state.scope; }, selection = w.CanvasSelection.create();
   const references = w.ConstraintReferences.create({ resolveGeometryRef: () => null });
@@ -23,7 +23,7 @@ function fixture() {
   const push = constraint => { constraint.sketchId = 'S1'; state.scope.constraints.push(constraint); return constraint; };
   const used = point => state.scope.lines.some(line => line.p1 === point || line.p2 === point)
     || [...state.scope.circles, ...state.scope.arcs].some(item => item.center === point);
-  const feature = w.TrimFeature.create({ currentScope, geometry, references, isActiveSketchElement: item => item.sketchId === 'S1',
+  const feature = buildFeature({ currentScope, geometry, references, isActiveSketchElement: item => item.sketchId === 'S1',
     minLineLength: 1, minArcLength: 1, pushModelConstraint: push, elementSketchId: item => item.sketchId,
     isPointUsedByPrimitive: used, isReferencePoint: point => point.kind === 'endpoint' && !used(point)
       && state.scope.constraints.some(constraint => constraint.enabled !== false && references.constraintReferencesPoint(constraint, point)),
@@ -80,4 +80,42 @@ test('Trim test support composes the existing line transfer, construction exclus
   assert.deepEqual(Array.from(construction.lineBoundaryXs), [-100, -60, 60, 100]);
   const single = support.diameterTransfer.diameterCase(2); assert.equal(single.arcCount, 1); assert.equal(single.retainedSameConstraint, true);
   const multiple = support.diameterTransfer.diameterCase(3); assert.equal(multiple.arcCount, 2); assert.equal(multiple.diameterCount, 0);
+});
+
+function authoringTrim(options) {
+  // Unrelated drawing constructors are inert; TrimQuery, TrimEditing and TrimCommand remain real.
+  for (const name of ['DrawingSnap', 'SplineDraft', 'SplineCommand', 'SnapConstraints', 'LineCommand', 'RectangleCommand',
+    'CircularConstruction', 'CircularCommands', 'SlotConstruction', 'SlotCommand']) w[name] = { create: () => ({}) };
+  const authoring = w.BasicDrawingTools.createAuthoring({ ...options,
+    sketchContext: { isActiveSketchElement: options.isActiveSketchElement, elementSketchId: options.elementSketchId, activeSketchId: options.activeSketchId },
+    pointUsage: { isPointUsedByPrimitive: options.isPointUsedByPrimitive, isReferencePoint: options.isReferencePoint },
+    scale: options.viewportScale, checkpoint: { capture() { assert.fail('primitive checkpoint must not replace trim checkpoint'); }, restore() { assert.fail('primitive rollback'); } },
+  });
+  return authoring.createTrim({ references: options.references, checkpoint: options.checkpoint, hitSketchIdentityElement: options.hitSketchIdentityElement,
+    guardSketchEdit: options.guardSketchEdit, guardSketchProjectionShapeEdit: options.guardSketchProjectionShapeEdit,
+    stabilizeActiveParameterNamespace: options.stabilizeActiveParameterNamespace, acceptError: options.acceptError,
+    invalidateAnalysis: options.invalidateAnalysis, refreshConstraintAnalysis: options.refreshConstraintAnalysis });
+}
+
+test('authoring Trim shares live scope and scale, transferring real constraints through its own geometry checkpoint', () => {
+  const f = fixture(authoringTrim); assert.equal(f.state.reads, 0); assert.deepEqual(f.events, []);
+  const target = f.scene(), last = target.p2;
+  const constraint = f.push(new g.PointOnLineConstraint(f.point(25, 0, 'explicit'), target));
+  assert.equal(f.feature.computePreview({ x: 15, y: 2 }).item, target);
+  f.state.scale = 4; assert.equal(f.feature.computePreview({ x: 15, y: 2 }), null);
+  f.selection.set('lines', [target]); assert.equal(f.feature.execute({ x: 15, y: 0 }), true);
+  const right = f.state.scope.lines.find(line => line !== target && line.p2 === last);
+  assert.equal(constraint.line, right); assert.equal(right.p1.x, 20); assert.equal(target.p2.x, 10);
+  assert.equal(f.selection.lines.length, 0); assert.equal(f.preview.trim, null); assert.equal(f.events.at(-1), 'history');
+  f.state.scope = scope(); assert.equal(f.feature.computePreview({ x: 15, y: 0 }), null);
+});
+
+test('authoring Trim failure restores the same geometry and IDs without using the primitive-tool checkpoint', () => {
+  const f = fixture(authoringTrim), target = f.scene(), first = target.p1, last = target.p2;
+  const points = [...f.state.scope.points], ids = JSON.stringify(f.ids.snapshot());
+  f.selection.set('lines', [target]); f.state.solved = false;
+  assert.equal(f.feature.execute({ x: 15, y: 0 }), false);
+  assert.equal(target.p1, first); assert.equal(target.p2, last); assert.equal(f.state.scope.lines.length, 3);
+  assert.deepEqual(Array.from(f.state.scope.points), points); assert.equal(JSON.stringify(f.ids.snapshot()), ids);
+  assert.equal(f.selection.lines.length, 0); assert.equal(f.preview.trim, null); assert.equal(f.events.includes('history'), false);
 });

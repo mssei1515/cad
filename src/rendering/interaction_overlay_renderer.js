@@ -1,6 +1,13 @@
 /* Present transient snap and Sketch identity overlays without owning interaction state. */
 (() => {
   "use strict";
+  function createLayer({ renderer, rectangle, snap, hover, selection, pointer }) {
+    return Object.freeze({
+      drawSelectionRect: () => renderer.drawSelectionRect(rectangle.preview()),
+      drawSnapMarker: () => { renderer.drawSnapMarker(snap.active); },
+      drawSketchIdentityLabel: () => { renderer.drawSketchIdentityLabel({ hoveredIdentity: hover.current.sketchIdentity, selection, pointer: pointer.lastWorld }); },
+    });
+  }
   function create({ ctx, viewport, withCanvasState, elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName }) {
     function drawSnapMarker(snap) {
       if (!snap) return;
@@ -119,5 +126,5 @@
     }
     return Object.freeze({ drawSelectionRect, drawSnapMarker, drawSketchIdentityLabel, sketchIdentityRelationLabel, sketchIdentityRelationColor });
   }
-  window.InteractionOverlayRenderer = Object.freeze({ create });
+  window.InteractionOverlayRenderer = Object.freeze({ create, createLayer });
 })();

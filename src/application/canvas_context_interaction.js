@@ -47,6 +47,20 @@
     }
     return Object.freeze({ open: canvasContextEntry.open, selectCandidate: canvasContextCandidateAction.select, execute: canvasContextActions.execute, preview });
   }
+  // Share existing editing owners while keeping the raw capability API available.
+  function createForEditing({ selection, selectionScope, sketches, access, constraintSelection, blockQueries,
+    dimensions, cancellation, clipboard, history, pointer, viewport, projection, ...options }) {
+    return create({ ...options, canvasSelection: selection, selectedGeometryItems: selection.selectedGeometryItems, hasSelection: selection.hasSelection,
+      selectionSketchId: selectionScope.selectionSketchId, activeSketchId: sketches.activeSketchId, elementSketchId: sketches.elementSketchId,
+      guardSketchEdit: access.guardSketchEdit, guardSelectionEdit: access.guardSelectionEdit, canCreateInActiveSketch: access.canCreateInActiveSketch,
+      selectedFixedBatchTargets: constraintSelection.fixedBatch, fixedBatchIsFullyFixed: constraintSelection.fullyFixed,
+      blockDefinitionScopeError: blockQueries.blockDefinitionScopeError, blockDefinitionEditError: blockQueries.blockDefinitionEditError,
+      selectedDimensionLineGroup: dimensions.selectedLineGroup, dimensionLineGroup: dimensions.lineGroup,
+      hasCancellableCanvasCommand: cancellation.hasCancellable, cancelCanvasCommandFromContextMenu: cancellation.cancel,
+      hasCopyableCanvasSelection: clipboard.canOfferCopy, undoHistory: history.undo, redoHistory: history.redo,
+      setLastPointer: pointer.setLastPointer, canvasPoint: viewport.canvasPoint,
+      sketchProjectionCommand: projection, commitSketchProjectionCommand: projection.commit });
+  }
   // Keep early DOM construction separate from late command construction and listener start.
   function createMenu({ document, window: browserWindow, canvas, escapeHtml, applicationText, canvasHover, draw, readInteraction, readPresentation }) {
     const { controller, element } = window.CanvasContextMenu.createForDocument({
@@ -60,7 +74,21 @@
     function createInteraction(options) {
       return create({ ...options, document, applicationText, canvasHover, draw, canvasContextMenu: element, canvasContextController: controller });
     }
-    return Object.freeze({ controller, element, createInteraction });
+    function createEditingInteraction(options) {
+      return createForEditing({ ...options, document, applicationText, canvasHover, draw, canvasContextMenu: element, canvasContextController: controller });
+    }
+    function createSceneForEditing({ sceneQueries, splineEditing, canvasContextAnnotationHit, documentWorkspace, readServices, interaction, sessions, candidates }) {
+      const { candidatesAt } = sceneQueries.createContextQuery({ editedFitPoints: () => splineEditing.current?.spline?.fitPoints, canvasContextAnnotationHit });
+      const presentCandidate = window.CanvasContextPresentation.create({ ...candidates, applicationText,
+        blockDefinitionById: readServices.catalog.blockDefinitionById });
+      function createSceneInteraction(options) {
+        return createEditingInteraction({ ...options, selection: interaction.selection, selectionScope: interaction.scope,
+          sketches: documentWorkspace.sketches, access: interaction.access, pointer: sessions.pointer, readMode: interaction.lifecycle.readMode,
+          pendingCommandSession: sessions.pending, constraintTargetSession: sessions.targets, splineEditing, canvasContextCandidatesAt: candidatesAt });
+      }
+      return Object.freeze({ presentCandidate, createInteraction: createSceneInteraction });
+    }
+    return Object.freeze({ controller, element, createInteraction, createEditingInteraction, createSceneForEditing });
   }
   window.CanvasContextInteraction = Object.freeze({ create, createMenu });
 })();

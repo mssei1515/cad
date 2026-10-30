@@ -2,6 +2,10 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "tests/unit/browser-test-api.test.js",
+  "tests/unit/reference-image-test-driver.test.js",
+  "tests/unit/parameter-test-driver.test.js",
+  "tests/unit/sketch-solving-feature.test.js",
   "tests/unit/expression-input-view.test.js", "tests/unit/expression-input-controller.test.js",
   "tests/unit/command-panel.test.js",
   "tests/unit/derived-patterns.test.js",
@@ -210,7 +214,7 @@ const files = [
   "tests/unit/constraint-analysis.test.js",
   "tests/unit/parameter-stabilization.test.js",
   "tests/unit/geometry-drag-solver.test.js",
-  "tests/unit/selection-rectangle.test.js", "tests/unit/rectangle-selection-feature.test.js", "tests/unit/canvas-selection-feature.test.js",
+  "tests/unit/selection-rectangle.test.js", "tests/unit/rectangle-selection-feature.test.js", "tests/unit/canvas-selection-feature.test.js", "tests/unit/canvas-interaction-feature.test.js",
   "tests/unit/rectangle-selection-query.test.js",
   "tests/unit/sketch-deletion-command.test.js"
 ];

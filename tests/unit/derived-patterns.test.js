@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ctx = vm.createContext({ window: {}, structuredClone });
-for (const file of ['geometry/geometry_kernel', 'geometry/geometry_ref', 'geometry/spline_geometry', 'solver/constraint_solver', 'geometry/pattern_instance_model', 'geometry/objects', 'geometry/instance_projection', 'commands/geometry_instance_command', 'commands/derived_instance_editing', 'commands/instance_source_command', 'editing/selection', 'application/derived_instance_feature']) vm.runInContext(fs.readFileSync(`src/${file}.js`, 'utf8'), ctx);
+for (const file of ['geometry/geometry_kernel', 'geometry/geometry_ref', 'geometry/spline_geometry', 'solver/constraint_solver', 'geometry/pattern_instance_model', 'geometry/objects', 'document/annotation_anchor_data', 'geometry/instance_projection', 'commands/geometry_instance_command', 'commands/derived_instance_editing', 'commands/instance_transform_command', 'commands/instance_source_command', 'editing/selection', 'application/derived_instance_feature']) vm.runInContext(fs.readFileSync(`src/${file}.js`, 'utf8'), ctx);
 const M = ctx.window.PatternInstanceModel, G = ctx.window.GeometrySolver;
 const ref = (kind, id) => ({ kind, path: id.split('@') });
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
@@ -162,11 +162,13 @@ test('circular placement cannot compensate inconsistent interval constraints wit
  assert.equal('rotation' in i,false); assert.deepEqual(Array.from(M.variables(i),v=>v.prop),['angleStep']);
 });
 
-function featureFixture(success = true) {
+function featureFixture(success = true, buildFeature = (placement, source) => {
+  const feature = ctx.window.DerivedInstanceFeature.create(placement); return { feature, sources: feature.createSourceCommand(source) };
+}) {
   const shared = { ready:false, mode:'select', scopeReads:0 }, selection=ctx.window.CanvasSelection.create(); let api;
   const f = editor(success, (options, geometry) => {
     const currentScope=()=>{assert.equal(shared.ready,true);shared.scopeReads++;return options.currentScope();};
-    const feature=ctx.window.DerivedInstanceFeature.create({currentScope,resolveGeometryRef:options.resolveGeometryRef,
+    const placement={currentScope,resolveGeometryRef:options.resolveGeometryRef,
       setHint:options.setHint,recordHistory:options.recordHistory,updateUI:options.updateUI,draw:options.draw,
       cancelConstraintTargetCommand() {},cancelPendingCommand() {},canCreateInActiveSketch:()=>true,rejectRootSketchCreation() {},
       selectedItemsForGeometryInstance:()=>[geometry.line],geometryRefForItem:item=>ref(item instanceof G.Line?'line':'point',item.id),
@@ -174,14 +176,15 @@ function featureFixture(success = true) {
       previewFreeId:()=> 'preview',nextInstanceId:()=> 'next',activeSketchId:()=> 'S1',getMode:()=>shared.mode,setMode:value=>{shared.mode=value;},
       updateToolbar() {},applicationText:ja=>ja,Line:G.Line,lineHasDirection:ctx.window.GeometryKernel.lineHasDirection,elementSketchId:item=>item.sketchId,
       createGeometryInstanceBundle:instance=>options.geometryInstanceBundlesForScope({...options.currentScope(),geometryInstances:[instance]},[])[0],
-      commitDraft:(...args)=>editing.commit(...args)});
-    const sources=feature.createSourceCommand({guardSketchEdit:()=>true,exitDrawMode(){},updatePropertiesUI(){},
+      commitDraft:(...args)=>editing.commit(...args)};
+    const source={guardSketchEdit:()=>true,exitDrawMode(){},updatePropertiesUI(){},
       sketchProjectionEntryFromItem(){},sketchProjectionSourceIsCovered:()=>false,
       geometryInstanceBundlesForScope:options.geometryInstanceBundlesForScope,blockProjectionBundles:options.blockProjectionBundles,
       geometryElementKey:item=>item.id,geometryInstanceBundle:options.geometryInstanceBundle,constraintGraphNodes:()=>[],
-      guardDimensionSymbolDeletion:()=>true,annotationReferencesRemovedGeometry:()=>false,clearSketchSolveState(){}});
-    const {editing,changeProperty}=feature.createEditing(options);
-    api={feature,command:feature.command,sources,changeProperty};return editing;
+      guardDimensionSymbolDeletion:()=>true,annotationReferencesRemovedGeometry:()=>false,clearSketchSolveState(){}};
+    const built=buildFeature(placement,source,{shared,selection,options,geometry}),{feature,sources}=built;
+    const {editing,changeProperty,transform}=built.createEditing ? built.createEditing(options) : feature.createEditing(options);
+    api={...built,feature,command:feature.command,sources,changeProperty,transform};return editing;
   });
   assert.equal(shared.scopeReads,0);shared.ready=true;
   return{...f,...api,shared,selection};
@@ -205,4 +208,181 @@ test('derived feature preserves committed edit rollback and pending settings rem
   const copy=structuredClone(draft);assert.equal(f.changeProperty(copy,'count',5),false);assert.equal(f.command.pending,draft);assert.equal(draft.count,4);
   assert.equal(f.command.finish(),false);assert.equal(f.command.pending,draft);assert.equal(JSON.stringify(f.instance),before);assert.equal(f.histories(),0);
   f.command.cancel();assert.equal(f.shared.mode,'select');assert.equal(f.command.pending,null);assert.equal(JSON.stringify(f.instance),before);
+});
+
+function stagedFeatureFixture(composed, success = true, probe = {}) {
+  const w = ctx.window; probe.order = []; probe.ports = {}; probe.results = {};
+  return featureFixture(success, (placement, source, { shared, selection, options, geometry }) => {
+    const ready = () => assert.equal(shared.ready, true); shared.active = 'S1'; shared.queryEvents = [];
+    placement.activeSketchId = () => { ready(); return shared.active; };
+    placement.getMode = () => { ready(); return shared.mode; }; placement.setMode = value => { ready(); shared.mode = value; };
+    const currentScope = placement.currentScope; placement.currentScope = () => shared.workspace || currentScope();
+    placement.geometryRefForItem = w.GeometryObjects.geometryRefForItem; placement.geometryRefsEqual = w.GeometryRef.equals;
+    source.geometryElementKey = w.GeometryObjects.geometryKeyForItem; source.annotationReferencesRemovedGeometry = w.AnnotationAnchorData.referencesRemovedGeometry;
+    const ids = { peek(kind) { assert.equal(this, ids); ready(); shared.queryEvents.push(['peek', kind]); return kind === 'mirror' ? 3 : 5; },
+      allocate(kind) { assert.equal(this, ids); ready(); shared.queryEvents.push(['allocate', kind]); return kind === 'mirror' ? 'MI3' : 'PI5'; } };
+    const projector = w.InstanceProjection.create({ elementSketchId: placement.elementSketchId, applicationText: placement.applicationText });
+    const owners = { documentWorkspace: { workspace: { current: placement.currentScope }, sketches: { activeSketchId: placement.activeSketchId, elementSketchId: placement.elementSketchId }, documentIds: ids },
+      readServices: { instances: { geometryInstanceSourcePoints: projector.geometryInstanceSourcePoints, createGeometryInstanceBundle: placement.createGeometryInstanceBundle, geometryInstanceBundlesForScope: source.geometryInstanceBundlesForScope },
+        reads: { resolveGeometryRef: placement.resolveGeometryRef, geometryInstanceBundle: source.geometryInstanceBundle, blockProjectionBundles: source.blockProjectionBundles },
+        projections: { blockProjectionBundle: () => { ready(); return shared.blockBundle; } }, geometryAppearance: { isVisibleSketchElement: placement.isVisibleSketchElement } },
+      references: { geometryInstanceDependencyRefs: item => item.sources, constraintGraphNodes: source.constraintGraphNodes },
+      interaction: { selection, access: { canCreateInActiveSketch: placement.canCreateInActiveSketch, rejectRootSketchCreation: placement.rejectRootSketchCreation, guardSketchEdit: source.guardSketchEdit }, lifecycle: { readMode: placement.getMode, setMode: placement.setMode, exit: source.exitDrawMode } },
+      editingScope: { get current() { ready(); shared.queryEvents.push('bound'); return shared.bound || options.currentScope(); } },
+      presentation: { settings: { applicationText: placement.applicationText }, updateUI: placement.updateUI, draw: placement.draw, setHint: placement.setHint, updatePropertiesUI: source.updatePropertiesUI } };
+    placement.previewFreeId = type => type === 'mirror' ? 'MI' + ids.peek('mirror') : 'PI' + ids.peek('pattern');
+    placement.nextInstanceId = type => type === 'mirror' ? ids.allocate('mirror') : ids.allocate('pattern');
+    const originals = new Map();
+    for (const [namespace, method, name] of [['InstanceProjection', 'createDragSourceQuery', 'drag'], ['InstanceProjection', 'createSourceSelection', 'selection'], ['GeometryInstanceCommand', 'create', 'placement'], ['InstanceSourceCommand', 'create', 'source']]) {
+      if (!originals.has(namespace)) { originals.set(namespace, w[namespace]); w[namespace] = { ...w[namespace] }; }
+      const factory = originals.get(namespace)[method];
+      w[namespace][method] = input => { probe.order.push(name); probe.ports[name] = input; if (probe.failAt === name) throw probe.error; return probe.results[name] = factory(input); };
+    }
+    try {
+      let stage;
+      if (composed) stage = w.DerivedInstanceFeature.createForEditing(owners);
+      else {
+        const dragSources = w.InstanceProjection.createDragSourceQuery({ geometryInstanceSourcePoints: owners.readServices.instances.geometryInstanceSourcePoints, geometryInstanceDependencyRefs: owners.references.geometryInstanceDependencyRefs, resolveGeometryRef: placement.resolveGeometryRef });
+        const sourceSelection = w.InstanceProjection.createSourceSelection({ currentScope: () => owners.editingScope.current, selectedGeometryItems: selection.selectedGeometryItems, canvasSelection: selection,
+          blockProjectionBundle: owners.readServices.projections.blockProjectionBundle, geometryInstanceBundle: source.geometryInstanceBundle,
+          elementSketchId: placement.elementSketchId, activeSketchId: placement.activeSketchId, geometryRefForItem: placement.geometryRefForItem });
+        stage = { dragSources, sourceSelection };
+      }
+      assert.deepEqual(probe.order, ['drag', 'selection']); assert.equal(shared.scopeReads, 0); assert.deepEqual(shared.queryEvents, []);
+      placement.selectedItemsForGeometryInstance = () => stage.sourceSelection.read(); options.geometryInstanceSourceObjects = stage.dragSources.sourceObjects;
+      const commandOptions = { cancelConstraintTargetCommand: placement.cancelConstraintTargetCommand, cancelPendingCommand: placement.cancelPendingCommand, clearSelection: placement.clearSelection,
+        normalizeGeometryInstance: placement.normalizeGeometryInstance, commitDraft: placement.commitDraft, updateToolbar: placement.updateToolbar, recordHistory: placement.recordHistory,
+        projectionSources: { sketchProjectionEntryFromItem: source.sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered: source.sketchProjectionSourceIsCovered },
+        guardDimensionSymbolDeletion: source.guardDimensionSymbolDeletion, solveState: { clearSketchSolveState: source.clearSketchSolveState } };
+      let feature, sources;
+      if (composed) { feature = stage.createCommands(commandOptions); sources = feature.sources; }
+      else { feature = w.DerivedInstanceFeature.create(placement); sources = feature.createSourceCommand(source); }
+      function createEditing(options) {
+        if (!probe.transforms) return feature.createEditing(options);
+        const events = shared.transformEvents = [], block = shared.block = { id: 'B1', definitionId: 'D1', sketchId: 'S1', x: 10, y: 20, rotation: 0, rotationLocked: true };
+        options.currentScope().blockInstances = [block];
+        const snapshotModelState = () => { ready(); events.push('snapshot'); return { derived: options.snapshotModelState(), block: { ...block } }; };
+        const restoreModelState = snapshot => { ready(); events.push('restore'); options.restoreModelState(snapshot.derived); Object.assign(block, snapshot.block); };
+        const blockDefinitionById = () => { ready(); return { name: 'Part' }; }, blockInstanceEnabledSketchSet = () => { ready(); return new Set(['S1']); };
+        const blockWorldPoint = (item, point) => { ready(); return { x: item.x + point.x * Math.cos(item.rotation) - point.y * Math.sin(item.rotation), y: item.y + point.x * Math.sin(item.rotation) + point.y * Math.cos(item.rotation) }; };
+        const invalidateBlockProjectionCache = id => { ready(); events.push(['invalidate', id]); };
+        owners.readServices.catalog = { blockDefinitionById, blockInstanceEnabledSketchSet };
+        Object.assign(owners.readServices.projections, { blockWorldPoint, invalidateBlockProjectionCache });
+        const checkpoint = { captureValues: snapshotModelState, restoreValues: restoreModelState };
+        const parameters = { stabilize: options.stabilize }, scopeQuery = { sketchSolveVariables: () => [], sketchSolveConstraints: () => [], sketchSolveLines: () => [] };
+        const solver = { solveSubset() { throw Error('unexpected subset'); } }, solveState = { clearSketchSolveState: source.clearSketchSolveState };
+        const blockLayout = { blockLocalGeometryBounds: () => { ready(); return { center: { x: 2, y: 3 } }; }, snappedBlockRotation: angle => { ready(); return Math.round(angle / (Math.PI / 2)) * Math.PI / 2; } };
+        const solving = { solveSketchAndDependents: id => { ready(); events.push(['solve', id]); if (probe.solveError) throw probe.solveError; return { success: probe.blockSuccess !== false }; } };
+        const updateBlockUI = () => events.push('blockUI'), refreshConstraintAnalysis = () => events.push('analysis');
+        const input = { checkpoint, serializeModel: options.serializeModel, addPointSnapConstraints: options.addPointSnapConstraints, rebind: options.rebind,
+          parameters, acceptError: options.acceptError, scopeQuery, solver, solveState, blockLayout, solving, updateBlockUI, refreshConstraintAnalysis };
+        probe.editingInput = input;
+        const originals = new Map();
+        for (const [namespace, name] of [['DerivedInstanceEditing', 'editing'], ['InstanceTransformCommand', 'transform']]) {
+          const original = w[namespace]; originals.set(namespace, original); w[namespace] = { ...original, create(ports) {
+            probe.order.push(name); probe.ports[name] = ports; if (probe.failEditAt === name) throw probe.error;
+            return probe.results[name] = original.create(ports);
+          } };
+        }
+        try {
+          if (composed) return feature.createEditingWithTransforms(input);
+          const edits = feature.createEditing({ ...options, snapshotModelState, restoreModelState });
+          const transform = w.InstanceTransformCommand.create({ isPlacing: feature.command.isPlacing, currentScope: placement.currentScope,
+            snapshotModelState, restoreModelState, geometryInstanceSourceObjects: stage.dragSources.sourceObjects, ...scopeQuery, solver, acceptError: options.acceptError,
+            stabilizeActiveParameterNamespace: parameters.stabilize, clearSketchSolveState: solveState.clearSketchSolveState,
+            applicationText: placement.applicationText, setHint: placement.setHint, recordHistory: placement.recordHistory,
+            blockDefinitionById, blockInstanceEnabledSketchSet, blockWorldPoint, invalidateBlockProjectionCache, ...blockLayout,
+            updateBlockUI, refreshConstraintAnalysis, updateUI: placement.updateUI, draw: placement.draw,
+            solveSketchAndDependents: solving.solveSketchAndDependents, updatePropertiesUI: source.updatePropertiesUI });
+          return { ...edits, transform };
+        } finally { for (const [namespace, original] of originals) w[namespace] = original; }
+      }
+      return { feature, sources, stage, owners, probe, createEditing };
+    } finally { for (const [namespace, original] of originals) w[namespace] = original; }
+  });
+}
+
+test('derived editing stage builds actual queries early and placement/source commands later without model, mode or ID reads', () => {
+  for (const composed of [false, true]) {
+    const f = stagedFeatureFixture(composed), { ports, results, order } = f.probe;
+    assert.deepEqual(order, ['drag', 'selection', 'placement', 'source']); assert.equal(f.shared.scopeReads, 0); assert.deepEqual(f.shared.queryEvents, []);
+    assert.equal(f.stage.dragSources, results.drag); assert.equal(f.stage.sourceSelection, results.selection); assert.equal(f.command, results.placement); assert.equal(f.sources, results.source);
+    assert.equal(ports.source.placementCommand, f.command); assert.equal(ports.placement.canvasSelection, f.selection); assert.equal(ports.selection.canvasSelection, f.selection);
+    assert.equal(ports.placement.currentScope, f.owners.documentWorkspace.workspace.current); assert.equal(ports.source.currentScope, ports.placement.currentScope);
+    assert.equal(ports.source.constraintGraphNodes, f.owners.references.constraintGraphNodes);
+    f.selection.set('lines', [f.line]); f.command.start('mirror'); assert.equal(f.command.pending.id, 'MI3'); assert.equal(f.command.sources[0].path[0], f.line.id);
+    f.command.cancel(); f.selection.set('lines', [f.line]); f.command.start('pattern'); assert.equal(f.command.pending.id, 'PI5');
+    assert.equal(f.shared.queryEvents.some(event => event[0] === 'allocate'), false); assert.equal(f.histories(), 0); f.command.cancel();
+  }
+});
+
+test('derived source selection and inverse dragging keep bound reads separate from the Workspace model and preserve Geometry identity', () => {
+  for (const composed of [false, true]) {
+    const f = stagedFeatureFixture(composed), hatch = { id: 'H1', boundaryLoops: [], seed: { x: 0, y: 0 }, sketchId: 'S1' }, other = { ...hatch, id: 'H2' };
+    f.shared.bound = { hatches: [hatch] }; f.selection.set('hatches', [hatch, other]); f.selection.set('lines', [f.line]);
+    assert.deepEqual(Array.from(f.stage.sourceSelection.read()), [f.line, hatch]); f.shared.bound = { hatches: [other] };
+    assert.deepEqual(Array.from(f.stage.sourceSelection.read()), [f.line, other]); assert.equal(f.scope.hatches.length, 0);
+    f.shared.active = 'S2'; assert.equal(f.stage.sourceSelection.read().length, 0); f.shared.active = 'S1';
+    const seen = f.stage.dragSources.sourceObjects(f.instance); assert.equal(seen.has(f.line), true); assert.equal(seen.has(f.p), true); assert.equal(seen.has(f.q), true);
+    const projection = { derivedProjection: true, sourceElement: f.line, derivedInversePoint: point => ({ x: point.x - 3, y: point.y + 4 }) };
+    const hit = f.stage.dragSources.resolve({ item: projection }, { x: 10, y: 20 }); assert.equal(hit.item, f.line); assert.deepEqual({ ...hit.pointer }, { x: 7, y: 24 });
+    const marker = new Error('inverse'); projection.derivedInversePoint = () => { throw marker; }; assert.throws(() => f.stage.dragSources.resolve({ item: projection }, { x: 0, y: 0 }), error => error === marker);
+    assert.equal(f.scope.geometryInstances[0], f.instance); assert.equal(f.histories(), 0);
+  }
+});
+
+test('derived staged commands keep existing draft routing, committed rollback and original source-construction failures', () => {
+  for (const composed of [false, true]) {
+    const f = stagedFeatureFixture(composed, false), before = JSON.stringify(f.instance); f.selection.set('lines', [f.line]);
+    assert.equal(f.changeProperty(f.instance, 'count', 6), false); assert.equal(JSON.stringify(f.instance), before); assert.equal(f.histories(), 0); assert.equal(f.restored(), 1);
+    f.sources.startForInstance(f.instance); const draft = f.command.pending; assert.notEqual(draft, f.instance);
+    assert.equal(f.changeProperty(draft, 'count', 4), true); assert.equal(draft.count, 4); assert.equal(JSON.stringify(f.instance), before);
+    f.command.cancel(); assert.equal(f.shared.mode, 'select'); assert.equal(f.command.pending, null);
+    const marker = new Error('source construction'), probe = { failAt: 'source', error: marker };
+    assert.throws(() => stagedFeatureFixture(composed, true, probe), error => error === marker); assert.deepEqual(probe.order, ['drag', 'selection', 'placement', 'source']);
+  }
+});
+
+
+test('committed instance editing and transforms share actual queries, checkpoints and solve capabilities without eager reads', () => {
+  for (const composed of [false, true]) {
+    const f = stagedFeatureFixture(composed, true, { transforms: true }), { ports, results, editingInput: input } = f.probe;
+    assert.deepEqual(f.probe.order, ['drag', 'selection', 'placement', 'source', 'editing', 'transform']);
+    assert.deepEqual(f.shared.transformEvents, []); assert.equal(f.shared.scopeReads, 0); assert.equal(f.editing, results.editing); assert.equal(f.transform, results.transform);
+    assert.equal(ports.editing.snapshotModelState, input.checkpoint.captureValues); assert.equal(ports.transform.snapshotModelState, ports.editing.snapshotModelState);
+    assert.equal(ports.transform.restoreModelState, ports.editing.restoreModelState); assert.equal(ports.transform.currentScope, ports.placement.currentScope);
+    assert.equal(ports.transform.geometryInstanceSourceObjects, ports.editing.geometryInstanceSourceObjects); assert.equal(ports.transform.isPlacing, f.command.isPlacing);
+    assert.equal(ports.transform.stabilizeActiveParameterNamespace, ports.editing.stabilize); assert.equal(ports.transform.solver, input.solver);
+    assert.equal(ports.transform.blockWorldPoint, f.owners.readServices.projections.blockWorldPoint);
+    f.sources.startForInstance(f.instance); const draft = f.command.pending;
+    assert.equal(f.changeProperty(draft, 'count', 4), true); assert.equal(draft.count, 4); assert.equal(f.histories(), 0); f.command.cancel();
+  }
+});
+
+test('composed instance transform preserves Block display center, live Workspace scope and fixed-operation rejection', () => {
+  for (const composed of [false, true]) {
+    const f = stagedFeatureFixture(composed, true, { transforms: true }), block = f.shared.block, original = JSON.stringify(f.instance);
+    assert.equal(f.transform.setBlockInstanceOrthogonalRotation(block, Math.PI / 2), true);
+    near(block.x, 15); near(block.y, 21); assert.equal(f.histories(), 1); assert.equal(JSON.stringify(f.instance), original);
+    block.fixed = true; assert.equal(f.transform.setBlockInstanceRotationLocked(block, false), false); assert.equal(block.rotationLocked, true);
+    block.fixed = false; assert.equal(f.transform.setBlockInstanceRotationLocked(block, false), true); assert.equal(block.rotationLocked, false); assert.equal(f.histories(), 2);
+    f.shared.workspace = { ...f.scope, blockInstances: [] }; assert.equal(f.transform.setBlockInstanceRotationLocked(block, true), false); assert.equal(block.rotationLocked, false);
+  }
+});
+
+test('composed instance editing keeps failed solve restoration and transform construction or runtime failures at the original boundary', () => {
+  for (const composed of [false, true]) {
+    const probe = { transforms: true, blockSuccess: false }, f = stagedFeatureFixture(composed, false, probe), block = f.shared.block;
+    const before = JSON.stringify(f.instance), blockBefore = JSON.stringify(block);
+    assert.equal(f.changeProperty(f.instance, 'count', 6), false); assert.equal(JSON.stringify(f.instance), before); assert.equal(f.histories(), 0);
+    assert.equal(f.transform.setBlockInstanceOrthogonalRotation(block, Math.PI / 2), false); assert.equal(JSON.stringify(block), blockBefore); assert.equal(f.histories(), 0);
+    assert.equal(f.shared.transformEvents.filter(event => Array.isArray(event) && event[0] === 'solve').length, 2);
+    probe.solveError = new Error('solve exception'); assert.throws(() => f.transform.setBlockInstanceOrthogonalRotation(block, Math.PI / 2), error => error === probe.solveError);
+    near(block.x, 15); near(block.y, 21); assert.equal(f.histories(), 0);
+    for (const failEditAt of ['editing', 'transform']) {
+      const error = new Error(failEditAt), broken = { transforms: true, failEditAt, error };
+      assert.throws(() => stagedFeatureFixture(composed, true, broken), value => value === error);
+      assert.deepEqual(broken.order, ['drag', 'selection', 'placement', 'source', 'editing', ...(failEditAt === 'transform' ? ['transform'] : [])]);
+    }
+  }
 });

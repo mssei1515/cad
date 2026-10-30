@@ -22,6 +22,19 @@
           clearGeometryReads: () => services.reads.clearReadCache(),
           invalidateProjection: services.projections.invalidateBlockProjectionCache });
       }
+      // Bind model reads and insertion together while keeping Parameter writes on Workspace.current.
+      function createEditingScope({ Solver, closeSketchContext, resetSketchMove }) {
+        const binding = createScopeBinding({ Solver, closeSketchContext, resetSketchMove });
+        const { solver } = binding;
+        const { activeSketchId, constraintSketchId, isDrawableSketch, firstDrawableSketchId } = sketches;
+        const { ensureDimensionParameter } = parameters;
+        const dimensionQueries = window.DimensionQueries.createModelQueries({
+          currentScope: () => binding.current, activeSketchId, constraintSketchId });
+        const insertion = window.ConstraintCommitCommand.createInsertion({
+          currentScope: () => binding.current, currentParameterNamespace: workspace.current,
+          activeSketchId, isDrawableSketch, firstDrawableSketchId, ensureDimensionParameter });
+        return Object.freeze({ binding, solver, dimensionQueries, insertion });
+      }
       function createPersistence({ placement, pointUsage, readEditingScope, readBlockEditor, version,
         constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps }) {
         const { dimensions, codecs } = window.ConstraintPersistence.createWithDimensions({
@@ -43,9 +56,20 @@
           isPointUsedByArc: pointUsage.isPointUsedByArc, constraintReferencesPoint,
           defaultUnits: window.DocumentState.DEFAULT_DOCUMENT_UNITS, applicationText,
           invalidateProjection: services.projections.invalidateBlockProjectionCache, normalizeArcSweeps });
-        return Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances });
+        const { targetFromConstraint } = window.DimensionQueries;
+        function ensureDimensionDefaults() {
+          return window.DocumentState.normalizeDimensionState(readEditingScope(), targetFromConstraint,
+            (target, dimension) => placement.normalizeDimension(target, dimension));
+        }
+        function createApplication({ resetEditingState, sketchTreeView, refreshReferenceConstraintValidity, enforceMinimumLineLengths, log }) {
+          return window.DocumentApplication.create({ documentLoading: loading, document, model: readEditingScope(), resetEditingState, sketchTreeView,
+            refreshReferenceConstraintValidity, enforceMinimumLineLengths, ensureDimensionDefaults,
+            restoreSequences: sequences => { reservation.geometry(sequences.geometry); documentIds.restore(sequences); },
+            ensureAppearanceState: () => preparation.appearance(), ensureBlockState: () => preparation.blocks(), log });
+        }
+        return Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, ensureDimensionDefaults, createApplication });
       }
-      return Object.freeze({ services, createScopeBinding, createPersistence });
+      return Object.freeze({ services, createScopeBinding, createEditingScope, createPersistence });
     }
     return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, createGeometryReadServices, createReadContext });
   }

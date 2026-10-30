@@ -41,6 +41,38 @@ test('hidden Sketch dimensions are shown only by show hidden, and their stored s
   const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   delete before.savedAt; delete after.savedAt; expect(after).toEqual(before);
 });
+test('hidden internal Sketch hides its centerline outside the block after save and reload', async ({ page }) => {
+  await openTestDocument(page);
+  const root = { id: 'ROOT', name: 'Root Sketch', parentSketchId: null, kind: 'root' };
+  const sketch = { id: 'S1', name: 'Hidden speaker', parentSketchId: 'ROOT', kind: 'sketch', appearance: { visible: false } };
+  const data = {
+    version: 8, documentName: 'Hidden speaker', sketches: [root, { ...sketch, appearance: {} }], activeSketchId: 'S1',
+    blockDefinitions: [{ id: 'B1', name: 'Speaker', revision: 1, origin: { x: 0, y: 0 },
+      sketches: [root, sketch], activeSketchId: 'S1',
+      points: [{ id: 'P1', x: -50, y: 0, kind: 'endpoint', sketchId: 'S1' }, { id: 'P2', x: 50, y: 0, kind: 'endpoint', sketchId: 'S1' }],
+      lines: [{ id: 'L1', p1: 'P1', p2: 'P2', construction: true, sketchId: 'S1' }], circles: [], arcs: [], constraints: [] }],
+    blockInstances: [{ id: 'BI1', definitionId: 'B1', sketchId: 'S1', x: 0, y: 0, rotation: 0, enabledSketchIds: ['S1'] }],
+    points: [], lines: [], circles: [], arcs: [], constraints: [],
+  };
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'hidden-speaker.jot2d'), data);
+  const visible = () => page.evaluate(() => window.__jot2dTest.appearanceStateForTest('line', 'BI1@L1').visible);
+  const rendering = () => page.evaluate(() => window.__jot2dTest.constructionLineRenderingForTest('BI1@L1'));
+  expect(await visible()).toBe(false);
+  expect(await rendering()).toMatchObject({ overhangPx: null, endpointMarkerCount: 0 });
+  await page.locator('#constraintStatusViewBtn').click(); expect(await visible()).toBe(false);
+  await showHidden(page, true); expect(await visible()).toBe(true);
+  expect(await rendering()).toMatchObject({ overhangPx: 12, endpointMarkerCount: 2 });
+  await showHidden(page, false); expect(await visible()).toBe(false);
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.blockDefinitions[0].sketches.find(s => s.id === 'S1').appearance.visible).toBe(false);
+  expect(saved.blockInstances[0].enabledSketchIds).toEqual(['S1']);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__jot2dTest));
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'hidden-speaker.jot2d'), saved);
+  expect(await visible()).toBe(false);
+  expect(await rendering()).toMatchObject({ overhangPx: null, endpointMarkerCount: 0 });
+});
+
 test('active selected Sketch has no Edit button; Root has no Edit or Editing marker', async ({ page }) => {
   await openTestDocument(page); await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   const active = page.locator('.sketch-item[data-id="S1"]');

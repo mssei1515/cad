@@ -130,3 +130,52 @@ test('leader accepts referenceable ancestors but rejects unrelated sketches', ()
   p.sketchId = 'UNRELATED';
   assert.equal(f.query.annotationLeaderTargetFromHit({ item: p }), null);
 });
+
+function composedQueryFixture() {
+  const state = { ready: false, active: 'S1', points: [], selected: [], scale: 1, visible: true,
+    reference: false, explicit: true, referencePoint: false, resolved: null, failure: null };
+  const calls = [], marker = new Error('annotation target read');
+  function read(name, value) { assert.equal(state.ready, true); calls.push(name); if (state.failure === name) throw marker; return value; }
+  const query = sandbox.window.AnnotationFeature.createAnchorQuery({
+    selection: { selectedGeometryItems: () => read('selection', state.selected) },
+    sketches: { elementSketchId: item => read('sketch', item.sketchId), activeSketchId: () => read('active', state.active),
+      isReferenceSourceSketchId: () => read('reference', state.reference) },
+    readServices: { reads: { resolveGeometryRef: () => read('resolve', state.resolved),
+      allGeometryPoints: () => read('points', state.points), allGeometryLines: () => read('lines', []),
+      allGeometryCircles: () => read('circles', []), allGeometryArcs: () => read('arcs', []), allGeometrySplines: () => read('splines', []) },
+      geometryAppearance: { isVisibleSketchElement: () => read('visible', state.visible) } },
+    pointUsage: { isExplicitPoint: () => read('explicit', state.explicit), isPointUsedByPrimitive: () => read('primitive', false),
+      isPointUsedByLine: () => read('line', false), isReferencePoint: () => read('reference-point', state.referencePoint) },
+    viewportScale: () => read('scale', state.scale),
+  });
+  assert.ok(Object.isFrozen(query)); assert.deepEqual(calls, []); state.ready = true;
+  return { query, state, calls, marker };
+}
+
+test('annotation feature composes live geometry, visibility, PointUsage, Sketch and scale without eager queries', () => {
+  const f = composedQueryFixture(), p = point('P-live', 0, 0); f.state.points = [p];
+  assert.equal(f.query.hitAnnotationTarget(8, 0).item, p); f.state.scale = 2; assert.equal(f.query.hitAnnotationTarget(8, 0), null);
+  f.state.scale = 1; f.state.visible = false; assert.equal(f.query.hitAnnotationTarget(0, 0), null);
+  f.state.visible = true; f.state.explicit = false; assert.equal(f.query.hitAnnotationTarget(0, 0), null);
+  f.state.referencePoint = true; assert.equal(f.query.hitAnnotationTarget(0, 0).item, p);
+  f.state.active = 'S2'; assert.equal(f.query.hitAnnotationTarget(0, 0), null);
+  f.state.reference = true; assert.equal(f.query.hitAnnotationTarget(0, 0).item, p);
+  f.state.selected = [p]; const target = f.query.annotationLeaderTargetFromSelection(); assert.equal(target.item, p);
+  assert.equal(target.geometryRef.path[0], p.id); assert.deepEqual({ ...target.anchor }, { x: 0, y: 0 });
+  f.state.selected = [p, p]; assert.equal(f.query.annotationLeaderTargetFromSelection(), null);
+  const replacement = point('P-next', 30, 40); f.state.points = [replacement];
+  assert.equal(f.query.hitAnnotationTarget(30, 40).item, replacement);
+});
+
+test('composed annotation anchors re-resolve identity and preserve fallback and inputs after read failures', () => {
+  const f = composedQueryFixture(), p = point('P-live', 10, 20), start = { x: 2, y: 3 };
+  const annotation = { geometryRef: { kind: 'point', path: [p.id] }, attachment: { kind: 'point' }, start };
+  f.state.resolved = p; assert.deepEqual({ ...f.query.annotationLeaderAnchor(annotation) }, { x: 10, y: 20 });
+  p.x = 30; assert.deepEqual({ ...f.query.annotationLeaderAnchor(annotation) }, { x: 30, y: 20 });
+  f.state.resolved = null; assert.equal(f.query.annotationLeaderAnchor(annotation), start);
+  f.state.failure = 'resolve'; assert.throws(() => f.query.annotationLeaderAnchor(annotation), error => error === f.marker);
+  assert.equal(annotation.start, start); assert.equal(annotation.geometryRef.path[0], p.id);
+  f.state.failure = 'points'; f.state.points = [p]; const points = f.state.points;
+  assert.throws(() => f.query.hitAnnotationTarget(30, 20), error => error === f.marker);
+  assert.equal(f.state.points, points); assert.equal(points[0], p); assert.equal(p.x, 30); assert.equal(p.y, 20);
+});

@@ -1,4 +1,4 @@
-/* Assemble the five Canvas command input adapters around shared editing owners. */
+/* Compose Canvas command routing and staged pointer/keyboard bindings. */
 (() => {
   "use strict";
   function create(options) { return createFeature(options).inputs; }
@@ -72,7 +72,32 @@
         press: { ...press, activation: { ...press.activation, selection: canvasSelection },
           worldPoint: viewport.canvasPoint, screenPoint: viewport.canvasScreenPoint, inputs } });
     }
-    return Object.freeze({ inputs, bindPointer });
+    function bindPointerForEditing(pointer, { canvasNavigation, drawingPreview, recordHistory, referenceImageInteraction, pointerHover,
+      hatch, fillet, offset, spline, splineEditing, blockPlacement, annotationInput, dimensionValues, dimensions,
+      identity, expressions, discardMoves, enterBlock, query, closeContextMenu, blankGesture,
+      updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement }) {
+      return bindPointer(pointer, { canvasNavigation, drawingPreview, recordHistory, referenceImageInteraction, pointerHover,
+        updateHatchPreview: hatch.updateHatchPreview, updateFilletRadiusPlacement: fillet.update, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
+        press: { discardMove: () => discardMoves({ discard: true }), selectInactive: identity.selectInactive, prepareSelection: identity.prepareSelection,
+          activation: { finalizeSpline: spline.doubleClick, submitOffset: offset.submit, startAnnotationEdit: annotationInput.start,
+            startDimensionEdit: hit => dimensionValues.startEdit(hit), startDistanceValue: point => dimensions.startDistanceValueInput(point), submitDistance: dimensionValues.submit,
+            constraintDoubleClick: (hitP, hitL, point) => dimensions.targetDoubleClick(hitP, hitL, point), enterBlock, beginSplineEdit: splineEditing.begin },
+          query, closeContextMenu, ...expressions.pointerReferences, commitHatch: hatch.commitHatchAt, calibrateImage: referenceImageInteraction.calibrationClick,
+          placeFilletRadius: fillet.submit, placeBlock: blockPlacement.click, blankGesture } });
+    }
+    function createKeyboard({ window: browserWindow, menus, sketchMove, constraintStatusView, dimensionInput, shortcuts,
+      isGeometryMode, projection, referenceImage, splineEditing, blockPlacement,
+      pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand, drawing,
+      finishSpline, finishProjection, finishHatch, removeSplinePoint, offset, readPointer,
+      deleteSelection, completeLineLength, isTextEditingTarget }) {
+      return window.KeyboardInput.create({ window: browserWindow, menus, sketchMove, constraintStatusView, dimensionInput, shortcuts,
+        readMode, isGeometryMode, instances: geometryInstanceCommand, projection, referenceImage, splineEditing, blockPlacement, annotationDrag,
+        pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand, drawing,
+        hasSelection: canvasSelection.hasSelection, clearSelection, annotation: annotationCommand, finishSources: instanceSourceCommand.finish,
+        finishSpline, finishProjection, finishHatch, removeSplinePoint, offset, readPointer, deleteSelection, completeLineLength,
+        isTextEditingTarget, setHint, updateUI, draw });
+    }
+    return Object.freeze({ inputs, bindPointer, bindPointerForEditing, createKeyboard });
   }
   window.CanvasCommandInputs = Object.freeze({ create, createFeature });
 })();

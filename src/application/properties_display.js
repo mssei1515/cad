@@ -2,7 +2,8 @@
 (() => {
   "use strict";
   function createFeature({ document, documentModel, currentScope, canvasSelection, readServices, sketchContext,
-    hatchAppearanceForDisplay, selectionOperation }) {
+    hatchAppearanceForDisplay, operations, selectionOperation = operations ? () => ({ mode: operations.lifecycle.mode,
+      instanceSourceEdit: operations.sources.current, freeInstancePlacement: operations.placement.pending, blockPlacementDefinitionId: operations.blocks.definitionId }) : undefined }) {
     const selection = createSelection({ canvasSelection, documentModel, readServices, sketchContext,
       hatchAppearanceForDisplay, getOperation: selectionOperation });
     function createFeatureEditing({ applicationSettings, escapeHtml, updateUI, updatePropertiesUI, draw, ...options }) {
@@ -13,7 +14,19 @@
           propertySelection: selection, readServices, sketchContext, applicationSettings, escapeHtml, hatchAppearanceForDisplay,
           propertyEditing: editing, appearanceUI, updateUI, updatePropertiesUI, draw });
       }
-      return Object.freeze({ editing, appearanceUI, createView });
+      function createViewForEditing({ access, instanceTransform, blockConfiguration, dimensionValues, dimensions, referenceImages, hatch, splineEditing, ...options }) {
+        const { guardSketchEdit } = access, { elementSketchId } = sketchContext;
+        return createView({ ...options,
+          getOperation: () => ({ mode: operations.lifecycle.mode, freeInstancePlacement: operations.placement.pending, instanceSourceEdit: operations.sources.current,
+            blockPlacementEnabledSketchIds: operations.blocks.enabledSketchIds, blockPlacementRotationLocked: operations.blocks.rotationLocked }),
+          canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"), commitDimensionPropertyEdit: dimensionValues.commitProperty,
+          blockPlacement: operations.blocks, setBlockInstanceRotationLocked: instanceTransform.setBlockInstanceRotationLocked,
+          setBlockInstanceEnabledSketchIds: blockConfiguration.setEnabledSketchIds, setBlockInstanceOrthogonalRotation: instanceTransform.setBlockInstanceOrthogonalRotation,
+          startInstanceSourceEdit: operations.sources.startForInstance, startInstancePlacementEdit: operations.placement.startEdit,
+          startInstanceAngleDimension: instance => dimensions.startInstanceAngleDimension(instance), startReferenceImageCalibration: referenceImages.startCalibration,
+          startHatchBoundaryRepair: hatch.startHatchBoundaryRepair, startSplineEdit: spline => splineEditing.activate(spline) });
+      }
+      return Object.freeze({ editing, appearanceUI, createView, createViewForEditing });
     }
     return Object.freeze({ selection, createEditing: createFeatureEditing });
   }

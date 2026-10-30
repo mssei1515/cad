@@ -4,6 +4,7 @@
   function create({ document, storage, refreshVersion, readDuplicateCount }) {
     let ui, canvas;
     let toolFlyouts = null;
+    let commandPanels = null;
     function updateUI(options) { return ui.refresh(options); }
     function updateGeometrySelectionUI() { return ui.selection(); }
     function updatePropertiesUI() { return ui.properties(); }
@@ -40,7 +41,25 @@
           readMode: lifecycle.readMode, readPendingType: () => pending.current?.type, readConstraintCommand: () => constraints.command });
         return Object.freeze({ view, status });
       }
-      return Object.freeze({ updateHistory: history.update, createControls });
+      function prepareControls({ canvas }) {
+        const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
+        const constraintMenuButtons = Array.from(document.querySelectorAll("[data-menu-constraint]"));
+        const fixPointBtn = document.getElementById("fixPointBtn");
+        const cursor = window.CommandCursor.create({ document, canvas, fixPointBtn, constraintButtons });
+        function createPreparedControls(options) { return createControls({ ...options, updateCursor: cursor.update }); }
+        return Object.freeze({ constraintButtons, constraintMenuButtons, fixPointBtn, cursor, createControls: createPreparedControls });
+      }
+      function createEditingBinding({ undo, redo, toggleVisibility, deleteSelection, annotation }) {
+        return window.ToolbarView.createEditingBinding({ document, undo, redo, toggleVisibility,
+          isGeometryMode, deleteSelection, updateUI, draw, annotation });
+      }
+      function createDrawingBinding({ startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand,
+        startGeometryInstanceCommand, filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation }) {
+        return window.ToolbarView.createBinding({ document, drawOperationLifecycle: lifecycle, constructionCommand,
+          startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand, startGeometryInstanceCommand,
+          filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation });
+      }
+      return Object.freeze({ updateHistory: history.update, createControls, prepareControls, createEditingBinding, createDrawingBinding });
     }
     function bindUI({ syncAnnotationResize, prepareParameterNamespace, refreshConstraintAnalysis, updateDocumentName,
       updateToolbar, renderSketch, updateBlockUI, renderProperties, readSketchMoving, updateStatusUI, updateConstraintButtons,
@@ -51,13 +70,25 @@
         localizeApplicationUI: settings.localizeApplicationUI, syncDimensionInput, refreshSketchSelection });
       return ui;
     }
-    function bindCanvas({ readPngCommand, readPending, readMode, readCommandPanel, syncAnnotationInput, readDerivedPanel,
+    function readCommandPanel() { return commandPanels ? commandPanels.commandPanel : null; }
+    function readDerivedPanel() { return commandPanels ? commandPanels.derivedPanel : null; }
+    function createCommandPanels({ host, readMode, sketchContext, projectionCommand, geometryCommand, sourceCommand,
+      resolveGeometryRef, geometryRefForItem, applicationText, formatDisplayNumber, finishProjection, finishSourceEdit,
+      exitDrawMode, changeFreeProperty, hatchCommand, annotationCommand, effectiveAnnotationStyle, pngExportCommand,
+      updateUI, updatePropertiesUI, setHint, draw }) {
+      commandPanels = window.CommandPanel.createFeature({ document, host, readMode, sketchContext, projectionCommand, geometryCommand, sourceCommand,
+        resolveGeometryRef, geometryRefForItem, applicationText, formatDisplayNumber, finishProjection, finishSourceEdit,
+        exitDrawMode, changeFreeProperty, hatchCommand, annotationCommand, effectiveAnnotationStyle, pngExportCommand,
+        updateUI, updatePropertiesUI, setHint, draw });
+      return commandPanels;
+    }
+    function bindCanvas({ readPngCommand, readPending, readMode, readCommandPanel: readPanel = readCommandPanel, syncAnnotationInput, readDerivedPanel: readDerived = readDerivedPanel,
       withGeometryReadCache, drawCanvas }) {
-      canvas = window.CanvasRefresh.create({ readPngCommand, readPending, readMode, readCommandPanel, syncAnnotationInput, readDerivedPanel,
+      canvas = window.CanvasRefresh.create({ readPngCommand, readPending, readMode, readCommandPanel: readPanel, syncAnnotationInput, readDerivedPanel: readDerived,
         interactionProfiler: profiler, profileInteractionWork: profiler.work, withGeometryReadCache, drawCanvas });
       return canvas;
     }
-    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createToolbar, createToolNavigation, bindUI, bindCanvas,
+    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createToolbar, createToolNavigation, createCommandPanels, readCommandPanel, bindUI, bindCanvas,
       log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw,
       get selectedItem() { return canvas.selectedItem; } });
   }
