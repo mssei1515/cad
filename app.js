@@ -136,7 +136,7 @@
   const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems } = hatchGeometryQuery;
   const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
-  const { blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
+  const { blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
@@ -467,7 +467,7 @@
   const { layer: annotationLayer, anchors: annotationAnchorConstraints, dimensions: annotationDimensions, command: annotationCommand,
     materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope, startAnchorConstraint: startAnnotationAnchorConstraint } = annotationFeature;
   const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
+  const { annotationLeaderDisplayGeometry, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
   const referenceImageFeature = window.ReferenceImageFeature.create({
     canvas, ctx, viewport, document, window, withCanvasState, createImage: () => new Image(),
@@ -496,7 +496,7 @@
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
     hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
   });
-  const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
+  const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
   const sketchProjectionEditing = window.SketchProjectionEditing.create({
     currentScope: workspace.current, queries: sketchProjectionQueries, resolveGeometryRef, geometryRefForItem, geometryKindForItem,
     constraintSketchId, constraintIsOperational, addPointToSketch, constraintReferencesPoint, nextSeq, normalizeAppearance,
@@ -678,7 +678,6 @@
     return geometryInstancePersistence.normalize(raw, normalizeSketch, index);
   }
 
-  const { serializeGeometryInstance } = window.DocumentSnapshot;
 
   function hitAnnotationElement(x, y, options = {}) {
     return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
@@ -953,16 +952,13 @@
   function deleteElements(options) { return deletionFeature.remove(options); }
   function deleteCurrentSelection() { return deletionFeature.removeSelection(); }
 
-  const clipboardFeature = window.ClipboardFeature.create({
-    blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText,
-    annotationTextLayout, annotationTextMetrics, annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle, viewport,
-    serializeGeometryInstance, constraintGraphNodes, serializeConstraint, decorateSerializedConstraint,
-    currentScope: () => editingScopeBinding.current, canvasSelection, blockScopeId: currentBlockDefinitionScopeId, setHint,
+  const clipboardFeature = window.ClipboardFeature.createForEditing({
+    documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices, interaction: canvasInteraction,
+    geometry: geometryCreation, annotationRenderer: annotationFeature.renderer, references: constraintReferences, annotationLeaderAnchor, viewport,
+    serializeConstraint, decorateSerializedConstraint, normalizeGeometryInstance, deserializeConstraint,
+    blockScopeId: currentBlockDefinitionScopeId, blockDefinitionScopeError, presentation,
     pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX, imageClipboard, updateToolbar, deleteSelection: deleteCurrentSelection,
-    geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById, documentIds, normalizeGeometryInstance,
-    parameters: parameterNamespace, deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache,
-    isGeometryMode, blockDefinitionScopeError, canCreateInActiveSketch, guardSketchEdit, activeSketchId, currentParameterNamespace,
-    clearSelection, selectMode: drawOperationLifecycle.selectMode, solveAndRefresh, updateUI, draw, sketchName,
+    isGeometryMode, clearSelection, solveAndRefresh,
   });
   const { session: clipboardSession, command: clipboardCommand } = clipboardFeature;
   function copyableSelectionPayload() { return clipboardFeature.copyableSelectionPayload(); }

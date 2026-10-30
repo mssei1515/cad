@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,974行、非空白1,524行、root直下424文、条件付きtest hooks323行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,922行、非空白1,472行、root直下416文、条件付きtest hooks319行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,6 +96,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-10-30）
+
+### 最新：Clipboardの編集環境からの組立て（2026-10-30、検証完了）
+
+基準developは020f7db。既存ClipboardFeatureにcreateForEditingを追加し、DocumentWorkspaceの採番・Sketch・Parameter、Geometry read services、CanvasInteractionの実Selection／access／Lifecycle、GeometryCreation、Annotation rendererとPresentationから各子へ必要なAPIを接続する。appの個別45項目を23項目のowner・操作依存へ整理し、既存createと同じ七owner・同じsession／commandを元の生成位置で返す。同期済みediting scopeは呼出時のeditingScope.current、Parameter namespaceはWorkspace.currentとして区別し、viewport倍率・Block namespaceの反復照会・guard短絡とreceiverも維持する。拘束codec／装飾とGeometry Instance正規化は既存callbackの引数・既定値を保つ。新fileや全app context、状態の複製、早期model／DOM照会は増やさない。削除ownerとの統合は行わず、拒否されたCutのpayload保持と、append失敗／solve失敗で異なるmode・pasteCountの復元範囲も変更しない。
+
+app.jsは1,926→1,922行（4行減）、非空白1,476→1,472行、root416文／関数81個／hooks319行／可変参照三つ。構築134文723非空白行、一文call関数77個99行、その他204文326行（文外5行）。Clipboard移管で不要になった六aliasをrootから除き、TEMP cad-clipboard-editing-composition-{proof,hierarchy}.cjsで45の子接続の旧構成一致、その他appとraw ClipboardFeatureのAST不変、root未使用bindingなしを確認した。hooksと短い委譲を除いても1,054非空白行が残り、数百行目標は未達。
+
+境界単体三件を追加した。実ClipboardSession／PasteCheckpoint／Commandを使い、構築時のmodel・namespace・permission・viewport無照会、共有API同一性とID owner receiver、現在modelとParameter namespaceの違い、拒否Cut、Block namespaceの反復取得、貼付け選択→求解、active Sketch照会例外とappend／solve失敗の限定rollbackを旧構成と比較した。関連単体69件／全単体2,094件／構文624fileが成功。関連12suite（unified-ui／blocks／derived-selection-copy／sketch-tree-visibility／reference-images／sketch-permissions／sketch-tree-delete／annotation-anchors／derived-patterns／unified-annotations／phase0-characterization／adversarial-authoring-performance）のE2E318件が全成功（5.4分、exit 0、実行session20524）。404製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-clipboard-editing-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。期待値・性能上限／timeout・workerは変更しない。今回は全E2E未実行であり、fec6c9aの全588件成功とは区別する。
+
+全体目標active、開始時週枠残量70%で停止条件未到達。mainは停止／releaseの最後に反映する。次は削除などの残る機能組立てと初期化phaseを実ownerに沿って確認する。個別portを単に別fileへ並べ替える薄いwrapperは増やさず、Workspaceとediting scope、取消・reset・復元範囲の違いを維持する。
+
+
 
 ### 最新：作図開始許可とTrim hover解除の所有（2026-10-30、検証完了）
 
