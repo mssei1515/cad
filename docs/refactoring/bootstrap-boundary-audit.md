@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 確定済みInstance編集と変換の組立て（2026-10-30、c73ccae基準）
+
+基準developはc73ccae。DerivedInstanceFeature.createForEditingの後段command APIへcreateEditingWithTransformsを追加し、従来のcreateEditingとInstanceTransformCommand.createを同じ後段位置で順に生成する。共通のWorkspace.current、元のcheckpoint.captureValues／restoreValues、dragSources.sourceObjects、Parameter stabilization、GeometryReadServicesのInstance／Block参照、翻訳・通知・履歴を同じ実体から接続する。後段は十三入力で、明示したserialize／snap／rebind、Solver／scope query／solve state、Block layout／求解と更新通知を受け、返すediting／changeProperty／transformも実APIのまま凍結して公開する。Block回転を含む既存InstanceTransformCommandの責務・仕様は変更しない。raw createEditingと旧factoryを維持し、第二モデル／checkpoint／Solver／sessionやsetterは作らない。Instance編集生成の失敗時は変換commandを生成せず、操作時の拒否・復元・例外とpending draftの識別は各既存commandに残す。
+
+app.jsは1,786→1,777行（9行減）、非空白1,336→1,327行。root410→409文、構築126→125文／676→667非空白行。関数80個、条件付きhooks235行、一文call委譲76個98行、その他207文322行、可変参照三つ・文外5行は維持する。不要になったblockInstanceEnabledSketchSet／sketchSolveVariables／sketchSolveLinesのroot aliasを除去した。TEMP cad-instance-editing-transform-{proof,hierarchy,stage-audit}.cjsで旧編集十一入力と変換二十七入力の同値、他app／既存feature ASTの不変、未使用root bindingなしと後段変数の早期直接捕捉なしを確認した。hooksと短い委譲を除いても994非空白行あり、200〜500行目標は未達。
+
 ## 派生Instanceの照会と編集コマンドの段階的な組立て（2026-10-30、2e7d9ca基準）
 
 基準developは2e7d9ca。既存DerivedInstanceFeatureへcreateForEditingを追加し、実DocumentWorkspace／GeometryReadServices／ConstraintReferences／CanvasInteraction／EditingScopeBinding／Presentationを共有する。前段でDragSourceQueryとSourceSelectionを従来順に一度ずつ生成し、後段のcreateCommandsで配置commandと参照元編集commandを従来位置・順序で生成する。前段六ownerと後段十入力に限定し、dragSources／sourceSelection／command／sources／createEditingは実APIを保持する。単独createと各raw APIも維持する。Selection読取りは同期済みeditingScope.current、配置・参照元commandはworkspace.currentを使い分け、IDのpeek／allocateのreceiver、零引数sourceSelection.read、後段commitDraftの遅延参照を保つ。確定済みInstance編集の生成・接続は従来のさらに後段に残し、構築中のmodel／mode／ID照会、第二Selection／session／モデル、可変contextやsetterを追加しない。

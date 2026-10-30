@@ -130,7 +130,7 @@
   const { effectiveAnnotationStyle } = annotationAppearance;
   const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
-  const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
+  const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds } = blockCatalog;
   const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryLines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
@@ -273,7 +273,7 @@
     syncAnnotationInput: () => annotationInputController.sync(),
     withGeometryReadCache, drawCanvas,
   });
-  const { command: geometryInstanceCommand, sources: instanceSourceCommand, createEditing: createInstanceEditing } = createDerivedCommands({
+  const { command: geometryInstanceCommand, sources: instanceSourceCommand, createEditingWithTransforms: createInstanceEditing } = createDerivedCommands({
     cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, normalizeGeometryInstance,
     commitDraft: (...args) => synchronizedInstanceEditing.commit(...args), updateToolbar, recordHistory,
     projectionSources: sketchProjectionSources, guardDimensionSymbolDeletion, solveState: sketchSolveResultState,
@@ -353,7 +353,7 @@
     geometryReads, activeSketchId, elementSketchId, constraintSketchId,
     isVisibleSketchElement, constraintIsOperational, constraintGraphNodes: constraint => constraint.annotationGeometryNodes || constraintGraphNodes(constraint), geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
   });
-  const { connectedComponentFromSeeds, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines } = solveScopeQuery;
+  const { connectedComponentFromSeeds, localSolveLines, sketchSolveConstraints } = solveScopeQuery;
   const { analysis: constraintAnalysis, redundancy: constraintRedundancy } = window.ConstraintAnalysis.createWithRedundancy({
     currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, sketchContext, readServices: geometryReadServices, constraintIsOperational,
     refreshReferenceConstraintValidity, sketchHasSolveError,
@@ -535,20 +535,11 @@
     invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory,
   });
   const { setEnabledSketchIds: setBlockInstanceEnabledSketchIds } = blockConfigurationCommand;
-  const { editing: synchronizedInstanceEditing, changeProperty: changeFreeInstanceProperty } = createInstanceEditing({
-    snapshotModelState, restoreModelState, geometryInstanceBundle, geometryInstanceBundlesForScope,
-    blockProjectionBundles, serializeModel, addPointSnapConstraints, geometryInstanceSourceObjects,
+  const { editing: synchronizedInstanceEditing, changeProperty: changeFreeInstanceProperty, transform: instanceTransformCommand } = createInstanceEditing({
+    checkpoint: editingCheckpoint, serializeModel, addPointSnapConstraints,
     rebind: () => constraintRebinding.rebuildDocument(editingScopeBinding.current, [...blockProjectionBundles(), ...geometryInstanceBundles()]),
-    stabilize: stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
-  });
-  const instanceTransformCommand = window.InstanceTransformCommand.create({
-    isPlacing: geometryInstanceCommand.isPlacing, currentScope: workspace.current,
-    snapshotModelState, restoreModelState, geometryInstanceSourceObjects,
-    sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, solver, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    stabilizeActiveParameterNamespace, clearSketchSolveState, applicationText, setHint, recordHistory,
-    blockDefinitionById, blockLocalGeometryBounds, blockInstanceEnabledSketchSet, blockWorldPoint,
-    invalidateBlockProjectionCache, updateBlockUI, refreshConstraintAnalysis, updateUI, draw,
-    snappedBlockRotation, solveSketchAndDependents, updatePropertiesUI,
+    parameters: parameterStabilization, acceptError: CONSTRAINT_ACCEPT_ERROR, scopeQuery: solveScopeQuery, solver, solveState: sketchSolveResultState,
+    blockLayout: { blockLocalGeometryBounds, snappedBlockRotation }, solving: sketchSolving, updateBlockUI, refreshConstraintAnalysis,
   });
   const { setBlockInstanceRotationLocked } = instanceTransformCommand;
   const constraintSolvePreparation = window.ConstraintSolvePreparation.createForSolver({
