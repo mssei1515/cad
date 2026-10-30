@@ -926,6 +926,9 @@
 
 
 
+  const { drawSelectionRect, drawSnapMarker, drawSketchIdentityLabel } = window.InteractionOverlayRenderer.createLayer({
+    renderer: interactionOverlay, rectangle: selectionRectangle, snap: drawingSnap, hover: canvasHover, selection: canvasSelection, pointer: pointerInteractionController,
+  });
   const canvasFrameRenderer = createCanvasRendering({
     recordDraw: () => pointerMoveScheduler.recordDraw(),
     geometry: geometryDisplay, dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
@@ -937,7 +940,6 @@
   function drawCanvas() { return canvasFrameRenderer.draw(); }
 
 
-  function drawSelectionRect() { return interactionOverlay.drawSelectionRect(selectionRectangle.preview()); }
 
 
 
@@ -999,10 +1001,6 @@
 
 
 
-  function drawSnapMarker() { interactionOverlay.drawSnapMarker(drawingSnap.active); }
-  function drawSketchIdentityLabel() {
-    interactionOverlay.drawSketchIdentityLabel({ hoveredIdentity: canvasHover.current.sketchIdentity, selection: canvasSelection, pointer: pointerInteractionController.lastWorld });
-  }
 
 
 

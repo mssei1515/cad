@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
-### 最新：Canvas入力の機能owner接続と生成段階（2026-10-30、検証完了）
+### 最新：操作overlayの描画状態参照layer（2026-10-30、検証完了）
+
+基準developは18ca049。InteractionOverlayRenderer.createLayerが実rendererとRectangleSelection／DrawingSnap／CanvasHover／Selection／Pointerを受け、矩形・Snap・Sketch識別ラベルを描く三つの凍結callbackを返す。preview()、active、current.sketchIdentity、lastWorldは描画時に従来順で読み、元rendererをmember receiverとして呼ぶ。Selection矩形は元描画の戻り値を返し、Snap／識別ラベルは従来どおりvoidを保つ。layer生成はRectangleSelection生成後かつCanvas Frame生成前とし、各callbackの最初の利用より前に置く。既存renderer.createと描画計算・Canvas操作は変更しない。状態・Geometry／Selection／preview／snapを複製せず、cache・listener・可変app contextを作らない。BrowserTestApiのdrawSelectionRect接続、Blockのstroke reset、後段Dimension preview／PNG exportへの遅延参照も維持する。
+
+app.jsは1,741→1,739行（2行減）、非空白1,292→1,290行。root399→397文、関数80→77個、一文call委譲76→73個／98→93非空白行。構築122→123文／642→645非空白行、その他200文314行と条件付きhooks233行は据置。hooksと単文call委譲を除くcore指標は961→964行となる。旧三関数を委譲側へ分類し、新しい生成三行をcoreへ数えるためであり、状態照会の所有はrenderer layerへ移った。指標だけで全体完了とは扱わず、200〜500行目標は未達。TEMP cad-interaction-overlay-layer-{proof,hierarchy}.cjsで他app AST／raw renderer AST不変、未使用root bindingなし、六入力の初期化済みと三callbackの全参照が生成後であることを確認した。
+
+旧root経路と新layerを比較する単体三件を追加した。cold生成、member receiver・戻り値／void、live owner差替えとObject同一性、実rendererでの矩形／Snap／識別ラベルのCanvas操作、倍率／crossing／無表示の変化、getterとpaint例外の評価順・同じError・途中効果を確認した。既存期待値は変更していない。構文626file・全単体2,164件・関連単体55件が成功。関連E2E321件が全成功（5.8m、exit 0、実行session91844）。選択した14file内の全testを対象に、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを実行process内で記録した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-interaction-overlay-layer-{check,unit,e2e}.log、run.ps1、selection.json、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標はactive・未完了。開始時週枠残量54%／最終確認54%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/interaction-overlay-layer。次候補はroot入力52項目のConstraintEditing.createWithControlsである（次点はDimensionValueCommand.createWithEditingSupportの37項目）。CanvasInteraction／OperationSessions／Sketch／Presentation設定・feedbackと、既に生成したOperand Feature／toolbar controlsを共有ownerとして受け取る境界を比較する。prepared buttons／menu buttons／Fix nodeは実Array・nodeを再利用し、後段DOM再照会やlocale snapshotを作らない。既存createWithFeedback→createCommandInput→createControlsの順と、後段createCommit／Fixed操作・controls.bindの段階を維持する。commitConstraintResolution／addConstraint／toggleFixed等は後段ownerへの遅延callbackなので、未生成commandを直接渡してTDZを作らない。findLineFixedConstraintのbound editing scopeと通常Workspace scope、isGeometryMode、blur callbackは既存の意味を保つ。現単位の検証・Commit／develop統合後にraw factoryと比較して着手し、入力数や行数だけで境界を決めず、巨大なbootstrap／可変app contextへ移すだけの変更にしない。
+
+### 直前：Canvas入力の機能owner接続と生成段階（2026-10-30、検証完了）
 
 基準developは9eba861。CanvasInteractionFeatureのOperationSessionsがcreateInputForEditingを提供し、Annotation Feature／drag、作図ownerと限定したcommand群、GeometryDrag Feature／既存Block entry／ReferenceImage interactionから、既存createInputFeatureへの接続を組み立てる。createInputFeature／CanvasCommandInputs.createFeatureと既存のmode／pending／targets／Selection／hover／Pointer所有は維持する。作図入力は同じauthoring.createCanvasInputを、Annotation入力→Constraint入力→Instance入力の後、Selection入力の前のcallback位置で一度生成する。readModeと五つの作図command、入力用snap.clearとsnapForDrawingのreceiver／一引数、Geometry参照解決、DimensionDragのSelection入力、transientAuthoringの後段Pointer接続を維持する。Block entryは従来位置で一度生成した実APIを渡す。bindPointer／Keyboardのbind・start順やPattern snapの10／viewport.scaleを変えず、model／Selection／session／previewの複製や可変app context・新listenerを作らない。返す入力Featureは従来の実APIである。
 
