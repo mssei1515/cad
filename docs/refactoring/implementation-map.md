@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- DerivedInstanceTestDriver.createForWorkspaceが派生形状のbrowser test APIの接続を担当する。DocumentWorkspace／Geometry creation／geometry read／CanvasInteraction／Presentationと実Canvas test driver／Sketch presentation／Hatch queryを共有し、三つの既存fixture／interactionを同じ順で生成する。動的Workspace.current、実Selection・Geometryの同一性、裸のfocus／clientPosition・描画通知、操作時のdocumentIds.allocateのmember呼出しを維持する。型・既定Sketch／Hatch外観・参照とarc sweep計算は既存namespaceを再利用し、model／scope／採番／Hatch cacheを複製しない。既存createBrowserApiと公開する六操作を維持し、通常モードのtest gate・BrowserTestApi公開順・公開衝突処理を変更しない。
+
 - ReferenceImageFeature.createForWorkspaceがDocumentWorkspace／editing scope／CanvasInteraction／Presentation／geometry appearanceとの接続を担当する。描画画像はeditingScope.current.referenceImages、取込・挿入先はworkspace.currentであり、両者を統合しない。実Selection・live hover・Sketch／作成権限・通知を共有し、viewport.screenToWorldと既存の数値表示／hypot2を使う。画像IDは操作時に同じdocumentIds.allocateをmember呼出しする。renderer→layer→interaction→inputの生成順と、後段のhit／snap／clipboard callback、Image生成、text編集判定、bind／dispose時機を維持する。既存createと実renderer／layer／interaction／input／prepareImages APIを維持し、画像cache・model／Selection／scope・採番・listenerを重複させない。
 
 - ConstraintEditing.createForEditingの後段窓口createCommitForWorkspaceが拘束確定の接続を担当する。先行したSelection／Sketch／Presentation／Operand候補を共有し、後段Workspace／checkpoint／挿入／redundancy／solving／安定化／reference stateと求解準備・line collapse・分析更新・履歴・clockだけを受ける。Workspace.currentの動的照会とbound editing scopeの挿入・snapshot／restoreは元の別参照を維持する。従来createCommit→DimensionConstraintFactory／Command→readOnly query→intent resolverの順と後段Commandへの遅延callback、裸関数参照・clockの呼出し時機を変えない。既存createCommitとraw ConstraintCommitCommandを維持し、実APIを再利用する。可変app context・新model／Selection／session・cache・listenerは増やさない。

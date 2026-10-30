@@ -23,7 +23,6 @@
     MIN_ORIENTATION_LENGTH, samePosition,
     arcEndpointPoint,
     circlePointAtAngle,
-    arcSweep,
     signedPointLineDistance,
   } = window.GeometryKernel;
 
@@ -1608,13 +1607,10 @@
       feature: referenceImageFeature, blocks: blockEditingFeature, canvasSelection, currentScope: workspace.current, readHistory: readTestHistory, viewport,
       fetch, File, resetModelState, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel,
     });
-    const derivedInstanceTestApi = window.DerivedInstanceTestDriver.createBrowserApi({
-      resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, resetHistory,
-      updateUI, draw, currentScope: workspace.current, serializeModel, geometryInstanceBundle, constraintStatusColor,
-      arcSweep, canvasSelection, resolvedHatchBoundary, document, loadModelData, deleteElements,
-      deleteCurrentSelection, addCircle, addArc, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, normalizeGeometryInstance,
-      activeSketchId, geometryRefForItem, parseGeometryRefId, hatchGeometryQuery, nextProjectionId: () => documentIds.allocate("sketchProjection"), nextMirrorId: () => documentIds.allocate("mirror"),
-      nextPatternId: () => documentIds.allocate("pattern"),
+    const derivedInstanceTestApi = window.DerivedInstanceTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
+      canvasTestDriver, document, hatchGeometryQuery, sketchPresentation, resetModelState, resetHistory,
+      serializeModel, loadModelData, deleteElements, deleteCurrentSelection, normalizeGeometryInstance,
     });
     const clipboardTestSupport = window.ClipboardTestDriver.createSupport({
       currentScope: workspace.current, serializeModel, sketchContext, readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
