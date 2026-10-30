@@ -24,7 +24,6 @@
     arcEndpointPoint,
     circlePointAtAngle,
     arcSweep,
-    lineHasDirection,
     signedPointLineDistance,
   } = window.GeometryKernel;
 
@@ -32,7 +31,6 @@
     parseId: parseGeometryRefId,
     id: geometryRefId,
     key: geometryRefKey,
-    equals: geometryRefsEqual,
   } = window.GeometryRef;
 
 
@@ -131,7 +129,7 @@
   const { effectiveDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState } = dimensionAppearance;
   const { effectiveAnnotationStyle } = annotationAppearance;
   const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems } = hatchGeometryQuery;
-  const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
+  const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryLines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
@@ -181,12 +179,10 @@
     readPresentation: () => canvasContextCandidatePresentation, readInteraction: () => canvasContextInteraction,
   });
   const closeCanvasContextMenu = canvasContextController.close;
-  const { resolve: resolveDerivedDragSource, sourceObjects: geometryInstanceSourceObjects } = window.InstanceProjection.createDragSourceQuery({
-    geometryInstanceSourcePoints, geometryInstanceDependencyRefs, resolveGeometryRef,
+  const { dragSources: derivedDragQueries, createCommands: createDerivedCommands } = window.DerivedInstanceFeature.createForEditing({
+    documentWorkspace, readServices: geometryReadServices, references: constraintReferences, interaction: canvasInteraction, editingScope: editingScopeBinding, presentation,
   });
-  const instanceSourceSelection = window.InstanceProjection.createSourceSelection({
-    currentScope: () => editingScopeBinding.current, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
-  });
+  const { resolve: resolveDerivedDragSource, sourceObjects: geometryInstanceSourceObjects } = derivedDragQueries;
 
   const annotationTargets = window.AnnotationFeature.createAnchorQuery({
     sketches: sketchContext, readServices: geometryReadServices, pointUsage, selection: canvasSelection, viewportScale: () => viewport.scale,
@@ -209,7 +205,7 @@
   });
   const { command: sketchProjectionCommand, sources: sketchProjectionSources,
     guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
-  const { sketchProjectionSourceKey, sketchProjectionSourceIsCovered, sketchProjectionEntryFromItem,
+  const { sketchProjectionSourceKey,
     sketchProjectionEntryFromOperand } = sketchProjectionSources;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
     commit: commitSketchProjectionCommand } = sketchProjectionCommand;
@@ -277,22 +273,12 @@
     syncAnnotationInput: () => annotationInputController.sync(),
     withGeometryReadCache, drawCanvas,
   });
-  const { command: geometryInstanceCommand, createSourceCommand: createInstanceSourceCommand, createEditing: createInstanceEditing } = window.DerivedInstanceFeature.create({
-    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    selectedItemsForGeometryInstance, geometryRefForItem, geometryRefsEqual, isVisibleSketchElement, clearSelection, normalizeGeometryInstance,
-    previewFreeId: type => type === "mirror" ? `MI${documentIds.peek("mirror")}` : `PI${documentIds.peek("pattern")}`,
-    nextInstanceId: type => type === "mirror" ? documentIds.allocate("mirror") : documentIds.allocate("pattern"),
-    activeSketchId, getMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode, updateToolbar, updateUI,
-    applicationText, setHint, draw, currentScope: workspace.current, canvasSelection, recordHistory,
-    Line, lineHasDirection, elementSketchId,
-    resolveGeometryRef, createGeometryInstanceBundle, commitDraft: (...args) => synchronizedInstanceEditing.commit(...args),
+  const { command: geometryInstanceCommand, sources: instanceSourceCommand, createEditing: createInstanceEditing } = createDerivedCommands({
+    cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, normalizeGeometryInstance,
+    commitDraft: (...args) => synchronizedInstanceEditing.commit(...args), updateToolbar, recordHistory,
+    projectionSources: sketchProjectionSources, guardDimensionSymbolDeletion, solveState: sketchSolveResultState,
   });
   const { start: startGeometryInstanceCommand } = geometryInstanceCommand;
-  const instanceSourceCommand = createInstanceSourceCommand({
-    guardSketchEdit, exitDrawMode, updatePropertiesUI, sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered,
-    geometryInstanceBundlesForScope, blockProjectionBundles, geometryElementKey, geometryInstanceBundle,
-    constraintGraphNodes, guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry, clearSketchSolveState,
-  });
   const { finish: finishInstanceSourceEdit } = instanceSourceCommand;
   const blockPlacementCommand = window.BlockPlacementCommand.create({
     isGeometryMode, canCreateInActiveSketch, blockDefinitionById, blockDefinitionScopeError,
@@ -714,7 +700,6 @@
 
 
 
-  function selectedItemsForGeometryInstance() { return instanceSourceSelection.read(); }
 
 
 
