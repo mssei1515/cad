@@ -158,5 +158,31 @@
       addReadOnlyDimensionConstraint, makeConstraintOperand, sameConstraintOperand, applicationText, log,
     });
   }
-  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing });
+  function createDimensionValues({ parameters, sketches, interaction, pending, valueInput, checkpoint, presentation,
+    annotationFeature, modelQueries, stabilization, viewport, bounds, placement, synchronizedInstanceEditing,
+    solvePreparation, scaleSketchForFirstDimension, acceptError, recordHistory, resetDimensionDrag, addDistanceConstraintFromTarget }) {
+    const { expressionFromUserInput, evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft,
+      renameDimension, parameterErrorText, expressionInputValue, numericDimensionExpression } = parameters;
+    const { activeSketchId, constraintSketchId } = sketches;
+    const { guardSketchEdit } = interaction.access;
+    const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = valueInput;
+    const { captureValues: snapshotModelState, restoreValues: restoreModelState } = checkpoint;
+    const { settings: { applicationText }, setHint, draw, updateUI } = presentation;
+    const { sketchGeometryBounds } = bounds;
+    const { targetFromConstraint, isReadOnlyDimension } = window.DimensionQueries;
+    return window.DimensionValueCommand.createWithEditingSupport({
+      synchronizedInstanceEditing, annotationDimensions: annotationFeature.dimensions, annotationAnchorConstraints: annotationFeature.anchors,
+      canvasSelection: interaction.selection, resetDimensionDrag, canEdit: (id, operation) => guardSketchEdit(id, operation), renameDimension,
+      getPending: pending.read, setPending: pending.replace,
+      expressionFromUserInput, evaluateDimensionExpressionDraft, applicationText, parameterErrorText,
+      setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint: modelQueries.sketchHasDimensionConstraint,
+      captureSketchScreenFootprint: (sketchId = activeSketchId()) => viewport.captureBoundsFootprint(sketchGeometryBounds(sketchId)),
+      snapshotModelState, restoreModelState, solvePreparation, stabilizeActiveParameterNamespace: stabilization.stabilize,
+      constraintSketchId, acceptError, hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
+      targetFromConstraint, isReadOnlyDimension, defaultDimensionForTarget: placement.defaultDimensionForTarget,
+      expressionInputValue, numericDimensionExpression, focusDimensionValueInput, addDistanceConstraintFromTarget,
+      restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
+    });
+  }
+  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing, createDimensionValues });
 })();

@@ -251,3 +251,94 @@ test('combined factory shares live special-target callbacks and retains accepted
     assert.equal(f.names().includes('hide'), accepted); assert.deepEqual(f.names().slice(-2), ['ui', 'draw']);
   }
 });
+for (const file of ['src/constraints/dimension_queries.js', 'src/editing/selection.js', 'src/editing/pending_command_session.js', 'src/application/constraint_editing.js']) {
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox, { filename: file });
+}
+function dimensionOwnersFixture(composed) {
+  const f = supportFixture(), { state, events } = f, w = sandbox.window, p = f.ports;
+  events.length = 0; state.ready = false; state.sketch = 'S1'; state.success = true; state.allowed = true;
+  const selection = w.CanvasSelection.create(), pending = w.PendingCommandSession.create({});
+  const constraint = Object.assign(new w.GeometrySolver.RadiusConstraint(new w.GeometrySolver.Circle('C', new w.GeometrySolver.Point('P', 0, 0), 10), 10), { expression: '10', sketchId: 'S1' });
+  const bare = (name, result) => function () { 'use strict'; assert.equal(this, undefined); assert.equal(state.ready, true); events.push([name, ...arguments]); return typeof result === 'function' ? result(...arguments) : result; };
+  const parameters = { expressionFromUserInput: p.expressionFromUserInput, evaluateEditingExpressionDraft: p.evaluateDimensionExpressionDraft,
+    parameterErrorText: p.parameterErrorText, renameDimension: bare('rename', (c, name) => { c.parameterName = name; }),
+    expressionInputValue: bare('input-expression', value => value), numericDimensionExpression: bare('numeric', () => '10') };
+  const sketches = { activeSketchId: bare('active', () => state.sketch), constraintSketchId: bare('constraint-sketch', c => c.sketchId) };
+  const guardSketchEdit = bare('guard', () => state.allowed), valueInput = { hide: bare('hide'), sync: bare('sync'), focus: bare('focus') };
+  const checkpoint = { captureValues: bare('snapshot', () => ({ expression: constraint.expression, name: constraint.parameterName })),
+    restoreValues: bare('restore', value => { constraint.expression = value.expression; constraint.parameterName = value.name; }) };
+  const presentation = { settings: { applicationText: bare('text', (_ja, en) => en) }, setHint: p.setHint, draw: bare('draw'), updateUI: bare('ui') };
+  const boundsValue = {}, footprint = {}, bounds = { sketchGeometryBounds: bare('bounds', () => boundsValue) };
+  const viewport = {
+    captureBoundsFootprint(value) { assert.equal(this, viewport); assert.equal(value, boundsValue); events.push(['capture', value]); return footprint; },
+    restoreBoundsFootprint(value, saved) { assert.equal(this, viewport); assert.equal(value, boundsValue); assert.equal(saved, footprint); events.push(['frame', saved]); return true; },
+  };
+  const stabilization = { stabilize: bare('stabilize', () => ({ success: state.success, result: { errorNorm: 0 } })) };
+  const solvePreparation = { withStepNorm: bare('step', (_norm, run) => run()), stepNorm: bare('norm', () => 1) };
+  const inputs = { parameters, sketches, interaction: { selection, access: { guardSketchEdit } }, pending, valueInput, checkpoint, presentation,
+    annotationFeature: { dimensions: p.annotationDimensions, anchors: p.annotationAnchorConstraints },
+    modelQueries: { sketchHasDimensionConstraint: bare('has-dimension', () => false) }, stabilization, viewport, bounds,
+    placement: { defaultDimensionForTarget: bare('placement', () => ({})) }, synchronizedInstanceEditing: p.synchronizedInstanceEditing,
+    solvePreparation, scaleSketchForFirstDimension: bare('scale'), acceptError: 1e-4, recordHistory: p.recordHistory,
+    resetDimensionDrag: p.resetDimensionDrag, addDistanceConstraintFromTarget: bare('add', () => state.accepted) };
+  const { activeSketchId } = sketches, { sketchGeometryBounds } = bounds;
+  const raw = { synchronizedInstanceEditing: inputs.synchronizedInstanceEditing, annotationDimensions: inputs.annotationFeature.dimensions,
+    annotationAnchorConstraints: inputs.annotationFeature.anchors, canvasSelection: selection, resetDimensionDrag: inputs.resetDimensionDrag,
+    canEdit: (id, operation) => guardSketchEdit(id, operation), renameDimension: parameters.renameDimension, getPending: pending.read, setPending: pending.replace,
+    expressionFromUserInput: parameters.expressionFromUserInput, evaluateDimensionExpressionDraft: parameters.evaluateEditingExpressionDraft,
+    applicationText: presentation.settings.applicationText, parameterErrorText: parameters.parameterErrorText, setHint: presentation.setHint,
+    syncDimensionValueInput: valueInput.sync, draw: presentation.draw, activeSketchId: sketches.activeSketchId,
+    sketchHasDimensionConstraint: inputs.modelQueries.sketchHasDimensionConstraint,
+    captureSketchScreenFootprint: (sketchId = activeSketchId()) => viewport.captureBoundsFootprint(sketchGeometryBounds(sketchId)),
+    snapshotModelState: checkpoint.captureValues, restoreModelState: checkpoint.restoreValues, solvePreparation,
+    stabilizeActiveParameterNamespace: stabilization.stabilize, constraintSketchId: sketches.constraintSketchId, acceptError: inputs.acceptError,
+    hideDimensionValueInput: valueInput.hide, recordHistory: inputs.recordHistory, updateUI: presentation.updateUI,
+    scaleSketchForFirstDimension: inputs.scaleSketchForFirstDimension, targetFromConstraint: w.DimensionQueries.targetFromConstraint,
+    isReadOnlyDimension: w.DimensionQueries.isReadOnlyDimension, defaultDimensionForTarget: inputs.placement.defaultDimensionForTarget,
+    expressionInputValue: parameters.expressionInputValue, numericDimensionExpression: parameters.numericDimensionExpression,
+    focusDimensionValueInput: valueInput.focus, addDistanceConstraintFromTarget: inputs.addDistanceConstraintFromTarget,
+    restoreSketchScreenFootprint: (sketchId, saved) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), saved) };
+  const original = w.DimensionValueCommand, observed = {};
+  w.DimensionValueCommand = { createWithEditingSupport(options) { observed.options = options; return original.createWithEditingSupport(options); } };
+  let command;
+  try { command = composed ? w.ConstraintEditing.createDimensionValues(inputs) : w.DimensionValueCommand.createWithEditingSupport(raw); }
+  finally { w.DimensionValueCommand = original; }
+  assert.deepEqual(events, []); state.ready = true;
+  return { ...f, command, inputs, raw, observed, pending, selection, constraint, footprint };
+}
+
+test('dimension value assembly stays cold, shares actual owners, preserves bare callbacks and reads footprint scope at call time', () => {
+  for (const composed of [false, true]) {
+    const f = dimensionOwnersFixture(composed), o = f.observed.options;
+    for (const name of Object.keys(f.raw).filter(name => !['canEdit', 'captureSketchScreenFootprint', 'restoreSketchScreenFootprint'].includes(name))) assert.equal(o[name], f.raw[name], name);
+    f.state.sketch = 'block'; assert.equal(o.captureSketchScreenFootprint(), f.footprint); assert.equal(f.events.find(e => e[0] === 'bounds')[1], 'block');
+    assert.equal(o.canEdit.length, 2); o.canEdit('S2', 'create'); assert.deepEqual(f.events.at(-1), ['guard', 'S2', 'create']);
+    assert.equal(o.restoreSketchScreenFootprint.length, 2); o.restoreSketchScreenFootprint('S2', f.footprint);
+    assert.equal(f.events.at(-2)[1], 'S2');
+    assert.equal(f.command.startEdit({ constraint: f.constraint }), true); assert.equal(f.selection.dimensionConstraint, f.constraint);
+    assert.equal(f.selection.constraint, null); assert.equal(f.pending.read().constraint, f.constraint); assert.equal(f.names().at(-1), 'focus');
+  }
+});
+
+test('dimension value assembly retains ordinary rollback, first-dimension order, permissions and late command callbacks', () => {
+  for (const composed of [false, true]) {
+    const f = dimensionOwnersFixture(composed); f.command.startEdit({ constraint: f.constraint }); const pending = f.pending.read();
+    f.events.length = 0; f.state.success = false; f.command.submit(); assert.equal(f.constraint.expression, '10'); assert.equal(f.pending.read(), pending);
+    assert.ok(f.names().indexOf('snapshot') < f.names().indexOf('stabilize')); assert.ok(f.names().indexOf('stabilize') < f.names().indexOf('restore')); assert.equal(f.names().includes('history'), false);
+    f.events.length = 0; f.state.allowed = false; f.command.submit(); assert.deepEqual(f.names(), ['constraint-sketch', 'guard']); assert.equal(f.pending.read(), pending);
+    f.state.allowed = true; f.state.success = true; f.events.length = 0; f.command.submit(); assert.equal(f.pending.read(), null); assert.equal(f.names().filter(n => n === 'history').length, 1);
+    f.pending.replace({ type: 'distance-value', target: {}, buffer: '20', dimension: {} }); f.events.length = 0; f.command.submit();
+    const names = f.names(); assert.ok(names.indexOf('capture') < names.indexOf('scale')); assert.ok(names.indexOf('scale') < names.indexOf('add')); assert.ok(names.indexOf('add') < names.indexOf('frame')); assert.equal(f.pending.read(), null);
+  }
+});
+
+test('dimension value assembly keeps special interval/annotation/anchor lifecycles and propagated failure identity', () => {
+  for (const composed of [false, true]) for (const kind of ['interval', 'annotation', 'anchor']) {
+    const f = dimensionOwnersFixture(composed), constraint = kind === 'annotation' ? { annotationOwner: {} } : null;
+    const pending = { type: 'distance-value', target: { interval: kind === 'interval', annotationAnchor: kind === 'anchor', dimensionAxis: 'y' }, constraint, dimension: {}, buffer: '=x' };
+    f.pending.replace(pending); f.state.namespace = 'block'; f.command.submit(); assert.equal(f.pending.read(), null);
+    assert.equal(f.names().includes('snapshot'), false); assert.equal(f.names().includes('scale'), false); assert.equal(f.names().filter(n => n === 'history').length, kind === 'annotation' ? 1 : 0);
+    f.pending.replace(pending); f.events.length = 0; const marker = new Error(kind); f.state.failure = { name: kind, error: marker };
+    assert.throws(() => f.command.submit(), error => error === marker); assert.equal(f.pending.read(), pending); assert.equal(f.names().includes('hide'), false);
+  }
+});
