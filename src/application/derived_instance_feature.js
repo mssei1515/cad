@@ -53,7 +53,27 @@
         sketchProjectionEntryFromItem: projectionSources.sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered: projectionSources.sketchProjectionSourceIsCovered,
         geometryInstanceBundlesForScope, blockProjectionBundles, geometryElementKey, geometryInstanceBundle, constraintGraphNodes,
         guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry, clearSketchSolveState: solveState.clearSketchSolveState });
-      return Object.freeze({ ...feature, sources });
+      function createEditingWithTransforms({ checkpoint, serializeModel, addPointSnapConstraints, rebind, parameters, acceptError,
+        scopeQuery, solver, solveState, blockLayout, solving, updateBlockUI, refreshConstraintAnalysis }) {
+        const { captureValues: snapshotModelState, restoreValues: restoreModelState } = checkpoint;
+        const { stabilize: stabilizeActiveParameterNamespace } = parameters;
+        const { sourceObjects: geometryInstanceSourceObjects } = dragSources;
+        const editing = feature.createEditing({ snapshotModelState, restoreModelState, geometryInstanceBundle, geometryInstanceBundlesForScope,
+          blockProjectionBundles, serializeModel, addPointSnapConstraints, geometryInstanceSourceObjects, rebind,
+          stabilize: stabilizeActiveParameterNamespace, acceptError });
+        const { sketchSolveVariables, sketchSolveConstraints, sketchSolveLines } = scopeQuery;
+        const { blockDefinitionById, blockInstanceEnabledSketchSet } = readServices.catalog;
+        const { blockWorldPoint, invalidateBlockProjectionCache } = readServices.projections;
+        const { blockLocalGeometryBounds, snappedBlockRotation } = blockLayout;
+        const transform = window.InstanceTransformCommand.create({ isPlacing: feature.command.isPlacing, currentScope: workspace.current,
+          snapshotModelState, restoreModelState, geometryInstanceSourceObjects, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines,
+          solver, acceptError, stabilizeActiveParameterNamespace, clearSketchSolveState: solveState.clearSketchSolveState,
+          applicationText, setHint, recordHistory, blockDefinitionById, blockLocalGeometryBounds, blockInstanceEnabledSketchSet, blockWorldPoint,
+          invalidateBlockProjectionCache, updateBlockUI, refreshConstraintAnalysis, updateUI, draw,
+          snappedBlockRotation, solveSketchAndDependents: solving.solveSketchAndDependents, updatePropertiesUI });
+        return Object.freeze({ ...editing, transform });
+      }
+      return Object.freeze({ ...feature, sources, createEditingWithTransforms });
     }
     return Object.freeze({ dragSources, sourceSelection, createCommands });
   }
