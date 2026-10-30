@@ -41,6 +41,14 @@
           readMode: lifecycle.readMode, readPendingType: () => pending.current?.type, readConstraintCommand: () => constraints.command });
         return Object.freeze({ view, status });
       }
+      function prepareControls({ canvas }) {
+        const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
+        const constraintMenuButtons = Array.from(document.querySelectorAll("[data-menu-constraint]"));
+        const fixPointBtn = document.getElementById("fixPointBtn");
+        const cursor = window.CommandCursor.create({ document, canvas, fixPointBtn, constraintButtons });
+        function createPreparedControls(options) { return createControls({ ...options, updateCursor: cursor.update }); }
+        return Object.freeze({ constraintButtons, constraintMenuButtons, fixPointBtn, cursor, createControls: createPreparedControls });
+      }
       function createEditingBinding({ undo, redo, toggleVisibility, deleteSelection, annotation }) {
         return window.ToolbarView.createEditingBinding({ document, undo, redo, toggleVisibility,
           isGeometryMode, deleteSelection, updateUI, draw, annotation });
@@ -51,7 +59,7 @@
           startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand, startGeometryInstanceCommand,
           filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation });
       }
-      return Object.freeze({ updateHistory: history.update, createControls, createEditingBinding, createDrawingBinding });
+      return Object.freeze({ updateHistory: history.update, createControls, prepareControls, createEditingBinding, createDrawingBinding });
     }
     function bindUI({ syncAnnotationResize, prepareParameterNamespace, refreshConstraintAnalysis, updateDocumentName,
       updateToolbar, renderSketch, updateBlockUI, renderProperties, readSketchMoving, updateStatusUI, updateConstraintButtons,

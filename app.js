@@ -580,10 +580,7 @@
   const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;
   const runtimeVersionView = window.RuntimeVersionView.create({ document, applicationText });
 
-  const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
-  const constraintMenuButtons = Array.from(document.querySelectorAll("[data-menu-constraint]"));
-  const fixPointBtn = document.getElementById("fixPointBtn");
-  const commandCursor = window.CommandCursor.create({ document, canvas, fixPointBtn, constraintButtons });
+  const { constraintButtons, constraintMenuButtons, fixPointBtn, createControls: createToolbarControls } = toolbarPresentation.prepareControls({ canvas });
 
   applicationSettings.prepareButtonTooltips();
 
@@ -1026,10 +1023,9 @@
   function selectionVisibilityIsHidden(targets) { return propertySelection.visibilityIsHidden(targets); }
   function toggleSelectedVisibility() { return selectionVisibilityCommand.toggle(); }
 
-  const { view: toolbarView, status: commandStatusView } = toolbarPresentation.createControls({
+  const { view: toolbarView, status: commandStatusView } = createToolbarControls({
     selectedVisibilityTargets, selectionVisibilityIsHidden,
     canEditTarget: target => canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)),
-    updateCursor: commandCursor.update,
   });
   function updateToolbar() { toolbarView.update(); }
 
