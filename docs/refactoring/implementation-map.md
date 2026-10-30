@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- BrowserTestApi（src/testing/browser_test_api.js）: 準備済みテスト支援の能力だけからブラウザ公開名・結合順を構成する。モデル・DOM・sessionやfixture生成を所有せず、元関数・通常object・getter／spread順・例外時の以前のAPIを維持する。appはtest guard・支援生成・install phaseを所有する。
+
 - DeletionFeature.createForEditing: 実Workspace／read／Canvas／session／solvingから削除に必要な限定APIを接続する。late drag reset、live analysis、既存createと異なる削除経路の途中状態・表示／履歴順を維持する。
 
 - ClipboardFeature.createForEditing: 共有ownerからcopy／cut／pasteに必要な限定APIを接続する。モデルのediting scopeとParameterのWorkspace scopeを区別し、既存create・操作順・限定rollbackを維持する。

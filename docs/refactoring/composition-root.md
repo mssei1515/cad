@@ -6,6 +6,24 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：ブラウザテスト公開契約の分離（2026-10-30、検証完了）
+
+基準developはb02cda6。src/testing/browser_test_api.jsのBrowserTestApi.createへ、window.__jot2dTestの公開名割当てとspreadの結合順を移した。既に準備されたTestDriver支援・診断API・履歴関数54個だけを14の用途別入力で受け、Document／モデル／Solver／session・DOMを渡さない。公開contractの追加・改名・上書き規則を通常appの組立てから独立して検証できる。返却値は従来どおり書換え可能な通常objectで、公開関数は元の参照・呼出時receiverを保ち、bindやwrapperで置き換えない。getter／spreadの評価順とlast-write優先、propertyの挿入順・通常data descriptorも維持する。構築途中の読取り例外では以前のwindow.__jot2dTestを保持する。module定義読込だけではAPI・fixtureを生成せず、test指定のguardとDocumentEditingReset生成後のinstall phaseはappのまま。indexの既存classic-script／cache回避queryと他script順は維持し、構文・単体の明示listへ新module／testを登録した。
+
+app.jsは1,918→1,852行（66行減）、非空白1,468→1,402行、root416文／関数81個／可変参照三つ。test hooksは319→253行。構築134文719非空白行、一文call関数77個99行、その他204文326行（文外5行）は不変。TEMP cad-browser-test-api-boundary-{proof,hierarchy,hook-audit}.cjsで85個のproperty定義／spreadの旧公開objectとのAST一致、他app・test guard／install phaseの不変、src追加以外のscript順・HTMLと明示test登録以外のtool不変、root未使用bindingなしを確認した。
+
+今回の54個は新しい可変app contextでなく、構築済みテスト支援の能力参照である。appはどの支援を接続するか、BrowserTestApiは何の名前・順序で公開するかを所有する。ただしtest支援の生成依存は減らしておらず、root外側275 binding（局所関数34、ObjectPattern alias 213、CallExpression初期化binding 23、その他5）は不変。hooksと短い委譲を除いても1,050非空白行が残る。行数差66を275依存の解消や数百行目標の達成と扱わない。
+
+公開境界の単体三件を追加した。DOM／locationへ触れないmodule初期化、fixture操作を呼ばない構築、代表する公開名の関数同一性・live結果／receiver、通常objectの書換え可能性、spread getterと衝突時の上書き・挿入順、先頭／途中／末尾の読取り例外時の未公開と同じ例外を確認した。関連単体25件／全単体2,101件／構文626fileが成功。初回全E2E（session49667）は587件成功／1件失敗。新moduleのpathをfile URL読込一覧のexpectedPathsへ登録し忘れており、読込数335期待／336実測で失敗した。tests/e2e/unified-ui.spec.jsの期待一覧へpathを一つ追加し、件数・全path・起動queryの厳密確認は維持した。製品入力は初回と不変で、差は同E2Eの登録一行のみと照合した。該当ケースの単独再検証1件が成功（2.7秒、TEMP cad-browser-test-api-boundary-targeted-*）。初回のlog／receipt／last-run／入力hashをTEMP cad-browser-test-api-boundary-initial-*へ保存した。
+
+全E2E588件が全成功（21.9m、exit 0、再実行session62136）。対象file／test名を絞らず、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを保存した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。新moduleと登録変更を含む最終12fileはcanonical blobで検証対象とmerge後の一致を照合する。TEMP cad-browser-test-api-boundary-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。読込module一覧の登録以外は既存E2Eの期待値・性能上限／timeout・workerを変更しない。
+
+全体目標active、開始時週枠残量69%／最終確認68%で停止条件未到達。mainは停止／releaseの最後に反映する。次はTestDriverの生成依存を既存の役割別ownerと実APIから整理する。54支援や275bindingを一つの汎用contextで包まず、通常機能の構築・test能力の生成・公開schemaの責務とphaseを区別する。
+
+新scriptを追加するときはindexのsources、tools/check-syntax.js、必要なunit実行list、unified-uiのfile URL expectedPathsを確認する。expectedPathsの厳密な件数・全path・起動query確認は維持し、indexから自動生成して独立した確認を省略しない。
+
+
+
 ### 最新：削除の編集環境からの組立て（2026-10-30、検証完了）
 
 基準developはcce412f。既存DeletionFeatureにcreateForEditingを追加し、DocumentWorkspaceのWorkspace／Sketch、Geometry read services、CanvasInteractionの実Selection／access／scope／hover／PointUsage、OperationSessions、GeometryCreation、SketchSolvingとPresentationから既存三ownerへ限定APIを接続する。appの個別47項目を22項目のowner・操作依存へ整理し、既存createと同じremove／removeSelection／rejectReferencesを元の生成位置で返す。削除はWorkspace.currentを読む設計を維持し、Clipboardのediting scopeへ置き換えない。Geometry／Dimension／Annotation dragは後段生成なので、三reset callbackをappで遅延のまま渡す。analysis.stableも操作時に読み、生成時にscope・状態・drag・DOMを照会しない。Geometry／Selection削除のraw command・計画／適用・拒否通知・求解・履歴は変更せず、新file・可変context・状態の複製を増やさない。
