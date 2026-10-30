@@ -195,9 +195,10 @@
     currentScope: () => editingScopeBinding.current, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
   });
 
-  const { hitAnnotationTarget, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationFeature.createAnchorQuery({
+  const annotationTargets = window.AnnotationFeature.createAnchorQuery({
     sketches: sketchContext, readServices: geometryReadServices, pointUsage, selection: canvasSelection, viewportScale: () => viewport.scale,
   });
+  const { hitAnnotationTarget, annotationLeaderTargetFromItem, annotationLeaderAnchor } = annotationTargets;
   const referenceConstraintState = window.ReferenceConstraintState.create({
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
   });
@@ -449,17 +450,13 @@
     readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRendering.frame),
     sketchAlpha, readMode: drawOperationLifecycle.readMode, readCommand: () => hatchCommand,
   });
-  const annotationFeature = window.AnnotationFeature.create({
-    ctx, viewport, surface: canvasSurface, effectiveAnnotationStyle, canvasSelection, readHover: () => canvasHover.current,
-    readExportFrame: () => pngRendering.frame, canvasThemeColor, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement,
-    resizeEnabled: element => annotationDrag.resizeEnabled(element), activeSketchId, allAnnotations, isVisibleValue, isVisibleSketchId,
-    currentScope: workspace.current, readEditingScope: () => editingScopeBinding.current, constraintTargetSession, pendingCommandSession,
-    lastPointer: pointerInteractionController.readLastPointer, elementSketchId, guardSketchEdit, isReferenceSourceSketchId, geometryRefForItem,
-    constraintOperandsFromSelection, recordHistory, updateUI, draw, setHint, cancelPendingCommand, cancelConstraintTargetCommand, applicationText,
-    startDistanceResolution, defaultDimensionForTarget, normalizeDimension: dimensionPlacement.normalizeDimension, evaluateDimensionExpressionDraft,
-    parameterNamespace, ensureDimensionParameter, parameterErrorText, exitDrawMode, nextAnnotationId: () => documentIds.allocate("annotation"),
-    applyStyle: (style, key, value, effective) => appearanceEditing.applyLeaderAppearanceValue(style, key, value, { viewportScale: viewport.scale, effective }),
-    canCreateInActiveSketch, rejectRootSketchCreation, annotationLeaderTargetFromHit, clearSelection, updateToolbar,
+  const annotationFeature = window.AnnotationFeature.createForEditing({
+    ctx, viewport, surface: canvasSurface, documentWorkspace, editingScope: editingScopeBinding,
+    readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions, targets: annotationTargets,
+    placement: dimensionPlacement, presentation, readAppearance: () => appearanceEditing,
+    readExportFrame: () => pngRendering.frame, canvasThemeColor, resizeEnabled: element => annotationDrag.resizeEnabled(element),
+    constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand,
+    startDistanceResolution, clearSelection, updateToolbar,
   });
   const { layer: annotationLayer, anchors: annotationAnchorConstraints, dimensions: annotationDimensions, command: annotationCommand,
     materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope, startAnchorConstraint: startAnnotationAnchorConstraint } = annotationFeature;

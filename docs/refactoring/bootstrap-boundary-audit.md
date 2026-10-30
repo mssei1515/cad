@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 注記機能の編集環境からの生成（2026-10-30、cbc5c2c基準）
+
+基準developはcbc5c2c。既存AnnotationFeatureにcreateForEditingを追加し、実DocumentWorkspace／editing scope・read services・CanvasInteraction・OperationSessions・Anchor query・DimensionPlacement・Presentation／Appearance編集からraw createへ限定APIを接続する。appの48項目を22項目のowner・操作依存へ整理した。Anchor queryは従来の位置で一度だけ生成した実体をannotationTargetsとして保持し、既存hit／anchor参照と共有する。modelのWorkspace.currentとreadEditingScopeの同期済みbinding.currentを区別し、同じSelection・Hover・Target／Pending・Pointerを使う。後段のAppearance編集はreadAppearanceで適用時まで取得を遅らせる。style適用は呼出時のviewport.scaleとeffectiveを元のoptionsでAppearance編集へ渡し、注記IDは同じDocumentIds.allocateへ依頼する。後段AnnotationDragのresizeEnabledとConstraintTargetCommand取消callbackはappの遅延参照のまま残す。raw create／createAnchorQuery、描画・Anchor／Command／editor／dragの順序、Parameterコピー・取消・guardの差は変更せず、新file・state／setter・modelの別コピーを増やさない。
+
+app.jsは1,831→1,828行（3行減）、非空白1,381→1,378行、root416→417文／関数81個／hooks235行／可変参照三つ。root一文増は同じAnchor query返却objectの保持とaliasの分離で、新しい操作stateではない。構築134文715非空白行、一文call関数77個99行、その他205文324行（文外5行）。移管で不要になったannotationLeaderTargetFromHit aliasをrootから除いた。TEMP cad-annotation-editing-composition-{proof,hierarchy}.cjsで全48子portの旧接続一致、Anchor queryの一回生成・元の段階と共有、その他app／raw FeatureのAST不変、未使用root bindingとfactory未定義globalなしを確認した。hooksと短い委譲を除いても1,044非空白行が残り、数百行目標は未達。
+
 ## 拘束テスト支援の段階的な生成接続（2026-10-30、c9ae976基準）
 
 基準developはc9ae976。既存ConstraintTestDriverにcreateBrowserFactoriesを追加し、実Workspace／Sketch・Geometry・read services・solve scope／solving・analysis／solver・参照状態・operand値・Selection／Target session・寸法配置／checkpoint・Presentation等から子portを接続する。共通29項目から7creatorの85個の子portを組み立て、各生成呼出しは元のapp内の位置に残す。解析更新は元のoptions={}の既定値と一引数のanalysis.refresh(options)呼出しを窓口内で接続し、毎回の新しい既定objectとactor receiverを保つ。readSummaryとsolver分析も元のreceiver・引数数を保つ。modelはWorkspace.currentを操作時に読み、同期済みediting scopeや生成時modelへ置き換えない。全creatorと生のcreateModelSupport等の旧APIを維持し、観測・fixture実行・強制Solver結果注入の実装は既存raw helperに残す。新file・状態・scope／Selection／Solverの別コピーを増やさない。

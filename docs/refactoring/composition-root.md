@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：注記機能の編集環境からの生成（2026-10-30、検証完了）
+
+基準developはcbc5c2c。既存AnnotationFeatureにcreateForEditingを追加し、実DocumentWorkspace／editing scope・read services・CanvasInteraction・OperationSessions・Anchor query・DimensionPlacement・Presentation／Appearance編集からraw createへ限定APIを接続する。appの48項目を22項目のowner・操作依存へ整理した。Anchor queryは従来の位置で一度だけ生成した実体をannotationTargetsとして保持し、既存hit／anchor参照と共有する。modelのWorkspace.currentとreadEditingScopeの同期済みbinding.currentを区別し、同じSelection・Hover・Target／Pending・Pointerを使う。後段のAppearance編集はreadAppearanceで適用時まで取得を遅らせる。style適用は呼出時のviewport.scaleとeffectiveを元のoptionsでAppearance編集へ渡し、注記IDは同じDocumentIds.allocateへ依頼する。後段AnnotationDragのresizeEnabledとConstraintTargetCommand取消callbackはappの遅延参照のまま残す。raw create／createAnchorQuery、描画・Anchor／Command／editor／dragの順序、Parameterコピー・取消・guardの差は変更せず、新file・state／setter・modelの別コピーを増やさない。
+
+app.jsは1,831→1,828行（3行減）、非空白1,381→1,378行、root416→417文／関数81個／hooks235行／可変参照三つ。root一文増は同じAnchor query返却objectの保持とaliasの分離で、新しい操作stateではない。構築134文715非空白行、一文call関数77個99行、その他205文324行（文外5行）。移管で不要になったannotationLeaderTargetFromHit aliasをrootから除いた。TEMP cad-annotation-editing-composition-{proof,hierarchy}.cjsで全48子portの旧接続一致、Anchor queryの一回生成・元の段階と共有、その他app／raw FeatureのAST不変、未使用root bindingとfactory未定義globalなしを確認した。hooksと短い委譲を除いても1,044非空白行が残り、数百行目標は未達。
+
+境界単体四件を追加した。同じdisplay／anchor／dimension／command実体、生成時のscope／倍率・ID／late drag無照会と既存生成順、Workspace editor lookupとbound anchor／drag／dimension viewの参照差を旧構成と比較した。styleの現在倍率・fresh options・effectiveの有無・method receiver、ID allocator receiverと元の例外、後段dragの遅延参照、Parameterの浅いコピーとensure後のscope再取得、異なる取消／prepare順を維持した。初回E2Eで後段Appearance編集の早期参照による起動ReferenceErrorを検出したため、その実行を終了し、遅延readerへ修正した。単体もAppearance生成前のFeature構築を再現するよう補強し、ASTの接続一致だけでは初期化時点の変更を検出できなかった点を踏まえ、直接依存の宣言順も検査する。初回失敗のlog・receipt／source hashはTEMP cad-annotation-editing-composition-initial-*へ保存した。修正後、関連単体48件／全単体2,114件／構文626fileが成功。関連13suite（unified-ui／unified-annotations／annotation-anchors／annotation-display-size／leader-appearance／free-text-input-drag／blocks／sketch-projection／sketch-permissions／phase0-characterization／derived-selection-copy／parameter-dialog-controller／reference-images）のE2E309件が全成功（4.9m、exit 0、実行session89513）。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-annotation-editing-composition-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更しない。今回は全E2E未実行であり、基準cbc5c2cの全588件成功とは区別する。
+
+全体目標active、開始時週枠残量66%／最終確認65%で停止条件未到達。mainは停止／releaseの最後に反映する。次も通常機能の広い接続を実ownerとinit phaseから整理する。少ない行数差を過大評価せず、別scope・遅延参照・共有queryの意味を維持し、巨大なapp contextへ移すだけの分割は採用しない。
+
+
+
 ### 最新：拘束テスト支援の段階的な生成接続（2026-10-30、検証完了）
 
 基準developはc9ae976。既存ConstraintTestDriverにcreateBrowserFactoriesを追加し、実Workspace／Sketch・Geometry・read services・solve scope／solving・analysis／solver・参照状態・operand値・Selection／Target session・寸法配置／checkpoint・Presentation等から子portを接続する。共通29項目から7creatorの85個の子portを組み立て、各生成呼出しは元のapp内の位置に残す。解析更新は元のoptions={}の既定値と一引数のanalysis.refresh(options)呼出しを窓口内で接続し、毎回の新しい既定objectとactor receiverを保つ。readSummaryとsolver分析も元のreceiver・引数数を保つ。modelはWorkspace.currentを操作時に読み、同期済みediting scopeや生成時modelへ置き換えない。全creatorと生のcreateModelSupport等の旧APIを維持し、観測・fixture実行・強制Solver結果注入の実装は既存raw helperに残す。新file・状態・scope／Selection／Solverの別コピーを増やさない。
