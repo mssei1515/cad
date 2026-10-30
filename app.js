@@ -220,7 +220,7 @@
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
   const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
-    pointer: pointerInteractionController, createSelectionPresentation, createInputFeature: createCanvasInputFeature,
+    pointer: pointerInteractionController, createSelectionPresentation, createInputForEditing: createCanvasInputFeature,
     bindEditingPointer: bindCanvasPointer, createKeyboard: createCanvasKeyboard } = operationSessions;
   const constructionCommand = window.ConstructionCommand.create({
     cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
@@ -622,7 +622,6 @@
 
   function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
-  const { beginDrag: beginReferenceImageDrag } = referenceImageInteraction;
 
   function decorateSerializedConstraint(data, constraint) { return constraintMetadata.decorate(data, constraint); }
 
@@ -1278,14 +1277,13 @@
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
   });
-  const { command: geometryDrag, build: buildDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
+  const { command: geometryDrag, build: buildDragSession } = geometryDragFeature;
 
   const { input: constraintInputFeature, dragging: dimensionDragFeature } = createConstraintInputWithDragging({
     viewport, currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, pointer: dragPointer,
     clearSnap, updateUI, recordHistory,
   });
   const { command: dimensionDrag } = dimensionDragFeature;
-  const { begin: beginDimensionDrag } = dimensionDrag;
 
 
 
@@ -1293,7 +1291,7 @@
 
 
 
-  const { begin: beginBlockDrag } = geometryDragFeature.createBlockEntry();
+  const blockDragging = geometryDragFeature.createBlockEntry();
 
 
 
@@ -1365,13 +1363,12 @@
 
   const canvasInputFeature = createCanvasInputFeature({
     document, canvas, updateUI,
-    annotationCommand, annotationDrag, startAnnotationAnchorConstraint, constraintInputFeature, dimensionDragging: dimensionDragFeature, beginDimensionDrag,
+    annotationFeature, annotationDrag, constraintInputFeature, dimensionDragging: dimensionDragFeature,
     constraintTargetHint,
     instanceSourceCommand, geometryInstanceCommand, sceneQueries: sceneHitQueries, operandElement, toggleSketchProjectionSource,
-    clearSnap, selectionRectangle, drawingSnap, viewport, geometryRefForItem, resolveGeometryRef, snapForDrawing, transientAuthoring,
-    createDrawingInput: () => authoringTools.createCanvasInput({ readMode: drawOperationLifecycle.readMode,
-      centerline: centerlineCommand, circleCenterCross: circleCenterCrossCommand, fillet: filletCommand, trim: trimFeature, offset: offsetCommand }),
-    sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, beginDerivedGeometryDrag, beginBlockDrag, beginReferenceImageDrag, buildDragSession, geometryDrag,
+    selectionRectangle, viewport, transientAuthoring, authoring: authoringTools,
+    drawingCommands: { centerline: centerlineCommand, circleCenterCross: circleCenterCrossCommand, fillet: filletCommand, trim: trimFeature, offset: offsetCommand },
+    sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, geometryDragging: geometryDragFeature, blockDragging, referenceImage: referenceImageInteraction,
   });
 
   const blankCanvasGesture = authoringTools.createBlankGesture({
