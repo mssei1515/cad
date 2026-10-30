@@ -84,7 +84,7 @@
   const { applicationText, translatedExactText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
-  const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
+  const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
   const documentWorkspace = window.DocumentWorkspace.create({
     applicationText, constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
   });
@@ -248,13 +248,10 @@
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
   });
-  const blockEditingFeature = window.BlockEditingFeature.create({
-    workspace, documentModel, ids: documentIds, catalog: blockCatalog, projections: blockProjections,
-    readEditingScope: () => editingScopeBinding.current,
-    instances: instanceProjections, rebinding: constraintRebinding, normalizedSketchCopy, normalizeGeometryInstance,
-    isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
-    activeSketchId, blockProjectionBundles, geometryElementKey, readViewport: () => viewport,
-    activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences, createHistory: createBlockEditHistory,
+  const blockEditingFeature = window.BlockEditingFeature.createForWorkspace({
+    documentWorkspace, readServices: geometryReadServices, rebinding: constraintRebinding, editingScope: editingScopeBinding, normalizeGeometryInstance,
+    readViewport: () => viewport, activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences, createHistory: createBlockEditHistory,
+    interaction: canvasInteraction, sessions: operationSessions, presentation,
   });
   const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
   const { clone: cloneBlockDefinition, fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
@@ -280,15 +277,10 @@
   });
   const { start: startGeometryInstanceCommand } = geometryInstanceCommand;
   const { finish: finishInstanceSourceEdit } = instanceSourceCommand;
-  const blockPlacementCommand = window.BlockPlacementCommand.create({
-    isGeometryMode, canCreateInActiveSketch, blockDefinitionById, blockDefinitionScopeError,
-    blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, snappedBlockRotation,
-    blockInstanceTranslationForAnchor, activeSketchId, currentScope: workspace.current,
-    nextInstanceId: () => documentIds.allocate("blockInstance"), clearSelection, canvasSelection, invalidateBlockProjectionCache,
+  const blockPlacementCommand = blockEditingFeature.createPlacement({
+    layout: { snappedBlockRotation, blockInstanceTranslationForAnchor }, isGeometryMode, clearSelection,
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
-    setPropertiesPanelCollapsed, getPointerPreview: () => drawingPreview.pointer,
-    setPointerPreview: value => { drawingPreview.setPointer(value); }, getLastPointerWorld: pointerInteractionController.readLastPointer,
-    setMode: drawOperationLifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory,
+    setPropertiesPanelCollapsed, solveAndRefresh, recordHistory,
   });
   const { start: startBlockPlacement, commit: commitBlockPlacement,
     restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;

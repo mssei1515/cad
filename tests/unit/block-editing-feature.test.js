@@ -10,7 +10,7 @@ const scope = id => ({ id, name: id, revision: 3, origin: { x: 0, y: 0 }, parent
   points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], parameters: [], annotations: [], hatches: [],
   referenceImages: [], blockInstances: [], geometryInstances: [], sketches: [{ id: 'ROOT', kind: 'root' }, { id: 'S1', kind: 'sketch' }],
   activeSketchId: 'S1', nextHatchIndex: 1, nextDimensionParameterIndex: 1 });
-function fixture({ realRebinding = false, sharedScope = false } = {}) {
+function fixture({ realRebinding = false, sharedScope = false, buildFeature = options => w.BlockEditingFeature.create(options) } = {}) {
   const document = { ...scope('host'), blockDefinitions: [] }, workspace = w.EditingWorkspace.create(document);
   const state = { ready: false, definitionSeq: 1, hatchSeq: 8, history: 0, viewport: { x: 1, y: 2, scale: 3 }, snapshotError: null, bundles: [], serializeFailure: null };
   const events = [];
@@ -32,7 +32,7 @@ function fixture({ realRebinding = false, sharedScope = false } = {}) {
     events.push('clone-constraint'); const clone = new g.DistanceConstraint(points.get(constraint.p1.id), points.get(constraint.p2.id), constraint.target);
     clone.sketchId = constraint.sketchId; return clone;
   } };
-  const feature = w.BlockEditingFeature.create({ workspace, documentModel: document, ids, catalog, projections,
+  const options = { workspace, documentModel: document, ids, catalog, projections,
     ...(sharedScope ? { readEditingScope: () => { assert.equal(state.ready,true); events.push('shared-bound'); return state.bound; } } : {}),
     instances: { geometryInstanceBundlesForScope: () => [], emptyGeometryInstanceBundle: () => ({}) }, rebinding,
     normalizedSketchCopy: sketch => ({ ...sketch, appearance: w.Appearance.normalizeAppearance(sketch.appearance) }),
@@ -42,13 +42,14 @@ function fixture({ realRebinding = false, sharedScope = false } = {}) {
     readViewport: () => { assert.equal(state.ready, true); return viewport; },
     activateScope: value => { events.push(['activate', value.id]); return workspace.activate(value); },
     reserveScopeSequences: value => events.push(['reserve', value.id]), createHistory: () => ({ id: ++state.history }),
-  });
+  };
+  const feature = buildFeature(options, { state, events });
   function geometry(definition) {
     const a = Object.assign(new g.Point('P1', 0, 0), { sketchId: 'S1' }), b = Object.assign(new g.Point('P2', 10, 0), { sketchId: 'S1' });
     definition.points.push(a, b); definition.lines.push(Object.assign(new g.Line('L1', a, b), { sketchId: 'S1' }));
     definition.constraints.push(Object.assign(new g.DistanceConstraint(a, b, 10), { sketchId: 'S1' })); return a;
   }
-  return { state, events, document, workspace, feature, geometry };
+  return { state, events, document, workspace, feature, geometry, options };
 }
 
 function commands(f, overrides = {}, build = (feature, options) => feature.createCommands(options)) {
@@ -357,5 +358,99 @@ test('Block completion confirmation keeps the dialog receiver, one pending reque
     f.events.length = 0; c.selection.set('lines', f.document.lines); c.state.choiceResult = Promise.resolve(false); c.definition.startCreation(); c.completion.complete(); await Promise.resolve();
     assert.equal(f.document.blockDefinitions.length, 1); assert.equal(f.document.blockInstances.length, 1); assert.equal(f.document.blockInstances[0].rotationLocked, false);
     assert.equal(c.selection.blockInstances[0], f.document.blockInstances[0]); assert.equal(f.events.filter(e => e === 'history').length, 1);
+  }
+});
+
+
+function workspacePlacementFixture(composed, probe = {}) {
+  probe.order = []; probe.ports = {}; probe.results = {}; let owners;
+  function constructing(names, action) {
+    const originals = new Map();
+    for (const [namespace, name] of names) { const original = w[namespace]; originals.set(namespace, original);
+      w[namespace] = { ...original, create(input) { probe.order.push(name); probe.ports[name] = input; if (probe.failAt === name) throw probe.error;
+        return probe.results[name] = original.create(input); } }; }
+    try { return action(); } finally { for (const [namespace, original] of originals) w[namespace] = original; }
+  }
+  const f = fixture({ sharedScope: true, buildFeature(options, { state, events }) {
+    options.normalizedSketchCopy = w.SketchHierarchy.copyWithNormalizedAppearance;
+    options.isDimensionConstraint = w.DimensionQueries.isDimensionConstraint; options.isReadOnlyDimension = w.DimensionQueries.isReadOnlyDimension;
+    options.geometryElementKey = w.GeometryObjects.geometryKeyForItem;
+    const originalReadViewport = options.readViewport; options.readViewport = () => state.nextViewport || originalReadViewport();
+    const ready = () => assert.equal(state.ready, true), selection = w.CanvasSelection.create(), lifecycle = w.DrawOperationLifecycle.createSession();
+    const preview = w.DrawingPreview.create({ types: g, hits: {}, canvasHover: {}, canCreateInActiveSketch: () => true });
+    const pointer = w.PointerInteractionController.createSession();
+    state.allowed = true; state.geometryMode = true; state.collapsed = true;
+    owners = { documentWorkspace: { workspace: options.workspace, document: options.documentModel, documentIds: options.ids,
+        sketches: { activeSketchId: options.activeSketchId }, parameters: { numericDimensionExpression: options.numericDimensionExpression, ensureParameterNamespace: options.ensureParameterNamespace } },
+      readServices: { catalog: options.catalog, projections: options.projections, instances: options.instances, reads: { blockProjectionBundles: options.blockProjectionBundles } },
+      rebinding: options.rebinding, editingScope: { get current() { ready(); return state.bound; } }, normalizeGeometryInstance: options.normalizeGeometryInstance,
+      readViewport: options.readViewport, activateScope: options.activateScope, reserveScopeSequences: options.reserveScopeSequences, createHistory: options.createHistory,
+      interaction: { selection, lifecycle, access: { canCreateInActiveSketch: () => { ready(); return state.allowed; } } }, sessions: { preview, pointer },
+      presentation: { setHint: (...args) => { ready(); events.push(['hint', ...args]); }, updateUI: () => { ready(); events.push('ui'); }, draw: () => { ready(); events.push('draw'); } } };
+    return constructing([['BlockDefinitionEditing', 'definition'], ['BlockEditorSession', 'session'], ['BlockEditingQueries', 'queries']],
+      () => composed ? w.BlockEditingFeature.createForWorkspace(owners) : w.BlockEditingFeature.create(options));
+  } });
+  assert.deepEqual(probe.order, ['definition', 'session', 'queries']); assert.deepEqual(f.events, []);
+  const layout = w.BlockLayout.create({ catalog: f.options.catalog, projections: f.options.projections, instanceProjections: f.options.instances,
+    annotationBounds: () => null, hatchPrimitivesForScope: () => [] });
+  const input = { layout, isGeometryMode: () => { assert.equal(f.state.ready, true); return f.state.geometryMode; },
+    clearSelection: () => { f.events.push('clear'); owners.interaction.selection.clear(); },
+    isPropertiesCollapsed: () => { assert.equal(f.state.ready, true); return f.state.collapsed; },
+    setPropertiesPanelCollapsed: value => { assert.equal(f.state.ready, true); f.state.collapsed = value; f.events.push(['panel', value]); },
+    solveAndRefresh: label => { f.events.push(['solve', label]); if (f.state.solveError) throw f.state.solveError; }, recordHistory: label => f.events.push(['placement-history', label]) };
+  const placement = constructing([['BlockPlacementCommand', 'placement']], () => composed ? f.feature.createPlacement(input)
+    : w.BlockPlacementCommand.create({ ...input, ...layout, canCreateInActiveSketch: owners.interaction.access.canCreateInActiveSketch,
+      blockDefinitionById: f.options.catalog.blockDefinitionById, blockDefinitionScopeError: f.feature.queries.blockDefinitionScopeError,
+      blockDefinitionDrawableSketchIds: f.options.catalog.blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds: f.options.catalog.blockDefinitionGeometrySketchIds,
+      activeSketchId: f.options.activeSketchId, currentScope: f.workspace.current, nextInstanceId: () => f.options.ids.allocate('blockInstance'),
+      canvasSelection: owners.interaction.selection, invalidateBlockProjectionCache: f.options.projections.invalidateBlockProjectionCache,
+      getPointerPreview: () => owners.sessions.preview.pointer, setPointerPreview: value => { owners.sessions.preview.setPointer(value); }, getLastPointerWorld: owners.sessions.pointer.readLastPointer,
+      setMode: owners.interaction.lifecycle.setMode, ...owners.presentation }));
+  assert.deepEqual(f.events, []); assert.equal(f.state.definitionSeq, 1); assert.equal(f.state.history, 0);
+  return { ...f, placement, owners, input, probe };
+}
+
+test('Block workspace composition preserves actual owners and construction stages and reads the late viewport only during session operations', () => {
+  for (const composed of [false, true]) {
+    const f = workspacePlacementFixture(composed), { ports, results } = f.probe;
+    assert.deepEqual(f.probe.order, ['definition', 'session', 'queries', 'placement']);
+    assert.equal(f.feature.editing, results.definition); assert.equal(f.feature.session, results.session); assert.equal(f.feature.queries, results.queries); assert.equal(f.placement, results.placement);
+    assert.equal(ports.placement.currentScope, ports.session.currentScope); assert.equal(ports.placement.canvasSelection, f.owners.interaction.selection);
+    assert.equal(ports.placement.blockDefinitionScopeError, f.feature.queries.blockDefinitionScopeError); assert.equal(ports.definition.ensureParameterNamespace, f.options.ensureParameterNamespace);
+    f.state.ready = true; const draft = f.feature.editing.empty('new'); assert.equal(draft.id, 'BD1'); assert.equal(f.state.definitionSeq, 2);
+    const late = { snapshot() { assert.equal(this, late); return { x: 30, y: 40, scale: 5 }; }, update(value) { assert.equal(this, late); f.state.lateRestored = value; } };
+    f.state.nextViewport = late; const host = f.workspace.current(), opened = f.feature.session.open(scope('nested'));
+    f.feature.session.restoreHost(opened); assert.equal(f.workspace.current(), host); assert.deepEqual({ ...f.state.lateRestored }, { x: 30, y: 40, scale: 5 });
+    const bound = { blockInstances: [{ id: 'BOUND' }] }; f.state.bound = bound;
+    assert.equal(f.feature.queries.blockInstanceById('BOUND'), bound.blockInstances[0]); assert.equal(f.workspace.current().blockInstances.length, 0);
+  }
+});
+
+test('Block workspace placement shares preview, pointer, selection and IDs while preserving anchor, orthogonal rotation and panel restoration', () => {
+  for (const composed of [false, true]) {
+    const f = workspacePlacementFixture(composed); f.state.ready = true; const definition = scope('D1'); f.geometry(definition); f.document.blockDefinitions.push(definition);
+    const source = JSON.stringify(definition), pointer = { x: 20, y: 30 }; f.owners.sessions.pointer.setLastPointer(pointer);
+    f.placement.start('D1'); assert.equal(f.owners.interaction.lifecycle.mode, 'block-place'); assert.equal(f.state.collapsed, false); assert.equal(f.owners.sessions.preview.pointer, pointer);
+    f.placement.click(pointer); f.placement.click({ x: 20, y: 40 }); const instance = f.document.blockInstances[0];
+    assert.equal(instance.id, 'BI1'); assert.ok(Math.abs(instance.rotation - Math.PI / 2) < 1e-12);
+    assert.ok(Math.abs(instance.x - 20) < 1e-12); assert.ok(Math.abs(instance.y - 25) < 1e-12);
+    assert.equal(f.owners.interaction.selection.blockInstances[0], instance); assert.equal(f.owners.sessions.preview.pointer, null);
+    assert.equal(f.owners.interaction.lifecycle.mode, 'select'); assert.equal(f.state.collapsed, true); assert.equal(JSON.stringify(definition), source);
+    assert.equal(f.events.filter(event => Array.isArray(event) && event[0] === 'placement-history').length, 1);
+  }
+});
+
+test('Block workspace placement preserves scope rejection, cancellation, partial state on solver exceptions and factory failure order', () => {
+  for (const composed of [false, true]) {
+    const f = workspacePlacementFixture(composed); f.state.ready = true; const definition = scope('D1'); f.geometry(definition); f.document.blockDefinitions.push(definition);
+    f.state.allowed = false; f.placement.start('D1'); assert.equal(f.owners.interaction.lifecycle.mode, 'select'); assert.equal(f.state.collapsed, true);
+    f.state.allowed = true; definition.parentDefinitionId = 'OTHER'; f.placement.start('D1'); assert.equal(f.owners.interaction.lifecycle.mode, 'select');
+    definition.parentDefinitionId = null; f.placement.start('D1'); f.placement.finishOrCancel(); assert.equal(f.state.collapsed, true); assert.equal(f.document.blockInstances.length, 0);
+    f.placement.start('D1'); f.placement.click({ x: 1, y: 2 }); f.state.solveError = new Error('solve');
+    assert.throws(() => f.placement.commit(), error => error === f.state.solveError); assert.equal(f.document.blockInstances.length, 1); assert.equal(f.state.collapsed, true);
+    assert.equal(f.events.some(event => Array.isArray(event) && event[0] === 'placement-history'), false);
+    for (const [failAt, order] of [['definition', ['definition']], ['session', ['definition', 'session']], ['queries', ['definition', 'session', 'queries']], ['placement', ['definition', 'session', 'queries', 'placement']]]) {
+      const probe = { failAt, error: new Error(failAt) }; assert.throws(() => workspacePlacementFixture(composed, probe), error => error === probe.error); assert.deepEqual(probe.order, order);
+    }
   }
 });

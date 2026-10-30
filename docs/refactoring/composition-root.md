@@ -6,7 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
-### 最新：DXF読込の操作状態判定と後段接続（2026-10-30、検証完了）
+### 最新：BlockのWorkspace接続と配置組立て（2026-10-30、検証完了）
+
+基準developは7e473df。既存BlockEditingFeatureへcreateForWorkspaceを追加し、実DocumentWorkspace／GeometryReadServices／ConstraintRebinding／編集scopeと、CanvasInteraction／OperationSessions／Presentationを共有する。既存createによる定義編集→session→queryの生成位置・順序を保持し、返すcreatePlacementから後段の既存BlockPlacementCommandを生成する。raw createとcommand／View／propagation等の実APIを維持する。Workspace.currentと同期済みeditingScope.currentを区別し、viewportは元のreadViewportのまま操作時まで評価しない。採番は同じDocumentIdsのreceiverを保ち、配置は同じSelection／Lifecycle／Preview／Pointer、catalog／projection、外観正規化・Parameter関数を使う。layoutとpane・求解・履歴のcallbackだけを後段へ明示し、二つ目のsession／model／viewport／IDや可変contextを作らない。
+
+app.jsは1,774→1,766行（8行減）、非空白1,324→1,316行。二つのroot構築入力は21＋25項目から12＋7項目へ減り、不要なnormalizedSketchCopyのroot aliasを除いた。root407文／構築124文／関数80個は据置で、構築の非空白666→658行。条件付きhooks235行、一文call委譲76個98行、その他206文320行、可変参照三つ・文外5行を維持する。TEMP cad-block-workspace-placement-{proof,hierarchy,stage-audit}.cjsで元の四十六入力・遅延viewport／同期済みscope／ID receiver／Preview callbackの同値、他app／raw Block feature ASTの不変、未使用root bindingなしと早期直接捕捉なしを確認した。hooksと短い委譲を除いても983非空白行あり、200〜500行目標は未達。
+
+境界単体三件を追加し、実BlockDefinitionEditing／BlockEditorSession／BlockEditingQueries／BlockPlacementCommandを旧直接生成と新窓口で比較した。同じ実体と四段の生成順、構築時のregistry／viewport／採番／history無照会、操作時に後段viewportを読むsession復元、Workspaceとbound scopeの違い、実BlockLayoutとSelection／Preview／Pointerによる中心・直交回転・配置、Geometry同一性、pane復元・取消、権限／階層拒否、求解例外時の部分反映とhistoryなし、各constructor失敗時の短絡を確認した。全単体2,142件、関連単体25件が成功。構文626fileが成功。関連E2E281件が全成功（7.2m、exit 0、実行session89082）。free-instance／derived-patterns／derived-selection-copy／blocks／block-geometry-fixed／sketch-projection／sketch-permissions／phase0-characterization／drag-smoothness／geometry-drag-smoothness／sketch-move／hatching／unified-ui／reference-imagesの14suiteを実施した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-block-workspace-placement-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。今回の全E2Eは未実施で、直前develop 7e473dfの588件全成功と区別する。
+
+全体目標はactive・未完了。開始時週枠残量60%／最終確認60%で停止条件未到達。mainは最終反映時まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/block-workspace-placement。再開時はGit現物・入力hash・検証receiptとusageを確認する。直前develop 7e473dfの全E2E588件成功（24.3m）は今回差分の関連検証と区別する。今回はroot構築数を減らした単位ではなく、Blockの生成・接続の所有者を揃えて入力重複を減らした単位である。次も数百行の目標を保持し、広いcallback一覧の短縮だけでなく構築・bind・起動の段階を整理できる境界を探す。
+
+### 直前：DXF読込の操作状態判定と後段接続（2026-10-30、検証完了）
 
 基準developは9233ee9。DocumentFileFeatureへcreateDxfForEditingを追加し、実DocumentWorkspaceのWorkspace.current／GeometryIds／active Sketch、CanvasInteractionのaccess／Lifecycle、OperationSessionsのpending／targetsを既存createDxfへ接続する。読込可否は権限、作図中、pending、拘束対象、block-placeの順に短絡し、既存のbare function呼出しと操作時のgetter評価を保つ。構築時にmodel／mode／sessionを照会せず、非同期読込の開始時と完了前の再判定には同じpredicateを渡す。返すcommand／createControlsは実APIのまま、追加のbindControlsは元の後段位置でcontrolsを生成してbindし、dispose可能な実controlsを返す。旧createDxfと個別createControlsの直接利用、共通fileSession／選択dialog／parser／挿入・復元・ID採番・履歴・saved checkpointを維持し、model／状態／listenerの別コピーや可変contextを追加しない。
 
