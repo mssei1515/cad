@@ -6,7 +6,17 @@
 
 ## 現在の再開地点（2026-10-30）
 
-### 最新：BlockのWorkspace接続と配置組立て（2026-10-30、検証完了）
+### 最新：Toolbarの拘束要素とカーソルの段階的な準備（2026-10-30、検証完了）
+
+基準developはa63ce0c。PresentationFeature.createToolbarが返すprepareControlsは、従来と同じ順で拘束ボタン群・メニュー拘束ボタン群・Fixボタンを取得し、同じDocument／Canvasと取得済み要素で既存CommandCursorを生成する。要素ArrayとFix node・実Cursor、後段のcreateControls窓口を凍結公開APIとして返し、後段窓口は既存Toolbar View／CommandStatusへ同じcursor.updateをbare callbackとして接続する。元の単独createControls／各binding APIも維持する。要素の取得・Cursor生成、tooltip等の初期化、View／Status生成、イベントbindの既存段階を変えない。取得済みArray／nodeとCursorのcacheは実体を共有し、DOM再照会・SVG先読み・mode／pendingの複製、追加listenerや可変contextを作らない。
+
+app.jsは1,766→1,762行（4行減）、非空白1,316→1,312行。root407→404文、その他206→203文／320→317非空白行。実部品を生成するprepareControlsも構築に算入し、構築124文は据置、非空白658→657行。関数80個、条件付きhooks235行、一文call委譲76個98行、可変参照三つ・文外5行を維持する。TEMP cad-toolbar-control-preparation-{proof,hierarchy,stage-audit}.cjsで二selector／Fix lookup／Cursorの順、後段の同じ入力とcursor.update、途中のtooltip初期化を含む他app／raw Presentation ASTの不変、未使用root bindingなしと早期直接捕捉なしを確認した。hooksと短い委譲を除いても979非空白行あり、200〜500行目標は未達。次の監査でもprepareControlsを単なる照会でなく部品生成として数える。
+
+境界単体三件を追加し、実CommandCursor／Toolbar View／CommandStatusを旧直接生成と新準備窓口で比較した。三DOM照会とCursor→後段View→Statusの順、DOM差替え後も元の要素実体を保持、SVG無先読み、同じcursor.update、flyout同期後の最新pending／mode、Cursorの優先順位・CSS cache、言語／status、selector／Fix lookup／各constructor失敗時の短絡を確認した。構文626file、全単体2,145件、関連単体36件が成功。関連E2E224件が全成功（6.2m、exit 0、実行session26834）。toolbar-layout／command-panel／unified-ui／unified-annotations／phase0-characterization／sketch-permissions／blocks／derived-patterns／drag-smoothness／geometry-drag-smoothnessの10suiteを実施した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-toolbar-control-preparation-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。今回の全E2Eは未実施で、develop 7e473dfの588件全成功と区別する。
+
+全体目標はactive・未完了。開始時週枠残量59%／最終確認59%で停止条件未到達。mainは最終反映時まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/toolbar-control-preparation。再開時はGit現物・入力hash・検証receiptとusageを確認する。最後の全E2Eはdevelop 7e473dfで588件成功（24.3m）、以後のBlock単位は281件の関連検証であり、今回の検証範囲と区別する。今回移管したのは三つのDOM読取りとCursor／View接続の所有で、root構築数の削減は装わない。次はUI／Canvas入力の構築・接続・bind段階を既存ownerごとに再監査し、必要な責務境界を保ちながら数百行の目標へ進む。
+
+### 直前：BlockのWorkspace接続と配置組立て（2026-10-30、検証完了）
 
 基準developは7e473df。既存BlockEditingFeatureへcreateForWorkspaceを追加し、実DocumentWorkspace／GeometryReadServices／ConstraintRebinding／編集scopeと、CanvasInteraction／OperationSessions／Presentationを共有する。既存createによる定義編集→session→queryの生成位置・順序を保持し、返すcreatePlacementから後段の既存BlockPlacementCommandを生成する。raw createとcommand／View／propagation等の実APIを維持する。Workspace.currentと同期済みeditingScope.currentを区別し、viewportは元のreadViewportのまま操作時まで評価しない。採番は同じDocumentIdsのreceiverを保ち、配置は同じSelection／Lifecycle／Preview／Pointer、catalog／projection、外観正規化・Parameter関数を使う。layoutとpane・求解・履歴のcallbackだけを後段へ明示し、二つ目のsession／model／viewport／IDや可変contextを作らない。
 

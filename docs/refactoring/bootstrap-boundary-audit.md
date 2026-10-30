@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Toolbarの拘束要素とカーソルの段階的な準備（2026-10-30、a63ce0c基準）
+
+基準developはa63ce0c。PresentationFeature.createToolbarが返すprepareControlsは、従来と同じ順で拘束ボタン群・メニュー拘束ボタン群・Fixボタンを取得し、同じDocument／Canvasと取得済み要素で既存CommandCursorを生成する。要素ArrayとFix node・実Cursor、後段のcreateControls窓口を凍結公開APIとして返し、後段窓口は既存Toolbar View／CommandStatusへ同じcursor.updateをbare callbackとして接続する。元の単独createControls／各binding APIも維持する。要素の取得・Cursor生成、tooltip等の初期化、View／Status生成、イベントbindの既存段階を変えない。取得済みArray／nodeとCursorのcacheは実体を共有し、DOM再照会・SVG先読み・mode／pendingの複製、追加listenerや可変contextを作らない。
+
+app.jsは1,766→1,762行（4行減）、非空白1,316→1,312行。root407→404文、その他206→203文／320→317非空白行。実部品を生成するprepareControlsも構築に算入し、構築124文は据置、非空白658→657行。関数80個、条件付きhooks235行、一文call委譲76個98行、可変参照三つ・文外5行を維持する。TEMP cad-toolbar-control-preparation-{proof,hierarchy,stage-audit}.cjsで二selector／Fix lookup／Cursorの順、後段の同じ入力とcursor.update、途中のtooltip初期化を含む他app／raw Presentation ASTの不変、未使用root bindingなしと早期直接捕捉なしを確認した。hooksと短い委譲を除いても979非空白行あり、200〜500行目標は未達。次の監査でもprepareControlsを単なる照会でなく部品生成として数える。
+
 ## BlockのWorkspace接続と配置組立て（2026-10-30、7e473df基準）
 
 基準developは7e473df。既存BlockEditingFeatureへcreateForWorkspaceを追加し、実DocumentWorkspace／GeometryReadServices／ConstraintRebinding／編集scopeと、CanvasInteraction／OperationSessions／Presentationを共有する。既存createによる定義編集→session→queryの生成位置・順序を保持し、返すcreatePlacementから後段の既存BlockPlacementCommandを生成する。raw createとcommand／View／propagation等の実APIを維持する。Workspace.currentと同期済みeditingScope.currentを区別し、viewportは元のreadViewportのまま操作時まで評価しない。採番は同じDocumentIdsのreceiverを保ち、配置は同じSelection／Lifecycle／Preview／Pointer、catalog／projection、外観正規化・Parameter関数を使う。layoutとpane・求解・履歴のcallbackだけを後段へ明示し、二つ目のsession／model／viewport／IDや可変contextを作らない。
