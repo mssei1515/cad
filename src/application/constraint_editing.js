@@ -128,5 +128,35 @@
       constraintButtons: options.constraintButtons, hasSelection: options.selection.hasSelection });
     return Object.freeze({ ...editing, input, controls: controlPresentation });
   }
-  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls });
+  function createForEditing({ document, controls, interaction, sessions, sketches, presentation, operands, viewport, annotationFeature, instances,
+    valueInput, resolveConstraintIntent, isGeometryMode, findLineFixedConstraint, clearSelection, commitConstraintResolution,
+    updateToolbar, updateConstraintButtons, blurConstraintControl, addConstraint, hitConstraintOperand,
+    toggleGeometryFixedOperand, toggleSelectedFixed, geometryInstanceBundle, cancelPendingCommand, placement,
+    readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint }) {
+    const { selection, access, lifecycle, hover } = interaction;
+    const { activeSketchId, elementSketchId, canEditSketch } = sketches;
+    const { settings, constraintFeedback: feedback, setHint, draw, updateGeometrySelectionUI, log } = presentation;
+    const { applicationText, translatedExactText } = settings;
+    const { candidates, operands: values, fromSelection: constraintOperandsFromSelection, syncSelection: syncSelectionFromConstraintOperands } = operands;
+    const { referenceTargetFromOperand, makeConstraintOperand, sameConstraintOperand } = values;
+    const { selectedGeometryItems, trimConstraintSelection, selectedPrimitives } = selection;
+    const { guardSketchEdit, guardSelectionEdit } = access;
+    const { Circle, Arc } = window.GeometrySolver;
+    const { targetFromConstraint, angleDegrees, angleDimensionAngles } = window.DimensionQueries;
+    return createWithControls({
+      retargeting: { canvasHover: hover, canvasPoint: viewport.canvasPoint, referenceTargetFromOperand },
+      controls: { document, constraintMenuButtons: controls.constraintMenuButtons, fixPointBtn: controls.fixPointBtn, translatedExactText },
+      constraintButtons: controls.constraintButtons, feedback, readLanguage: () => settings.language,
+      session: sessions.targets, selection, pending: sessions.pending, candidates, lifecycle, valueInput,
+      resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
+      elementSketchId, canEditSketch, findLineFixedConstraint, selectedGeometryItems, guardSketchEdit, guardSelectionEdit,
+      startAnnotationAnchorConstraint: annotationFeature.startAnchorConstraint, clearSelection, trimConstraintSelection,
+      commitConstraintResolution, syncSelectionFromConstraintOperands, updateToolbar, updateConstraintButtons, setHint, draw, blurConstraintControl,
+      addConstraint, annotationAnchorConstraints: annotationFeature.anchors, hitConstraintOperand, toggleGeometryFixedOperand, toggleSelectedFixed,
+      updateGeometrySelectionUI, types: { Circle, Arc }, isPlacingInstance: instances.isPlacing, geometryInstanceBundle, targetFromConstraint,
+      cancelPendingCommand, selectedPrimitives, placement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
+      addReadOnlyDimensionConstraint, makeConstraintOperand, sameConstraintOperand, applicationText, log,
+    });
+  }
+  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing });
 })();

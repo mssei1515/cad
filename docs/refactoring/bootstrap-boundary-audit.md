@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 拘束編集の共有owner接続（2026-10-30、ed4f85e基準）
+
+ConstraintEditing.createForEditingがCanvasInteraction／OperationSessions／Sketch／Presentationと実Operand Feature／prepared toolbar controls、Annotation Feature／Instance commandを受け、既存createWithControlsへ接続する。Selection照会・guard／lifecycle／session、Operand変換、feedback／live language・翻訳、準備済みbutton Array／menu Array／Fix node、Annotation anchor APIを同じownerから取得する。Circle／ArcとDimensionQueriesの既存静的計算を再利用し、createWithFeedback→createCommandInput→createControlsと後段createCommit／Fixed操作・controls.bindの順を変えない。後段commandへのcommit／add／toggle callback、bound editing scopeの固定拘束照会、isGeometryMode、blur callbackは同じ意味と参照時機を維持する。Operand Featureとtoolbar controlsの生成結果を保持して同じ実APIから分解し、DOM再照会・locale snapshot・model／Selection／session複製・可変app contextやsetterを作らない。元のcreate／createWithFeedback／createWithControlsを維持し、返すFeatureも従来の実APIである。
+
+app.jsは1,739→1,730行（9行減）、非空白1,290→1,281行。root397→399文、構築123文は据置で645→635非空白行、その他200→202文／314→315非空白行。保持した二つの実ownerからの分解を明示したため文数は二つ増えたが、明示入力は52→28項目、不要root alias十三個を除去した。関数77個、条件付きhooks233行、一文call委譲73個93行を維持し、通常coreは964→955行。200〜500行目標は未達。TEMP cad-constraint-editing-owners-{proof,hierarchy}.cjsで他app AST／既存raw ConstraintEditing AST不変・未使用root bindingなし・前段入力の初期化済みを確認した。
+
+次候補はDimensionValueCommand.createWithEditingSupportの37項目である。Command本体へUI／Viewport依存を増やさず、既にDimension placement／input／dragを組み立てるapplication側ConstraintEditingへ、寸法値編集の接続窓口を追加する案を比較する。Parameter namespace／Sketch／CanvasInteraction／pending／value input／checkpoint／Presentation、Annotation Feature／Model query／安定化と、Viewport・Boundsの実ownerを共有する。hide／sync／focusとcheckpoint captureValues／restoreValuesは現在bare method参照なので、不要にmember wrapperへ変えない。capture footprintの既定Sketchは呼出し時にactiveSketchId()を読み、Boundsの裸関数とViewportのmember receiver、restoreの二引数を保つ。resetDimensionDragとaddDistanceConstraintFromTargetは後段ownerへの遅延callbackとして残し、未生成drag／commitを渡さない。canEditの二引数、checkpoint・復元・first-dimension scaling・履歴の段階は既存raw Commandに維持する。次点はCanvas context操作37項目だが、入力数や行数だけで境界を選ばない。現単位の全E2E・Commit／develop統合後に着手する。
+
 ## 操作overlayの描画状態参照layer（2026-10-30、18ca049基準）
 
 InteractionOverlayRenderer.createLayerが実rendererとRectangleSelection／DrawingSnap／CanvasHover／Selection／Pointerを受け、矩形・Snap・Sketch識別ラベルを描く三つの凍結callbackを返す。preview()、active、current.sketchIdentity、lastWorldは描画時に従来順で読み、元rendererをmember receiverとして呼ぶ。Selection矩形は元描画の戻り値を返し、Snap／識別ラベルは従来どおりvoidを保つ。layer生成はRectangleSelection生成後かつCanvas Frame生成前とし、各callbackの最初の利用より前に置く。既存renderer.createと描画計算・Canvas操作は変更しない。状態・Geometry／Selection／preview／snapを複製せず、cache・listener・可変app contextを作らない。BrowserTestApiのdrawSelectionRect接続、Blockのstroke reset、後段Dimension preview／PNG exportへの遅延参照も維持する。
