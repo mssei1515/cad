@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- SketchEditingFeature.createForInteractionのediting公開APIは、既存のcommand／各factoryと同じ関数実体を保持し、後段Tree用のcreateTreeForEditingを提供する。この窓口は既に保持するread services・CanvasInteraction・Presentationを共有し、TreeのSelection／Hover／scope query・PointUsage／ConstraintFeedback・更新通知を組み立てる。表示binding、dimension presentation scope、Workspace command scopeは区別し、Block表示キーのlive参照・例外、固定操作、Tree生成段階と別途のメニューstartを維持する。参照・重複・求解状態と既存raw Tree／Move／Deletion commandを接続し、編集state・モデルや選択の複製は作らない。
+
 - BlockEditingFeature.createCommandsForEditingは実CanvasInteraction／DrawingFit／Presentation／参照状態／SketchSolving／SketchContext／ChoiceDialog／拘束参照／求解状態から、同じBlockEditorSessionを使う作成・完了commandを生成する。BlockViewは後段生成のためreadViewで操作時に取得する。作成guardの短絡順、View・dialog・promptのmethod receiver、live reference error、Workspace scope、選択・history・viewport復元・確認pending／stale sessionを維持する。旧createCommands／createViewとraw commandは保持し、新たな編集stateは作らない。
 
 - AnnotationFeature.createForEditing（src/application/annotation_feature.js）はWorkspace／editing scope、read、Selection／Hover／session、早期に生成した実Anchor query、寸法配置と表示／Appearance編集を接続する。Workspace.currentによるcommand／editor modelと、同期済みeditingScope.currentによるanchor／drag／dimension viewを区別する。Parameterは同じNamespace、IDは同じDocumentIdsで扱い、後段生成のAppearance編集はreadAppearanceで適用時まで取得せず、viewport.scale・effectiveをstyle適用時に評価してmethod receiverとoptionsを維持する。Anchor queryは一度だけ生成してhit／anchorと共有し、late resizeEnabled／取消callbackを構築時に照会しない。返却は元のraw Feature APIで、既存create／createAnchorQuery、各子の生成順・共有実体・Parameterコピー／scope再取得・取消／guard／失敗範囲を維持する。

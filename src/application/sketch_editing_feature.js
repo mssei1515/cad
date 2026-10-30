@@ -79,7 +79,25 @@
       effectiveAppearanceForElement: readServices.geometryAppearance.effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit,
       prepareLockToggle: () => { sessions.pending.cancel(""); constraintTargets.cancel(""); exitDrawMode(); },
       prepareMove: () => { constraintTargets.cancel(""); sessions.pending.cancel(""); exitDrawMode(); hover.clear(); } });
-    return Object.freeze({ reset, editing });
+    // Reuse the interaction/presentation owners captured before the later Tree stage.
+    function createTreeForEditing({ document, window: browserWindow, selectionHighlight, objectOptions, escapeHtml, closeCanvasContextMenu,
+      moveCommand, deletion, blockEditor, editingScope, solveState, dimensionScope, deleteElements, deleteCurrentSelection,
+      toggleSelectedVisibility, fixedOperands }) {
+      const { referenceState, redundancy } = objectOptions;
+      const { updateSketchUI, updateGeometrySelectionUI } = presentation;
+      const { targetFromConstraint } = window.DimensionQueries;
+      return editing.createTree({ readServices, canvasHover: interaction.hover, selectionHighlight,
+        objectOptions: { ...objectOptions, constraintFeedback: presentation.constraintFeedback, pointUsage: interaction.pointUsage },
+        document, window: browserWindow, applicationSettings: presentation.settings, escapeHtml, closeCanvasContextMenu, moveCommand, deletion,
+        getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
+        viewScope: () => editingScope.current, sketchHasSolveError: solveState.hasError,
+        referenceConstraintErrorCountForSketch: referenceState.referenceConstraintErrorCountForSketch,
+        constraintDuplicateCountForSketch: redundancy.constraintDuplicateCountForSketch, dimensionScope,
+        toggleBlockInstanceSelection: interaction.selection.toggleBlockInstanceSelection, targetFromConstraint,
+        updateSketchUI, selectionSketchId: interaction.scope.selectionSketchId, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
+        updateSelectionUI: updateGeometrySelectionUI, unfixPoint: fixedOperands.unfixPoint });
+    }
+    return Object.freeze({ reset, editing: Object.freeze({ ...editing, createTreeForEditing }) });
   }
   window.SketchEditingFeature = Object.freeze({ create, createForInteraction });
 })();

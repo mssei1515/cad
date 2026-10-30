@@ -119,18 +119,18 @@ test('each Sketch move refresh failure stops later stages and restores ownership
   }
 });
 
-function treeFixture() {
-  const f = fixture(), domReads = [], label = { textContent: '' }, document = new EventTarget(), browser = new EventTarget();
+function treeFixture(buildTree = (f, options) => f.feature.createTree(options), makeFixture = fixture) {
+  const f = makeFixture(), domReads = [], label = { textContent: '' }, document = new EventTarget(), browser = new EventTarget();
   document.getElementById = id => { domReads.push(id); return id === 'activeSketchLabel' ? label : null; };
   document.querySelectorAll = () => [];
-  const canvasHover = w.CanvasHover.create({ isEndpointPoint: () => false });
+  const canvasHover = f.owners?.interaction.hover || w.CanvasHover.create({ isEndpointPoint: () => false });
   const selectionHighlight = w.SelectionHighlight.create({ canvasSelection: f.selection, types: w.GeometrySolver,
     constraintGraphNodes: () => [], targetFromConstraint: () => null, getHoveredDimension: () => canvasHover.current.dimension,
     setHoveredDimension: value => canvasHover.update({ dimension: value }), draw: () => f.calls.push(['hover-draw']) });
   f.state.dimensionScope = { ...f.state.scope, sketches: [...f.state.scope.sketches, { id: 'dimension-only', name: 'Dimension scope' }] };
   f.state.viewScope = { sketches: [{ id: 'S1', name: 'Bound view' }] }; f.state.ready = false;
   const read = field => { assert.equal(f.state.ready, true); return f.state[field]; };
-  const tree = f.feature.createTree({ document, window: browser, readServices: { reads: { scopeGeometryItem: () => f.point } },
+  const tree = buildTree(f, { document, window: browser, readServices: { reads: { scopeGeometryItem: () => f.point } },
     canvasHover, selectionHighlight, objectOptions: { types: w.GeometrySolver },
     applicationSettings: { applicationText: (_ja,en) => en }, escapeHtml: String, closeCanvasContextMenu: () => f.calls.push(['close-canvas']),
     moveCommand: f.move, deletion: f.deletion, getScopeKey: () => 'document', viewScope: () => read('viewScope'),
@@ -272,4 +272,82 @@ test('Sketch interaction composition propagates cancellation failures before loc
    results.push(JSON.stringify({calls:f.calls,pending:f.state.pending,target:f.state.target}));
   }assert.equal(results[1],results[0]);
  }
+});
+
+function editingTreeFixture(composed) {
+  let ports, config;
+  const original = w.SketchTreeController;
+  w.SketchTreeController = { ...original, createWithDocumentObjects(input) { ports = input; return original.createWithDocumentObjects(input); } };
+  try {
+    const f = treeFixture((f, p) => {
+      const o = f.owners, referenceState = { referenceConstraintErrorCountForSketch: p.referenceConstraintErrorCountForSketch },
+        redundancy = { constraintDuplicateCountForSketch: p.constraintDuplicateCountForSketch };
+      o.interaction.scope = w.CanvasSelection.createScopeQuery({ canvasSelection: f.selection, selectedGeometryItems: f.selection.selectedGeometryItems });
+      o.interaction.pointUsage = { isExplicitPoint: () => true, isPointUsedByLine: () => false };
+      o.readServices.reads.scopeGeometryItem = p.readServices.reads.scopeGeometryItem;
+      Object.assign(o.presentation, { constraintFeedback: {}, updateSketchUI: p.updateSketchUI, updateGeometrySelectionUI: p.updateSelectionUI });
+      f.state.keyReads = 0;
+      const blockEditor = { get current() { assert.equal(f.state.ready, true); f.state.keyReads++; if (f.state.keyFailure) throw f.state.keyFailure; return f.state.treeSession; } };
+      Object.assign(p, { readServices: o.readServices, canvasHover: o.interaction.hover, applicationSettings: o.presentation.settings,
+        objectOptions: { ...p.objectOptions, referenceState, redundancy, constraintFeedback: o.presentation.constraintFeedback, pointUsage: o.interaction.pointUsage },
+        getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : 'document',
+        toggleBlockInstanceSelection: f.selection.toggleBlockInstanceSelection, targetFromConstraint: w.DimensionQueries.targetFromConstraint,
+        selectionSketchId: o.interaction.scope.selectionSketchId });
+      config = { document: p.document, window: p.window, selectionHighlight: p.selectionHighlight, objectOptions: { ...p.objectOptions },
+        escapeHtml: p.escapeHtml, closeCanvasContextMenu: p.closeCanvasContextMenu, moveCommand: p.moveCommand, deletion: p.deletion,
+        blockEditor, editingScope: { get current() { return p.viewScope(); } }, solveState: { hasError: p.sketchHasSolveError }, dimensionScope: p.dimensionScope,
+        deleteElements: p.deleteElements, deleteCurrentSelection: p.deleteCurrentSelection, toggleSelectedVisibility: p.toggleSelectedVisibility,
+        fixedOperands: { unfixPoint: p.unfixPoint } };
+      delete config.objectOptions.constraintFeedback; delete config.objectOptions.pointUsage;
+      return composed ? f.feature.createTreeForEditing(config) : f.feature.createTree(p);
+    }, () => interactionFixture(true));
+    return { ...f, ports, config };
+  } finally { w.SketchTreeController = original; }
+}
+
+test('editing Tree stage reuses captured interaction, presentation and command identities without early scope reads or menu start', () => {
+  for (const composed of [false, true]) {
+    const f = editingTreeFixture(composed), p = f.ports;
+    assert.equal(Object.isFrozen(f.feature), true); assert.equal(f.feature, f.editing); assert.deepEqual(f.calls, []); assert.equal(f.state.keyReads, 0);
+    assert.equal(p.canvasSelection, f.selection); assert.equal(p.canvasHover, f.owners.interaction.hover); assert.equal(p.readServices, f.owners.readServices);
+    assert.equal(p.selectionHighlight, f.config.selectionHighlight); assert.equal(p.applicationSettings, f.owners.presentation.settings);
+    assert.equal(p.objectOptions.pointUsage, f.owners.interaction.pointUsage); assert.equal(p.objectOptions.constraintFeedback, f.owners.presentation.constraintFeedback);
+    assert.equal(p.moveCommand, f.move); assert.equal(p.setActiveSketch, f.feature.command.activate); assert.equal(p.deleteSketch, f.deletion.remove);
+    assert.equal(p.updateSketchUI, f.owners.presentation.updateSketchUI); assert.equal(p.updateSelectionUI, f.owners.presentation.updateGeometrySelectionUI);
+    assert.equal(p.targetFromConstraint, w.DimensionQueries.targetFromConstraint); assert.equal(p.unfixPoint, f.config.fixedOperands.unfixPoint);
+    assert.equal(p.viewScope(), f.state.viewScope); assert.equal(p.currentScope(), f.state.dimensionScope); assert.notEqual(p.currentScope(), f.state.scope);
+    f.state.viewScope = { sketches: [{ id: 'S1', name: 'Replacement' }] }; f.tree.view.render(); assert.equal(f.label.textContent, 'Drawing sketch: Replacement');
+    for (const [session, expected, reads] of [[null, 'document', 1], [{ draft: { id: '' } }, 'document', 1], [{ draft: { id: 'BD1' } }, 'block:BD1', 2]]) {
+      f.state.treeSession = session; f.state.keyReads = 0; assert.equal(p.getScopeKey(), expected); assert.equal(f.state.keyReads, reads);
+    }
+    const marker = new Error('scope key'); f.state.keyFailure = marker; assert.throws(() => p.getScopeKey(), error => error === marker);
+    assert.equal(f.state.scope.activeSketchId, 'S1'); f.tree.menu.start(); f.tree.menu.dispose();
+  }
+});
+
+test('editing Tree keeps live dimension objects and Hover separate from the command model and shares Block selection', () => {
+  for (const composed of [false, true]) {
+    const f = editingTreeFixture(composed), replacement = { ...f.point, id: 'P-new' };
+    f.state.dimensionScope = { ...f.empty(), points: [replacement] };
+    assert.equal(f.tree.objects.index().get('S1').point[0], replacement); assert.equal(f.state.scope.points[0], f.point);
+    const annotation = { id: 'AN1' }; f.owners.interaction.hover.update({ annotation }); assert.equal(f.tree.objects.hovered('annotation', annotation), true);
+    f.owners.interaction.hover.update({ annotation: null }); assert.equal(f.tree.objects.hovered('annotation', annotation), false);
+    const block = { id: 'BI1', sketchId: 'S1' }; f.ports.toggleBlockInstanceSelection(block, false); assert.equal(f.selection.blockInstances[0], block);
+    f.tree.controller.keyDown(f.event('S2', 'sketchActivateBtn')); assert.equal(f.selection.sketchId, 'S2'); assert.equal(f.state.scope.activeSketchId, 'S1');
+    assert.deepEqual(f.names().slice(-3), ['selection', 'selection-ui', 'draw']);
+  }
+});
+
+test('editing Tree visibility, locking and move completion use the same real commands and retain one history commit', () => {
+  for (const composed of [false, true]) {
+    const f = editingTreeFixture(composed), destination = f.state.scope.sketches.find(sketch => sketch.id === 'S2'); destination.appearance = { visible: false };
+    f.tree.controller.click(f.event('S2', 'sketchVisibilityBtn')); assert.equal(destination.appearance.visible, true);
+    f.tree.controller.click(f.event('S2', 'sketchLockBtn')); assert.equal(destination.locked, true);
+    f.tree.controller.click(f.event('S2', 'sketchDeleteBtn')); assert.equal(f.state.scope.sketches.includes(destination), true);
+    f.tree.controller.click(f.event('S2', 'sketchLockBtn')); assert.equal(destination.locked, false);
+    f.selection.set('points', [f.point]); assert.equal(f.move.start(), true); f.tree.controller.keyDown(f.event('S2', 'sketchActivateBtn'));
+    assert.equal(f.move.state().targetId, 'S2'); f.tree.controller.click(f.event('S2', null, 'commit'));
+    assert.equal(f.move.active, false); assert.equal(f.point.sketchId, 'S2'); assert.equal(f.state.scope.points[0], f.point);
+    assert.equal(f.calls.filter(call => call[0] === 'history' && call[1] === 'スケッチ間の図形移動').length, 1);
+  }
 });

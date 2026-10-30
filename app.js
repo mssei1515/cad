@@ -81,7 +81,7 @@
     document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
   });
   const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
-    log, setHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw } = presentation;
+    log, setHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, draw } = presentation;
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const { applicationText, translatedExactText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
@@ -169,7 +169,7 @@
   const { selectionSketchId } = selectionScopeQuery;
   const {
     selectedElementCount, selectedGeometryItems, selectedPrimitives,
-    toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
+    selectedConstructionTogglePrimitives,
     trimConstraintSelection,
     hasSelection,
   } = canvasSelection;
@@ -202,8 +202,7 @@
   const referenceConstraintState = window.ReferenceConstraintState.create({
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
   });
-  const { constraintIsOperational, wouldCreateReferenceCycle, refreshReferenceConstraintValidity,
-    referenceConstraintErrorCountForSketch } = referenceConstraintState;
+  const { constraintIsOperational, wouldCreateReferenceCycle, refreshReferenceConstraintValidity } = referenceConstraintState;
   const sketchProjectionQueries = window.SketchProjectionQueries.create({
     currentScope: workspace.current, constraintIsOperational,
   });
@@ -382,7 +381,7 @@
     isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
     profileAnalysis: work => interactionProfiler.active ? profileInteractionWork("analysis", work) : work(),
   });
-  const { redundantConstraintInfo, constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
+  const { redundantConstraintInfo, constraintIsRedundant } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
   const { viewport, navigation: canvasNavigation, createWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
@@ -1170,20 +1169,14 @@
     currentScope: workspace.current, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
-  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = sketchEditing.createTree({
-    readServices: geometryReadServices, canvasHover, selectionHighlight,
-    objectOptions: { constraintFeedback, isHidden: selectionVisibilityIsHidden, pointUsage, analysis: constraintAnalysis,
-      redundancy: constraintRedundancy, referenceState: referenceConstraintState, projectionQueries: sketchProjectionQueries,
+  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = sketchEditing.createTreeForEditing({
+    document, window, selectionHighlight,
+    objectOptions: { isHidden: selectionVisibilityIsHidden, analysis: constraintAnalysis, redundancy: constraintRedundancy,
+      referenceState: referenceConstraintState, projectionQueries: sketchProjectionQueries,
       toolbarSvgMarkup, constraintToolbarIcon, findLineFixedConstraint, geometryInstanceTypeLabel, hatchPatternTypeLabel },
-    document, window, applicationSettings, escapeHtml, closeCanvasContextMenu,
-    moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
-    getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
-    viewScope: () => editingScopeBinding.current, sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
-    dimensionScope: dimensionPresentationScope,
-    toggleBlockInstanceSelection, targetFromConstraint,
-    updateSketchUI, selectionSketchId, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
-    updateSelectionUI: updateGeometrySelectionUI,
-    unfixPoint: fixedOperandCommand.unfixPoint,
+    escapeHtml, closeCanvasContextMenu, moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
+    blockEditor, editingScope: editingScopeBinding, solveState: sketchSolveResultState, dimensionScope: dimensionPresentationScope,
+    deleteElements, deleteCurrentSelection, toggleSelectedVisibility, fixedOperands: fixedOperandCommand,
   });
   const { applyWidth: applySketchTreeWidth } = sketchTreeView;
   sketchContextController = sketchTreeContextMenu;
