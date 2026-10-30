@@ -782,10 +782,8 @@
     return documentApplication.load(data, options);
   }
 
-  const canImportDxf = () => canCreateInActiveSketch() && !hasActiveDrawOperation()
-    && !pendingCommandSession.current && !constraintTargetSession.command && drawOperationLifecycle.mode !== "block-place";
-  const dxfImportFeature = documentFileFeature.createDxf({
-    geometry: geometryCreation, ids: geometryIds, currentScope: workspace.current, activeSketchId, canImport: canImportDxf,
+  const dxfImportFeature = documentFileFeature.createDxfForEditing({
+    documentWorkspace, geometry: geometryCreation, interaction: canvasInteraction, sessions: operationSessions,
     minimumLength: MIN_LINE_LENGTH, clearSelection, updateUI, recordHistory,
   });
 
@@ -1484,8 +1482,7 @@
   });
   pngExportCommand = pngExport.command;
   pngExport.start();
-  const dxfFileControls = dxfImportFeature.createControls({ flushScheduledCanvasPointerMove });
-  dxfFileControls.bind();
+  dxfImportFeature.bindControls({ flushScheduledCanvasPointerMove });
   referenceImageInput.bindControls();
   sketchTreeView.bindCreation(createSketch);
 
