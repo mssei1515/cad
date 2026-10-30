@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Canvasと寸法表示・入力Workspaceの組立て（2026-10-30、123313b基準）
+
+基準developは123313b。CanvasDisplayの既存viewport ownerへcreateEditingWorkspaceを追加し、従来のWorkspace（Surface／Export／Layout／drag pointer）、DimensionDisplay.createForScene、DimensionInput.createForDocumentを一度ずつ同じ順で生成する。描画context・viewport・Document・座標変換・外観／Sketch query・翻訳／表示更新を同じownerから共有する。dimensionSceneは線の読取り・最小長・色／描画観測・外観／Sketch、dimensionInputはhighlight／frame scheduling・Pending・式評価／取消／確定callbackに限定した二群で渡す。返すdimensionsのdisplay／labels／input feature／elementは実体であり、Workspaceの既存scene／render／PNG／input factoryも同じ関数を保持する。単独createWorkspaceとDimensionDisplay／DimensionInputのAPIは維持し、入力bindとSurface.startは従来の後段のまま、操作state／model／viewport・描画cacheの複製やsetterは作らない。
+
+app.jsは1,805→1,801行（4行減）、非空白1,355→1,351行。root414→412文、構築130→128文／693→689非空白行へ減った。関数81個／hooks235行／可変参照三つ、一文call関数77個99行、その他206文323行（文外5行）。TEMP cad-canvas-dimension-workspace-{proof,hierarchy}.cjsで各子の旧接続、同じviewport／context・遅延command callback、旧生成間で越えるのはplain API／定数のdestructureだけであること、他app／raw CanvasDisplayのAST不変、未使用root bindingなしを確認した。hooksと短い委譲を除いても1,017非空白行あり、200〜500行目標は未達。
+
 ## 拘束操作の表示と入力準備の組立て（2026-10-30、ddf292b基準）
 
 基準developはddf292b。ConstraintEditingへcreateWithControlsを追加し、従来のcreateWithFeedback→createCommandInput→createControlsを一度ずつ呼ぶ。実際の生成順はfeedback→selection query→target command→dimension placement→retarget hover→control Viewである。retargetingのHover／canvas座標／reference targetとcontrol用DOM・翻訳を限定した二群で受け、constraintButtonsとhasSelectionは同じ既存入力／Selectionから共有する。返すinput／controlsと既存query／targets／dimensions／factoryは元の実体で、操作stateを複製しない。raw create／createWithFeedbackと各段のAPIは保持する。前後で越えるのはhoistされる関数宣言だけで、後段のcontrol binding・dimension input／drag生成とCanvas入力bindの時機は変更しない。

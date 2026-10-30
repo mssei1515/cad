@@ -6,7 +6,7 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ['src/ui/number_display.js', 'src/ui/canvas_input_binding.js', 'src/rendering/viewport.js', 'src/ui/canvas_navigation.js', 'src/ui/canvas_zoom_control.js', 'src/rendering/canvas_surface.js', 'src/rendering/canvas_export.js', 'src/ui/canvas_workspace_layout.js', 'src/application/canvas_display.js', 'src/geometry/export_region.js', 'src/persistence/document_files.js', 'src/persistence/png_file.js', 'src/commands/png_export_command.js', 'src/application/png_export.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
-function fixture(fitVisibleGeometry = () => true, library = sandbox.window) {
+function fixture(fitVisibleGeometry = () => true, library = sandbox.window, buildWorkspace = (display, options) => display.createWorkspace(options)) {
   const calls = [], state = { ready: false, rect: { left: 0, top: 0, width: 200, height: 100 }, pending: false, dpr: 2, error: null, onDraw: null };
   const element = () => {
     const handlers = {};
@@ -26,11 +26,11 @@ function fixture(fitVisibleGeometry = () => true, library = sandbox.window) {
   });
   assert.deepEqual(calls, [['element', 'statusZoom'], ['element', 'statusZoomInput']]); calls.length = 0;
   class Observer { constructor(callback) { ready(); state.resize = callback; calls.push('observer'); } observe(value) { assert.equal(value, canvas); calls.push('observe'); } disconnect() { calls.push('disconnect'); } }
-  const workspace = display.createWorkspace({ ctx, readPixelRatio: () => { ready(); return state.dpr; }, ResizeObserverClass: Observer,
+  const workspace = buildWorkspace(display, { ctx, readPixelRatio: () => { ready(); return state.dpr; }, ResizeObserverClass: Observer,
     withGeometryReadCache: callback => { calls.push('cache'); return callback(); }, drawCanvas: () => { ready(); calls.push('content'); state.onContent?.(); },
     isValueInputPending: () => { calls.push('pending'); return state.pending; }, window: browser, updatePropertiesUI() {}, closeContextMenu: () => calls.push('close-menu'),
     applySketchTreeWidth: () => calls.push('tree'), applicationText: (_ja, en) => en, readLanguage: () => 'en',
-  });
+  }, { state, calls, canvas, ctx, document });
   assert.deepEqual(calls, []); state.ready = true;
   const enter = percent => { button.emit('click'); input.valueAsNumber = percent; input.emit('keydown', { key: 'Enter' }); };
   return { display, workspace, state, calls, button, input, browser, canvas, ctx, enter, status, document };
@@ -542,4 +542,99 @@ test('editing scene preserves legacy partial Canvas state and leaves model, view
   f.sceneState.statusFailure=null;f.sceneState.failure=marker;assert.throws(()=>f.scene.fit.fitAllGeometryToViewport(),error=>error===marker);
   assert.equal(solveState.sketchSolveState('S1'),record);assert.equal(f.sceneState.scope.lines,lines);assert.equal(lines[0],line);assert.deepEqual({...f.display.viewport.snapshot()},before);
  }
+});
+
+function dimensionWorkspaceFixture(composed, probe = {}) {
+  const w = sceneWindow, events = {}, frames = [], operations = [], reads = [], classes = new Set();
+  const value = { hidden: true, value: '', style: { setProperty() {} }, classList: { contains: name => classes.has(name), remove: name => classes.delete(name), toggle: (name, on) => on ? classes.add(name) : classes.delete(name) },
+    addEventListener: (name, fn) => { events[name] = fn; }, focus: () => operations.push('focus'), select: () => operations.push('select') };
+  const shell = { hidden: true, style: { setProperty() {} } }; probe.order = []; probe.ports = {}; probe.results = {};
+  const f = fixture(() => true, w, (display, options, { state, calls, ctx, document }) => {
+    probe.state = state; state.dimensionPending = null; state.dimensionLines = []; state.activeSketch = 'S1'; state.height = 3;
+    const ready = () => assert.equal(state.ready, true, 'workspace construction must defer model and viewport queries');
+    ctx.font = '12px test'; ctx.measureText = text => { ready(); return { width: String(text).length * 6 }; };
+    const getElement = document.getElementById;
+    document.getElementById = id => { if (!id.startsWith('dimensionValueInput')) return getElement(id); reads.push(id);
+      if (probe.lookupError) throw probe.lookupError; return id === 'dimensionValueInput' ? probe.missing ? null : value : shell; };
+    const appearance = { effectiveDimensionAppearance(dimension, sketchId) { ready(); operations.push(['appearance', sketchId]); return { ...w.Appearance.DEFAULT_DIMENSION_APPEARANCE, dimensionTextHeight: state.height }; },
+      dimensionDisplayState() { ready(); return w.Appearance.DEFAULT_DIMENSION_APPEARANCE; } };
+    const sketches = { constraintSketchId: constraint => constraint.sketchId, activeSketchId: () => { ready(); return state.activeSketch; } };
+    const dimensionScene = { currentLines: () => { ready(); return state.dimensionLines; }, minLineLength: 1e-6, canvasThemeColor: color => color,
+      onExpressionMark: mark => operations.push(['mark', mark]), appearance, sketches };
+    const dimensionInput = { syncHighlight: input => { ready(); assert.equal(input, value); operations.push('highlight'); }, scheduleFrame: fn => frames.push(fn),
+      pending: { read() { ready(); state.pendingReads = (state.pendingReads || 0) + 1; return state.dimensionPending; } },
+      evaluateDimensionExpressionDraft: (_constraint, text) => Number(text), expressionFromUserInput: text => text,
+      cancelPendingCommand: () => operations.push('cancel'), startDistanceValueInput: () => operations.push('start'),
+      submitOffsetValue: () => operations.push('offset'), submitDistanceValue: () => operations.push('distance') };
+    const originals = new Map();
+    for (const [namespace, method, name] of [['CanvasSurface', 'create', 'surface'], ['CanvasExport', 'createRenderer', 'export'],
+      ['CanvasWorkspaceLayout', 'create', 'layout'], ['CanvasInputBinding', 'createDragPointer', 'pointer'], ['DimensionDisplay', 'createForScene', 'dimensions'], ['DimensionInput', 'createForDocument', 'input']]) {
+      if (!originals.has(namespace)) { originals.set(namespace, w[namespace]); w[namespace] = { ...w[namespace] }; }
+      const factory = originals.get(namespace)[method];
+      w[namespace][method] = input => { probe.order.push(name); probe.ports[name] = input; if (probe.failAt === name) throw probe.error; return probe.results[name] = factory(input); };
+    }
+    try {
+      if (composed) return display.createEditingWorkspace({ ...options, dimensionScene, dimensionInput });
+      const workspace = display.createWorkspace(options), dimensions = w.DimensionDisplay.createForScene({ ctx, viewport: display.viewport, ...dimensionScene });
+      const input = w.DimensionInput.createForDocument({ ...dimensionInput, document, viewport: display.viewport, display: dimensions.display,
+        worldToCanvasScreen: display.viewport.worldToCanvasScreen, effectiveDimensionAppearance: appearance.effectiveDimensionAppearance,
+        constraintSketchId: sketches.constraintSketchId, activeSketchId: sketches.activeSketchId, applicationText: options.applicationText,
+        setHint: probe.ports.layout.setHint, draw: probe.ports.layout.draw });
+      return { ...workspace, dimensions: { ...dimensions, input: input.feature, element: input.input } };
+    } finally { for (const [namespace, original] of originals) w[namespace] = original; }
+  });
+  return { ...f, dimensions: f.workspace.dimensions, value, shell, events, frames, operations, reads, probe };
+}
+
+test('editing Workspace creates Surface, export, layout, dimensions and inline input in order on the same viewport without starting or binding', () => {
+  for (const composed of [false, true]) {
+    const f = dimensionWorkspaceFixture(composed), { ports, results } = f.probe;
+    assert.deepEqual(f.probe.order, ['surface', 'export', 'layout', 'pointer', 'dimensions', 'input']); assert.deepEqual(f.calls, []); assert.deepEqual(f.operations, []);
+    assert.deepEqual(f.events, {}); assert.deepEqual(f.frames, []); assert.equal(f.state.resize, undefined);
+    assert.deepEqual(f.reads, ['dimensionValueInput', 'dimensionValueInputShell']); assert.equal(f.dimensions.element, f.value);
+    assert.equal(f.workspace.surface, results.surface); assert.equal(f.workspace.exportRenderer, results.export); assert.equal(f.workspace.layout, results.layout);
+    assert.equal(f.dimensions.display, results.dimensions.display); assert.equal(f.dimensions.labels, results.dimensions.labels); assert.equal(f.dimensions.input, results.input.feature);
+    for (const name of ['surface', 'export', 'layout', 'dimensions', 'input']) assert.equal(ports[name].viewport, f.display.viewport, name);
+    assert.equal(ports.dimensions.ctx, f.ctx); assert.equal(ports.input.display, f.dimensions.display); assert.equal(ports.input.document, f.document);
+    assert.equal(ports.input.worldToCanvasScreen, f.display.viewport.worldToCanvasScreen); assert.equal(ports.input.effectiveDimensionAppearance, ports.dimensions.appearance.effectiveDimensionAppearance);
+    const lines = []; f.state.dimensionLines = lines; assert.equal(ports.dimensions.currentLines(), lines);
+    f.dimensions.input.bind(); assert.deepEqual(Object.keys(f.events), ['pointerdown', 'dblclick', 'input', 'keydown']);
+    f.workspace.surface.start(); assert.deepEqual(f.calls, ['observer', 'observe']);
+  }
+});
+
+test('editing Workspace inline input uses live viewport, appearance and pending values through delayed focus and both submission paths', () => {
+  const results = [];
+  for (const composed of [false, true]) {
+    const f = dimensionWorkspaceFixture(composed), g = sceneWindow.GeometrySolver;
+    const target = { kind: 'point-point', p1: new g.Point('A', 0, 0), p2: new g.Point('B', 100, 0), value: 100 };
+    const dimension = f.dimensions.display.placement.dimensionFromAnchor(target, { x: 50, y: 20 });
+    const old = f.state.dimensionPending = { type: 'distance-value', target, dimension, buffer: 'old' };
+    f.dimensions.input.controller.focus(); assert.equal(f.frames.length, 1); assert.deepEqual(f.operations, []);
+    f.display.viewport.update({ scale: 4, x: 25, y: 30 }); f.state.height = 5;
+    const current = f.state.dimensionPending = { type: 'distance-value', target, dimension, buffer: '12', constraint: { sketchId: 'S9' } };
+    f.frames.shift()(); assert.equal(f.value.hidden, false); assert.equal(f.shell.hidden, false); assert.equal(f.value.value, '12');
+    assert.ok(f.operations.some(event => event[0] === 'appearance' && event[1] === 'S9')); assert.deepEqual(f.operations.slice(-2), ['focus', 'select']);
+    const left = f.shell.style.left; f.display.viewport.update({ x: 55 }); f.dimensions.input.controller.sync(); assert.notEqual(f.shell.style.left, left);
+    f.dimensions.input.bind(); f.value.value = '22'; f.events.input(); assert.equal(current.buffer, '22'); assert.equal(current.editing, true); assert.equal(old.buffer, 'old');
+    const key = () => ({ key: 'Enter', stopPropagation() {}, preventDefault() {} }); f.events.keydown(key()); assert.equal(f.operations.at(-1), 'distance');
+    current.type = 'offset-value'; f.events.keydown(key()); assert.equal(f.operations.at(-1), 'offset');
+    f.events.keydown({ ...key(), key: 'Escape' }); assert.equal(f.operations.at(-1), 'cancel');
+    f.state.dimensionPending = null; f.dimensions.input.controller.sync(); assert.equal(f.shell.hidden, true);
+    results.push(JSON.stringify({ styles: f.shell.style, operations: f.operations, buffer: current.buffer }));
+  }
+  assert.equal(results[1], results[0]);
+});
+
+test('editing Workspace preserves missing input and stops at display or DOM lookup failure before observation or binding', () => {
+  for (const composed of [false, true]) {
+    const missing = dimensionWorkspaceFixture(composed, { missing: true }); missing.dimensions.input.bind(); missing.dimensions.input.controller.sync();
+    assert.equal(missing.dimensions.element, null); assert.deepEqual(missing.events, {}); assert.equal(missing.state.pendingReads, undefined);
+    for (const failAt of ['dimensions', 'lookup']) {
+      const marker = new Error(failAt), probe = failAt === 'lookup' ? { lookupError: marker } : { failAt, error: marker };
+      assert.throws(() => dimensionWorkspaceFixture(composed, probe), error => error === marker);
+      assert.deepEqual(probe.order, ['surface', 'export', 'layout', 'pointer', 'dimensions', ...(failAt === 'lookup' ? ['input'] : [])]);
+      assert.equal(probe.state.resize, undefined); assert.equal(probe.state.pendingReads, undefined);
+    }
+  }
 });

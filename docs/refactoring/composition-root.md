@@ -6,6 +6,18 @@
 
 ## 現在の再開地点（2026-10-30）
 
+### 最新：Canvasと寸法表示・入力Workspaceの組立て（2026-10-30、検証完了）
+
+基準developは123313b。CanvasDisplayの既存viewport ownerへcreateEditingWorkspaceを追加し、従来のWorkspace（Surface／Export／Layout／drag pointer）、DimensionDisplay.createForScene、DimensionInput.createForDocumentを一度ずつ同じ順で生成する。描画context・viewport・Document・座標変換・外観／Sketch query・翻訳／表示更新を同じownerから共有する。dimensionSceneは線の読取り・最小長・色／描画観測・外観／Sketch、dimensionInputはhighlight／frame scheduling・Pending・式評価／取消／確定callbackに限定した二群で渡す。返すdimensionsのdisplay／labels／input feature／elementは実体であり、Workspaceの既存scene／render／PNG／input factoryも同じ関数を保持する。単独createWorkspaceとDimensionDisplay／DimensionInputのAPIは維持し、入力bindとSurface.startは従来の後段のまま、操作state／model／viewport・描画cacheの複製やsetterは作らない。
+
+app.jsは1,805→1,801行（4行減）、非空白1,355→1,351行。root414→412文、構築130→128文／693→689非空白行へ減った。関数81個／hooks235行／可変参照三つ、一文call関数77個99行、その他206文323行（文外5行）。TEMP cad-canvas-dimension-workspace-{proof,hierarchy}.cjsで各子の旧接続、同じviewport／context・遅延command callback、旧生成間で越えるのはplain API／定数のdestructureだけであること、他app／raw CanvasDisplayのAST不変、未使用root bindingなしを確認した。hooksと短い委譲を除いても1,017非空白行あり、200〜500行目標は未達。
+
+境界単体三件を追加し、元の三段の直接生成と新窓口で実Surface／Export／Layout／DimensionDisplay／InputControllerを比較した。六部品の生成順・同じcontext／viewportと実体、同じDocumentの入力nodeを一度だけ取得、構築時のmodel／倍率無照会とobserver／input無起動、後段bindとSurface.start、遅延focusが現在Pending／倍率／外観を読み、viewport移動がinput位置へ反映されること、現在bufferの編集・距離／Offset確定／取消、入力なしの無動作とDisplay／DOM lookup失敗の順序を確認した。関連単体49件／全単体2,130件が成功。構文626fileが成功。全E2E588件が全成功（21.9m、exit 0、実行session91808）。対象file／test名を絞らず、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを保存した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を確認した。TEMP cad-canvas-dimension-workspace-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonへ証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更しない。
+
+全体目標active。開始時週枠残量63%／最終確認62%で停止条件未到達。mainは停止／releaseの最後に反映する。今回の全E2Eで直近のDocument編集scope・拘束操作と現在のCanvas Workspaceをまとめて検証した。次も同じ機能の部品生成と接続、残るcallbackとinit phaseを実ownerから整理し、巨大contextや単純なfile移動で行数を達成したことにしない。
+
+
+
 ### 最新：拘束操作の表示と入力準備の組立て（2026-10-30、検証完了）
 
 基準developはddf292b。ConstraintEditingへcreateWithControlsを追加し、従来のcreateWithFeedback→createCommandInput→createControlsを一度ずつ呼ぶ。実際の生成順はfeedback→selection query→target command→dimension placement→retarget hover→control Viewである。retargetingのHover／canvas座標／reference targetとcontrol用DOM・翻訳を限定した二群で受け、constraintButtonsとhasSelectionは同じ既存入力／Selectionから共有する。返すinput／controlsと既存query／targets／dimensions／factoryは元の実体で、操作stateを複製しない。raw create／createWithFeedbackと各段のAPIは保持する。前後で越えるのはhoistされる関数宣言だけで、後段のcontrol binding・dimension input／drag生成とCanvas入力bindの時機は変更しない。

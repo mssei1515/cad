@@ -121,7 +121,20 @@
       const dragPointer = window.CanvasInputBinding.createDragPointer({ canvas });
       return Object.freeze({ surface, exportRenderer, layout, createScene, createSceneForEditing, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
     }
-    return Object.freeze({ viewport, navigation, zoomControl, createDrawingFit, createWorkspace });
+    // Build inline dimensions on the same surface/context before any input binding or observation starts.
+    function createEditingWorkspace({ dimensionScene, dimensionInput, ...workspaceOptions }) {
+      const workspace = createWorkspace(workspaceOptions);
+      const { currentLines, minLineLength, canvasThemeColor, onExpressionMark, appearance, sketches } = dimensionScene;
+      const dimensions = window.DimensionDisplay.createForScene({ ctx: workspaceOptions.ctx, viewport, currentLines,
+        minLineLength, canvasThemeColor, onExpressionMark, appearance, sketches });
+      const input = window.DimensionInput.createForDocument({ ...dimensionInput,
+        document, viewport, display: dimensions.display, worldToCanvasScreen: viewport.worldToCanvasScreen,
+        effectiveDimensionAppearance: appearance.effectiveDimensionAppearance,
+        constraintSketchId: sketches.constraintSketchId, activeSketchId: sketches.activeSketchId,
+        applicationText: workspaceOptions.applicationText, setHint, draw });
+      return Object.freeze({ ...workspace, dimensions: Object.freeze({ ...dimensions, input: input.feature, element: input.input }) });
+    }
+    return Object.freeze({ viewport, navigation, zoomControl, createDrawingFit, createWorkspace, createEditingWorkspace });
   }
   function createRendering({ canvas, ctx, viewport, surface, zoomControl, readExportFrame, recordDraw,
     geometry, dimensions, drawDimensionPreview, annotations, authoringPreview, placements, offsetPreview,
