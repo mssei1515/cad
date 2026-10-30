@@ -223,9 +223,7 @@
     sketchProjectionEntryFromOperand } = sketchProjectionSources;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
     commit: commitSketchProjectionCommand } = sketchProjectionCommand;
-  const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
-    pointer: pointerInteractionController, createSelectionPresentation, createInputFeature: createCanvasInputFeature,
-    bindEditingPointer: bindCanvasPointer, createKeyboard: createCanvasKeyboard } = createOperationSessions({
+  const operationSessions = createOperationSessions({
     snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
     readCenterline: () => centerlineCommand, projectPointToCenterlineSupport: point => projectPointToCenterlineSupport(point),
     readOffsetSelection: () => offsetSelection, computeTrimPreview,
@@ -236,6 +234,9 @@
     hideInput: () => hideDimensionValueInput(), updateToolbar, updateConstraintButtons,
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
+  const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
+    pointer: pointerInteractionController, createSelectionPresentation, createInputFeature: createCanvasInputFeature,
+    bindEditingPointer: bindCanvasPointer, createKeyboard: createCanvasKeyboard } = operationSessions;
   const constructionCommand = window.ConstructionCommand.create({
     cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
     synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), setHint, clearSelection, updateUI, draw, recordHistory,
@@ -1144,29 +1145,20 @@
   });
   function updateConstraintButtons() { constraintControlsView.update(); }
 
-  const sketchInteractionReset = window.SketchCommand.createInteractionReset({
-    resetSketchMove: () => sketchMoveCommand?.reset(), clearSelection,
+  const { reset: sketchInteractionReset, editing: sketchEditing } = window.SketchEditingFeature.createForInteraction({
+    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
+    constraintTargets: constraintTargetCommand, valueInput: dimensionInputController, presentation, constraintReferences, recordHistory,
+    clearSelection, clearSnap, updateToolbar, resetSketchMove: () => sketchMoveCommand?.reset(),
     resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(),
-    referenceImage: referenceImageInteraction, selectionRectangle, drawing: drawOperationLifecycle,
-    pending: pendingCommandSession, constraint: constraintTargetSession, projection: sketchProjectionCommand,
-    instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, hover: canvasHover,
-    clearPointer: pointerInteractionController.clearLastPointer, hideValueInput: hideDimensionValueInput, clearSnap,
-    selectMode: drawOperationLifecycle.selectMode, updateToolbar,
+    referenceImage: referenceImageInteraction, selectionRectangle, projection: sketchProjectionCommand, instances: geometryInstanceCommand, instanceSources: instanceSourceCommand,
+    clearInteractionForSketchChange, promptName: (title, name) => window.prompt(title, name), clearTreeHover: () => sketchTreeController.clearHoverSketch(),
   });
   function clearInteractionForSketchChange() { return sketchInteractionReset.clear(); }
 
-  const sketchEditing = window.SketchEditingFeature.create({
-    currentScope: workspace.current, sketches: sketchContext, ids: documentIds, selection: canvasSelection,
-    geometryReads, projections: blockProjections, constraintReferences,
-    clearInteractionForSketchChange, clearSelection, applicationText, setHint, updateUI, draw, recordHistory,
-    promptName: (title, name) => window.prompt(title, name), effectiveAppearanceForElement,
-    clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap, guardEdit: guardSketchEdit,
-    prepareLockToggle: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode(); },
-  });
   const { createSketch, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
   const { command: createdSketchMoveCommand, input: sketchMoveInputBinding } = sketchEditing.createMoveWithInput({
-    document, prepare: () => { cancelConstraintTargetCommand(""); cancelPendingCommand(""); exitDrawMode(); canvasHover.clear(); },
+    document,
     readEditingScope: () => editingScopeBinding.current, hatches: hatchGeometryQuery, rebinding: constraintRebinding,
     analysis: constraintAnalysis, refreshReferenceConstraintValidity,
   });

@@ -6,7 +6,7 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture(configureMove, buildMove = (feature, options) => feature.createMove(options)) {
+function fixture(configureMove, buildMove = (feature, options) => feature.createMove(options), buildFeature = options => w.SketchEditingFeature.create(options)) {
   const empty = () => ({ ...Object.fromEntries([...w.SketchMove.fields, 'constraints', 'geometryInstances'].map(field => [field, []])),
     activeSketchId: 'S1', sketches: [{ id: 'ROOT', kind: 'root', name: 'Root' },
       { id: 'S1', kind: 'sketch', name: 'Sketch-1', parentSketchId: 'ROOT' }, { id: 'S2', kind: 'sketch', name: 'Destination', parentSketchId: 'ROOT', visible: false }] });
@@ -20,13 +20,14 @@ function fixture(configureMove, buildMove = (feature, options) => feature.create
   const ids = { allocate(kind) { assert.equal(this, ids); assert.equal(kind, 'sketch'); return `S${state.sequence++}`; } };
   const projections = { blockAllProjectionBundle: item => item.bundle, invalidateBlockProjectionCache: notify('cache') };
   const geometryReads = { resolveGeometryRef: resolve };
-  const feature = w.SketchEditingFeature.create({ currentScope: read, sketches, ids, selection, constraintReferences,
+  const featureOptions = { currentScope: read, sketches, ids, selection, constraintReferences,
     geometryReads, projections, clearSelection: () => { calls.push(['selection']); selection.clear(); },
     clearInteractionForSketchChange: () => { calls.push(['interaction']); state.move?.reset(); },
     applicationText: (_ja,en) => { assert.equal(state.ready, true); return en; }, setHint: notify('hint'), updateUI: notify('ui'),
     draw: notify('draw'), recordHistory: notify('history'), promptName: () => null,
     effectiveAppearanceForElement: item => ({ ...state.scope.sketches.find(sketch => sketch.id === item.sketchId)?.appearance, ...item.appearance }), clearTreeHover: notify('hover'), clearSnap: notify('snap'),
-    guardEdit: () => true, prepareLockToggle: notify('lock') });
+    guardEdit: () => true, prepareLockToggle: notify('lock') };
+  const feature = buildFeature(featureOptions, {state,calls});
   const moveOptions = configureMove ? configureMove({ state, calls, geometryReads, projections }) : { refresh: () => { notify('refresh')(); if(state.refreshError) throw state.refreshError; } };
   const move = buildMove(feature, { prepare: notify('prepare'), ...moveOptions });
   const deletion = feature.createDeletion({ rejectReferencedGeometryDeletion: items => items.length > 0, log: notify('log'),
@@ -206,4 +207,69 @@ test("Sketch move command remains usable when the separately enabled input bindi
   f.selection.set("points", [f.point]); assert.equal(f.move.start(), true);
   assert.equal(f.move.cancel(), true); assert.equal(f.move.active, false);
   assert.equal(f.point.sketchId, "S1"); assert.equal(f.calls.some(call => call[0] === "history"), false);
+});
+
+function interactionFixture(composed){
+ let assembled,owners,controls;const listeners=[];
+ const document={addEventListener:(...args)=>listeners.push(args),removeEventListener(){}};
+ const f=fixture(undefined,(feature,options)=>{
+  if(composed)delete options.prepare;else options.prepare=()=>{owners.constraintTargets.cancel('');owners.sessions.pending.cancel('');owners.interaction.lifecycle.exit();owners.interaction.hover.clear();};
+  controls=feature.createMoveWithInput({document,...options});return controls.command;
+ },(options,{state,calls})=>{
+  const step=name=>(...args)=>{assert.equal(state.ready,true);calls.push([name,...args]);if(state.failStage===name)throw state.error;};
+  const pending={cancel(message){step('pending-cancel')(message);state.pending=null;},clear(){step('pending-clear')();state.pending=null;}};
+  const targets={clearCommand(){step('targets-clear')();state.target=null;}},constraintTargets={cancel(message){step('targets-cancel')(message);state.target=null;}};
+  const rawHover=w.CanvasHover.create({isEndpointPoint:()=>false}),hover={update(values){assert.equal(this,hover);step('hover-update')(values);rawHover.update(values);},clear(){assert.equal(this,hover);step('hover-clear')();rawHover.clear();},get current(){return rawHover.current;}};
+  const rawPointer=w.PointerInteractionController.createSession(),pointer={clearLastPointer:()=>{step('pointer')();rawPointer.clearLastPointer();}};
+  const lifecycle={exit:step('exit'),resetInputsForSketchChange:step('drawing'),selectMode:step('select')};
+  const resetSketchMove=()=>{step('move')();state.move?.reset();};
+  owners={documentWorkspace:{workspace:{current:options.currentScope},sketches:options.sketches,documentIds:options.ids},
+   readServices:{reads:options.geometryReads,projections:options.projections,geometryAppearance:{effectiveAppearanceForElement:options.effectiveAppearanceForElement}},
+   interaction:{lifecycle,selection:options.selection,hover,access:{guardSketchEdit:options.guardEdit}},sessions:{pending,targets,pointer},constraintTargets,
+   valueInput:{hide:step('value')},presentation:{settings:{applicationText:options.applicationText},setHint:options.setHint,updateUI:options.updateUI,draw:options.draw},
+   constraintReferences:options.constraintReferences,recordHistory:options.recordHistory,clearSelection:options.clearSelection,clearSnap:options.clearSnap,updateToolbar:step('toolbar'),
+   resetSketchMove,resetGeometryDrag:step('geometry'),resetDimensionDrag:step('dimension'),referenceImage:{reset:step('image')},selectionRectangle:{reset:step('rectangle')},
+   projection:{reset:step('projection')},instances:{clearSources:step('instances')},instanceSources:{reset:step('sources')},
+   clearInteractionForSketchChange:()=>assembled.reset.clear(),promptName:options.promptName,clearTreeHover:options.clearTreeHover};
+  owners.rawPointer=rawPointer;
+  if(composed)assembled=w.SketchEditingFeature.createForInteraction(owners);
+  else{
+   const reset=w.SketchCommand.createInteractionReset({resetSketchMove,clearSelection:options.clearSelection,resetGeometryDrag:owners.resetGeometryDrag,resetDimensionDrag:owners.resetDimensionDrag,
+    referenceImage:owners.referenceImage,selectionRectangle:owners.selectionRectangle,drawing:lifecycle,pending,constraint:targets,projection:owners.projection,instances:owners.instances,instanceSources:owners.instanceSources,hover,
+    clearPointer:pointer.clearLastPointer,hideValueInput:owners.valueInput.hide,clearSnap:options.clearSnap,selectMode:lifecycle.selectMode,updateToolbar:owners.updateToolbar});
+   const editing=w.SketchEditingFeature.create({...options,clearInteractionForSketchChange:owners.clearInteractionForSketchChange,
+    prepareLockToggle:()=>{pending.cancel('');constraintTargets.cancel('');lifecycle.exit();}});assembled={reset,editing};
+  }
+  return assembled.editing;
+ });
+ return{...f,...assembled,owners,controls,listeners};
+}
+
+test('Sketch interaction composition preserves reset order, the shared selection and pointer, and its distinct hover subset',()=>{
+ const results=[];for(const composed of [false,true]){
+  const f=interactionFixture(composed),point=f.point;assert.deepEqual(f.calls,[]);assert.deepEqual(f.listeners,[]);f.selection.set('points',[point]);f.owners.rawPointer.setLastPointer(point);f.owners.interaction.hover.update({point,sketchIdentity:{id:'S1'}});f.state.pending={type:'distance-value'};f.state.target={type:'distance'};f.calls.length=0;
+  f.reset.clear();assert.deepEqual(f.names(),['move','selection','geometry','dimension','image','rectangle','drawing','pending-clear','targets-clear','projection','instances','sources','hover-update','pointer','value','snap','select','toolbar']);
+  assert.equal(f.selection.points.length,0);assert.equal(f.owners.rawPointer.readLastPointer(),null);assert.equal(f.owners.interaction.hover.current.point,point);assert.equal(f.owners.interaction.hover.current.sketchIdentity,null);assert.equal(f.state.pending,null);assert.equal(f.state.target,null);
+  results.push(JSON.stringify(f.calls));
+ }assert.equal(results[1],results[0]);
+});
+
+test('Sketch interaction composition keeps lock and move cancellation priorities distinct and leaves input activation explicit',()=>{
+ const results=[];for(const composed of [false,true]){
+  const f=interactionFixture(composed);assert.equal(f.controls.command,f.move);assert.deepEqual(f.listeners,[]);
+  f.feature.command.toggleLock('S2');assert.deepEqual(f.names().slice(0,3),['pending-cancel','targets-cancel','exit']);f.state.scope.sketches.find(s=>s.id==='S2').locked=false;
+  f.selection.set('points',[f.point]);f.owners.interaction.hover.update({point:f.point});f.calls.length=0;assert.equal(f.move.start(),true);assert.deepEqual(f.names().slice(0,4),['targets-cancel','pending-cancel','exit','hover-clear']);assert.equal(f.owners.interaction.hover.current.point,null);
+  assert.equal(f.move.choose('S2'),true);assert.equal(f.move.commit(),true);assert.equal(f.point.sketchId,'S2');assert.equal(f.state.scope.points[0],f.point);assert.equal(f.calls.filter(c=>c[0]==='history').length,1);
+  f.controls.input.bind();assert.equal(f.listeners.length,6);results.push(JSON.stringify({calls:f.calls,point:f.point}));
+ }assert.equal(results[1],results[0]);
+});
+
+test('Sketch interaction composition propagates cancellation failures before lock or move state changes and later side effects',()=>{
+ for(const stage of ['pending-cancel','targets-cancel','exit'])for(const operation of ['lock','move']){
+  const results=[];for(const composed of [false,true]){
+   const f=interactionFixture(composed);f.selection.set('points',[f.point]);f.state.pending={type:'distance-value'};f.state.target={type:'distance'};f.state.failStage=stage;const marker=new Error(stage);f.state.error=marker;
+   assert.throws(()=>operation==='lock'?f.feature.command.toggleLock('S2'):f.move.start(),error=>error===marker);assert.equal(Boolean(f.state.scope.sketches.find(s=>s.id==='S2').locked),false);assert.equal(f.move.active,false);assert.equal(f.names().some(n=>['history','ui','draw','hover-clear'].includes(n)),false);
+   results.push(JSON.stringify({calls:f.calls,pending:f.state.pending,target:f.state.target}));
+  }assert.equal(results[1],results[0]);
+ }
 });

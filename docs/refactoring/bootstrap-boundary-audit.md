@@ -6,6 +6,12 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## Sketch切替resetと編集開始の組立て（2026-10-30、6bd13ab基準）
+
+SketchEditingFeature.createForInteractionは実Workspace／read services、CanvasInteractionとOperationSessions、実拘束command／値入力／通知を共有し、reset→Sketch編集を元の順・位置で生成して実APIを返す。lockのpending→拘束→描画終了と、moveの拘束→pending→描画終了→hover全解除を別に持ち、Sketch切替resetの18操作・hover部分解除と統合しない。prepareMoveはprepare未指定時だけの既定値で、旧createと明示prepareは維持する。前段利用のclear callbackと後段drag／Tree／move参照は遅延のまま残し、Move公開→input bindの順を変えない。rootは既存sessionsの実返却を保持するだけで、新stateや汎用context・listenerを持たない。
+
+app.jsは1,936→1,928行、非空白1,486→1,478行、root417文／関数81個。構築134文726非空白行、hooks319行、一文call関数77個99行、その他205文329行（文外5行）。可変参照三つは不変。hooksと短い委譲を除いても1,060非空白行が残る。TEMP cad-sketch-interaction-composition-{proof,hierarchy}.cjsと再開記録section 8を参照する。
+
 ## Document読込適用と正規化・採番復元の所有（2026-10-30、d841cc5基準）
 
 DocumentWorkspace.createPersistenceが実loading／Document／preparation／placement／ID ownerを持ち、createApplicationが外部のreset・late Tree・妥当性更新・線長補正・logから同じDocumentApplicationを生成する。modelは元の生成位置でreadEditingScopeから一度取得し、寸法正規化は呼出時の編集scopeだけを読む。late Treeのcallbackはそのまま渡し、予約→Document ID復元の順と途中失敗状態を維持する。旧createPersistence時のcold構築と全利用前の寸法正規化API公開、旧loading／DocumentApplication.createも維持する。新model／session・独自採番や可変contextは持たず、形式・decode／installとreset・回復は各既存ownerに残す。

@@ -3,7 +3,7 @@
   "use strict";
   function create({ currentScope, sketches, ids, selection, geometryReads, projections, constraintReferences,
     clearInteractionForSketchChange, clearSelection, applicationText, setHint, updateUI, draw, recordHistory,
-    promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, prepareLockToggle }) {
+    promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, prepareLockToggle, prepareMove }) {
     const { ensureSketchState, activeSketch, activeSketchId, sketchById, childSketchesOf, sketchName,
       descendantSketchIds, constraintSketchId, elementSketchId, isReferenceSourceSketchId } = sketches;
     const { resolveGeometryRef } = geometryReads;
@@ -13,7 +13,7 @@
       nextSketchId: () => ids.allocate("sketch"), clearInteractionForSketchChange, setHint, updateUI, draw, recordHistory,
       promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, applicationText, prepareLockToggle,
     });
-    function createMove({ prepare, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity }) {
+    function createMove({ prepare = prepareMove, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity }) {
       function refreshGeometry() {
         const { invalidateBlockProjectionCache } = projections;
         invalidateBlockProjectionCache();
@@ -64,5 +64,22 @@
     }
     return Object.freeze({ command, createMove, createMoveWithInput, createDeletion, createTree });
   }
-  window.SketchEditingFeature = Object.freeze({ create });
+  function createForInteraction({ documentWorkspace, readServices, interaction, sessions, constraintTargets, valueInput, presentation, constraintReferences, recordHistory,
+    clearSelection, clearSnap, updateToolbar, resetSketchMove, resetGeometryDrag, resetDimensionDrag, referenceImage, selectionRectangle,
+    projection, instances, instanceSources, clearInteractionForSketchChange, promptName, clearTreeHover }) {
+    const { workspace, sketches, documentIds: ids } = documentWorkspace;
+    const { lifecycle: drawing, selection, hover, access } = interaction;
+    const { exit: exitDrawMode, selectMode } = drawing, { guardSketchEdit: guardEdit } = access;
+    const { settings: { applicationText }, setHint, updateUI, draw } = presentation;
+    const reset = window.SketchCommand.createInteractionReset({ resetSketchMove, clearSelection, resetGeometryDrag, resetDimensionDrag,
+      referenceImage, selectionRectangle, drawing, pending: sessions.pending, constraint: sessions.targets, projection, instances, instanceSources, hover,
+      clearPointer: sessions.pointer.clearLastPointer, hideValueInput: valueInput.hide, clearSnap, selectMode, updateToolbar });
+    const editing = create({ currentScope: workspace.current, sketches, ids, selection, geometryReads: readServices.reads, projections: readServices.projections, constraintReferences,
+      clearInteractionForSketchChange, clearSelection, applicationText, setHint, updateUI, draw, recordHistory, promptName,
+      effectiveAppearanceForElement: readServices.geometryAppearance.effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit,
+      prepareLockToggle: () => { sessions.pending.cancel(""); constraintTargets.cancel(""); exitDrawMode(); },
+      prepareMove: () => { constraintTargets.cancel(""); sessions.pending.cancel(""); exitDrawMode(); hover.clear(); } });
+    return Object.freeze({ reset, editing });
+  }
+  window.SketchEditingFeature = Object.freeze({ create, createForInteraction });
 })();
