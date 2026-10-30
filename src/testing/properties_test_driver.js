@@ -257,5 +257,55 @@
     return Object.freeze({ set });
   }
 
-  window.PropertiesTestDriver = Object.freeze({ createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
+  // Bind shared owners once; invoke each creator at its existing bootstrap stage.
+  function createBrowserFactories({ documentWorkspace, geometry, readServices, interaction, blockQueries, selectionHighlight,
+    presentation, display, placement, viewport, document, canvas, fixPointBtn, readHistory, resetModelState, clearSelection,
+    resetHistory, fitAllGeometryToViewport, pushModelConstraint, assignConstraintSketchId, recordHistory,
+    canvasThemeColor, isSidebarHighlightedElement, selectedPropertiesTarget, findLineFixedConstraint, constructionAlpha }) {
+    const { workspace, sketches } = documentWorkspace, { activeSketchId, elementSketchId } = sketches;
+    const { geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
+    const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
+    const { Point, HorizontalConstraint, DistanceConstraint } = window.GeometrySolver;
+    const { DEFAULT_APPEARANCE, normalizeAppearance } = window.Appearance;
+    const { selection: canvasSelection, hover: canvasHover, pointUsage } = interaction;
+    const { appearanceSelectionTarget, effectiveSelectedConstraint } = canvasSelection, { isAnyLineEndpoint } = pointUsage;
+    const { constraintHighlightNodes, isSidebarHoveredElement } = selectionHighlight;
+    const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = readServices.reads;
+    const { blockProjectionBundle, invalidateBlockProjectionCache } = readServices.projections;
+    const { effectiveAppearanceForElement, isVisibleSketchElement } = readServices.geometryAppearance;
+    const { blockInstanceById } = blockQueries, { geometryDisplayColor, geometryStrokeWidth } = display;
+    const { dimensionFromAnchor } = placement, { worldToCanvasScreen } = viewport;
+    const { addPoint, addLine, addCircle, addArc } = geometry;
+    const { settings: applicationSettings, updateUI, updatePropertiesUI, draw } = presentation;
+    return Object.freeze({
+      createStrokeStyleCases: () => createStrokeStyleCases({ resetModelState, addLine, addPoint, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, geometryStrokeWidth, constructionAlpha }),
+      createHighlightObservation: () => createHighlightObservation({ canvasSelection, effectiveSelectedConstraint, constraintHighlightNodes, selectionHighlight, canvasHover }),
+      createHoverKeyObservation: () => createHoverKeyObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, isSidebarHoveredElement, geometryElementKey }),
+      createThemeObservation: () => createThemeObservation({ applicationSettings, readDefaultGeometryColor: () => DEFAULT_APPEARANCE.color, canvasThemeColor, CanvasThemeColors: window.CanvasThemeColors }),
+      createInspectionFixture: () => createInspectionFixture({
+        resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, assignConstraintSketchId, activeSketchId, currentScope: workspace.current, updateUI, fitAllGeometryToViewport, draw, canvas, worldToCanvasScreen,
+      }),
+      createAppearanceAction: () => createAppearanceAction({
+        appearanceSelectionTarget, normalizeAppearance, invalidateBlockProjectionCache, updatePropertiesUI, draw, recordHistory,
+      }),
+      createHoverObservation: () => createHoverObservation({
+        allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle, effectiveAppearanceForElement,
+        isSidebarHighlightedElement, Point, isAnyLineEndpoint, isSidebarHoveredElement, canvasHover, geometryDisplayColor, geometryStrokeWidth,
+      }),
+      createAppearanceObservation: () => createAppearanceObservation({
+        allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle,
+        normalizeAppearance, effectiveAppearanceForElement, isVisibleSketchElement,
+      }),
+      createFixture: () => createFixture({
+        resetModelState, clearSelection, addPoint, addLine, addCircle, canvasSelection, currentScope: workspace.current, ROOT_SKETCH_ID, resetHistory, updateUI, draw,
+      }),
+      createPropertiesObservation: () => createPropertiesObservation({
+        selectedPropertiesTarget, canvasSelection, normalizeAppearance, effectiveAppearanceForElement, document, readHistory,
+      }),
+      createFixedObservation: () => createFixedObservation({
+        currentScope: workspace.current, elementSketchId, findLineFixedConstraint, modelTypes: window.GeometrySolver, fixPointBtn, readHistory,
+      }),
+    });
+  }
+  window.PropertiesTestDriver = Object.freeze({ createBrowserFactories, createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
 })();

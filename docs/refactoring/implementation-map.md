@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- PropertiesTestDriver.createBrowserFactories（src/testing/properties_test_driver.js）は共有Workspace／Sketch・Geometry・read services・Selection／Hover／highlight・Presentation／表示・寸法配置と操作callbackから、Properties・Sidebar・Themeの観測／fixture／appearance操作を生成する11creatorを返す。窓口は生成時や各creator呼出時に編集状態・DOM・theme・履歴を照会せず、各creatorは元のraw helperと同じ実owner・関数を渡して新しい支援APIを返す。appは各creatorを従来の位置で呼び、他TestDriverとの生成順を維持する。modelは呼出時のWorkspace.current、色の既定値とFixed型の既定値も元の評価時点を維持し、Selection／hover／model・履歴の別コピーを生成しない。観測・fixture実行・途中失敗の反映範囲は既存raw helperが所有し、従来の直接注入APIとブラウザ公開名も保持する。
+
 - BrowserTestApi（src/testing/browser_test_api.js）: 準備済みテスト支援の能力だけからブラウザ公開名・結合順を構成する。モデル・DOM・sessionやfixture生成を所有せず、元関数・通常object・getter／spread順・例外時の以前のAPIを維持する。appはtest guard・支援生成・install phaseを所有する。
 
 - DeletionFeature.createForEditing: 実Workspace／read／Canvas／session／solvingから削除に必要な限定APIを接続する。late drag reset、live analysis、既存createと異なる削除経路の途中状態・表示／履歴順を維持する。
