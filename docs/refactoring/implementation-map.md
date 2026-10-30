@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- BasicDrawingTools.createLifecycle.interaction: 同じ実Lifecycle／access／hoverから開始許可とTrimの部分hover解除を接続する。Selectの無条件通過とguard短絡、live Sketch、明示入力優先・旧API、遅延Hatchとmode ownerを維持する。
+
 - SketchEditingFeature.createForInteraction: 実Canvas／OperationSessionsとWorkspaceからresetとSketch編集を元の順に生成し、lock／moveの異なる準備順を所有する。raw APIと明示prepare、late drag／Tree参照、Move公開→input bindのphaseを維持する。通常reset・Document resetと統合しない。
 
 - DocumentWorkspace.createPersistence.ensureDimensionDefaults／createApplication: 寸法既定値のlive scopeによる正規化、Geometry予約→Document ID復元、preparationと既存Applicationの接続を所有する。適用先modelは元の生成時点で取得し、Treeはlate callbackを維持する。形式・decode／install・reset／回復の各ownerは維持する。

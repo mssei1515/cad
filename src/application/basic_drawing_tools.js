@@ -139,7 +139,14 @@
         projectPointToCenterlineSupport: centerlineCommand.projectPointToCenterlineSupport, readCanvasSize });
       return Object.freeze({ renderer, layer });
     }
-    function createLifecycle({ lifecycle, canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
+    function createLifecycle({ interaction, lifecycle = interaction?.lifecycle, canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover }) {
+      if (canStart === undefined && interaction) {
+        const { guardSketchEdit, guardSelectionEdit } = interaction.access;
+        canStart = nextMode => nextMode === "select" || guardSketchEdit(activeSketchId(), "create") && (nextMode !== "trim" || guardSelectionEdit("structure"));
+      }
+      if (clearTrimHover === undefined && interaction) {
+        clearTrimHover = () => interaction.hover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null });
+      }
       const construct = lifecycle ? lifecycle.bind : window.DrawOperationLifecycle.create;
       return construct({ canStart, instances, instanceSources, centerline, fillet, offset, hatch, readMode, clearTrimHover,
         line: tools.line, rectangle: tools.rectangle, slot: tools.slot, circular: tools.circular, spline: spline.draft,
