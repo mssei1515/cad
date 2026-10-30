@@ -66,9 +66,8 @@
   } = constraintReferences;
 
   const {
-    targetFromConstraint, angleDegrees,
+    targetFromConstraint,
     measuredConstraintTargetValue,
-    angleDimensionAngles,
     isReadOnlyDimension, isDimensionConstraint,
   } = window.DimensionQueries;
 
@@ -81,7 +80,7 @@
   const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
     log, setHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, draw } = presentation;
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
-  const { applicationText, translatedExactText, localizeApplicationUI,
+  const { applicationText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
@@ -160,9 +159,8 @@
   const { guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation } = sketchEditAccess;
   const { selectionSketchId } = selectionScopeQuery;
   const {
-    selectedElementCount, selectedGeometryItems, selectedPrimitives,
+    selectedElementCount,
     selectedConstructionTogglePrimitives,
-    trimConstraintSelection,
   } = canvasSelection;
   const { isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc } = pointUsage;
   presentation.bindUI({
@@ -323,12 +321,13 @@
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const resultIsAccepted = window.SketchSolving.createResultAcceptance(CONSTRAINT_ACCEPT_ERROR);
-  const { candidates: constraintCandidates, operands: constraintOperandValues,
-    fromSelection: constraintOperandsFromSelection, syncSelection: syncSelectionFromConstraintOperands } = selectionFeature.createConstraintOperands({
+  const constraintOperandFeature = selectionFeature.createConstraintOperands({
     targets: constraintTargetSession, pointer: pointerInteractionController, solver, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
+  const { candidates: constraintCandidates, operands: constraintOperandValues,
+    fromSelection: constraintOperandsFromSelection } = constraintOperandFeature;
   const { sameArcEndpoint, linesAreParallel } = constraintCandidates;
-  const { operandElement, makeConstraintOperand, referenceTargetFromOperand, sameConstraintOperand } = constraintOperandValues;
+  const { operandElement } = constraintOperandValues;
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
@@ -415,7 +414,7 @@
     startDistanceResolution, clearSelection, updateToolbar,
   });
   const { layer: annotationLayer, anchors: annotationAnchorConstraints, dimensions: annotationDimensions, command: annotationCommand,
-    materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope, startAnchorConstraint: startAnnotationAnchorConstraint } = annotationFeature;
+    materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
   const { annotationLeaderDisplayGeometry, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
@@ -569,7 +568,8 @@
   const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;
   const runtimeVersionView = window.RuntimeVersionView.create({ document, applicationText });
 
-  const { constraintButtons, constraintMenuButtons, fixPointBtn, createControls: createToolbarControls } = toolbarPresentation.prepareControls({ canvas });
+  const toolbarControls = toolbarPresentation.prepareControls({ canvas });
+  const { fixPointBtn, createControls: createToolbarControls } = toolbarControls;
 
   applicationSettings.prepareButtonTooltips();
 
@@ -1018,22 +1018,13 @@
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
     createCommit: createConstraintCommit, createFixedEditing, constraintTargetHint,
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging },
-    controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createWithControls({
-    retargeting: { canvasHover, canvasPoint, referenceTargetFromOperand },
-    controls: { document, constraintMenuButtons, fixPointBtn, translatedExactText },
-    constraintButtons, feedback: constraintFeedback, readLanguage: () => applicationSettings.language,
-    session: constraintTargetSession, selection: canvasSelection, pending: pendingCommandSession, candidates: constraintCandidates,
-    lifecycle: drawOperationLifecycle, valueInput: dimensionInputController,
-    resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
-    elementSketchId, canEditSketch, findLineFixedConstraint, selectedGeometryItems, guardSketchEdit, guardSelectionEdit, startAnnotationAnchorConstraint,
-    clearSelection, trimConstraintSelection, commitConstraintResolution, syncSelectionFromConstraintOperands,
-    updateToolbar, updateConstraintButtons, setHint, draw,
+    controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForEditing({
+    document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, sketches: sketchContext, presentation,
+    operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController,
+    resolveConstraintIntent, isGeometryMode, findLineFixedConstraint, clearSelection, commitConstraintResolution, updateToolbar, updateConstraintButtons,
     blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
-    addConstraint, annotationAnchorConstraints, hitConstraintOperand,
-    toggleGeometryFixedOperand, toggleSelectedFixed, updateGeometrySelectionUI, types: { Circle, Arc },
-    isPlacingInstance: geometryInstanceCommand.isPlacing, geometryInstanceBundle, targetFromConstraint, cancelPendingCommand,
-    selectedPrimitives, placement: dimensionPlacement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
-    addReadOnlyDimensionConstraint, makeConstraintOperand, sameConstraintOperand, applicationText, log,
+    addConstraint, hitConstraintOperand, toggleGeometryFixedOperand, toggleSelectedFixed,
+    geometryInstanceBundle, cancelPendingCommand, placement: dimensionPlacement, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint,
   });
 
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }

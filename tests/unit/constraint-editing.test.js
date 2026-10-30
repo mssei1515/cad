@@ -413,7 +413,7 @@ test('staged input construction precedes drag construction and propagates failur
   assert.throws(()=>support.createWithDragging(ports),error=>error===marker);assert.deepEqual(order,[]);
 });
 
-function controlsAssemblyFixture(composed, probe = {}) {
+function controlsAssemblyFixture(composed, probe = {}, assemble = null) {
   let hover;
   probe.order = []; probe.ports = {}; probe.results = {};
   const f = controlsFixture((w, input, { buttons, state, events, controls }) => {
@@ -437,7 +437,8 @@ function controlsAssemblyFixture(composed, probe = {}) {
     try {
       const options = { ...input, constraintButtons: buttons, feedback, readLanguage };
       let result;
-      if (composed) result = w.ConstraintEditing.createWithControls({ ...options, retargeting, controls });
+      if (assemble) result = assemble(w, { ...options, retargeting, controls }, probe);
+      else if (composed) result = w.ConstraintEditing.createWithControls({ ...options, retargeting, controls });
       else {
         const editing = w.ConstraintEditing.createWithFeedback(options), support = editing.createCommandInput(retargeting);
         const presentation = editing.createControls({ ...controls, constraintButtons: buttons, hasSelection: input.selection.hasSelection });
@@ -495,5 +496,80 @@ test('constraint control assembly stops at input or View construction failure be
     assert.deepEqual(probe.order, ['feedback', 'query', 'targets', 'dimensions', 'retarget', ...(failAt === 'controls' ? ['controls'] : [])]);
     assert.equal(probe.state.ready, false); assert.equal(probe.state.pending, null); assert.equal(probe.input.session.command, null);
     assert.equal(probe.input.selection.hasSelection(), false);
+  }
+});
+
+function editingOwnersFixture(composed, probe = {}) {
+  const f = controlsAssemblyFixture(true, probe, (w, options) => {
+    Object.assign(options, { selectedGeometryItems: options.selection.selectedGeometryItems, trimConstraintSelection: options.selection.trimConstraintSelection,
+      selectedPrimitives: options.selection.selectedPrimitives, targetFromConstraint: w.DimensionQueries.targetFromConstraint,
+      angleDegrees: w.DimensionQueries.angleDegrees, angleDimensionAngles: w.DimensionQueries.angleDimensionAngles,
+      types: { Circle: w.GeometrySolver.Circle, Arc: w.GeometrySolver.Arc } });
+    const originals = Object.fromEntries(['commitConstraintResolution','addConstraint','toggleGeometryFixedOperand','toggleSelectedFixed'].map(name => [name, options[name]]));
+    for (const name of Object.keys(originals)) options[name] = (...args) => { assert.equal(probe.commandsReady, true, 'late commands must not run during construction'); return originals[name](...args); };
+    options.controls.document.querySelectorAll = () => assert.fail('prepared controls must not be requeried');
+    const controls = Object.freeze({ constraintButtons: options.constraintButtons, constraintMenuButtons: options.controls.constraintMenuButtons, fixPointBtn: options.controls.fixPointBtn });
+    const settings = { applicationText: options.applicationText, translatedExactText: options.controls.translatedExactText, get language() { return options.readLanguage(); } };
+    const input = {
+      document: options.controls.document, controls,
+      interaction: { selection: options.selection, hover: options.retargeting.canvasHover, lifecycle: options.lifecycle, access: { guardSketchEdit: options.guardSketchEdit, guardSelectionEdit: options.guardSelectionEdit } },
+      sessions: { targets: options.session, pending: options.pending },
+      sketches: { activeSketchId: options.activeSketchId, elementSketchId: options.elementSketchId, canEditSketch: options.canEditSketch },
+      presentation: { settings, constraintFeedback: options.feedback, setHint: options.setHint, draw: options.draw, updateGeometrySelectionUI: options.updateGeometrySelectionUI, log: options.log },
+      operands: { candidates: options.candidates, operands: { referenceTargetFromOperand: options.retargeting.referenceTargetFromOperand, makeConstraintOperand: options.makeConstraintOperand, sameConstraintOperand: options.sameConstraintOperand },
+        fromSelection: options.constraintOperandsFromSelection, syncSelection: options.syncSelectionFromConstraintOperands },
+      viewport: { canvasPoint: options.retargeting.canvasPoint }, annotationFeature: { startAnchorConstraint: options.startAnnotationAnchorConstraint, anchors: options.annotationAnchorConstraints },
+      instances: { isPlacing: options.isPlacingInstance }, valueInput: options.valueInput, resolveConstraintIntent: options.resolveConstraintIntent,
+      isGeometryMode: options.isGeometryMode, findLineFixedConstraint: options.findLineFixedConstraint, clearSelection: options.clearSelection,
+      commitConstraintResolution: options.commitConstraintResolution, updateToolbar: options.updateToolbar, updateConstraintButtons: options.updateConstraintButtons,
+      blurConstraintControl: options.blurConstraintControl, addConstraint: options.addConstraint, hitConstraintOperand: options.hitConstraintOperand,
+      toggleGeometryFixedOperand: options.toggleGeometryFixedOperand, toggleSelectedFixed: options.toggleSelectedFixed, geometryInstanceBundle: options.geometryInstanceBundle,
+      cancelPendingCommand: options.cancelPendingCommand, placement: options.placement, readOnlyDimensionConstraintForPlacement: options.readOnlyDimensionConstraintForPlacement,
+      addReadOnlyDimensionConstraint: options.addReadOnlyDimensionConstraint,
+    };
+    probe.ownerInputs = input; probe.originalOptions = options;
+    return composed ? w.ConstraintEditing.createForEditing(input) : w.ConstraintEditing.createWithControls(options);
+  });
+  probe.commandsReady = true; return f;
+}
+
+test('constraint editing owners retain cold Feedback/Input/Controls stages, prepared nodes, actual sessions and late callbacks', () => {
+  for (const composed of [false, true]) {
+    const f = editingOwnersFixture(composed), { ports, results, ownerInputs: input } = f.probe;
+    assert.deepEqual(f.probe.order, ['feedback','query','targets','dimensions','retarget','controls']); assert.deepEqual(f.events, []);
+    assert.equal(ports.feedback.constraintButtons, f.buttons); assert.equal(ports.controls.constraintMenuButtons, f.menu); assert.equal(ports.controls.fixPointBtn, f.fix);
+    assert.equal(ports.query.session, f.session); assert.equal(ports.targets.session, f.session); assert.equal(ports.dimensions.selection, f.selection);
+    assert.equal(ports.query.constraintOperandsFromSelection, input.operands.fromSelection); assert.equal(ports.targets.syncSelectionFromConstraintOperands, input.operands.syncSelection);
+    assert.equal(ports.targets.commitConstraintResolution, input.commitConstraintResolution); assert.equal(ports.targets.addConstraint, input.addConstraint);
+    assert.equal(ports.targets.types.Circle, f.w.GeometrySolver.Circle); assert.equal(ports.retarget.canvasHover, f.hover);
+    assert.equal(f.feature.constraintTargetHint, results.feedback.targetHint); assert.equal(Object.isFrozen(f.feature), true);
+    f.binding.dispose(); f.buttons[0].click(); assert.equal(f.session.command, null); f.binding.bind(); f.buttons[0].click(); assert.equal(f.session.command.type, 'horizontal');
+  }
+});
+
+test('constraint editing owners preserve live language, menu cancellation, hover identity and query failure boundaries', () => {
+  const traces=[];for (const composed of [false,true]) {
+    const f=editingOwnersFixture(composed),g=f.w.GeometrySolver;
+    f.menu[0].click();assert.equal(f.session.command.type,'horizontal');f.menu[0].click();assert.equal(f.session.command,null);
+    f.state.language='ja';assert.equal(f.probe.ports.feedback.readLanguage(),'ja');assert.equal(f.probe.ports.feedback.readOperands(),f.session.operands);
+    const first=new g.Line('a',new g.Point('a1',0,0),new g.Point('a2',10,0)),second=new g.Line('b',new g.Point('b1',0,0),new g.Point('b2',10,0));
+    const base={kind:'line',line:first},operand={kind:'line',line:second},target={kind:'line-length',line:second};
+    f.state.operand=operand;f.state.resolveIntent=()=>({target,operands:[base,operand]});f.session.begin('distance',[base]);
+    const pending=f.state.pending={type:'distance-place',target:{kind:'line-length',line:first},dimension:{},operands:[base]};
+    assert.equal(f.support.updateHover({x:1,y:2}),true);assert.equal(f.hover.current.line,second);assert.equal(f.state.pending,pending);assert.equal(f.session.operands[0],base);
+    const marker=new Error('owner hit failed'),hover=f.hover.current;f.state.hitError=marker;
+    assert.throws(()=>f.support.updateHover({x:3,y:4}),error=>error===marker);assert.equal(f.hover.current,hover);assert.equal(f.state.pending,pending);
+    f.state.hitError=null;f.state.queryError=marker;f.buttons[0].attrs['aria-pressed']='before';
+    assert.throws(()=>f.controls.view.update(),error=>error===marker);assert.equal(f.buttons[0].attrs['aria-pressed'],'before');assert.equal(f.state.pending,pending);
+    traces.push(JSON.stringify(f.events));
+  }assert.equal(traces[1],traces[0]);
+});
+
+test('constraint editing owners retain failure identity and stop before later construction or binding', () => {
+  const order=['feedback','query','targets','dimensions','retarget','controls'];
+  for (const composed of [false,true]) for (const failAt of ['feedback','query','retarget','controls']) {
+    const probe={failAt,error:new Error(failAt)};assert.throws(()=>editingOwnersFixture(composed,probe),error=>error===probe.error);
+    assert.deepEqual(probe.order,order.slice(0,order.indexOf(failAt)+1));assert.equal(probe.state.ready,false);assert.equal(probe.state.pending,null);
+    assert.equal(probe.input.session.command,null);assert.equal(probe.input.selection.hasSelection(),false);assert.notEqual(probe.commandsReady,true);
   }
 });
