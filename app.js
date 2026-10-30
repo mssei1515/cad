@@ -66,7 +66,7 @@
   const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const {
-    constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
+    constraintReferencesPoint,
     constraintGraphNodes, geometryInstanceDependencyRefs,
   } = constraintReferences;
 
@@ -136,7 +136,7 @@
   const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems } = hatchGeometryQuery;
   const { geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
-  const { blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
+  const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
@@ -937,16 +937,12 @@
 
 
 
-  const deletionFeature = window.DeletionFeature.create({
-    currentScope: workspace.current, pointUsage, constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
-    geometryElementKey, annotationReferencesRemovedGeometry, geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes, annotationDimensions,
-    canvasSelection, splineEditing, canvasHover, guardSketchEdit, elementSketchId, geometryInstanceDependencyRefs, geometryRefKey,
-    guardDimensionSymbolDeletion, applicationText,
+  const deletionFeature = window.DeletionFeature.createForEditing({
+    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, references: constraintReferences, annotationDimensions,
+    splineEditing, guardDimensionSymbolDeletion, geometry: geometryCreation, sessions: operationSessions, lineCommand, circularCommands,
+    solving: sketchSolving, analysis: constraintAnalysis, presentation, updateToolbar, recordHistory,
+    referenceImageInteraction, clearSelection, solveAndRefresh,
     resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
-    pendingCommandSession, constraintTargetSession, lineCommand, circularCommands, drawingPreview, selectMode: drawOperationLifecycle.selectMode,
-    solveSketchAndDependents, normalizeArcSweeps, updateToolbar, updateUI, draw, analysisStable: () => constraintAnalysis.stable, setHint, log, recordHistory,
-    referenceImageInteraction, guardSelectionEdit, selectionSketchId, activeSketchId, geometryRefForItem, invalidateBlockProjectionCache,
-    effectiveSelectedConstraint, clearSelection, solveAndRefresh,
   });
   function rejectReferencedGeometryDeletion(instances, label) { return deletionFeature.rejectReferences(instances, label); }
   function deleteElements(options) { return deletionFeature.remove(options); }

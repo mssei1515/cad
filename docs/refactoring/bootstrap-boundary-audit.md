@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 削除の編集環境からの組立て（2026-10-30、cce412f基準）
+
+基準developはcce412f。既存DeletionFeatureにcreateForEditingを追加し、DocumentWorkspaceのWorkspace／Sketch、Geometry read services、CanvasInteractionの実Selection／access／scope／hover／PointUsage、OperationSessions、GeometryCreation、SketchSolvingとPresentationから既存三ownerへ限定APIを接続する。appの個別47項目を22項目のowner・操作依存へ整理し、既存createと同じremove／removeSelection／rejectReferencesを元の生成位置で返す。削除はWorkspace.currentを読む設計を維持し、Clipboardのediting scopeへ置き換えない。Geometry／Dimension／Annotation dragは後段生成なので、三reset callbackをappで遅延のまま渡す。analysis.stableも操作時に読み、生成時にscope・状態・drag・DOMを照会しない。Geometry／Selection削除のraw command・計画／適用・拒否通知・求解・履歴は変更せず、新file・可変context・状態の複製を増やさない。
+
+app.jsは1,922→1,918行（4行減）、非空白1,472→1,468行、root416文／関数81個／hooks319行／可変参照三つ。構築134文719非空白行、一文call関数77個99行、その他204文326行（文外5行）。移管で不要になった三aliasをrootから除き、TEMP cad-deletion-editing-composition-{proof,hierarchy}.cjsで47の子接続の旧構成一致、その他appとraw DeletionFeatureのAST不変、root未使用bindingなしを確認した。hooksと短い委譲を除いても1,050非空白行が残り、数百行目標は未達。
+
+条件付きtest hooksは319行に対してroot外側の275 bindingを参照する（局所関数34、ObjectPattern alias 213、CallExpression初期化binding 23、その他5）。TEMP cad-deletion-editing-composition-hook-audit.cjsとhook-{dependencies,alias-sources}.jsonに現物監査を保存した。275依存をまとめて新fileへ渡す抽出は採用せず、既存の役割別TestDriverへ共有ownerからの接続を集めてから公開境界を縮める。通常起動ではtest支援を生成せず、installTestHooksの実行はDocumentEditingReset生成後というphaseを維持する。
+
 ## Clipboardの編集環境からの組立て（2026-10-30、020f7db基準）
 
 基準developは020f7db。既存ClipboardFeatureにcreateForEditingを追加し、DocumentWorkspaceの採番・Sketch・Parameter、Geometry read services、CanvasInteractionの実Selection／access／Lifecycle、GeometryCreation、Annotation rendererとPresentationから各子へ必要なAPIを接続する。appの個別45項目を23項目のowner・操作依存へ整理し、既存createと同じ七owner・同じsession／commandを元の生成位置で返す。同期済みediting scopeは呼出時のeditingScope.current、Parameter namespaceはWorkspace.currentとして区別し、viewport倍率・Block namespaceの反復照会・guard短絡とreceiverも維持する。拘束codec／装飾とGeometry Instance正規化は既存callbackの引数・既定値を保つ。新fileや全app context、状態の複製、早期model／DOM照会は増やさない。削除ownerとの統合は行わず、拒否されたCutのpayload保持と、append失敗／solve失敗で異なるmode・pasteCountの復元範囲も変更しない。

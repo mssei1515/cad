@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- DeletionFeature.createForEditing: 実Workspace／read／Canvas／session／solvingから削除に必要な限定APIを接続する。late drag reset、live analysis、既存createと異なる削除経路の途中状態・表示／履歴順を維持する。
+
 - ClipboardFeature.createForEditing: 共有ownerからcopy／cut／pasteに必要な限定APIを接続する。モデルのediting scopeとParameterのWorkspace scopeを区別し、既存create・操作順・限定rollbackを維持する。
 
 - BasicDrawingTools.createLifecycle.interaction: 同じ実Lifecycle／access／hoverから開始許可とTrimの部分hover解除を接続する。Selectの無条件通過とguard短絡、live Sketch、明示入力優先・旧API、遅延Hatchとmode ownerを維持する。
@@ -1426,6 +1428,8 @@ ClipboardFeature（src/application/clipboard_feature.js）はcopy／cut／paste�
 ClipboardFeature.createForEditingはDocumentWorkspace／editing scope、Geometry read services、実CanvasInteraction、GeometryCreation、Annotation renderer、Presentationと操作callbackを受け、既存createへ必要な限定APIを接続する。同じ七ownerの生成順と返却session／commandを維持し、独立したmodel・Selection・採番・modeを持たない。Geometryのcopy／paste対象は呼出時のeditingScope.current、Parameter targetはWorkspace.currentとして取得し、両者を統一しない。現在Sketch・倍率・Block namespaceとpermissionも操作時に評価し、Cut拒否時のpayload保持と貼付け失敗の限定rollbackは既存command／checkpointに残す。拘束codec／装飾・Geometry Instance正規化のcallback契約も維持する。従来の45依存のcreateによる直接注入APIを保持し、appは23項目のowner・操作依存から同じ構成を生成する。
 
 DeletionFeature（src/application/deletion_feature.js）はGeometryDeletion→GeometryDeletionCommand→SelectionDeletionCommandの生成・接続と、削除候補を参照する派生Instanceの判定／拒否通知を共有する。47の明示依存を各既存ownerへ限定して渡し、remove／removeSelection／rejectReferencesだけを公開する。PointUsageの同じ四照会を使い、新しい削除計画・モデル・Selection・履歴・rollback stateは持たない。currentScopeは従来のWorkspace readerで、計画・削除・求解・履歴と途中反映の順序は各既存commandのまま。Geometry削除の表示更新はToolbar→UI→draw、混在Selectionの更新はUI→drawという差を保持する。後段のGeometry／Dimension／Annotation drag resetは操作時callbackのままとし、生成時に参照しない。注記拘束除去と実command.removeは元ownerのreceiverを保って呼ぶ。拒否時は元のID順・文言でHint→logを行い、空候補は照会／通知しない。同じrejectReferencesをGeometryInstanceLifecycleへも接続する。
+
+DeletionFeature.createForEditingは共有Workspace／Sketch、read services、CanvasInteraction、OperationSessions、GeometryCreation、SketchSolving、analysis、Presentationと操作callbackを受け、既存createへ限定APIを渡す。新しいSelection・session・計画・modeを生成せず、同じ三ownerを同じ順で生成する。currentScopeはWorkspace.current、analysisStableは呼出時のanalysis.stableであり、Clipboardの同期済みediting scopeとは統一しない。後段drag三種のresetはrootで遅延callbackとして渡し、構築時に評価しない。Geometry削除と混在Selection削除の表示・求解・履歴、失敗時の部分反映範囲を変えず、既存47依存のcreateによる直接注入も保持する。appは22項目のowner・操作依存から組み立てる。
 
 ## 表示機能の生成・接続
 
