@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- ConstraintTestDriver.createBrowserFactories（src/testing/constraint_test_driver.js）は実Workspace／Sketch・geometry／read・solve scope／solving・analysis／solver・参照状態・operand値・Selection／Target session・寸法配置／checkpointとUI／操作callbackから、拘束観測・参照fixture・入力／intent・強制commitの7creatorを返す。窓口とcreatorの生成時はmodel・分析・Solver・DOMを照会せず、各支援をappの従来の位置で生成する。解析更新のoptions={}・一引数呼出し、analysis／solverのreceiver、Workspace.currentのlive scopeを維持する。同じ実ownerを共有し、旧直接注入API・公開名、raw観測／fixtureと例外・強制solveSubset復元の範囲を変更しない。
+
 - PropertiesTestDriver.createBrowserFactories（src/testing/properties_test_driver.js）は共有Workspace／Sketch・Geometry・read services・Selection／Hover／highlight・Presentation／表示・寸法配置と操作callbackから、Properties・Sidebar・Themeの観測／fixture／appearance操作を生成する11creatorを返す。窓口は生成時や各creator呼出時に編集状態・DOM・theme・履歴を照会せず、各creatorは元のraw helperと同じ実owner・関数を渡して新しい支援APIを返す。appは各creatorを従来の位置で呼び、他TestDriverとの生成順を維持する。modelは呼出時のWorkspace.current、色の既定値とFixed型の既定値も元の評価時点を維持し、Selection／hover／model・履歴の別コピーを生成しない。観測・fixture実行・途中失敗の反映範囲は既存raw helperが所有し、従来の直接注入APIとブラウザ公開名も保持する。
 
 - BrowserTestApi（src/testing/browser_test_api.js）: 準備済みテスト支援の能力だけからブラウザ公開名・結合順を構成する。モデル・DOM・sessionやfixture生成を所有せず、元関数・通常object・getter／spread順・例外時の以前のAPIを維持する。appはtest guard・支援生成・install phaseを所有する。
