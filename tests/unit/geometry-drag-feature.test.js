@@ -124,14 +124,14 @@ test('late Block entry shares the actual drag plan and selection while fixed and
   assert.equal(f.selection.blockInstances[0],instance);assert.equal(f.hints.at(-1)[0],'回転がロックされたブロックインスタンスです');assert.deepEqual(f.events,['draw']);assert.equal(f.state.reads,0);
 });
 
-function editingFixture() {
+function editingFixture(buildFeature = options => w.GeometryDragFeature.createForEditing(options)) {
   let scaleReads = 0, time = 0;
   const profiler = w.InteractionProfiler.create(() => ++time), pointerEvents = [];
   const pointer = w.CanvasInputBinding.createDragPointer({ canvas: {
     classList: { add: name => pointerEvents.push(['add', name]), remove: name => pointerEvents.push(['remove', name]) },
     setPointerCapture: id => pointerEvents.push(['capture', id]), releasePointerCapture: id => pointerEvents.push(['release', id]),
   } });
-  const f = fixture(ports => w.GeometryDragFeature.createForEditing({
+  const f = fixture(ports => buildFeature({
     currentScope: ports.currentScope, solver: ports.solver,
     sketches: { activeSketchId: ports.activeSketchId, elementSketchId: ports.elementSketchId, isEditableSketchId: ports.isEditableSketchId },
     scopeQuery: { sketchSolveVariables: ports.sketchSolveVariables, sketchSolveConstraints: ports.sketchSolveConstraints,
@@ -197,4 +197,73 @@ test('editing composition retains checkpoint restoration and thrown solve errors
   assert.equal(f.profiler.active, false); assert.equal(f.profiler.stop().commit.work.solve.calls, 1);
   assert.equal(f.feature.command.active, false); assert.equal(f.events.at(-1), 'on-end'); assert.equal(f.events.includes('history'), false);
   assert.deepEqual(f.pointerEvents.slice(-2), [['remove', 'is-dragging'], ['release', 23]]);
+});
+
+function workspaceFixture(composed, probe = {}) {
+  probe.clears = 0;
+  return editingFixture(options => {
+    const clear = options.clearSelection;
+    options.clearSelection = () => { probe.clears++; probe.highlight = null; clear(); };
+    const input = {
+      documentWorkspace: { workspace: { current: options.currentScope }, sketches: options.sketches },
+      interaction: { access: { guardSketchEdit: options.canEdit }, selection: options.canvasSelection },
+      presentation: { profiler: options.profiler, settings: { applicationText: options.applicationText }, setHint: options.setHint,
+        updateUI: options.updateUI, updateGeometrySelectionUI: options.updateGeometrySelectionUI, draw: options.draw },
+      sourceQueries: { sourceObjects: options.geometryInstanceSourceObjects, resolve: options.resolveDerivedDragSource },
+      projectionQueries: { sketchProjectionConstraintsAffectingItems: options.projectionConstraintsForItems },
+      solver: options.solver, scopeQuery: options.scopeQuery, solving: options.solving, checkpoint: options.checkpoint,
+      geometry: options.geometry, readServices: options.readServices, viewport: options.viewport, pointer: options.pointer,
+      acceptError: options.acceptError, previewMaxModelError: options.previewMaxModelError, minimumLength: options.minimumLength,
+      blockLocalGeometryBounds: options.blockLocalGeometryBounds, blockWorldPoint: options.blockWorldPoint,
+      pointLockedByLineFixed: options.pointLockedByLineFixed, findLineFixedConstraint: options.findLineFixedConstraint,
+      findArcEndpointFixedConstraint: options.findArcEndpointFixedConstraint, projectionBlockedMessage: options.projectionBlockedMessage,
+      stabilizeActiveParameterNamespace: options.stabilizeActiveParameterNamespace, refreshConstraintAnalysis: options.refreshConstraintAnalysis,
+      recordHistory: options.recordHistory, clearSelection: options.clearSelection,
+    };
+    probe.input = input;
+    return composed ? w.GeometryDragFeature.createForWorkspace(input) : w.GeometryDragFeature.createForEditing(options);
+  });
+}
+
+test('Workspace drag composition retains cold owners, live scope and scale, actual pointer capture and one history step', () => {
+  for (const composed of [false, true]) {
+    const probe = {}, f = workspaceFixture(composed, probe);
+    assert.equal(f.state.reads, 0); assert.equal(f.scaleReads(), 0); assert.equal(probe.clears, 0);
+    assert.deepEqual(f.events, []); assert.deepEqual(f.pointerEvents, []); assert.equal(Object.isFrozen(f.feature), true);
+    assert.equal(probe.input.interaction.selection, f.selection); f.state.ready = true;
+    const plan = f.feature.build('point', f.point, { x: 0, y: 0 }); assert.equal(plan.points[0].point, f.point);
+    f.feature.command.begin({ pointerId: 31 }, plan); f.state.scale = 2; f.profiler.start();
+    f.profiler.phase('move', () => f.feature.command.update({ x: 6, y: 8 }));
+    f.profiler.phase('commit', () => f.feature.command.finish({ pointerId: 31 }));
+    assert.equal(f.point.x, 6); assert.equal(f.point.y, 8); assert.equal(f.state.scope.points[0], f.point);
+    assert.equal(f.events.filter(e => e === 'history').length, 1); assert.equal(f.profiler.stop().move.work.solve.calls, 1);
+    assert.deepEqual(f.pointerEvents, [['add', 'is-dragging'], ['capture', 31], ['remove', 'is-dragging'], ['release', 31]]);
+    const next = Object.assign(new Point('P2', 40, 50), { sketchId: 'S2' });
+    f.state.scope = { ...f.state.scope, points: [next] }; f.state.active = 'S2';
+    const nextPlan = f.feature.build('point', next, { x: 40, y: 50 }); f.feature.prepare(nextPlan);
+    assert.equal(nextPlan.local.variables[0].object, next); assert.equal(f.feature.build('point', f.point, { x: 6, y: 8 }), null);
+  }
+});
+
+test('Workspace drag keeps supplied selection clearing, derived mapping, late Block refusals and failed/throwing solve cleanup', () => {
+  for (const composed of [false, true]) {
+    const probe = { highlight: {} }, f = workspaceFixture(composed, probe); f.state.ready = true;
+    const instance = { id: 'SPI1', type: 'sketchProjection', sketchId: 'S1' };
+    f.state.resolved = { item: f.point, pointer: { x: 0, y: 0 }, mapPointer: p => ({ x: p.x - 100, y: p.y }) };
+    f.feature.beginDerived({ pointerId: 32 }, { instance, item: f.point, kind: 'point' }, { x: 100, y: 0 });
+    assert.equal(probe.clears, 1); assert.equal(probe.highlight, null); assert.equal(f.selection.geometryInstances[0], instance);
+    f.feature.command.update({ x: 110, y: 5 }); assert.equal(f.point.x, 10); assert.equal(f.point.y, 5);
+    f.state.finish = () => ({ success: false, errorNorm: 1 }); f.feature.command.finish({ pointerId: 32 });
+    assert.equal(f.point.x, 0); assert.equal(f.point.y, 0); assert.equal(f.events.includes('history'), false);
+    const entry = f.feature.createBlockEntry(); assert.equal(probe.clears, 1);
+    const block = { id: 'BI1', sketchId: 'S1', fixed: true }; probe.highlight = {};
+    entry.begin({ pointerId: 33 }, block, { x: 2, y: 3 });
+    assert.equal(probe.clears, 2); assert.equal(probe.highlight, null); assert.equal(f.selection.blockInstances[0], block);
+    assert.equal(f.hints.at(-1)[1], 'error'); assert.equal(f.feature.command.active, false);
+    const error = new Error('Workspace drag solve failed'); f.state.finish = () => { throw error; };
+    const plan = f.feature.build('point', f.point, { x: 0, y: 0 }); f.feature.command.begin({ pointerId: 34 }, plan);
+    f.feature.command.update({ x: 8, y: 9 }); assert.throws(() => f.feature.command.finish({ pointerId: 34 }), e => e === error);
+    assert.equal(f.feature.command.active, false); assert.equal(f.events.includes('history'), false);
+    assert.deepEqual(f.pointerEvents.slice(-2), [['remove', 'is-dragging'], ['release', 34]]);
+  }
 });

@@ -182,7 +182,6 @@
   const { dragSources: derivedDragQueries, createCommands: createDerivedCommands } = window.DerivedInstanceFeature.createForEditing({
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, interaction: canvasInteraction, editingScope: editingScopeBinding, presentation,
   });
-  const { resolve: resolveDerivedDragSource, sourceObjects: geometryInstanceSourceObjects } = derivedDragQueries;
 
   const annotationTargets = window.AnnotationFeature.createAnchorQuery({
     sketches: sketchContext, readServices: geometryReadServices, pointUsage, selection: canvasSelection, viewportScale: () => viewport.scale,
@@ -195,7 +194,7 @@
   const sketchProjectionQueries = window.SketchProjectionQueries.create({
     currentScope: workspace.current, constraintIsOperational,
   });
-  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
+  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget } = sketchProjectionQueries;
   const sketchProjectionFeature = window.SketchProjectionFeature.createForEditing({
     currentScope: () => editingScopeBinding.current, queries: sketchProjectionQueries, sketches: sketchContext, readServices: geometryReadServices,
     referenceState: referenceConstraintState, access: sketchEditAccess, selection: canvasSelection, lifecycle: drawOperationLifecycle, ids: documentIds, hover: canvasHover,
@@ -1271,17 +1270,15 @@
 
   function addConstraint(type) { return constraintCommitCommand.fromSelection(type); }
 
-  const geometryDragFeature = window.GeometryDragFeature.createForEditing({
-    solver, currentScope: workspace.current, sketches: sketchContext, scopeQuery: solveScopeQuery, solving: sketchSolving,
+  const geometryDragFeature = window.GeometryDragFeature.createForWorkspace({
+    documentWorkspace, interaction: canvasInteraction, presentation, sourceQueries: derivedDragQueries, projectionQueries: sketchProjectionQueries,
+    solver, scopeQuery: solveScopeQuery, solving: sketchSolving,
     checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
-    viewport, pointer: dragPointer, profiler: interactionProfiler, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    viewport, pointer: dragPointer, acceptError: CONSTRAINT_ACCEPT_ERROR,
     previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR, minimumLength: MIN_ORIENTATION_LENGTH,
     blockLocalGeometryBounds, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
-    projectionConstraintsForItems: sketchProjectionConstraintsAffectingItems,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
-    canEdit: guardSketchEdit, canvasSelection, stabilizeActiveParameterNamespace, refreshConstraintAnalysis,
-    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
-    geometryInstanceSourceObjects, clearSelection, resolveDerivedDragSource,
+    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
   });
   const { command: geometryDrag, build: buildDragSession, beginDerived: beginDerivedGeometryDrag } = geometryDragFeature;
 
