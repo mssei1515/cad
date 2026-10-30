@@ -143,7 +143,7 @@
     const { guardSketchEdit, guardSelectionEdit } = access;
     const { Circle, Arc } = window.GeometrySolver;
     const { targetFromConstraint, angleDegrees, angleDimensionAngles } = window.DimensionQueries;
-    return createWithControls({
+    const editing = createWithControls({
       retargeting: { canvasHover: hover, canvasPoint: viewport.canvasPoint, referenceTargetFromOperand },
       controls: { document, constraintMenuButtons: controls.constraintMenuButtons, fixPointBtn: controls.fixPointBtn, translatedExactText },
       constraintButtons: controls.constraintButtons, feedback, readLanguage: () => settings.language,
@@ -157,6 +157,22 @@
       cancelPendingCommand, selectedPrimitives, placement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
       addReadOnlyDimensionConstraint, makeConstraintOperand, sameConstraintOperand, applicationText, log,
     });
+    function createCommitForWorkspace({ workspace, checkpoint, insertion, redundancy, solving, stabilization, referenceState,
+      solvePreparation, lineCollapseQuery, acceptError, refreshConstraintAnalysis, recordHistory, now }) {
+      const { constraintTargetsAreActive, constraintSketchId, isReferenceSourceSketchId, descendantSketchIds, sketchName } = sketches;
+      const { isDimensionConstraint, isReadOnlyDimension, measuredConstraintTargetValue } = window.DimensionQueries;
+      return editing.createCommit({
+        linesAreParallel: candidates.linesAreParallel, assignSketch: insertion.assignSketch, probeRedundancy: redundancy.probeCandidate,
+        currentScope: workspace.current, forgetConstraint: redundancy.forgetConstraint, constraintTargetsAreActive,
+        snapshotModelState: checkpoint.captureValues, restoreModelState: checkpoint.restoreValues, solvePreparation, pushModelConstraint: insertion.push,
+        solveConstraintComponentAndDependents: solving.solveConstraintComponentAndDependents,
+        isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace: stabilization.stabilize,
+        constraintSketchId, lineCollapseQuery, redundantConstraintInfo: redundancy.redundantConstraintInfo, acceptError, measuredConstraintTargetValue,
+        refreshConstraintAnalysis, updateUI: presentation.updateUI, recordHistory, isReferenceSourceSketchId, descendantSketchIds,
+        wouldCreateReferenceCycle: referenceState.wouldCreateReferenceCycle, sketchName, now,
+      });
+    }
+    return Object.freeze({ ...editing, createCommitForWorkspace });
   }
   function createDimensionValues({ parameters, sketches, interaction, pending, valueInput, checkpoint, presentation,
     annotationFeature, modelQueries, stabilization, viewport, bounds, placement, synchronizedInstanceEditing,

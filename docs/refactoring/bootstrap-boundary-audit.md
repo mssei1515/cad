@@ -6,6 +6,14 @@
 
 これは現在の構造と次の判断の記録であり、全体完了を示す文書ではない。合意した目標と停止・検証条件は[再開手順](refactoring-policy-and-resume.md)、現在の配置は[実装map](implementation-map.md)を優先する。以後の実装では行番号より関数・owner名を使って現物を再確認する。
 
+## 拘束確定の共有owner接続（2026-10-30、28ac1f1基準）
+
+ConstraintEditing.createForEditingの後段窓口createCommitForWorkspaceが拘束確定の接続を担当する。先行したSelection／Sketch／Presentation／Operand候補を共有し、後段Workspace／checkpoint／挿入／redundancy／solving／安定化／reference stateと求解準備・line collapse・分析更新・履歴・clockだけを受ける。Workspace.currentの動的照会とbound editing scopeの挿入・snapshot／restoreは元の別参照を維持する。従来createCommit→DimensionConstraintFactory／Command→readOnly query→intent resolverの順と後段Commandへの遅延callback、裸関数参照・clockの呼出し時機を変えない。既存createCommitとraw ConstraintCommitCommandを維持し、実APIを再利用する。可変app context・新model／Selection／session・cache・listenerは増やさない。
+
+app.jsは1,722→1,715行（7行減）、非空白1,273→1,266行。root399文・構築123文・関数77個・hooks233行・一文call委譲73個93行は据置。構築の非空白627→621行、その他202文315→314行、通常core947→940行。明示入力27→13項目、不要root alias七個を除去した。TEMP cad-constraint-commit-owners-{proof,hierarchy}.cjsで他app AST・既存構築経路／raw Command不変、未使用root bindingなし、前段十入力の初期化済みを確認した。200〜500行の全体目標は未達である。
+
+全体目標はactive・未完了。開始時週枠残量52%。mainは最終反映まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/constraint-commit-owners。直前の全E2Eは28ac1f1の588件成功（22.4m）で、今回の関連E2Eとは区別する。次は残る固定拘束操作の構築とDocument resetの接続を比較する。既存ownerへの集約で依存やroot aliasを減らせるかを実コードで判断し、引数の包み直しや巨大なbootstrapへの移動で行数目標を装わない。現単位の検証・Commit／develop統合前に次の製品変更を始めない。 現物では固定拘束operand生成はSketch Treeより前、Selection用command生成はcontrols.bind直前という別段階である。Projectionのshape guard、SelectionHighlightの表示要素比較、Workspace.currentと後段commitのcallbackを区別する。DocumentEditingResetは既に単一のreset順序を所有し、ReferenceImage Feature等の実ownerから接続を減らせる余地はあるが、30項目をまとめた巨大なcontextを受けるだけの置換は採用しない。現在のresetには前後二回のReferenceImage interaction resetがあるため、重複と決めつけて削除しない。
+
 ## 寸法値編集の接続（2026-10-30、9c87ef9基準）
 
 ConstraintEditing.createDimensionValuesが寸法値編集の接続を担当する。実Parameter namespace／Sketch／CanvasInteraction／pending session／value input／checkpoint／Presentation、Annotation Feature／model query／安定化とViewport／Bounds／placementを受け、従来のDimensionValueCommand.createWithEditingSupportへ同じ参照を渡す。raw Commandの特殊寸法support→通常Commandの構築順、求解・失敗復元・first-dimension scaling・履歴は変更しない。入力UIとcheckpoint・Parameterの裸関数参照、guardの二引数、footprintの呼出し時の既定SketchとViewportのmember receiverを維持する。後段DimensionDrag.resetと拘束追加は従来の遅延callbackで接続し、未生成owner・可変context・session複製・追加listenerは導入しない。
