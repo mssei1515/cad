@@ -52,6 +52,21 @@
       }
       return Object.freeze({ command: dxfCommand, createControls });
     }
+    function createDxfForEditing({ documentWorkspace, geometry, interaction, sessions, minimumLength, clearSelection, updateUI, recordHistory }) {
+      const { workspace, geometryIds: ids, sketches: { activeSketchId } } = documentWorkspace;
+      const { canCreateInActiveSketch } = interaction.access, { active: hasActiveDrawOperation } = interaction.lifecycle;
+      const { pending, targets } = sessions;
+      const canImport = () => canCreateInActiveSketch() && !hasActiveDrawOperation()
+        && !pending.current && !targets.command && interaction.lifecycle.mode !== "block-place";
+      const dxf = createDxf({ geometry, ids, currentScope: workspace.current, activeSketchId, canImport,
+        minimumLength, clearSelection, updateUI, recordHistory });
+      function bindControls(options) {
+        const controls = dxf.createControls(options);
+        controls.bind();
+        return controls;
+      }
+      return Object.freeze({ ...dxf, bindControls });
+    }
     let started = false;
     function start() {
       if (started) return;
@@ -64,7 +79,7 @@
       if (started) browserWindow.removeEventListener("beforeunload", command.beforeUnload);
       started = false;
     }
-    return Object.freeze({ refreshStatus, markCheckpoint, createDxf, bindControls: controls.bind, start, dispose,
+    return Object.freeze({ refreshStatus, markCheckpoint, createDxf, createDxfForEditing, bindControls: controls.bind, start, dispose,
       save: command.save, saveAs: command.saveAs, open: command.open, importFileData: command.importFileData });
   }
   window.DocumentFileFeature = Object.freeze({ create });

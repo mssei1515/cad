@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,777行、非空白1,327行、root直下409文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
+2026-10-30の最新単位ではapp.jsは1,774行、非空白1,324行、root直下407文、条件付きtest hooks235行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標はactive・未完了である。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-10-30）
 
-### 最新：確定済みInstance編集と変換の組立て（2026-10-30、検証完了）
+### 最新：DXF読込の操作状態判定と後段接続（2026-10-30、検証完了）
+
+基準developは9233ee9。DocumentFileFeatureへcreateDxfForEditingを追加し、実DocumentWorkspaceのWorkspace.current／GeometryIds／active Sketch、CanvasInteractionのaccess／Lifecycle、OperationSessionsのpending／targetsを既存createDxfへ接続する。読込可否は権限、作図中、pending、拘束対象、block-placeの順に短絡し、既存のbare function呼出しと操作時のgetter評価を保つ。構築時にmodel／mode／sessionを照会せず、非同期読込の開始時と完了前の再判定には同じpredicateを渡す。返すcommand／createControlsは実APIのまま、追加のbindControlsは元の後段位置でcontrolsを生成してbindし、dispose可能な実controlsを返す。旧createDxfと個別createControlsの直接利用、共通fileSession／選択dialog／parser／挿入・復元・ID採番・履歴・saved checkpointを維持し、model／状態／listenerの別コピーや可変contextを追加しない。
+
+app.jsは1,777→1,774行（3行減）、非空白1,327→1,324行。root409→407文、構築125→124文／667→666非空白行、その他207→206文／322→320行。関数80個、条件付きhooks235行、一文call委譲76個98行、可変参照三つ・文外5行は維持する。rootのcanImportDxfとdxfFileControlsを除き、判断と接続をfile ownerへ集約した。TEMP cad-dxf-editing-import-{proof,hierarchy,stage-audit}.cjsでguardの短絡・receiver／getter、元の九入力と遅延controls生成・bindの同値、他app／raw file featureのAST不変、未使用root bindingなしと早期直接捕捉なしを確認した。hooksと短い委譲を除いても991非空白行あり、200〜500行目標は未達。
+
+境界単体三件を追加し、実DXF command／parser／GeometryCreation／ID／controlsを旧直接生成と新窓口で比較した。五段の読込可否短絡と例外、構築時のguard無照会、async読込中の作図／pending／拘束対象／mode／scope変更による拒否と無採番、後段DOM取得／bind・flush・共有fileSessionによる拒否・実取込・一履歴・disposeを確認した。全単体2,139件、関連単体37件が成功。構文626fileが成功。全E2E588件が全成功（24.3m、exit 0、実行session24201）。対象file／test名を絞らず、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHが全て未設定であることを実行process内で記録した。405製品／E2E入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-dxf-editing-import-{check,unit,focused,e2e}.log、run.ps1、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存E2Eの期待値・性能上限／timeout・workerは変更していない。
+
+全体目標はactive・未完了。開始時週枠残量61%／最終確認60%で停止条件未到達。mainは最終反映時まで5800850に保持する。この単位の統合先はdevelop、作業branchはcodex/dxf-editing-import。 次候補の具体監査では、BlockEditingFeature.createの定義／session／query生成と、後段BlockPlacementCommandが同じDocumentWorkspace・read services・CanvasInteraction／OperationSessions・Presentationを共有できることを確認した。既存raw createを保持するcreateForWorkspaceと後段placement窓口を検討する。viewportは後段生成のためreadViewportを遅延のまま維持し、現在の構築順・pane復元・採番・取消の境界を比較してから着手する。再開時はGit現物・入力hash・検証receiptとusageを確認する。保存読込・UI側に残る判断と操作の所有者を引き続き確認し、構築数・接続責務の削減も進める。Hatchのcontent／layerを包むだけの分割や、生成位置が離れた作図ツールを一括生成する変更は採用していない。行数を目的に巨大な組立てmoduleや状態contextを作らず、200〜500行の目標は保持する。
+
+### 直前：確定済みInstance編集と変換の組立て（2026-10-30、検証完了）
 
 基準developはc73ccae。DerivedInstanceFeature.createForEditingの後段command APIへcreateEditingWithTransformsを追加し、従来のcreateEditingとInstanceTransformCommand.createを同じ後段位置で順に生成する。共通のWorkspace.current、元のcheckpoint.captureValues／restoreValues、dragSources.sourceObjects、Parameter stabilization、GeometryReadServicesのInstance／Block参照、翻訳・通知・履歴を同じ実体から接続する。後段は十三入力で、明示したserialize／snap／rebind、Solver／scope query／solve state、Block layout／求解と更新通知を受け、返すediting／changeProperty／transformも実APIのまま凍結して公開する。Block回転を含む既存InstanceTransformCommandの責務・仕様は変更しない。raw createEditingと旧factoryを維持し、第二モデル／checkpoint／Solver／sessionやsetterは作らない。Instance編集生成の失敗時は変換commandを生成せず、操作時の拒否・復元・例外とpending draftの識別は各既存commandに残す。
 
