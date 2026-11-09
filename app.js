@@ -1232,8 +1232,6 @@
   const editingToolBinding = toolbarPresentation.createEditingBinding({
     undo: undoHistory, redo: redoHistory, toggleVisibility: toggleSelectedVisibility, deleteSelection: deleteCurrentSelection, annotation: annotationCommand,
   });
-  editingToolBinding.bind();
-  canvasViewControls.bindControls();
 
 
 
@@ -1241,14 +1239,12 @@
 
 
 
-  const toolNavigation = presentation.createToolNavigation({ window });
-  const { close: closeAppMenus } = toolNavigation;
-  toolNavigation.start();
-  canvasWorkspaceLayout.bindControls();
-  parameterEditor.start();
-  appearanceUI.start();
-  applicationSettings.start();
-  blockView.bind();
+  const workspaceControls = presentation.prepareWorkspaceControls({
+    window, editingTools: editingToolBinding, canvasViewControls, layout: canvasWorkspaceLayout,
+    parameters: parameterEditor, appearance: appearanceUI, blocks: blockView,
+  });
+  const { close: closeAppMenus } = workspaceControls;
+  workspaceControls.start();
 
   const drawingToolBinding = toolbarPresentation.createDrawingBinding({
     startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand, startGeometryInstanceCommand,

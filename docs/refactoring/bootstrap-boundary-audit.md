@@ -1,5 +1,18 @@
 # Composition rootの残存責務と依存監査
 
+## Workspace UIの準備と起動（2026-11-10）
+
+PresentationFeature.prepareWorkspaceControlsへ、連続していたWorkspace UIの接続・起動を集約した。prepareは既存editing binding→Canvas view controlsのbind→同じToolNavigation生成を行い、元のmenu close関数とstartを返す。rootはcloseAppMenusを受け取ってからstartを呼び、navigation start（menu→flyout）→layout bind→Parameter editor start→Appearance UI start→ApplicationSettings start→Block view bindの順を保つ。keyboard／window接続はこの前、drawing toolbar／file controls／PNG等はこの後のまま。各componentは既存の実体とlistener／stateを所有し、追加のglobal・model・listener・起動flagや汎用contextを作らない。
+
+app.jsは1,521→1,517行（4行減）、非空白1,072→1,068行。連続10文を準備・close受取り・起動の段階へ接続し、component入力は7項目。rootは341文・558binding。単なる空白削除を行わず、既存Properties／Tree／Blockの構築・scope・モデル編集責務は移さない。全体目標は未完了。
+
+TEMP cad-workspace-ui-startup-proof.cjsで対象10文の連続性、各component port、残るroot ASTと既存Presentation API・raw menu／flyout／Toolbar／BlockView・index.html不変、未使用binding・新しい未束縛参照なしを確認した。三件の新旧比較は実Menu／ToolFlyoutsを使い、準備時の二bindとmenu生成・起動までのlistener状態、close関数同一性と後続開始前の公開、ツールclick／Escape／外側クリック、receiver・引数・11段階の例外と既設listener／部分状態を検証する。
+
+Propertiesの三生成は既存moduleが共有依存とscopeを保持しており、現時点で単に統合しても34項目の入力や依存の多いcontextを移すだけになるため追加wrapperを見送った。Tree／Blockのモデル編集ownerと独自の生成・start段階も保持する。今後は残る構築・別名とfeature間接続を実owner・phaseから整理し、細かなport追加やtest hooks全体の移動で200〜500行に到達したと扱わない。
+
+関連単体25件、構文631file・全単体2,291件・関連E2E266件が成功（17file、3.8m、exit 0）。三件の実menu／flyout比較で、prepare時のbindとmenu生成・start前のclose公開、listener状態・実ツールclick／Escape／外側クリック、component methodのreceiver／零引数と11段階の起動例外・既接続listener／部分状態を検証した。699製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-workspace-ui-startup-{focused,check,unit,e2e,proof,smoke}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。直近07f5936の全E2E589件成功（21.6m）とは別の今回変更後の関連検証であり、全体目標は未完了。
+
+
 ## 作図編集の共通依存と生成段階（2026-11-10）
 
 BasicDrawingTools.createAuthoringForEditingが返すcreateEditingは、既に共有するDocumentWorkspace・CanvasInteraction・操作sessionからLifecycle／Selection／pending／pointerを使い、後段のcheckpoint・求解・Parameter安定化・解析・編集scopeとFillet用依存を接続する。Filletは元の位置で生成し、円中心十字とSpline編集は返したfactoryを元の別々の位置で呼ぶ。Offsetはcheckpoint生成前のまま保持し、三コマンドを早期に一括生成しない。共有のGeometry・IDs・Selection・実checkpointを維持し、geometry snapshotとvalue snapshot、Workspaceとbound editing scope、安定化／求解のbare callback、analysis／Solver／Lifecycleのmember receiver、Filletの無返値invalidateとcrossの返値を使い分ける。
