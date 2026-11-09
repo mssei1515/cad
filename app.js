@@ -107,7 +107,6 @@
     Solver: ConstraintSolver,
     closeSketchContext: () => sketchContextController?.close(), resetSketchMove: () => sketchMoveCommand?.reset(),
   });
-  const { hasDirectRadiusDimension } = dimensionModelQueries;
   function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
   const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = constraintInsertion;
@@ -321,11 +320,11 @@
     annotationBounds,
   });
   const { traceSplinePath } = geometryDisplay;
-  const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
+  const { allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { fitSketchToViewport, fitAllGeometryToViewport } = drawingFit;
   function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
-  const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
-    currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
+  const dimensionValueEditing = window.ConstraintEditing.prepareDimensionValues({
+    workspace, sketches: sketchContext, bounds: drawingBounds, minimumLineLength: MIN_LINE_LENGTH,
   });
 
   const { layer: hatchLayer, drawHatches, createStack: createDrawingStack } = createHatchRendering({
@@ -429,14 +428,12 @@
     blockLayout: { blockLocalGeometryBounds, snappedBlockRotation }, solving: sketchSolving, updateBlockUI, refreshConstraintAnalysis,
   });
   const { setBlockInstanceRotationLocked } = instanceTransformCommand;
-  const constraintSolvePreparation = window.ConstraintSolvePreparation.createForSolver({
-    solver, hasDirectRadiusDimension, offsetChainDraft, minimumOrientationLength: MIN_ORIENTATION_LENGTH, minimumLineLength: MIN_LINE_LENGTH,
-  });
-  const dimensionValueCommand = window.ConstraintEditing.createDimensionValues({
-    parameters: parameterNamespace, sketches: sketchContext, interaction: canvasInteraction, pending: pendingCommandSession,
+  const { command: dimensionValueCommand, solvePreparation: constraintSolvePreparation } = dimensionValueEditing.createForEditing({
+    solver, offsetChainDraft, minimumOrientationLength: MIN_ORIENTATION_LENGTH,
+    parameters: parameterNamespace, interaction: canvasInteraction, pending: pendingCommandSession,
     valueInput: dimensionInputController, checkpoint: editingCheckpoint, presentation, annotationFeature,
-    modelQueries: dimensionModelQueries, stabilization: parameterStabilization, viewport, bounds: drawingBounds, placement: dimensionPlacement,
-    synchronizedInstanceEditing, solvePreparation: constraintSolvePreparation, scaleSketchForFirstDimension,
+    modelQueries: dimensionModelQueries, stabilization: parameterStabilization, viewport, placement: dimensionPlacement,
+    synchronizedInstanceEditing,
     acceptError: CONSTRAINT_ACCEPT_ERROR, recordHistory, resetDimensionDrag: () => dimensionDrag.reset(), addDistanceConstraintFromTarget,
   });
   const { submit: submitDistanceValue } = dimensionValueCommand;

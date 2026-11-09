@@ -183,6 +183,25 @@
     }
     return Object.freeze({ ...editing, createCommitForWorkspace, createCommitWithIntentForWorkspace });
   }
+  function prepareDimensionValues({ workspace, sketches, bounds, minimumLineLength }) {
+    const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
+      currentScope: workspace.current, activeSketchId: sketches.activeSketchId, constraintSketchId: sketches.constraintSketchId,
+      elementSketchId: sketches.elementSketchId, sketchGeometryBounds: bounds.sketchGeometryBounds, minLength: minimumLineLength,
+    });
+    function createForEditing({ solver, modelQueries, offsetChainDraft, minimumOrientationLength, parameters, interaction,
+      pending, valueInput, checkpoint, presentation, annotationFeature, stabilization, viewport, placement,
+      synchronizedInstanceEditing, acceptError, recordHistory, resetDimensionDrag, addDistanceConstraintFromTarget }) {
+      const solvePreparation = window.ConstraintSolvePreparation.createForSolver({
+        solver, hasDirectRadiusDimension: modelQueries.hasDirectRadiusDimension, offsetChainDraft,
+        minimumOrientationLength, minimumLineLength,
+      });
+      const command = createDimensionValues({ parameters, sketches, interaction, pending, valueInput, checkpoint, presentation,
+        annotationFeature, modelQueries, stabilization, viewport, bounds, placement, synchronizedInstanceEditing,
+        solvePreparation, scaleSketchForFirstDimension, acceptError, recordHistory, resetDimensionDrag, addDistanceConstraintFromTarget });
+      return Object.freeze({ command, solvePreparation });
+    }
+    return Object.freeze({ createForEditing });
+  }
   function createDimensionValues({ parameters, sketches, interaction, pending, valueInput, checkpoint, presentation,
     annotationFeature, modelQueries, stabilization, viewport, bounds, placement, synchronizedInstanceEditing,
     solvePreparation, scaleSketchForFirstDimension, acceptError, recordHistory, resetDimensionDrag, addDistanceConstraintFromTarget }) {
@@ -209,5 +228,5 @@
       restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
     });
   }
-  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing, createDimensionValues });
+  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing, prepareDimensionValues, createDimensionValues });
 })();

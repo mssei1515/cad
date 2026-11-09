@@ -736,3 +736,191 @@ test("paired commit and intent propagate constructor and live guard failures wit
     }
   }
 });
+
+function dimensionStagesFixture(composed, failFactory = null, constructionEvents = []) {
+  const context = { window: {} }; vm.createContext(context);
+  for (const file of controlSources.filter(file => file.startsWith('src/'))) {
+    vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
+  }
+  const w = context.window, G = w.GeometrySolver, events = [], ports = {}, owners = {};
+  const state = { ready: false, phase: 'early', active: 'S1', editable: true, added: true,
+    hasDimension: false, success: true, failure: null, pending: null };
+  const ready = () => assert.equal(state.ready, true, 'no model or UI reads during construction');
+  const note = name => (...args) => { ready(); events.push([name, ...args]); };
+  for (const [name, method] of [['FirstDimensionScaling', 'create'], ['ConstraintSolvePreparation', 'createForSolver'], ['DimensionValueCommand', 'createWithEditingSupport']]) {
+    const original = w[name];
+    w[name] = { ...original, [method](options) {
+      constructionEvents.push([name, state.phase]);
+      if (failFactory?.name === name) throw failFactory.error;
+      ports[name] = options; return owners[name] = original[method](options);
+    } };
+  }
+  function geometry(id) {
+    const p = new G.Point(id + 'p', 0, 0), q = new G.Point(id + 'q', 10, 0), foreign = new G.Point(id + 'foreign', 90, 90);
+    p.sketchId = q.sketchId = 'S1'; foreign.sketchId = 'S2';
+    return { points: [p, q, foreign], circles: [], arcs: [], constraints: [], line: new G.Line(id, p, q) };
+  }
+  state.workspace = geometry('old');
+  state.editingScope = { constraints: [] };
+  const sketches = {
+    activeSketchId: () => { ready(); events.push(['active']); return state.active; },
+    constraintSketchId: c => { ready(); return c.sketchId; },
+    elementSketchId: item => { ready(); return item.sketchId; },
+  };
+  const workspace = { current: () => { ready(); events.push(['scope']); return state.workspace; } };
+  const bounds = { sketchGeometryBounds: id => {
+    ready(); events.push(['bounds', id]);
+    const points = state.workspace.points.filter(p => p.sketchId === id);
+    return { x1: Math.min(...points.map(p => p.x)), y1: 0, x2: Math.max(...points.map(p => p.x)), y2: 0 };
+  } };
+  const solver = { maxStepNorm: 3, syncLineOrientationHints: note('orientation') };
+  const modelQueries = {
+    hasDirectRadiusDimension: arc => { ready(); events.push(['radius-query']); return state.editingScope.constraints.some(c => c.arc === arc); },
+    sketchHasDimensionConstraint: id => { ready(); events.push(['has-dimension', id]); return state.hasDimension; },
+  };
+  const selection = w.CanvasSelection.create();
+  const parameters = {
+    expressionFromUserInput: input => { ready(); events.push(['expression', input]); return input; },
+    evaluateEditingExpressionDraft: (constraint, expression, unused, options) => { ready(); events.push(['evaluate', expression, options.signedAngle]); return Number(expression); },
+    renameDimension: note('rename'), parameterErrorText: error => error.message,
+    expressionInputValue: value => value, numericDimensionExpression: () => '10',
+  };
+  const pending = { read: () => { ready(); return state.pending; }, replace: value => { ready(); state.pending = value; events.push(['pending', value === null]); } };
+  const input = {
+    parameters, sketches, interaction: { selection, access: { guardSketchEdit: (id, operation) => {
+      ready(); events.push(['guard', id, operation]); return state.editable;
+    } } }, pending, valueInput: { hide: note('hide'), sync: note('sync'), focus: note('focus') },
+    checkpoint: { captureValues: () => { ready(); events.push(['snapshot']); return state.pending.constraint.expression; },
+      restoreValues: value => { ready(); state.pending.constraint.expression = value; events.push(['restore', value]); } },
+    presentation: { settings: { applicationText: (_ja, en) => en }, setHint: note('hint'), draw: note('draw'), updateUI: note('ui') },
+    annotationFeature: { dimensions: { setValue: () => true }, anchors: { submitDistance: () => true } },
+    modelQueries, stabilization: { stabilize: id => {
+      ready(); events.push(['stabilize', id, solver.maxStepNorm]); if (state.failure) throw state.failure;
+      return { success: state.success, result: { errorNorm: state.success ? 0 : 1, reason: 'fixture' } };
+    } },
+    viewport: { captureBoundsFootprint: value => { ready(); events.push(['capture-frame', value.x1, value.x2]); return { original: true }; },
+      restoreBoundsFootprint: (value, footprint) => { ready(); assert.equal(footprint.original, true); events.push(['restore-frame', value.x1, value.x2]); return true; } },
+    bounds, placement: { defaultDimensionForTarget: () => ({ offsetU: 3 }) }, synchronizedInstanceEditing: { interval: () => true },
+    acceptError: 1e-4, recordHistory: note('history'), resetDimensionDrag: note('reset-drag'),
+    addDistanceConstraintFromTarget: (target, value, dimension, options) => {
+      ready(); assert.equal(target.line, state.workspace.line); events.push(['add', value, dimension.offsetU, options.expression]); return state.added;
+    },
+  };
+  const early = { workspace, sketches, bounds, minimumLineLength: 0.01 };
+  let support, scaleSketchForFirstDimension;
+  if (composed) support = w.ConstraintEditing.prepareDimensionValues(early);
+  else ({ scaleSketchForFirstDimension } = w.FirstDimensionScaling.create({
+    currentScope: workspace.current, ...sketches, sketchGeometryBounds: bounds.sketchGeometryBounds, minLength: 0.01,
+  }));
+  assert.deepEqual(constructionEvents, [['FirstDimensionScaling', 'early']]);
+  assert.deepEqual(events, []);
+  state.phase = 'late';
+  const preparationInput = { solver, hasDirectRadiusDimension: modelQueries.hasDirectRadiusDimension,
+    offsetChainDraft: note('offset-draft'), minimumOrientationLength: 1e-8, minimumLineLength: 0.01 };
+  let command, solvePreparation;
+  if (composed) ({ command, solvePreparation } = support.createForEditing({
+    ...input, solver, offsetChainDraft: preparationInput.offsetChainDraft, minimumOrientationLength: 1e-8,
+  }));
+  else {
+    solvePreparation = w.ConstraintSolvePreparation.createForSolver(preparationInput);
+    command = w.ConstraintEditing.createDimensionValues({ ...input, solvePreparation, scaleSketchForFirstDimension });
+  }
+  assert.deepEqual(events, []);
+  state.ready = true;
+  function snapshot() {
+    return { events, points: state.workspace.points.map(p => [p.id, p.x, p.y]),
+      pending: state.pending ? { expression: state.pending.constraint?.expression, buffer: state.pending.buffer, dimension: state.pending.dimension } : null,
+      stepNorm: solver.maxStepNorm };
+  }
+  return { w, G, state, ports, owners, constructionEvents, events, input, early, preparationInput, command, solvePreparation, geometry, snapshot };
+}
+
+test('dimension value stages keep cold construction order and share actual scaling, command and solver preparation', () => {
+  for (const composed of [false, true]) {
+    const f = dimensionStagesFixture(composed);
+    assert.deepEqual(f.constructionEvents, [['FirstDimensionScaling', 'early'], ['ConstraintSolvePreparation', 'late'], ['DimensionValueCommand', 'late']]);
+    assert.equal(f.command, f.owners.DimensionValueCommand);
+    assert.equal(f.solvePreparation, f.owners.ConstraintSolvePreparation);
+    assert.equal(f.ports.DimensionValueCommand.solvePreparation, f.solvePreparation);
+    assert.equal(f.ports.DimensionValueCommand.scaleSketchForFirstDimension, f.owners.FirstDimensionScaling.scaleSketchForFirstDimension);
+    assert.equal(f.ports.FirstDimensionScaling.currentScope, f.early.workspace.current);
+    assert.equal(f.ports.ConstraintSolvePreparation.hasDirectRadiusDimension, f.input.modelQueries.hasDirectRadiusDimension);
+    assert.equal(f.ports.ConstraintSolvePreparation.offsetChainDraft, f.preparationInput.offsetChainDraft);
+    assert.equal(f.ports.ConstraintSolvePreparation.minimumLineLength, 0.01);
+    assert.equal(f.ports.ConstraintSolvePreparation.minimumOrientationLength, 1e-8);
+    assert.equal(f.ports.DimensionValueCommand.snapshotModelState, f.input.checkpoint.captureValues);
+    assert.equal(f.ports.DimensionValueCommand.getPending, f.input.pending.read);
+    assert.equal(f.ports.DimensionValueCommand.resetDimensionDrag, f.input.resetDimensionDrag);
+    // Omitted sketchId is resolved when invoked; viewport methods keep their owner and one/two argument boundaries.
+    f.state.active = 'S2';
+    const capture = f.input.viewport.captureBoundsFootprint, restore = f.input.viewport.restoreBoundsFootprint;
+    f.input.viewport.captureBoundsFootprint = function (...args) { assert.equal(this, f.input.viewport); assert.equal(args.length, 1); return capture(...args); };
+    f.input.viewport.restoreBoundsFootprint = function (...args) { assert.equal(this, f.input.viewport); assert.equal(args.length, 2); return restore(...args); };
+    const footprint = f.ports.DimensionValueCommand.captureSketchScreenFootprint();
+    f.ports.DimensionValueCommand.restoreSketchScreenFootprint('S2', footprint);
+    assert.deepEqual(f.events.slice(0, 2), [['active'], ['bounds', 'S2']]);
+    // The same shared preparation sees live editing queries rather than the workspace used for initial scaling.
+    const arc = new f.G.Arc('a', new f.G.Point('center', 0, 5), 1, 0, Math.PI);
+    const line = f.state.workspace.line; line.orientationHint = 'horizontal';
+    f.state.editingScope.constraints = [{ arc }];
+    f.solvePreparation.precondition(new f.G.ArcEndpointOnLineConstraint(arc, 'start', line));
+    assert.equal(arc.radiusValue, 1);
+    f.state.editingScope.constraints = [];
+    f.solvePreparation.precondition(new f.G.ArcEndpointOnLineConstraint(arc, 'start', line));
+    assert.ok(arc.radiusValue > 5);
+  }
+});
+
+test('staged dimension values preserve real first-dimension scaling, live scope, guards and insertion refusal', () => {
+  for (const scenario of ['accepted', 'guard-refused', 'insertion-refused', 'already-dimensioned']) {
+    const results = [];
+    for (const composed of [false, true]) {
+      const f = dimensionStagesFixture(composed);
+      f.state.workspace = f.geometry('current');
+      const refs = [...f.state.workspace.points];
+      f.state.editable = scenario !== 'guard-refused'; f.state.added = scenario !== 'insertion-refused';
+      f.state.hasDimension = scenario === 'already-dimensioned';
+      f.state.pending = { type: 'distance-value', target: { kind: 'line-length', line: f.state.workspace.line }, buffer: '25', dimension: { offsetU: 3 }, sketchId: 'S1' };
+      f.command.submit();
+      assert.equal(f.state.workspace.points[0], refs[0]); assert.equal(f.state.workspace.points[2], refs[2]);
+      const scaled = scenario === 'accepted' || scenario === 'insertion-refused';
+      assert.equal(refs[0].x, scaled ? -7.5 : 0); assert.equal(refs[1].x, scaled ? 17.5 : 10); assert.equal(refs[2].x, 90);
+      assert.equal(f.state.pending === null, scenario === 'accepted' || scenario === 'already-dimensioned');
+      assert.equal(f.events.some(e => e[0] === 'restore-frame'), scenario === 'accepted');
+      results.push(f.snapshot());
+    }
+    assert.deepEqual(results[1], results[0], scenario);
+  }
+});
+
+test('staged existing dimension edits preserve rollback boundaries, temporary solver settings and exceptions', () => {
+  for (const scenario of ['accepted', 'rejected', 'solver-threw']) {
+    const results = [];
+    for (const composed of [false, true]) {
+      const f = dimensionStagesFixture(composed), failure = new Error('solver');
+      const constraint = { sketchId: 'S1', expression: '10', error: () => [8] };
+      f.state.pending = { type: 'distance-value', constraint, target: {}, buffer: '25', dimension: {} };
+      f.state.success = scenario !== 'rejected'; f.state.failure = scenario === 'solver-threw' ? failure : null;
+      if (f.state.failure) assert.throws(() => f.command.submit(), error => error === failure);
+      else f.command.submit();
+      assert.equal(constraint.expression, scenario === 'rejected' ? '10' : '25');
+      assert.equal(f.solvePreparation.stepNorm(constraint), 12);
+      assert.equal(f.state.pending === null, scenario === 'accepted');
+      assert.equal(f.events.find(e => e[0] === 'stabilize')[2], 12);
+      assert.equal(f.input.checkpoint.captureValues, f.ports.DimensionValueCommand.snapshotModelState);
+      assert.equal(f.snapshot().stepNorm, 3);
+      assert.equal(f.events.some(e => e[0] === 'restore'), scenario === 'rejected');
+      results.push(f.snapshot());
+    }
+    assert.deepEqual(results[1], results[0], scenario);
+  }
+});
+
+test('dimension value stages propagate constructor failures and do not build later components', () => {
+  const names = ['FirstDimensionScaling', 'ConstraintSolvePreparation', 'DimensionValueCommand'];
+  for (const composed of [false, true]) for (const [index, name] of names.entries()) {
+    const events = [], error = new Error(name);
+    assert.throws(() => dimensionStagesFixture(composed, { name, error }, events), value => value === error);
+    assert.deepEqual(events.map(event => event[0]), names.slice(0, index + 1));
+  }
+});
