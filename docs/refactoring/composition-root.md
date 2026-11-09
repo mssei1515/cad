@@ -1,5 +1,13 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 再監査と寸法表示test依存の分離（2026-11-09）
+
+DimensionTestDriver.createForEditingが後段createDisplayForEditingを返す。既存の実DimensionDisplayからplacement／layouts／metricsを共有し、型・幾何計算・表示定数・正規化・数値formatは既存namespaceからテスト生成時に取得する。後段入力はCanvas hover／Document reader／dimensionAppearanceの三つだけとし、geometryAppearanceのSketch可視性とは別ownerとして扱う。返すものは従来の実createDisplayのappearance六操作・cases二操作である。既存createSupport／createDisplay／createDisplaySupportと八fixtureの生成順、前段編集fixture→他test support→後段表示support→BrowserTestApi公開の順、test gateを維持する。Document／scope／外観／倍率／Selection／hoverは実行時に読み、値やstyleをsnapshot化せず、Canvas method・viewportのfinally復元と例外同一性を変えない。通常起動へ新しい操作・state・listener・moduleを追加しない。
+
+app.jsは1,690→1,681行（9行減）、非空白1,241→1,232行。寸法表示testの明示入力20→3項目とし、不要root alias十三個を除去した。TEMP cad-dimension-display-test-owners-proof.cjsで他app／test gate AST・既存DimensionTestDriver不変、未使用root bindingなし、後段三入力の初期化済みを確認した。200〜500行の全体目標は未達である。
+
+関連単体9件、構文627file・全単体2,202件・関連E2E299件が成功（14file、4.3m、exit 0）。実Geometry／DimensionDisplay／DimensionAppearance／Selection／Hoverで旧接続と比較する三件を追加し、cold生成と同じ八操作、精度・角度・半径・terminator計測、live Document／scope／外観／倍率、Canvas strokeのreceiver／引数／returnとSelection・hover・viewport復元、reader／painter例外同一性を検証した。表示test APIを使用する全3fileも関連E2Eへ含めた。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-dimension-display-test-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## 配置プレビューのCanvas owner接続（2026-11-09）
 
 CanvasDisplayのWorkspaceがcreatePlacementPreviewを提供し、同じctx／viewport／surface.withCanvasStateで既存PlacementPreviewRendererのrenderer→layerを連続生成する。実GeometryDisplayのSpline painter、Annotation rendererの二painter、Hatch layerの可変長member委譲とGeometryReadServices.hatchesのboundary query、既存HatchDataの外観・pattern originを共有する。LifecycleのreadModeとOperationSessions.preview.pointerは従来どおり操作時に読み、Block／Instance commandとprojection bundle生成の参照を維持する。実layerを返し、可視条件とpointer再読取り回数、描画順・style copy・Canvas save／finally restore・例外同一性を変えない。新しいmodel／state／cache／listener・moduleを追加せず、低水準PlacementPreviewRenderer.create／createLayerを維持する。
