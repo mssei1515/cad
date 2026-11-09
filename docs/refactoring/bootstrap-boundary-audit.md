@@ -1,5 +1,14 @@
 # Composition rootの残存責務と依存監査
 
+## Document Browser検証APIの共有Workspace接続（2026-11-10）
+
+DocumentTestDriver.createForWorkspaceは、同じDocumentWorkspace・GeometryCreation・Presentation・History・Block編集session・補助線設定・File feature／sessionとDOMを共有して履歴観測を準備し、元の後段でSketch削除・循環参照・File APIを生成する。Root／Default Sketch定数、Geometry型／参照とfileNameStemは既存namespaceから解決し、モデル／scope／履歴・名前・DOMは生成時に読まない。履歴観測の実state関数、固定Documentのlive名、Workspace.current、Geometryの参照、確認なし削除の第二引数false、循環fixtureの構築→serialize→load→解析→UI→参照エラー／badge読取り順を維持する。解析refreshの既定Object・一引数／member receiver、referenceState.errorReasonsのreceiver、importのawait後の名前とclock読取り、File／structuredClone・loadの既定引数とcatch境界を変えない。実history observation／fixture／File APIと全公開名・順序を保ち、raw factoryも維持する。test query guardと四つの生成位置、通常起動と保存形式は変更せず、新model・履歴・state・cache・listenerや汎用contextを追加しない。
+
+app.jsは1,545→1,543行（2行減）、非空白1,096→1,094行。四箇所の入力は4／8／14／14→9／2／6／4項目（合計40→21）。Document検証専用alias四つをrootから除いた。TEMP cad-document-browser-owners-proof.cjsで他root・既存Document driver AST不変、未使用binding・新しい未束縛参照なし、hook install前の依存初期化を確認した。全体目標は未完了。
+
+関連単体9件、構文629file・全単体2,271件・全E2E589件が成功（50file、21.5m、exit 0）。三件の旧接続比較を追加し、非同期File import／load／観測の公開順・clone・失敗境界、coldな段階生成、履歴／scope／DOMのlive読取り、実Geometry参照、確認なし削除と循環fixture reload順、十五段階の例外と途中modelを検証した。698製品／test入力と開始HEAD不変、無指定test listと50fileの589件が一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-document-browser-owners-{focused,check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutは変更していない。共通load helper接続変更後の現物で全体検証したが、数百行への全体目標の達成とは区別する。
+
+
 ## Properties三段階のWorkspace接続（2026-11-10）
 
 PropertiesDisplay.createForWorkspaceは、DocumentWorkspace・GeometryReadServices・CanvasInteraction・Presentationと既存の配置操作ownerを共有し、元の選択query生成を行う。後段createEditingForWorkspaceで編集scope・checkpoint・Parameter安定化・Projection／metadata・Annotationを接続し、さらにcreateViewForWorkspaceで解析・highlight・Block／寸法／ReferenceImage／Hatch／Splineの操作を接続する。三段階の生成位置と実PropertySelection→PropertyEditingFeature／AppearanceUI→Controller／Viewの順を保ち、Workspace.currentとAppearanceUIのeditingScope.current、選択用と表示用のoperation readerを統合しない。型・Geometry ID・Hatch外観等の静的依存と、既存ownerの通知／guard／codec・queryは内部で解決する。生成時にmodel・scope・mode・Selection・DOMを読まず、原query／編集／Viewと同じ実体・Geometry参照・live読取り順、lock拒否・preview／commit・actionの引数／receiver／返値・例外を維持する。既存factoryと段階APIは引き続き利用でき、新state・palette・cache・listenerや汎用app contextを作らない。通常UIと保存形式は変更しない。

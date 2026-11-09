@@ -11,7 +11,6 @@
   const {
     drawingOrderOwner,
   } = window.DrawingOrder;
-  const { fileNameStem } = window.DocumentFiles;
 
   const {
     MIN_ORIENTATION_LENGTH,
@@ -27,7 +26,6 @@
     vectorNorm,
     Point,
     Line,
-    CoincidentConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
     ConstraintSolver,
@@ -152,7 +150,7 @@
   const referenceConstraintState = window.ReferenceConstraintState.create({
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
   });
-  const { constraintIsOperational, refreshReferenceConstraintValidity } = referenceConstraintState;
+  const { refreshReferenceConstraintValidity } = referenceConstraintState;
   const sketchProjectionFeature = window.SketchProjectionFeature.createForWorkspace({
     documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices,
     referenceState: referenceConstraintState, interaction: canvasInteraction, presentation,
@@ -479,7 +477,7 @@
     repairMessage: () => documentApplication.blockConstraintRepairMessage,
   });
   const { effectiveDocumentName, refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint,
-    save: saveJot2DFile, saveAs: saveJot2DFileAs, importFileData } = documentFileFeature;
+    save: saveJot2DFile, saveAs: saveJot2DFileAs } = documentFileFeature;
 
 
 
@@ -1310,8 +1308,11 @@
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
-    const historyObservation = window.DocumentTestDriver.createHistoryObservation({ activeEditHistory, blockEditor, document, constructionCommand });
-    const readTestHistory = historyObservation.state;
+    const documentTestSupport = window.DocumentTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, presentation, document, history: historyFeature, blocks: blockEditingFeature,
+      constructionCommand, files: documentFileFeature, fileSession,
+    });
+    const readTestHistory = documentTestSupport.history.state;
     const { readSelectedGeometry: readTestSelectedGeometry, createApiForEditing: createSelectionTestApi } = window.CanvasSelectionTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation, clearSelection,
     });
@@ -1353,7 +1354,7 @@
       cssPxPerMm: CSS_PX_PER_MM, types: { Point, Line }, evaluateSpline: window.SplineGeometry.evaluate,
       hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
     });
-    const sketchDeletionFixture = window.DocumentTestDriver.createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine, addCircle, geometryRefForItem, deleteSketch });
+    const sketchDeletionFixture = documentTestSupport.createSketchDeletion({ resetModelState, deleteSketch });
     const propertiesTestFactories = window.PropertiesTestDriver.createBrowserFactories({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, blockQueries: blockEditingQueries,
       selectionHighlight, presentation, display: geometryDisplay, placement: dimensionPlacement, viewport, document, canvas, fixPointBtn,
@@ -1370,9 +1371,8 @@
     });
     const referenceLineMove = constraintTestFactories.createReferenceLineMove();
     const dependencyOrderFixture = constraintTestFactories.createDependencyOrderFixture();
-    const cyclicReferenceFixture = window.DocumentTestDriver.createCyclicReferenceFixture({
-      resetModelState, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, addPoint, markReferenceConstraint, CoincidentConstraint, serializeModel, loadModelData,
-      refreshConstraintAnalysis, updateUI, constraintIsOperational, readReferenceErrors: () => referenceConstraintState.errorReasons(), document,
+    const cyclicReferenceFixture = documentTestSupport.createCyclicReference({
+      resetModelState, markReferenceConstraint, serializeModel, loadModelData, analysis: constraintAnalysis, referenceState: referenceConstraintState,
     });
     const constraintCaseTestApi = constraintTestFactories.createEditingCases();
     const blockTestSupport = window.BlockTestDriver.createBrowserSupport({
@@ -1396,10 +1396,8 @@
       snapshotModelState, refreshConstraintAnalysis, dimensionDrag,
     });
     const themeObservation = propertiesTestFactories.createThemeObservation();
-    const documentTestApi = window.DocumentTestDriver.createFileApi({
-      performance, File, document, fileSession, readDocumentName: () => documentModel.documentName,
-      effectiveDocumentName, serializeModel, importFileData, loadModelData,
-      fileNameStem, resetHistory, updateUI, draw, currentScope: workspace.current,
+    const documentTestApi = documentTestSupport.createFileApi({
+      performance, File, serializeModel, loadModelData,
     });
     const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
     const responsiveDragFixture = window.GeometryDragTestDriver.createResponsiveFixture({
