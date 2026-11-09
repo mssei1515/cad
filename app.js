@@ -121,9 +121,6 @@
     access: sketchEditAccess, pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
   const { guardSketchEdit, guardSelectionEdit } = sketchEditAccess;
   const { selectionSketchId } = selectionScopeQuery;
-  const {
-    selectedElementCount,
-  } = canvasSelection;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -409,13 +406,10 @@
   });
   const { solveSketchAndDependents } = sketchSolving;
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
-  const filletCommand = authoringTools.createFillet({
-    defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
-    pending: pendingCommandSession, readPointer: pointerInteractionController.readLastPointer,
-    prepareStart: () => drawOperationLifecycle.prepare("fillet"), guardSketchProjectionShapeEdit,
-    valueInput: dimensionInputController, checkpoint: editingCheckpoint,
-    stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
-    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
+  const { fillet: filletCommand, createCircleCenterCross, createSplineEditing } = authoringTools.createEditing({
+    checkpoint: editingCheckpoint, solving: sketchSolving, parameters: parameterStabilization, analysis: constraintAnalysis,
+    editingScope: editingScopeBinding, solver, placement: dimensionPlacement, valueInput: dimensionInputController,
+    projection: sketchProjectionFeature, acceptError: CONSTRAINT_ACCEPT_ERROR,
     updateGeometrySelectionUI,
   });
   const blockConfigurationCommand = blockEditingFeature.createConfiguration({
@@ -554,9 +548,8 @@
 
 
 
-  const circleCenterCrossCommand = authoringTools.createCircleCenterCross({
-    checkpoint: editingCheckpoint, solveSketchAndDependents, resultIsAccepted, minOrientationLength: MIN_ORIENTATION_LENGTH,
-    selectedElementCount, invalidateAnalysis: () => constraintAnalysis.invalidate(),
+  const circleCenterCrossCommand = createCircleCenterCross({
+    resultIsAccepted, minOrientationLength: MIN_ORIENTATION_LENGTH,
   });
   const { start: startCircleCenterCrossCommand } = circleCenterCrossCommand;
 
@@ -564,9 +557,8 @@
     connectedComponentFromSeeds, constraintGraphNodes, localSolveLines, minLineLength: MIN_LINE_LENGTH,
   });
 
-  const splineEditing = authoringTools.createSplineEditing({
-    editingScope: editingScopeBinding, checkpoint: editingCheckpoint, parameters: parameterStabilization, analysis: constraintAnalysis,
-    access: sketchEditAccess, guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion,
+  const splineEditing = createSplineEditing({
+    constraintReferences, guardDimensionSymbolDeletion,
   });
 
   const blockSelectionQuery = blockEditingFeature.createSelectionQuery({

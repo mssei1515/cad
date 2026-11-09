@@ -460,7 +460,7 @@ test('authoring circle cross preserves failed solve rollback and creation reject
   assert.deepEqual(f.calls,[['cancelConstraint',''],['cancelPending',''],'reject']);
  }
 });
-function geometryFoundationFixture({composed=false,probe=null}={}){
+function geometryFoundationFixture({composed=false,probe=null,configure=null}={}){
  const sandbox={window:{},structuredClone};vm.createContext(sandbox);
  const sources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
  for(const file of sources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),sandbox,{filename:file});
@@ -492,6 +492,7 @@ function geometryFoundationFixture({composed=false,probe=null}={}){
   interaction:{pointUsage,selection,lifecycle,access:{canCreateInActiveSketch:ports.canCreateInActiveSketch,rejectRootSketchCreation:ports.rejectRootSketchCreation}},
   sessions:{preview,pending},presentation:{settings:{applicationText:ports.applicationText},setHint:ports.setHint,updateUI:ports.updateUI,draw:ports.draw,log:ports.log},
   viewport:{get scale(){read();return state.scale??1;}}};
+ if(configure)configure({w,state,owners,ports,events,ids,foundation});
  const remaining={...ports};
  for(const key of ['samePosition','sketchContext','pointUsage','geometryReads','isVisibleSketchElement','scale','selection','preview','cancelPendingCommand',
   'canCreateInActiveSketch','rejectRootSketchCreation','setMode','applicationText','setHint','updateUI','draw','log'])delete remaining[key];
@@ -747,3 +748,154 @@ test('editing authoring retains constructor stages and late checkpoint failures 
   for(const key of Object.keys(arrays)){assert.equal(f.state.scope[key],arrays[key]);assert.equal(arrays[key].length,0);}
  }
 });
+
+(function () {
+"use strict";
+function editingToolStagesFixture(composed, failAt = null, construction = []) {
+ const calls=[],captured={},actual={},state={ready:false,success:true,projectionAllowed:true,editable:true,failure:null,pointer:{x:10,y:10}};
+ let common,checkpoint,solving,parameters,analysis,solver,projection,editingScope;
+ const parent=geometryFoundationFixture({composed:true,configure(f){
+  const {w,owners,ports}=f,ready=()=>assert.equal(state.ready,true,'no eager editor/model/UI read');
+  f.state.scope=w.DocumentState.create();state.parent=f.state;
+  const note=name=>(...args)=>{ready();calls.push([name,...args]);};
+  ports.clearSelection=()=>{ready();owners.interaction.selection.clear();calls.push(['clear']);};
+  ports.pushModelConstraint=(constraint,sketchId=f.state.sketch)=>{ready();constraint.sketchId=sketchId;f.state.scope.constraints.push(constraint);};
+  ports.recordHistory=note('history');ports.setHint=note('hint');ports.updateUI=note('ui');ports.draw=note('draw');
+  ports.cancelConstraintTargetCommand=note('cancel-target');ports.updateToolbar=note('toolbar');
+  for(const name of ['setHint','updateUI','draw'])owners.presentation[name]=ports[name];
+  const lifecycle={...owners.interaction.lifecycle,prepare(mode){assert.equal(this,lifecycle);ready();calls.push(['prepare',mode]);return state.result;}};
+  owners.interaction.lifecycle=lifecycle;
+  owners.sessions.pointer={readLastPointer:function(){assert.equal(this,undefined);ready();return state.pointer;}};
+  owners.interaction.access.guardSketchEdit=(id,operation)=>{ready();calls.push(['guard',id,operation]);return state.editable;};
+  for(const name of ['isPointUsedByLine','isPointUsedByCircle','isPointUsedByArc'])owners.interaction.pointUsage[name]=()=>false;
+  analysis={invalidate(){assert.equal(this,analysis);ready();calls.push(['analysis']);return state.result;},
+   refresh(...args){assert.equal(this,analysis);assert.equal(args.length,1);ready();calls.push(['refresh',args[0]]);if(state.failure)throw state.failure;return state.result;}};
+  const real=w.EditingCheckpoint.create({currentScope:()=>{ready();return f.state.scope;},ids:f.ids,invalidateProjection:note('projection-invalidate'),invalidateAnalysis:()=>analysis.invalidate()});
+  checkpoint=Object.fromEntries(['captureGeometry','restoreGeometry','captureValues','restoreValues'].map(name=>[name,function(...args){
+   assert.equal(this,undefined);ready();calls.push([name]);return real[name](...args);
+  }]));
+  const result=()=>{ready();if(state.failure)throw state.failure;return {success:state.success,result:{errorNorm:state.success?0:1,reason:'fixture'}};};
+  solving={solveSketchAndDependents:function(id){assert.equal(this,undefined);calls.push(['solve',id]);return result();}};
+  parameters={stabilize:function(id){assert.equal(this,undefined);calls.push(['stabilize',id]);return result();}};
+  solver={syncLineOrientationHints(){assert.equal(this,solver);ready();calls.push(['orientation']);return state.result;}};
+  projection={guardSketchProjectionShapeEdit(items){ready();calls.push(['projection-guard',items.map(item=>item.id)]);return state.projectionAllowed;}};
+  editingScope={get current(){ready();return state.bound??f.state.scope;}};
+  common={checkpoint,solving,parameters,analysis,editingScope,solver,placement:{defaultDimensionForTarget:()=>({display:{}})},
+   valueInput:{hide:note('hide')},projection,acceptError:0.0125,updateGeometrySelectionUI:note('selection-ui')};
+  for(const [name,method]of [['FilletFeature','create'],['CircleCenterCrossCommand','create'],['SplineEditCommand','create']]){
+   const original=w[name];w[name]={...original,[method](options){
+    construction.push(name);if(failAt?.name===name)throw failAt.error;captured[name]=options;return actual[name]=original[method](options);
+   }};
+  }
+ }});
+ parent.state.ready=false;
+ let fillet,createCircleCenterCross,createSplineEditing;
+ if(composed)({fillet,createCircleCenterCross,createSplineEditing}=parent.tools.createEditing(common));
+ else {
+  const {activeSketchId}=parent.owners.documentWorkspace.sketches,{stabilize}=parameters;
+  fillet=parent.tools.createFillet({defaultDimensionForTarget:common.placement.defaultDimensionForTarget,syncLineOrientationHints:()=>solver.syncLineOrientationHints?.(),
+   pending:parent.owners.sessions.pending,readPointer:parent.owners.sessions.pointer.readLastPointer,prepareStart:()=>parent.owners.interaction.lifecycle.prepare('fillet'),
+   guardSketchProjectionShapeEdit:projection.guardSketchProjectionShapeEdit,valueInput:common.valueInput,checkpoint,
+   stabilize:()=>stabilize(activeSketchId()),acceptError:common.acceptError,invalidateAnalysis:()=>{analysis.invalidate();},
+   refreshConstraintAnalysis:(options={})=>analysis.refresh(options),updateGeometrySelectionUI:common.updateGeometrySelectionUI});
+  createCircleCenterCross=({resultIsAccepted,minOrientationLength})=>parent.tools.createCircleCenterCross({checkpoint,solveSketchAndDependents:solving.solveSketchAndDependents,
+   resultIsAccepted,minOrientationLength,selectedElementCount:parent.owners.interaction.selection.selectedElementCount,invalidateAnalysis:()=>analysis.invalidate()});
+  createSplineEditing=({constraintReferences,guardDimensionSymbolDeletion})=>parent.tools.createSplineEditing({editingScope,checkpoint,parameters,analysis,
+   access:parent.owners.interaction.access,guardSketchProjectionShapeEdit:projection.guardSketchProjectionShapeEdit,constraintReferences,guardDimensionSymbolDeletion});
+ }
+ assert.deepEqual(construction,['FilletFeature']);assert.deepEqual(calls,[]);
+ const cross=createCircleCenterCross({resultIsAccepted:result=>result.errorNorm===0,minOrientationLength:1e-8});
+ assert.deepEqual(construction,['FilletFeature','CircleCenterCrossCommand']);assert.deepEqual(calls,[]);
+ const spline=createSplineEditing({constraintReferences:{constraintReferencesPoint:()=>false},guardDimensionSymbolDeletion:()=>true});
+ assert.deepEqual(calls,[]);state.ready=true;parent.state.ready=true;
+ function snapshot(){
+  const scope=parent.state.scope;
+  return JSON.stringify({calls,ids:parent.ids.snapshot(),points:scope.points.map(p=>[p.id,p.x,p.y]),lines:scope.lines.map(l=>[l.id,l.p1.id,l.p2.id]),
+   arcs:scope.arcs.map(a=>[a.id,a.radiusValue]),constraints:scope.constraints.map(c=>c.constructor.name),splines:scope.splines.map(s=>s.fitPoints.map(p=>p.id))});
+ }
+ return {...parent,state,calls,captured,actual,construction,common,fillet,cross,spline,snapshot};
+}
+
+test('authoring editing stages keep real Fillet, cross and Spline construction cold and separate while sharing existing owners',()=>{
+ for(const composed of [false,true]){
+  const f=editingToolStagesFixture(composed);
+  assert.deepEqual(f.construction,['FilletFeature','CircleCenterCrossCommand','SplineEditCommand']);
+  assert.equal(f.fillet,f.actual.FilletFeature);assert.equal(f.cross,f.actual.CircleCenterCrossCommand);assert.equal(f.spline,f.actual.SplineEditCommand);
+  assert.equal(f.captured.FilletFeature.checkpoint,f.common.checkpoint);
+  assert.equal(f.captured.FilletFeature.pending,f.owners.sessions.pending);
+  assert.equal(f.captured.FilletFeature.readPointer,f.owners.sessions.pointer.readLastPointer);
+  assert.equal(f.captured.SplineEditCommand.snapshotModelState,f.common.checkpoint.captureValues);
+  assert.equal(f.captured.CircleCenterCrossCommand.checkpoint.capture,f.common.checkpoint.captureGeometry);
+  assert.equal(f.captured.SplineEditCommand.stabilizeActiveParameterNamespace,f.common.parameters.stabilize);
+  f.state.result={token:true};
+  assert.equal(f.captured.FilletFeature.prepareStart(),f.state.result);
+  assert.equal(f.captured.FilletFeature.invalidateAnalysis(),undefined);
+  assert.equal(f.captured.CircleCenterCrossCommand.invalidateAnalysis(),f.state.result);
+  assert.equal(f.captured.FilletFeature.refreshConstraintAnalysis(),f.state.result);
+  const options={force:true};assert.equal(f.captured.FilletFeature.refreshConstraintAnalysis(options,'ignored'),f.state.result);
+  assert.equal(f.calls.at(-1)[1],options);
+  const bound=f.w.DocumentState.create();f.state.bound=bound;
+  assert.equal(f.captured.SplineEditCommand.currentScope(),bound);assert.notEqual(bound,f.state.parent.scope);
+  f.state.parent.sketch='S2';f.captured.FilletFeature.stabilize();assert.deepEqual(f.calls.at(-1),['stabilize','S2']);
+ }
+});
+
+test('authoring editing stages preserve actual fillet geometry, pending, rollback, IDs and history on acceptance and refusal',()=>{
+ for(const scenario of ['accepted','solve-refused','projection-refused','solver-threw']){
+  const traces=[];
+  for(const composed of [false,true]){
+   const f=editingToolStagesFixture(composed),g=f.foundation.geometry;
+   const corner=g.addPoint(0,0,false,'endpoint'),a=g.addPoint(100,0,false,'endpoint'),b=g.addPoint(0,100,false,'endpoint');
+   const l1=g.addLine(corner,a),l2=g.addLine(corner,b);
+   f.state.success=scenario!=='solve-refused';f.state.projectionAllowed=scenario!=='projection-refused';
+   assert.equal(f.fillet.start(l1,l2,{x:10,y:10}),scenario!=='projection-refused');
+   const marker=new Error('solver');f.state.failure=scenario==='solver-threw'?marker:null;
+   if(f.state.failure)assert.throws(()=>f.fillet.submit({x:10,y:10}),error=>error===marker);
+   else f.fillet.submit({x:10,y:10});
+   const kept=scenario==='accepted'||scenario==='solver-threw';
+   assert.equal(f.state.parent.scope.arcs.length,kept?1:0);assert.equal(l1.p2,a);assert.equal(l2.p2,b);
+   assert.equal(l1.p1===corner,!kept);assert.equal(f.calls.filter(c=>c[0]==='history').length,scenario==='accepted'?1:0);
+   assert.equal(f.calls.some(c=>c[0]==='restoreGeometry'),scenario==='solve-refused');
+   traces.push(f.snapshot());
+  }
+  assert.equal(traces[1],traces[0],scenario);
+ }
+});
+
+test('authoring editing stages preserve circle cross and Spline operations with real geometry checkpoints and failed solve restoration',()=>{
+ for(const operation of ['cross','spline'])for(const success of [true,false]){
+  const traces=[];
+  for(const composed of [false,true]){
+   const f=editingToolStagesFixture(composed),g=f.foundation.geometry,scope=f.state.parent.scope;
+   f.state.success=success;
+   if(operation==='cross'){
+    const center=g.addPoint(50,50),circle=g.addCircle(center,20);const result=f.cross.createCrosses([circle]);
+    assert.equal(result,success);assert.equal(scope.circles[0],circle);assert.equal(scope.lines.length,success?2:0);
+    assert.equal(f.calls.some(c=>c[0]==='restoreGeometry'),!success);
+   }else{
+    const points=[g.addPoint(0,0),g.addPoint(20,10),g.addPoint(40,-10),g.addPoint(60,0)],spline=g.addSpline(points);
+    f.spline.activate(spline);assert.equal(f.spline.current.spline,spline);
+    assert.equal(f.spline.addPoint(spline,{x:30,y:5}),success);
+    assert.equal(spline.fitPoints.length,success?5:4);assert.equal(spline.fitPoints[0],points[0]);
+    assert.equal(f.calls.some(c=>c[0]==='restoreValues'),!success);
+   }
+   assert.equal(f.calls.filter(c=>c[0]==='history').length,success?1:0);traces.push(f.snapshot());
+  }
+  assert.equal(traces[1],traces[0],operation+'/'+success);
+ }
+});
+
+test('authoring editing stages preserve constructor and live callback error identity without starting later stages',()=>{
+ const names=['FilletFeature','CircleCenterCrossCommand','SplineEditCommand'];
+ for(const composed of [false,true]){
+  for(const [index,name]of names.entries()){
+   const construction=[],error=new Error(name);
+   assert.throws(()=>editingToolStagesFixture(composed,{name,error},construction),value=>value===error);
+   assert.deepEqual(construction,names.slice(0,index+1));
+  }
+  const f=editingToolStagesFixture(composed),error=new Error('refresh');f.state.failure=error;
+  assert.throws(()=>f.captured.FilletFeature.refreshConstraintAnalysis(),value=>value===error);
+ }
+});
+
+})();

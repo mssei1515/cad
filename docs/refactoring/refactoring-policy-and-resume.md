@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,529行、非空白1,080行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,521行、非空白1,072行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：作図編集の共通依存と生成段階（2026-11-10）
+
+BasicDrawingTools.createAuthoringForEditingが返すcreateEditingは、既に共有するDocumentWorkspace・CanvasInteraction・操作sessionからLifecycle／Selection／pending／pointerを使い、後段のcheckpoint・求解・Parameter安定化・解析・編集scopeとFillet用依存を接続する。Filletは元の位置で生成し、円中心十字とSpline編集は返したfactoryを元の別々の位置で呼ぶ。Offsetはcheckpoint生成前のまま保持し、三コマンドを早期に一括生成しない。共有のGeometry・IDs・Selection・実checkpointを維持し、geometry snapshotとvalue snapshot、Workspaceとbound editing scope、安定化／求解のbare callback、analysis／Solver／Lifecycleのmember receiver、Filletの無返値invalidateとcrossの返値を使い分ける。
+
+app.jsは1,529→1,521行（8行減）、非空白1,080→1,072行。対象の入力は13／6／8→11／2／2項目（合計27→15）。selectedElementCountのroot別名を除いた。rootは348文・558bindingで、後段factory二つの明示接続によりbinding数自体は一つ増える。新global・操作state・listener・setter-only bridgeや汎用contextは作らず、既存raw factory／個別create API・通常UI・保存形式を維持する。全体目標は未完了。
+
+TEMP cad-authoring-editing-stages-proof.cjsで変更対象外のroot ASTとraw作図実装・三command・index.html不変、未使用binding・新しい未束縛参照なしを確認した。四件の旧接続比較は、実Fillet／Cross／Splineと実EditingCheckpointを使い、coldな別段階生成・参照同一性・constructor例外停止、scope／active IDのlive読取り・callback receiver／既定値／引数／返値／例外、実Geometry・pending・ID／履歴、求解拒否復元と例外時の途中状態を検証する。
+
+関連単体42件、構文631file・全単体2,288件・関連E2E260件が成功（13file、3.7m、exit 0）。四件の実owner比較でcoldな別段階生成・実API／checkpoint共有・constructor例外、live scope・active ID・callback receiver／既定値／引数／返値／例外、実Fillet／Cross／SplineのGeometry・pending・IDs／履歴と求解拒否復元・例外時の途中状態を検証した。699製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-authoring-editing-stages-{focused,check,unit,e2e,proof,smoke}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。直前07f5936の全E2E589件成功（21.6m）とは別の今回変更後の関連検証であり、全体目標は未完了。
+
+基準developは07f5936、作業branchはcodex/authoring-editing-stages。開始時週枠残量44%。直前07f5936の全E2E589件成功（21.6m）とは今回の関連検証を区別する。次はWorkspace UIの生成・bind／start境界、構築と別名の残存依存を検討する。細かなport追加やtest hooksの丸ごと移動に目標を縮小せず、巨大な代替bootstrapも作らない。mainは停止条件到達時の全体検証後に最後に反映する。
 
 ### 最新：寸法値編集の段階的な組立て（2026-11-10）
 
