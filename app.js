@@ -31,7 +31,6 @@
     ConstraintSolver,
   } = window.GeometrySolver;
 
-  const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const {
     constraintReferencesPoint,
@@ -83,7 +82,7 @@
     constraintSketchId,
   } = sketchContext;
 
-  const { geometryRefForItem, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
+  const { geometryRefForItem } = window.GeometryObjects;
   const { services: geometryReadServices, createEditingScope, createPersistence } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
@@ -198,7 +197,6 @@
   const { blockDefinitionScopeError } = blockEditingQueries;
 
   const sketchSolveResultState = window.SketchSolving.createState();
-  const { clearSketchSolveState } = sketchSolveResultState;
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
@@ -727,7 +725,6 @@
     referenceImageInteraction, clearSelection, solveAndRefresh,
     resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
   });
-  function rejectReferencedGeometryDeletion(instances, label) { return deletionFeature.rejectReferences(instances, label); }
   function deleteElements(options) { return deletionFeature.remove(options); }
   function deleteCurrentSelection() { return deletionFeature.removeSelection(); }
 
@@ -918,11 +915,9 @@
 
 
 
-  const sketchDeletionCommand = sketchEditing.createDeletion({
-    rejectReferencedGeometryDeletion, log, geometryElementKey, guardDimensionSymbolDeletion,
-    annotationReferencesRemovedGeometry, clearSketchSolveState,
-    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, solveSketchAndDependents,
-    refreshConstraintAnalysis, confirmDeletion: message => window.confirm(message),
+  const sketchDeletionCommand = sketchEditing.createDeletionForEditing({
+    deletion: deletionFeature, guardDimensionSymbolDeletion, solveState: sketchSolveResultState,
+    solving: sketchSolving, analysis: constraintAnalysis, confirmDeletion: message => window.confirm(message),
   });
   const { remove: deleteSketch } = sketchDeletionCommand;
 

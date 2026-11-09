@@ -98,6 +98,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：Sketch削除の共有owner接続（2026-11-10）
+
+SketchEditingFeature.createForInteractionのeditingへcreateDeletionForEditingを追加した。既に共有するPresentation／Sketch／Workspaceと、後段のDeletionFeature・symbol guard・Solve State／Solving・Analysis・確認callbackから実SketchDeletionCommandを元の位置で生成する。Geometry keyとAnnotation削除判定は既存namespaceから取得する。root専用の参照拒否委譲と三つの未使用別名を除き、削除固有の依存入力を10→6項目にした。
+
+参照拒否は二引数のmember呼出し、Analysis invalidateは返値なし、refreshはoptions既定値{}と一引数のmember呼出しを保つ。Solve State消去と求解は元の裸関数参照のまま。操作時のWorkspace scopeと既存Selection／Sketch／Geometry参照、削除拒否・確認・履歴・例外時の部分更新は実commandが所有し、共通rollbackを追加しない。旧createDeletionと全raw API、UI／保存形式v26を維持する。
+
+app.jsは1,504→1,499行（5行減）、非空白1,055→1,050行。AST比較で削除構築・専用委譲・不要別名以外のrootと既存module API不変、削除command／Sketch command／Tree controller・index・全E2E不変、新しい未使用／未束縛参照なしを確認した。
+
+関連単体17件、構文631file・全単体2,308件・関連E2E244件が成功（10file、3.5m、exit 0）。三つの新旧比較でcold生成・実owner参照・引数／既定値・receiver／返値／例外、操作時のWorkspace差替え、ロック／参照／symbol／確認拒否と成功時のGeometry同一性・一履歴、constructor／消去／解析／求解／refresh失敗時の部分更新を確認した。699製品／test入力と開始HEAD不変、選択10fileのtest list244件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-sketch-deletion-owners-{focused,check,unit,e2e,proof,smoke}.logとsource-hashes／selection／filter-environment／e2e-receipt／last-run JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、cc97d9eの全589件成功とは区別する。全体目標は未完了。
+
+基準developは75bfab2、作業branchはcodex/sketch-deletion-owners、開始時週枠残量40%。削除・Sketch移動／権限／投影・派生コピー・Block・UI・保存読込の関連10fileを選択した。直前の関連E2E234件と、この単位の変更後検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：読み取り専用寸法の共有入口（2026-11-10）
 
 ConstraintEditing.createForWorkspaceが、完成済みCommit supportから読み取り専用寸法の候補照会・追加を接続し、immutableなreadOnlyDimensions（forPlacement／add）として公開する。通常のDimensionPlacementと既存Block Browser test driverには同じ関数参照を渡す。rootから二つのcallback入力・委譲と専用Query別名を除き、CommitとQueryの組合せを再注入させない。三つの既存component参照を使い、新しいmodel／session／cache／listenerは作らない。
