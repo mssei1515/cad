@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## Projection metadata編集の共有owner接続（2026-11-10）
+
+SketchProjectionFeature.createForWorkspaceの後段createModelEditingは、既に生成した同じquery・Workspace.current・SketchContext・GeometryReadServicesの参照解決・ReferenceConstraintStateを使い、実SketchProjectionEditingを生成する。Geometry生成とConstraintReferencesだけを後段で受け、既存addPointToSketch／constraintReferencesPointを裸関数として接続する。GeometryObjectsのkind／ref、GeometryIds.nextSeq、Appearance.normalizeAppearanceは既存namespaceから取得する。編集中scopeとの切替やqueryの複製を行わず、rootは従来のGeometry生成直後にこのfactoryを呼ぶ。共有target端点の分離は明示namespaceに作用し、metadata同期はその時点のWorkspaceを使う。point ID・座標・固定／Sketch／外観・Spline cache、参照先の再接続、既存fit pointの再利用・追加・不要点の除去、操作拒否と例外時の途中状態は既存Editing／Geometry／Reference ownerのまま維持する。モデル・ID allocator・query cache・listenerを追加せず、raw factory、保存形式、UIや求解方針を変更しない。
+
+app.jsは1,588→1,585行（3行減）、非空白1,139→1,136行。metadata編集生成の十一入力を二つの既存ownerへまとめ、rootからnextSeq／normalizeAppearance／geometryKindForItemの専用aliasを除いた。TEMP cad-projection-model-editing-proof.cjsで他root／既存ProjectionFeature AST、raw Editing／Query／GeometryCreation／References／GeometryIds／Appearance不変、未使用root bindingなし、後段依存の初期化順を確認した。数百行への全体目標は未完了。
+
+関連単体17件、構文627file・全単体2,247件・関連E2E354件が成功（16file、5.1m、exit 0）。実Editing／Queries／GeometryCreation／GeometryIds／ReferenceState／References／Appearanceを旧接続と比較する三件を追加し、cold生成と実体／capability共有、Workspaceと独立した明示namespaceの共有端点分離・ID／固定／外観、live Workspace置換とSpline source再接続・既存点再利用／追加／除去・construction／closed／cache・操作拒否、constructorと五つの読取／確保／参照／外観変換例外および既存の途中状態を検証した。新fixtureはmetadata処理に必要なnamespace配列を備え、scope取得例外と処理callback例外を別のmarkerとして比較した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-projection-model-editing-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## Sketch Projection照会とworkspace編集のowner接続（2026-11-10）
 
 SketchProjectionFeature.createForWorkspaceは、実SketchProjectionQueries→既存source選択→既存SketchProjectionCommandをこの順に生成し、実queryを編集APIとともに公開する。queriesはWorkspace.current、source／commitは最後にbindしたeditingScope.currentを従来どおり使い分ける。DocumentWorkspaceのSketchContextとID、CanvasInteractionのaccess／Selection／Lifecycle／Hover、GeometryReadServices、Presentationの翻訳／hint／UI／drawを同じ実体で共有する。ReferenceConstraintStateは既存の外部ownerを使い、生成も有効性stateもここへ移さない。operand・矩形照会などの後段callbackはrootの遅延接続を保持する。queryのtarget index・legacy／operational判定、commandのsource／mode／instance確定・取消・history・例外時の途中状態は各既存ownerに残す。scope・Selection・言語・参照を生成時に読まず、追加cache・session・listener・global contextを作らない。raw create／createForEditingと既存Queries／ReferenceState／Command API、保存形式を維持する。

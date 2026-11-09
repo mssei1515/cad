@@ -64,7 +64,15 @@
       operandElement, readProjectionRectangle, cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, clearSnap, updateToolbar,
       setHint: presentation.setHint, applicationText: presentation.settings.applicationText, updateUI: presentation.updateUI, draw: presentation.draw,
       normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory });
-    return Object.freeze({ ...feature, queries });
+    function createModelEditing({ geometry, references }) {
+      const { geometryRefForItem, geometryKindForItem } = window.GeometryObjects;
+      return window.SketchProjectionEditing.create({ currentScope: documentWorkspace.workspace.current, queries,
+        resolveGeometryRef: readServices.reads.resolveGeometryRef, geometryRefForItem, geometryKindForItem,
+        constraintSketchId: documentWorkspace.sketches.constraintSketchId, constraintIsOperational: referenceState.constraintIsOperational,
+        addPointToSketch: geometry.addPointToSketch, constraintReferencesPoint: references.constraintReferencesPoint,
+        nextSeq: window.GeometryIds.nextSeq, normalizeAppearance: window.Appearance.normalizeAppearance });
+    }
+    return Object.freeze({ ...feature, queries, createModelEditing });
   }
   window.SketchProjectionFeature = Object.freeze({ createForWorkspace, createForEditing, create });
 })();
