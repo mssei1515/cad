@@ -123,7 +123,19 @@
         getPointerPreview: () => preview.pointer, setPointerPreview: value => { preview.setPointer(value); }, getLastPointerWorld: pointer.readLastPointer,
         setMode: lifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory });
     }
-    return Object.freeze({ ...feature, createPlacement });
+    function createConfiguration({ references, guardDimensionSymbolDeletion, updateBlockUI, recordHistory }) {
+      const { key: geometryRefKey, parseId: parseGeometryRefId } = window.GeometryRef;
+      const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
+      const { setHint, log, updateUI, draw } = presentation;
+      return window.BlockConfigurationCommand.create({ currentScope: workspace.current,
+        blockDefinitionById: catalog.blockDefinitionById, blockProjectionBundle: projections.blockProjectionBundle,
+        createBlockProjectionBundle: projections.createBlockProjectionBundle, blockDefinitionDrawableSketchIds: catalog.blockDefinitionDrawableSketchIds,
+        blockDefinitionGeometrySketchIds: catalog.blockDefinitionGeometrySketchIds, constraintGraphNodes: references.constraintGraphNodes,
+        geometryRefKey, parseGeometryRefId, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion, canvasSelection: interaction.selection,
+        clearRemovedHover: removed => { if (removed.has(interaction.hover.current.dimension)) interaction.hover.update({ dimension: null }); },
+        invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory });
+    }
+    return Object.freeze({ ...feature, createPlacement, createConfiguration });
   }
   window.BlockEditingFeature = Object.freeze({ create, createForWorkspace });
 })();

@@ -454,3 +454,101 @@ test('Block workspace placement preserves scope rejection, cancellation, partial
     }
   }
 });
+
+function configurationOwnersFixture(composed, probe = {}) {
+  const f = workspacePlacementFixture(true), { owners } = f, effects = [], state = { allowed: true, failAt: null };
+  Object.assign(probe, { f, effects });
+  const step = (name, ...args) => { assert.equal(f.state.ready, true); effects.push([name, ...args]); if (state.failAt === name) throw probe.error; };
+  const makeLine = (id, sketchId, y) => Object.assign(new g.Line("BI1@" + id,
+    Object.assign(new g.Point("BI1@" + id + "a", 0, y), { sketchId }), Object.assign(new g.Point("BI1@" + id + "b", 10, y), { sketchId })), { sketchId });
+  const a = makeLine("L1", "S1", 0), b = makeLine("L2", "S2", 5), definition = scope("BD1");
+  definition.name = "Part"; definition.sketches.push({ id: "S2", kind: "sketch", parentId: "ROOT" }); definition.lines = [a, b];
+  definition.points = [a.p1, a.p2, b.p1, b.p2]; f.document.blockDefinitions.push(definition);
+  const retained = new g.HorizontalConstraint(a), removed = new g.HorizontalConstraint(b);
+  const instance = { id: "BI1", definitionId: "BD1", enabledSketchIds: ["S1", "S2"] }; f.document.constraints = [retained, removed];
+  const bundle = lines => ({ points: lines.flatMap(line => [line.p1, line.p2]), lines, circles: [], arcs: [], splines: [] });
+  Object.assign(owners.readServices.projections, {
+    blockProjectionBundle(item) { "use strict"; assert.equal(this, undefined); step("bundle"); assert.equal(item, instance); return bundle([a, b]); },
+    createBlockProjectionBundle(item, value, ids) { "use strict"; assert.equal(this, undefined); step("project"); assert.equal(item, instance); assert.equal(value, definition); return bundle(ids.includes("S2") ? [a, b] : [a]); },
+    invalidateBlockProjectionCache(id) { "use strict"; assert.equal(this, undefined); step("invalidate", id); },
+  });
+  const hover = w.CanvasHover.create({ isEndpointPoint: () => false });
+  const hoverPort = { get current() { step("hover-read"); return hover.current; }, update(patch) { assert.equal(this, hoverPort); step("hover-update"); return hover.update(patch); } };
+  owners.interaction.hover = hoverPort;
+  Object.assign(owners.presentation, { setHint: (...args) => step("hint", ...args), log: text => step("log", text), updateUI: () => step("ui"), draw: () => step("draw") });
+  const references = w.ConstraintReferences.create({ resolveGeometryRef: () => null });
+  const input = { references, guardDimensionSymbolDeletion: constraints => { step("guard"); assert.equal(constraints.has(removed), true); return state.allowed; },
+    updateBlockUI: () => step("block-ui"), recordHistory: label => step("history", label) };
+  let captured, result; const original = w.BlockConfigurationCommand;
+  w.BlockConfigurationCommand = { ...original, create(ports) { captured = ports; if (probe.constructorError) throw probe.constructorError; return result = original.create(ports); } };
+  let configuration;
+  try {
+    configuration = composed ? f.feature.createConfiguration(input) : w.BlockConfigurationCommand.create({ currentScope: f.workspace.current,
+      blockDefinitionById: owners.readServices.catalog.blockDefinitionById, blockProjectionBundle: owners.readServices.projections.blockProjectionBundle,
+      createBlockProjectionBundle: owners.readServices.projections.createBlockProjectionBundle,
+      blockDefinitionDrawableSketchIds: owners.readServices.catalog.blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds: owners.readServices.catalog.blockDefinitionGeometrySketchIds,
+      constraintGraphNodes: references.constraintGraphNodes, geometryRefKey: w.GeometryRef.key, parseGeometryRefId: w.GeometryRef.parseId,
+      annotationReferencesRemovedGeometry: w.AnnotationAnchorData.referencesRemovedGeometry, guardDimensionSymbolDeletion: input.guardDimensionSymbolDeletion,
+      canvasSelection: owners.interaction.selection, clearRemovedHover: values => { if (values.has(hoverPort.current.dimension)) hoverPort.update({ dimension: null }); },
+      invalidateBlockProjectionCache: owners.readServices.projections.invalidateBlockProjectionCache, ...owners.presentation,
+      updateBlockUI: input.updateBlockUI, recordHistory: input.recordHistory });
+  } finally { w.BlockConfigurationCommand = original; }
+  assert.deepEqual(effects, []); assert.deepEqual(f.events, []); f.state.ready = true;
+  owners.interaction.selection.set("dimensionConstraint", removed); owners.interaction.selection.set("constraint", removed); hover.update({ dimension: removed });
+  return { ...f, configuration, result, captured, input, cfgState: state, effects, hover, instance, retained, removed, definition, a, b };
+}
+
+test("Block configuration shares cold feature owners and mutates the live Workspace rather than the last bound editing scope", () => {
+  const snapshots = [];
+  for (const composed of [false, true]) {
+    const f = configurationOwnersFixture(composed), selection = f.owners.interaction.selection;
+    assert.equal(f.configuration, f.result); assert.equal(Object.isFrozen(f.configuration), true); assert.equal(f.captured.currentScope, f.workspace.current);
+    assert.equal(f.captured.canvasSelection, selection); assert.equal(f.captured.constraintGraphNodes, f.input.references.constraintGraphNodes);
+    assert.equal(f.captured.blockDefinitionById, f.owners.readServices.catalog.blockDefinitionById); assert.equal(f.captured.setHint, f.owners.presentation.setHint);
+    const replacement = { ...scope("replacement"), constraints: [f.retained, f.removed] }; f.workspace.activate(replacement);
+    f.state.bound = { constraints: [f.removed] }; f.definition.name = "Renamed";
+    assert.equal(f.configuration.setEnabledSketchIds(f.instance, ["unknown", "S1", "S1"]), true);
+    assert.deepEqual(Array.from(f.instance.enabledSketchIds), ["S1"]); assert.equal(replacement.constraints.length, 1); assert.equal(replacement.constraints[0], f.retained);
+    assert.equal(f.document.constraints.length, 2); assert.equal(f.state.bound.constraints[0], f.removed);
+    assert.equal(selection.dimensionConstraint, null); assert.equal(selection.constraint, null); assert.equal(f.hover.current.dimension, null);
+    assert.deepEqual(f.effects.map(entry => entry[0]), ["bundle", "project", "guard", "hover-read", "hover-update", "invalidate", "hint", "log", "ui", "draw", "history"]);
+    assert.match(f.effects.find(entry => entry[0] === "hint")[1], /Renamed/); assert.equal(f.effects.at(-1)[1], "ブロック構成変更");
+    snapshots.push(JSON.stringify(f.effects));
+  }
+  assert.equal(snapshots[1], snapshots[0]);
+});
+
+test("Block configuration preserves drawable, actual annotation-reference and Parameter rejection before mutation and leaves unrelated hover intact", () => {
+  for (const composed of [false, true]) {
+    for (const reason of ["empty", "annotation", "parameter"]) {
+      const f = configurationOwnersFixture(composed), selection = f.owners.interaction.selection;
+      if (reason === "annotation") f.document.annotations.push({ id: "N1", type: "leader", geometryRef: w.GeometryRef.parseId("line", f.b.id) });
+      if (reason === "parameter") f.cfgState.allowed = false;
+      assert.equal(f.configuration.setEnabledSketchIds(f.instance, reason === "empty" ? ["unknown"] : ["S1"]), false);
+      assert.deepEqual(Array.from(f.instance.enabledSketchIds), ["S1", "S2"]); assert.equal(f.document.constraints.length, 2);
+      assert.equal(selection.dimensionConstraint, f.removed); assert.equal(selection.constraint, f.removed); assert.equal(f.hover.current.dimension, f.removed);
+      assert.equal(f.effects.at(-1)[0], "block-ui"); assert.equal(f.effects.some(entry => ["history", "invalidate", "hover-update"].includes(entry[0])), false);
+    }
+    const f = configurationOwnersFixture(composed); f.hover.update({ dimension: f.retained });
+    assert.equal(f.configuration.setEnabledSketchIds(f.instance, ["S1"]), true); assert.equal(f.hover.current.dimension, f.retained);
+    assert.equal(f.effects.some(entry => entry[0] === "hover-update"), false);
+  }
+});
+
+test("Block configuration retains constructor and operation failure identity and legacy partial mutation without notification or rollback changes", () => {
+  for (const composed of [false, true]) {
+    const constructorError = new Error("configuration"), probe = { constructorError };
+    assert.throws(() => configurationOwnersFixture(composed, probe), value => value === constructorError); assert.deepEqual(probe.effects, []); assert.deepEqual(probe.f.events, []);
+  }
+  for (const failAt of ["bundle", "project", "guard", "hover-update", "invalidate", "hint", "ui", "draw", "history"]) {
+    const snapshots = [];
+    for (const composed of [false, true]) {
+      const error = new Error(failAt), f = configurationOwnersFixture(composed, { error }); f.cfgState.failAt = failAt;
+      assert.throws(() => f.configuration.setEnabledSketchIds(f.instance, ["S1"]), value => value === error);
+      assert.equal(f.effects.at(-1)[0], failAt);
+      snapshots.push(JSON.stringify({ effects: f.effects, ids: f.instance.enabledSketchIds, constraints: f.document.constraints.map(c => c.name),
+        selected: f.owners.interaction.selection.dimensionConstraint?.name, hover: f.hover.current.dimension?.name }));
+    }
+    assert.equal(snapshots[1], snapshots[0]);
+  }
+});

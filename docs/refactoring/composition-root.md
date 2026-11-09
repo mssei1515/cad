@@ -1,5 +1,13 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Block構成変更のfeature owner接続（2026-11-10）
+
+BlockEditingFeature.createForWorkspaceの後段createConfigurationが既存BlockConfigurationCommandを生成する。同じWorkspace、catalogの定義／drawable・geometry Sketch照会、projection生成・無効化、CanvasInteractionの実Selection／Hover、Presentationのhint／log／UI／drawを共有する。ConstraintReferencesとParameter削除guard、Block UI更新、historyだけを明示入力に残す。GeometryRefのkey／parseとAnnotation参照判定は既存namespaceから取得する。currentScopeはWorkspace.currentで、最後にbindしたeditingScope.currentとは統合しない。Hoverは現在の寸法が除去対象に含まれる場合だけ、従来どおり同じownerへupdate({dimension:null})する。rawの有効Sketch検証・重複排除、注記／Parameter参照による拒否、関連拘束除去、Selection／Hover処理、projection無効化・通知・history順と例外時の途中状態を維持する。既存BlockFeature／BlockConfigurationCommand APIと実commandを保ち、model／Selection／editor／cache／listenerを追加しない。
+
+app.jsは1,626→1,618行（8行減）、非空白1,177→1,169行。構築入力20→4項目へ減らし、rootのGeometryRef key／parseとgeometry Sketch照会aliasを除いた。drawable Sketch照会のroot aliasは既存test hook専用として維持する。TEMP cad-block-configuration-owners-proof.cjsで他app／既存BlockFeature／raw Configuration・Annotation参照・GeometryRef AST不変、未使用root bindingなし、後段入力の初期化済みを確認した。数百行への全体目標は未完了。
+
+関連単体26件、構文627file・全単体2,226件・関連E2E350件が成功（14file、5.0m、exit 0）。実BlockFeature／BlockCatalog／ConstraintReferences／GeometryRef／Annotation参照／Selection／Hover／BlockConfigurationCommandを旧接続と比較する三件を追加し、cold生成とcapability同一性、別のlive Workspace・bound scope、重複／未知Sketch除外、実Annotation／Parameter拒否、削除Selection／Hoverと無関係Hover、constructor・query・guard・更新通知の例外同一性と既存の途中状態を確認した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-block-configuration-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## ファイル機能のSession準備とWorkspace接続（2026-11-10）
 
 DocumentFileFeature.prepareが従来の位置で実DocumentFiles Sessionを一つ生成し、同じsessionと後段createForWorkspaceを凍結APIとして返す。後段でDocumentWorkspaceの表示名、Historyのsnapshot／reset、Block editor、Presentationの翻訳・hint・log・draw、DrawingFitを接続し、従来どおりStatus→Bookmarks→FileCommand→Controlsを生成する。後段choice dialogとDocumentApplicationのrepair messageはappの遅延callbackに残す。FileSessionの値・checkpoint・保存／読込排他は従来のDocumentFilesが所有し、PNG／DXF／テストも同じ実sessionを共有する。表示名の正規化は既存create内のeffectiveDocumentNameに集約し、Statusと公開reader、appのPNG／testへ同じlive読取りを渡す。name／snapshot／Blockを生成時に読まず、裸のreset／fit／通知、読込・求解・history・checkpoint・status・fit・repairの順と例外・listenerのbind／start／dispose時機を維持する。既存create／DXF／FileCommand／Status／Controls APIと保存形式を維持し、新しいmodel・session・handle・排他state・listenerを追加しない。
