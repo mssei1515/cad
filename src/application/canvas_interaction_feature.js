@@ -56,7 +56,16 @@
           drawing: { active: lifecycle.active, cancel: lifecycle.cancel, isToolMode: lifecycle.isToolMode, exit: lifecycle.exit },
           readPointer: pointer.readLastPointer });
       }
-      return Object.freeze({ preview, pending, targets, pointer, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard });
+      function createCommandCancellation({ instances, constraints, blockPlacementCommand, restoreBlockPlacementPropertiesPanel, updateUI }) {
+        return window.CanvasCommandCancellation.create({
+          instances, readMode: lifecycle.readMode, selectMode: lifecycle.selectMode, blockPlacementCommand, drawingPreview: preview, restoreBlockPlacementPropertiesPanel,
+          readPending: pending.read, cancelPendingCommand: message => pending.cancel(message), readConstraintCommand: () => targets.command,
+          cancelConstraintTargetCommand: message => constraints.cancel(message),
+          drawing: { active: lifecycle.active, cancel: lifecycle.cancel, isToolMode: lifecycle.isToolMode, exit: lifecycle.exit },
+          applicationText, setHint, updateUI, draw,
+        });
+      }
+      return Object.freeze({ preview, pending, targets, pointer, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createCommandCancellation });
     }
     return Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
       identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions });
