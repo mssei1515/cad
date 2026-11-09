@@ -143,3 +143,83 @@ test('editing projection normalization failure preserves original partial state 
  f.feature.command.cancel();assert.equal(f.state.mode,'select');assert.equal(f.feature.command.count,0);assert.equal(f.hover.current.point,null);assert.equal(f.hover.current.dimension,f.dimension);
  f.state.active='root';f.events.length=0;f.feature.command.start();assert.deepEqual(f.events,['constraint-cancel','pending-cancel','root-rejected']);
 });
+vm.runInContext(fs.readFileSync('src/constraints/reference_constraint_state.js', 'utf8'), sandbox);
+function projectionWorkspaceFixture(composed, probe) {
+  'use strict'; probe ||= {};
+  const f = fixture(), state = { bound: scope(), fail: null, seq: 0, language: 'en' }, marker = new Error('projection workspace failure');
+  function check(stage) { if (state.fail === stage) throw marker; }
+  function current() { assert.equal(this, undefined); check('workspace'); assert.equal(f.state.ready,true); f.state.reads++; return f.state.scope; }
+  const editingScope = { get current() { check('editing'); assert.equal(f.state.ready,true); return state.bound; } };
+  const sketches = { activeSketchId: f.ports.activeSketchId, constraintSketchId: f.ports.constraintSketchId, elementSketchId: f.ports.elementSketchId, isReferenceSourceSketchId: f.ports.isReferenceSourceSketchId };
+  const referenceState = w.ReferenceConstraintState.create({ currentScope: current, constraintSketchId: sketches.constraintSketchId, isReferenceSourceSketchId: sketches.isReferenceSourceSketchId });
+  const selection = w.CanvasSelection.create(), hover = { current: { dimension: { id: 'D1' } }, update(patch) { assert.equal(this,hover); Object.assign(this.current,patch); f.events.push('hover'); } };
+  const ids = { allocate(kind) { assert.equal(this,ids); assert.equal(kind,'sketchProjection'); return 'SPI'+ ++state.seq; } };
+  const interaction = { selection, hover, access: { guardSketchEdit(id) { check('guard'); return f.ports.guardSketchEdit(id); }, canCreateInActiveSketch:f.ports.canCreateInActiveSketch, rejectRootSketchCreation:f.ports.rejectRootSketchCreation },
+    lifecycle: { readMode:f.ports.getMode, setMode:f.ports.setMode } };
+  const presentation = { settings: { applicationText(ja,en) { assert.equal(this,undefined); check('text'); return state.language==='en'?en:ja; } }, setHint:f.ports.setHint,
+    updateUI() { assert.equal(this,undefined); check('ui'); f.events.push('ui'); }, draw() { assert.equal(this,undefined); check('draw'); f.events.push('draw'); } };
+  const readServices = { reads: Object.fromEntries(['Points','Lines','Circles','Arcs','Splines','Hatches'].map(kind => ['all'+(kind==='Hatches'?'':'Geometry')+kind, () => kind==='Lines'?selection.lines:[]])),
+    geometryAppearance: { isVisibleSketchElement:f.ports.isVisibleSketchElement } };
+  const documentWorkspace = { workspace: { current }, sketches, documentIds:ids };
+  let operandReader, rectangleQuery, snap;
+  const options = { documentWorkspace, editingScope, readServices, referenceState, interaction, presentation,
+    operandElement: operand=>operandReader(operand), readProjectionRectangle:(...args)=>rectangleQuery.readProjection(...args),
+    cancelConstraintTargetCommand:f.ports.cancelConstraintTargetCommand,cancelPendingCommand:f.ports.cancelPendingCommand,
+    clearSelection:()=>{ selection.clear(); f.events.push('clear'); },clearSnap:()=>snap(),updateToolbar:f.ports.updateToolbar,
+    normalizeGeometryInstance:instance=>{check('normalize');return instance;},refreshConstraintAnalysis:f.ports.refreshConstraintAnalysis,
+    recordHistory:()=>{check('history');f.events.push('history');} };
+  const originalQueries=w.SketchProjectionQueries,originalCommand=w.SketchProjectionCommand;
+  probe.order=[];probe.ports={};probe.events=f.events;
+  const observe=(name,factory)=>ports=>{probe.order.push(name);probe.ports[name]=ports;if(probe.failAt===name)throw probe.marker;const result=factory(ports);if(name==='queries')probe.queries=result;return result;};
+  w.SketchProjectionQueries={...originalQueries,create:observe('queries',originalQueries.create),createSources:observe('sources',originalQueries.createSources)};
+  w.SketchProjectionCommand={create:observe('command',originalCommand.create)};
+  let feature,queries;
+  try {
+    if(composed){feature=w.SketchProjectionFeature.createForWorkspace(options);queries=feature.queries;}
+    else {queries=w.SketchProjectionQueries.create({currentScope:current,constraintIsOperational:referenceState.constraintIsOperational});feature=w.SketchProjectionFeature.createForEditing({
+      ...options,currentScope:()=>editingScope.current,queries,sketches,access:interaction.access,selection,lifecycle:interaction.lifecycle,ids,hover,
+      setHint:presentation.setHint,applicationText:presentation.settings.applicationText,updateUI:presentation.updateUI,draw:presentation.draw});}
+  } finally {w.SketchProjectionQueries=originalQueries;w.SketchProjectionCommand=originalCommand;}
+  assert.equal(f.state.reads,0);assert.deepEqual(f.events,[]);
+  operandReader=operand=>operand.item;rectangleQuery={readProjection(rect,crossing,geometry,entry){assert.equal(this,rectangleQuery);check('rectangle');return geometry.lines().map(entry).filter(Boolean);}};snap=()=>f.events.push('snap');f.state.ready=true;
+  return {...f,feature,queries,referenceState,selection,interaction,presentation,documentWorkspace,editingScope,workspaceState:state,marker,probe,
+    snapshot(){return JSON.parse(JSON.stringify({events:f.events,hints:f.hints,mode:f.state.mode,count:feature.command.count,seq:state.seq,
+      documentInstances:f.state.scope.geometryInstances,boundInstances:state.bound.geometryInstances,selected:selection.geometryInstances.map(i=>i.id),hover:hover.current}));} };
+}
+
+test('workspace projection assembles one actual query before sources and command and reuses existing owners without eager reads',()=>{
+  const f=projectionWorkspaceFixture(true),p=f.probe.ports;
+  assert.deepEqual(f.probe.order,['queries','sources','command']);assert.equal(f.feature.queries,f.probe.queries);assert.equal(p.sources.queries,f.queries);
+  assert.equal(p.queries.currentScope,f.documentWorkspace.workspace.current);assert.equal(p.queries.constraintIsOperational,f.referenceState.constraintIsOperational);
+  assert.equal(p.command.canvasSelection,f.selection);assert.equal(p.command.applicationText,f.presentation.settings.applicationText);assert.ok(Object.isFrozen(f.feature));
+  const source=f.line('S');assert.equal(f.feature.sources.sketchProjectionEntryFromOperand({item:source}).item,source);
+});
+
+test('workspace projection keeps query and bound editing scopes distinct through replacement, legacy filtering and instance commit',()=>{
+  const run=composed=>{
+    const f=projectionWorkspaceFixture(composed),source=f.line('S'),target=f.line('T');target.sketchId='target';
+    const legacy=new SketchProjectionConstraint('line',source,target);legacy.sketchId='target';f.state.scope.constraints.push(legacy);
+    assert.equal(f.queries.sketchProjectionConstraintForTarget(target),legacy);assert.equal(f.feature.sources.sketchProjectionSourceIsCovered(source),true);
+    legacy.enabled=false;assert.equal(f.queries.sketchProjectionConstraintForTarget(target),null);assert.equal(f.queries.sketchProjectionConstraintForTarget(target,{operationalOnly:false}),legacy);
+    f.state.scope=scope();assert.equal(f.queries.sketchProjectionConstraintForTarget(target),null);assert.equal(f.feature.sources.sketchProjectionSourceIsCovered(source),false);
+    f.selection.set('lines',[source]);f.feature.command.start();assert.equal(f.feature.command.count,1);
+    const previous=f.workspaceState.bound;f.workspaceState.bound=scope();assert.equal(f.feature.command.commit(),true);assert.equal(previous.geometryInstances.length,0);
+    assert.equal(f.state.scope.geometryInstances.length,0);assert.equal(f.workspaceState.bound.geometryInstances.length,1);assert.equal(f.selection.geometryInstances[0],f.workspaceState.bound.geometryInstances[0]);
+    f.workspaceState.language='ja';assert.match(f.feature.sketchProjectionShapeEditBlockedMessage('drag'),/旧形式/);
+    f.workspaceState.language='en';assert.match(f.feature.sketchProjectionShapeEditBlockedMessage('drag'),/legacy/);return f.snapshot();
+  };assert.deepEqual(run(true),run(false));
+});
+
+test('workspace projection preserves constructor and live query, input, notification and commit failure boundaries',()=>{
+  for(const failAt of ['queries','sources','command']){const marker=new Error(failAt),raw={failAt,marker},composed={failAt,marker};
+    for(const [mode,p]of [[false,raw],[true,composed]])assert.throws(()=>projectionWorkspaceFixture(mode,p),error=>error===marker);
+    assert.deepEqual(composed.order,raw.order);assert.deepEqual(composed.events,raw.events);}
+  for(const failure of ['workspace','editing','guard','rectangle','text','normalize','ui','draw','history']){
+    const run=composed=>{const f=projectionWorkspaceFixture(composed),source=f.line('S');f.selection.set('lines',[source]);
+      if(['rectangle','normalize','ui','draw','history'].includes(failure))f.feature.command.start();f.workspaceState.fail=failure;
+      const operation=failure==='workspace'?()=>f.queries.sketchProjectionConstraints():failure==='editing'?()=>f.feature.sources.sketchProjectionSourceIsCovered(source):
+        failure==='guard'?()=>f.feature.guardSketchProjectionShapeEdit([source]):failure==='rectangle'?()=>f.feature.command.addByRect({},true):
+        failure==='text'?()=>f.feature.sketchProjectionShapeEditBlockedMessage():()=>f.feature.command.commit();
+      assert.throws(operation,error=>error===f.marker);return f.snapshot();};assert.deepEqual(run(true),run(false),failure);
+  }
+});

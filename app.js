@@ -161,19 +161,16 @@
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
   });
   const { constraintIsOperational, refreshReferenceConstraintValidity } = referenceConstraintState;
-  const sketchProjectionQueries = window.SketchProjectionQueries.create({
-    currentScope: workspace.current, constraintIsOperational,
-  });
-  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget } = sketchProjectionQueries;
-  const sketchProjectionFeature = window.SketchProjectionFeature.createForEditing({
-    currentScope: () => editingScopeBinding.current, queries: sketchProjectionQueries, sketches: sketchContext, readServices: geometryReadServices,
-    referenceState: referenceConstraintState, access: sketchEditAccess, selection: canvasSelection, lifecycle: drawOperationLifecycle, ids: documentIds, hover: canvasHover,
+  const sketchProjectionFeature = window.SketchProjectionFeature.createForWorkspace({
+    documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices,
+    referenceState: referenceConstraintState, interaction: canvasInteraction, presentation,
     operandElement: operand => operandElement(operand), readProjectionRectangle: (...args) => rectangleSelectionQuery.readProjection(...args),
     cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, clearSnap: () => clearSnap(),
-    updateToolbar, setHint, applicationText, updateUI, draw, normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory,
+    updateToolbar, normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory,
   });
-  const { command: sketchProjectionCommand, sources: sketchProjectionSources,
+  const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
     guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
+  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget } = sketchProjectionQueries;
   const { sketchProjectionSourceKey,
     sketchProjectionEntryFromOperand } = sketchProjectionSources;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
