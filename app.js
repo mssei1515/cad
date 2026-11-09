@@ -66,7 +66,7 @@
   const {
     targetFromConstraint,
     measuredConstraintTargetValue,
-    isReadOnlyDimension, isDimensionConstraint,
+    isDimensionConstraint,
   } = window.DimensionQueries;
 
   const canvas = document.getElementById("canvas");
@@ -678,7 +678,6 @@
     editingScope: editingScopeBinding, checkpoint: editingCheckpoint, parameters: parameterStabilization, analysis: constraintAnalysis,
     access: sketchEditAccess, guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion,
   });
-  const { addPoint: addSplineFitPointFromContext, deletePoint: deleteSplineFitPointFromContext } = splineEditing;
 
   const blockSelectionQuery = window.BlockSelectionQuery.create({
     currentScope: workspace.current, canvasSelection, blockProjectionBundle, elementSketchId, activeSketchId,
@@ -1269,7 +1268,7 @@
 
   const { presentCandidate: canvasContextCandidatePresentation, createInteraction: createCanvasContextInteraction } = createCanvasContextScene({
     sceneQueries: sceneHitQueries, splineEditing, canvasContextAnnotationHit, documentWorkspace, readServices: geometryReadServices,
-    interaction: canvasInteraction, sessions: operationSessions,
+    interaction: canvasInteraction, sessions: operationSessions, presentation,
     candidates: { toolbarSvgMarkup, formatDisplayNumber, constraintToolbarIcon, localizedConstraintName,
       geometryInstanceTypeLabel, hatchPatternTypeLabel, hatchAppearanceForDisplay },
   });
@@ -1312,14 +1311,13 @@
     constraintSelection: constraintSelectionQuery, blockQueries: blockEditingQueries, dimensions: dimensionDragFeature,
     cancellation: canvasCommandCancellation, clipboard: clipboardFeature, history: historyController,
     viewport, projection: sketchProjectionCommand,
-    sameArcEndpoint, clearSelection, arcEndpointPoint, findLineFixedConstraint, findArcEndpointFixedConstraint,
-    visibleGeometryBounds, isReadOnlyDimension,
-    selectedConstructionTogglePrimitives, drawingOrderCommandState, handleConstraintOperandClick, updateUI, isGeometryMode,
+    sameArcEndpoint, clearSelection, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    visibleGeometryBounds, drawingOrderCommandState, handleConstraintOperandClick, isGeometryMode,
     closeAppMenus: () => closeAppMenus(),
     copySelectionToClipboard, imageClipboard,
     showSelectedObjectProperties: canvasWorkspaceLayout.showSelectedObjectProperties, fixPointBtn, enterBlockDefinitionEdit,
-    setBlockInstanceRotationLocked, startDimensionEditInput, updateGeometrySelectionUI, recordHistory, setHint, sketchMoveCommand,
-    startHatchBoundaryRepair, reorderSelectedDrawingObjects, addSplineFitPointFromContext, deleteSplineFitPointFromContext, fitVisibleGeometryToViewport,
+    setBlockInstanceRotationLocked, startDimensionEditInput, recordHistory, sketchMoveCommand,
+    startHatchBoundaryRepair, reorderSelectedDrawingObjects, fitVisibleGeometryToViewport,
   });
   canvasContextController.start();
 

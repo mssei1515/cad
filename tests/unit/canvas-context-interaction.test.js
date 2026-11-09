@@ -197,6 +197,12 @@ test('editing-owner menu uses original cancellation, guards, dimension group and
 function sceneFixture(composed, probe = {}) {
   probe.order = []; probe.ports = {}; probe.results = {};
   const f = fixture({ withMenu: true, withEditingOwners: true, buildScene({ menuFeature, remaining, editingOwners, options, state, calls }) {
+    options.splineEditing.addPoint = options.addSplineFitPointFromContext;
+    options.splineEditing.deletePoint = (...args) => { assert.equal(state.ready, true); calls.push(['spline-delete', ...args]); };
+    remaining.deleteSplineFitPointFromContext = options.splineEditing.deletePoint;
+    remaining.arcEndpointPoint = w.GeometryKernel.arcEndpointPoint;
+    remaining.isReadOnlyDimension = w.DimensionQueries.isReadOnlyDimension;
+    remaining.selectedConstructionTogglePrimitives = editingOwners.selection.selectedConstructionTogglePrimitives;
     state.sceneScope = Object.fromEntries(['points', 'lines', 'circles', 'arcs', 'splines', 'constraints', 'annotations', 'hatches', 'blockInstances', 'geometryInstances', 'referenceImages'].map(key => [key, []]));
     state.definitions = []; const ready = () => assert.equal(state.ready, true), allow = () => { ready(); return true; };
     const sceneQueries = { createContextQuery(input) { assert.equal(this, sceneQueries); probe.order.push('query'); probe.ports.query = input; if (probe.failAt === 'query') throw probe.error;
@@ -211,7 +217,8 @@ function sceneFixture(composed, probe = {}) {
     const input = { sceneQueries, splineEditing: options.splineEditing, canvasContextAnnotationHit: () => null,
       documentWorkspace: { sketches: editingOwners.sketches }, readServices: { catalog },
       interaction: { selection: editingOwners.selection, scope: editingOwners.selectionScope, access: editingOwners.access, lifecycle: { readMode: options.readMode } },
-      sessions: { pointer: editingOwners.pointer, pending: options.pendingCommandSession, targets: options.constraintTargetSession }, candidates };
+      sessions: { pointer: editingOwners.pointer, pending: options.pendingCommandSession, targets: options.constraintTargetSession }, candidates,
+      presentation: { updateUI: options.updateUI, updateGeometrySelectionUI: options.updateGeometrySelectionUI, setHint: options.setHint } };
     probe.input = input; const originals = new Map();
     for (const [namespace, method, name] of [['CanvasContextPresentation', 'create', 'presentation'], ['CanvasContextMenu', 'createEntry', 'entry'], ['CanvasContextActions', 'create', 'actions']]) {
       const original = w[namespace]; originals.set(namespace, original); w[namespace] = { ...original, [method](ports) {
@@ -232,6 +239,8 @@ function sceneFixture(composed, probe = {}) {
       assert.deepEqual(probe.order, ['query', 'presentation']); assert.deepEqual(calls, []); probe.order.push('between');
       const later = { ...remaining, ...editingOwners };
       for (const key of ['selection', 'selectionScope', 'sketches', 'access', 'pointer', 'readMode', 'pendingCommandSession', 'constraintTargetSession', 'splineEditing', 'canvasContextCandidatesAt']) delete later[key];
+      if (composed) for (const key of ['selectedConstructionTogglePrimitives', 'addSplineFitPointFromContext', 'deleteSplineFitPointFromContext',
+        'updateUI', 'updateGeometrySelectionUI', 'setHint', 'arcEndpointPoint', 'isReadOnlyDimension']) delete later[key];
       return { scene, interaction: scene.createInteraction(later) };
     } finally { for (const [namespace, original] of originals) w[namespace] = original; }
   } });
@@ -280,5 +289,43 @@ test('context scene preserves query and formatter failure stages and leaves sele
     }
     const f = sceneFixture(composed), point = f.point('P1'); f.selection.set('points', [point]); f.state.queryError = new Error('query runtime');
     assert.throws(() => f.interaction.open(f.event), error => error === f.state.queryError); assert.deepEqual(Array.from(f.selection.points), [point]); assert.equal(f.dom.menu.hidden, true);
+  }
+});
+
+test('context scene shares owner callbacks and keeps live spline targets after action construction', () => {
+  for (const composed of [false, true]) {
+    const f = sceneFixture(composed), { input, ports } = f.probe;
+    assert.equal(ports.actions.addSplineFitPointFromContext, input.splineEditing.addPoint);
+    assert.equal(ports.actions.deleteSplineFitPointFromContext, input.splineEditing.deletePoint);
+    assert.equal(ports.actions.updateGeometrySelectionUI, input.presentation.updateGeometrySelectionUI);
+    assert.equal(ports.actions.setHint, input.presentation.setHint);
+    const spline = { id: 'SP1', sketchId: 'S1' }, fitPoint = f.point('P1');
+    f.interaction.execute('spline-fit-point-add', { kind: 'spline', item: spline }, f.state.pointer);
+    assert.deepEqual(f.calls, ['guard-selection', ['guard-sketch', 'S1'], ['guard-sketch', 'S1', 'structure'], ['spline-add', spline, f.state.pointer]]);
+    f.calls.length = 0;
+    input.splineEditing.current = { spline };
+    input.splineEditing.deletePoint = () => { throw new Error('must retain original bare callback'); };
+    f.interaction.execute('spline-fit-point-delete', { kind: 'spline-fit-point', item: fitPoint }, f.state.pointer);
+    assert.deepEqual(f.calls, ['guard-selection', ['guard-sketch', 'S1'], ['guard-sketch', 'S1', 'structure'], ['spline-delete', spline, fitPoint]]);
+    f.calls.length = 0; f.state.allowed = false;
+    f.interaction.execute('spline-fit-point-delete', { kind: 'spline-fit-point', item: fitPoint }, f.state.pointer);
+    assert.deepEqual(f.calls, ['guard-selection']);
+  }
+});
+
+test('context scene retains dimension update order and propagates the original failure before later effects', () => {
+  for (const composed of [false, true]) {
+    const f = sceneFixture(composed), { input } = f.probe;
+    input.presentation.updateGeometrySelectionUI = () => { throw new Error('must retain original bare callback'); };
+    f.state.group = { reference: {} };
+    const target = { kind: 'dimension', item: { id: 'D1', sketchId: 'S1' } };
+    f.interaction.execute('dimension-align', target, f.state.pointer);
+    assert.deepEqual(f.calls.slice(0, 5), ['guard-selection', ['guard-sketch', 'S1'], ['align', f.state.group], 'selection-ui', 'draw']);
+    assert.deepEqual(f.calls.slice(5).map(call => call[0]), ['history', 'hint']);
+    const error = new Error('alignment failed');
+    f.editingOwners.dimensions.lineGroup.align = group => { assert.equal(group, f.state.group); throw error; };
+    f.calls.length = 0;
+    assert.throws(() => f.interaction.execute('dimension-align', target, f.state.pointer), value => value === error);
+    assert.deepEqual(f.calls, ['guard-selection', ['guard-sketch', 'S1']]);
   }
 });

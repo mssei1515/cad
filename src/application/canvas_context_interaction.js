@@ -77,14 +77,18 @@
     function createEditingInteraction(options) {
       return createForEditing({ ...options, document, applicationText, canvasHover, draw, canvasContextMenu: element, canvasContextController: controller });
     }
-    function createSceneForEditing({ sceneQueries, splineEditing, canvasContextAnnotationHit, documentWorkspace, readServices, interaction, sessions, candidates }) {
+    function createSceneForEditing({ sceneQueries, splineEditing, canvasContextAnnotationHit, documentWorkspace, readServices, interaction, sessions, candidates, presentation }) {
       const { candidatesAt } = sceneQueries.createContextQuery({ editedFitPoints: () => splineEditing.current?.spline?.fitPoints, canvasContextAnnotationHit });
       const presentCandidate = window.CanvasContextPresentation.create({ ...candidates, applicationText,
         blockDefinitionById: readServices.catalog.blockDefinitionById });
       function createSceneInteraction(options) {
         return createEditingInteraction({ ...options, selection: interaction.selection, selectionScope: interaction.scope,
           sketches: documentWorkspace.sketches, access: interaction.access, pointer: sessions.pointer, readMode: interaction.lifecycle.readMode,
-          pendingCommandSession: sessions.pending, constraintTargetSession: sessions.targets, splineEditing, canvasContextCandidatesAt: candidatesAt });
+          pendingCommandSession: sessions.pending, constraintTargetSession: sessions.targets, splineEditing, canvasContextCandidatesAt: candidatesAt,
+          selectedConstructionTogglePrimitives: interaction.selection.selectedConstructionTogglePrimitives,
+          addSplineFitPointFromContext: splineEditing.addPoint, deleteSplineFitPointFromContext: splineEditing.deletePoint,
+          updateUI: presentation.updateUI, updateGeometrySelectionUI: presentation.updateGeometrySelectionUI, setHint: presentation.setHint,
+          arcEndpointPoint: window.GeometryKernel.arcEndpointPoint, isReadOnlyDimension: window.DimensionQueries.isReadOnlyDimension });
       }
       return Object.freeze({ presentCandidate, createInteraction: createSceneInteraction });
     }

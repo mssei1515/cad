@@ -1,5 +1,13 @@
 # app.jsを起動・接続専用にする継続作業
 
+### Canvas contextの共有owner接続（2026-11-09）
+
+CanvasContextInteraction.createMenuのcreateSceneForEditingがPresentationも共有し、後段の操作生成時にSelectionのconstruction対象、Spline editingのaddPoint／deletePoint、PresentationのUI更新・Selection更新・hintを実関数参照で接続する。arc endpoint計算とread-only寸法判定は既存GeometryKernel／DimensionQueriesを利用する。raw create／createEditingInteractionは維持する。固定拘束のscope照会、広いclearSelection、Clipboard copy、DrawingOrder、Block操作は別ownerのため引き続き明示入力とする。query／formatter→取消／DrawingOrder→操作生成→controller.startの順、裸関数のreceiver、live spline対象とguard・例外後の未実行effectを変えない。新しいstate・cache・listener・moduleは追加しない。
+
+app.jsは1,700→1,698行（2行減）、非空白1,251→1,249行。後段入力は37→29項目、前段に既存Presentation一項目を追加し、未使用のroot alias三個を削除した。TEMP cad-canvas-context-owner-ports-proof.cjsで変更対象以外のapp／context AST不変、未使用root bindingなし、直接入力の初期化済みを確認した。数百行への全体目標は未達である。
+
+関連単体13件、構文627file・全単体2,190件・関連E2E275件が成功（11file、4.4m、exit 0）。旧接続と比較し、live spline対象・guardと元関数の保持、寸法alignの更新順・例外同一性／後続effect停止を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-canvas-context-owner-ports-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 再開時は先に[リファクタリング方針と再開手順](refactoring-policy-and-resume.md)を読む。本書の古い記録は当時の経過であり、現在の課題は先頭の再開地点とGitの現物を優先する。
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
