@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-09の最新単位ではapp.jsは1,677行、非空白1,228行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,666行、非空白1,217行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -95,9 +95,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-11-09）
+## 8. 再開地点（2026-11-10）
 
-### 最新：Canvas sceneの後段frame構築（2026-11-09、検証完了）
+### 最新：Canvas sceneのHatch・描画stack接続（2026-11-10、検証完了）
+
+CanvasDisplayのsceneがcreateHatchRenderingを提供する。実Geometry painterと型別boundary map、GeometryReadServicesの外観可視性／Hatch boundary／Geometry collection、commandTargetsとSketch style、Selection／Hover／Lifecycle、同じctx／viewport／export frameをHatch content・layerへ共有する。raw実layerと可変長member委譲drawHatches、後段のcreateStackを凍結公開APIとして返す。content→layerと、Annotation／Reference Imageの生成後のDrawingStack生成を元の位置に保つ。stackは実Geometry painterと同じHatch layerへ接続し、previewを除外する。mode／後段Hatch command／hover／可視性／export boundsは実行時に読み、query・paint順、selected／hover／alpha、fast path／sort／batchと既存drawingOrder正規化、引数・receiver・return・例外／途中Canvas状態を変えない。新しいmodel／state／cache／listener・moduleを作らず、raw HatchRenderer／DrawingStack APIは維持する。
+
+app.jsは1,677→1,666行（11行減）、非空白1,228→1,217行。三constructorの明示入力合計29→Hatch command reader一個と後段零入力へ減らした。既存sceneのcapabilityを共有するため、以前見送ったcontent／layerを包むだけの分割とは区別する。TEMP cad-canvas-hatch-stack-proof.cjsで他app／既存CanvasDisplay／raw Hatch・Stack AST不変、未使用root bindingなし、後段Hatch commandの遅延捕捉を確認した。全体目標は未完了で、数百行へは未到達である。
+
+2026-11-10に関連単体35件、構文627file・全単体2,208件・関連E2E358件が成功（21file、5.5m、exit 0）。実HatchRenderer／DrawingStack／Geometry painter／Selection／Hover／viewportを旧接続と比較する三件を追加し、cold生成と離れたconstructor順・同一性、collection順fast pathと複数Sketchのsort／batch、preview除外、live可視性／選択／hoverとexport bounds／色、constructor／query／paint例外と既存の途中状態を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-canvas-hatch-stack-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
+基準developは0c76132。作業branchはcodex/canvas-hatch-stack。開始時週枠残量58%。mainは停止条件到達時まで17d4cb0に保持する。直前の全E2E589件成功（21.1m）は0c76132の証跡であり、今回の関連検証と区別する。次は残る構築groupと既存ownerの後段接続を再監査し、巨大context／setter facadeへの置換ではなく実際の所有と依存を整理する。
+
+### 直前：Canvas sceneの後段frame構築（2026-11-09、検証完了）
 
 CanvasDisplay.createSceneForEditingがcreateFrameを返し、scene自身の実Geometry／OverlayとCanvasInteractionのSelection／Hoverを後段frame構築へ共有する。従来の位置でOverlay layer→interactive renderer→frame rendererを生成し、実frameと実overlaysを凍結した組として返す。Reference Imageは描画layerだけを受け、recordDrawは元のcallbackを保つ。矩形・Snap・pointerとnullable PNG commandは描画時に読む。PNGのdrawOverlayは同じctx／現在倍率をmember receiverで呼び、通常描画とexportの順・短絡・戻り値・例外と既存の途中Canvas／export状態を変えない。新しいmodel／state／cache／listener・moduleを作らず、raw createScene／createRendering／CanvasSurface／Overlay APIと初期化・bind順を維持する。
 
