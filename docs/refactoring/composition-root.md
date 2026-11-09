@@ -1,5 +1,13 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Offset source選択とCanvas選択同期のowner接続（2026-11-10）
+
+OffsetFeature.createSelectionForEditingは、実OffsetSelectionを従来の早期生成位置で一つ生成し、その実APIを返す。editingScope.currentとSketchContextのactive／element／constraint所属照会、既存GeometrySolverのLine／Arcと四つの拘束型を接続する。source更新後の通知は同じCanvasSelection.applyOffsetSelectionへ同じsource実体を渡し、member receiver・返値・例外を維持する。Workspace.currentと最後にbindしたeditingScope.currentを統合せず、モデル・Sketch・Selectionは操作時に読み、生成時に読まない。source／Chain配列・確定flag、端点接続・向き・閉鎖判定・拒否・resetは既存OffsetSelection、Canvas選択は既存CanvasSelectionが所有する。後段Offset command／preview／lifecycle／診断も同じsource実体を使い、追加のstate・cache・listenerやsetter中継を作らない。既存OffsetFeature.createとraw OffsetSelection.createは維持する。
+
+app.jsは1,609→1,602行（7行減）、非空白1,160→1,153行。Offset source生成の十一入力を三つの実ownerへまとめ、同期用のroot中継関数と三つの拘束型aliasを除いた。CoincidentConstraintは既存診断hookで使うため保持する。TEMP cad-offset-selection-owner-proof.cjsで他root／既存OffsetFeature AST不変、未使用root bindingなし、raw OffsetSelection／CanvasSelection／OffsetCommand／BasicDrawingTools不変を確認した。数百行への全体目標は未完了。
+
+関連単体10件、構文627file・全単体2,235件・関連E2E205件が成功（7file、3.3m、exit 0）。実OffsetSelection／CanvasSelectionと実Geometry型を使う旧接続との比較三件を追加し、cold生成・実体／型／Sketch関数同一性、sourceとCanvasのGeometry参照、接続Chain・向き・重複拒否・確定・reset、live editing scope／Sketch切替、通知receiverと二段階の例外・途中stateを検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-offset-selection-owner-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## Presentationの表示初期化と実行コミット表示（2026-11-10）
 
 PresentationFeature.createStartupが実RuntimeVersionViewの生成と表示系の起動順を所有する。同じsettings・UI／Canvas更新・通知を使い、UI更新→描画→ログ→言語→theme→runtime metadata読取／表示→resize→Canvas開始の順で実行する。生成時にDOMや設定・metadataを読まず、UI／Canvasの後段bindを許す。言語／theme setterは元の裸関数参照、version loadとsurface startは元の実体をreceiverとして呼ぶ。設定値とmetadataは元の段階でliveに取得し、既定option・返値undefined・例外と途中状態を維持する。Document reset、履歴開始、保存checkpoint、File開始はappに残す。モデル・操作session・履歴・保存形式や新しい表示stateを追加せず、既存RuntimeVersionView／ApplicationSettings／Canvas APIを変更しない。

@@ -31,10 +31,7 @@
     Circle,
     Arc,
     Spline,
-    OffsetChainConstraint,
     CoincidentConstraint,
-    ArcEndpointCoincidentConstraint,
-    ArcEndpointArcEndpointCoincidentConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
     SketchProjectionConstraint,
@@ -207,11 +204,8 @@
   const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
     currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
   });
-  const offsetSelection = window.OffsetSelection.create({
-    getModel: () => editingScopeBinding.current, activeSketchId, elementSketchId, constraintSketchId,
-    Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
-    ArcEndpointArcEndpointCoincidentConstraint, OffsetChainConstraint,
-    onSelectionChanged: syncOffsetChainSelection,
+  const offsetSelection = window.OffsetFeature.createSelectionForEditing({
+    editingScope: editingScopeBinding, sketches: sketchContext, selection: canvasSelection,
   });
   const { nextSeq } = window.GeometryIds;
   const constraintRebinding = window.ConstraintRebinding.create({
@@ -646,7 +640,6 @@
     cancel: cancelBlockDefinitionEdit } = blockDefinitionCommand;
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
 
-  function syncOffsetChainSelection() { return canvasSelection.applyOffsetSelection(offsetSelection); }
 
   function resetModelState() { return documentEditingReset.reset(); }
 

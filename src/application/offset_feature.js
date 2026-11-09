@@ -37,5 +37,16 @@
     }
     return Object.freeze({ plans, command, previewLayer, createGeometry: construction.createOffsetGeometry, chainDraft });
   }
-  window.OffsetFeature = Object.freeze({ create });
+  function createSelectionForEditing({ editingScope, sketches, selection }) {
+    const { Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
+      ArcEndpointArcEndpointCoincidentConstraint, OffsetChainConstraint } = window.GeometrySolver;
+    const source = window.OffsetSelection.create({
+      getModel: () => editingScope.current, activeSketchId: sketches.activeSketchId,
+      elementSketchId: sketches.elementSketchId, constraintSketchId: sketches.constraintSketchId,
+      Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint, ArcEndpointArcEndpointCoincidentConstraint, OffsetChainConstraint,
+      onSelectionChanged: () => selection.applyOffsetSelection(source),
+    });
+    return source;
+  }
+  window.OffsetFeature = Object.freeze({ create, createSelectionForEditing });
 })();
