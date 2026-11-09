@@ -3,7 +3,6 @@
   "use strict";
   const { formatDisplayNumber } = window.NumberDisplay;
   const { escapeHtml } = window.HtmlText;
-  const { lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { serializeHatch, hatchAppearanceForDisplay } = window.HatchData;
 
   const {
@@ -626,10 +625,8 @@
     access: sketchEditAccess, guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion,
   });
 
-  const blockSelectionQuery = window.BlockSelectionQuery.create({
-    currentScope: workspace.current, canvasSelection, blockProjectionBundle, elementSketchId, activeSketchId,
-    constraintGraphNodes, serializeConstraint, constraintLabelForList: (constraint) => localizedConstraintName(constraint.name), resolveGeometryRef,
-    applicationText, mergeBounds, lineBBox, primitiveBBox, splineBBox, annotationBounds,
+  const blockSelectionQuery = blockEditingFeature.createSelectionQuery({
+    references: constraintReferences, serializeConstraint, annotationBounds,
   });
   const { read: blockSelectionGeometry, center: blockSelectionBoundsCenter } = blockSelectionQuery;
 

@@ -123,6 +123,16 @@
         getPointerPreview: () => preview.pointer, setPointerPreview: value => { preview.setPointer(value); }, getLastPointerWorld: pointer.readLastPointer,
         setMode: lifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory });
     }
+    function createSelectionQuery({ references, serializeConstraint, annotationBounds }) {
+      const { mergeBounds, lineBBox, primitiveBBox, splineBBox } = window.GeometryBounds;
+      const { applicationText } = presentation.settings;
+      const { localizedConstraintName } = presentation.constraintFeedback;
+      return window.BlockSelectionQuery.create({ currentScope: workspace.current, canvasSelection: interaction.selection,
+        blockProjectionBundle: projections.blockProjectionBundle, elementSketchId: documentWorkspace.sketches.elementSketchId, activeSketchId,
+        constraintGraphNodes: references.constraintGraphNodes, serializeConstraint,
+        constraintLabelForList: constraint => localizedConstraintName(constraint.name), resolveGeometryRef: readServices.reads.resolveGeometryRef,
+        applicationText, mergeBounds, lineBBox, primitiveBBox, splineBBox, annotationBounds });
+    }
     function createConfiguration({ references, guardDimensionSymbolDeletion, updateBlockUI, recordHistory }) {
       const { key: geometryRefKey, parseId: parseGeometryRefId } = window.GeometryRef;
       const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
@@ -135,7 +145,7 @@
         clearRemovedHover: removed => { if (removed.has(interaction.hover.current.dimension)) interaction.hover.update({ dimension: null }); },
         invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory });
     }
-    return Object.freeze({ ...feature, createPlacement, createConfiguration });
+    return Object.freeze({ ...feature, createPlacement, createSelectionQuery, createConfiguration });
   }
   window.BlockEditingFeature = Object.freeze({ create, createForWorkspace });
 })();
