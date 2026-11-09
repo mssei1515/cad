@@ -88,13 +88,37 @@
       return createAuthoring({ ...options, currentScope, ids, geometry, endpointAt, minLineLength, minArcLength });
     }
     function createToolsForEditing({ documentWorkspace, readServices, interaction, sessions, presentation, viewport, ...options }) {
-      return createTools({ ...options, samePosition: window.GeometryKernel.samePosition,
+      const tools = createTools({ ...options, samePosition: window.GeometryKernel.samePosition,
         sketchContext: documentWorkspace.sketches, pointUsage: interaction.pointUsage, geometryReads: readServices.reads,
         isVisibleSketchElement: readServices.geometryAppearance.isVisibleSketchElement, scale: () => viewport.scale,
         selection: interaction.selection, preview: sessions.preview, cancelPendingCommand: message => sessions.pending.cancel(message),
         canCreateInActiveSketch: interaction.access.canCreateInActiveSketch, rejectRootSketchCreation: interaction.access.rejectRootSketchCreation,
         setMode: interaction.lifecycle.setMode, applicationText: presentation.settings.applicationText,
         setHint: presentation.setHint, updateUI: presentation.updateUI, draw: presentation.draw, log: presentation.log });
+      function createEditing({ checkpoint, solving, parameters, analysis, editingScope, solver, placement, valueInput,
+        projection, acceptError, updateGeometrySelectionUI }) {
+        const { activeSketchId } = documentWorkspace.sketches;
+        const { stabilize } = parameters;
+        const fillet = tools.createFillet({
+          defaultDimensionForTarget: placement.defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
+          pending: sessions.pending, readPointer: sessions.pointer.readLastPointer,
+          prepareStart: () => interaction.lifecycle.prepare("fillet"), guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit,
+          valueInput, checkpoint, stabilize: () => stabilize(activeSketchId()), acceptError,
+          invalidateAnalysis: () => { analysis.invalidate(); }, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options),
+          updateGeometrySelectionUI,
+        });
+        function createCircleCenterCross({ resultIsAccepted, minOrientationLength }) {
+          return tools.createCircleCenterCross({ checkpoint, solveSketchAndDependents: solving.solveSketchAndDependents,
+            resultIsAccepted, minOrientationLength, selectedElementCount: interaction.selection.selectedElementCount,
+            invalidateAnalysis: () => analysis.invalidate() });
+        }
+        function createSplineEditing({ constraintReferences, guardDimensionSymbolDeletion }) {
+          return tools.createSplineEditing({ editingScope, checkpoint, parameters, analysis, access: interaction.access,
+            guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion });
+        }
+        return Object.freeze({ fillet, createCircleCenterCross, createSplineEditing });
+      }
+      return Object.freeze({ ...tools, createEditing });
     }
     return Object.freeze({ geometry, createAuthoring: createTools, createAuthoringForEditing: createToolsForEditing });
   }

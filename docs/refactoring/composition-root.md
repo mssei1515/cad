@@ -1,5 +1,16 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 作図編集の共通依存と生成段階（2026-11-10）
+
+BasicDrawingTools.createAuthoringForEditingが返すcreateEditingは、既に共有するDocumentWorkspace・CanvasInteraction・操作sessionからLifecycle／Selection／pending／pointerを使い、後段のcheckpoint・求解・Parameter安定化・解析・編集scopeとFillet用依存を接続する。Filletは元の位置で生成し、円中心十字とSpline編集は返したfactoryを元の別々の位置で呼ぶ。Offsetはcheckpoint生成前のまま保持し、三コマンドを早期に一括生成しない。共有のGeometry・IDs・Selection・実checkpointを維持し、geometry snapshotとvalue snapshot、Workspaceとbound editing scope、安定化／求解のbare callback、analysis／Solver／Lifecycleのmember receiver、Filletの無返値invalidateとcrossの返値を使い分ける。
+
+app.jsは1,529→1,521行（8行減）、非空白1,080→1,072行。対象の入力は13／6／8→11／2／2項目（合計27→15）。selectedElementCountのroot別名を除いた。rootは348文・558bindingで、後段factory二つの明示接続によりbinding数自体は一つ増える。新global・操作state・listener・setter-only bridgeや汎用contextは作らず、既存raw factory／個別create API・通常UI・保存形式を維持する。全体目標は未完了。
+
+TEMP cad-authoring-editing-stages-proof.cjsで変更対象外のroot ASTとraw作図実装・三command・index.html不変、未使用binding・新しい未束縛参照なしを確認した。四件の旧接続比較は、実Fillet／Cross／Splineと実EditingCheckpointを使い、coldな別段階生成・参照同一性・constructor例外停止、scope／active IDのlive読取り・callback receiver／既定値／引数／返値／例外、実Geometry・pending・ID／履歴、求解拒否復元と例外時の途中状態を検証する。
+
+関連単体42件、構文631file・全単体2,288件・関連E2E260件が成功（13file、3.7m、exit 0）。四件の実owner比較でcoldな別段階生成・実API／checkpoint共有・constructor例外、live scope・active ID・callback receiver／既定値／引数／返値／例外、実Fillet／Cross／SplineのGeometry・pending・IDs／履歴と求解拒否復元・例外時の途中状態を検証した。699製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-authoring-editing-stages-{focused,check,unit,e2e,proof,smoke}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。直前07f5936の全E2E589件成功（21.6m）とは別の今回変更後の関連検証であり、全体目標は未完了。
+
+
 ## 寸法値編集の段階的な組立て（2026-11-10）
 
 ConstraintEditing.prepareDimensionValuesが、実FirstDimensionScalingを従来のDrawingBounds直後に生成する。返したcreateForEditingをOffset・checkpoint・安定化・Instance編集の準備後に呼び、実ConstraintSolvePreparation→既存createDimensionValuesの順で一度だけ生成する。Workspace.current・Sketch query・bounds・最小長を前後で共有し、同じpreparationを値編集commandとともに返す。拘束確定とOffset test supportはその同じ実体を受け、preparationの処理ownerはSolver層のまま。後段依存のsetter・新state・汎用context・listenerを追加せず、三つのraw factoryと既存API、callbackのreceiver・引数・既定値・返値・例外、独自scopeとrollback境界を維持する。
