@@ -227,7 +227,17 @@
         function createPngExport(options) {
           return displayWorkspace.createPngExport({ ...options, drawOperationLifecycle: interaction.lifecycle, pendingCommandSession: pending, constraintTargetSession: targets });
         }
-        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport });
+        function createDimensionTraversal({ currentScope, readDraggedDimension, dimensionUsesExpression }) {
+          const { isActiveSketchConstraint, constraintSketchId } = sketches;
+          const { isVisibleSketchId, isVisibleValue } = readServices.geometryAppearance;
+          return displayWorkspace.dimensions.display.createTraversal({ currentScope, isActiveSketchConstraint, isVisibleSketchId,
+            constraintSketchId, isVisibleValue, canvasSelection: interaction.selection,
+            readHoverDimension: () => interaction.hover.current.dimension, readDraggedDimension,
+            readPending: () => pending.current, readExportFrame: () => displayWorkspace.exportRenderer.frame,
+            readConstraintStatus: () => controls.state.constraintStatus, inactiveColor: window.GeometryPresentation.INACTIVE_CONSTRAINT_STATUS_COLOR,
+            dimensionLabelForConstraint: displayWorkspace.dimensions.labels.label, dimensionUsesExpression });
+        }
+        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal });
       }
       return Object.freeze({ ...display, createEditingWorkspace });
     }

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,537行、非空白1,088行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,532行、非空白1,083行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,15 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：寸法走査と選択範囲のCanvas owner接続（2026-11-10）
+
+CanvasDisplay.prepareForWorkspaceの後段workspaceがcreateDimensionTraversalを公開し、実DimensionDisplayの同じcreateTraversalへSketch判定・Geometry外観・Selection・hover・pending・export frame・ConstraintStatus表示・既存label readerを接続する。注記を含む描画用currentScopeと後段DimensionDragのreader、式判定だけは明示portに残し、通常Workspace.currentへ置き換えない。生成時にscope・Sketch・Selection・hover／drag・pending／export／表示状態を読まず、元の位置で実SelectionBounds→Layerを生成する。inactive色は既存GeometryPresentation定数を使う。raw DimensionDisplay／DimensionPresentationのin-place sort・active判定cache・可視性短絡・highlight／編集中／export抑制・label／式判定の順と呼出し回数、metrics／layout、例外時の途中sort／Canvas save状態を変更しない。新model・state・cache・listenerや汎用contextを追加せず、既存display／workspace APIと通常UI・保存形式を維持する。
+
+app.jsは1,537→1,532行（5行減）、非空白1,088→1,083行。走査生成の入力は14→3項目。寸法走査専用alias四つをrootから除いた。TEMP cad-dimension-traversal-owners-proof.cjsで三port・他root／既存Canvas ASTとraw寸法実装不変、未使用binding・新しい未束縛参照なし、直接依存の初期化順を確認した。全体目標は未完了。
+
+関連単体41件、構文629file・全単体2,277件・関連E2E440件が成功（29file、6.9m、exit 0）。実DimensionPresentation Layer／SelectionBoundsと実metrics／layoutにpainter／label probeを接続した三件を追加し、cold生成と実API／Selection／label reader同一性、独自描画scope、in-place sort、現在のhover／drag／pending／export／表示flag、式判定、boundsのactive／hidden短絡、二constructor・七reader／paint段階の例外と途中sort／未restore save状態を旧接続と比較した。698製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-dimension-traversal-owners-{focused,check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutを変更せず、全E2Eの代替結果とは扱わない。全体目標は未完了。
+
 
 ### 最新：Block Browser検証APIのWorkspace接続（2026-11-10）
 
