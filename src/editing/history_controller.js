@@ -62,5 +62,17 @@
     }
     return Object.freeze({ documentHistory, controller, restoration, captureDocument, createBlockHistory, record });
   }
-  window.HistoryController = Object.freeze({ create, createFeature });
+  function createForWorkspace({ documentWorkspace, blocks, readServices, presentation, serializeDocument, loadDocument,
+    serializeConstraint, decorateSerializedConstraint, constructionCommand, clearInteractionForSketchChange,
+    solveAndRefresh, changed, limit }) {
+    const documentModel = documentWorkspace.document;
+    return createFeature({ serializeDocument, document: { getName: () => documentModel.documentName,
+      setName: name => { documentModel.documentName = name; }, load: loadDocument },
+      blockEditor: blocks.session, liveBlockDefinition: blocks.session.live, cloneBlockDefinition: blocks.editing.clone,
+      serializeConstraint, decorateSerializedConstraint, constructionCommand,
+      invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache,
+      clearInteractionForSketchChange, solveAndRefresh, setHint: presentation.setHint, changed,
+      log: presentation.log, limit, interactionProfiler: presentation.profiler });
+  }
+  window.HistoryController = Object.freeze({ create, createFeature, createForWorkspace });
 })();

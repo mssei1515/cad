@@ -1,5 +1,14 @@
 # Composition rootの残存責務と依存監査
 
+## 履歴のWorkspace／Block復元接続（2026-11-10）
+
+HistoryController.createForWorkspaceは、実DocumentWorkspaceのDocument名adapterと、BlockEditingFeatureの同じsession／live／clone、GeometryReadServicesのprojection無効化、Presentationのhint／log／profilerを既存createFeatureへ接続する。保存／読込とconstraint codec、補助線設定command、操作reset、求解更新、履歴ボタン通知と上限は明示入力に残す。生成時にDocument名・Block current・履歴snapshot・profiler状態を読まず、元の位置で同じEditHistory→Controller→BlockHistorySnapshot→HistoryRestorationを生成する。履歴の内容とscope選択、復元抑制・finally通知、Document名／補助線設定の復元、Block draftのclone／差替え、callback receiver・返値・例外と途中stateは既存ownerのまま維持する。新しいmodel・履歴・可変context・listenerを追加せず、raw create／createFeatureと実feature APIを維持する。通常UIと保存形式は変更しない。
+
+app.jsは1,560→1,558行（2行減）、非空白1,111→1,109行。履歴生成の入力は16→13項目。Document名adapterと履歴専用Block alias二つをrootから除き、責務の所在を履歴ownerへまとめた。TEMP cad-history-workspace-owners-proof.cjsで八port・他root AST・既存History AST不変、未使用bindingと新しい未束縛参照なし、直接依存の初期化順を確認した。全体目標は未完了。
+
+構文629file・全単体2,262件・関連E2E391件が成功（22file、6.1m、exit 0）。実EditHistory／HistoryRestoration／BlockHistorySnapshotを使う三件を追加し、cold生成、Document名と補助線設定の保持、独立したBlock stack、cloneしたdraftの差替え、profile返値、十八段階の例外と途中state／finally通知・callback receiverを旧接続と比較した。698製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-history-workspace-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutは変更せず、全E2Eの代替結果とは扱わない。
+
+
 ## Canvas選択Browser APIのworkspace接続（2026-11-10）
 
 CanvasSelectionTestDriver.createForWorkspaceは、同じDocumentWorkspace・GeometryCreation・GeometryReadServices・CanvasInteraction・Presentationから選択観測supportを準備し、後段createApiForEditingで元の七APIを生成する。SketchContextのactive読取り、Workspace.current、Selection／hover、Block選択query／定義生成、fit／座標、Document採番を実ownerから接続する。root Documentへの定義追加と現在編集scopeへのGeometry／instance追加は区別する。Block editorは呼出時のcurrentをBoolean化し、採番は同じallocatorのreceiverを保つ。生成時にscope・Selection・DOM・Block sessionを読まず、公開名・順序・返値・Geometry参照・callback receiver・例外時の途中状態を維持する。新state・cache・listenerは追加せず、raw createSupport／createApiと個別factoryを維持する。test query guardと二段階生成の位置、通常起動・UI・保存形式は変更しない。

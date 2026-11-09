@@ -202,8 +202,8 @@
     interaction: canvasInteraction, sessions: operationSessions, presentation,
   });
   const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
-  const { clone: cloneBlockDefinition, fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
-  const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
+  const { fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
+  const { chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
   const { blockDefinitionScopeError } = blockEditingQueries;
 
@@ -231,12 +231,10 @@
   });
   const { start: startBlockPlacement, commit: commitBlockPlacement,
     restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;
-  const historyFeature = window.HistoryController.createFeature({
-    serializeDocument: serializeModel, document: { getName: () => documentModel.documentName,
-      setName: name => { documentModel.documentName = name; }, load: loadModelData },
-    blockEditor, liveBlockDefinition: liveBlockEditorDefinition, cloneBlockDefinition, serializeConstraint, decorateSerializedConstraint,
-    constructionCommand, invalidateBlockProjectionCache, clearInteractionForSketchChange, solveAndRefresh, setHint,
-    changed: updateHistoryButtons, log, limit: HISTORY_LIMIT, interactionProfiler,
+  const historyFeature = window.HistoryController.createForWorkspace({
+    documentWorkspace, blocks: blockEditingFeature, readServices: geometryReadServices, presentation,
+    serializeDocument: serializeModel, loadDocument: loadModelData, serializeConstraint, decorateSerializedConstraint,
+    constructionCommand, clearInteractionForSketchChange, solveAndRefresh, changed: updateHistoryButtons, limit: HISTORY_LIMIT,
   });
   const { documentHistory, controller: historyController, captureDocument: historySnapshot } = historyFeature;
   const { active: activeEditHistory, resetBlock: resetBlockEditorHistory, resetDocument: resetHistory,
