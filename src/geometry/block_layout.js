@@ -112,15 +112,9 @@
       return blockWorldPoint(instance, center);
     }
 
-    function blockInstanceTranslationForAnchor(definition, enabledSketchIds, anchor, rotation) {
+    function blockInstanceTranslationForAnchor(definition, enabledSketchIds, anchor, rotation, mirrored = false) {
       const localCenter = blockLocalGeometryBounds(definition, enabledSketchIds)?.center || definition?.origin || { x: 0, y: 0 };
-      const cos = Math.cos(rotation);
-      const sin = Math.sin(rotation);
-      return {
-        x: anchor.x - localCenter.x * cos + localCenter.y * sin,
-        y: anchor.y - localCenter.x * sin - localCenter.y * cos,
-        localCenter,
-      };
+      return { ...window.BlockTransform.translationForCenter(localCenter, anchor, rotation, mirrored), localCenter };
     }
 
 

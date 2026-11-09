@@ -4,7 +4,7 @@
   function create({ HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget,
     elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
     changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
-    applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
+    applicationText, setHint, setPlacementRotationLocked, setPlacementMirrored, setPlacementSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
     openAppearanceColorPalette, canEditStructure = () => true, activeSketchId = () => null }) {
@@ -108,6 +108,11 @@
       if (target.kind === "multiple" && input.dataset.bulkProperty) {
         const raw = input.type === "checkbox" ? input.checked : ["prefix", "suffix"].includes(input.dataset.bulkProperty) ? input.value : input.value.trim();
         applyMultipleProperty(target, input.dataset.bulkProperty, raw);
+        return;
+      }
+      if (target.kind === "blockPlacement" && input.dataset.placementMirrored !== undefined) {
+        setPlacementMirrored(input.checked);
+        draw();
         return;
       }
       if (target.kind === "blockPlacement" && input.dataset.placementRotationMode) {

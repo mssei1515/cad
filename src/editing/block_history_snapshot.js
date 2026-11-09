@@ -37,6 +37,7 @@
           rotation: instance.rotation,
           fixed: Boolean(instance.fixed),
           rotationLocked: Boolean(instance.rotationLocked),
+          mirrored: instance.mirrored === true,
           enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
         })),
         geometryInstances: (definition.geometryInstances || []).map(serializeGeometryInstance),

@@ -4,7 +4,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/commands/instance_transform_command.js'), 'utf8'), sandbox);
+for (const file of ['src/geometry/block_transform.js', 'src/commands/instance_transform_command.js']) {
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
+}
 function fixture({ placing = false, subsetSuccess = true, dependentSuccess = true, blockSuccess = true } = {}) {
   const instance = { id: 'I1', definitionId: 'D1', sketchId: 'S1', x: 10, y: 20, rotation: 0, rotationLocked: true };
   const source = {}, other = {}, calls = [];
@@ -21,7 +23,7 @@ function fixture({ placing = false, subsetSuccess = true, dependentSuccess = tru
     },
     clearSketchSolveState: () => calls.push('clearSolve'), applicationText: (_ja, en) => en, setHint: () => calls.push('hint'), recordHistory: () => calls.push('history'),
     blockDefinitionById: () => ({ name: 'Part' }), blockLocalGeometryBounds: () => ({ center: { x: 2, y: 3 } }), blockInstanceEnabledSketchSet: () => new Set(['S1']),
-    blockWorldPoint: (item, p) => ({ x: item.x + p.x * Math.cos(item.rotation) - p.y * Math.sin(item.rotation), y: item.y + p.x * Math.sin(item.rotation) + p.y * Math.cos(item.rotation) }),
+    blockWorldPoint: sandbox.window.BlockTransform.worldPoint,
     invalidateBlockProjectionCache: () => calls.push('invalidate'), updateBlockUI: () => calls.push('blockUI'), refreshConstraintAnalysis: () => calls.push('analysis'),
     updateUI: () => calls.push('ui'), draw: () => calls.push('draw'), snappedBlockRotation: angle => Math.round(angle / (Math.PI / 2)) * Math.PI / 2,
     solveSketchAndDependents: () => { calls.push('blockSolve'); return { success: blockSuccess }; }, updatePropertiesUI: () => calls.push('properties'),
@@ -33,6 +35,9 @@ test('Block orthogonal rotation preserves the display center and a failed solve 
   const f = fixture(); assert.equal(f.command.setBlockInstanceOrthogonalRotation(f.instance, Math.PI / 2), true);
   assert.ok(Math.abs(f.instance.x - 15) < 1e-12); assert.ok(Math.abs(f.instance.y - 21) < 1e-12);
   assert.deepEqual(f.calls, ['invalidate', 'blockSolve', 'analysis', 'hint', 'ui', 'draw', 'history']);
+  const reflected = fixture(); reflected.instance.mirrored = true;
+  assert.equal(reflected.command.setBlockInstanceOrthogonalRotation(reflected.instance, Math.PI / 2), true);
+  assert.ok(Math.abs(reflected.instance.x - 11) < 1e-12); assert.ok(Math.abs(reflected.instance.y - 25) < 1e-12);
   const failed = fixture({ blockSuccess: false }); assert.equal(failed.command.setBlockInstanceOrthogonalRotation(failed.instance, Math.PI / 2), false);
   assert.equal(failed.instance.x, 10); assert.equal(failed.instance.y, 20); assert.equal(failed.instance.rotation, 0);
   assert.deepEqual(failed.calls, ['invalidate', 'blockSolve', 'restore', 'blockSolve', 'analysis', 'hint', 'ui', 'draw']);

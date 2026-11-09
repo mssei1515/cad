@@ -14,16 +14,16 @@ function fixture(rawInstances = []) {
   return { codec, parent, child };
 }
 test('nested instance fallback enables all drawable sketches and uses filtered index ids', () => {
-  const f = fixture([{ definitionId: 'missing' }, { definitionId: 'child', enabledSketchIds: ['invalid'], x: '12' }]);
+  const f = fixture([{ definitionId: 'missing' }, { definitionId: 'child', enabledSketchIds: ['invalid'], x: '12', mirrored: true }]);
   f.codec.connectDefinitions(); const instance = f.parent.blockInstances[0];
-  assert.equal(instance.id, 'BI1'); assert.equal(instance.x, 12); assert.equal(instance.enabledSketchIds.join(','), 'S1,S2');
+  assert.equal(instance.id, 'BI1'); assert.equal(instance.x, 12); assert.equal(instance.mirrored, true); assert.equal(instance.enabledSketchIds.join(','), 'S1,S2');
   assert.equal(f.parent.geometryInstances[0].sketchId, 'S1'); assert.equal(f.codec.definitionById('child'), f.child);
 });
 test('document fallback enables only sketches with geometry while omitted list enables all', () => {
   const f = fixture(); f.codec.connectDefinitions();
   const instances = f.codec.decodeDocument([{ definitionId: 'child', enabledSketchIds: [] }, { definitionId: 'child' }], () => 'S9');
   assert.equal(instances[0].enabledSketchIds.join(','), 'S2'); assert.equal(instances[1].enabledSketchIds.join(','), 'S1,S2');
-  assert.equal(instances[0].sketchId, 'S9');
+  assert.equal(instances[0].sketchId, 'S9'); assert.equal(instances[1].mirrored, false);
 });
 test('document rejects owned child definitions and filters missing definitions', () => {
   const f = fixture(); f.child.parentDefinitionId = 'parent';

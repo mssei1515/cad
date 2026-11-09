@@ -18,7 +18,7 @@
         const { guardSketchEdit } = access, { elementSketchId } = sketchContext;
         return createView({ ...options,
           getOperation: () => ({ mode: operations.lifecycle.mode, freeInstancePlacement: operations.placement.pending, instanceSourceEdit: operations.sources.current,
-            blockPlacementEnabledSketchIds: operations.blocks.enabledSketchIds, blockPlacementRotationLocked: operations.blocks.rotationLocked }),
+            blockPlacementEnabledSketchIds: operations.blocks.enabledSketchIds, blockPlacementRotationLocked: operations.blocks.rotationLocked, blockPlacementMirrored: operations.blocks.mirrored }),
           canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"), commitDimensionPropertyEdit: dimensionValues.commitProperty,
           blockPlacement: operations.blocks, setBlockInstanceRotationLocked: instanceTransform.setBlockInstanceRotationLocked,
           setBlockInstanceEnabledSketchIds: blockConfiguration.setEnabledSketchIds, setBlockInstanceOrthogonalRotation: instanceTransform.setBlockInstanceOrthogonalRotation,
@@ -119,7 +119,7 @@
     localizedConstraintName = constraintFeedback?.localizedConstraintName, localizeApplicationUI = applicationSettings?.localizeApplicationUI, installExpressionInputHighlights,
     propertyEditing, appearanceUI, HTMLTextAreaElement, HTMLInputElement, canEditStructure,
     changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw, setHint,
-    setPlacementRotationLocked = blockPlacement?.setRotationLocked, setPlacementSketchIds = blockPlacement?.setEnabledSketchIds,
+    setPlacementRotationLocked = blockPlacement?.setRotationLocked, setPlacementMirrored = blockPlacement?.setMirrored, setPlacementSketchIds = blockPlacement?.setEnabledSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit }) {
     const { Spline } = window.GeometrySolver;
@@ -129,7 +129,7 @@
       elementPropertyCommand: propertyEditing.element, appearancePropertyCommand: propertyEditing.appearance,
       geometryPropertyCommand: propertyEditing.geometry, applyMultipleProperty: propertyEditing.applyMultiple,
       changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
-      applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
+      applicationText, setHint, setPlacementRotationLocked, setPlacementMirrored, setPlacementSketchIds,
       setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
       annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
       startSplineEdit, openAppearanceColorPalette: appearanceUI.openPalette,

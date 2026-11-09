@@ -60,8 +60,9 @@
         const rotation = element.annotationTransformRotation || 0, cos = Math.cos(rotation), sin = Math.sin(rotation);
         const localCorners = metrics.frameCorners.map(point => ({ x: (point.x - text.x) * cos + (point.y - text.y) * sin, y: -(point.x - text.x) * sin + (point.y - text.y) * cos }));
         const bottom = Math.max(...localCorners.map(point => point.y)) + gap;
-        const left = Math.min(...localCorners.map(point => point.x)) - metrics.fontSize / 2;
-        const right = Math.max(...localCorners.map(point => point.x));
+        const inset = metrics.fontSize / 2;
+        const left = Math.min(...localCorners.map(point => point.x)) - (element.annotationMirrored ? 0 : inset);
+        const right = Math.max(...localCorners.map(point => point.x)) + (element.annotationMirrored ? inset : 0);
         const leftPoint = { x: text.x + left * cos - bottom * sin, y: text.y + left * sin + bottom * cos };
         const rightPoint = { x: text.x + right * cos - bottom * sin, y: text.y + right * sin + bottom * cos };
         const leftNear = hypot2(origin.x - leftPoint.x, origin.y - leftPoint.y) <= hypot2(origin.x - rightPoint.x, origin.y - rightPoint.y);
@@ -157,10 +158,11 @@
       const offset = bottom + gapWorld + strokeHalfWidth;
       const along = (shelf.end.x - shelf.elbow.x) * Math.cos(transformRotation)
         + (shelf.end.y - shelf.elbow.y) * Math.sin(transformRotation);
-      const leftEnd = along < 0 ? shelf.end : shelf.elbow;
-      const inset = fontSize / 2;
-      const x = leftEnd.x + Math.cos(transformRotation) * inset + Math.sin(transformRotation) * offset;
-      const y = leftEnd.y + Math.sin(transformRotation) * inset - Math.cos(transformRotation) * offset;
+      const fromEnd = element.annotationMirrored ? along > 0 : along < 0;
+      const textEnd = fromEnd ? shelf.end : shelf.elbow;
+      const inset = (element.annotationMirrored ? -1 : 1) * fontSize / 2;
+      const x = textEnd.x + Math.cos(transformRotation) * inset + Math.sin(transformRotation) * offset;
+      const y = textEnd.y + Math.sin(transformRotation) * inset - Math.cos(transformRotation) * offset;
       if (element.anchorPosition) {
         const layout = annotationTextMetrics({ ...element, anchorPosition: undefined }, { x, y });
         const [horizontal, vertical] = element.anchorPosition.split("-");

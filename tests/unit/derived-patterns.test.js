@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ctx = vm.createContext({ window: {}, structuredClone });
-for (const file of ['geometry/geometry_kernel', 'geometry/geometry_ref', 'geometry/spline_geometry', 'solver/constraint_solver', 'geometry/pattern_instance_model', 'geometry/objects', 'document/annotation_anchor_data', 'geometry/instance_projection', 'commands/geometry_instance_command', 'commands/derived_instance_editing', 'commands/instance_transform_command', 'commands/instance_source_command', 'editing/selection', 'application/derived_instance_feature']) vm.runInContext(fs.readFileSync(`src/${file}.js`, 'utf8'), ctx);
+for (const file of ['geometry/geometry_kernel', 'geometry/block_transform', 'geometry/geometry_ref', 'geometry/spline_geometry', 'solver/constraint_solver', 'geometry/pattern_instance_model', 'geometry/objects', 'document/annotation_anchor_data', 'geometry/instance_projection', 'commands/geometry_instance_command', 'commands/derived_instance_editing', 'commands/instance_transform_command', 'commands/instance_source_command', 'editing/selection', 'application/derived_instance_feature']) vm.runInContext(fs.readFileSync(`src/${file}.js`, 'utf8'), ctx);
 const M = ctx.window.PatternInstanceModel, G = ctx.window.GeometrySolver;
 const ref = (kind, id) => ({ kind, path: id.split('@') });
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);

@@ -11,12 +11,14 @@
     let blockPlacementAnchor = null;
     let blockPlacementEnabledSketchIds = [];
     let blockPlacementRotationLocked = true;
+    let mirrored = false;
     let blockPlacementPropertiesWasCollapsed = null;
     function reset({ preservePanelState = false } = {}) {
       blockPlacementDefinitionId = null;
       blockPlacementAnchor = null;
       blockPlacementEnabledSketchIds = [];
       blockPlacementRotationLocked = true;
+      mirrored = false;
       if (!preservePanelState) blockPlacementPropertiesWasCollapsed = null;
     }
     function prepare(definitionId, sketchIds) {
@@ -24,18 +26,20 @@
       blockPlacementAnchor = null;
       blockPlacementEnabledSketchIds = [...sketchIds];
       blockPlacementRotationLocked = true;
+      mirrored = false;
     }
     function setAnchor(pointer) { blockPlacementAnchor = { x: pointer.x, y: pointer.y }; }
     function setEnabledSketchIds(ids) { blockPlacementEnabledSketchIds = [...ids]; invalidateBlockProjectionCache(); }
+    function setMirrored(value) { mirrored = Boolean(value); }
     function setRotationLocked(value) { blockPlacementRotationLocked = value; }
     function preview(pointer) {
       const definition = blockDefinitionById(blockPlacementDefinitionId);
       if (!definition || !pointer) return null;
       const anchor = blockPlacementAnchor || pointer;
       const rotation = blockPlacementRotation(pointer);
-      const translation = blockInstanceTranslationForAnchor(definition, blockPlacementEnabledSketchIds, anchor, rotation);
+      const translation = blockInstanceTranslationForAnchor(definition, blockPlacementEnabledSketchIds, anchor, rotation, mirrored);
       return { definition, instance: { id: "BLOCK_PREVIEW", definitionId: definition.id, sketchId: activeSketchId(),
-        x: translation.x, y: translation.y, rotation, fixed: false, rotationLocked: blockPlacementRotationLocked,
+        x: translation.x, y: translation.y, rotation, mirrored, fixed: false, rotationLocked: blockPlacementRotationLocked,
         enabledSketchIds: blockPlacementEnabledSketchIds.slice() } };
     }
 
@@ -73,8 +77,8 @@
         return null;
       }
       const committedRotation = blockPlacementRotationLocked ? snappedBlockRotation(rotation) : rotation;
-      const translation = blockInstanceTranslationForAnchor(definition, enabledSketchIds, blockPlacementAnchor, committedRotation);
-      const instance = { id: nextInstanceId(), definitionId: definition.id, sketchId: activeSketchId(), x: translation.x, y: translation.y, rotation: committedRotation, fixed: false, rotationLocked: blockPlacementRotationLocked, enabledSketchIds: enabledSketchIds.slice(), appearanceOverride: {} };
+      const translation = blockInstanceTranslationForAnchor(definition, enabledSketchIds, blockPlacementAnchor, committedRotation, mirrored);
+      const instance = { id: nextInstanceId(), definitionId: definition.id, sketchId: activeSketchId(), x: translation.x, y: translation.y, rotation: committedRotation, mirrored, fixed: false, rotationLocked: blockPlacementRotationLocked, enabledSketchIds: enabledSketchIds.slice(), appearanceOverride: {} };
       currentScope().blockInstances.push(instance);
       invalidateBlockProjectionCache(instance.id);
       clearSelection();
@@ -126,10 +130,11 @@
     }
     return Object.freeze({ start: startBlockPlacement, commit: commitBlockPlacement, click: handleBlockPlacementClick,
       finishOrCancel, rotation: blockPlacementRotation, restorePropertiesPanel: restoreBlockPlacementPropertiesPanel,
-      reset, prepare, setAnchor, setEnabledSketchIds, setRotationLocked, preview,
+      reset, prepare, setAnchor, setEnabledSketchIds, setRotationLocked, setMirrored, preview,
       get definitionId() { return blockPlacementDefinitionId; },
       get anchor() { return blockPlacementAnchor ? { ...blockPlacementAnchor } : null; },
       get enabledSketchIds() { return blockPlacementEnabledSketchIds.slice(); },
+      get mirrored() { return mirrored; },
       get rotationLocked() { return blockPlacementRotationLocked; },
     });
   }

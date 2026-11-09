@@ -20,7 +20,7 @@ function fixture() {
   const spline = new Spline('SP1', points.slice(), false, false);
   const constraint = new PointOnSplineConstraint(points[0], spline, 0.25);
   Object.assign(constraint, { target: 5, parameterName: 'd1', expression: 'width / 2', evaluatedParameterValue: 5 });
-  const model = { points, lines: [new Line('L1', points[0], points[1])], circles: [new Circle('C1', points[0], 5)], arcs: [new Arc('A1', points[1], 8, 0.2, 1.4)], splines: [spline], annotations: [{ id: 'AN1' }], blockInstances: [{ id: 'BI1', x: 4, y: 8, rotation: 0.4, fixed: true, rotationLocked: true }], geometryInstances: [{ id: 'FI1', type: 'pattern', placement: { kind: 'linear' }, x: 2, y: 3, rotation: 0.3, mirrorX: true, mirrorY: false }, { id: 'MI1', type: 'mirror', x: 90 }], constraints: [constraint], parameters: [{ name: 'width', expression: '10' }], nextDimensionParameterIndex: 2 };
+  const model = { points, lines: [new Line('L1', points[0], points[1])], circles: [new Circle('C1', points[0], 5)], arcs: [new Arc('A1', points[1], 8, 0.2, 1.4)], splines: [spline], annotations: [{ id: 'AN1' }], blockInstances: [{ id: 'BI1', x: 4, y: 8, rotation: 0.4, mirrored: true, fixed: true, rotationLocked: true }], geometryInstances: [{ id: 'FI1', type: 'pattern', placement: { kind: 'linear' }, x: 2, y: 3, rotation: 0.3, mirrorX: true, mirrorY: false }, { id: 'MI1', type: 'mirror', x: 90 }], constraints: [constraint], parameters: [{ name: 'width', expression: '10' }], nextDimensionParameterIndex: 2 };
   const state = { model, events: [] }, ids = sandbox.window.GeometryIds.create(); ids.reserve(model);
   const checkpoint = sandbox.window.EditingCheckpoint.create({ currentScope: () => state.model, ids, invalidateProjection: () => { state.events.push(['projection', state.model.points[0].x, state.model.constraints.length]); }, invalidateAnalysis: () => { state.events.push(['analysis', state.model.constraints.length, state.model.nextDimensionParameterIndex]); } });
   return { state, model, ids, checkpoint, constraint, spline };
@@ -28,12 +28,12 @@ function fixture() {
 test('value checkpoints restore geometry and placement without replacing referenced objects', () => {
   const { model, checkpoint } = fixture(); const snapshot = checkpoint.captureValues(); const p = model.points[0], circle = model.circles[0], arc = model.arcs[0];
   Object.assign(p, { x: 40, y: 50, fixed: true }); circle.radiusValue = 90; Object.assign(arc, { radiusValue: 70, startAngle: 2, endAngle: 3 });
-  Object.assign(model.blockInstances[0], { x: 20, y: 30, rotation: 2, fixed: false, rotationLocked: false });
+  Object.assign(model.blockInstances[0], { x: 20, y: 30, rotation: 2, mirrored: false, fixed: false, rotationLocked: false });
   Object.assign(model.geometryInstances[0], { x: 20, y: 30, rotation: 2, mirrorX: false, mirrorY: true }); model.geometryInstances[1].x = 100;
   checkpoint.restoreValues(snapshot);
   assert.equal(model.points[0], p); assert.deepEqual([p.x, p.y, p.fixed], [0, 0, false]); assert.equal(model.circles[0], circle); assert.equal(circle.radiusValue, 5);
   assert.equal(model.arcs[0], arc); assert.deepEqual([arc.radiusValue, arc.startAngle, arc.endAngle], [8, 0.2, 1.4]);
-  assert.deepEqual(model.blockInstances[0], { id: 'BI1', x: 4, y: 8, rotation: 0.4, fixed: true, rotationLocked: true });
+  assert.deepEqual(model.blockInstances[0], { id: 'BI1', x: 4, y: 8, rotation: 0.4, mirrored: true, fixed: true, rotationLocked: true });
   assert.deepEqual(model.geometryInstances[0], { id: 'FI1', type: 'pattern', placement: { kind: 'linear' }, x: 2, y: 3, rotation: 0.3, mirrorX: true, mirrorY: false });
   assert.equal(model.geometryInstances[1].x, 100, 'derived-instance fields are outside this checkpoint');
 });

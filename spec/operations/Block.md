@@ -11,7 +11,7 @@ Block Definition
   再利用するローカル Geometry と内部 Sketch
 
 Block Instance
-  Definition の配置・回転・有効内部 Sketch
+  Definition の配置・回転・反転・有効内部 Sketch
 
 Block Projection
   Instance からワールド座標へ導出した読み取り専用 Geometry
@@ -21,7 +21,7 @@ Block Projection
 
 ## 2. Definition と Instance
 
-Definition は `origin`、内部 Sketch、Geometry、Constraint、Annotation、Hatch、編集用Reference Image、子 Block Instance、Definition固有のParameterと寸法採番counterを持つ。Instance は `definitionId`、配置先 `sketchId`、`x`、`y`、`rotation`、固定、回転ロック、有効内部 Sketch を持つ。
+Definition は `origin`、内部 Sketch、Geometry、Constraint、Annotation、Hatch、編集用Reference Image、子 Block Instance、Definition固有のParameterと寸法採番counterを持つ。Instance は `definitionId`、配置先 `sketchId`、`x`、`y`、`rotation`、反転、固定、回転ロック、有効内部 Sketch を持つ。
 
 DefinitionのParameter名前空間からDocumentまたは別Definitionのsymbolは参照できない。
 
@@ -34,7 +34,7 @@ DefinitionのParameter名前空間からDocumentまたは別Definitionのsymbol�
 Projection は座標を保存せず、Definition、Instance 変換、`enabledSketchIds` から生成する。
 
 - Line、Circle、Arc、Spline と必要な Point を投影する。
-- 内部Annotationを座標、Leader形状、文字位置、回転、GeometryRefへInstance変換を合成して投影する。文字もBlockと一緒に回転する。
+- 内部Annotationを座標、Leader形状、文字位置、回転、GeometryRefへInstance変換を合成して投影する。反転時は文字位置、整列、引出線も反転する。文字は読める向きを保ち、配置角度に従って回転する。
 - 内部Hatchは投影するが、手動トレース用Reference ImageはDefinition編集用に限定してInstanceへ投影しない。
 - Projection は表示、スナップ、外部拘束、寸法、同じ配置SketchのLeader参照の対象になる。
 - 先祖Sketch上のProjection Geometryはスケッチ投影の元Geometryとして使用できる。Instanceの移動・回転・Definition変更でProjection cacheが再生成された場合も正規GeometryRefで元参照を再結合する。
@@ -110,12 +110,14 @@ Block Editor はCanvasを太枠で囲まず、通常画面の白とは異なる�
 
 ## 9. 配置
 
-配置開始時は全作図可能内部 Sketch を有効にし、ユーザーが個別に切り替えられる。Geometry、派生Geometry Instance（Sketch Projectionを含む）、Annotation、Hatchまたは子Blockを持つ Sketch を少なくとも1つ有効にする必要がある。投影だけを持つ内部Sketchも単独で配置でき、その投影Geometryを外接範囲中心の計算に含める。配置中の回転モードと表示内部SketchはPropertiesへ表示し、Propertiesが畳まれていれば一時的に展開する。配置完了またはキャンセル後は開始前のProperties開閉状態へ戻す。
+配置開始時は全作図可能内部 Sketch を有効にし、ユーザーが個別に切り替えられる。Geometry、派生Geometry Instance（Sketch Projectionを含む）、Annotation、Hatchまたは子Blockを持つ Sketch を少なくとも1つ有効にする必要がある。投影だけを持つ内部Sketchも単独で配置でき、その投影Geometryを外接範囲中心の計算に含める。配置中の回転モード、反転、表示内部SketchはPropertiesへ表示し、Propertiesが畳まれていれば一時的に展開する。配置完了またはキャンセル後は開始前のProperties開閉状態へ戻す。
 
 1. 1クリック目で、有効 Geometry の外接範囲中心を置く位置を決める。
 2. 2クリック目で回転方向を決める。
 
-表示中心を決める前の Esc はキャンセルする。表示中心を決めた後の Esc は0°で配置を確定する。
+表示中心を決める前の Esc はキャンセルする。表示中心を決めた後の Esc は選んだ反転状態のまま0°で配置を確定する。
+
+配置Propertiesの「反転」は配置を始めるたびにオフになる。オンにすると、有効な内部Sketchの表示中心を通るローカルの縦軸を基準に左右を反転し、その後で配置角度を適用する。中心を指定した後も確定までは切り替えられ、プレビューに反映する。反転はInstanceごとに保存する。選択後のPropertiesには反転状態を表示する。
 
 新規配置は既定で `rotationLocked = true` であり、90°単位へスナップする。自由回転へ切り替えると `rotation` が外部 solve 変数になる。
 
@@ -176,7 +178,6 @@ Instance ごとに `enabledSketchIds` を持ち、配置後も変更できる。
 
 - 外部 Block ライブラリ、リンク更新
 - Instance の倍率
-- 鏡像変換
 - 通常 Geometry への分解
 - Definition 原点の手動編集
 

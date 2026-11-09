@@ -33,7 +33,7 @@
       if (item instanceof Circle) {
         const base = pointer || { x: item.center.x + item.radius(), y: item.center.y };
         const angle = Math.atan2(base.y - item.center.y, base.x - item.center.x);
-        return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, attachment: { kind: "circle", angle: angle - (item.blockProjectionRotation || 0) }, geometryRef: geometryRefForItem(item) };
+        return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, attachment: { kind: "circle", angle: (angle - (item.blockProjectionRotation || 0)) * (item.blockProjectionMirrored ? -1 : 1) }, geometryRef: geometryRefForItem(item) };
       }
       if (item instanceof Arc) {
         const base = pointer || arcEndpointPoint(item, "start");
@@ -57,7 +57,7 @@
       if (attachment?.kind === "line" && item instanceof Line && Number.isFinite(attachment.t)) return { x: item.p1.x + (item.p2.x - item.p1.x) * attachment.t, y: item.p1.y + (item.p2.y - item.p1.y) * attachment.t };
       if (attachment?.kind === "spline" && item instanceof Spline && Number.isFinite(attachment.t)) return window.SplineGeometry.evaluate(item.curve(), attachment.t);
       if (attachment?.kind === "circle" && item instanceof Circle || attachment?.kind === "arc" && item instanceof Arc) {
-        const angle = attachment.kind === "arc" ? item.startAngle + (item.endAngle - item.startAngle) * attachment.t : attachment.angle + (item.blockProjectionRotation || 0);
+        const angle = attachment.kind === "arc" ? item.startAngle + (item.endAngle - item.startAngle) * attachment.t : (item.blockProjectionMirrored ? -attachment.angle : attachment.angle) + (item.blockProjectionRotation || 0);
         if (Number.isFinite(angle)) return { x: item.center.x + item.radius() * Math.cos(angle), y: item.center.y + item.radius() * Math.sin(angle) };
       }
       return annotationLeaderTargetFromItem(item, element.start || null)?.anchor || element.start || null;
