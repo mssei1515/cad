@@ -43,6 +43,20 @@
       }
       return Object.freeze({ close: menus.close, start });
     }
+    function prepareWorkspaceControls({ window: browserWindow, editingTools, canvasViewControls, layout, parameters, appearance, blocks }) {
+      editingTools.bind();
+      canvasViewControls.bindControls();
+      const navigation = createToolNavigation({ window: browserWindow });
+      function start() {
+        navigation.start();
+        layout.bindControls();
+        parameters.start();
+        appearance.start();
+        settings.start();
+        blocks.bind();
+      }
+      return Object.freeze({ close: navigation.close, start });
+    }
     function createToolbar({ lifecycle, pending, constraints, constructionCommand, readSplineEditing, readHistory, updateDocumentStatus, isGeometryMode }) {
       const history = window.ToolbarView.createHistory({ document, readHistory, updateDocumentStatus });
       function createControls({ selectedVisibilityTargets, selectionVisibilityIsHidden, canEditTarget, syncFlyouts = syncToolFlyouts, updateCursor }) {
@@ -113,7 +127,7 @@
         interactionProfiler: profiler, profileInteractionWork: profiler.work, withGeometryReadCache, drawCanvas });
       return canvas;
     }
-    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createStartup, createToolbar, createToolNavigation, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
+    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createStartup, createToolbar, createToolNavigation, prepareWorkspaceControls, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
       log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw,
       get selectedItem() { return canvas.selectedItem; } });
   }

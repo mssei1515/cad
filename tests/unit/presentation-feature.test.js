@@ -519,3 +519,111 @@ test('presentation startup propagates failures at the same stage and retains the
     assert.deepEqual(composed.result(), raw.result(), failure); assert.equal(composed.stages.at(-1), failure);
   }
 });
+
+(function () {
+"use strict";
+function workspaceControlsFixture(composed, failure = null, observe = {}) {
+ const f=fixture(),events=[],counts={},marker=new Error('workspace UI'),listeners=[];
+ function stage(name){events.push(name);if(name===failure)throw marker;}
+ function surface(name){
+  const handlers=new Map();
+  return {addEventListener(type,callback){listeners.push([name,type]);if(!handlers.has(type))handlers.set(type,[]);handlers.get(type).push(callback);},
+   removeEventListener(){},dispatch(type,event={}){for(const callback of handlers.get(type)||[])callback.call(this,event);},
+   closest:()=>null,focus(){events.push(name+':focus');}};
+ }
+ Object.assign(f.document,surface('document'));
+ const browserWindow={...surface('window'),setTimeout(){return 1;},clearTimeout(){},
+  MutationObserver:class{observe(){}disconnect(){}}};
+ const menuBar={classList:{toggle(name,value){counts[name]=value;}}},menuContainer=surface('menu-container');
+ const menus=[0,1].map(i=>Object.assign(surface('menu'+i),{open:false,
+  summary:surface('summary'+i),querySelector(){return this.summary;},
+  removeAttribute(name){assert.equal(name,'open');if(observe.closeError)throw observe.closeError;this.open=false;},
+  setAttribute(){this.open=true;}}));
+ const tool=surface('tool');tool.click=()=>{counts.tool=(counts.tool||0)+1;};
+ const menuButton=Object.assign(surface('menu-button'),{dataset:{menuTool:'toolLine'},closest:()=>menus[0]});
+ f.document.getElementById=id=>id==='toolLine'?tool:null;
+ f.document.querySelectorAll=selector=>selector==='.app-menu'?menus:selector==='[data-menu-tool]'?[menuButton]:[];
+ f.document.querySelector=selector=>selector==='.menu-bar'?menuBar:selector==='.app-menus'?menuContainer:null;
+ for(const source of ['src/ui/application_menus.js','src/ui/tool_flyouts.js'])vm.runInNewContext(fs.readFileSync(source,'utf8'),{window:f.w});
+ let actualMenus;
+ for(const [name,label]of [['ApplicationMenus','menu'],['ToolFlyouts','flyout']]){
+  const original=f.w[name];f.w[name]={...original,create(options){
+   stage(label+' create');const owner=original.create(options);if(name==='ApplicationMenus')actualMenus=owner;
+   return {...owner,start(){assert.equal(arguments.length,0);stage(label+' start');return owner.start();}};
+  }};
+ }
+ let close;
+ const part=(name,method)=>{const owner={[method](){assert.equal(this,owner);assert.equal(arguments.length,0);stage(name);
+  counts[name]=(counts[name]||0)+1;f.document.addEventListener(name,()=>{counts[name+':event']=(counts[name+':event']||0)+1;});
+  if(name==='parameters'){assert.equal(typeof close,'function');close();}
+  return observe.result;
+ }};return owner;};
+ const input={window:browserWindow,editingTools:part('editing','bind'),canvasViewControls:part('canvas','bindControls'),
+  layout:part('layout','bindControls'),parameters:part('parameters','start'),appearance:part('appearance','start'),blocks:part('blocks','bind')};
+ f.settings.start=function(){assert.equal(this,f.settings);assert.equal(arguments.length,0);stage('settings');counts.settings=(counts.settings||0)+1;return observe.result;};
+ let controls;
+ observe.events=events;observe.counts=counts;observe.listeners=listeners;
+ function prepare(){
+  if(composed)controls=f.feature.prepareWorkspaceControls(input);
+  else{
+   input.editingTools.bind();input.canvasViewControls.bindControls();
+   const navigation=f.feature.createToolNavigation({window:browserWindow});
+   controls={close:navigation.close,start(){
+    navigation.start();input.layout.bindControls();input.parameters.start();input.appearance.start();f.settings.start();input.blocks.bind();
+   }};
+  }
+  close=controls.close;return controls;
+ }
+ const snapshot=()=>JSON.stringify({events,counts,listeners,menus:menus.map(m=>m.open)});
+ return {...f,prepare,events,counts,listeners,menus,menuButton,browserWindow,marker,snapshot,get actualMenus(){return actualMenus;}};
+}
+
+test('workspace controls keep preparation separate from navigation and later startup over the actual menu and flyout owners',()=>{
+ for(const composed of [false,true]){
+  const f=workspaceControlsFixture(composed),controls=f.prepare();
+  assert.deepEqual(f.events,['editing','canvas','menu create']);
+  assert.equal(controls.close,f.actualMenus.close);
+  assert.equal(f.listeners.some(([owner])=>owner==='window'),false);
+  assert.equal(f.counts.layout,undefined);
+  f.menus[0].open=true;assert.equal(controls.start(),undefined);
+  assert.equal(f.menus[0].open,false);assert.equal(f.counts.parameters,1);assert.equal(f.counts.blocks,1);
+  assert.ok(f.listeners.some(([owner,type])=>owner==='window'&&type==='blur'));
+  assert.equal(f.events.indexOf('menu start')<f.events.indexOf('flyout create'),true);
+ }
+});
+
+test('workspace controls preserve real menu tool dispatch, Escape/outside closure and live event receivers after activation',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=workspaceControlsFixture(composed),controls=f.prepare();controls.start();
+  f.menus[0].open=true;f.menuButton.dispatch('click');assert.equal(f.counts.tool,1);assert.equal(f.menus[0].open,false);
+  f.menus[1].open=true;let prevented=0,stopped=0;
+  f.document.dispatch('keydown',{key:'Escape',preventDefault(){prevented++;},stopPropagation(){stopped++;}});
+  assert.equal(prevented,1);assert.equal(stopped,1);assert.equal(f.menus[1].open,false);
+  f.menus[0].open=f.menus[1].open=true;f.document.dispatch('pointerdown',{target:{closest:()=>null}});
+  assert.equal(f.menus.some(menu=>menu.open),false);
+  f.document.dispatch('editing');f.document.dispatch('blocks');
+  assert.equal(f.counts['editing:event'],1);assert.equal(f.counts['blocks:event'],1);
+  results.push(f.snapshot());
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('workspace controls preserve every startup failure boundary, installed listeners and menu close exception identity',()=>{
+ const phases=['editing','canvas','menu create','menu start','flyout create','flyout start','layout','parameters','appearance','settings','blocks'];
+ for(const phase of phases){
+  const results=[];
+  for(const composed of [false,true]){
+   const observe={},f=workspaceControlsFixture(composed,phase,observe);
+   assert.throws(()=>{const controls=f.prepare();controls.start();},error=>error===f.marker);
+   assert.equal(f.events.at(-1),phase);results.push(f.snapshot());
+  }
+  assert.equal(results[1],results[0],phase);
+ }
+ for(const composed of [false,true]){
+  const observe={},f=workspaceControlsFixture(composed,null,observe),controls=f.prepare();controls.start();
+  const error=new Error('close');observe.closeError=error;
+  assert.throws(()=>controls.close(),value=>value===error);
+ }
+});
+})();

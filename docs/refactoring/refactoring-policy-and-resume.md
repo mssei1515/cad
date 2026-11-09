@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,521行、非空白1,072行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,517行、非空白1,068行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Workspace UIの準備と起動（2026-11-10）
+
+PresentationFeature.prepareWorkspaceControlsへ、連続していたWorkspace UIの接続・起動を集約した。prepareは既存editing binding→Canvas view controlsのbind→同じToolNavigation生成を行い、元のmenu close関数とstartを返す。rootはcloseAppMenusを受け取ってからstartを呼び、navigation start（menu→flyout）→layout bind→Parameter editor start→Appearance UI start→ApplicationSettings start→Block view bindの順を保つ。keyboard／window接続はこの前、drawing toolbar／file controls／PNG等はこの後のまま。各componentは既存の実体とlistener／stateを所有し、追加のglobal・model・listener・起動flagや汎用contextを作らない。
+
+app.jsは1,521→1,517行（4行減）、非空白1,072→1,068行。連続10文を準備・close受取り・起動の段階へ接続し、component入力は7項目。rootは341文・558binding。単なる空白削除を行わず、既存Properties／Tree／Blockの構築・scope・モデル編集責務は移さない。全体目標は未完了。
+
+TEMP cad-workspace-ui-startup-proof.cjsで対象10文の連続性、各component port、残るroot ASTと既存Presentation API・raw menu／flyout／Toolbar／BlockView・index.html不変、未使用binding・新しい未束縛参照なしを確認した。三件の新旧比較は実Menu／ToolFlyoutsを使い、準備時の二bindとmenu生成・起動までのlistener状態、close関数同一性と後続開始前の公開、ツールclick／Escape／外側クリック、receiver・引数・11段階の例外と既設listener／部分状態を検証する。
+
+Propertiesの三生成は既存moduleが共有依存とscopeを保持しており、現時点で単に統合しても34項目の入力や依存の多いcontextを移すだけになるため追加wrapperを見送った。Tree／Blockのモデル編集ownerと独自の生成・start段階も保持する。今後は残る構築・別名とfeature間接続を実owner・phaseから整理し、細かなport追加やtest hooks全体の移動で200〜500行に到達したと扱わない。
+
+関連単体25件、構文631file・全単体2,291件・関連E2E266件が成功（17file、3.8m、exit 0）。三件の実menu／flyout比較で、prepare時のbindとmenu生成・start前のclose公開、listener状態・実ツールclick／Escape／外側クリック、component methodのreceiver／零引数と11段階の起動例外・既接続listener／部分状態を検証した。699製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-workspace-ui-startup-{focused,check,unit,e2e,proof,smoke}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。直近07f5936の全E2E589件成功（21.6m）とは別の今回変更後の関連検証であり、全体目標は未完了。
+
+基準developはf175a2a、作業branchはcodex/workspace-ui-startup。開始時週枠残量43%。全体目標は未完了。直近の全E2E589件成功は07f5936（21.6m）の証跡で、今回変更後の関連検証と区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：作図編集の共通依存と生成段階（2026-11-10）
 
