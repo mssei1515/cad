@@ -1,5 +1,16 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 寸法値編集の段階的な組立て（2026-11-10）
+
+ConstraintEditing.prepareDimensionValuesが、実FirstDimensionScalingを従来のDrawingBounds直後に生成する。返したcreateForEditingをOffset・checkpoint・安定化・Instance編集の準備後に呼び、実ConstraintSolvePreparation→既存createDimensionValuesの順で一度だけ生成する。Workspace.current・Sketch query・bounds・最小長を前後で共有し、同じpreparationを値編集commandとともに返す。拘束確定とOffset test supportはその同じ実体を受け、preparationの処理ownerはSolver層のまま。後段依存のsetter・新state・汎用context・listenerを追加せず、三つのraw factoryと既存API、callbackのreceiver・引数・既定値・返値・例外、独自scopeとrollback境界を維持する。
+
+app.jsは1,532→1,529行（3行減）、非空白1,083→1,080行。rootの三生成を二段階へ接続し、入力は6／5／20→4／19項目（合計31→23）。共有依存の重複を除き、hasDirectRadiusDimension・sketchGeometryBounds・scaleSketchForFirstDimensionのroot別名を内部接続へ整理した。rootは349文・557binding、構築545行・別名等150行・委譲83行・test hooks209行。ここだけで200〜500行に届くとはせず、全体目標は未完了。
+
+TEMP cad-dimension-editing-stages-proof.cjsで置換対象以外のroot ASTと三raw実装・旧ConstraintEditing API・index.html不変、未使用binding・新しい未束縛参照なしを確認した。四件の実owner比較ではcoldな二段階生成とconstructor例外停止、共通API参照、live Workspace／別のediting query、viewport methodのreceiver・引数とactive既定値、実Geometryの拡縮・挿入拒否、既存寸法の求解拒否復元・例外時の未復元と一時step norm復帰を検証する。
+
+関連単体31件、構文631file・全単体2,284件・全E2E589件が成功（50file、21.6m、exit 0）。四件の旧接続比較を追加し、二段階のcold生成・実API同一性・生成例外、live scopeの区別・実Geometryと寸法配置の拡縮・guard／挿入拒否、求解拒否の復元・求解例外時の部分更新とstep norm復帰を確認した。699製品／test入力と開始HEAD不変、無指定test listと50fileの589件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-dimension-editing-stages-{focused,check,unit,e2e,proof}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存テスト期待値・性能閾値・timeoutは変更していない。今回の共有準備接続変更後の現物で全体検証したが、数百行への全体目標の達成とは区別する。
+
+
 ## 構築・遅延依存の再監査（2026-11-10、基準7d6ccc9）
 
 app.jsの残存構造を再監査し、[監査結果](bootstrap-boundary-audit.md)と[再生成可能なJSON](composition-root-audit.json)へ記録した。1,532行・非空白1,083行のまま。root351文・559binding、call／new初期化547行・別名等151行・委譲83行・test hooks209行を確認した。単純なadapter追加だけで数百行へ届くとはせず、次は既存ConstraintEditingの構築境界で初回寸法scaleと後段の共通求解準備→値編集commandを段階的に接続する原型を検証する。生成時機・共有実体・独自scopeを維持し、setter-only bridgeや巨大contextを作らない。全体目標は未完了。
