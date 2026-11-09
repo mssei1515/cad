@@ -862,13 +862,13 @@
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
     createCommitWithIntentForWorkspace: createConstraintCommit, createFixedEditing, constraintTargetHint,
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging },
-    controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForEditing({
-    document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, sketches: sketchContext, presentation,
+    controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForWorkspace({
+    document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, presentation,
     operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController,
-    resolveConstraintIntent, isGeometryMode, findLineFixedConstraint, clearSelection, commitConstraintResolution, updateToolbar, updateConstraintButtons,
+    isGeometryMode, findLineFixedConstraint, clearSelection, updateToolbar, updateConstraintButtons,
     blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
-    addConstraint, hitConstraintOperand, toggleGeometryFixedOperand, toggleSelectedFixed,
-    geometryInstanceBundle, cancelPendingCommand, placement: dimensionPlacement, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint,
+    hitConstraintOperand,
+    geometryInstanceBundle, placement: dimensionPlacement, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint,
   });
 
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
@@ -1063,7 +1063,7 @@
   function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
   const { command: constraintCommitCommand, readOnly: dimensionReadOnlyQuery, intentResolver: constraintIntentResolver } = createConstraintCommit({
-    workspace, checkpoint: editingCheckpoint, insertion: constraintInsertion, redundancy: constraintRedundancy,
+    checkpoint: editingCheckpoint, insertion: constraintInsertion, redundancy: constraintRedundancy,
     solving: sketchSolving, stabilization: parameterStabilization, referenceState: referenceConstraintState,
     solvePreparation: constraintSolvePreparation, lineCollapseQuery, acceptError: CONSTRAINT_ACCEPT_ERROR,
     refreshConstraintAnalysis, recordHistory, now: () => performance.now(),
@@ -1076,7 +1076,6 @@
 
   function startDistanceResolution(resolution, pointer) { return dimensionPlacementCommand.startDistanceResolution(resolution, pointer); }
 
-  function commitConstraintResolution(...args) { return constraintCommitCommand.resolution(...args); }
 
   function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
     return dimensionReadOnlyQuery.forPlacement(target, value, dimension, options);
@@ -1084,7 +1083,6 @@
 
   function addDistanceConstraintFromTarget(...args) { return constraintCommitCommand.dimension(...args); }
 
-  function addConstraint(type) { return constraintCommitCommand.fromSelection(type); }
 
   const geometryDragFeature = window.GeometryDragFeature.createForWorkspace({
     documentWorkspace, interaction: canvasInteraction, presentation, sourceQueries: derivedDragQueries, projectionQueries: sketchProjectionQueries,
@@ -1261,13 +1259,11 @@
   window.SidebarController.create({ document, setHint }).bind();
 
 
-  function toggleGeometryFixedOperand(operand) { return fixedOperandCommand.toggle(operand); }
 
-  const fixedSelectionCommand = createFixedSelection({
+  createFixedSelection({
     blockDefinitionById, updateUI, recordHistory, snapshotModelState, restoreModelState, pushModelConstraint,
     solveSketchAndDependents, acceptError: CONSTRAINT_ACCEPT_ERROR, refreshConstraintAnalysis,
   });
-  function toggleSelectedFixed() { return fixedSelectionCommand.toggle(); }
 
   const constraintControlBinding = createConstraintControlBinding();
   constraintControlBinding.bind();
