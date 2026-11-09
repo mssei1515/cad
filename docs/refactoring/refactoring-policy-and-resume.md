@@ -10,7 +10,7 @@
 
 ユーザーは長時間の段階的な実装を許可している。「無理に終わらせる必要はない」「今後の開発に過不足なく良い単位で分離する」が最新方針であり、残りクレジットに合わせて設計を急いだり、分離数を固定したりしない。
 
-2026-10-16の目標再開指示に従い、週枠の残量が50%を下回った時点で新たな分離を停止する。残量はusage toolの100−usedPercentとして確認する。検証・Commit・Push・main反映の余裕を確保する。停止時は検証・Commit・Pushを済ませ、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。
+2026-11-09の最新再開指示に従い、週枠の残量が5%を下回った時点で新たな分離を停止する。残量はusage toolの100−usedPercentとして確認する。停止時は現在の単位の検証・Commit・Pushを終え、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。以前の50%条件は過去の停止記録として扱う。
 
 ## 2. 維持するもの
 
@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-10-30の最新単位ではapp.jsは1,704行、非空白1,255行、root直下398文、条件付きtest hooks230行。可変参照は三つで、最新の検証と次候補はsection 8の再開記録を参照する。全体目標は未完了であり、週枠残量49%で新規分離を停止した。検証とmain／develop同期を済ませたcheckpointから再開する。
+2026-11-09の最新単位ではapp.jsは1,700行、非空白1,251行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -71,7 +71,7 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 ## 6. 実装・検証・履歴の進め方
 
 - サブエージェントは使わない（ユーザーの明示指示）。
-- 2026-10-16の目標再開指示により停止条件は週枠残量50%未満。以前の70%／60%／尽きる前の条件は過去の記録として扱う。停止時の最後のコミットをmainへマージする指示も受領。残量はusage toolで確認し、リリース時はdevelop先行・main最後・両ブランチ同期の手順を守る。
+- 2026-11-09の最新指示による停止条件は週枠残量5%未満。以前の70%／60%／50%は過去の記録として扱う。停止時は検証・Commit・Push後、develop先行・main最後・両ブランチ同期の手順を守る。
 - 開始時にAGENTS.md、Gitのbranch／status、関連仕様・テストを確認する。既存の無関係な変更を混ぜない。
 - 責務としてまとまった単位で実装し、差分を確認し、関連仕様を更新して検証・Commit・Pushする。将来の原因調査で区切りを追える履歴を残す。
 - 構文は`npm run check`、単体は`npm run test:unit`。関連E2Eを実施し、全体完了前には全体E2Eも確認する。
@@ -95,9 +95,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-10-30）
+## 8. 再開地点（2026-11-09）
 
-### 最新：Spline構造編集の共有owner接続・停止checkpoint（2026-10-30、検証完了）
+### 最新：Canvas取消のsession接続（2026-11-09、検証完了）
+
+基準developは7f6c1e0。CanvasInteractionFeatureのOperationSessionsがcreateCommandCancellationを提供する。自身のlifecycle／pending／constraint targets／previewと既存の言語・通知を接続し、後段のInstance command／Constraint command／Block placement／Properties panel復元／UI更新だけを受ける。raw CanvasCommandCancellationのInstance→Block→pending→constraint→作図取消→tool終了の順、途中のlive状態再読取りと拒否・例外の境界を変えない。pending／constraintの取消は同じownerをmember receiverとして空文字messageで呼び、作図のactive／cancel／isToolMode／exitは従来の実関数参照を保つ。新しいsession・state・cache・listenerを作らず、返すものは従来の実Command APIである。
+
+app.jsは1,704→1,700行（4行減）、非空白1,255→1,251行。明示入力15→5項目、未使用root alias三個を除去した。生成位置と後段参照は従来どおりで、TEMP cad-canvas-cancellation-owners-proof.cjsで他app AST・既存OperationSessions／raw取消Command不変、未使用root bindingなし、五入力の初期化済みを確認した。数百行の目標は未達である。
+
+実Lifecycle／PendingCommandSession／ConstraintTargetSession／Selectionで旧接続と比較する三件を追加した。cold生成・参照同一性、途中のInstance取消が後続状態を変えるケース、作図取消とtool終了、constructorと各effectの例外同一性・途中状態を検証した。関連単体11件が成功。初回E2Eは261件成功・1件失敗で、原因はGit管理外のtest-data/テスト図形.jsonがworktreeに無いことであった。既存fixtureを複製し、hash対象へ加えた。初回ログはTEMP cad-canvas-cancellation-owners-attempt1-*へ保存した。構文627file・全単体2,188件・関連E2E263件が成功（10file、3.7m、exit 0、session73499）。実行process内の三つのCAD filter未設定、695製品／test入力fileと開始HEADの不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空、自己起動server停止を照合した。TEMP cad-canvas-cancellation-owners-{check,unit,e2e}.log、run.ps1、selection.json、source-hashes.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。E2E期待値・性能上限・timeout・workerは変更していない。
+
+全体目標はactive・未完了。2026-11-09の再開指示で停止条件を週枠残量5%未満へ変更した。開始時残量63%。開始時のC:/dev/cadにはBlock反転配置の37fileのステージ済み変更があり、独立したmanaged worktreeで分離した。作業中に別タスクが7f6c1e0としてdevelopへ反映したため、自分の差分だけを一時退避し、最新developへff追従して差分を戻した。Blockの変更を保持した同じ基準で全検証を再実行する。開始時mainは17d4cb0で、本タスクからのmain反映は残量5%未満の停止時まで行わない。次はCanvas context入力と取消／keyboardが共有する実ownerを再監査し、単なる引数の包み直しや巨大なapp contextは採用しない。現単位の検証・Commit・developへの統合後に着手する。
+
+### 直前：Spline構造編集の共有owner接続・停止checkpoint（2026-10-30、検証完了）
 
 基準developはa9bad06。BasicDrawingTools.createAuthoringの後段窓口createSplineEditingがSpline構造編集の接続を担当する。既存のGeometry／ids／pointUsage／Sketch context／Selection／通知を共有し、editing scope・値checkpoint・Parameter安定化・analysis・access・Projection guard・constraint reference・dimension symbol guardを明示入力にする。親のWorkspace.currentと構造編集のeditingScope.current、親のgeometry mutation checkpointと構造編集のcaptureValues／restoreValuesを区別する。guardのstructure引数、値checkpoint／安定化の裸関数、分析無効化のmember呼出し、既存参照・Annotation照会を維持する。raw SplineEditCommand、生成位置、後段Canvas context操作・作図取消との接続を変えず、session／Geometry／Selection／採番を複製しない。
 

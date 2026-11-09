@@ -152,7 +152,7 @@
   });
   const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, scope: selectionScopeQuery,
     access: sketchEditAccess, pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
-  const { exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode } = drawOperationLifecycle;
+  const { exit: exitDrawMode } = drawOperationLifecycle;
   const { guardSketchEdit, guardSelectionEdit, canCreateInActiveSketch, rejectRootSketchCreation } = sketchEditAccess;
   const { selectionSketchId } = selectionScopeQuery;
   const {
@@ -1285,12 +1285,8 @@
 
 
 
-  const canvasCommandCancellation = window.CanvasCommandCancellation.create({
-    instances: geometryInstanceCommand,
-    readMode: drawOperationLifecycle.readMode, selectMode: drawOperationLifecycle.selectMode, blockPlacementCommand, drawingPreview, restoreBlockPlacementPropertiesPanel,
-    readPending: pendingCommandSession.read, cancelPendingCommand, readConstraintCommand: () => constraintTargetSession.command, cancelConstraintTargetCommand,
-    drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
-    applicationText, setHint, updateUI, draw,
+  const canvasCommandCancellation = operationSessions.createCommandCancellation({
+    instances: geometryInstanceCommand, constraints: constraintTargetCommand, blockPlacementCommand, restoreBlockPlacementPropertiesPanel, updateUI,
   });
 
 

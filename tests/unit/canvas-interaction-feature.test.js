@@ -182,3 +182,75 @@ test('editing input construction preserves failure identity and short circuits b
   const probe={failAt};assert.throws(()=>editingInputsFixture(composed,probe),error=>error===probe.error);assert.deepEqual(probe.order,order.slice(0,order.indexOf(failAt)+1));
  }
 });
+function cancellationFixture(composed, probe = {}) {
+ const f=fixture(),{foundation:b,sessions:s,events,state,w}=f;
+ state.ready=false;state.failAt=null;state.error=new Error('cancel failed');state.instance=false;
+ const stage=name=>{assert.equal(state.ready,true);events.push(name);if(state.failAt===name)throw state.error;};
+ const primitive=name=>({targets:[],points:[],entries:[],reset(){stage(name);this.startPoint=this.firstPoint=this.firstCenter=this.secondCenter=this.firstLine=this.source=null;this.points=[];this.entries=[];this.targets=[];},
+  cancel(){stage(name+'.cancel');this.points=[];},resetCircle(){stage(name+'.circle');},resetArcs(){stage(name+'.arcs');}});
+ const line=primitive('line'),centerline=primitive('centerline'),rectangle=primitive('rectangle'),slot=primitive('slot'),fillet=primitive('fillet'),
+  circular=primitive('circular'),spline=primitive('spline'),splineEditing=primitive('spline-edit'),projection=primitive('projection'),offset=primitive('offset'),hatch=primitive('hatch');
+ const instances={cancel(){assert.equal(this,instances);stage('instances');state.onInstances?.();return state.instance;},reset:()=>stage('instance-reset')};
+ b.lifecycle.bind({instances,instanceSources:primitive('sources'),centerline,line,rectangle,slot,fillet,circular,spline,splineEditing,projection,preview:s.preview,offset,hatch,
+  transient:{rollbackLineStart:()=>stage('rollback'),clearPoint:()=>stage('clear-point'),clearLineCompletion:()=>stage('clear-line')},
+  clearSnap:()=>stage('snap'),clearSelection:b.selection.clear,updateToolbar:()=>stage('toolbar'),setHint:()=>events.push('hint'),updateUI:()=>stage('ui'),draw:()=>events.push('draw')});
+ const constraints={cancel(message){assert.equal(this,constraints);assert.equal(message,'');stage('constraints');s.targets.reset();}};
+ const blockPlacementCommand={reset(options){assert.equal(this,blockPlacementCommand);assert.equal(options.preservePanelState,true);stage('block');}};
+ const ports={instances,constraints,blockPlacementCommand,restoreBlockPlacementPropertiesPanel:()=>stage('panel'),updateUI:()=>stage('ui')};
+ const original=w.CanvasCommandCancellation;
+ w.CanvasCommandCancellation={create(options){probe.options=options;if(probe.constructError)throw probe.constructError;return probe.actual=original.create(options);}};
+ let command;
+ try{command=composed?s.createCommandCancellation(ports):w.CanvasCommandCancellation.create({
+  instances,readMode:b.lifecycle.readMode,selectMode:b.lifecycle.selectMode,blockPlacementCommand,drawingPreview:s.preview,restoreBlockPlacementPropertiesPanel:ports.restoreBlockPlacementPropertiesPanel,
+  readPending:s.pending.read,cancelPendingCommand:message=>s.pending.cancel(message),readConstraintCommand:()=>s.targets.command,cancelConstraintTargetCommand:message=>constraints.cancel(message),
+  drawing:{active:b.lifecycle.active,cancel:b.lifecycle.cancel,isToolMode:b.lifecycle.isToolMode,exit:b.lifecycle.exit},
+  applicationText:(_ja,en)=>en,setHint:()=>events.push('hint'),updateUI:ports.updateUI,draw:()=>events.push('draw')});}
+ finally{w.CanvasCommandCancellation=original;}
+ assert.deepEqual(events,[]);state.ready=true;
+ return{...f,command,probe,line,ports};
+}
+
+test('Canvas cancellation composition shares cold real sessions and lifecycle without binding or copying pending commands',()=>{
+ for(const composed of [false,true]){
+  const f=cancellationFixture(composed),{sessions:s,foundation:b,probe:{options:p}}=f;
+  assert.equal(f.command,f.probe.actual);assert.equal(Object.isFrozen(f.command),true);
+  assert.equal(p.drawingPreview,s.preview);assert.equal(p.readPending,s.pending.read);assert.equal(p.readMode,b.lifecycle.readMode);
+  assert.equal(p.drawing.active,b.lifecycle.active);assert.equal(p.drawing.cancel,b.lifecycle.cancel);assert.equal(p.drawing.exit,b.lifecycle.exit);
+  const pending={type:'distance-value'},operand={item:f.point};s.pending.replace(pending);s.targets.begin('horizontal',[operand]);
+  assert.equal(p.readPending(),pending);assert.equal(p.readConstraintCommand(),s.targets.command);
+  b.lifecycle.setMode('block-place');f.line.startPoint=f.point;f.state.instance=true;
+  assert.equal(f.command.cancel(),true);assert.equal(s.pending.current,null);assert.equal(s.targets.command,null);assert.equal(b.lifecycle.mode,'select');
+  assert.ok(f.events.indexOf('block')<f.events.indexOf('panel'));assert.ok(f.events.indexOf('panel')<f.events.indexOf('constraints'));
+  assert.equal(f.events.at(-1),'draw');assert.equal(f.state.scope.points[0],f.point);
+ }
+});
+
+test('Canvas cancellation composition retains sequential rereads and actual drawing cancellation plus tool exit traces',()=>{
+ for(const mutate of [false,true]){
+  const traces=[];
+  for(const composed of [false,true]){
+   const f=cancellationFixture(composed),{sessions:s,foundation:b}=f;
+   s.pending.replace({type:'distance-value'});s.targets.begin('horizontal',[]);f.line.startPoint=f.point;b.lifecycle.setMode('line');
+   if(mutate)f.state.onInstances=()=>{s.pending.clear();s.targets.reset();f.line.startPoint=null;b.lifecycle.selectMode();};
+   assert.equal(f.command.cancel(),!mutate);
+   if(mutate)assert.deepEqual(f.events,['instances']);
+   else{assert.equal(f.events.filter(e=>e==='line').length,2);assert.equal(f.events.filter(e=>e==='instance-reset').length,1);assert.equal(b.lifecycle.mode,'select');}
+   assert.equal(s.pending.current,null);assert.equal(s.targets.command,null);
+   traces.push(JSON.stringify({events:f.events,mode:b.lifecycle.mode,point:f.point}));
+  }assert.equal(traces[1],traces[0]);
+ }
+});
+
+test('Canvas cancellation composition preserves constructor and operation failure identity at each original effect boundary',()=>{
+ for(const composed of [false,true]){
+  const marker=new Error('factory failed');assert.throws(()=>cancellationFixture(composed,{constructError:marker}),error=>error===marker);
+  for(const failAt of ['instances','block','panel','constraints','line','ui']){
+   const f=cancellationFixture(composed),{sessions:s,foundation:b}=f;
+   s.pending.replace({type:'distance-value'});s.targets.begin('horizontal',[]);f.line.startPoint=f.point;b.lifecycle.setMode('block-place');f.state.failAt=failAt;
+   assert.throws(()=>f.command.cancel(),error=>error===f.state.error);
+   assert.equal(f.events.at(-1),failAt);assert.equal(f.state.scope.points[0],f.point);
+   if(['instances','block','panel'].includes(failAt)){assert.ok(s.pending.current);assert.ok(s.targets.command);}
+   if(failAt==='constraints')assert.equal(s.pending.current,null);
+  }
+ }
+});
