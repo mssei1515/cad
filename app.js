@@ -40,14 +40,10 @@
     Circle,
     Arc,
     Spline,
-    OffsetConstraint,
     OffsetChainConstraint,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
-    HorizontalConstraint,
-    VerticalConstraint,
-    RadiusConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
     SplineSplineTangentConstraint,
@@ -64,7 +60,6 @@
 
   const {
     targetFromConstraint,
-    measuredConstraintTargetValue,
     isDimensionConstraint,
   } = window.DimensionQueries;
 
@@ -234,7 +229,6 @@
     ArcEndpointArcEndpointCoincidentConstraint, OffsetChainConstraint,
     onSelectionChanged: syncOffsetChainSelection,
   });
-  const { add: addOffsetChainGeometry } = offsetSelection;
   const { nextSeq } = window.GeometryIds;
   const constraintRebinding = window.ConstraintRebinding.create({
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
@@ -452,8 +446,7 @@
     prepareStart: () => drawOperationLifecycle.prepare("offset"),
     updateGeometrySelectionUI, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { command: offsetCommand, previewLayer: offsetPreviewLayer, createGeometry: createOffsetGeometry, chainDraft: offsetChainDraft } = offsetFeature;
-  const { offsetDistanceFromPointer } = offsetFeature.plans;
+  const { command: offsetCommand, previewLayer: offsetPreviewLayer, chainDraft: offsetChainDraft } = offsetFeature;
   const { submit: submitOffsetValue } = offsetCommand;
   function computeTrimPreview(pointer) { return trimFeature.computePreview(pointer); }
   const editingCheckpoint = window.EditingCheckpoint.create({
@@ -502,7 +495,6 @@
   const constraintSolvePreparation = window.ConstraintSolvePreparation.createForSolver({
     solver, hasDirectRadiusDimension, offsetChainDraft, minimumOrientationLength: MIN_ORIENTATION_LENGTH, minimumLineLength: MIN_LINE_LENGTH,
   });
-  const { precondition: preconditionNewConstraint } = constraintSolvePreparation;
   const dimensionValueCommand = window.ConstraintEditing.createDimensionValues({
     parameters: parameterNamespace, sketches: sketchContext, interaction: canvasInteraction, pending: pendingCommandSession,
     valueInput: dimensionInputController, checkpoint: editingCheckpoint, presentation, annotationFeature,
@@ -1507,13 +1499,10 @@
       resetModelState, addPoint, addLine, pushModelConstraint, modelTypes: window.GeometrySolver,
       ensureDimensionDefaults, solveAndRefresh, log, fitAllGeometryToViewport, draw, resetHistory, serializeModel,
     });
-    const offsetTestSupport = window.OffsetTestDriver.createSupport({
-      resetModelState, addPoint, addLine, addCircle, addArc, pushModelConstraint, currentScope: workspace.current,
-      RadiusConstraint, OffsetConstraint, OffsetChainConstraint, HorizontalConstraint, VerticalConstraint, Line,
-      createOffsetGeometry, preconditionNewConstraint, solveSketchAndDependents, activeSketchId, snapshotModelState,
-      targetFromConstraint, measuredConstraintTargetValue, serializeModel, loadModelData,
-      offsetSelection, drawingPreview, offsetDistanceFromPointer, pendingCommandSession, addOffsetChainGeometry, clearSelection,
-      fitAllGeometryToViewport, resetHistory, solveAndRefresh, draw, canvas, worldToCanvasScreen, document
+    const offsetTestSupport = window.OffsetTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, insertion: constraintInsertion, offset: offsetFeature, sourceSelection: offsetSelection,
+      solvePreparation: constraintSolvePreparation, solving: sketchSolving, checkpoint: editingCheckpoint, sessions: operationSessions, presentation, viewport,
+      resetModelState, serializeModel, loadModelData, clearSelection, fitAllGeometryToViewport, resetHistory, solveAndRefresh, canvas, document,
     });
     const sidebarInspectionFixture = propertiesTestFactories.createInspectionFixture();
     const appearanceTestAction = propertiesTestFactories.createAppearanceAction();

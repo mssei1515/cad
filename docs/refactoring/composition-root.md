@@ -1,5 +1,13 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Offset testのWorkspace owner接続（2026-11-10）
+
+OffsetTestDriver.createForWorkspaceが、DocumentWorkspaceのWorkspace.current／active Sketch、GeometryCreation、ConstraintInsertion、OffsetFeature、OffsetSelection、ConstraintSolvePreparation、SketchSolving、EditingCheckpoint、OperationSessions、Presentation、viewportから既存の九つのブラウザテスト操作を構築する。型と寸法測定queryは既存namespaceから取得する。Workspaceの観測scopeとOffsetFeatureが持つ編集scopeを区別し、求解前処理・checkpoint・求解・描画・座標変換は元の裸関数を渡す。reset／serialize／load／Selection消去／fit／history／solve-refreshとDOMは明示入力に残し、初期化時にmodelを読まない。既存createSupportとfixture・公開九操作、test gate／公開順、Geometry同一性、live session／倍率とcallback引数・receiver・戻り値・例外時の途中状態を維持する。新しいmodel／state／cache／listener・moduleは作らない。
+
+app.jsは1,666→1,655行（11行減）、非空白1,217→1,206行。Offset専用の型四つ・機能alias五つをrootから除き、構築入力35項目を20項目へ整理した。型・計算の静的依存をtest ownerへ移し、通常機能の所有をtest moduleへ移さない。TEMP cad-offset-test-owners-proof.cjsで変更対象以外のappと既存OffsetTestDriverのAST不変、未使用root bindingなし、入力ownerの初期化済みを確認した。全体目標は未完了で、数百行には未到達。拘束の早期callbackは、後段ownerへのsetterだけを増やす分離を見送った。
+
+関連単体5件、構文627file・全単体2,211件・関連E2E205件が成功（7file、3.2m、exit 0）。実Geometry／OffsetFeature／OffsetSelectionを使う旧接続との比較三件を追加し、cold生成、primitive構築・前処理・checkpoint・求解・reload順、別Workspace／編集view、live選択・pointer・pending・倍率、prepare／capture／solve／loadの同一例外と途中状態を確認した。追加テストの座標期待値130は既存fixtureの35×2＋20＝90に訂正し、製品計算や既存テストは変更していない。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-offset-test-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsへ証跡を保持する。既存の性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## Canvas sceneのHatch・描画stack接続（2026-11-09）
 
 CanvasDisplayのsceneがcreateHatchRenderingを提供する。実Geometry painterと型別boundary map、GeometryReadServicesの外観可視性／Hatch boundary／Geometry collection、commandTargetsとSketch style、Selection／Hover／Lifecycle、同じctx／viewport／export frameをHatch content・layerへ共有する。raw実layerと可変長member委譲drawHatches、後段のcreateStackを凍結公開APIとして返す。content→layerと、Annotation／Reference Imageの生成後のDrawingStack生成を元の位置に保つ。stackは実Geometry painterと同じHatch layerへ接続し、previewを除外する。mode／後段Hatch command／hover／可視性／export boundsは実行時に読み、query・paint順、selected／hover／alpha、fast path／sort／batchと既存drawingOrder正規化、引数・receiver・return・例外／途中Canvas状態を変えない。新しいmodel／state／cache／listener・moduleを作らず、raw HatchRenderer／DrawingStack APIは維持する。
