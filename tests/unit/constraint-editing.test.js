@@ -643,3 +643,96 @@ test('commit owner assembly propagates constructor failure identity without star
     assert.equal(probe.f.state.ready, false); assert.equal(probe.f.session.command, null); assert.equal(probe.f.selection.lines.length, 1);
   }
 });
+
+function commitIntentFixture(composed, probe = {}) {
+  const initial = {}, f = commitCompositionFixture(true, true, initial), w = f.w;
+  const state = { active: true, editable: true, reference: true, cycle: false, failure: null }, calls = [];
+  const read = name => { assert.equal(f.state.ready, true); calls.push(name); if (state.failure === name) throw probe.error; };
+  const values = { subjectFromOperand: operand => { read("subject"); return operand; }, referenceTargetFromOperand: operand => { read("reference-target"); return operand; },
+    referenceSubjectElement: subject => { read("element"); return subject.item; }, referenceSubjectSketchId: subject => { read("sketch"); return subject.sketchId; } };
+  const shared = f.probe.ownerInputs;
+  Object.assign(shared.operands.operands, values);
+  const active = item => { read("active"); return state.active && item.sketchId === "S1"; }, editable = () => { read("editable"); return state.editable; };
+  Object.assign(shared.sketches, { isActiveSketchElement: active, isEditableSketchElement: editable,
+    isReferenceSourceSketchId: () => { read("reference"); return state.reference; } });
+  const options = { ...initial.inputs, referenceState: { wouldCreateReferenceCycle: () => { read("cycle"); return state.cycle; } } };
+  shared.operands.candidates.referenceConstraintForType = () => { read("candidate"); return f.state.createdConstraint; };
+  const order = [], ports = {}, results = {}, restore = [];
+  Object.assign(probe, { order, ports, results, calls, f }); f.state.ready = false;
+  for (const [name, method, label] of [["ConstraintCommitCommand", "createWithDimensions", "commit"], ["DimensionConstraintFactory", "create", "dimension-factory"],
+    ["DimensionReadOnlyQuery", "create", "read-only"], ["ConstraintIntentResolver", "create", "intent"]]) {
+    const original = w[name]; restore.push(() => { w[name] = original; });
+    w[name] = { ...original, [method](input) { order.push(label); ports[label] = input; if (probe.failAt === label) throw probe.error; return results[label] = original[method](input); } };
+  }
+  let support, resolver;
+  try {
+    if (composed) { support = f.feature.createCommitWithIntentForWorkspace(options); resolver = support.intentResolver; }
+    else {
+      support = f.feature.createCommitForWorkspace(options); const { createIntentResolver } = support;
+      resolver = createIntentResolver({ operands: shared.operands.operands,
+        types: { PointOnSplineConstraint: w.GeometrySolver.PointOnSplineConstraint, SplineLineTangentConstraint: w.GeometrySolver.SplineLineTangentConstraint, SplineSplineTangentConstraint: w.GeometrySolver.SplineSplineTangentConstraint },
+        isActiveSketchElement: active, isEditableSketchElement: editable });
+    }
+  } finally { for (const reset of restore) reset(); }
+  assert.deepEqual(f.events, []); assert.deepEqual(calls, []); f.state.ready = true;
+  f.state.resolveIntent = (type, operands) => resolver.resolve(type, operands);
+  return { ...f, ...support, resolver, support, intentState: state, calls, options, shared, order, ports, results };
+}
+
+test("paired commit and intent construction preserves cold constructor order and shares actual candidate, operand, guard, command and query owners", () => {
+  for (const composed of [false, true]) {
+    const f = commitIntentFixture(composed);
+    assert.deepEqual(f.order, ["commit", "dimension-factory", "read-only", "intent"]); assert.equal(Object.isFrozen(f.support), true);
+    assert.equal(f.command, f.results.commit.command); assert.equal(f.readOnly, f.results.commit.readOnly); assert.equal(f.resolver, f.results.intent);
+    assert.equal(f.ports.intent.candidates, f.shared.operands.candidates); assert.equal(f.ports.intent.operands, f.shared.operands.operands);
+    assert.equal(f.ports.intent.activeSketchId, f.shared.sketches.activeSketchId); assert.equal(f.ports.intent.isActiveSketchElement, f.shared.sketches.isActiveSketchElement);
+    assert.equal(f.ports.intent.isEditableSketchElement, f.shared.sketches.isEditableSketchElement); assert.equal(f.ports.intent.wouldCreateReferenceCycle, f.options.referenceState.wouldCreateReferenceCycle);
+    for (const name of ["PointOnSplineConstraint", "SplineLineTangentConstraint", "SplineSplineTangentConstraint"]) assert.equal(f.ports.intent.types[name], f.w.GeometrySolver[name]);
+    assert.equal(typeof f.support.createIntentResolver, "function"); if (composed) assert.equal(f.support.intentResolver, f.resolver);
+  }
+});
+
+test("paired intent preserves real Spline constraints, live reference guards, selection resolution, solve rollback, history and performance traces", () => {
+  for (const rejectSolve of [false, true]) {
+    const snapshots = [];
+    for (const composed of [false, true]) {
+      const f = commitIntentFixture(composed), g = f.w.GeometrySolver, operand = { kind: "line", line: f.line, item: f.line, relation: "active", sketchId: "S1" };
+      const spline = new g.Spline("SP1", [f.a, f.b]), second = new g.Spline("SP2", [f.a, f.b]);
+      const picked = { kind: "spline", relation: "active", sketchId: "S1", spline, parameter: 0.25, endpoint: "end" };
+      const point = { kind: "point", relation: "active", sketchId: "S1", point: f.a };
+      const on = f.resolver.resolve("coincident", [point, picked]).constraint; assert.equal(on instanceof g.PointOnSplineConstraint, true); assert.equal(on.point, f.a); assert.equal(on.spline, spline); assert.equal(on.parameter, 0.25);
+      const tangent = f.resolver.resolve("tangent", [operand, picked]).constraint; assert.equal(tangent instanceof g.SplineLineTangentConstraint, true); assert.equal(tangent.line, f.line); assert.equal(tangent.spline, spline); assert.equal(tangent.endpoint, "end");
+      const pair = f.resolver.resolve("tangent", [picked, { ...picked, spline: second, endpoint: "start" }]).constraint;
+      assert.equal(pair instanceof g.SplineSplineTangentConstraint, true); assert.equal(pair.a, spline); assert.equal(pair.b, second); assert.equal(pair.endpointB, "start");
+      spline.closed = true; assert.match(f.resolver.resolve("tangent", [operand, picked]).error, /closed/i); spline.closed = false;
+      const reference = { ...operand, relation: "reference", sketchId: "parent" };
+      assert.equal(f.resolver.resolve("parallel", [reference, operand]).constraint, f.state.createdConstraint);
+      f.intentState.editable = false; assert.match(f.resolver.resolve("parallel", [operand, reference]).error, /アクティブ/);
+      f.intentState.editable = true; f.intentState.cycle = true; assert.match(f.resolver.resolve("parallel", [operand, reference]).error, /循環/); f.intentState.cycle = false;
+      f.intentState.reference = false; assert.match(f.resolver.resolve("parallel", [operand, reference]).error, /先祖/); f.intentState.reference = true;
+      assert.match(f.resolver.resolve("horizontal", [{ ...operand, relation: "descendant", sketchId: "child" }]).error, /子孫/);
+      f.session.begin("horizontal", [operand]); f.state.rejectSolve = rejectSolve; f.command.fromSelection("horizontal");
+      assert.equal(f.b.y, 0); assert.equal(f.model.constraints.length, rejectSolve ? 0 : 1); assert.equal(f.history.length, rejectSolve ? 0 : 2);
+      if (rejectSolve) assert.equal(f.selection.lines[0], f.line); else assert.equal(f.model.constraints[0].line, f.line);
+      snapshots.push(JSON.stringify({ events: f.events, guards: f.calls, history: f.history, trace: f.command.readPerformance() }));
+    }
+    assert.equal(snapshots[1], snapshots[0]);
+  }
+});
+
+test("paired commit and intent propagate constructor and live guard failures without later construction or editing", () => {
+  const order = ["commit", "dimension-factory", "read-only", "intent"];
+  for (const composed of [false, true]) {
+    for (const failAt of order) {
+      const error = new Error(failAt), probe = { failAt, error };
+      assert.throws(() => commitIntentFixture(composed, probe), value => value === error); assert.deepEqual(probe.order, order.slice(0, order.indexOf(failAt) + 1));
+      assert.deepEqual(probe.f.events, []); assert.deepEqual(probe.calls, []); assert.equal(probe.f.state.ready, false); assert.equal(probe.f.model.constraints.length, 0);
+    }
+    for (const name of ["subject", "reference-target", "sketch", "element", "reference", "active", "editable", "cycle", "candidate"]) {
+      const error = new Error(name), f = commitIntentFixture(composed, { error }); f.intentState.failure = name;
+      const operand = { relation: "active", kind: "line", item: f.line, line: f.line, sketchId: "S1" };
+      assert.throws(() => f.resolver.resolve("parallel", [operand, { ...operand, relation: "reference", sketchId: "parent" }]), value => value === error);
+      assert.equal(f.calls.at(-1), name); assert.equal(f.model.constraints.length, 0); assert.equal(f.history.length, 0); assert.deepEqual(f.events, []);
+    }
+  }
+});
