@@ -77,6 +77,7 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 構文は`npm run check`、単体は`npm run test:unit`。関連E2Eを実施し、全体完了前には全体E2Eも確認する。
 - `.test.js`の変更は分離した責務の境界検証や読込一覧の更新に必要な範囲とする。テストの整備だけで分離が進んだことにはしない。
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`tools/run-unit-tests.js`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。factoryへ渡す各portについて、後で初期化されるconst／letの直接捕捉がないか確認し、従来どおり操作時に読む入口はgetter／委譲callbackで接続する。
+- binding削除の監査では、未使用宣言だけでなく開始時に比べて新しい未束縛参照が増えていないことも確認する。削除後に別の機能から使われていないか、Babel scope等で参照先を照合する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
 - originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。最新developからcodex/*の作業branchを作成し、現在のbranchはsection 8とGitで確認する。統合・検証・Push後は取り込みを確認して作業branchを整理し、未統合・調査中のbranchは保持する。
@@ -96,6 +97,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Sketch投影Browser検証APIのworkspace接続（2026-11-10）
+
+SketchProjectionTestDriver.createForWorkspaceはtest query guard内でだけ呼ばれ、既存createSupportへ必要な型・scope・操作・readerを接続する。Geometry生成、DocumentWorkspace／GeometryReadServices、CanvasInteraction、実Projection feature、描画／拘束表示、履歴／求解、Block編集・command・選択queryを明示したownerとして共有する。型・Sketch定数・Geometry ID照会は既存namespaceから取得し、Projectionのquery／sourceとCanvas Selectionをそのまま使う。Block定義の追記はroot Document、Geometryの照会はWorkspace.currentを使い分け、Block instance IDも同じDocument allocatorから取得する。後段の特殊なhistory観測、保存／読込、metadata、削除／外観、clipboard callbackは明示入力に残す。生成時にscope・Selection・mode・staged count・DOM・履歴を読まず、従来の21公開APIの名前・順序・引数・返値・例外とfixtureの途中状態を維持する。製品owner・query・sessionを作らず、通常起動やBrowserTestApiの公開順・guardは変更しない。個別factoryとraw createSupportも維持する。
+
+app.jsは1,585→1,573行（12行減）、非空白1,136→1,124行。投影検証の入力は61→34項目となり、専用のsource／constraint照会、型・外観・Geometry生成aliasをrootから除いた。TEMP cad-projection-browser-support-proof.cjsで十六callbackとversion入力、他root／既存TestDriver AST、BrowserTestApi／製品Projection owner不変、未使用root bindingなしを確認した。通常Instance編集が使うsketchProjectionSourcesの共有aliasは保持する。初回E2Eでこのaliasの参照不足を検出したため実行を停止し、復元後に通常起動・test起動を確認して全検証をやり直した。AST監査は未使用bindingに加え、開始時に比べて新しい未束縛参照がないことも検証する。巨大なtest contextや個別file群を増やさず、診断だけに必要な接続を既存TestDriverへ置く。数百行への全体目標は未完了。
+
+関連単体14件、構文627file・全単体2,250件・関連E2E354件が成功（16file、5.1m、exit 0）。実Geometry生成／GeometryIds／Selectionと既存TestDriverを旧接続と比較する三件を追加し、cold生成と公開API順、live mode／staged／scope／history・同じGeometry参照、copy／paste・reloadとversion、Geometry／Block編集fixtureとroot Document定義・IDの使い分け、十一callbackの例外同一性と途中stateを検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-projection-browser-support-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。初回E2Eは通常Instance編集へのsketchProjectionSources参照不足で起動失敗し停止した。共有aliasを復元し、新しい未束縛参照がないことを監査してから構文・単体・同じ全関連E2Eを再実行した結果である。初回ログとsnapshotはTEMP cad-projection-browser-support-failed-initial-e2e.log／failed-initial-source-hashes.jsonに保持する。復元後の通常起動二経路とtest起動一経路もブラウザerrorなしを確認した（smoke.log）。全E2Eの代替結果とは扱わない。
 
 ### 最新：Projection metadata編集の共有owner接続（2026-11-10）
 

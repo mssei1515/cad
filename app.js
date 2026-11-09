@@ -27,13 +27,9 @@
     vectorNorm,
     Point,
     Line,
-    Circle,
-    Arc,
-    Spline,
     CoincidentConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
-    SketchProjectionConstraint,
     ConstraintSolver,
   } = window.GeometrySolver;
 
@@ -99,7 +95,7 @@
   });
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
-  const { effectiveAppearanceForElement, isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
+  const { isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
   const { hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
@@ -169,9 +165,7 @@
   });
   const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
     guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
-  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget } = sketchProjectionQueries;
-  const { sketchProjectionSourceKey,
-    sketchProjectionEntryFromOperand } = sketchProjectionSources;
+  const { sketchProjectionConstraintForTarget } = sketchProjectionQueries;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
   const operationSessions = createOperationSessions({
     snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
@@ -301,7 +295,6 @@
     annotationDrag: constrainedAnnotationDrag, solver, pointUsage, presentation, solveState: sketchSolveResultState, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { connectedComponentFromSeeds, localSolveLines, sketchSolveConstraints } = solveScopeQuery;
-  const { constraintIsRedundant } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
   const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = createCanvasDisplay({
     initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,
@@ -340,7 +333,7 @@
     annotationBounds,
   });
   const { constraintStatusColor, sketchStrokeWidth } = sketchPresentation;
-  const { geometryDisplayColor, traceSplinePath } = geometryDisplay;
+  const { traceSplinePath } = geometryDisplay;
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { fitSketchToViewport, fitAllGeometryToViewport } = drawingFit;
@@ -383,7 +376,7 @@
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
     hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
   });
-  const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
+  const { addPoint, addLine, addCircle, addArc, addSpline, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
   const sketchProjectionEditing = sketchProjectionFeature.createModelEditing({
     geometry: geometryCreation, references: constraintReferences,
   });
@@ -1445,18 +1438,13 @@
     });
     const sidebarInspectionFixture = propertiesTestFactories.createInspectionFixture();
     const appearanceTestAction = propertiesTestFactories.createAppearanceAction();
-    const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createSupport({
-      types: { Point, Line, Circle, Arc, Spline }, currentScope: workspace.current, readMode: drawOperationLifecycle.readMode, readStagedCount: () => sketchProjectionCommand.count, readConstraints: sketchProjectionConstraints,
-      constraintGeometryId, constraintSketchId, effectiveAppearanceForElement, geometryDisplayColor,
-      constraintStatusOf, constraintStatusColor, constraintIsRedundant, serializeModel, readHistory: readTestHistory, document,
-      resetModelState, DEFAULT_SKETCH_ID, ROOT_SKETCH_ID, addPoint, addLine, addCircle, addArc, addSpline, addPointToSketch,
-      focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, splineGeometry: window.SplineGeometry, resetHistory, updateUI, draw, SketchProjectionConstraint,
-      markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata, solveSketchAndDependents, loadModelData,
-      createEmptyBlockDefinition, openBlockDefinitionEditor, resetBlockEditorHistory, completeBlockDefinitionEdit, isEditingBlock: () => Boolean(blockEditor.current),
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, blockProjectionBundle, clearSelection, canvasSelection,
-      deleteCurrentSelection, setAppearanceForSelection: appearanceTestAction.set, deleteElements, deleteSketch, elementSketchId, sketchProjectionSourceKey,
-      CURRENT_JSON_VERSION, sketchProjectionEntryFromOperand, copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
-      blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter
+    const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, projection: sketchProjectionFeature,
+      display: geometryDisplay, sketchPresentation, analysis: constraintAnalysis, redundancy: constraintRedundancy, presentation, canvasDriver: canvasTestDriver,
+      history: historyController, solving: sketchSolving, blocks: blockEditingFeature, blockDefinition: blockDefinitionCommand, blockCompletion: blockCompletionCommand, blockSelection: blockSelectionQuery,
+      document, readHistory: readTestHistory, resetModelState, serializeModel, loadModelData, markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata,
+      clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection: appearanceTestAction.set, version: CURRENT_JSON_VERSION,
+      copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
     });
     const constraintInputObservation = constraintTestFactories.createInputObservation();
     const constraintIntentTestDriver = constraintTestFactories.createIntentResolution();
