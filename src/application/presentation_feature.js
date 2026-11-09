@@ -82,13 +82,23 @@
         updateUI, updatePropertiesUI, setHint, draw });
       return commandPanels;
     }
+    function createCommandPanelsForEditing({ host, documentWorkspace, readServices, lifecycle,
+      projectionCommand, geometryCommand, sourceCommand, changeFreeProperty, hatchCommand, annotationCommand, pngExportCommand }) {
+      return createCommandPanels({ host, readMode: lifecycle.readMode, sketchContext: documentWorkspace.sketches,
+        projectionCommand, geometryCommand, sourceCommand, resolveGeometryRef: readServices.reads.resolveGeometryRef,
+        geometryRefForItem: window.GeometryObjects.geometryRefForItem, applicationText: settings.applicationText,
+        formatDisplayNumber: window.NumberDisplay.formatDisplayNumber, finishProjection: projectionCommand.commit,
+        finishSourceEdit: sourceCommand.finish, exitDrawMode: lifecycle.exit, changeFreeProperty, hatchCommand, annotationCommand,
+        effectiveAnnotationStyle: readServices.annotationAppearance.effectiveAnnotationStyle, pngExportCommand,
+        updateUI, updatePropertiesUI, setHint, draw });
+    }
     function bindCanvas({ readPngCommand, readPending, readMode, readCommandPanel: readPanel = readCommandPanel, syncAnnotationInput, readDerivedPanel: readDerived = readDerivedPanel,
       withGeometryReadCache, drawCanvas }) {
       canvas = window.CanvasRefresh.create({ readPngCommand, readPending, readMode, readCommandPanel: readPanel, syncAnnotationInput, readDerivedPanel: readDerived,
         interactionProfiler: profiler, profileInteractionWork: profiler.work, withGeometryReadCache, drawCanvas });
       return canvas;
     }
-    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createToolbar, createToolNavigation, createCommandPanels, readCommandPanel, bindUI, bindCanvas,
+    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createToolbar, createToolNavigation, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
       log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw,
       get selectedItem() { return canvas.selectedItem; } });
   }

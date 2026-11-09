@@ -114,10 +114,9 @@
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
-    geometryAppearance, dimensionAppearance, annotationAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
+    geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { effectiveAppearanceForElement, isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
   const { effectiveDimensionAppearance } = dimensionAppearance;
-  const { effectiveAnnotationStyle } = annotationAppearance;
   const { hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds } = blockCatalog;
@@ -146,7 +145,6 @@
   });
   const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, scope: selectionScopeQuery,
     access: sketchEditAccess, pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
-  const { exit: exitDrawMode } = drawOperationLifecycle;
   const { guardSketchEdit, guardSelectionEdit } = sketchEditAccess;
   const { selectionSketchId } = selectionScopeQuery;
   const {
@@ -194,8 +192,7 @@
     guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
   const { sketchProjectionSourceKey,
     sketchProjectionEntryFromOperand } = sketchProjectionSources;
-  const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
-    commit: commitSketchProjectionCommand } = sketchProjectionCommand;
+  const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
   const operationSessions = createOperationSessions({
     snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
     readCenterline: () => centerlineCommand, projectPointToCenterlineSupport: point => projectPointToCenterlineSupport(point),
@@ -262,7 +259,6 @@
     projectionSources: sketchProjectionSources, guardDimensionSymbolDeletion, solveState: sketchSolveResultState,
   });
   const { start: startGeometryInstanceCommand } = geometryInstanceCommand;
-  const { finish: finishInstanceSourceEdit } = instanceSourceCommand;
   const blockPlacementCommand = blockEditingFeature.createPlacement({
     layout: { snappedBlockRotation, blockInstanceTranslationForAnchor }, isGeometryMode, clearSelection,
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
@@ -1621,12 +1617,10 @@
     });
   }
 
-  presentation.createCommandPanels({
-    host: canvas.parentElement, readMode: drawOperationLifecycle.readMode, sketchContext, projectionCommand: sketchProjectionCommand,
-    geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand, resolveGeometryRef, geometryRefForItem, applicationText, formatDisplayNumber,
-    finishProjection: commitSketchProjectionCommand, finishSourceEdit: finishInstanceSourceEdit, exitDrawMode,
-    changeFreeProperty: changeFreeInstanceProperty, hatchCommand, annotationCommand, effectiveAnnotationStyle, pngExportCommand,
-    updateUI, updatePropertiesUI, setHint, draw,
+  presentation.createCommandPanelsForEditing({
+    host: canvas.parentElement, documentWorkspace, readServices: geometryReadServices, lifecycle: drawOperationLifecycle,
+    projectionCommand: sketchProjectionCommand, geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand,
+    changeFreeProperty: changeFreeInstanceProperty, hatchCommand, annotationCommand, pngExportCommand,
   });
 
   const documentEditingReset = window.DocumentEditingReset.create({

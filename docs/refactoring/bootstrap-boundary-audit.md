@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## Command panelのPresentation owner接続（2026-11-10）
+
+PresentationFeature.createCommandPanelsForEditingが共有command panelの組立てを担当する。親が持つdocument／settings.applicationText／画面更新・Properties更新・hint・drawへ、DocumentWorkspace.sketches、GeometryReadServicesの参照解決／注記外観、LifecycleとProjection／Instance source／Geometry／Hatch／Annotation／PNG commandを接続する。数値formatとGeometry参照変換は既存namespaceを使う。Projection.commit、source.finish、Lifecycle.exitとqueryは元の裸関数参照を保ち、command自身を渡す箇所のmember receiverも維持する。derived→hatch→annotation→共通DOM生成とlistener登録を従来の後段位置で行い、成功時だけ同じpanel ownerを公開する。mode／source／active Sketch／言語／注記style／PNG activeと選択を操作時に読み、完了・取消／refresh順と例外時の途中状態を変えない。既存createCommandPanelsとraw各panel APIを維持し、draft／session／model／listener ownerを重複させない。
+
+app.jsは1,655→1,649行（6行減）、非空白1,206→1,200行。明示構築入力22→11項目、test hooksは222行のまま。Presentationが所有する翻訳・通知と編集機能の接続を同じ境界へ集め、不要になったrootの注記外観・終了／確定aliasを除いた。TEMP cad-command-panel-owners-proof.cjsで変更対象以外のapp／既存Presentation／raw四panelのAST不変、未使用root bindingなし、後段入力の初期化済みを確認した。数百行への全体目標は未完了。
+
+関連単体19件、構文627file・全単体2,214件・関連E2E338件が成功（14file、5.4m、exit 0）。実Derived／Hatch／Annotation／共通Command panelを旧接続と比較する三件を追加し、cold生成順と参照同一性、live mode／選択／言語／Sketch／注記外観、完了・取消とPNG優先、実Canvas refreshへのpanel接続、DOM／constructor・exit・UI／Canvas refreshの例外同一性と後続処理停止を確認した。新規比較fixtureの数値表示期待値は既存NumberDisplayの丸めと一致させ、UI例外注入は元のPresentation stateを対象とした。製品挙動や既存テスト期待値は変更していない。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-command-panel-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。性能閾値・timeoutは変更しておらず、全E2Eの代替結果とは扱わない。
+
 ## Offset testのWorkspace owner接続（2026-11-10）
 
 OffsetTestDriver.createForWorkspaceが、DocumentWorkspaceのWorkspace.current／active Sketch、GeometryCreation、ConstraintInsertion、OffsetFeature、OffsetSelection、ConstraintSolvePreparation、SketchSolving、EditingCheckpoint、OperationSessions、Presentation、viewportから既存の九つのブラウザテスト操作を構築する。型と寸法測定queryは既存namespaceから取得する。Workspaceの観測scopeとOffsetFeatureが持つ編集scopeを区別し、求解前処理・checkpoint・求解・描画・座標変換は元の裸関数を渡す。reset／serialize／load／Selection消去／fit／history／solve-refreshとDOMは明示入力に残し、初期化時にmodelを読まない。既存createSupportとfixture・公開九操作、test gate／公開順、Geometry同一性、live session／倍率とcallback引数・receiver・戻り値・例外時の途中状態を維持する。新しいmodel／state／cache／listener・moduleは作らない。
