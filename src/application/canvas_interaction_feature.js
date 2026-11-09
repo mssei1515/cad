@@ -77,6 +77,17 @@
           completeLineLength: () => constraints.completeLineLength(), finishSpline: spline.finalize, removeSplinePoint: spline.removeLast,
           finishProjection: projection.commit, finishHatch: hatch.finish });
       }
+      function createEditingInput(options) {
+        const inputs = createInputForEditing(options);
+        const { referenceImage, drawingCommands: { fillet, offset } } = options;
+        function bindPointer(options) {
+          return bindEditingPointer(inputs, { ...options, referenceImageInteraction: referenceImage, fillet, offset });
+        }
+        function createKeyboard(options) {
+          return createKeyboardForEditing(inputs, { ...options, referenceImage, offset });
+        }
+        return Object.freeze({ bindPointer, createKeyboard });
+      }
       function createCommandCancellation({ instances, constraints, blockPlacementCommand, restoreBlockPlacementPropertiesPanel, updateUI }) {
         return window.CanvasCommandCancellation.create({
           instances, readMode: lifecycle.readMode, selectMode: lifecycle.selectMode, blockPlacementCommand, drawingPreview: preview, restoreBlockPlacementPropertiesPanel,
@@ -86,7 +97,7 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      return Object.freeze({ preview, pending, targets, pointer, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      return Object.freeze({ preview, pending, targets, pointer, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
     }
     return Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
       identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions });

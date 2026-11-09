@@ -98,6 +98,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：Canvas入力の共有実体と後段接続（2026-11-10）
+
+CanvasInteractionFeatureのOperationSessionsにcreateEditingInputを追加した。同じ実CanvasCommandInputs featureを一度だけ生成し、pointer接続とkeyboard生成をその実体に閉じたimmutable APIとして返す。rootが入力featureを再び選択して渡す二つのfactory接続を除き、Reference Image／Fillet／Offsetの五つの重複入力を初期の実ownerから共有する。rootは元の位置で入力を生成し、Blank Gesture／hit query後にpointerを接続、native inputとDimension inputのbind後にkeyboardを生成・startする。
+
+pointer接続は同じSession pointer・DrawingPreview・Selection identityを使い、keyboardも同じPending／Target session・Lifecycle・pointer読取りへ接続する。実pointer／KeyboardInputの返却、receiver・例外と個別bind／start／disposeの所有は従来のまま。新しいmodel／mode／pending／pointer／cache／listenerや汎用contextを作らず、raw createInputForEditing／bindEditingPointer／createKeyboardForEditingも維持する。
+
+app.jsは1,499→1,497行（2行減）、非空白1,050→1,048行。AST比較で対象構築・接続の置換以外のroot全体と相対順、旧module API、CanvasCommandInputs／Pointer controller／KeyboardInput・index・全E2E不変、新しい未使用／未束縛参照なしを確認した。入力実体を外から再接続できないAPIとし、同じ機能に紐付く初期ownerを再注入させない。
+
+再集計は330文・542binding、非空白1,048行。構築532行、別名／設定142行、委譲74行、test hooks210行が中心である（TEMP cad-canvas-editing-input-ownership-audit.json）。構文依存の集計であり、runtime初期化順やmodule境界の証明ではない。次の分離はこの構築部の実ownerとphaseを優先し、行数だけの委譲移動や一括bootstrapへ縮退させない。
+
+関連単体22件、構文631file・全単体2,310件・全E2E589件が成功（50file、21.4m、exit 0）。二つの追加テストで同一feature・Session pointer／Preview／identity・command参照、生成時のlistenerなし、実pointerによる注記配置、keyboard取消順・Offset確定時の最新pointer・start／disposeを確認した。既存の生成失敗比較は新入口も含め、同じ例外と後段未実行を確認した。699製品／test入力と開始HEAD不変、無指定test listと選択50fileの589件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-canvas-editing-input-ownership-{focused,check,unit,e2e,proof,smoke}.logとsource-hashes／selection／filter-environment／e2e-receipt／last-run JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。今回の入力所有変更後の全体検証であり、全体の数百行への目標達成とは区別する。
+
+基準developは72168e9、作業branchはcodex/canvas-editing-input-ownership、開始時週枠残量40%。Canvas入力全般へ関わる共通接続のため、今回変更後の全E2E589件（50file）を選択した。同じ生存sessionの終了まで待ち、元のテスト基準・timeoutは変えない。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Sketch削除の共有owner接続（2026-11-10）
 
 SketchEditingFeature.createForInteractionのeditingへcreateDeletionForEditingを追加した。既に共有するPresentation／Sketch／Workspaceと、後段のDeletionFeature・symbol guard・Solve State／Solving・Analysis・確認callbackから実SketchDeletionCommandを元の位置で生成する。Geometry keyとAnnotation削除判定は既存namespaceから取得する。root専用の参照拒否委譲と三つの未使用別名を除き、削除固有の依存入力を10→6項目にした。

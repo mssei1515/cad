@@ -166,8 +166,7 @@
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
   const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
-    pointer: pointerInteractionController, createSelectionPresentation, createInputForEditing: createCanvasInputFeature,
-    bindEditingPointer: bindCanvasPointer, createKeyboardForEditing: createCanvasKeyboard } = operationSessions;
+    pointer: pointerInteractionController, createSelectionPresentation, createEditingInput: createCanvasEditingInput } = operationSessions;
   const constructionCommand = operationSessions.createConstruction({
     projection: sketchProjectionFeature, cancelConstraintTargetCommand, updateUI, recordHistory,
     synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), clearSnap: () => clearSnap(), updateToolbar,
@@ -1161,7 +1160,7 @@
   });
   canvasContextController.start();
 
-  const canvasInputFeature = createCanvasInputFeature({
+  const canvasEditingInput = createCanvasEditingInput({
     document, canvas, updateUI,
     annotationFeature, annotationDrag, constraintInputFeature, dimensionDragging: dimensionDragFeature,
     constraintTargetHint,
@@ -1181,10 +1180,10 @@
     canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget, blankCanvasGesture, instanceSourceCommand, hatchCommand,
   });
 
-  bindCanvasPointer(canvasInputFeature, {
-    canvasNavigation, recordHistory, referenceImageInteraction, pointerHover,
+  canvasEditingInput.bindPointer({
+    canvasNavigation, recordHistory, pointerHover,
     updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
-    hatch: hatchCommand, fillet: filletCommand, offset: offsetCommand, spline: splineCommand, splineEditing,
+    hatch: hatchCommand, spline: splineCommand, splineEditing,
     blockPlacement: blockPlacementCommand, annotationInput: annotationInputController, dimensionValues: dimensionValueCommand, dimensions: dimensionPlacementCommand,
     expressions: expressionInputController, discardMoves: flushScheduledCanvasPointerMove, enterBlock: enterBlockDefinitionEdit,
     query: canvasPressQuery, closeContextMenu: closeCanvasContextMenu, blankGesture: blankCanvasGesture,
@@ -1198,15 +1197,14 @@
   canvasInputBinding.bind();
   dimensionInput.bind();
 
-  const keyboardInput = createCanvasKeyboard(canvasInputFeature, {
+  const keyboardInput = canvasEditingInput.createKeyboard({
     window, menus: { closeSketch: () => sketchContextController.close(),
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
     projection: sketchProjectionCommand, constraints: constraintTargetCommand, spline: splineCommand, hatch: hatchCommand,
-    referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
-    offset: offsetCommand, deleteSelection: deleteCurrentSelection,
+    splineEditing, blockPlacement: blockPlacementCommand, deleteSelection: deleteCurrentSelection,
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
   keyboardInput.start();

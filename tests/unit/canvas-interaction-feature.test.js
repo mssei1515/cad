@@ -133,8 +133,12 @@ function editingInputsFixture(composed,probe={}){
  for(const name of ['AnnotationCommandInput','InstanceCommandInput','PointCommand','DrawingCommandInput','CanvasSelectionInteraction']){
   const owner=w[name];w[name]={...owner,create(...args){probe.order.push(name);if(probe.failAt===name)throw probe.error;return owner.create(...args);}};
  }
- const raw=w.CanvasCommandInputs;w.CanvasCommandInputs={...raw,createFeature(options){probe.ports=options;return raw.createFeature(options);}};
- const inputs=composed?s.createInputForEditing(source):s.createInputFeature({document:source.document,canvas:source.canvas,updateUI:source.updateUI,
+ const raw=w.CanvasCommandInputs;w.CanvasCommandInputs={...raw,createFeature(options){probe.ports=options;const actual=raw.createFeature(options);probe.actualInputs=actual;
+  if(!probe.stubBindings)return actual;
+  const owner={...actual,bindPointerForEditing(pointer,options){assert.equal(this,owner);probe.pointer={pointer,options};if(probe.bindError)throw probe.bindError;return probe.result;},
+   createKeyboard(options){assert.equal(this,owner);probe.keyboard=options;if(probe.keyboardError)throw probe.keyboardError;return probe.result;}};
+  return probe.boundInputs=owner;}};
+ const inputs=composed==='owned'?s.createEditingInput(source):composed?s.createInputForEditing(source):s.createInputFeature({document:source.document,canvas:source.canvas,updateUI:source.updateUI,
   annotationCommand:annotationFeature.command,annotationDrag:source.annotationDrag,startAnnotationAnchorConstraint:annotationFeature.startAnchorConstraint,
   constraintInputFeature,dimensionDragging,beginDimensionDrag:dimensionDragging.command.begin,constraintTargetHint:source.constraintTargetHint,
   instanceSourceCommand:source.instanceSourceCommand,geometryInstanceCommand:source.geometryInstanceCommand,sceneQueries:source.sceneQueries,
@@ -178,7 +182,7 @@ test('editing input owners keep pending annotation pointer routing and dimension
 
 test('editing input construction preserves failure identity and short circuits before later components',()=>{
  const order=['AnnotationCommandInput','ConstraintCommandInput','InstanceCommandInput','drawingFactory','PointCommand','DrawingCommandInput','CanvasSelectionInteraction'];
- for(const composed of [false,true])for(const failAt of ['AnnotationCommandInput','InstanceCommandInput','drawingFactory','CanvasSelectionInteraction']){
+ for(const composed of [false,true,'owned'])for(const failAt of ['AnnotationCommandInput','InstanceCommandInput','drawingFactory','CanvasSelectionInteraction']){
   const probe={failAt};assert.throws(()=>editingInputsFixture(composed,probe),error=>error===probe.error);assert.deepEqual(probe.order,order.slice(0,order.indexOf(failAt)+1));
  }
 });
@@ -439,4 +443,46 @@ test('construction owner assembly preserves command creation and callback/reset 
     const run=composed=>{const f=constructionFixture(composed,failure);if(['guard','metadata','ui','history'].includes(failure))f.foundation.selection.set('lines',f.lines);
       assert.throws(()=>f.command.toggle(),error=>error===f.marker);return f.snapshot();};assert.deepEqual(run(true),run(false),failure);
   }
+});
+
+
+test('Owned Canvas input shares its private feature, pointer identity and command dependencies across separately generated bindings',()=>{
+ const f=editingInputsFixture('owned',{stubBindings:true,result:{}}),{inputs:api,probe:p,source:o,sessions:s,foundation:b}=f;
+ assert.equal(Object.isFrozen(api),true);assert.deepEqual(Object.keys(api),['bindPointer','createKeyboard']);assert.equal(api.inputs,undefined);
+ assert.equal(p.pointer,undefined);assert.equal(p.keyboard,undefined);
+ const pointerOptions={query:{},canvasNavigation:{}};
+ assert.equal(api.bindPointer(pointerOptions),p.result);
+ assert.equal(p.pointer.pointer,s.pointer);assert.equal(p.pointer.options.identity,b.selectionFeature.identity);assert.equal(p.pointer.options.drawingPreview,s.preview);
+ assert.equal(p.pointer.options.query,pointerOptions.query);assert.equal(p.pointer.options.referenceImageInteraction,o.referenceImage);
+ assert.equal(p.pointer.options.fillet,o.drawingCommands.fillet);assert.equal(p.pointer.options.offset,o.drawingCommands.offset);
+ const constraints={cancel(){}},spline={finalize(){},removeLast(){}},hatch={finish(){}},projection={commit(){}},browser={};
+ assert.equal(api.createKeyboard({window:browser,constraints,spline,hatch,projection}),p.result);
+ assert.equal(p.keyboard.window,browser);assert.equal(p.keyboard.referenceImage,o.referenceImage);assert.equal(p.keyboard.offset,o.drawingCommands.offset);
+ assert.equal(p.keyboard.pendingCommandSession,s.pending);assert.equal(p.keyboard.constraintTargetSession,s.targets);assert.equal(p.keyboard.readPointer,s.pointer.readLastPointer);
+ assert.equal(p.keyboard.finishSpline,spline.finalize);assert.equal(p.keyboard.finishProjection,projection.commit);
+ p.bindError=new Error('pointer');assert.throws(()=>api.bindPointer(pointerOptions),error=>error===p.bindError);
+ p.keyboardError=new Error('keyboard');assert.throws(()=>api.createKeyboard({constraints,spline,hatch,projection}),error=>error===p.keyboardError);
+ assert.deepEqual(f.events,[]);
+});
+
+test('Owned Canvas input preserves real pointer placement, keyboard pending cancellation and live shared Offset commands',()=>{
+ const traces=[];
+ for(const owned of [false,true]){
+  const f=editingInputsFixture(owned?'owned':true),{sessions:s,foundation:b,source:o,events}=f,listeners=new Map();
+  const offset=o.drawingCommands.offset;offset.canConfirmSelection=()=>true;offset.confirmSelection=p=>events.push(['offset-confirm',p]);
+  const pointerOptions={canvasNavigation:{movePan:()=>false},hatch:{},spline:{},splineEditing:{},blockPlacement:{},annotationInput:{},dimensionValues:{},dimensions:{},expressions:{pointerReferences:{}},query:{read:()=>({})},closeContextMenu:()=>events.push('close'),blankGesture:{}};
+  f.state.ready=false;
+  const pointer=owned?f.inputs.bindPointer(pointerOptions):s.bindEditingPointer(f.inputs,{...pointerOptions,referenceImageInteraction:o.referenceImage,fillet:o.drawingCommands.fillet,offset});
+  assert.equal(pointer,s.pointer);assert.deepEqual(events,[]);
+  const keyboardOptions={window:{addEventListener:(type,listener)=>listeners.set(type,listener),removeEventListener:type=>listeners.delete(type)},menus:{closeSketch:()=>false,canvasVisible:()=>false},sketchMove:{active:false},constraintStatusView:{hold:()=>false},dimensionInput:{handleKey:()=>false},shortcuts:{},projection:{commit(){}},constraints:{cancel(){events.push('constraint-cancel');},completeLineLength:()=>false},spline:{finalize(){},removeLast(){}},hatch:{finish(){}},splineEditing:{},blockPlacement:{},isTextEditingTarget:()=>false,deleteSelection:()=>false};
+  const keyboard=owned?f.inputs.createKeyboard(keyboardOptions):s.createKeyboardForEditing(f.inputs,{...keyboardOptions,referenceImage:o.referenceImage,offset});
+  assert.equal(listeners.size,0);assert.deepEqual(events,[]);f.state.ready=true;keyboard.start();keyboard.start();assert.equal(listeners.size,1);
+  const key=key=>listeners.get('keydown')({key,target:{},preventDefault:()=>events.push('prevent')});
+  s.pending.replace({type:'annotation-text-place',annotationDraft:true});s.pointer.down({button:0,preventDefault:()=>events.push('prevent')});
+  assert.equal(s.pointer.readLastPointer(),f.point);assert.equal(events.find(e=>Array.isArray(e)&&e[0]==='text')[1],f.point);
+  s.pending.replace({type:'offset-value'});events.length=0;key('Escape');assert.equal(s.pending.current,null);assert.equal(events.includes('constraint-cancel'),false);
+  b.lifecycle.setMode('offset');const next={x:17,y:19};s.pointer.setLastPointer(next);events.length=0;key('Enter');assert.deepEqual(events,['prevent',['offset-confirm',next]]);
+  keyboard.dispose();keyboard.dispose();assert.equal(listeners.size,0);traces.push(JSON.stringify(events));
+ }
+ assert.equal(traces[1],traces[0]);
 });
