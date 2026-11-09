@@ -1010,3 +1010,91 @@ test('Canvas staged workspace assembly keeps constructor failures and existing p
     assert.deepEqual(composed.order,raw.order,failAt); assert.deepEqual(composed.calls,raw.calls,failAt); assert.equal(composed.order.at(-1),failAt);
   }
 });
+
+function dimensionTraversalFixture(composed, failure, probe) {
+  'use strict';
+  probe ||= {}; probe.events = []; probe.draws = []; probe.marker ||= new Error('dimension traversal failure');
+  const w = sceneWindow, original = w.DimensionPresentation;
+  const state = { ready: false, active: 'S1', scope: { constraints: [] }, hidden: null, dragged: null, expression: false };
+  const check = name => { assert.equal(state.ready, true); probe.events.push(name); if (failure === name) throw probe.marker; };
+  const construct = name => { probe.events.push(name); if (failure === name) throw probe.marker; };
+  w.DimensionPresentation = { ...original,
+    createLabel: () => Object.freeze({ label: constraint => { check('label'); return constraint.id; } }),
+    createPainter: () => Object.freeze({ drawDimension: function (...args) { assert.equal(this, undefined); check('paint'); probe.draws.push(args); } }),
+    createSelectionBounds(input) { construct('bounds'); probe.boundsPorts = input; return probe.bounds = original.createSelectionBounds(input); },
+    createLayer(input) { construct('layer'); probe.ports = input; return probe.layer = original.createLayer(input); },
+  };
+  let f, traversal;
+  try {
+    f = preparedWorkspaceFixture(true);
+    const sketches = f.documentWorkspace.sketches, appearance = f.readServices.geometryAppearance;
+    sketches.isActiveSketchConstraint = constraint => { check('active'); return constraint.sketchId === state.active; };
+    sketches.constraintSketchId = constraint => constraint.sketchId;
+    appearance.isVisibleSketchId = id => { check('visible'); return id !== state.hidden; };
+    f.interaction.selection.inspectionContains = () => false; f.interaction.selection.constraintSelectedInCanvas = () => false;
+    const input = { currentScope: () => { check('scope'); return state.scope; },
+      readDraggedDimension: () => { check('drag'); return state.dragged; }, dimensionUsesExpression: () => { check('expression'); return state.expression; } };
+    traversal = composed ? f.workspace.createDimensionTraversal(input) : f.workspace.dimensions.display.createTraversal({
+      ...input, isActiveSketchConstraint: sketches.isActiveSketchConstraint, isVisibleSketchId: appearance.isVisibleSketchId,
+      constraintSketchId: sketches.constraintSketchId, isVisibleValue: appearance.isVisibleValue, canvasSelection: f.interaction.selection,
+      readHoverDimension: () => f.interaction.hover.current.dimension, readPending: () => f.pending.current,
+      readExportFrame: () => f.workspace.exportRenderer.frame, readConstraintStatus: () => f.controls.state.constraintStatus,
+      inactiveColor: w.GeometryPresentation.INACTIVE_CONSTRAINT_STATUS_COLOR, dimensionLabelForConstraint: f.workspace.dimensions.labels.label });
+    assert.deepEqual(probe.events, ['bounds', 'layer']);
+    assert.equal(traversal.selectionBounds, probe.bounds); assert.equal(traversal.layer, probe.layer);
+    assert.equal(probe.ports.canvasSelection, f.interaction.selection);
+    assert.equal(probe.ports.dimensionLabelForConstraint, f.workspace.dimensions.labels.label);
+  } finally { w.DimensionPresentation = original; }
+  f.ctx.measureText = function (text) { assert.equal(this, f.ctx); return { width: String(text).length * 5 }; };
+  state.ready = true; probe.events.length = 0;
+  const point = new w.GeometrySolver.Point('P1', 0, 0), other = new w.GeometrySolver.Point('P2', 10, 0);
+  function constraint(id, sketchId) {
+    const value = Object.assign(new w.GeometrySolver.DistanceConstraint(point, other, 10), { id, sketchId });
+    value.dimension = f.workspace.dimensions.display.placement.defaultDimensionForTarget(w.DimensionQueries.targetFromConstraint(value));
+    return value;
+  }
+  const active = constraint('active', 'S1'), inactive = constraint('inactive', 'S2'); state.scope.constraints.push(active, inactive);
+  return { ...f, state, probe, traversal, active, inactive,
+    snapshot() { return JSON.parse(JSON.stringify({ events: probe.events, draws: probe.draws, order: state.scope.constraints.map(c => c.id), calls: f.calls, stack: f.stack.length })); } };
+}
+
+test('Canvas dimension traversal shares existing bounds and layer while preserving custom scope, sorting and live interaction/export readers', () => {
+  const run = composed => {
+    const f = dimensionTraversalFixture(composed); assert.ok(Object.isFrozen(f.traversal)); f.traversal.layer.draw();
+    assert.deepEqual(f.probe.draws.map(args => args[2]), ['inactive', 'active']);
+    f.controls.constraintStatus.setLatched(true); f.interaction.hover.current = { dimension: f.active }; f.state.dragged = f.inactive;
+    f.pending.replace({ type: 'distance-value', constraint: f.active }); f.state.expression = true; f.traversal.layer.draw();
+    const editing = f.probe.draws.at(-1); assert.equal(editing[4], true); assert.equal(editing[5].hidden, true); assert.equal(editing[8], true);
+    f.workspace.exportRenderer.render({ x: 0, y: 0, width: 10, height: 10 }, { x: 2, y: 2 }); f.traversal.layer.draw();
+    assert.equal(f.probe.draws.at(-1)[4], false); assert.equal(f.probe.draws.at(-1)[5], null); assert.equal(f.probe.draws.at(-1)[8], false);
+    f.state.scope = { constraints: [f.inactive] }; f.state.hidden = 'S2'; const count = f.probe.draws.length; f.traversal.layer.draw(); assert.equal(f.probe.draws.length, count);
+    return f.snapshot();
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Canvas dimension selection bounds retain real layout metrics, active/hidden short circuits and expression reads', () => {
+  const run = composed => {
+    const f = dimensionTraversalFixture(composed); const bounds = f.traversal.selectionBounds.read(f.active);
+    assert.ok(Number.isFinite(bounds.x1)); assert.ok(bounds.x2 > bounds.x1);
+    assert.equal(f.traversal.selectionBounds.read(f.inactive), null);
+    f.state.hidden = 'S1'; assert.equal(f.traversal.selectionBounds.read(f.active), null);
+    f.state.hidden = null; f.state.active = 'S2'; const other = f.traversal.selectionBounds.read(f.inactive); assert.ok(Number.isFinite(other.y1));
+    return { bounds: { ...bounds }, other: { ...other }, snapshot: f.snapshot() };
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Canvas dimension traversal preserves factory and reader/paint failures, consumed sort and unmatched save state', () => {
+  for (const failure of ['bounds', 'layer']) {
+    const marker = new Error('dimension traversal failure'), raw = { marker }, composed = { marker };
+    assert.throws(() => dimensionTraversalFixture(false, failure, raw), error => error === marker);
+    assert.throws(() => dimensionTraversalFixture(true, failure, composed), error => error === marker);
+    assert.deepEqual(composed.events, raw.events);
+  }
+  for (const failure of ['scope', 'active', 'visible', 'drag', 'label', 'expression', 'paint']) {
+    const run = composed => { const f = dimensionTraversalFixture(composed, failure);
+      assert.throws(() => f.traversal.layer.draw(), error => error === f.probe.marker); return f.snapshot(); };
+    assert.deepEqual(run(true), run(false), failure);
+  }
+});

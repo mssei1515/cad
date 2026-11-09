@@ -80,7 +80,7 @@
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
     elementSketchId, canEditSketch,
-    constraintSketchId, isActiveSketchConstraint,
+    constraintSketchId,
   } = sketchContext;
 
   const { geometryRefForItem, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
@@ -91,7 +91,7 @@
   });
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
-  const { isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
+  const { isVisibleSketchElement } = geometryAppearance;
   const { hatchPrimitivesForScope } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
@@ -294,7 +294,7 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer,
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview, createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
     dimensionScene: { onExpressionMark: canvasRenderProbe.captureExpressionMark },
     dimensionInput: { syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
@@ -455,7 +455,6 @@
     ctx, viewport, withCanvasState, traceSplinePath, readMode: drawOperationLifecycle.readMode, centerlineCommand,
     readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
   });
-  const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;
   const { versionView: runtimeVersionView, initialize: initializePresentation } = presentation.createStartup({
     canvasSurface, resizeCanvas, readVersion: () => window.__JOT2D_RUNTIME_VERSION__,
   });
@@ -761,12 +760,8 @@
   function pasteGeometryClipboard() { return clipboardCommand.paste(); }
 
 
-  const { selectionBounds: dimensionSelectionBounds, layer: dimensionLayer } = dimensionDisplay.createTraversal({
-    currentScope: dimensionPresentationScope, isActiveSketchConstraint, isVisibleSketchId, constraintSketchId, isVisibleValue, canvasSelection,
-    readHoverDimension: () => canvasHover.current.dimension, readDraggedDimension: () => dimensionDrag.constraint,
-    readPending: () => pendingCommandSession.current, readExportFrame: () => pngRendering.frame,
-    readConstraintStatus: () => viewState.constraintStatus, inactiveColor: INACTIVE_CONSTRAINT_STATUS_COLOR,
-    dimensionLabelForConstraint, dimensionUsesExpression,
+  const { selectionBounds: dimensionSelectionBounds, layer: dimensionLayer } = createDimensionTraversal({
+    currentScope: dimensionPresentationScope, readDraggedDimension: () => dimensionDrag.constraint, dimensionUsesExpression,
   });
 
   const { query: rectangleSelectionQuery, rectangle: selectionRectangle } = sceneHitInteraction.createRectangleSelection({
