@@ -18,6 +18,21 @@
     function setHint(message, kind = "normal") { return feedback.hint(message, kind); }
     function setSolveResultHint(label, solved, analysis, dependent) { return feedback.solveResult(label, solved, analysis, dependent); }
     function syncToolFlyouts() { return toolFlyouts?.sync(); }
+    function createStartup({ canvasSurface, resizeCanvas, readVersion }) {
+      const versionView = window.RuntimeVersionView.create({ document, applicationText: settings.applicationText });
+      const { setApplicationLanguage, setApplicationTheme } = settings;
+      function initialize(message) {
+        updateUI();
+        draw();
+        log(message);
+        setApplicationLanguage(settings.language, { persist: false, refresh: false });
+        setApplicationTheme(settings.theme, { persist: false, redraw: false });
+        versionView.load(readVersion());
+        resizeCanvas();
+        canvasSurface.start();
+      }
+      return Object.freeze({ versionView, initialize });
+    }
     function createToolNavigation({ window: browserWindow }) {
       const menus = window.ApplicationMenus.create({ document, window: browserWindow,
         activateTool: id => document.getElementById(id)?.click() });
@@ -98,7 +113,7 @@
         interactionProfiler: profiler, profileInteractionWork: profiler.work, withGeometryReadCache, drawCanvas });
       return canvas;
     }
-    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createToolbar, createToolNavigation, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
+    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createStartup, createToolbar, createToolNavigation, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
       log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw,
       get selectedItem() { return canvas.selectedItem; } });
   }

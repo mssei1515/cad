@@ -444,3 +444,78 @@ test("command panel construction and cancellation propagate identical exceptions
     }
   }
 });
+function startupFixture(composed, fail) {
+  'use strict';
+  const f = fixture(), stages = [], marker = new Error('startup failure'), target = { textContent: '', dataset: {}, removeAttribute() { delete this.title; } };
+  const live = { language: 'ja', theme: 'light', version: null, loading: false, resized: false, started: false };
+  const step = name => { stages.push(name); if (fail === name) throw marker; };
+  vm.runInNewContext(fs.readFileSync('src/ui/runtime_version_view.js', 'utf8'), { window: f.w });
+  const rawCreate = f.w.RuntimeVersionView.create;
+  let actual, constructorPorts, startup;
+  f.w.RuntimeVersionView = { create(ports) { step('create'); constructorPorts = ports; return actual = rawCreate(ports); } };
+  Object.defineProperties(f.settings, {
+    language: { get() { return live.language; } },
+    theme: { get() { step('theme read'); return live.theme; } },
+  });
+  f.settings.setApplicationLanguage = function(value, options) {
+    assert.equal(this, undefined); step('language'); assert.equal(value, 'en'); assert.deepEqual(JSON.parse(JSON.stringify(options)), { persist: false, refresh: false });
+    live.language = value; live.theme = 'dark'; f.settings.localizeApplicationUI(); actual.render();
+  };
+  f.settings.setApplicationTheme = function(value, options) {
+    assert.equal(this, undefined); step('theme'); assert.equal(value, 'dark'); assert.deepEqual(JSON.parse(JSON.stringify(options)), { persist: false, redraw: false });
+    live.theme = value; live.version = { available: true, branch: 'after-theme', commit: 'a'.repeat(40), shortCommit: 'a'.repeat(12), dirty: true };
+  };
+  f.document.getElementById = id => {
+    if (id !== 'runtimeCommit') return id === 'propertiesPanel' ? f.state.properties : null;
+    step(live.loading ? 'load render' : 'language render'); return target;
+  };
+  const surface = { start() { assert.equal(this, surface); step('surface'); live.started = true; return marker; } };
+  function resizeCanvas() { assert.equal(this, undefined); step('resize'); live.resized = true; }
+  function readVersion() { assert.equal(this, undefined); step('version read'); live.loading = true; return live.version; }
+  if (composed) startup = f.feature.createStartup({ canvasSurface: surface, resizeCanvas, readVersion });
+  else {
+    actual = f.w.RuntimeVersionView.create({ document: f.document, applicationText: f.settings.applicationText });
+    const { setApplicationLanguage, setApplicationTheme } = f.settings;
+    startup = { versionView: actual, initialize(message) {
+      f.feature.updateUI(); f.feature.draw(); f.feature.log(message);
+      setApplicationLanguage(f.settings.language, { persist: false, refresh: false });
+      setApplicationTheme(f.settings.theme, { persist: false, redraw: false });
+      actual.load(readVersion()); resizeCanvas(); surface.start();
+    } };
+  }
+  const cold = { stages: [...stages], events: [...f.events], domReads: f.state.domReads };
+  const oldFrame = f.canvas.drawCanvas;
+  f.canvas.drawCanvas = function() { step('frame'); live.language = 'en'; return oldFrame(); };
+  const oldLog = f.feedback.log;
+  f.feedback.log = function(message) { step('log'); return oldLog.call(this, message); };
+  f.ui.syncAnnotationResize = () => step('ui');
+  f.feature.bindUI(f.ui); f.feature.bindCanvas(f.canvas);
+  f.events.length = 0; stages.length = 0;
+  return { ...f, startup, actual, constructorPorts, cold, stages, live, target, marker,
+    result() { return JSON.parse(JSON.stringify({ stages, events: f.events, live, target })); } };
+}
+
+test('presentation startup creates the actual version view cold and supports later UI and canvas binding', () => {
+  const f = startupFixture(true);
+  assert.equal(f.startup.versionView, f.actual); assert.ok(Object.isFrozen(f.startup));
+  assert.equal(f.constructorPorts.document, f.document); assert.equal(f.constructorPorts.applicationText, f.settings.applicationText);
+  assert.deepEqual(f.cold, { stages: ['create'], events: ['settings', 'profiler', 'feedback'], domReads: 0 });
+  assert.equal(f.startup.initialize('new document'), undefined);
+  assert.equal(f.live.started, true); assert.equal(f.target.dataset.state, 'available');
+});
+
+test('presentation startup retains live settings and version reads, exact options and original UI-to-surface sequence', () => {
+  const raw = startupFixture(false), composed = startupFixture(true);
+  assert.equal(raw.startup.initialize('new document'), undefined); assert.equal(composed.startup.initialize('new document'), undefined);
+  assert.deepEqual(composed.result(), raw.result());
+  assert.deepEqual(composed.stages, ['ui', 'frame', 'log', 'language', 'language render', 'theme read', 'theme', 'version read', 'load render', 'resize', 'surface']);
+  assert.equal(composed.target.textContent, 'after-theme@aaaaaaaaaaaa (dirty)');
+});
+
+test('presentation startup propagates failures at the same stage and retains the same partial state', () => {
+  for (const failure of ['ui', 'frame', 'log', 'language', 'language render', 'theme read', 'theme', 'version read', 'load render', 'resize', 'surface']) {
+    const raw = startupFixture(false, failure), composed = startupFixture(true, failure);
+    for (const f of [raw, composed]) assert.throws(() => f.startup.initialize('new document'), error => error === f.marker);
+    assert.deepEqual(composed.result(), raw.result(), failure); assert.equal(composed.stages.at(-1), failure);
+  }
+});

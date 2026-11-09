@@ -62,8 +62,7 @@
   const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
     log, setHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, draw } = presentation;
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
-  const { applicationText, localizeApplicationUI,
-    setApplicationLanguage, setApplicationTheme } = applicationSettings;
+  const { applicationText, localizeApplicationUI } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
   const documentWorkspace = window.DocumentWorkspace.create({
@@ -507,7 +506,9 @@
     readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
   });
   const { INACTIVE_CONSTRAINT_STATUS_COLOR } = window.GeometryPresentation;
-  const runtimeVersionView = window.RuntimeVersionView.create({ document, applicationText });
+  const { versionView: runtimeVersionView, initialize: initializePresentation } = presentation.createStartup({
+    canvasSurface, resizeCanvas, readVersion: () => window.__JOT2D_RUNTIME_VERSION__,
+  });
 
   const toolbarControls = toolbarPresentation.prepareControls({ canvas });
   const { fixPointBtn, createControls: createToolbarControls } = toolbarControls;
@@ -1601,14 +1602,7 @@
   installTestHooks();
   installExpressionInputHighlights(document);
   resetModelState();
-  updateUI();
-  draw();
-  log("空の新規Documentを作成しました");
-  setApplicationLanguage(applicationSettings.language, { persist: false, refresh: false });
-  setApplicationTheme(applicationSettings.theme, { persist: false, redraw: false });
-  runtimeVersionView.load(window.__JOT2D_RUNTIME_VERSION__);
-  resizeCanvas();
-  canvasSurface.start();
+  initializePresentation("空の新規Documentを作成しました");
   resetHistory("起動");
   markDocumentFileCheckpoint("new");
   documentFileFeature.start();

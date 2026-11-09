@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## Presentationの表示初期化と実行コミット表示（2026-11-10）
+
+PresentationFeature.createStartupが実RuntimeVersionViewの生成と表示系の起動順を所有する。同じsettings・UI／Canvas更新・通知を使い、UI更新→描画→ログ→言語→theme→runtime metadata読取／表示→resize→Canvas開始の順で実行する。生成時にDOMや設定・metadataを読まず、UI／Canvasの後段bindを許す。言語／theme setterは元の裸関数参照、version loadとsurface startは元の実体をreceiverとして呼ぶ。設定値とmetadataは元の段階でliveに取得し、既定option・返値undefined・例外と途中状態を維持する。Document reset、履歴開始、保存checkpoint、File開始はappに残す。モデル・操作session・履歴・保存形式や新しい表示stateを追加せず、既存RuntimeVersionView／ApplicationSettings／Canvas APIを変更しない。
+
+app.jsは1,615→1,609行（6行減）、非空白1,166→1,160行。八つの表示初期化操作とRuntimeVersionView生成を既存Presentationへ集めた。別の巨大bootstrapやsetter中継は作らない。TEMP cad-presentation-startup-proof.cjsで変更対象以外のroot AST、既存Presentation ASTとraw owner不変を確認した。数百行への全体目標は未完了。
+
+関連単体25件、構文627file・全単体2,232件・関連E2E169件が成功（8file、2.4m、exit 0）。実RuntimeVersionViewとUI／Canvas更新を用いた旧接続との比較三件で、cold生成・後段bind・実体同一性、live設定／metadata・裸setterと実receiver、既定option・順序・返値、十一段階の例外と途中状態を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-presentation-startup-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。通常起動の追加smoke二経路でも診断hookなし、日本語／lightと保存済み英語／dark、空DocumentのUndo無効、Canvasサイズ、実行commit表示、ブラウザerrorなしを確認した（TEMP cad-presentation-startup-smoke.log）。全E2Eの代替結果とは扱わない。
+
 ## Block作成候補照会のfeature owner接続（2026-11-10）
 
 BlockEditingFeature.createForWorkspaceの後段createSelectionQueryが実BlockSelectionQueryを生成する。同じWorkspace.current、CanvasInteractionのSelection、Block projection、Sketchの所属／active照会、GeometryReadServicesの参照解決、Presentationの翻訳・拘束名表示を共有する。ConstraintReferences、constraint codecへのserialize callback、Annotation boundsは明示入力とし、四つの境界計算は既存GeometryBoundsから取得する。拘束名表示は元の裸関数参照を呼び、生成時にWorkspace／Selection／言語／projection／参照／codecを読まない。実queryのread／center、Geometry参照、内部／外部・参照拘束分類、共有端点／別Sketch／注記・Hatchの参照閉包と既定中心、無関係な選択点を中心に含めない規則、例外と生成順を維持する。最後のbound editing scopeをWorkspaceの代わりに使わず、既存BlockFeature／QueryとGeometryBoundsを変更しない。model／Selection／query cache／listenerを追加しない。
