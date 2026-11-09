@@ -860,7 +860,7 @@
   function updateToolbar() { toolbarView.update(); }
 
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
-    createCommitWithIntentForWorkspace: createConstraintCommit, createFixedEditing, constraintTargetHint,
+    createCommitWithIntentForWorkspace: createConstraintCommit, createFixedEditing, constraintTargetHint, readOnlyDimensions,
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging },
     controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForWorkspace({
     document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, presentation,
@@ -868,7 +868,7 @@
     isGeometryMode, findLineFixedConstraint, clearSelection, updateToolbar, updateConstraintButtons,
     blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
     hitConstraintOperand,
-    geometryInstanceBundle, placement: dimensionPlacement, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint,
+    geometryInstanceBundle, placement: dimensionPlacement,
   });
 
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
@@ -1060,9 +1060,8 @@
 
 
 
-  function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
-  const { command: constraintCommitCommand, readOnly: dimensionReadOnlyQuery, intentResolver: constraintIntentResolver } = createConstraintCommit({
+  const { command: constraintCommitCommand, intentResolver: constraintIntentResolver } = createConstraintCommit({
     checkpoint: editingCheckpoint, insertion: constraintInsertion, redundancy: constraintRedundancy,
     solving: sketchSolving, stabilization: parameterStabilization, referenceState: referenceConstraintState,
     solvePreparation: constraintSolvePreparation, lineCollapseQuery, acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -1077,9 +1076,6 @@
   function startDistanceResolution(resolution, pointer) { return dimensionPlacementCommand.startDistanceResolution(resolution, pointer); }
 
 
-  function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
-    return dimensionReadOnlyQuery.forPlacement(target, value, dimension, options);
-  }
 
   function addDistanceConstraintFromTarget(...args) { return constraintCommitCommand.dimension(...args); }
 
@@ -1351,7 +1347,8 @@
     const sidebarHighlightObservation = propertiesTestFactories.createHighlightObservation();
     const sidebarHoverKeyObservation = propertiesTestFactories.createHoverKeyObservation();
     const blockTestActions = blockTestSupport.createDimensionCases({
-      defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint, blockDefinitionById,
+      defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement: readOnlyDimensions.forPlacement,
+      addReadOnlyDimensionConstraint: readOnlyDimensions.add, blockDefinitionById,
     });
     const dimensionInteractionSupport = dimensionTestSupport.createInteraction({
       clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput, clearSelection, updateUI, draw, addCircle, addArc,

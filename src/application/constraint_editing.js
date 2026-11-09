@@ -185,7 +185,13 @@
   }
   function createForWorkspace({ documentWorkspace, sessions, ...options }) {
     let commit, fixedOperand, fixedSelection;
+    function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
+      return commit.readOnly.forPlacement(target, value, dimension, options);
+    }
+    function addReadOnlyDimensionConstraint(...args) { return commit.command.readOnly(...args); }
+    const readOnlyDimensions = Object.freeze({ forPlacement: readOnlyDimensionConstraintForPlacement, add: addReadOnlyDimensionConstraint });
     const editing = createForEditing({ ...options, sessions, sketches: documentWorkspace.sketches,
+      readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint,
       resolveConstraintIntent: (type, operands) => commit.intentResolver.resolve(type, operands),
       commitConstraintResolution: (...args) => commit.command.resolution(...args),
       addConstraint: type => commit.command.fromSelection(type),
@@ -213,7 +219,7 @@
     return Object.freeze({ selectionQuery: editing.selectionQuery, targets: editing.targets, dimensions: editing.dimensions,
       createControls: editing.createControls, createCommandInput: editing.createCommandInput,
       constraintTargetHint: editing.constraintTargetHint, input: editing.input, controls: editing.controls,
-      createCommitWithIntentForWorkspace, createFixedEditing });
+      createCommitWithIntentForWorkspace, createFixedEditing, readOnlyDimensions });
   }
   function prepareDimensionValues({ workspace, sketches, bounds, minimumLineLength }) {
     const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({

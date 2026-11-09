@@ -98,6 +98,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：読み取り専用寸法の共有入口（2026-11-10）
+
+ConstraintEditing.createForWorkspaceが、完成済みCommit supportから読み取り専用寸法の候補照会・追加を接続し、immutableなreadOnlyDimensions（forPlacement／add）として公開する。通常のDimensionPlacementと既存Block Browser test driverには同じ関数参照を渡す。rootから二つのcallback入力・委譲と専用Query別名を除き、CommitとQueryの組合せを再注入させない。三つの既存component参照を使い、新しいmodel／session／cache／listenerは作らない。
+
+候補照会は四引数・optionsの既定値{}、追加は全引数を実method receiverへ返値・例外ごと委譲する。Commit／Intent生成が途中で失敗したときは以前の完成済みsupportを使い、再生成成功後は両入口が新supportを読む。生成・bind／startの順序、raw factory、求解／履歴／保存形式v26は維持する。
+
+app.jsは1,507→1,504行（3行減）、非空白1,058→1,055行。初期構築入力は22→20項目。二つのroot委譲とdimensionReadOnlyQuery bindingを除いた。AST比較で、対象構築・二委譲・Browser入口以外のroot、owned factoryの追加部分以外のmodule、Commit／Query／Placement／Block driver・index・全E2E不変、新しい未使用／未束縛参照なしを確認した。
+
+関連単体36件、構文631file・全単体2,305件・関連E2E234件が成功（10file、3.3m、exit 0）。二つの新旧比較で同一関数参照、引数・既定値・receiver・返値・例外と再生成失敗時の公開先保持、実候補分類・Geometry参照・操作時の実測値・読み取り専用挿入と履歴を確認した。699製品／test入力と開始HEAD不変、選択10fileのtest list234件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-read-only-ownership-{focused,check,unit,e2e,proof,smoke}.logとsource-hashes／selection／filter-environment／e2e-receipt／last-run JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、直前の全589件成功とは区別する。全体目標は未完了。
+
+基準developはcc97d9e、作業branchはcodex/constraint-read-only-ownership、開始時週枠残量40%。直前の全E2E589件成功はcc97d9eと同じ製品treeの検証であり、今回変更後の関連検証とは区別する。今回の対象は同じCommit supportを使う二callbackに限定し、寸法・Block・UI・保存読込・Sketch投影／編集guardの関連10fileを選んだ。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：拘束編集の内部command生成と公開（2026-11-10）
 
 ConstraintEditing.createForWorkspaceが、同じDocumentWorkspaceと操作sessionの上でTarget／Selection／Controlsを生成し、後段で自ら生成するCommit＋Intent・固定operand・固定Selectionへ六つのcallbackを内部接続する。三つの内部参照は実componentへの参照であり、Document／Selection／sessionや履歴stateを複製しない。CommitはIntent resolverまで全生成が成功してから、固定operandと固定Selectionもそれぞれのfactoryが正常に返ってから公開する。再生成のconstructor失敗では以前の完成済み参照を保つ。rootは従来の別々の位置でfactoryを呼び、Fixed operand→Tree→Commit＋Intent→UI接続→Fixed Selection→Constraint bindingの相対順を変えない。
