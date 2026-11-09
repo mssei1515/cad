@@ -127,7 +127,15 @@
         }
         return Object.freeze({ fillet, createCircleCenterCross, createSplineEditing, createCenterline, createTrim });
       }
-      return Object.freeze({ ...tools, createEditing });
+      function createOffsetForEditing({ editingScope, placement, sourceSelection, valueInput, ctx, surface, drawDimension,
+        commitNewConstraint, offsetChainErrorText, analysis }) {
+        return tools.createOffset({ currentScope: () => editingScope.current, placement, sourceSelection,
+          pending: sessions.pending, valueInput, viewport, ctx, withCanvasState: surface.withCanvasState, drawDimension,
+          readMode: interaction.lifecycle.readMode, commitNewConstraint, offsetChainErrorText,
+          prepareStart: () => interaction.lifecycle.prepare("offset"),
+          updateGeometrySelectionUI: presentation.updateGeometrySelectionUI, invalidateAnalysis: () => { analysis.invalidate(); } });
+      }
+      return Object.freeze({ ...tools, createEditing, createOffsetForEditing });
     }
     return Object.freeze({ geometry, createAuthoring: createTools, createAuthoringForEditing: createToolsForEditing });
   }

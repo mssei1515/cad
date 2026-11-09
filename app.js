@@ -373,12 +373,10 @@
   const { start: beginSplineCreation } = splineCommand;
   const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, circular: circularCommands } = basicDrawingTools;
-  const offsetFeature = authoringTools.createOffset({
-    currentScope: () => editingScopeBinding.current, placement: dimensionPlacement, sourceSelection: offsetSelection,
-    pending: pendingCommandSession, valueInput: dimensionInputController, viewport, ctx, withCanvasState, drawDimension, readMode: drawOperationLifecycle.readMode,
-    commitNewConstraint, offsetChainErrorText,
-    prepareStart: () => drawOperationLifecycle.prepare("offset"),
-    updateGeometrySelectionUI, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
+  const offsetFeature = authoringTools.createOffsetForEditing({
+    editingScope: editingScopeBinding, placement: dimensionPlacement, sourceSelection: offsetSelection,
+    valueInput: dimensionInputController, ctx, surface: canvasSurface, drawDimension,
+    commitNewConstraint, offsetChainErrorText, analysis: constraintAnalysis,
   });
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, chainDraft: offsetChainDraft } = offsetFeature;
   const { submit: submitOffsetValue } = offsetCommand;
