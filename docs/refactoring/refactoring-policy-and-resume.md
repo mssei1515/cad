@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,515行、非空白1,066行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,511行、非空白1,062行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：TrimとCenterlineの作図編集owner接続（2026-11-10）
+
+BasicDrawingTools.createAuthoringForEditingの後段createEditingへ、createCenterline／createTrimを追加した。既に接続済みのcheckpoint・Parameter安定化・解析・Projection／編集guardと数値方針を再利用し、Centerlineはcommit入口とparallel tolerance、TrimはConstraintReferencesとhit queryだけを後段で受ける。元の別々の位置で同じ実command／featureを生成し、Offset・Fillet・Cross・Splineの生成順も変えない。TrimのWorkspace scopeとSplineのbound editing scopeを統合せず、Centerlineは専用Constructionのarray／point・line ID部分rollback、Trimは実geometry checkpointをそれぞれ使い続ける。Centerlineの解析invalidateは返値なし、Trimは返値ありとし、refreshの既定options・一引数・member receiver・返値／例外を維持する。
+
+app.jsは1,515→1,511行（4行減）、非空白1,066→1,062行。二生成の入力は3／9→2／2項目（合計12→4）。共通段階の入力11項目を増やさず、rootのsketchEditAccess／guardSketchEdit別名を除いた。rootは339文・555binding。既存raw authoring factory・createEditingの既存三機能・各command APIを維持し、新state・cache・listener・汎用contextや共通transactionへの置換を加えない。全体目標は未完了。
+
+TEMP cad-authoring-trim-centerline-proof.cjsで二呼出し・二aliasと戻り値の二method以外のroot AST、各port、旧Authoring APIとraw Trim／Centerline実装・index.html不変、未使用binding・新しい未束縛参照なしを確認した。三件の旧接続比較では実Trim query／editing／command・Centerline geometry／construction／command・実Geometry／EditingCheckpointを使い、coldな別段階生成・実APIと共有owner、Workspaceとbound scopeの区別、invalidate／refreshの返値・引数、実切断／中心線拘束・guard／求解／commit拒否とID・履歴、constructor／求解／commit例外の途中状態を検証する。
+
+次は残る構築group・別名と機能間接続を実owner・生成phaseから整理する。ここで共通依存を再利用してもrootには多数の構築が残り、細かなport追加やtest hooks移動だけで200〜500行へ到達したとはしない。
+
+関連単体45件、構文631file・全単体2,300件・関連E2E219件が成功（10file、3.1m、exit 0）。三件の実Trim query／editing／command・Centerline geometry／construction／commandとGeometry／Checkpointの旧接続比較でcold生成・共有API・異なるscope、callbackの返値／既定値／引数、実切断・中心線拘束とguard／求解／commit拒否・ID／履歴、constructor／求解／commit例外の途中状態を確認した。699製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-authoring-trim-centerline-{focused,check,unit,e2e,proof,smoke}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。直近07f5936の全E2E589件成功（21.6m）とは別の今回変更後の関連検証であり、全体目標は未完了。
+
+基準developは41b78d1、作業branchはcodex/authoring-trim-centerline。開始時週枠残量42%。直近の全E2E589件成功は07f5936（21.6m）の証跡で、今回変更後の関連検証と区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Selectionと重なり順の共通owner（2026-11-10）
 
