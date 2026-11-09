@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-09の最新単位ではapp.jsは1,700行、非空白1,251行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-09の最新単位ではapp.jsは1,698行、非空白1,249行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-09）
 
-### 最新：Canvas取消のsession接続（2026-11-09、検証完了）
+### 最新：Canvas contextの共有owner接続（2026-11-09、検証完了）
+
+CanvasContextInteraction.createMenuのcreateSceneForEditingがPresentationも共有し、後段の操作生成時にSelectionのconstruction対象、Spline editingのaddPoint／deletePoint、PresentationのUI更新・Selection更新・hintを実関数参照で接続する。arc endpoint計算とread-only寸法判定は既存GeometryKernel／DimensionQueriesを利用する。raw create／createEditingInteractionは維持する。固定拘束のscope照会、広いclearSelection、Clipboard copy、DrawingOrder、Block操作は別ownerのため引き続き明示入力とする。query／formatter→取消／DrawingOrder→操作生成→controller.startの順、裸関数のreceiver、live spline対象とguard・例外後の未実行effectを変えない。新しいstate・cache・listener・moduleは追加しない。
+
+app.jsは1,700→1,698行（2行減）、非空白1,251→1,249行。後段入力は37→29項目、前段に既存Presentation一項目を追加し、未使用のroot alias三個を削除した。TEMP cad-canvas-context-owner-ports-proof.cjsで変更対象以外のapp／context AST不変、未使用root bindingなし、直接入力の初期化済みを確認した。数百行への全体目標は未達である。
+
+関連単体13件、構文627file・全単体2,190件・関連E2E275件が成功（11file、4.4m、exit 0）。旧接続と比較し、live spline対象・guardと元関数の保持、寸法alignの更新順・例外同一性／後続effect停止を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-canvas-context-owner-ports-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
+基準developは4c79eba。作業branchはcodex/canvas-context-owner-ports。開始時週枠残量61%。mainは停止条件到達時の最終反映まで17d4cb0に保持する。直前の電源接続後の性能12件成功（43.3秒）は変更前の4c79ebaでの結果であり、今回の検証とは区別する。過去の航空機timeout記録を現在の未解決不具合と混同しない。直前の全体検証は17d4cb0の588件成功で、今回は最新Block反転配置を含む関連検証を行う。
+
+### 直前：Canvas取消のsession接続（2026-11-09、検証完了）
 
 基準developは7f6c1e0。CanvasInteractionFeatureのOperationSessionsがcreateCommandCancellationを提供する。自身のlifecycle／pending／constraint targets／previewと既存の言語・通知を接続し、後段のInstance command／Constraint command／Block placement／Properties panel復元／UI更新だけを受ける。raw CanvasCommandCancellationのInstance→Block→pending→constraint→作図取消→tool終了の順、途中のlive状態再読取りと拒否・例外の境界を変えない。pending／constraintの取消は同じownerをmember receiverとして空文字messageで呼び、作図のactive／cancel／isToolMode／exitは従来の実関数参照を保つ。新しいsession・state・cache・listenerを作らず、返すものは従来の実Command APIである。
 
