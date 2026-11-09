@@ -99,3 +99,94 @@ test('composed history retains moved stacks, finally notifications and short cir
   assert.throws(() => feature.record(), error => error === state.error); assert.deepEqual(state.events, ['profile']);
   assert.equal(feature.documentHistory.undoCount, 1); assert.equal(feature.documentHistory.redoCount, 1);
 });
+
+function workspaceHistoryFixture(composed) {
+  'use strict';
+  const w = featureSandbox.window, events = [], error = new Error('workspace history failure');
+  const state = { name: 'Current', value: 0, enabled: true, current: null, profiling: false,
+    definition: { ...w.DocumentState.create(), id: 'B1', points: [{ id: 'P1', x: 0, y: 0 }] } };
+  const check = name => { events.push(name); if (state.fail === name) throw error; };
+  const raw = (name, work) => function (...args) { assert.equal(this, undefined); check(name); return work?.(...args); };
+  const documentModel = { get documentName() { check('name'); return state.name; }, set documentName(value) { check('rename'); state.name = value; } };
+  let feature, documentAdapter;
+  function loadDocument(data, options) {
+    assert.equal(this, documentAdapter); check('load'); assert.equal(feature.controller.restoring, true);
+    assert.equal(options.documentNameFallback, 'Current'); assert.equal(options.preserveSketchTreeState, true);
+    state.value = data.value; state.name = 'Loaded'; state.enabled = false;
+  }
+  const session = { get current() { check('current'); return state.current; },
+    live: raw('live', () => state.definition),
+    replaceDraft(value) { assert.equal(this, session); check('replace'); state.definition = value; } };
+  const blocks = { session, editing: { clone: raw('clone', value => structuredClone(value)) } };
+  const readServices = { projections: { invalidateBlockProjectionCache: raw('invalidate') } };
+  const constructionCommand = { get enabled() { check('enabled'); return state.enabled; },
+    restore(value) { assert.equal(this, constructionCommand); check('construction'); state.enabled = value; } };
+  const presentation = { setHint: raw('hint'), log: raw('log'), profiler: {
+    get active() { check('profiling'); return state.profiling; },
+    work: raw('profile', (phase, work) => { assert.equal(phase, 'history'); work(); return 'profile-result'; }) } };
+  const serializeDocument = raw('capture', () => ({ value: state.value, savedAt: 'clock', documentName: state.name }));
+  const options = { documentWorkspace: { document: documentModel }, blocks, readServices, presentation,
+    serializeDocument, loadDocument, serializeConstraint: value => value, decorateSerializedConstraint: value => value,
+    constructionCommand, clearInteractionForSketchChange: raw('clear'), changed: raw('changed'), limit: 3,
+    solveAndRefresh: raw('solve', () => { assert.equal(feature.controller.restoring, true); feature.controller.record('suppressed'); }) };
+  const original = w.HistoryRestoration;
+  w.HistoryRestoration = { create(input) { documentAdapter = input.document; return original.create(input); } };
+  try {
+    feature = composed ? w.HistoryController.createForWorkspace(options) : w.HistoryController.createFeature({
+      serializeDocument, document: { getName: () => documentModel.documentName,
+        setName: name => { documentModel.documentName = name; }, load: loadDocument },
+      blockEditor: session, liveBlockDefinition: session.live, cloneBlockDefinition: blocks.editing.clone,
+      serializeConstraint: options.serializeConstraint, decorateSerializedConstraint: options.decorateSerializedConstraint,
+      constructionCommand, invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache,
+      clearInteractionForSketchChange: options.clearInteractionForSketchChange, solveAndRefresh: options.solveAndRefresh,
+      changed: options.changed, limit: 3, setHint: presentation.setHint, log: presentation.log, interactionProfiler: presentation.profiler });
+  } finally { w.HistoryRestoration = original; }
+  assert.deepEqual(events, []);
+  return { state, events, error, feature, documentModel,
+    snapshot() { return JSON.parse(JSON.stringify({ events, value: state.value, name: state.name, enabled: state.enabled,
+      definition: state.definition, restoring: feature.controller.restoring, documentUndo: feature.documentHistory.undoCount,
+      documentRedo: feature.documentHistory.redoCount, blockUndo: state.current?.history.undoCount, blockRedo: state.current?.history.redoCount })); } };
+}
+
+test('workspace history connects cold to the same owners and preserves live name, construction preference and profile return', () => {
+  const run = composed => {
+    const f = workspaceHistoryFixture(composed), h = f.feature;
+    assert.ok(Object.isFrozen(h)); h.documentHistory.reset(); f.state.value = 1; h.record('edit');
+    assert.equal(h.controller.undo(), true); assert.equal(f.state.name, 'Current'); assert.equal(f.state.enabled, true);
+    assert.equal(h.controller.redo(), true); assert.equal(f.state.value, 1);
+    f.state.profiling = true; assert.equal(h.record(), 'profile-result');
+    assert.equal(h.captureDocument(), '{"value":1}'); return f.snapshot();
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('workspace history retains independent block stacks and restores cloned drafts through the actual editor', () => {
+  const run = composed => {
+    const f = workspaceHistoryFixture(composed), h = f.feature;
+    h.documentHistory.reset(); const first = h.createBlockHistory(), second = h.createBlockHistory();
+    f.state.current = { history: first }; h.controller.resetBlock(); f.state.definition.points[0].x = 10; h.record();
+    assert.equal(h.controller.undo(), true); assert.equal(f.state.definition.points[0].x, 0);
+    assert.notEqual(f.state.definition, first.currentSnapshot.definition);
+    f.state.current = { history: second }; h.controller.resetBlock(); assert.equal(first.redoCount, 1);
+    f.state.current = null; assert.equal(h.controller.active(), h.documentHistory); return f.snapshot();
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('workspace history keeps callback receivers, exceptions, moved stacks and finally notifications at each restore stage', () => {
+  for (const failure of ['current', 'capture', 'profiling', 'profile', 'log', 'name', 'enabled', 'load', 'rename', 'construction', 'clear', 'solve', 'hint', 'changed', 'live', 'clone', 'replace', 'invalidate']) {
+    const run = composed => {
+      const f = workspaceHistoryFixture(composed), h = f.feature;
+      h.documentHistory.reset(); f.state.value = 1; h.record();
+      const block = ['live', 'clone', 'replace', 'invalidate'].includes(failure);
+      if (block) { f.state.current = { history: h.createBlockHistory() }; h.controller.resetBlock(); f.state.definition.points[0].x = 10; h.record(); }
+      f.events.length = 0; f.state.fail = failure;
+      const record = ['current', 'capture', 'profiling', 'profile', 'log', 'live'].includes(failure);
+      if (failure === 'profile') f.state.profiling = true;
+      if (failure === 'log') f.state.value = 2;
+      assert.throws(() => record ? h.record() : h.controller.undo(), error => error === f.error);
+      return f.snapshot();
+    };
+    assert.deepEqual(run(true), run(false), failure);
+  }
+});
