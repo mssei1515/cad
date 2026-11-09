@@ -21,11 +21,7 @@
     signedPointLineDistance,
   } = window.GeometryKernel;
 
-  const {
-    parseId: parseGeometryRefId,
-    id: geometryRefId,
-    key: geometryRefKey,
-  } = window.GeometryRef;
+  const { id: geometryRefId } = window.GeometryRef;
 
 
 
@@ -112,7 +108,7 @@
   const { effectiveAppearanceForElement, isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
   const { hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
-  const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds } = blockCatalog;
+  const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
   const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allAnnotations, allHatches, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
@@ -466,12 +462,8 @@
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
     updateGeometrySelectionUI,
   });
-  const blockConfigurationCommand = window.BlockConfigurationCommand.create({
-    currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, createBlockProjectionBundle,
-    blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, constraintGraphNodes,
-    geometryRefKey, parseGeometryRefId, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion,
-    canvasSelection, clearRemovedHover: removed => { if (removed.has(canvasHover.current.dimension)) canvasHover.update({ dimension: null }); },
-    invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory,
+  const blockConfigurationCommand = blockEditingFeature.createConfiguration({
+    references: constraintReferences, guardDimensionSymbolDeletion, updateBlockUI, recordHistory,
   });
   const { setEnabledSketchIds: setBlockInstanceEnabledSketchIds } = blockConfigurationCommand;
   const { editing: synchronizedInstanceEditing, changeProperty: changeFreeInstanceProperty, transform: instanceTransformCommand } = createInstanceEditing({
