@@ -1,5 +1,18 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Selectionと重なり順の共通owner（2026-11-10）
+
+CanvasSelectionFeature.createEditingが返すcreateDrawingOrderは、同じSelection・scope query・Sketch query・編集access・描画／翻訳／hintを既存DrawingOrderCommandへ接続する。最後にbindしたeditingScopeとordinarySelectionMode、UI更新・履歴記録は明示入力に残す。currentScopeは呼出時のeditingScope.currentを読み、Document Workspace.currentへ統合しない。active優先／非active Sketchの逆順走査、選択Sketchの順序変更、guardの既定operation、配列・Geometry同一性とdrawingOrderのみの更新、通知・履歴・例外時の途中状態はraw commandが所有する。元の後段位置で実commandを一度生成し、新state・Selection・cache・listenerや汎用contextは作らない。
+
+app.jsは1,517→1,515行（2行減）、非空白1,068→1,066行。生成入力は11→4項目。rootのselectionScopeQuery／selectionSketchId／guardSelectionEdit別名を除き、rootは340文・555bindingになった。生のDrawingOrder／DrawingOrderCommandと既存CanvasSelectionFeature APIを維持し、createEditingに生成methodだけを加える。全体目標は未完了。
+
+TEMP cad-selection-drawing-order-proof.cjsで置換呼出しと三別名以外のroot AST、四port・返す三APIのbinding、既存SelectionFeature・raw order／command・CanvasInteraction・index.html不変、未使用binding・新しい未束縛参照なしを確認した。三件の新旧比較は実DrawingOrderCommand／CanvasSelection／EditAccessを使い、cold生成・実APIとguard／query参照、Workspaceと異なるbound scope・Block切替・inactive選択、四操作と無効操作／lock／空選択、配列・オブジェクト同一性とUI／履歴、constructor／scope／ordinary queryとUI・draw・history・hint例外の途中状態を検証する。
+
+削除と固定操作は既に専用ownerが別々のscopeと生成段階を保持しているため、同じ編集用contextへまとめていない。次は残る構築groupと機能間の接続を実owner・phaseから整理する。共有依存をまとめてもrootには構築と別名が多く残り、細かなport追加やtest hooksの移動だけで200〜500行へ届いたとはしない。
+
+関連単体11件、構文631file・全単体2,297件・関連E2E207件が成功（10file、3.0m、exit 0）。三件の実DrawingOrderCommand／Selection／EditAccess比較でcold生成・共有API、bound scopeとWorkspaceの区別・Block切替・inactive選択、四操作とguard／無効action／空選択、配列・オブジェクト同一性・通知／履歴、constructor／query／UI・draw・history・hint例外時の途中状態を確認した。699製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-selection-drawing-order-{focused,check,unit,e2e,proof,smoke}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。直近07f5936の全E2E589件成功（21.6m）とは別の今回変更後の関連検証であり、全体目標は未完了。
+
+
 ## DocumentとDXFの共有Workspace接続（2026-11-10）
 
 DocumentFileFeature.prepareのcreateForWorkspaceが、元のDocument／History／Presentationを保持したcreateDxfForWorkspaceを公開する。DXFの後段生成は同じraw createDxfForEditingへ委譲し、DocumentWorkspace・UI更新・履歴記録を親の実ownerから接続する。rootで二度目のDocumentWorkspaceを選択させず、Geometry・CanvasInteraction・操作session・最小長・Selection消去だけを後段入力とする。履歴委譲の既定label・一引数・member receiver・返値／例外は元のroot関数と一致させる。共有File Session、モデル更新・非同期guard再確認・rollback・dirty判定・controlの後段bind／disposeは既存ownerのまま維持する。

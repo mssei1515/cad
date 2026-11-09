@@ -117,10 +117,9 @@
     isGeometryMode, setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null),
     clearSelection, updateGeometrySelectionUI, draw,
   });
-  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, scope: selectionScopeQuery,
+  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection,
     access: sketchEditAccess, pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
-  const { guardSketchEdit, guardSelectionEdit } = sketchEditAccess;
-  const { selectionSketchId } = selectionScopeQuery;
+  const { guardSketchEdit } = sketchEditAccess;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -1146,9 +1145,8 @@
   });
 
 
-  const { topmostOwner: topmostDrawingOrderOwner, state: drawingOrderCommandState, reorder: reorderSelectedDrawingObjects } = window.DrawingOrderCommand.create({
-    currentScope: () => editingScopeBinding.current, canvasSelection, activeSketchId, selectionSketchId, ordinarySelectionMode,
-    guardSelectionEdit, updateUI, draw, recordHistory, applicationText, setHint,
+  const { topmostOwner: topmostDrawingOrderOwner, state: drawingOrderCommandState, reorder: reorderSelectedDrawingObjects } = selectionFeature.createDrawingOrder({
+    editingScope: editingScopeBinding, ordinarySelectionMode, updateUI, recordHistory,
   });
 
 
