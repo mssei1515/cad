@@ -4,6 +4,7 @@ const path = require("node:path");
 const files = [
   "tests/unit/browser-test-api.test.js",
   "tests/unit/sketch-tree-test-driver.test.js",
+  "tests/unit/canvas-selection-test-driver.test.js",
   "tests/unit/reference-image-test-driver.test.js",
   "tests/unit/parameter-test-driver.test.js",
  "src/application/sketch_solving_feature.js", "tests/unit/sketch-solving-feature.test.js",

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,615行、非空白1,166行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,560行、非空白1,111行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Canvas選択Browser APIのworkspace接続（2026-11-10）
+
+CanvasSelectionTestDriver.createForWorkspaceは、同じDocumentWorkspace・GeometryCreation・GeometryReadServices・CanvasInteraction・Presentationから選択観測supportを準備し、後段createApiForEditingで元の七APIを生成する。SketchContextのactive読取り、Workspace.current、Selection／hover、Block選択query／定義生成、fit／座標、Document採番を実ownerから接続する。root Documentへの定義追加と現在編集scopeへのGeometry／instance追加は区別する。Block editorは呼出時のcurrentをBoolean化し、採番は同じallocatorのreceiverを保つ。生成時にscope・Selection・DOM・Block sessionを読まず、公開名・順序・返値・Geometry参照・callback receiver・例外時の途中状態を維持する。新state・cache・listenerは追加せず、raw createSupport／createApiと個別factoryを維持する。test query guardと二段階生成の位置、通常起動・UI・保存形式は変更しない。
+
+app.jsは1,563→1,560行（3行減）、非空白1,114→1,111行。後段APIの入力は30→16項目。専用の型・定数・採番・選択／scope接続を検証ownerへ集める。TEMP cad-selection-browser-owners-proof.cjsで他root AST・既存driver AST不変、未使用bindingと新しい未束縛参照なし、hook install前の依存初期化を確認した。全体目標は未完了。
+
+構文629file・全単体2,259件・関連E2E319件が成功（公開七APIを使う19file、15.2m、exit 0）。実Selection／GeometryCreation／SketchContextを使う三件を追加し、二段階のcold生成、公開順と選択reader同一性、scope置換とBlock／hoverのlive観測、重なり・Arc endpoint fixture、root Documentへの定義追加と採番、座標挿入、二十段階の例外と途中state／callback順を旧接続と比較した。700製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-selection-browser-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutは変更しておらず、全E2Eの代替結果とは扱わない。
+
+
 
 ### 最新：実線／補助線切替と描画Lifecycleのowner接続（2026-11-10）
 

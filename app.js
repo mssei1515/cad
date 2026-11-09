@@ -1327,8 +1327,8 @@
     if (!new URLSearchParams(window.location.search).has("test")) return;
     const historyObservation = window.DocumentTestDriver.createHistoryObservation({ activeEditHistory, blockEditor, document, constructionCommand });
     const readTestHistory = historyObservation.state;
-    const { readSelectedGeometry: readTestSelectedGeometry, createApi: createSelectionTestApi } = window.CanvasSelectionTestDriver.createSupport({
-      canvasSelection, currentScope: workspace.current, clearSelection, updateUI, draw,
+    const { readSelectedGeometry: readTestSelectedGeometry, createApiForEditing: createSelectionTestApi } = window.CanvasSelectionTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation, clearSelection,
     });
     const constraintTestFactories = window.ConstraintTestDriver.createBrowserFactories({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, scopeQuery: solveScopeQuery,
@@ -1444,12 +1444,9 @@
       decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
     });
     const selectionTestApi = createSelectionTestApi({
-      sketchMoveCommand, activeSketchId, fields: window.SketchMove.fields, decorateSerializedConstraint, serializeConstraint, serializeModel,
-      isEditingBlock: () => Boolean(blockEditor.current), blockSelectionGeometry, resetModelState, addLine, addPoint, addArc,
-      ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      invalidateBlockProjectionCache, fitSketchToViewport, resetHistory, clientPosition: canvasTestDriver.clientPosition, arcEndpointPoint,
-      canvasHover, canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport,
+      sketchMoveCommand, blockEditor, blockSelection: blockSelectionQuery, blocks: blockEditingFeature, drawingFit, canvasDriver: canvasTestDriver,
+      decorateSerializedConstraint, serializeConstraint, serializeModel, resetModelState, resetHistory,
+      canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport,
     });
     const propertyAppearanceObservation = propertiesTestFactories.createAppearanceObservation();
     const propertiesFixture = propertiesTestFactories.createFixture();
