@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## 実線／補助線切替と描画Lifecycleのowner接続（2026-11-10）
+
+CanvasInteractionFeatureのoperation sessionが公開するcreateConstructionは、同じCanvasSelection・DrawOperationLifecycle・通知／描画を使い、実ConstructionCommandを従来の位置で生成する。Projection featureの編集guardと、target取消・metadata同期・UI更新・履歴・snap解除・Toolbar更新は明示した限定依存として接続する。setLineModeは同じLifecycle.setModeへlineを渡して返値undefinedを保ち、resetLineInputsは同じresetInputsへ委譲する。構築時にSelection・mode・guard・後段metadata／snap callbackを読まず、描画commandのLifecycle bindは元の後段に残す。construction設定stateは既存ConstructionCommand、modeと入力reset順は既存Lifecycleが所有する。選択Geometryの切替と今後の作図設定、投影guard拒否、metadata→選択解除→UI→draw→historyの順、例外時の途中状態を維持する。state・session・listenerを追加せず、raw ConstructionCommand／Lifecycle APIと通常UI・保存形式を変更しない。
+
+app.jsは1,566→1,563行（3行減）、非空白1,117→1,114行。切替生成の入力は14→7項目となり、mode変更／入力resetの接続と選択primitive照会を同じinteraction ownerへ集め、rootの専用aliasを除いた。TEMP cad-construction-interaction-owner-proof.cjsで六callback、他root／既存Interaction AST、raw ConstructionCommand／Lifecycle／Selection不変、未使用binding・新しい未束縛参照なしと後段依存の初期化順を確認した。数百行への全体目標は未完了。
+
+関連単体24件、構文628file・全単体2,256件・関連E2E372件が成功（19file、5.8m、exit 0）。実ConstructionCommand／Selection／DrawOperationLifecycleとoperation sessionを旧接続と比較する三件を追加し、cold生成・実APIと選択／guard同一性、後段Lifecycle bind、選択中の属性切替／guard拒否と今後の作図設定の分離、line modeと元のreset順、constructorと十三callback／reset段階の例外・途中状態を検証した。697製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-construction-interaction-owner-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。通常起動二経路とtest起動一経路もブラウザerrorなしを確認した（TEMP cad-construction-interaction-owner-smoke.log）。全E2Eの代替結果とは扱わない。
+
 ## Sketch Tree Browser検証APIのworkspace接続（2026-11-10）
 
 SketchTreeTestDriver.createForWorkspaceは、DocumentWorkspaceのSketchContext／scope・Geometry生成・可視性／Block投影・Canvas hover・表示更新・Sketch style／Overlay・viewport／fit・Block定義・寸法配置の既存ownerを使い、元のcreateBrowserApiを生成する。型・Sketch定数・寸法判定／target照会は既存namespaceから取得する。Root Documentへの定義追加とWorkspace.currentのGeometry生成を区別し、同じDocument allocatorでBlock instance IDを取得する。DOM／computed style・serialize／reset・距離寸法開始・layout・Block中心の八portは明示入力に残す。生成時にscope・Sketch・DOM・座標・hoverを読まず、既存八hookの名前・順序・返値、live読取・Geometry参照・fixtureの操作順・例外と途中状態を維持する。通常のTree表示／編集やモデルの所有を移さず、新しいview state・cache・listener・global contextは作らない。raw createBrowserApiと個別factoryを維持し、appのtest query guardとBrowserTestApi公開位置はそのままにする。

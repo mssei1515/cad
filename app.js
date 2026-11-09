@@ -126,7 +126,6 @@
   const { selectionSketchId } = selectionScopeQuery;
   const {
     selectedElementCount,
-    selectedConstructionTogglePrimitives,
   } = canvasSelection;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
@@ -179,11 +178,9 @@
   const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
     pointer: pointerInteractionController, createSelectionPresentation, createInputForEditing: createCanvasInputFeature,
     bindEditingPointer: bindCanvasPointer, createKeyboardForEditing: createCanvasKeyboard } = operationSessions;
-  const constructionCommand = window.ConstructionCommand.create({
-    cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
-    synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), setHint, clearSelection, updateUI, draw, recordHistory,
-    setLineMode: () => { drawOperationLifecycle.setMode("line"); }, resetLineInputs: () => drawOperationLifecycle.resetInputs("line"),
-    clearSnap: () => clearSnap(), updateToolbar,
+  const constructionCommand = operationSessions.createConstruction({
+    projection: sketchProjectionFeature, cancelConstraintTargetCommand, updateUI, recordHistory,
+    synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), clearSnap: () => clearSnap(), updateToolbar,
   });
   const { highlight: selectionHighlight, clearing: selectionClearing, documentReset: documentCanvasReset } = createSelectionPresentation({
     projections: blockProjections, constraintReferences,

@@ -19,6 +19,13 @@
         clearPreviewPointer: () => preview.setPointer(null), hideInput, setHint, updateToolbar, updateConstraintButtons, draw });
       const targets = window.ConstraintTargetSession.create({ acceptTarget });
       const pointer = window.PointerInteractionController.createSession();
+      function createConstruction({ projection, cancelConstraintTargetCommand, synchronizeSketchProjectionMetadata, updateUI, recordHistory, clearSnap, updateToolbar }) {
+        return window.ConstructionCommand.create({ cancelConstraintTargetCommand,
+          selectedConstructionTogglePrimitives: selectionFeature.selection.selectedConstructionTogglePrimitives,
+          guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
+          setHint, clearSelection, updateUI, draw, recordHistory,
+          setLineMode: () => { lifecycle.setMode("line"); }, resetLineInputs: () => lifecycle.resetInputs("line"), clearSnap, updateToolbar });
+      }
       function createMoveScheduler({ requestFrame, cancelFrame, profilePhase, withGeometryReadCache, readInput, syncDimensionValueInput }) {
         return window.PointerMoveScheduler.create({ requestFrame, cancelFrame,
           processMove: pointer => profilePhase("preview", () => {
@@ -79,7 +86,7 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      return Object.freeze({ preview, pending, targets, pointer, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      return Object.freeze({ preview, pending, targets, pointer, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
     }
     return Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
       identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions });
