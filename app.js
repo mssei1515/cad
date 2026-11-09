@@ -3,8 +3,7 @@
   "use strict";
   const { formatDisplayNumber } = window.NumberDisplay;
   const { escapeHtml } = window.HtmlText;
-  const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
-  const { referenceImageWorldToLocal } = window.ReferenceImageGeometry;
+  const { lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { serializeHatch, hatchAppearanceForDisplay } = window.HatchData;
 
   const {
@@ -116,7 +115,6 @@
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { effectiveAppearanceForElement, isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
-  const { effectiveDimensionAppearance } = dimensionAppearance;
   const { hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds } = blockCatalog;
@@ -589,13 +587,10 @@
 
 
 
-  const sceneHitInteraction = window.CanvasHitInteraction.createScene({
-    currentScope: workspace.current, dimensionScope: dimensionPresentationScope, viewport, pointUsage, sketchContext, geometryAppearance,
-    geometryReads, catalog: blockCatalog, projections: blockProjections, hatches: hatchGeometryQuery, dimensions: dimensionDisplay,
-    effectiveDimensionAppearance, dimensionLabelForConstraint, dimensionUsesExpression, annotationBounds, hitAnnotationElement,
-    hatchAppearanceForDisplay, targetFromConstraint, drawingOrderOwner, referenceImageWorldToLocal, pointInExpandedBox,
-    readMode: drawOperationLifecycle.readMode, readPendingCommand: () => pendingCommandSession.current, readConstraintCommand: () => constraintTargetSession.command,
-    operandValues: constraintOperandValues,
+  const sceneHitInteraction = window.CanvasHitInteraction.createSceneForWorkspace({
+    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
+    viewport, dimensionScope: dimensionPresentationScope, dimensions: dimensionDisplay, dimensionLabelForConstraint,
+    annotationBounds, hitAnnotationElement, operandValues: constraintOperandValues,
   });
   const { ordinarySelectionMode } = sceneHitInteraction.policy;
 
@@ -849,13 +844,9 @@
     dimensionLabelForConstraint, dimensionUsesExpression,
   });
 
-  const { query: rectangleSelectionQuery, rectangle: selectionRectangle } = window.RectangleSelectionFeature.create({
-    currentScope: dimensionPresentationScope, viewport, canvasSelection, selectionScope: selectionScopeQuery,
-    sketches: sketchContext, pointUsage, appearance: geometryAppearance, geometryReads, projections: blockProjections,
-    hatches: hatchGeometryQuery, dimensionBounds: dimensionSelectionBounds, annotationBounds, hatchAppearanceForDisplay,
-    readMode: drawOperationLifecycle.readMode, instanceSourceCommand, geometryInstanceCommand, sketchProjection: sketchProjectionFeature,
-    releasePointer: (id) => { try { canvas.releasePointerCapture(id); } catch (_) {} },
-    clearSelection, setHint, updateGeometrySelectionUI, draw,
+  const { query: rectangleSelectionQuery, rectangle: selectionRectangle } = sceneHitInteraction.createRectangleSelection({
+    dimensionBounds: dimensionSelectionBounds, instanceSourceCommand, geometryInstanceCommand, sketchProjection: sketchProjectionFeature,
+    canvas, clearSelection, presentation,
   });
 
   function drawBlockInstanceHandles() {

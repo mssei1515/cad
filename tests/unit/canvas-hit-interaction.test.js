@@ -19,7 +19,7 @@ function fixture() {
   return { api, canvasHover, calls, values, state, p: { x: 8, y: 12 }, names: () => calls.map(call => call[0]) };
 }
 
-function sceneFixture(configure = () => {}) {
+function sceneFixture(configure = () => {}, buildScene = ports => sandbox.window.CanvasHitInteraction.createScene(ports)) {
   const empty = () => ({ points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [], annotations: [], referenceImages: [], blockInstances: [], geometryInstances: [], hatches: [] });
   const state = { ready: false, scope: empty(), dimensionScope: empty(), mode: 'select', active: 'S1', pending: null, command: null,
     hidden: false, locked: false, blocks: [], instances: [], reads: [], error: null };
@@ -55,11 +55,11 @@ function sceneFixture(configure = () => {}) {
     operandValues: { makeConstraintOperand: (kind, value) => ({ kind, ...value }), operandFromReferenceTarget: value => value },
   };
   configure(ports, state);
-  const scene = sandbox.window.CanvasHitInteraction.createScene(ports);
+  const scene = buildScene(ports);
   assert.deepEqual(state.reads, []);
   const queries = scene.createQueries();
   assert.deepEqual(state.reads, []); state.ready = true;
-  return { state, scene, queries, point, empty };
+  return { state, scene, queries, point, empty, ports };
 }
 
 function commandPanelFixture() {
@@ -312,4 +312,122 @@ test('context query keeps Document scope and shares dimension layout, projection
   state.failAnnotation = true; calls.length = 0;
   assert.throws(() => query.candidatesAt(pointer), actual => actual === error);
   assert.deepEqual(calls, []); assert.equal(state.scope.annotations[0], annotation);
+});
+
+function workspaceSceneFixture(composed, probe = {}) {
+  const w = sandbox.window, stages = [], captured = {}, restorations = [], effects = [];
+  Object.assign(probe, { stages, captured, effects });
+  const factories = {
+    GeometryHitQuery: { createScopePolicy: "policy", createRegions: "regions", createDimensions: "dimensions", createInstances: "instances", create: "geometry" },
+    OperandHitQuery: { create: "operands" }, RectangleSelectionFeature: { create: "rectangle-feature" },
+    RectangleSelectionQuery: { create: "rectangle-query" }, CanvasSelectionInteraction: { createRectangleSelection: "selection" },
+    InstanceCommandInput: { createRectangleSources: "sources" }, SelectionRectangle: { create: "rectangle" },
+  };
+  for (const [name, methods] of Object.entries(factories)) {
+    const original = w[name], wrapped = { ...original }; restorations.push(() => { w[name] = original; });
+    for (const [method, stage] of Object.entries(methods)) wrapped[method] = input => {
+      stages.push(stage); captured[stage] = input; if (probe.failAt === stage) throw probe.error; return original[method](input);
+    };
+    w[name] = wrapped;
+  }
+  try {
+    let owners, selection;
+    const f = sceneFixture((ports, state) => {
+      selection = w.CanvasSelection.create();
+      const scope = w.CanvasSelection.createScopeQuery({ canvasSelection: selection, selectedGeometryItems: selection.selectedGeometryItems });
+      ports.sketchContext.isActiveSketchElement = item => item.sketchId === state.active;
+      Object.assign(ports, { targetFromConstraint: w.DimensionQueries.targetFromConstraint, drawingOrderOwner: w.DrawingOrder.drawingOrderOwner,
+        hatchAppearanceForDisplay: w.HatchData.hatchAppearanceForDisplay, referenceImageWorldToLocal: w.ReferenceImageGeometry.referenceImageWorldToLocal,
+        pointInExpandedBox: w.GeometryBounds.pointInExpandedBox });
+      owners = { documentWorkspace: { workspace: { current: ports.currentScope }, sketches: ports.sketchContext, parameters: { dimensionUsesExpression: ports.dimensionUsesExpression } },
+        readServices: { reads: ports.geometryReads, catalog: ports.catalog, projections: ports.projections, hatches: ports.hatches,
+          geometryAppearance: ports.geometryAppearance, dimensionAppearance: { effectiveDimensionAppearance: ports.effectiveDimensionAppearance } },
+        interaction: { pointUsage: ports.pointUsage, selection, scope, lifecycle: { readMode: ports.readMode } },
+        sessions: { pending: { get current() { return ports.readPendingCommand(); } }, targets: { get command() { return ports.readConstraintCommand(); } } },
+        viewport: ports.viewport, dimensionScope: ports.dimensionScope, dimensions: ports.dimensions, dimensionLabelForConstraint: ports.dimensionLabelForConstraint,
+        annotationBounds: ports.annotationBounds, hitAnnotationElement: ports.hitAnnotationElement, operandValues: ports.operandValues };
+    }, ports => composed ? w.CanvasHitInteraction.createSceneForWorkspace(owners) : w.CanvasHitInteraction.createScene(ports));
+    f.state.ready = false; stages.push("between");
+    function effect(name) { "use strict"; return function(...args) { assert.equal(this, undefined); assert.equal(f.state.ready, true); effects.push([name, ...args]); if (f.state.failEffect === name) throw probe.error; }; }
+    const canvas = { releasePointerCapture(id) { assert.equal(this, canvas); effects.push(["release", id]); if (f.state.releaseFails) throw new Error("capture already released"); } };
+    const dimensionBounds = { read: constraint => { assert.equal(f.state.ready, true); return constraint.bounds || null; } };
+    const source = { instance: { type: "mirror" }, addSources(items) { assert.equal(this, source); effects.push(["source", ...items]); } };
+    const instances = { addSources(items) { assert.equal(this, instances); effects.push(["instances", ...items]); } };
+    const projection = { command: { addByRect: effect("projection") }, sketchProjectionEntriesByRect: () => [{ item: f.state.scope.points[0] }] };
+    const presentation = { setHint: effect("hint"), updateGeometrySelectionUI: effect("ui"), draw: effect("draw") };
+    const clearSelection = () => { effects.push(["clear"]); f.state.clears = (f.state.clears || 0) + 1; selection.clear(); };
+    const options = { dimensionBounds, instanceSourceCommand: source, geometryInstanceCommand: instances, sketchProjection: projection, canvas, clearSelection, presentation };
+    const rectangle = composed ? f.scene.createRectangleSelection(options) : w.RectangleSelectionFeature.create({ currentScope: f.ports.dimensionScope,
+      viewport: f.ports.viewport, canvasSelection: selection, selectionScope: owners.interaction.scope, sketches: f.ports.sketchContext, pointUsage: f.ports.pointUsage,
+      appearance: f.ports.geometryAppearance, geometryReads: f.ports.geometryReads, projections: f.ports.projections, hatches: f.ports.hatches,
+      dimensionBounds, annotationBounds: f.ports.annotationBounds, hatchAppearanceForDisplay: f.ports.hatchAppearanceForDisplay,
+      readMode: f.ports.readMode, instanceSourceCommand: source, geometryInstanceCommand: instances, sketchProjection: projection,
+      releasePointer: id => { try { canvas.releasePointerCapture(id); } catch (_) {} }, clearSelection,
+      setHint: presentation.setHint, updateGeometrySelectionUI: presentation.updateGeometrySelectionUI, draw: presentation.draw });
+    assert.deepEqual(f.state.reads, []); assert.deepEqual(effects, []); f.state.ready = true;
+    function finish(options = {}, end = { x: 10, y: 10 }) {
+      rectangle.rectangle.begin({ x: 0, y: 0 }, options); rectangle.rectangle.update(end); return rectangle.rectangle.finish({ pointerId: 7 });
+    }
+    return { ...f, owners, selection, rectangle, effects, stages, captured, options, finish, source, projection };
+  } finally { for (const restore of restorations) restore(); }
+}
+
+test("Workspace hit scene keeps cold policy, query and late rectangle construction, exact scopes and existing owner identity", () => {
+  for (const composed of [false, true]) {
+    const f = workspaceSceneFixture(composed);
+    assert.deepEqual(f.stages, ["policy", "regions", "dimensions", "instances", "geometry", "operands", "between", "rectangle-feature", "rectangle-query", "selection", "sources", "rectangle"]);
+    assert.equal(f.captured.geometry.currentScope, f.ports.currentScope); assert.equal(f.captured.dimensions.currentScope, f.ports.dimensionScope);
+    assert.equal(f.captured["rectangle-query"].currentScope, f.ports.dimensionScope); assert.notEqual(f.ports.currentScope, f.ports.dimensionScope);
+    assert.equal(f.captured.selection.canvasSelection, f.selection); assert.equal(f.captured["rectangle-feature"].dimensionBounds, f.options.dimensionBounds);
+    assert.equal(f.captured["rectangle-feature"].clearSelection, f.options.clearSelection);
+    assert.equal(Object.isFrozen(f.scene), true); assert.equal(Object.isFrozen(f.rectangle), true); assert.equal(f.rectangle.rectangle.active, false);
+  }
+});
+
+test("Workspace hit and rectangle scene retain independent live scopes, selection identity, zoom, visibility and all rectangle routes", () => {
+  const results = [];
+  for (const composed of [false, true]) {
+    const f = workspaceSceneFixture(composed), p = f.point("workspace", 5, 5), q = f.point("display", 5, 5);
+    f.state.scope.points.push(p); f.state.dimensionScope.points.push(q);
+    assert.equal(f.queries.geometry.hitPoint(5, 5), p); f.finish(); assert.equal(f.selection.points[0], q);
+    assert.deepEqual(f.effects.map(e => e[0]), ["release", "hint", "ui", "draw"]); f.effects.length = 0;
+    f.finish({ kind: "instance-sources" }); assert.equal(f.effects[1][1], p); assert.equal(f.effects[1][0], "instances");
+    f.state.mode = "instance-sources"; f.effects.length = 0; f.finish({ kind: "instance-sources" }); assert.equal(f.effects[1][0], "source"); assert.equal(f.effects[1][1], p);
+    f.source.instance.type = "sketchProjection"; f.effects.length = 0; f.finish({ kind: "instance-sources" }); assert.equal(f.effects[1][1], p);
+    f.effects.length = 0; f.finish({ kind: "sketch-projection" }, { x: -10, y: 10 }); assert.equal(f.effects[1][0], "projection"); assert.equal(f.effects[1][2], true);
+    f.state.mode = "select"; f.state.scope = f.empty(); assert.equal(f.queries.geometry.hitPoint(5, 5), null);
+    f.state.hidden = true; f.finish(); assert.equal(f.selection.points.length, 0); f.state.hidden = false;
+    f.state.dimensionScope = f.empty(); f.state.dimensionScope.points.push(q); f.state.releaseFails = true;
+    f.finish({}, { x: 2, y: 0 }); assert.equal(f.state.clears, 1); f.state.scale = 2;
+    f.finish({}, { x: 2, y: 0 }); assert.equal(f.selection.points.length, 0);
+    f.state.scale = 1; f.finish(); assert.equal(f.selection.points[0], q);
+    const circle = new sandbox.window.GeometrySolver.Circle("C1", f.point("center", 0, 0), 5);
+    const constraint = Object.assign(new sandbox.window.GeometrySolver.RadiusConstraint(circle, 5), { id: "D", sketchId: "S1", dimension: {}, bounds: { x1: 0, y1: 0, x2: 10, y2: 10 } });
+    f.ports.dimensions.layout = () => ({ text: { x: 0, y: 0 }, hitA: { x: -10, y: 0 }, hitB: { x: 10, y: 0 } });
+    f.state.dimensionScope.constraints.push(constraint); assert.equal(f.queries.dimensions.hitDimension(0, 0).constraint, constraint);
+    f.finish(); assert.equal(f.selection.dimensionConstraints[0], constraint);
+    constraint.sketchId = "S2"; f.state.pending = {}; assert.equal(f.scene.policy.ordinarySelectionMode(), false); assert.equal(f.queries.dimensions.hitDimension(0, 0), null); f.state.pending = null;
+    f.state.command = {}; assert.equal(f.scene.policy.ordinarySelectionMode(), false); f.state.command = null;
+    f.state.dimensionScope = f.empty(); assert.equal(f.queries.dimensions.hitDimension(0, 0), null);
+    results.push(JSON.stringify({ effects: f.effects, selected: f.selection.points.map(point => point.id) }));
+  }
+  assert.equal(results[1], results[0]);
+});
+
+test("Workspace hit scene propagates constructor, scope and notification errors and retains release-capture swallowing and completed-session boundaries", () => {
+  const order = ["policy", "regions", "dimensions", "instances", "geometry", "operands", "between", "rectangle-feature", "rectangle-query", "selection", "sources", "rectangle"];
+  for (const composed of [false, true]) {
+    for (const failAt of order.filter(name => name !== "between")) {
+      const error = new Error(failAt), probe = { failAt, error }; assert.throws(() => workspaceSceneFixture(composed, probe), value => value === error);
+      assert.deepEqual(probe.stages, order.slice(0, order.indexOf(failAt) + 1)); assert.deepEqual(probe.effects, []);
+    }
+    const error = new Error("scope"), f = workspaceSceneFixture(composed, { error }); f.state.error = error;
+    assert.throws(() => f.queries.geometry.hitPoint(0, 0), value => value === error);
+    assert.throws(() => f.finish(), value => value === error); assert.equal(f.rectangle.rectangle.active, false); assert.deepEqual(f.effects, [["release", 7]]);
+    for (const name of ["hint", "ui", "draw"]) {
+      const marker = new Error(name), g = workspaceSceneFixture(composed, { error: marker }); g.state.failEffect = name; g.state.releaseFails = true;
+      assert.throws(() => g.finish(), value => value === marker); assert.equal(g.rectangle.rectangle.active, false); assert.equal(g.effects.at(-1)[0], name);
+      assert.equal(g.rectangle.rectangle.finish({ pointerId: 7 }), false);
+    }
+  }
 });

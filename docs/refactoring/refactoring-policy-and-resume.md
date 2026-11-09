@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,649行、非空白1,200行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,640行、非空白1,191行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
-### 最新：Command panelのPresentation owner接続（2026-11-10、検証完了）
+### 最新：Canvas hit sceneと矩形選択のowner接続（2026-11-10、検証完了）
+
+CanvasHitInteraction.createSceneForWorkspaceが、DocumentWorkspaceのWorkspace／Sketch／Parameter、GeometryReadServicesのGeometry／外観／Block／Hatch、CanvasInteractionのpoint usage／Selection／scope／Lifecycle、OperationSessionsと同じviewportをsceneへ接続する。寸法の表示scopeは明示入力とし、通常Geometry／region／instanceのWorkspaceと区別する。型に依存する寸法target query、Hatch外観、描画順owner、画像座標変換とbox判定は既存namespaceを使う。返すsceneは従来のpolicy／createQueriesを保持し、後段createRectangleSelectionで同じ読取り・可視性・Selectionへ実RectangleSelectionFeatureを接続する。矩形のcurrentScopeは寸法表示scope、Instance矩形のGeometry readsはWorkspace由来のまま。dimension boundsは従来のTraversal生成後に渡し、policy→query群→後段矩形の生成位置と順を変えない。広いSelection消去は明示callbackに残し、pointer capture解除のmember receiverと例外を握りつぶす既存処理、裸のhint／UI／draw参照を維持する。判定・矩形session・Selection更新のアルゴリズムと所有者は既存モジュールに残し、model／query cache／session／listenerを複製しない。
+
+app.jsは1,649→1,640行（9行減）、非空白1,200→1,191行。二段階の明示入力は25＋22＝47→11＋7＝18項目へ減り、画像座標変換・box判定・寸法外観のroot専用aliasを除いた。TEMP cad-canvas-hit-scene-owners-proof.cjsで変更対象以外のapp／既存CanvasHitInteraction／raw矩形Feature・Query・Selection・sessionのAST不変、未使用root bindingなし、両段の入力初期化済みを確認した。数百行への全体目標は未完了。
+
+再監査ではroot378文、構築123文589非空白行、call一文の関数70個90行、test hooks222行、後段接続let三つ。今回の二段階を整理しても構築数は減っていない。数百行へは機能単位の生成・接続・bind境界をさらに整理する必要があり、alias除去やtest hookだけの移管で到達したとはしない。
+
+関連単体22件、構文627file・全単体2,217件・全E2E589件が成功（50file、21.1m、exit 0）。実GeometryHit／OperandHit／RectangleSelectionFeature・Query・Selection・sessionを旧接続と比較する三件を追加し、cold二段階生成、異なるlive scope、Geometry／寸法選択の参照同一性、倍率・可視性・pending／constraint mode、通常／Instance／pattern／投影の矩形経路、constructor・scope・hint／UI／draw例外とsession終了、pointer capture解除例外の既存処理を検証した。追加fixtureのpendingテストは既存どおりactive寸法を許可するため、非active寸法の除外を対象とした。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-canvas-hit-scene-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。共通判定／矩形の構築変更後の現物で全体検証を実施した。数百行への全体目標の完了とは区別する。
+
+基準developは822ecbb。作業branchはcodex/canvas-hit-scene-owners。開始時週枠残量56%。mainは停止条件到達時まで17d4cb0に保持する。前回全E2E589件成功は0c76132の証跡で、今回変更後の全体検証を別に記録する。次は残る構築groupの実owner／後段接続とbind順を再監査する。小関数の分割だけで数百行へ届くとはせず、setter-only adapterや巨大contextへ置換しない。
+
+### 直前：Command panelのPresentation owner接続（2026-11-10、検証完了）
 
 PresentationFeature.createCommandPanelsForEditingが共有command panelの組立てを担当する。親が持つdocument／settings.applicationText／画面更新・Properties更新・hint・drawへ、DocumentWorkspace.sketches、GeometryReadServicesの参照解決／注記外観、LifecycleとProjection／Instance source／Geometry／Hatch／Annotation／PNG commandを接続する。数値formatとGeometry参照変換は既存namespaceを使う。Projection.commit、source.finish、Lifecycle.exitとqueryは元の裸関数参照を保ち、command自身を渡す箇所のmember receiverも維持する。derived→hatch→annotation→共通DOM生成とlistener登録を従来の後段位置で行い、成功時だけ同じpanel ownerを公開する。mode／source／active Sketch／言語／注記style／PNG activeと選択を操作時に読み、完了・取消／refresh順と例外時の途中状態を変えない。既存createCommandPanelsとraw各panel APIを維持し、draft／session／model／listener ownerを重複させない。
 
