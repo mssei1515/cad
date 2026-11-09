@@ -98,6 +98,13 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：構築・遅延依存の再監査（2026-11-10、基準7d6ccc9）
+
+app.jsの残存構造を再監査し、[監査結果](bootstrap-boundary-audit.md)と[再生成可能なJSON](composition-root-audit.json)へ記録した。1,532行・非空白1,083行のまま。root351文・559binding、call／new初期化547行・別名等151行・委譲83行・test hooks209行を確認した。単純なadapter追加だけで数百行へ届くとはせず、次は既存ConstraintEditingの構築境界で初回寸法scaleと後段の共通求解準備→値編集commandを段階的に接続する原型を検証する。生成時機・共有実体・独自scopeを維持し、setter-only bridgeや巨大contextを作らない。全体目標は未完了。
+
+構文631file・全単体2,280件が成功（exit 0）。追加の監査三件でscope／shadowing・構文上の参照段階・代入先／循環・LF／CRLF・行coverageと非対応entrypoint拒否を検証した。CLI再生成結果と保存JSONの一致、app.jsのGit blob・行数・hash、351文／559bindingと次の候補位置も照合した。CAD実装・index.html・E2E・packageに差分はなく、E2Eは今回再実行していない。正式なモジュール構成仕様へ開発用toolの役割と静的解析の限界を追記した。TEMP cad-composition-boundary-review-{check,unit,proof}.logに証跡を保持する。全体目標は未完了。
+
+
 ### 最新：寸法走査と選択範囲のCanvas owner接続（2026-11-10）
 
 CanvasDisplay.prepareForWorkspaceの後段workspaceがcreateDimensionTraversalを公開し、実DimensionDisplayの同じcreateTraversalへSketch判定・Geometry外観・Selection・hover・pending・export frame・ConstraintStatus表示・既存label readerを接続する。注記を含む描画用currentScopeと後段DimensionDragのreader、式判定だけは明示portに残し、通常Workspace.currentへ置き換えない。生成時にscope・Sketch・Selection・hover／drag・pending／export／表示状態を読まず、元の位置で実SelectionBounds→Layerを生成する。inactive色は既存GeometryPresentation定数を使う。raw DimensionDisplay／DimensionPresentationのin-place sort・active判定cache・可視性短絡・highlight／編集中／export抑制・label／式判定の順と呼出し回数、metrics／layout、例外時の途中sort／Canvas save状態を変更しない。新model・state・cache・listenerや汎用contextを追加せず、既存display／workspace APIと通常UI・保存形式を維持する。

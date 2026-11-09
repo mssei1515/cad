@@ -1,5 +1,78 @@
 # Composition rootの残存責務と依存監査
 
+## 構築・遅延依存の再監査（2026-11-10、基準7d6ccc9）
+
+今回の単位は監査と開発用の再生成toolであり、製品の責務分離を実施した単位とは区別する。app.jsは1,532→1,532行、非空白1,083→1,083行。200〜500行の目標と、週枠残量5%未満で現在単位の検証・Commit・Push後にmainを最後へ反映する方針を維持する。
+
+### 現物から分かる残存構造
+
+| ASTによる分類 | root文数 | 非空白行 |
+| --- | ---: | ---: |
+| aliasesAndConfiguration | 107 | 151 |
+| construction | 119 | 547 |
+| lateReferences | 3 | 3 |
+| delegates | 67 | 83 |
+| bindingCalls | 20 | 39 |
+| policyValues | 10 | 10 |
+| otherCalls | 8 | 15 |
+| otherFunctions | 3 | 8 |
+| lateAssignments | 3 | 3 |
+| startupCalls | 10 | 10 |
+| testHooks | 1 | 209 |
+| IIFE・directive・独立comment等 | — | 5 |
+| 合計 | 351 | 1083 |
+
+constructionはCallExpression／NewExpressionによる変数初期化の構文分類であり、全119件をfeature factoryと呼ぶものではない。DOM handle取得やMath.maxも含む。aliasesAndConfigurationはnamespaceからの取出し・owner別名等。bindingCalls／startupCallsも名前による分類で、実際の副作用は元のmoduleを確認する。
+
+全行1,532のうち449行は空白。67個の委譲関数は83行、test guard内のinstallTestHooksは209行である。仮にこの二群を全て外へ出せても非空白791行が残る。空行整理・委譲移動・test hook丸ごとの別bootstrap化では目標へ届いた根拠にならない。主対象は547行の初期化と151行の別名・設定を、機能の共有依存と生成段階に沿って整理することである。
+
+rootの束縛は559、letはpngExportCommand／sketchMoveCommand／sketchContextControllerの三つで、対応する後段代入も三つ。これらは後段で生成する実componentへの参照で、mode／Selection／pending／履歴の重複stateではない。単なるsetterを新設して隠さない。委譲以外の通常関数はisGeometryMode（true）、hitBlockRotationHandle（null）、updateBlockUI（normalization→render）の三つ・計8行。固定挙動を無断で削除・変更しない。
+
+### 依存グラフの読み方と限界
+
+root statement間の構文参照edgeはimmediateSyntax 1,068本、deferredSyntax 344本。callbackを含めたグラフには243文の強連結成分が一つあり、immediateSyntaxだけには循環がなかった。draw／UI更新／履歴通知から構築先へ戻る遅延参照も含まれるため、この243文を一つのmoduleへ束ねる判断はしない。
+
+これは実行時の初期化順の証明ではない。即時呼出しの関数がcallbackを同期実行することもあり、遅延参照内のIIFEも実際にはすぐ実行され得る。代入先はwritesへ別記し、書込みから値の流れを追う解析は行わない。新しい境界の採用時には、元のconstructor body・bind／start順とcold生成・例外の境界テストを引き続き確認する。
+
+### 次の実装境界：寸法値編集の段階的な組立て
+
+既存ConstraintEditingを構築ownerとして、次の三生成を扱う原型を検証する。新たな巨大EditingContextは作らない。
+
+| 現在の生成位置 | 必要な依存 | 同じ時機に残すもの |
+| --- | --- | --- |
+| FirstDimensionScaling、app.js:327 | Workspace.current・Sketch query・DrawingBounds・最小長 | Geometry／Sketchの実行時読取り、同じscale関数 |
+| ConstraintSolvePreparation、app.js:432 | Solver・modelQueries.hasDirectRadiusDimension・Offset chain draft・数値方針 | 共通preparationを一度だけ生成すること |
+| ConstraintEditing.createDimensionValues、app.js:435 | checkpoint・安定化・Annotation・Instance編集・入力・viewport・上記二support | Command生成順、後段drag resetと拘束追加callback |
+
+前段はDrawingBounds生成後の元の位置でscaling supportだけを生成する。後段はOffset・checkpoint・安定化・Instance編集の準備後、元のpreparation→value command順を守る。後段factoryで依存を受け、setContext／bindCheckpointのようなsetter-only bridgeを作らない。共通preparationの処理ownerはConstraintSolvePreparationのままとし、DimensionValueCommandへ所有を移さない。生成した同じ実体をConstraint commit（app.js:1082）とOffset test support（app.js:1398）へも公開し、第二のpreparationを作らない。
+
+この原型の受入条件は、三生成の相対順・参照同一性・数値方針・Workspaceと最後にbindした編集scopeの区別・constructor時の無読取り・callbackのreceiver／引数／返値／例外・失敗復元が旧接続と一致すること。移しただけで同じ大量のcallbackが残る場合は採用を再検討する。行数削減量は実装後に測り、先に約束しない。これは次の未実装単位であり、数百行への全工程をこの一単位に縮小しない。
+
+### 続く機能単位と、まとめない範囲
+
+| 領域 | 検討する責務 | 保つ境界・デメリット |
+| --- | --- | --- |
+| Authoring tools | checkpoint／安定化／投影guardを使う編集toolの共通接続 | Offsetはcheckpoint／solving生成前。Fillet・Spline等をOffsetと同時に早期生成しない。元の複数phaseを残す |
+| Workspace UI | Selection query・Properties／Tree／Block viewの生成と表示更新 | component参照の所有をUI側へ集めても、Documentの変更・sessionの開始取消・履歴は各commandに残す。bind／startを一括で並べ替えない |
+| Browser test support | domain別の生成と公開 | 通常featureからtestingへの逆依存を作らない。209行を別の巨大test bootstrapへそのまま移さない |
+
+現在の細かいport adapterを追加するだけで200〜500行に到達すると見積もらない。生成段階と共有依存を持つ機能単位へ整理する必要がある。一方、依存や順序を内側へ隠すほど追跡が難しくなるため、実ownerを共有する公開API・生成の証跡・境界テストを同時に保つ。app.jsには最終的にも機能間の依存と起動順が明示的に残る。
+
+### 再生成と証跡
+
+[composition-root-audit.json](composition-root-audit.json)は基準7d6ccc9のapp.jsのGit blob／LF正規化SHA-256、351文の分類、binding・参照・循環を記録する。[audit tool](../../tools/audit-composition-root.js)をrepository rootで実行すると、アプリコードを実行せず同じJSONを標準出力する。
+
+~~~powershell
+node tools/audit-composition-root.js
+~~~
+
+JSONは基準snapshotであり、app.js変更後はGit blobを照合して現状と一致するか確認する。次の再監査では同toolで更新する。
+
+監査には現在のdevDependencyに含まれるPlaywright 1.60.0のbundled Babelを使用する。package追加や製品の実行時依存はない。これは公開parser APIへの依存ではないため、Playwright更新でbundle配置／APIが変わった場合はaudit toolを更新して再検証する。parser版はJSONにも記録し、取得できない場合に推測で監査を続けない。
+
+構文631file・全単体2,280件が成功（exit 0）。追加の監査三件でscope／shadowing・構文上の参照段階・代入先／循環・LF／CRLF・行coverageと非対応entrypoint拒否を検証した。CLI再生成結果と保存JSONの一致、app.jsのGit blob・行数・hash、351文／559bindingと次の候補位置も照合した。CAD実装・index.html・E2E・packageに差分はなく、E2Eは今回再実行していない。正式なモジュール構成仕様へ開発用toolの役割と静的解析の限界を追記した。TEMP cad-composition-boundary-review-{check,unit,proof}.logに証跡を保持する。全体目標は未完了。
+
+
 ## 寸法走査と選択範囲のCanvas owner接続（2026-11-10）
 
 CanvasDisplay.prepareForWorkspaceの後段workspaceがcreateDimensionTraversalを公開し、実DimensionDisplayの同じcreateTraversalへSketch判定・Geometry外観・Selection・hover・pending・export frame・ConstraintStatus表示・既存label readerを接続する。注記を含む描画用currentScopeと後段DimensionDragのreader、式判定だけは明示portに残し、通常Workspace.currentへ置き換えない。生成時にscope・Sketch・Selection・hover／drag・pending／export／表示状態を読まず、元の位置で実SelectionBounds→Layerを生成する。inactive色は既存GeometryPresentation定数を使う。raw DimensionDisplay／DimensionPresentationのin-place sort・active判定cache・可視性短絡・highlight／編集中／export抑制・label／式判定の順と呼出し回数、metrics／layout、例外時の途中sort／Canvas save状態を変更しない。新model・state・cache・listenerや汎用contextを追加せず、既存display／workspace APIと通常UI・保存形式を維持する。
