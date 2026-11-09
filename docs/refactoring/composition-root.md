@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 作図基盤の共有owner接続（2026-11-09）
+
+BasicDrawingTools.createGeometryがcreateAuthoringForEditingを提供する。親のWorkspace.current／Geometry／ids／endpoint resolver／最小長を保持したまま、DocumentWorkspaceのSketch、GeometryReadServicesのreadsとgeometryAppearanceの可視性、CanvasInteractionのPointUsage／Selection／access／Lifecycle、OperationSessionsのpreview／pending、Presentationの翻訳／通知、viewportのlive倍率を既存createAuthoringへ接続する。Pending cancelは操作時に元sessionのmember receiverへ同じ一引数messageで渡す。samePositionは既存GeometryKernelを使う。checkpointの可変長capture／restore wrapper、後段Spline editing／blank gestureのreset callback、Constraint command取消と広いSelection消去は従来の明示的・遅延入力のまま保持する。新しいmodel／Selection／ID／state／cache／listener・moduleを作らず、返すものは従来の実Authoring APIである。createAuthoringと各primitive constructorの順・生関数参照・例外境界は変更しない。
+
+app.jsは1,694→1,692行（2行減）、非空白1,245→1,243行。作図基盤の明示入力30→19項目とし、不要root alias三個を除去した。TEMP cad-authoring-workspace-owners-proof.cjsで他app AST・既存Geometry／Authoring構築AST不変、未使用root bindingなし、直接入力の初期化済みを確認した。数百行への全体目標は未達である。
+
+初回E2EはisVisibleSketchElementの誤った接続先によるTypeErrorを検出して中止した（session80557、exit 1、専用portのlistener消滅を確認）。可視性の実ownerはSketch contextではなくGeometryReadServices.geometryAppearanceであった。接続を修正し、単体fixtureも実際のowner構造へ合わせ、Sketch contextに同名関数がないことを検証する。初回の途中失敗ログと入力snapshotはTEMP cad-authoring-workspace-owners-attempt1-*へ保存した。未完了の初回実行を合格として扱わない。
+
+関連単体38件、構文627file・全単体2,196件・関連E2E326件が成功（18file、5.0m、exit 0）。実Geometry／ID／Selection／Lifecycle／Pendingで旧接続と比較する三件を追加し、cold生成・callback同一性、live倍率／scope、Spline取消・権限拒否・後段resetの例外、constructor順・後段checkpoint失敗前のSlot model／ID不変を検証した。未使用alias除去後のapp.jsはnode --checkでも再確認した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-authoring-workspace-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## Keyboardの編集owner接続（2026-11-09）
 
 CanvasInteractionFeatureのOperationSessionsがcreateKeyboardForEditingを提供する。実Pending sessionのcancelとConstraint commandのcancel／completeLineLengthを同じmember receiverで操作時に呼び、Spline commandのfinalize／removeLast、Projectionのcommit、Hatchのfinishは従来の実関数参照で接続する。取消の一引数messageとundefined時の既定message、completeLineLengthの零引数、Keyboard controllerが操作callbackへ渡すreceiver・引数・例外を維持する。既存createKeyboard／CanvasCommandInputs／KeyboardInput／KeyboardInteractionControllerと、生成→明示start／disposeのlistener管理、live mode・pending・targets・pointer、Escapeの一操作取消順を変えない。新しいsession・状態・listener・moduleは追加せず、返すものは実Keyboard APIである。
