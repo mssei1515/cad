@@ -103,16 +103,17 @@ function fixture({ interactive = false, sharedScene = false, sharedOwners = fals
     ...ownerPorts, escapeHtml, hatchRegionErrorText: () => '', geometryInstanceTypeLabel: value => value,
     installExpressionInputHighlights: () => calls.push('highlight'),
     ...(interactive ? interactivePorts : {}) };
-  const editor = composition ? composition.createEditing({ appearanceScope: () => { assert.equal(state.ready,true); return state.appearanceScope || state.scope; },
+  const editingOptions = composition ? { appearanceScope: () => { assert.equal(state.ready,true); return state.appearanceScope || state.scope; },
     viewport: { get scale() { assert.equal(state.ready,true); return 2; } }, checkpoint: { captureValues: () => ({}), restoreValues() {} },
     parameterStabilization: { stabilize: () => true }, guardSketchProjectionShapeEdit: () => true,
     synchronizeSketchProjectionMetadata() {}, materializeAnchor() {}, isGeometryMode: () => true, toggleSketchVisibility() {}, guardSelectionEdit: () => true,
     applicationSettings: ownerPorts.applicationSettings || { applicationText, localizeApplicationUI: presentationPorts.localizeApplicationUI }, escapeHtml,
     invalidateBlockProjectionCache: services.projections.invalidateBlockProjectionCache, recordHistory: notify('history'),
-    updateUI: interactivePorts.updateUI, updatePropertiesUI: interactivePorts.updatePropertiesUI, draw: interactivePorts.draw }) : null;
+    updateUI: interactivePorts.updateUI, updatePropertiesUI: interactivePorts.updatePropertiesUI, draw: interactivePorts.draw } : null;
+  const editor = composition ? composition.createEditing(editingOptions) : null;
   const view = editor ? operationBindings ? editor.createViewForEditing({ ...viewOptions, ...editingActors }) : editor.createView(viewOptions) : build(viewOptions);
   function point(id, x = 1) { const item = Object.assign(new Point(id, x, 2), { sketchId: activeSketchId() }); state.scope.points.push(item); return item; }
-  return { model, state, panel, calls, controller, view, selection, propertySelection, point, services, sketchContext, composition, editor, operations, editingActors };
+  return { model, state, panel, calls, controller, view, selection, propertySelection, point, services, sketchContext, composition, editor, operations, editingActors, document, viewOptions, editingOptions };
 }
 
 test('shared scene owners preserve mixed markup, current locks and interactive property routing without construction reads', () => {
@@ -322,4 +323,99 @@ test('Properties editing view retains Block changes and dimension property callb
   f.panel.onchange({target:new Input({property:'block-orthogonal-rotation'},'90')});assert.equal(f.calls.at(-1)[0],'block-rotation');assert.equal(f.calls.at(-1)[2],Math.PI/2);
   f.selection.clear();const constraint=new w.GeometrySolver.DistanceConstraint(point,f.point('P2',12),10);constraint.dimension={};f.selection.set('dimensionConstraint',constraint);f.calls.length=0;
   f.panel.onchange({target:new Input({property:'constraint-expression'},'=2+8')});assert.equal(f.calls[0][0],'dimension-property');assert.equal(f.calls[0][1],constraint);assert.deepEqual(f.calls[0].slice(2),['constraint-expression','=2+8']);assert.deepEqual(f.calls.slice(1),['ui','draw']);
+});
+
+function workspaceFixture(composed) {
+  const f = operationsFixture(), { viewOptions: v, editingOptions: e, operations } = f;
+  const readServices = { ...f.services, hatches: { resolvedHatchBoundary: v.resolvedHatchBoundary } };
+  const current = () => { assert.equal(f.state.ready, true); f.state.scopeReads = (f.state.scopeReads || 0) + 1; return f.state.scope; };
+  const documentWorkspace = { document: f.model, workspace: { current }, sketches: f.sketchContext, parameters: v.parameterNamespace };
+  const interaction = { selection: f.selection, lifecycle: operations.lifecycle,
+    access: { ...f.editingActors.access, guardSelectionEdit: e.guardSelectionEdit } };
+  const presentation = { settings: e.applicationSettings, constraintFeedback: v.constraintFeedback, setHint: v.setHint,
+    updateUI: e.updateUI, updatePropertiesUI: e.updatePropertiesUI, draw: e.draw };
+  const projection = { guardSketchProjectionShapeEdit: e.guardSketchProjectionShapeEdit,
+    queries: { sketchProjectionConstraintForTarget: v.sketchProjectionConstraintForTarget } };
+  const projectionEditing = { synchronizeSketchProjectionMetadata: e.synchronizeSketchProjectionMetadata };
+  const annotationFeature = { materialize: e.materializeAnchor, command: { addLeader: item => { f.calls.push(['leader', item]); return 'leader-result'; } } };
+  const inputs = { document: f.document, documentWorkspace, readServices, interaction, presentation,
+    operations: { sources: operations.sources, placement: operations.placement, blocks: operations.blocks } };
+  const composition = composed ? w.PropertiesDisplay.createForWorkspace(inputs) : w.PropertiesDisplay.createFeature({
+    document: f.document, documentModel: f.model, currentScope: current, canvasSelection: f.selection,
+    readServices, sketchContext: f.sketchContext, hatchAppearanceForDisplay: w.HatchData.hatchAppearanceForDisplay, operations });
+  const editingInputs = { editingScope: { get current() { assert.equal(f.state.ready, true); return f.state.appearanceScope || f.state.scope; } },
+    viewport: e.viewport, checkpoint: e.checkpoint, parameters: e.parameterStabilization, projection, projectionEditing, annotationFeature,
+    isGeometryMode: e.isGeometryMode, toggleSketchVisibility: e.toggleSketchVisibility, recordHistory: e.recordHistory, escapeHtml };
+  const editor = composed ? composition.createEditingForWorkspace(editingInputs) : composition.createEditing(e);
+  const viewInputs = { analysis: { statusOf: v.constraintStatusOf }, selectionHighlight: { constraintDefiningGeometryEntries: v.constraintDefiningGeometryEntries },
+    snappedBlockRotation: v.snappedBlockRotation, hatchRegionErrorText: v.hatchRegionErrorText, geometryInstanceTypeLabel: v.geometryInstanceTypeLabel,
+    installExpressionInputHighlights: v.installExpressionInputHighlights, HTMLTextAreaElement: TextArea, HTMLInputElement: Input,
+    changeFreeInstanceProperty: v.changeFreeInstanceProperty, commitAnnotationParameterEdit: v.commitAnnotationParameterEdit,
+    ...f.editingActors };
+  const view = composed ? editor.createViewForWorkspace(viewInputs) : editor.createViewForEditing({ ...v, ...f.editingActors,
+    constraintGeometryId: w.GeometryObjects.geometryIdForItem, resolvedHatchBoundary: readServices.hatches.resolvedHatchBoundary,
+    annotationCommand: annotationFeature.command });
+  assert.deepEqual(f.calls, []); assert.equal(f.state.operationReads, undefined); assert.equal(f.state.scopeReads, undefined);
+  return { ...f, view, editor, composition, propertySelection: composition.selection,
+    snapshot() { return JSON.parse(JSON.stringify({ calls: f.calls, model: f.model, html: f.panel.innerHTML,
+      operationReads: f.state.operationReads, scopeReads: f.state.scopeReads })); } };
+}
+
+test('Properties workspace stages stay cold and preserve distinct selection and presentation read order and live scope', () => {
+  const run = composed => {
+    const f = workspaceFixture(composed); assert.ok(Object.isFrozen(f.composition)); assert.ok(Object.isFrozen(f.editor));
+    f.state.ready = true;
+    const definition = { ...w.DocumentState.create(), id: 'BD1', name: 'Block' }; f.model.blockDefinitions.push(definition);
+    f.state.operation = { mode: 'block-place', blockPlacementDefinitionId: definition.id, blockPlacementEnabledSketchIds: ['S1'], blockPlacementRotationLocked: true };
+    const target = f.propertySelection.selectedDisplayTarget(); assert.equal(target.item, definition);
+    assert.deepEqual(f.state.operationReads.slice(0, 4), ['mode', 'instanceSourceEdit', 'freeInstancePlacement', 'blockPlacementDefinitionId']);
+    f.state.operationReads = []; f.view.render(target);
+    assert.deepEqual(f.state.operationReads.slice(0, 5), ['mode', 'freeInstancePlacement', 'instanceSourceEdit', 'blockPlacementEnabledSketchIds', 'blockPlacementRotationLocked']);
+    f.state.operation = {}; f.state.scope = w.DocumentState.create();
+    const point = f.point('replacement'); f.selection.set('points', [point]); f.view.render(f.propertySelection.selectedDisplayTarget());
+    assert.equal(f.propertySelection.selectedDisplayTarget().item, point); return f.snapshot();
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Properties workspace stages preserve actual appearance edits, locks and selection identity', () => {
+  const run = composed => {
+    const f = workspaceFixture(composed); f.state.ready = true;
+    const point = f.point('P1'); f.selection.set('points', [point]); f.view.render(f.propertySelection.selectedDisplayTarget());
+    f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#123456') });
+    assert.equal(point.appearance.color, '#123456'); assert.equal(f.selection.points[0], point);
+    f.model.sketches.find(s => s.id === point.sketchId).locked = true;
+    const target = f.propertySelection.selectedDisplayTarget(); assert.equal(target.readOnly, true);
+    f.view.render(target); const before = f.calls.length;
+    f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#abcdef') });
+    assert.equal(point.appearance.color, '#123456'); assert.equal(f.calls.length, before); return f.snapshot();
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Properties workspace connection keeps guarded actions, member receivers, returns and partially rendered failures', () => {
+  const run = composed => {
+    const f = workspaceFixture(composed); f.state.ready = true;
+    const point = f.point('P1'); f.selection.set('points', [point]);
+    const displayTarget = f.propertySelection.selectedDisplayTarget(); f.view.render(displayTarget);
+    const instance = { id: 'GI1', sketchId: point.sketchId }; f.state.operation = { freeInstancePlacement: instance };
+    const instanceTarget = f.propertySelection.selectedDisplayTarget();
+    assert.equal(f.panel.onclick(actionEvent('instance-angle-dimension')), 'angle-dimension-result');
+    f.state.structureAllowed = false; assert.equal(f.panel.onclick(actionEvent('instance-anchor')), false); f.state.structureAllowed = true;
+    const marker = new Error('same action failure'); f.state.actionFailure = marker;
+    assert.throws(() => f.panel.onclick(actionEvent('instance-angle-dimension')), error => error === marker); f.state.actionFailure = null;
+    f.state.operationFailure = marker;
+    assert.throws(() => f.view.render(instanceTarget), error => error === marker); f.state.operationFailure = null;
+    assert.equal(f.state.operation.freeInstancePlacement, instance);
+    f.state.operation = {}; f.selection.clear();
+    const block = { id: 'BI1', definitionId: 'BD1', sketchId: point.sketchId }; f.selection.set('blockInstances', [block]);
+    f.panel.onchange({ target: new Input({ blockRotationMode: 'locked' }, '') });
+    assert.equal(f.calls.at(-1)[0], 'block-lock'); assert.equal(f.calls.at(-1)[1], block);
+    f.selection.clear(); const dimension = new w.GeometrySolver.DistanceConstraint(point, f.point('P2', 12), 10);
+    dimension.dimension = {}; f.selection.set('dimensionConstraint', dimension);
+    f.panel.onchange({ target: new Input({ property: 'constraint-expression' }, '=2+8') });
+    assert.equal(f.calls.at(-3)[0], 'dimension-property'); assert.equal(f.calls.at(-3)[1], dimension);
+    return f.snapshot();
+  };
+  assert.deepEqual(run(true), run(false));
 });

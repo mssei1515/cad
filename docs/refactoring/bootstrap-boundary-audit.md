@@ -1,5 +1,14 @@
 # Composition rootの残存責務と依存監査
 
+## Properties三段階のWorkspace接続（2026-11-10）
+
+PropertiesDisplay.createForWorkspaceは、DocumentWorkspace・GeometryReadServices・CanvasInteraction・Presentationと既存の配置操作ownerを共有し、元の選択query生成を行う。後段createEditingForWorkspaceで編集scope・checkpoint・Parameter安定化・Projection／metadata・Annotationを接続し、さらにcreateViewForWorkspaceで解析・highlight・Block／寸法／ReferenceImage／Hatch／Splineの操作を接続する。三段階の生成位置と実PropertySelection→PropertyEditingFeature／AppearanceUI→Controller／Viewの順を保ち、Workspace.currentとAppearanceUIのeditingScope.current、選択用と表示用のoperation readerを統合しない。型・Geometry ID・Hatch外観等の静的依存と、既存ownerの通知／guard／codec・queryは内部で解決する。生成時にmodel・scope・mode・Selection・DOMを読まず、原query／編集／Viewと同じ実体・Geometry参照・live読取り順、lock拒否・preview／commit・actionの引数／receiver／返値・例外を維持する。既存factoryと段階APIは引き続き利用でき、新state・palette・cache・listenerや汎用app contextを作らない。通常UIと保存形式は変更しない。
+
+app.jsは1,550→1,545行（5行減）、非空白1,101→1,096行。三段階の入力は8／17／25→6／11／17項目（合計50→34）。Properties専用alias七つをrootから除いた。TEMP cad-properties-workspace-owners-proof.cjsで他root・既存Properties AST不変、未使用binding・新しい未束縛参照なしと直接依存の初期化順を確認した。全体目標は未完了。
+
+関連単体17件、構文629file・全単体2,268件・関連E2E427件が成功（27file、6.7m、exit 0）。実PropertySelection／PropertyEditingFeature／Controller／Viewとread servicesを使う三件を追加し、三段階のcold生成、選択／表示readerの異なる順序、scope置換、実外観編集とlock拒否、Geometry参照、guard／member receiver／返値、Block・寸法操作、action／表示reader例外後の途中状態を旧接続と比較した。698製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-properties-workspace-owners-{focused,check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutを変更せず、全E2Eの代替結果とは扱わない。
+
+
 ## Parameter適用とBlock伝播のWorkspace組立て（2026-11-10）
 
 ParameterApplication.createForWorkspaceは、同じDocumentWorkspace・編集scope・BlockEditingFeature・History・EditingCheckpoint・現在／保存済みParameter安定化・Presentationを使い、従来のcreateEditingSupport→Block伝播→createApplicationをこの順に組み立てる。DocumentのJSON snapshotとBlock局所の値snapshot、復元時のDocument名fallback、Workspace.currentとeditingScope.currentの違い、Block editorのcapture時二回／restore時のlive読取りを維持する。生成時にmodel・scope・Block session・名前を読まず、Block伝播に同じstabilizeDocumentを共有し、注記Parameter適用にも同じ関数を公開する。後段のload・選択消去と受理閾値だけは明示portに残す。裸関数／member receiver、capture例外がtry外・確定通知の例外が復元対象という境界、親BlockからDocumentへの伝播・revision・cache無効化と途中状態を変えない。既存の三factoryと実support／propagation／applicationを維持し、追加state・履歴・可変context・listenerや保存形式変更は行わない。

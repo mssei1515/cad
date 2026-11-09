@@ -1,6 +1,36 @@
 /* Assemble Properties queries, editing commands, shared appearance UI and display around existing owners. */
 (() => {
   "use strict";
+  function createForWorkspace({ document, documentWorkspace, readServices, interaction, presentation, operations }) {
+    const { document: documentModel, workspace, sketches: sketchContext, parameters: parameterNamespace } = documentWorkspace;
+    const { hatchAppearanceForDisplay } = window.HatchData;
+    const feature = createFeature({ document, documentModel, currentScope: workspace.current, canvasSelection: interaction.selection,
+      readServices, sketchContext, hatchAppearanceForDisplay, operations: { ...operations, lifecycle: interaction.lifecycle } });
+    function createEditingForWorkspace({ editingScope, viewport, checkpoint, parameters, projection, projectionEditing,
+      annotationFeature, isGeometryMode, toggleSketchVisibility, recordHistory, escapeHtml }) {
+      const { createEditing } = feature;
+      const editor = createEditing({ appearanceScope: () => editingScope.current, viewport, checkpoint, parameterStabilization: parameters,
+        guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit,
+        synchronizeSketchProjectionMetadata: projectionEditing.synchronizeSketchProjectionMetadata, materializeAnchor: annotationFeature.materialize,
+        isGeometryMode, toggleSketchVisibility, guardSelectionEdit: interaction.access.guardSelectionEdit,
+        applicationSettings: presentation.settings, escapeHtml, invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache,
+        recordHistory, updateUI: presentation.updateUI, updatePropertiesUI: presentation.updatePropertiesUI, draw: presentation.draw });
+      function createViewForWorkspace({ analysis, selectionHighlight, snappedBlockRotation, hatchRegionErrorText, geometryInstanceTypeLabel,
+        installExpressionInputHighlights, HTMLTextAreaElement, HTMLInputElement, changeFreeInstanceProperty, commitAnnotationParameterEdit,
+        instanceTransform, blockConfiguration, dimensionValues, dimensions, referenceImages, hatch, splineEditing }) {
+        const { createViewForEditing } = editor;
+        return createViewForEditing({ sketchProjectionConstraintForTarget: projection.queries.sketchProjectionConstraintForTarget,
+          constraintGeometryId: window.GeometryObjects.geometryIdForItem, constraintFeedback: presentation.constraintFeedback,
+          constraintStatusOf: analysis.statusOf, snappedBlockRotation, constraintDefiningGeometryEntries: selectionHighlight.constraintDefiningGeometryEntries,
+          resolvedHatchBoundary: readServices.hatches.resolvedHatchBoundary, hatchRegionErrorText, geometryInstanceTypeLabel,
+          parameterNamespace, installExpressionInputHighlights, HTMLTextAreaElement, HTMLInputElement,
+          changeFreeInstanceProperty, commitAnnotationParameterEdit, setHint: presentation.setHint, annotationCommand: annotationFeature.command,
+          access: interaction.access, instanceTransform, blockConfiguration, dimensionValues, dimensions, referenceImages, hatch, splineEditing });
+      }
+      return Object.freeze({ ...editor, createViewForWorkspace });
+    }
+    return Object.freeze({ ...feature, createEditingForWorkspace });
+  }
   function createFeature({ document, documentModel, currentScope, canvasSelection, readServices, sketchContext,
     hatchAppearanceForDisplay, operations, selectionOperation = operations ? () => ({ mode: operations.lifecycle.mode,
       instanceSourceEdit: operations.sources.current, freeInstancePlacement: operations.placement.pending, blockPlacementDefinitionId: operations.blocks.definitionId }) : undefined }) {
@@ -145,5 +175,5 @@
       localizeApplicationUI, installExpressionInputHighlights,
     });
   }
-  window.PropertiesDisplay = Object.freeze({ create, createFeature, createSelection, createEditing, createWithController });
+  window.PropertiesDisplay = Object.freeze({ create, createFeature, createForWorkspace, createSelection, createEditing, createWithController });
 })();

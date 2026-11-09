@@ -51,7 +51,7 @@
     document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
   });
   const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
-    log, setHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, draw } = presentation;
+    log, setHint, updateUI, updateGeometrySelectionUI, draw } = presentation;
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const { applicationText, localizeApplicationUI } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
@@ -85,7 +85,7 @@
     constraintSketchId, isActiveSketchConstraint,
   } = sketchContext;
 
-  const { geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
+  const { geometryRefForItem, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
   const { services: geometryReadServices, createEditingScope, createPersistence } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
@@ -94,7 +94,7 @@
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
-  const { hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
+  const { hatchPrimitivesForScope } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
   const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
@@ -162,7 +162,6 @@
   });
   const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
     guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
-  const { sketchProjectionConstraintForTarget } = sketchProjectionQueries;
   const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
   const operationSessions = createOperationSessions({
     snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
@@ -185,7 +184,7 @@
   const { highlight: selectionHighlight, clearing: selectionClearing, documentReset: documentCanvasReset } = createSelectionPresentation({
     projections: blockProjections, constraintReferences,
   });
-  const { constraintDefiningGeometryEntries, sameConstraintDisplayElement } = selectionHighlight;
+  const { sameConstraintDisplayElement } = selectionHighlight;
   const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
     currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
   });
@@ -288,7 +287,6 @@
     annotationDrag: constrainedAnnotationDrag, solver, pointUsage, presentation, solveState: sketchSolveResultState, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { connectedComponentFromSeeds, localSolveLines, sketchSolveConstraints } = solveScopeQuery;
-  const { statusOf: constraintStatusOf } = constraintAnalysis;
   const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = createCanvasDisplay({
     initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,
     fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
@@ -344,7 +342,7 @@
     startDistanceResolution, clearSelection, updateToolbar,
   });
   const { layer: annotationLayer, dimensions: annotationDimensions, command: annotationCommand,
-    materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope } = annotationFeature;
+    dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
   const { annotationLeaderDisplayGeometry, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
@@ -1022,26 +1020,23 @@
 
 
 
-  const { selection: propertySelection, createEditing: createPropertyEditing } = window.PropertiesDisplay.createFeature({
-    document, documentModel, currentScope: workspace.current, canvasSelection, readServices: geometryReadServices, sketchContext, hatchAppearanceForDisplay,
-    operations: { lifecycle: drawOperationLifecycle, sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
+  const { selection: propertySelection, createEditingForWorkspace: createPropertyEditing } = window.PropertiesDisplay.createForWorkspace({
+    document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
+    operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
   function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
-  const { editing: propertyEditing, appearanceUI, createViewForEditing: createPropertiesView } = createPropertyEditing({
-    appearanceScope: () => editingScopeBinding.current, viewport, checkpoint: editingCheckpoint, parameterStabilization,
-    guardSketchProjectionShapeEdit, synchronizeSketchProjectionMetadata, materializeAnchor: materializeAnnotationAnchor,
-    isGeometryMode, toggleSketchVisibility, guardSelectionEdit, applicationSettings, escapeHtml,
-    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
+  const { editing: propertyEditing, appearanceUI, createViewForWorkspace: createPropertiesView } = createPropertyEditing({
+    editingScope: editingScopeBinding, viewport, checkpoint: editingCheckpoint, parameters: parameterStabilization,
+    projection: sketchProjectionFeature, projectionEditing: sketchProjectionEditing, annotationFeature,
+    isGeometryMode, toggleSketchVisibility, recordHistory, escapeHtml,
   });
   const { appearanceEditing, visibility: selectionVisibilityCommand } = propertyEditing;
   const propertiesView = createPropertiesView({
-    sketchProjectionConstraintForTarget,
-    constraintGeometryId, constraintFeedback, constraintStatusOf, snappedBlockRotation, constraintDefiningGeometryEntries,
-    resolvedHatchBoundary, hatchRegionErrorText,
-    geometryInstanceTypeLabel, parameterNamespace, installExpressionInputHighlights,
+    analysis: constraintAnalysis, selectionHighlight, snappedBlockRotation, hatchRegionErrorText,
+    geometryInstanceTypeLabel, installExpressionInputHighlights,
     HTMLTextAreaElement, HTMLInputElement,
-    changeFreeInstanceProperty, commitAnnotationParameterEdit, setHint, annotationCommand,
-    access: sketchEditAccess, instanceTransform: instanceTransformCommand, blockConfiguration: blockConfigurationCommand,
+    changeFreeInstanceProperty, commitAnnotationParameterEdit,
+    instanceTransform: instanceTransformCommand, blockConfiguration: blockConfigurationCommand,
     dimensionValues: dimensionValueCommand, dimensions: dimensionPlacementCommand, referenceImages: referenceImageInteraction, hatch: hatchCommand, splineEditing,
   });
 

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,550行、非空白1,101行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,545行、非空白1,096行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,15 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Properties三段階のWorkspace接続（2026-11-10）
+
+PropertiesDisplay.createForWorkspaceは、DocumentWorkspace・GeometryReadServices・CanvasInteraction・Presentationと既存の配置操作ownerを共有し、元の選択query生成を行う。後段createEditingForWorkspaceで編集scope・checkpoint・Parameter安定化・Projection／metadata・Annotationを接続し、さらにcreateViewForWorkspaceで解析・highlight・Block／寸法／ReferenceImage／Hatch／Splineの操作を接続する。三段階の生成位置と実PropertySelection→PropertyEditingFeature／AppearanceUI→Controller／Viewの順を保ち、Workspace.currentとAppearanceUIのeditingScope.current、選択用と表示用のoperation readerを統合しない。型・Geometry ID・Hatch外観等の静的依存と、既存ownerの通知／guard／codec・queryは内部で解決する。生成時にmodel・scope・mode・Selection・DOMを読まず、原query／編集／Viewと同じ実体・Geometry参照・live読取り順、lock拒否・preview／commit・actionの引数／receiver／返値・例外を維持する。既存factoryと段階APIは引き続き利用でき、新state・palette・cache・listenerや汎用app contextを作らない。通常UIと保存形式は変更しない。
+
+app.jsは1,550→1,545行（5行減）、非空白1,101→1,096行。三段階の入力は8／17／25→6／11／17項目（合計50→34）。Properties専用alias七つをrootから除いた。TEMP cad-properties-workspace-owners-proof.cjsで他root・既存Properties AST不変、未使用binding・新しい未束縛参照なしと直接依存の初期化順を確認した。全体目標は未完了。
+
+関連単体17件、構文629file・全単体2,268件・関連E2E427件が成功（27file、6.7m、exit 0）。実PropertySelection／PropertyEditingFeature／Controller／Viewとread servicesを使う三件を追加し、三段階のcold生成、選択／表示readerの異なる順序、scope置換、実外観編集とlock拒否、Geometry参照、guard／member receiver／返値、Block・寸法操作、action／表示reader例外後の途中状態を旧接続と比較した。698製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-properties-workspace-owners-{focused,check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutを変更せず、全E2Eの代替結果とは扱わない。
+
 
 ### 最新：Parameter適用とBlock伝播のWorkspace組立て（2026-11-10）
 
