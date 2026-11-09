@@ -348,7 +348,7 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createRendering: createCanvasRendering, createPlacementPreview, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer,
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
     dimensionScene: { currentLines: () => workspace.current().lines, minLineLength: MIN_LINE_LENGTH, canvasThemeColor,
       onExpressionMark: canvasRenderProbe.captureExpressionMark, appearance: dimensionAppearance, sketches: sketchContext },
@@ -367,7 +367,7 @@
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const { commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, geometry: geometryDisplay,
-    overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit } = createCanvasScene({
+    overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit, createFrame: createCanvasFrame } = createCanvasScene({
     currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, interaction: canvasInteraction,
     targets: constraintTargetSession, pending: pendingCommandSession, solveState: sketchSolveResultState, analysis: constraintAnalysis,
     readPanelSelection: () => presentation.selectedItem, instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
@@ -418,7 +418,6 @@
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
   const { renderer: referenceImageRenderer, interaction: referenceImageInteraction, input: referenceImageInput } = referenceImageFeature;
-  const { drawImages: drawReferenceImages, drawOverlays: drawReferenceImageOverlays } = referenceImageFeature.layer;
   const { drawDrawingStack } = window.DrawingStack.create({
     currentScope: workspace.current, activeSketchId, geometryReads,
     isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
@@ -900,15 +899,12 @@
 
 
 
-  const { drawSelectionRect, drawSnapMarker, drawSketchIdentityLabel } = window.InteractionOverlayRenderer.createLayer({
-    renderer: interactionOverlay, rectangle: selectionRectangle, snap: drawingSnap, hover: canvasHover, selection: canvasSelection, pointer: pointerInteractionController,
-  });
-  const canvasFrameRenderer = createCanvasRendering({
-    recordDraw: () => pointerMoveScheduler.recordDraw(),
-    geometry: geometryDisplay, dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
+  const { frame: canvasFrameRenderer, overlays: { drawSelectionRect } } = createCanvasFrame({
+    rectangle: selectionRectangle, snap: drawingSnap, pointer: pointerInteractionController,
+    recordDraw: () => pointerMoveScheduler.recordDraw(), referenceImageLayer: referenceImageFeature.layer, readPngCommand: () => pngExportCommand,
+    dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
     authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
-    drawBlockInstanceHandles, drawSnapMarker, drawReferenceImages, drawHatches, drawDrawingStack, drawReferenceImageOverlays,
-    drawSketchIdentityLabel, drawSelectionRect, drawExportOverlay: () => pngExportCommand?.drawOverlay(ctx, viewport.scale),
+    drawBlockInstanceHandles, drawHatches, drawDrawingStack,
   });
 
   function drawCanvas() { return canvasFrameRenderer.draw(); }

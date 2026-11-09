@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-09の最新単位ではapp.jsは1,681行、非空白1,232行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-09の最新単位ではapp.jsは1,677行、非空白1,228行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-09）
 
-### 最新：再監査と寸法表示test依存の分離（2026-11-09、検証完了）
+### 最新：Canvas sceneの後段frame構築（2026-11-09、検証完了）
+
+CanvasDisplay.createSceneForEditingがcreateFrameを返し、scene自身の実Geometry／OverlayとCanvasInteractionのSelection／Hoverを後段frame構築へ共有する。従来の位置でOverlay layer→interactive renderer→frame rendererを生成し、実frameと実overlaysを凍結した組として返す。Reference Imageは描画layerだけを受け、recordDrawは元のcallbackを保つ。矩形・Snap・pointerとnullable PNG commandは描画時に読む。PNGのdrawOverlayは同じctx／現在倍率をmember receiverで呼び、通常描画とexportの順・短絡・戻り値・例外と既存の途中Canvas／export状態を変えない。新しいmodel／state／cache／listener・moduleを作らず、raw createScene／createRendering／CanvasSurface／Overlay APIと初期化・bind順を維持する。
+
+app.jsは1,681→1,677行（4行減）、非空白1,232→1,228行。二つのroot構築を一つの後段生成へまとめ、構築文125→124、構築の非空白608→605行、root391→389文となった。明示入力は二constructor合計23→15項目、元のtest hooks225行と一文委譲71個91行・三つの後段接続letは据置。TEMP cad-canvas-scene-frame-proof.cjsで他app／既存CanvasDisplay／raw Frame・Overlay・Export API不変、未使用root bindingなし、後段入力の初期化済みを確認した。数百行への全体目標は未達である。
+
+関連単体32件、構文627file・全単体2,205件・全E2E589件が成功（50file、21.1m、exit 0）。実scene／surface／viewportと既存Frame・Overlay rendererを旧接続と比較する三件を追加し、cold生成・constructor順／参照同一性、通常／PNG描画順、live矩形・Snap・pointer・倍率／nullable command、Image callbackの捕捉時機、constructor・record・painter例外同一性と既存の途中Canvas／export状態を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-canvas-scene-frame-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。今回の全E2Eは共通frame構築変更後の現物で実施した。数百行への全体目標の完了とは区別する。
+
+基準developは397344e。作業branchはcodex/canvas-scene-frame。開始時週枠残量59%。mainは停止条件到達時まで17d4cb0に保持する。全体目標はactive・未完了。ConstraintとBlockの早期callbackは後段commandの生成前に別featureへ渡されるため、単なるconst／bind置換や可変setter facadeへ置き換えない。次は既存ownerのprepare／create／bind段階の接続と残るread-only構築groupを比較し、責務と順序を維持できるまとまりを選ぶ。
+
+### 直前：再監査と寸法表示test依存の分離（2026-11-09、検証完了）
 
 DimensionTestDriver.createForEditingが後段createDisplayForEditingを返す。既存の実DimensionDisplayからplacement／layouts／metricsを共有し、型・幾何計算・表示定数・正規化・数値formatは既存namespaceからテスト生成時に取得する。後段入力はCanvas hover／Document reader／dimensionAppearanceの三つだけとし、geometryAppearanceのSketch可視性とは別ownerとして扱う。返すものは従来の実createDisplayのappearance六操作・cases二操作である。既存createSupport／createDisplay／createDisplaySupportと八fixtureの生成順、前段編集fixture→他test support→後段表示support→BrowserTestApi公開の順、test gateを維持する。Document／scope／外観／倍率／Selection／hoverは実行時に読み、値やstyleをsnapshot化せず、Canvas method・viewportのfinally復元と例外同一性を変えない。通常起動へ新しい操作・state・listener・moduleを追加しない。
 
