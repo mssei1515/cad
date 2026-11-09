@@ -914,3 +914,99 @@ test('scene Hatch and stack keep constructor, query and paint failure identity a
   }
  }
 });
+function preparedWorkspaceFixture(composed, probe) {
+  'use strict';
+  probe ||= {};
+  let seed;
+  const f = sceneFixture(true, value => { seed = value.sceneOptions; }), w = sceneWindow, state = f.sceneState;
+  f.state.ready = false; f.calls.length = 0; f.reads.length = 0;
+  const pending = w.PendingCommandSession.create({}), targets = w.ConstraintTargetSession.create({});
+  const pointer = Object.fromEntries(['down','move','finish','leave','doubleClick'].map(name => [name, () => f.calls.push(name)]));
+  const sessions = { pending, targets, pointer, preview: { pointer: null } }, interaction = { ...f.editing.interaction, lifecycle: { ...f.editing.interaction.lifecycle, active: () => false, setMode: value => { state.mode = value; } } };
+  const settings = { applicationText: seed.applicationText, get theme() { return state.theme || 'light'; }, get language() { return state.language; } };
+  const presentation = { settings, draw: () => f.calls.push('draw'), setHint: () => f.calls.push('hint'), updatePropertiesUI: () => f.calls.push('properties'),
+    readCommandPanel: () => null, get selectedItem() { return state.panel; }, profiler: { phase(label, work) { assert.equal(this, undefined); f.calls.push(label); return work(); } } };
+  const readServices = { ...seed.readServices, reads: { ...seed.readServices.reads, withGeometryReadCache: work => { f.calls.push('cache'); return work(); } },
+    dimensionAppearance: { effectiveDimensionAppearance: () => w.Appearance.DEFAULT_DIMENSION_APPEARANCE, dimensionDisplayState: () => w.Appearance.DEFAULT_DIMENSION_APPEARANCE } };
+  const documentWorkspace = { workspace: { current: seed.currentScope }, sketches: seed.sketches };
+  f.browser.devicePixelRatio = 2; f.browser.ResizeObserver = class { observe() { f.calls.push('observe'); } disconnect() {} };
+  const originals = new Map(); probe.order = []; probe.ports = {}; probe.results = {}; probe.calls = f.calls;
+  const factories = [['CanvasViewControls','create','controls'],['CanvasViewport','create','viewport'],['CanvasNavigation','create','navigation'],['CanvasZoomControl','create','zoom'],
+    ['CanvasSurface','create','surface'],['CanvasExport','createRenderer','export'],['CanvasWorkspaceLayout','create','layout'],['CanvasInputBinding','createDragPointer','dragPointer'],
+    ['DimensionDisplay','createForScene','dimensions'],['DimensionInput','createForDocument','input'],['GeometryPresentation','createCommandTargets','targets'],['GeometryPresentation','createSketchStyle','style'],
+    ['GeometryDisplay','create','geometry'],['InteractionOverlayRenderer','create','overlay'],['DrawingBounds','create','bounds'],['PlacementPreviewRenderer','create','placementRenderer'],
+    ['PlacementPreviewRenderer','createLayer','placementLayer'],['CanvasInputBinding','createCommandRouting','routing'],['CanvasInputBinding','create','inputBinding'],['PngExport','create','png']];
+  for (const [namespace, method, name] of factories) {
+    if (!originals.has(namespace)) { originals.set(namespace, w[namespace]); w[namespace] = { ...w[namespace] }; }
+    const original = originals.get(namespace)[method];
+    w[namespace][method] = ports => { probe.order.push(name); probe.ports[name] = ports; if (probe.failAt === name) throw probe.marker; return probe.results[name] = original(ports); };
+  }
+  let prepared, controls, color, display, workspace, scene, placement, binding, png;
+  try {
+    if (composed) { prepared = w.CanvasDisplay.prepareForWorkspace({ canvas: f.canvas, document: f.document, window: f.browser, ctx: f.ctx, documentWorkspace, readServices, interaction, sessions, presentation }); controls = prepared.controls; color = prepared.canvasThemeColor; }
+    else { controls = w.CanvasViewControls.create({ document: f.document, window: f.browser, setHint: presentation.setHint, draw: presentation.draw }); color = value => w.CanvasThemeColors.color(value, settings.theme); }
+    assert.deepEqual(probe.order, ['controls']); assert.deepEqual(f.reads, []);
+    const displayOptions = { initialScale: 2, minLength: 1e-6, fitVisibleGeometry: () => true, flushPointerMoves: () => f.calls.push('flush'), syncDimensionValueInput: () => f.calls.push('sync') };
+    display = composed ? prepared.createForEditing(displayOptions) : w.CanvasDisplay.create({ ...displayOptions, canvas: f.canvas, document: f.document, minZoom: .002, maxZoom: 20000000, draw: presentation.draw, setHint: presentation.setHint });
+    const dimensionInput = { syncHighlight() {}, scheduleFrame() {}, evaluateDimensionExpressionDraft: (_c,text) => Number(text), expressionFromUserInput: text => text,
+      cancelPendingCommand() {}, startDistanceValueInput() {}, submitOffsetValue() {}, submitDistanceValue() {} };
+    const workspaceOptions = { dimensionScene: { onExpressionMark() {} }, dimensionInput, drawCanvas: () => f.calls.push('content'), closeContextMenu: () => f.calls.push('close'), applySketchTreeWidth: () => f.calls.push('tree') };
+    workspace = display.createEditingWorkspace(composed ? workspaceOptions : { ...workspaceOptions,
+      dimensionScene: { ...workspaceOptions.dimensionScene, currentLines: () => documentWorkspace.workspace.current().lines, minLineLength: 1e-6, canvasThemeColor: color, appearance: readServices.dimensionAppearance, sketches: seed.sketches },
+      dimensionInput: { ...dimensionInput, pending }, ctx: f.ctx, readPixelRatio: () => f.browser.devicePixelRatio || 1, ResizeObserverClass: f.browser.ResizeObserver,
+      withGeometryReadCache: readServices.reads.withGeometryReadCache, isValueInputPending: () => pending.current && ['distance-value','offset-value'].includes(pending.current.type),
+      window: f.browser, updatePropertiesUI: presentation.updatePropertiesUI, applicationText: settings.applicationText, readLanguage: () => settings.language });
+    const { Point, commandTargets, sketchStyle, canvasSelection, canvasHover, pointUsage, resolvedLoopBounds, hatchAppearanceForDisplay, ...common } = seed;
+    for (const name of ['currentScope','sketches','readServices','viewState','canvasThemeColor','applicationText']) delete common[name];
+    const sceneOptions = { ...common, solveState: f.editing.solveState, analysis: { statusOf: () => state.status }, operandElement: operand => operand.element,
+      instanceSources: { includesRef: () => false }, projection: { includes: () => false }, instances: { reference: null, sources: [] } };
+    scene = workspace.createSceneForEditing(composed ? sceneOptions : { ...sceneOptions, currentScope: documentWorkspace.workspace.current, sketches: seed.sketches, readServices, interaction, targets, pending,
+      readPanelSelection: () => presentation.selectedItem, viewState: controls.state, canvasThemeColor: color, applicationText: settings.applicationText });
+    const placementOptions = { geometry: scene.geometry, annotations: { drawAnnotationLeader() {}, drawAnnotationText() {} }, hatchLayer: { drawResolvedHatch() {} }, blockPlacementCommand: {}, geometryInstanceCommand: {}, createBlockProjectionBundle() {} };
+    placement = workspace.createPlacementPreview(composed ? placementOptions : { ...placementOptions, readServices, interaction, sessions });
+    const inputOptions = { readPngExportCommand: () => null, blankCanvasGesture: {}, isBlankCommandPanelPoint: () => false, scheduler: { flush() {} } };
+    const { phase } = presentation.profiler;
+    binding = workspace.createInputBinding(composed ? inputOptions : { ...inputOptions, pointer, readCommandPanel: presentation.readCommandPanel, profileCommit: work => phase('commit',work) });
+    const pngOptions = { documentName: () => 'untitled', prepareImages: async () => {}, fileSession: { busy: false }, findSnap: () => null, flushPointerMove() {} };
+    png = workspace.createPngExport(composed ? pngOptions : { ...pngOptions, drawOperationLifecycle: interaction.lifecycle, pendingCommandSession: pending, constraintTargetSession: targets });
+  } finally { for (const [namespace, original] of originals) w[namespace] = original; }
+  assert.deepEqual(f.reads, []); assert.ok(f.calls.every(call => Array.isArray(call) && call[0] === 'element')); f.state.ready = true;
+  return { ...f, prepared, controls, color, display, workspace, scene, placement, binding, png, pending, targets, sessions, interaction, documentWorkspace, readServices, presentation, probe };
+}
+
+test('Canvas workspace preparation preserves staged construction and shares actual controls, viewport, context and editing owners', () => {
+  const raw = preparedWorkspaceFixture(false), f = preparedWorkspaceFixture(true), p = f.probe.ports, r = f.probe.results;
+  assert.deepEqual(f.probe.order, raw.probe.order); assert.deepEqual(f.calls, raw.calls); assert.ok(Object.isFrozen(f.prepared));
+  assert.equal(f.controls, r.controls); assert.equal(f.display.viewport, r.viewport); assert.equal(f.workspace.surface, r.surface); assert.equal(f.workspace.dimensions.display, r.dimensions.display);
+  assert.equal(f.scene.geometry, r.geometry); assert.equal(f.placement, r.placementLayer); assert.equal(f.binding, r.inputBinding); assert.equal(f.png, r.png);
+  for (const name of ['surface','export','layout','dimensions','placementRenderer']) assert.equal(p[name].viewport, f.display.viewport, name);
+  assert.equal(p.geometry.ctx, f.ctx); assert.equal(p.geometry.viewState, f.controls.state); assert.equal(p.targets.readMode, f.interaction.lifecycle.readMode);
+  assert.equal(p.input.pending, f.pending); assert.equal(p.routing.canvasPoint, f.display.viewport.canvasPoint); assert.equal(p.routing.pointer, f.sessions.pointer); assert.equal(p.png.pendingCommandSession, f.pending); assert.equal(p.png.constraintTargetSession, f.targets);
+  assert.equal(p.dimensions.appearance, f.readServices.dimensionAppearance); assert.equal(p.dimensions.canvasThemeColor, f.color);
+});
+
+test('Canvas workspace preparation preserves live scope, language, theme, DPR, pending resize and original zoom bounds', () => {
+  const run = composed => {
+    const f = preparedWorkspaceFixture(composed); f.calls.length = 0; f.reads.length = 0;
+    f.sceneState.theme = 'dark'; f.sceneState.language = 'ja';
+    assert.equal(f.color('#ffffff'), sceneWindow.CanvasThemeColors.color('#ffffff','dark')); assert.equal(f.probe.ports.layout.readLanguage(), 'ja');
+    f.sceneState.scope = { points: [], lines: [], circles: [], arcs: [], splines: [], annotations: [], hatches: [], referenceImages: [] };
+    const p1 = Object.assign(new sceneWindow.GeometrySolver.Point('P1',0,0),{sketchId:'S1'}), p2 = Object.assign(new sceneWindow.GeometrySolver.Point('P2',20,10),{sketchId:'S1'});
+    const line = Object.assign(new sceneWindow.GeometrySolver.Line('L1',p1,p2),{sketchId:'S1'}); f.sceneState.scope.lines.push(line); f.sceneState.scope.points.push(p1,p2);
+    assert.equal(f.probe.ports.dimensions.currentLines()[0], line); f.scene.geometry.drawLines([line]); const bounds = f.scene.bounds.allGeometryBounds();
+    f.browser.devicePixelRatio = 3; f.workspace.surface.syncCanvasBitmapSize(160,80); assert.equal(f.canvas.width,480);
+    f.pending.replace({type:'distance-value'}); f.probe.ports.surface.onResize(); assert.equal(f.calls.at(-1),'sync'); f.pending.clear(); f.probe.ports.surface.onResize(); assert.equal(f.calls.at(-1),'draw');
+    f.display.navigation.setScale(1e12); const max = f.display.viewport.scale; f.display.navigation.setScale(1e-12); const min = f.display.viewport.scale;
+    assert.equal(max,20000000); assert.equal(min,.002);
+    return JSON.parse(JSON.stringify({calls:f.calls,reads:f.reads,strokes:f.strokes,bounds,min,max}));
+  };
+  assert.deepEqual(run(true),run(false));
+});
+
+test('Canvas staged workspace assembly keeps constructor failures and existing partially created owners without extra startup', () => {
+  for (const failAt of ['controls','viewport','navigation','zoom','surface','export','layout','dragPointer','dimensions','input','targets','style','geometry','overlay','bounds','placementRenderer','placementLayer','routing','inputBinding','png']) {
+    const marker = new Error(failAt), raw = {failAt,marker}, composed = {failAt,marker};
+    for (const [mode,probe] of [[false,raw],[true,composed]]) assert.throws(() => preparedWorkspaceFixture(mode,probe), error => error === marker);
+    assert.deepEqual(composed.order,raw.order,failAt); assert.deepEqual(composed.calls,raw.calls,failAt); assert.equal(composed.order.at(-1),failAt);
+  }
+});
