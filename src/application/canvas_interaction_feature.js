@@ -56,6 +56,12 @@
           drawing: { active: lifecycle.active, cancel: lifecycle.cancel, isToolMode: lifecycle.isToolMode, exit: lifecycle.exit },
           readPointer: pointer.readLastPointer });
       }
+      function createKeyboardForEditing(inputs, { constraints, spline, hatch, projection, ...options }) {
+        return createKeyboard(inputs, { ...options, projection,
+          cancelPendingCommand: message => pending.cancel(message), cancelConstraintTargetCommand: message => constraints.cancel(message),
+          completeLineLength: () => constraints.completeLineLength(), finishSpline: spline.finalize, removeSplinePoint: spline.removeLast,
+          finishProjection: projection.commit, finishHatch: hatch.finish });
+      }
       function createCommandCancellation({ instances, constraints, blockPlacementCommand, restoreBlockPlacementPropertiesPanel, updateUI }) {
         return window.CanvasCommandCancellation.create({
           instances, readMode: lifecycle.readMode, selectMode: lifecycle.selectMode, blockPlacementCommand, drawingPreview: preview, restoreBlockPlacementPropertiesPanel,
@@ -65,7 +71,7 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      return Object.freeze({ preview, pending, targets, pointer, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createCommandCancellation });
+      return Object.freeze({ preview, pending, targets, pointer, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
     }
     return Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
       identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions });

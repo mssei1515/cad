@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## Keyboardの編集owner接続（2026-11-09）
+
+CanvasInteractionFeatureのOperationSessionsがcreateKeyboardForEditingを提供する。実Pending sessionのcancelとConstraint commandのcancel／completeLineLengthを同じmember receiverで操作時に呼び、Spline commandのfinalize／removeLast、Projectionのcommit、Hatchのfinishは従来の実関数参照で接続する。取消の一引数messageとundefined時の既定message、completeLineLengthの零引数、Keyboard controllerが操作callbackへ渡すreceiver・引数・例外を維持する。既存createKeyboard／CanvasCommandInputs／KeyboardInput／KeyboardInteractionControllerと、生成→明示start／disposeのlistener管理、live mode・pending・targets・pointer、Escapeの一操作取消順を変えない。新しいsession・状態・listener・moduleは追加せず、返すものは実Keyboard APIである。
+
+app.jsは1,698→1,694行（4行減）、非空白1,249→1,245行。Keyboardの明示入力20→16項目、未使用root alias二個と一文委譲一個を除去した。TEMP cad-keyboard-editing-owners-proof.cjsで他app AST・既存OperationSessions／raw Keyboard各層の不変、未使用root bindingなし、直接入力の初期化済みを確認した。数百行への全体目標は未達である。
+
+関連単体14件、構文627file・全単体2,193件・関連E2E315件が成功（15file、4.9m、exit 0）。実sessionと実入力Feature／Keyboard controllerを旧接続と比較する三件を追加し、cold生成・関数同一性・receiver／引数、live mode／pointer、Pending→Constraint取消、コールバック捕捉時機、constructorと各commandの例外・後続effect停止を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-keyboard-editing-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## Canvas contextの共有owner接続（2026-11-09）
 
 CanvasContextInteraction.createMenuのcreateSceneForEditingがPresentationも共有し、後段の操作生成時にSelectionのconstruction対象、Spline editingのaddPoint／deletePoint、PresentationのUI更新・Selection更新・hintを実関数参照で接続する。arc endpoint計算とread-only寸法判定は既存GeometryKernel／DimensionQueriesを利用する。raw create／createEditingInteractionは維持する。固定拘束のscope照会、広いclearSelection、Clipboard copy、DrawingOrder、Block操作は別ownerのため引き続き明示入力とする。query／formatter→取消／DrawingOrder→操作生成→controller.startの順、裸関数のreceiver、live spline対象とguard・例外後の未実行effectを変えない。新しいstate・cache・listener・moduleは追加しない。

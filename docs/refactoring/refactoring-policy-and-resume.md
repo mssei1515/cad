@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-09の最新単位ではapp.jsは1,698行、非空白1,249行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-09の最新単位ではapp.jsは1,694行、非空白1,245行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-09）
 
-### 最新：Canvas contextの共有owner接続（2026-11-09、検証完了）
+### 最新：Keyboardの編集owner接続（2026-11-09、検証完了）
+
+CanvasInteractionFeatureのOperationSessionsがcreateKeyboardForEditingを提供する。実Pending sessionのcancelとConstraint commandのcancel／completeLineLengthを同じmember receiverで操作時に呼び、Spline commandのfinalize／removeLast、Projectionのcommit、Hatchのfinishは従来の実関数参照で接続する。取消の一引数messageとundefined時の既定message、completeLineLengthの零引数、Keyboard controllerが操作callbackへ渡すreceiver・引数・例外を維持する。既存createKeyboard／CanvasCommandInputs／KeyboardInput／KeyboardInteractionControllerと、生成→明示start／disposeのlistener管理、live mode・pending・targets・pointer、Escapeの一操作取消順を変えない。新しいsession・状態・listener・moduleは追加せず、返すものは実Keyboard APIである。
+
+app.jsは1,698→1,694行（4行減）、非空白1,249→1,245行。Keyboardの明示入力20→16項目、未使用root alias二個と一文委譲一個を除去した。TEMP cad-keyboard-editing-owners-proof.cjsで他app AST・既存OperationSessions／raw Keyboard各層の不変、未使用root bindingなし、直接入力の初期化済みを確認した。数百行への全体目標は未達である。
+
+関連単体14件、構文627file・全単体2,193件・関連E2E315件が成功（15file、4.9m、exit 0）。実sessionと実入力Feature／Keyboard controllerを旧接続と比較する三件を追加し、cold生成・関数同一性・receiver／引数、live mode／pointer、Pending→Constraint取消、コールバック捕捉時機、constructorと各commandの例外・後続effect停止を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-keyboard-editing-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
+基準developはbb38c6c。作業branchはcodex/keyboard-editing-owners。開始時週枠残量61%。mainは停止条件到達時まで17d4cb0に保持する。全体目標はactive・未完了である。次はツール操作と入力接続を再比較する。少数portを包み直すだけの層、巨大なbootstrap／可変contextは作らず、実ownerとの依存削減を判断する。
+
+### 直前：Canvas contextの共有owner接続（2026-11-09、検証完了）
 
 CanvasContextInteraction.createMenuのcreateSceneForEditingがPresentationも共有し、後段の操作生成時にSelectionのconstruction対象、Spline editingのaddPoint／deletePoint、PresentationのUI更新・Selection更新・hintを実関数参照で接続する。arc endpoint計算とread-only寸法判定は既存GeometryKernel／DimensionQueriesを利用する。raw create／createEditingInteractionは維持する。固定拘束のscope照会、広いclearSelection、Clipboard copy、DrawingOrder、Block操作は別ownerのため引き続き明示入力とする。query／formatter→取消／DrawingOrder→操作生成→controller.startの順、裸関数のreceiver、live spline対象とguard・例外後の未実行effectを変えない。新しいstate・cache・listener・moduleは追加しない。
 
