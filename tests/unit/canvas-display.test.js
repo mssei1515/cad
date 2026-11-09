@@ -723,3 +723,96 @@ test('Workspace placement keeps constructor and painter failures at their origin
   }
  }
 });
+
+function sceneFrameFixture(composed, probe = {}) {
+ const f=sceneFixture(true),{state,ctx}=f,operations=[];state.ready=false;
+ ctx.measureText=text=>({width:String(text).length*7});
+ const stage=(name,...args)=>{assert.equal(state.ready,true,'no eager frame operation');operations.push([name,...args]);if(state.failAt===name)throw state.error;};
+ for(const name of ['clearRect','translate','scale','fillRect','strokeRect'])ctx[name]=(...args)=>{assert.equal(state.ready,true);f.calls.push([name,...args]);};
+ function owner(methods){const api={};for(const[method,name]of Object.entries(methods))api[method]=function(){assert.equal(this,api);stage(name);};return api;}
+ const scheduler={recordDraw(){assert.equal(this,scheduler);stage('record');return 7;}};
+ const rectangle={preview(){assert.equal(this,rectangle);stage('rectangle');return state.rectangle??null;}};
+ const snap={get active(){stage('snap');return state.snap??null;}},pointer={get lastWorld(){stage('pointer',state.pointer);return state.pointer;}};
+ const imageLayer={drawImages(){'use strict';assert.equal(this,undefined);stage('images');},
+  drawOverlays(){'use strict';assert.equal(this,undefined);stage('image-overlays');}};
+ function readPngCommand(){'use strict';assert.equal(this,undefined);stage('png-read');return state.png??null;}
+ const input={recordDraw:()=>scheduler.recordDraw(),rectangle,snap,pointer,referenceImageLayer:imageLayer,readPngCommand,
+  dimensions:owner({draw:'dimensions'}),drawDimensionPreview:()=>stage('dimension-preview'),annotations:owner({draw:'annotations',drawPreview:'annotation-preview'}),
+  authoringPreview:owner({draw:'authoring',drawTrimPreview:'trim'}),placements:owner({drawBlockPlacementPreview:'block-placement',drawFreeInstancePreview:'free-instance'}),
+  offsetPreview:owner({draw:'offset'}),drawBlockInstanceHandles:()=>stage('block-handles'),
+  drawHatches(items,options){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,2);assert.equal(items.length,0);assert.equal(options.includePreview,true);stage('hatches');},
+  drawDrawingStack:()=>stage('stack')};
+ const originalOverlay=sceneWindow.InteractionOverlayRenderer,originalSurface=sceneWindow.CanvasSurface;
+ probe.order=[];probe.ports={};probe.results={};
+ function observe(name,original,ports){probe.order.push(name);probe.ports[name]=ports;if(probe.failAt===name)throw probe.error;return probe.results[name]=original(ports);}
+ sceneWindow.InteractionOverlayRenderer={...originalOverlay,createLayer:ports=>observe('overlays',originalOverlay.createLayer,ports)};
+ sceneWindow.CanvasSurface={...originalSurface,createInteractiveRenderer:ports=>observe('interactive',originalSurface.createInteractiveRenderer,ports),
+  createFrameRenderer:ports=>observe('frame',originalSurface.createFrameRenderer,ports)};
+ let result;
+ try{
+  if(composed)result=f.scene.createFrame(input);
+  else{
+   const overlays=sceneWindow.InteractionOverlayRenderer.createLayer({renderer:f.scene.overlay,rectangle,snap,hover:f.editing.interaction.hover,selection:f.selection,pointer});
+   const frame=f.workspace.createRendering({recordDraw:()=>scheduler.recordDraw(),geometry:f.scene.geometry,dimensions:input.dimensions,
+    drawDimensionPreview:input.drawDimensionPreview,annotations:input.annotations,authoringPreview:input.authoringPreview,placements:input.placements,offsetPreview:input.offsetPreview,
+    drawBlockInstanceHandles:input.drawBlockInstanceHandles,drawSnapMarker:overlays.drawSnapMarker,drawReferenceImages:imageLayer.drawImages,drawHatches:input.drawHatches,
+    drawDrawingStack:input.drawDrawingStack,drawReferenceImageOverlays:imageLayer.drawOverlays,drawSketchIdentityLabel:overlays.drawSketchIdentityLabel,drawSelectionRect:overlays.drawSelectionRect,
+    drawExportOverlay:()=>readPngCommand()?.drawOverlay(ctx,f.display.viewport.scale)});
+   result={frame,overlays};
+  }
+ }finally{sceneWindow.InteractionOverlayRenderer=originalOverlay;sceneWindow.CanvasSurface=originalSurface;}
+ assert.deepEqual(operations,[]);assert.deepEqual(f.calls,[]);state.ready=true;
+ f.state.onContent=result.frame.draw;f.state.onDraw=result.frame.draw;
+ return {...f,...result,operations,input,probe};
+}
+
+const sceneFrameOrder=['record','images','hatches','stack','block-handles','dimensions','dimension-preview','annotations','annotation-preview','authoring','block-placement','free-instance','offset','trim','snap','image-overlays','pointer','rectangle','png-read'];
+
+test('scene frame assembles overlays then interactive and frame renderers cold on the actual scene owners and preserves normal paint order',()=>{
+ for(const composed of [false,true]){
+  const f=sceneFrameFixture(composed),{probe:{ports:p,results:r},input:i}=f;
+  assert.deepEqual(f.probe.order,['overlays','interactive','frame']);assert.equal(f.frame,r.frame);assert.equal(f.overlays,r.overlays);
+  assert.equal(p.overlays.renderer,f.scene.overlay);assert.equal(p.overlays.selection,f.selection);assert.equal(p.overlays.hover,f.editing.interaction.hover);assert.equal(p.overlays.pointer,i.pointer);
+  assert.equal(p.frame.ctx,f.ctx);assert.equal(p.frame.viewport,f.display.viewport);assert.equal(p.frame.surface,f.workspace.surface);
+  assert.equal(p.interactive.drawSnapMarker,f.overlays.drawSnapMarker);assert.equal(p.interactive.drawSelectionRect,f.overlays.drawSelectionRect);
+  assert.equal(p.interactive.drawReferenceImageOverlays,i.referenceImageLayer.drawOverlays);
+  f.frame.draw();assert.deepEqual(f.operations.map(e=>e[0]),sceneFrameOrder);assert.equal(f.stack.length,0);assert.equal(f.button.textContent,'100%');
+ }
+});
+
+test('scene frame reads current rectangle, snap, pointer and PNG command, preserves captured Image callbacks and skips interactive work during export',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=sceneFrameFixture(composed);f.state.pointer={x:7,y:9};f.state.rectangle={rect:{x1:1,y1:2,x2:5,y2:8},crossing:false};f.state.snap={x:10,y:20,label:'snap'};
+  const png={drawOverlay(ctx,scale){assert.equal(this,png);assert.equal(ctx,f.ctx);f.operations.push(['png',scale]);}};f.state.png=png;
+  f.input.referenceImageLayer.drawImages=()=>{throw new Error('must retain captured image callback');};
+  f.display.viewport.update({scale:4,x:10,y:20});f.frame.draw();
+  assert.equal(f.operations.find(e=>e[0]==='pointer')[1],f.state.pointer);assert.equal(f.operations.at(-1)[0],'png');assert.equal(f.operations.at(-1)[1],4);
+  assert.ok(f.calls.some(e=>e[0]==='strokeRect'&&e[1]===1&&e[2]===2&&e[3]===4&&e[4]===6));
+  assert.equal(f.stack.length,0);const normal=f.operations.map(e=>e[0]);
+  f.operations.length=0;f.calls.length=0;const before={...f.display.viewport.snapshot()};
+  f.workspace.exportRenderer.render({x:2,y:3,width:20,height:30},{x:8,y:12});
+  assert.deepEqual(f.operations.map(e=>e[0]),['images','hatches','stack','dimensions','annotations']);assert.equal(f.stack.length,0);
+  assert.deepEqual({...f.display.viewport.snapshot()},before);
+  f.operations.length=0;f.state.png=null;f.state.rectangle=null;f.state.snap=null;f.workspace.exportRenderer.restore();
+  assert.equal(f.workspace.exportRenderer.frame,null);assert.deepEqual(f.operations.map(e=>e[0]),sceneFrameOrder);assert.equal(f.stack.length,0);
+  results.push(JSON.stringify({normal,restored:f.operations.map(e=>e[0]),view:before}));
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('scene frame keeps constructor and drawing exception identity and the original partial Canvas/export state without extra recovery',()=>{
+ for(const composed of [false,true]){
+  for(const failAt of ['overlays','interactive','frame']){const probe={failAt,error:new Error(failAt)};
+   assert.throws(()=>sceneFrameFixture(composed,probe),value=>value===probe.error);
+   const order=['overlays','interactive','frame'];assert.deepEqual(probe.order,order.slice(0,order.indexOf(failAt)+1));}
+  for(const failAt of ['record','images','dimensions','image-overlays','rectangle']){
+   const f=sceneFrameFixture(composed),error=new Error(failAt),scope=f.sceneState.scope;f.state.failAt=failAt;f.state.error=error;
+   assert.throws(()=>f.frame.draw(),value=>value===error);assert.equal(f.operations.at(-1)[0],failAt);assert.equal(f.sceneState.scope,scope);
+   assert.equal(f.stack.length,failAt==='record'?0:1);
+  }
+  const f=sceneFrameFixture(composed),error=new Error('export annotations');f.state.failAt='annotations';f.state.error=error;
+  assert.throws(()=>f.workspace.exportRenderer.render({x:0,y:0,width:10,height:10},{x:2,y:2}),value=>value===error);
+  assert.ok(f.workspace.exportRenderer.frame);assert.equal(f.stack.length,1);assert.deepEqual(f.operations.map(e=>e[0]),['images','hatches','stack','dimensions','annotations']);
+ }
+});

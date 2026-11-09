@@ -1,5 +1,13 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Canvas sceneの後段frame構築（2026-11-09）
+
+CanvasDisplay.createSceneForEditingがcreateFrameを返し、scene自身の実Geometry／OverlayとCanvasInteractionのSelection／Hoverを後段frame構築へ共有する。従来の位置でOverlay layer→interactive renderer→frame rendererを生成し、実frameと実overlaysを凍結した組として返す。Reference Imageは描画layerだけを受け、recordDrawは元のcallbackを保つ。矩形・Snap・pointerとnullable PNG commandは描画時に読む。PNGのdrawOverlayは同じctx／現在倍率をmember receiverで呼び、通常描画とexportの順・短絡・戻り値・例外と既存の途中Canvas／export状態を変えない。新しいmodel／state／cache／listener・moduleを作らず、raw createScene／createRendering／CanvasSurface／Overlay APIと初期化・bind順を維持する。
+
+app.jsは1,681→1,677行（4行減）、非空白1,232→1,228行。二つのroot構築を一つの後段生成へまとめ、構築文125→124、構築の非空白608→605行、root391→389文となった。明示入力は二constructor合計23→15項目、元のtest hooks225行と一文委譲71個91行・三つの後段接続letは据置。TEMP cad-canvas-scene-frame-proof.cjsで他app／既存CanvasDisplay／raw Frame・Overlay・Export API不変、未使用root bindingなし、後段入力の初期化済みを確認した。数百行への全体目標は未達である。
+
+関連単体32件、構文627file・全単体2,205件・全E2E589件が成功（50file、21.1m、exit 0）。実scene／surface／viewportと既存Frame・Overlay rendererを旧接続と比較する三件を追加し、cold生成・constructor順／参照同一性、通常／PNG描画順、live矩形・Snap・pointer・倍率／nullable command、Image callbackの捕捉時機、constructor・record・painter例外同一性と既存の途中Canvas／export状態を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-canvas-scene-frame-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。今回の全E2Eは共通frame構築変更後の現物で実施した。数百行への全体目標の完了とは区別する。
+
 ## 再監査と寸法表示test依存の分離（2026-11-09）
 
 DimensionTestDriver.createForEditingが後段createDisplayForEditingを返す。既存の実DimensionDisplayからplacement／layouts／metricsを共有し、型・幾何計算・表示定数・正規化・数値formatは既存namespaceからテスト生成時に取得する。後段入力はCanvas hover／Document reader／dimensionAppearanceの三つだけとし、geometryAppearanceのSketch可視性とは別ownerとして扱う。返すものは従来の実createDisplayのappearance六操作・cases二操作である。既存createSupport／createDisplay／createDisplaySupportと八fixtureの生成順、前段編集fixture→他test support→後段表示support→BrowserTestApi公開の順、test gateを維持する。Document／scope／外観／倍率／Selection／hoverは実行時に読み、値やstyleをsnapshot化せず、Canvas method・viewportのfinally復元と例外同一性を変えない。通常起動へ新しい操作・state・listener・moduleを追加しない。
