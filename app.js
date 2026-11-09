@@ -41,7 +41,6 @@
   } = constraintReferences;
 
   const {
-    targetFromConstraint,
     isDimensionConstraint,
   } = window.DimensionQueries;
 
@@ -80,11 +79,10 @@
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
     isRootSketch,
-    sketchById,
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
     elementSketchId, canEditSketch,
-    sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
+    constraintSketchId, isActiveSketchConstraint,
   } = sketchContext;
 
   const { geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
@@ -332,9 +330,7 @@
       editedSpline: () => splineEditing.current?.spline },
     annotationBounds,
   });
-  const { constraintStatusColor, sketchStrokeWidth } = sketchPresentation;
   const { traceSplinePath } = geometryDisplay;
-  const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { fitSketchToViewport, fitAllGeometryToViewport } = drawingFit;
   function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
@@ -1384,14 +1380,11 @@
       findLineFixedConstraint, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
     });
     const strokeStyleCases = propertiesTestFactories.createStrokeStyleCases();
-    const sketchTreeTestApi = window.SketchTreeTestDriver.createBrowserApi({
-      resetModelState, sketchById, defaultSketchId: DEFAULT_SKETCH_ID, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID, addPoint, addLine,
-      refreshReferenceConstraintValidity, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen, sketchRelationToActive,
-      sketchIdentityRelationLabel, sketchIdentityRelationColor, document, getComputedStyle: element => getComputedStyle(element), isVisibleSketchId,
-      serializeModel, sketchStrokeWidth, constraintStatusColor, activeSketchId, addDistanceConstraintFromTarget, dimensionFromAnchor, isDimensionConstraint,
-      createEmptyBlockDefinition, Point, Line, appendDefinition: definition => documentModel.blockDefinitions.push(definition),
-      nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache, viewport, dimensionLayout, targetFromConstraint,
-      clientPosition: canvasTestDriver.clientPosition, blockInstanceDisplayCenter, canvasHover, addCircle, addArc, blockProjectionBundle,
+    const sketchTreeTestApi = window.SketchTreeTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
+      sketchPresentation, overlay: interactionOverlay, viewport, canvasDriver: canvasTestDriver, drawingFit, blocks: blockEditingFeature, dimensionDisplay,
+      referenceState: referenceConstraintState, document, canvas, getComputedStyle: element => getComputedStyle(element),
+      serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter,
     });
     const referenceLineMove = constraintTestFactories.createReferenceLineMove();
     const dependencyOrderFixture = constraintTestFactories.createDependencyOrderFixture();

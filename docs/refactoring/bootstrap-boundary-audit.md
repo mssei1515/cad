@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## Sketch Tree Browser検証APIのworkspace接続（2026-11-10）
+
+SketchTreeTestDriver.createForWorkspaceは、DocumentWorkspaceのSketchContext／scope・Geometry生成・可視性／Block投影・Canvas hover・表示更新・Sketch style／Overlay・viewport／fit・Block定義・寸法配置の既存ownerを使い、元のcreateBrowserApiを生成する。型・Sketch定数・寸法判定／target照会は既存namespaceから取得する。Root Documentへの定義追加とWorkspace.currentのGeometry生成を区別し、同じDocument allocatorでBlock instance IDを取得する。DOM／computed style・serialize／reset・距離寸法開始・layout・Block中心の八portは明示入力に残す。生成時にscope・Sketch・DOM・座標・hoverを読まず、既存八hookの名前・順序・返値、live読取・Geometry参照・fixtureの操作順・例外と途中状態を維持する。通常のTree表示／編集やモデルの所有を移さず、新しいview state・cache・listener・global contextは作らない。raw createBrowserApiと個別factoryを維持し、appのtest query guardとBrowserTestApi公開位置はそのままにする。
+
+app.jsは1,573→1,566行（7行減）、非空白1,124→1,117行。Tree検証生成の入力は41→21項目となり、専用のSketch照会・Overlay表示・Sketch styleのroot aliasを除いた。新しい専用単体testを構文／単体の実行一覧へ登録した。TEMP cad-sketch-tree-browser-support-proof.cjsで八port、他root／既存TestDriver AST・製品Sketch owner・BrowserTestApi不変、未使用binding／新しい未束縛参照なし、hook使用前の依存初期化、二つのregistryが新testの追加だけであることを確認した。数百行への全体目標は未完了。
+
+専用単体3件、構文628file・全単体2,253件・関連E2E357件が成功（17file、5.1m、exit 0）。実SketchContext／Geometry生成／GeometryIds／viewportと既存TestDriverを旧接続と比較し、cold生成・八API順、置換scope／可視性／hover・参照同一性、全fixtureの座標／所属／Style・Root Document定義とID、十六callbackの例外同一性・既存の途中状態を検証した。可視性fixtureは現行のappearance.visibleを設定し、legacy visibleだけを変えて正規化に戻される状態と区別した。699製品／test／registry入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-sketch-tree-browser-support-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。通常起動二経路とtest起動一経路もブラウザerrorなしを確認した（TEMP cad-sketch-tree-browser-support-smoke.log）。全E2Eの代替結果とは扱わない。
+
 ## Sketch投影Browser検証APIのworkspace接続（2026-11-10）
 
 SketchProjectionTestDriver.createForWorkspaceはtest query guard内でだけ呼ばれ、既存createSupportへ必要な型・scope・操作・readerを接続する。Geometry生成、DocumentWorkspace／GeometryReadServices、CanvasInteraction、実Projection feature、描画／拘束表示、履歴／求解、Block編集・command・選択queryを明示したownerとして共有する。型・Sketch定数・Geometry ID照会は既存namespaceから取得し、Projectionのquery／sourceとCanvas Selectionをそのまま使う。Block定義の追記はroot Document、Geometryの照会はWorkspace.currentを使い分け、Block instance IDも同じDocument allocatorから取得する。後段の特殊なhistory観測、保存／読込、metadata、削除／外観、clipboard callbackは明示入力に残す。生成時にscope・Selection・mode・staged count・DOM・履歴を読まず、従来の21公開APIの名前・順序・引数・返値・例外とfixtureの途中状態を維持する。製品owner・query・sessionを作らず、通常起動やBrowserTestApiの公開順・guardは変更しない。個別factoryとraw createSupportも維持する。

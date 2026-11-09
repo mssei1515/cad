@@ -348,5 +348,24 @@
     });
   }
 
-  window.SketchTreeTestDriver = Object.freeze({ createBrowserApi, createRootHoverFixture, createBlockHoverFixture, createSiblingVisibilityFixture, createInactiveHoverFixture, createIdentityObservation, createSubtreeReferenceFixture, createSubtreeVisibilityObservation, createVisibilityObservation });
+  function createForWorkspace({ documentWorkspace, geometry, readServices, interaction, presentation, sketchPresentation, overlay,
+    viewport, canvasDriver, drawingFit, blocks, dimensionDisplay, referenceState,
+    document, canvas, getComputedStyle, serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter }) {
+    const { workspace, sketches, document: documentModel, documentIds } = documentWorkspace;
+    const { ROOT_SKETCH_ID: rootSketchId, DEFAULT_SKETCH_ID: defaultSketchId } = window.SketchHierarchy;
+    const { Point, Line } = window.GeometrySolver;
+    return createBrowserApi({ resetModelState, sketchById: sketches.sketchById, defaultSketchId, currentScope: workspace.current, rootSketchId,
+      addPoint: geometry.addPoint, addLine: geometry.addLine, addCircle: geometry.addCircle, addArc: geometry.addArc,
+      refreshReferenceConstraintValidity: referenceState.refreshReferenceConstraintValidity, fitAllGeometryToViewport: drawingFit.fitAllGeometryToViewport,
+      updateUI: presentation.updateUI, draw: presentation.draw, canvas, worldToCanvasScreen: viewport.worldToCanvasScreen, sketchRelationToActive: sketches.sketchRelationToActive,
+      sketchIdentityRelationLabel: overlay.sketchIdentityRelationLabel, sketchIdentityRelationColor: overlay.sketchIdentityRelationColor, document, getComputedStyle,
+      isVisibleSketchId: readServices.geometryAppearance.isVisibleSketchId, serializeModel, sketchStrokeWidth: sketchPresentation.sketchStrokeWidth,
+      constraintStatusColor: sketchPresentation.constraintStatusColor, activeSketchId: sketches.activeSketchId, addDistanceConstraintFromTarget,
+      dimensionFromAnchor: dimensionDisplay.placement.dimensionFromAnchor, isDimensionConstraint: window.DimensionQueries.isDimensionConstraint,
+      createEmptyBlockDefinition: blocks.editing.empty, Point, Line, appendDefinition: definition => documentModel.blockDefinitions.push(definition),
+      nextInstanceId: () => documentIds.allocate("blockInstance"), invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache, viewport,
+      dimensionLayout, targetFromConstraint: window.DimensionQueries.targetFromConstraint, clientPosition: canvasDriver.clientPosition,
+      blockInstanceDisplayCenter, canvasHover: interaction.hover, blockProjectionBundle: readServices.projections.blockProjectionBundle });
+  }
+  window.SketchTreeTestDriver = Object.freeze({ createForWorkspace, createBrowserApi, createRootHoverFixture, createBlockHoverFixture, createSiblingVisibilityFixture, createInactiveHoverFixture, createIdentityObservation, createSubtreeReferenceFixture, createSubtreeVisibilityObservation, createVisibilityObservation });
 })();
