@@ -100,6 +100,16 @@
         return createRendering({ ...options, canvas, ctx, viewport, surface, zoomControl,
           readExportFrame: () => exportRenderer.frame });
       }
+      function createPlacementPreview({ geometry, annotations, hatchLayer, readServices, interaction, sessions,
+        blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle }) {
+        const { hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
+        const renderer = window.PlacementPreviewRenderer.create({ ctx, viewport, withCanvasState: surface.withCanvasState,
+          traceSplinePath: geometry.traceSplinePath, drawResolvedHatch: (...args) => hatchLayer.drawResolvedHatch(...args),
+          resolvedHatchBoundary: readServices.hatches.resolvedHatchBoundary, hatchAppearanceForDisplay, hatchPatternOrigin,
+          drawAnnotationLeader: annotations.drawAnnotationLeader, drawAnnotationText: annotations.drawAnnotationText });
+        return window.PlacementPreviewRenderer.createLayer({ renderer, readMode: interaction.lifecycle.readMode,
+          readPointer: () => sessions.preview.pointer, blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle });
+      }
       function createInputBinding({ pointer, readCommandPanel, readPngExportCommand, blankCanvasGesture,
         isBlankCommandPanelPoint, scheduler, profileCommit }) {
         const { canvasScreenPoint, canvasPoint, screenToWorld } = viewport;
@@ -119,7 +129,7 @@
           withGeometryReadCache, findSnap, flushPointerMove, setHint, draw });
       }
       const dragPointer = window.CanvasInputBinding.createDragPointer({ canvas });
-      return Object.freeze({ surface, exportRenderer, layout, createScene, createSceneForEditing, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
+      return Object.freeze({ surface, exportRenderer, layout, createScene, createSceneForEditing, createRendering: createWorkspaceRendering, createPlacementPreview, createInputBinding, createPngExport, dragPointer });
     }
     // Build inline dimensions on the same surface/context before any input binding or observation starts.
     function createEditingWorkspace({ dimensionScene, dimensionInput, ...workspaceOptions }) {

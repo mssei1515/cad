@@ -638,3 +638,88 @@ test('editing Workspace preserves missing input and stops at display or DOM look
     }
   }
 });
+
+function placementWorkspaceFixture(composed, probe = {}) {
+ const f=fixture(()=>true,sceneWindow),{state,calls,ctx}=f,draws=[],stack=[];
+ state.ready=false;state.mode='select';state.pointer={x:5,y:8};state.definitionId='BD1';
+ const effect=(name,...args)=>{assert.equal(state.ready,true,'no eager placement operation');draws.push([name,...args]);if(state.failAt===name)throw state.error;};
+ for(const name of ['setLineDash','beginPath','moveTo','lineTo','stroke','arc'])ctx[name]=(...args)=>effect(name,...args);
+ ctx.save=()=>{effect('save');stack.push(true);};ctx.restore=()=>{effect('restore');assert.equal(stack.pop(),true);};
+ const hatch=Object.freeze({id:'H1',appearance:Object.freeze({color:'red'}),patternOrigin:Object.freeze({x:0,y:0})});
+ const text=Object.freeze({type:'text',style:Object.freeze({color:'black'})}),leader=Object.freeze({type:'leader',style:Object.freeze({color:'green'})}),spline={id:'SP1'};
+ state.bundle={lines:[{p1:{x:0,y:0},p2:{x:10,y:0}}],circles:[],arcs:[],splines:[spline],points:[{x:1,y:2}],hatches:[hatch],annotations:[text,leader]};
+ state.instance={id:'B1'};state.definition={id:'BD1'};state.blockPlan={instance:state.instance,definition:state.definition};state.freePlan=state.bundle;state.boundary={id:'boundary'};
+ const geometry={traceSplinePath(value){'use strict';assert.equal(this,undefined);effect('spline',value);}};
+ const annotations={drawAnnotationText(value){'use strict';assert.equal(this,undefined);effect('text',value);},
+  drawAnnotationLeader(value,preview){'use strict';assert.equal(this,undefined);effect('leader',value,preview);}};
+ const hatchLayer={drawResolvedHatch(...args){assert.equal(this,hatchLayer);effect('hatch',...args);}};
+ const readServices={hatches:{resolvedHatchBoundary(value){'use strict';assert.equal(this,undefined);effect('boundary',value);return state.boundary;}}};
+ const interaction={lifecycle:{readMode:()=>{effect('mode');return state.mode;}}},sessions={preview:{get pointer(){effect('pointer',state.pointer);return state.pointer;}}};
+ const blockPlacementCommand={get definitionId(){effect('definition');return state.definitionId;},
+  preview(pointer){assert.equal(this,blockPlacementCommand);effect('block-preview',pointer);return state.blockPlan;}};
+ const geometryInstanceCommand={preview(pointer){assert.equal(this,geometryInstanceCommand);effect('instance-preview',pointer);return state.freePlan;}};
+ function createBlockProjectionBundle(instance,definition){'use strict';assert.equal(this,undefined);effect('bundle',instance,definition);return state.bundle;}
+ const input={geometry,annotations,hatchLayer,readServices,interaction,sessions,blockPlacementCommand,geometryInstanceCommand,createBlockProjectionBundle};
+ const original=sceneWindow.PlacementPreviewRenderer;probe.order=[];probe.ports={};
+ sceneWindow.PlacementPreviewRenderer={create(ports){probe.order.push('renderer');probe.ports.renderer=ports;if(probe.failAt==='renderer')throw probe.error;return probe.renderer=original.create(ports);},
+  createLayer(ports){probe.order.push('layer');probe.ports.layer=ports;if(probe.failAt==='layer')throw probe.error;return probe.layer=original.createLayer(ports);}};
+ let layer;
+ try{
+  if(composed)layer=f.workspace.createPlacementPreview(input);
+  else{
+   const renderer=sceneWindow.PlacementPreviewRenderer.create({ctx,viewport:f.display.viewport,withCanvasState:f.workspace.surface.withCanvasState,
+    traceSplinePath:geometry.traceSplinePath,drawResolvedHatch:(...args)=>hatchLayer.drawResolvedHatch(...args),
+    resolvedHatchBoundary:readServices.hatches.resolvedHatchBoundary,hatchAppearanceForDisplay:sceneWindow.HatchData.hatchAppearanceForDisplay,hatchPatternOrigin:sceneWindow.HatchData.hatchPatternOrigin,
+    drawAnnotationLeader:annotations.drawAnnotationLeader,drawAnnotationText:annotations.drawAnnotationText});
+   layer=sceneWindow.PlacementPreviewRenderer.createLayer({renderer,readMode:interaction.lifecycle.readMode,readPointer:()=>sessions.preview.pointer,
+    blockPlacementCommand,geometryInstanceCommand,createBlockProjectionBundle});
+  }
+ }finally{sceneWindow.PlacementPreviewRenderer=original;}
+ assert.deepEqual(calls,[]);assert.deepEqual(draws,[]);state.ready=true;
+ return {...f,layer,probe,draws,stack,input,hatch,text,leader,spline};
+}
+
+test('Workspace placement assembly shares the surface and existing painter owners, constructs cold renderer then layer and retains live Block guards',()=>{
+ for(const composed of [false,true]){
+  const f=placementWorkspaceFixture(composed),{probe:{ports:p},input:i,layer,state,draws}=f;
+  assert.deepEqual(f.probe.order,['renderer','layer']);assert.equal(layer,f.probe.layer);assert.equal(Object.isFrozen(layer),true);
+  assert.equal(p.renderer.ctx,f.ctx);assert.equal(p.renderer.viewport,f.display.viewport);assert.equal(p.renderer.withCanvasState,f.workspace.surface.withCanvasState);
+  assert.equal(p.renderer.traceSplinePath,i.geometry.traceSplinePath);assert.equal(p.renderer.drawAnnotationText,i.annotations.drawAnnotationText);
+  assert.equal(p.renderer.resolvedHatchBoundary,i.readServices.hatches.resolvedHatchBoundary);assert.equal(p.layer.renderer,f.probe.renderer);
+  layer.drawBlockPlacementPreview();assert.deepEqual(draws.map(e=>e[0]),['mode']);
+  state.mode='block-place';state.definitionId=null;draws.length=0;layer.drawBlockPlacementPreview();assert.deepEqual(draws.map(e=>e[0]),['mode','definition']);
+  state.definitionId='BD1';state.pointer=null;draws.length=0;layer.drawBlockPlacementPreview();assert.deepEqual(draws.map(e=>e[0]),['mode','definition','pointer']);
+  state.pointer={x:12,y:16};draws.length=0;layer.drawBlockPlacementPreview();
+  assert.deepEqual(draws.filter(e=>['block-preview','bundle','hatch','spline','text','leader'].includes(e[0])).map(e=>e[0]),['block-preview','bundle','hatch','spline','text','leader']);
+  assert.equal(draws.find(e=>e[0]==='block-preview')[1],state.pointer);const bundle=draws.find(e=>e[0]==='bundle');assert.equal(bundle[1],state.instance);assert.equal(bundle[2],state.definition);
+  assert.equal(draws.find(e=>e[0]==='hatch')[1],state.boundary);assert.equal(draws.find(e=>e[0]==='hatch')[2].color,'#2563eb');
+  assert.notEqual(draws.find(e=>e[0]==='text')[1],f.text);assert.equal(f.text.style.color,'black');assert.equal(f.leader.style.color,'green');assert.equal(f.hatch.appearance.color,'red');
+  assert.deepEqual(f.stack,[]);assert.equal(f.ctx.globalAlpha,1);
+ }
+});
+
+test('Workspace Instance preview uses current pointer and viewport with independent mode and preserves null plans without painting',()=>{
+ for(const composed of [false,true]){
+  const f=placementWorkspaceFixture(composed),{state,layer,draws}=f;state.mode='block-place';state.pointer={x:30,y:40};
+  f.display.viewport.update({scale:4});layer.drawFreeInstancePreview();
+  assert.equal(draws.some(e=>e[0]==='mode'),false);assert.equal(draws.find(e=>e[0]==='instance-preview')[1],state.pointer);
+  assert.equal(draws.find(e=>e[0]==='arc')[3],3/4);assert.deepEqual(f.stack,[]);
+  state.pointer=null;state.freePlan=null;draws.length=0;layer.drawFreeInstancePreview();
+  assert.deepEqual(draws,[['pointer',null],['instance-preview',null]]);
+ }
+});
+
+test('Workspace placement keeps constructor and painter failures at their original stages and restores Canvas state before propagating',()=>{
+ for(const composed of [false,true]){
+  for(const failAt of ['renderer','layer']){const probe={failAt,error:new Error(failAt)};assert.throws(()=>placementWorkspaceFixture(composed,probe),value=>value===probe.error);
+   assert.deepEqual(probe.order,failAt==='renderer'?['renderer']:['renderer','layer']);}
+  for(const failAt of ['block-preview','bundle','boundary','hatch','spline','text','leader']){
+   const f=placementWorkspaceFixture(composed),error=new Error(failAt);f.state.mode='block-place';f.state.error=error;f.state.failAt=failAt;
+   assert.throws(()=>f.layer.drawBlockPlacementPreview(),value=>value===error);
+   assert.deepEqual(f.stack,[]);const painted=!['block-preview','bundle'].includes(failAt);
+   assert.equal(f.draws.filter(e=>e[0]==='restore').length,painted?1:0);
+   if(painted)assert.equal(f.ctx.globalAlpha,1);
+   const index=f.draws.findIndex(e=>e[0]===failAt);assert.ok(index>=0);assert.ok(f.draws.slice(index+1).every(e=>['restore','setLineDash'].includes(e[0])));
+  }
+ }
+});

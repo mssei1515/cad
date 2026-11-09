@@ -350,7 +350,7 @@
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createRendering: createCanvasRendering, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer,
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createRendering: createCanvasRendering, createPlacementPreview, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
     dimensionScene: { currentLines: () => workspace.current().lines, minLineLength: MIN_LINE_LENGTH, canvasThemeColor,
       onExpressionMark: canvasRenderProbe.captureExpressionMark, appearance: dimensionAppearance, sketches: sketchContext },
@@ -412,7 +412,7 @@
   const { layer: annotationLayer, dimensions: annotationDimensions, command: annotationCommand,
     materialize: materializeAnnotationAnchor, dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
-  const { annotationLeaderDisplayGeometry, drawAnnotationText, drawAnnotationLeader } = annotationFeature.renderer;
+  const { annotationLeaderDisplayGeometry, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
   const referenceImageFeature = window.ReferenceImageFeature.createForWorkspace({
     canvas, ctx, viewport, document, window, withCanvasState, createImage: () => new Image(),
@@ -429,10 +429,9 @@
     painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
   });
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
-  const placementPreview = window.PlacementPreviewRenderer.create({ ctx, viewport, withCanvasState, traceSplinePath,
-    drawResolvedHatch, resolvedHatchBoundary, hatchAppearanceForDisplay, hatchPatternOrigin, drawAnnotationLeader, drawAnnotationText });
-  const placementPreviewLayer = window.PlacementPreviewRenderer.createLayer({
-    renderer: placementPreview, readMode: drawOperationLifecycle.readMode, readPointer: () => drawingPreview.pointer,
+  const placementPreviewLayer = createPlacementPreview({
+    geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer, readServices: geometryReadServices,
+    interaction: canvasInteraction, sessions: operationSessions,
     blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle,
   });
   const { geometry: geometryCreation, createAuthoringForEditing: createAuthoringTools } = window.BasicDrawingTools.createGeometry({
@@ -897,7 +896,6 @@
 
 
 
-  function drawResolvedHatch(...args) { return hatchLayer.drawResolvedHatch(...args); }
 
   function drawHatches(...args) { return hatchLayer.drawHatches(...args); }
 
