@@ -1,5 +1,14 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Canvas選択Browser APIのworkspace接続（2026-11-10）
+
+CanvasSelectionTestDriver.createForWorkspaceは、同じDocumentWorkspace・GeometryCreation・GeometryReadServices・CanvasInteraction・Presentationから選択観測supportを準備し、後段createApiForEditingで元の七APIを生成する。SketchContextのactive読取り、Workspace.current、Selection／hover、Block選択query／定義生成、fit／座標、Document採番を実ownerから接続する。root Documentへの定義追加と現在編集scopeへのGeometry／instance追加は区別する。Block editorは呼出時のcurrentをBoolean化し、採番は同じallocatorのreceiverを保つ。生成時にscope・Selection・DOM・Block sessionを読まず、公開名・順序・返値・Geometry参照・callback receiver・例外時の途中状態を維持する。新state・cache・listenerは追加せず、raw createSupport／createApiと個別factoryを維持する。test query guardと二段階生成の位置、通常起動・UI・保存形式は変更しない。
+
+app.jsは1,563→1,560行（3行減）、非空白1,114→1,111行。後段APIの入力は30→16項目。専用の型・定数・採番・選択／scope接続を検証ownerへ集める。TEMP cad-selection-browser-owners-proof.cjsで他root AST・既存driver AST不変、未使用bindingと新しい未束縛参照なし、hook install前の依存初期化を確認した。全体目標は未完了。
+
+構文629file・全単体2,259件・関連E2E319件が成功（公開七APIを使う19file、15.2m、exit 0）。実Selection／GeometryCreation／SketchContextを使う三件を追加し、二段階のcold生成、公開順と選択reader同一性、scope置換とBlock／hoverのlive観測、重なり・Arc endpoint fixture、root Documentへの定義追加と採番、座標挿入、二十段階の例外と途中state／callback順を旧接続と比較した。700製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-selection-browser-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutは変更しておらず、全E2Eの代替結果とは扱わない。
+
+
 ## 実線／補助線切替と描画Lifecycleのowner接続（2026-11-10）
 
 CanvasInteractionFeatureのoperation sessionが公開するcreateConstructionは、同じCanvasSelection・DrawOperationLifecycle・通知／描画を使い、実ConstructionCommandを従来の位置で生成する。Projection featureの編集guardと、target取消・metadata同期・UI更新・履歴・snap解除・Toolbar更新は明示した限定依存として接続する。setLineModeは同じLifecycle.setModeへlineを渡して返値undefinedを保ち、resetLineInputsは同じresetInputsへ委譲する。構築時にSelection・mode・guard・後段metadata／snap callbackを読まず、描画commandのLifecycle bindは元の後段に残す。construction設定stateは既存ConstructionCommand、modeと入力reset順は既存Lifecycleが所有する。選択Geometryの切替と今後の作図設定、投影guard拒否、metadata→選択解除→UI→draw→historyの順、例外時の途中状態を維持する。state・session・listenerを追加せず、raw ConstructionCommand／Lifecycle APIと通常UI・保存形式を変更しない。

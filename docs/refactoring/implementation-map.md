@@ -1,5 +1,7 @@
 # 実装対応表
 
+- CanvasSelectionTestDriver.createForWorkspaceは、同じDocumentWorkspace・GeometryCreation・GeometryReadServices・CanvasInteraction・Presentationから選択観測supportを準備し、後段createApiForEditingで元の七APIを生成する。SketchContextのactive読取り、Workspace.current、Selection／hover、Block選択query／定義生成、fit／座標、Document採番を実ownerから接続する。root Documentへの定義追加と現在編集scopeへのGeometry／instance追加は区別する。Block editorは呼出時のcurrentをBoolean化し、採番は同じallocatorのreceiverを保つ。生成時にscope・Selection・DOM・Block sessionを読まず、公開名・順序・返値・Geometry参照・callback receiver・例外時の途中状態を維持する。新state・cache・listenerは追加せず、raw createSupport／createApiと個別factoryを維持する。test query guardと二段階生成の位置、通常起動・UI・保存形式は変更しない。
+
 app.jsのローカルaliasと委譲関数は、実際の接続またはテスト公開で参照するものだけを保持する。既存ownerへ移管済みの機能を未使用のローカル名として重複公開しない。ownerの生成と必要な初期化は省略せず、Selection／command／描画／保存読込の公開APIは各ownerに残す。
 
 現在の実装配置を調べるための開発資料。正式仕様や将来の分割設計ではない。仕様と保証内容は[仕様の入口](../../spec/README.md)および[検証対応](../../spec/verification/保証対応.md)を参照する。
