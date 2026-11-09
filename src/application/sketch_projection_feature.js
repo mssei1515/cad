@@ -54,5 +54,17 @@
       normalizeGeometryInstance, nextId: () => ids.allocate("sketchProjection"), canvasSelection: selection, refreshConstraintAnalysis, recordHistory,
       clearHover: () => hover.update({ point: null, line: null, circle: null, arc: null, spline: null, sketchIdentity: null }) });
   }
-  window.SketchProjectionFeature = Object.freeze({ createForEditing, create });
+  function createForWorkspace({ documentWorkspace, editingScope, readServices, referenceState, interaction, presentation,
+    operandElement, readProjectionRectangle, cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, clearSnap,
+    updateToolbar, normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory }) {
+    const queries = window.SketchProjectionQueries.create({ currentScope: documentWorkspace.workspace.current,
+      constraintIsOperational: referenceState.constraintIsOperational });
+    const feature = createForEditing({ currentScope: () => editingScope.current, queries, sketches: documentWorkspace.sketches, readServices, referenceState,
+      access: interaction.access, selection: interaction.selection, lifecycle: interaction.lifecycle, ids: documentWorkspace.documentIds, hover: interaction.hover,
+      operandElement, readProjectionRectangle, cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, clearSnap, updateToolbar,
+      setHint: presentation.setHint, applicationText: presentation.settings.applicationText, updateUI: presentation.updateUI, draw: presentation.draw,
+      normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory });
+    return Object.freeze({ ...feature, queries });
+  }
+  window.SketchProjectionFeature = Object.freeze({ createForWorkspace, createForEditing, create });
 })();

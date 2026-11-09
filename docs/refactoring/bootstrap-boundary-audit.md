@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## Sketch Projection照会とworkspace編集のowner接続（2026-11-10）
+
+SketchProjectionFeature.createForWorkspaceは、実SketchProjectionQueries→既存source選択→既存SketchProjectionCommandをこの順に生成し、実queryを編集APIとともに公開する。queriesはWorkspace.current、source／commitは最後にbindしたeditingScope.currentを従来どおり使い分ける。DocumentWorkspaceのSketchContextとID、CanvasInteractionのaccess／Selection／Lifecycle／Hover、GeometryReadServices、Presentationの翻訳／hint／UI／drawを同じ実体で共有する。ReferenceConstraintStateは既存の外部ownerを使い、生成も有効性stateもここへ移さない。operand・矩形照会などの後段callbackはrootの遅延接続を保持する。queryのtarget index・legacy／operational判定、commandのsource／mode／instance確定・取消・history・例外時の途中状態は各既存ownerに残す。scope・Selection・言語・参照を生成時に読まず、追加cache・session・listener・global contextを作らない。raw create／createForEditingと既存Queries／ReferenceState／Command API、保存形式を維持する。
+
+app.jsは1,591→1,588行（3行減）、非空白1,142→1,139行。編集生成の入力は24→16項目となり、Projection固有の照会生成と共有ownerからの接続を既存featureへ集めた。行数だけを目的に汎用contextへ包まず、照会と編集で異なるscopeを明示する。TEMP cad-sketch-projection-workspace-proof.cjsで十個の明示callback AST、他root／既存ProjectionFeature AST、raw Query／ReferenceState／Command不変、未使用root bindingなし、直接依存とquery consumerの初期化順を確認した。数百行への全体目標は未完了。
+
+関連単体14件、構文627file・全単体2,244件・関連E2E348件が成功（15file、5.0m、exit 0）。実Queries／ReferenceState／Selectionと編集commandを旧接続と比較する三件を追加し、query→sources→command順・実体／capability共有・cold生成、異なるlive Workspace／bound scopeと置換、legacy／operational指定と同じGeometry参照、instance確定先・言語更新、三か所のconstructorと九つのquery／入力／guard／通知／確定時の例外・途中状態を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-sketch-projection-workspace-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## Canvas表示workspaceの段階的組立てと共有依存（2026-11-10）
 
 CanvasDisplay.prepareForWorkspaceは、同じCanvas／DOM／context、DocumentWorkspace、GeometryReadServices、CanvasInteraction／operation session、Presentationを受け、従来の早期位置で実CanvasViewControlsだけを生成する。後段createForEditingでviewport／navigation／zoom、さらにcreateEditingWorkspaceでsurface／export／layout／寸法表示・入力を元の順に生成する。子のscene／placement／input binding／PNGには同じscope reader・Sketch・外観・Selection／Hover・pending／targets／pointer・表示設定を共有し、実APIへの参照を返す。初期倍率に対する0.001〜10000000倍の既存zoom範囲と、CanvasThemeColorsへ現在themeを渡す読取りも表示ownerへ集約する。scope・言語／theme・DPR・pending・Panel選択は従来の操作時に読む。bind／start／dispose位置と各raw APIを維持し、モデル・session・view値・cacheを複製しない。巨大なapp context・setter中継・追加listenerや新しい仕様は作らない。
