@@ -476,5 +476,21 @@
       observations, createDimensionCases });
   }
 
-  window.BlockTestDriver = Object.freeze({ createBrowserSupport, createObservationSupport, createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
+  function createForWorkspace({ documentWorkspace, geometry, readServices, blocks, interaction, sessions, presentation,
+    placement, solver, canvas, viewport, solving, definition, completion, configuration, sketchEditing, dragging, selectionQuery,
+    resetModelState, pushModelConstraint, fitAllGeometryToViewport, recordHistory, serializeConstraint, serializeModel, loadModelData, blockInstanceDisplayCenter }) {
+    return createBrowserSupport({ geometry, modelTypes: window.GeometrySolver, documentModel: documentWorkspace.document,
+      currentScope: documentWorkspace.workspace.current, sketches: documentWorkspace.sketches,
+      projections: readServices.projections, reads: readServices.reads, queries: blocks.queries, selection: interaction.selection,
+      editor: blocks.session, editorChain: blocks.session.chain, placement, readMode: interaction.lifecycle.readMode, solver,
+      canvas, viewport, worldToCanvasScreen: viewport.worldToCanvasScreen, resetModelState, pushModelConstraint, fitAllGeometryToViewport,
+      updateUI: presentation.updateUI, draw: presentation.draw, commitBlockPlacement: placement.commit,
+      solveSketchById: solving.solveSketchById, recordHistory, serializeConstraint, createSketch: sketchEditing.command.createSketch,
+      cancelBlockDefinitionEdit: definition.cancel, completeBlockDefinitionEdit: completion.complete,
+      setBlockInstanceEnabledSketchIds: configuration.setEnabledSketchIds, serializeModel, loadModelData,
+      enterBlockDefinitionEdit: definition.enter, blockInstanceDisplayCenter, buildDragSession: dragging.build,
+      constraintTargetSession: sessions.targets, canvasHover: interaction.hover, blockSelectionGeometry: selectionQuery.read,
+      geometryRefForItem: window.GeometryObjects.geometryRefForItem });
+  }
+  window.BlockTestDriver = Object.freeze({ createForWorkspace, createBrowserSupport, createObservationSupport, createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
 })();
