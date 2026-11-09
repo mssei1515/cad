@@ -154,7 +154,9 @@ function commitCompositionFixture(bound = true, ownerCommit = null, probe = {}) 
       : w.ConstraintEditing.createForEditing({ ...input,
         resolveConstraintIntent: (type, operands) => published.intentResolver.resolve(type, operands),
         commitConstraintResolution: (...args) => published.command.resolution(...args),
-        addConstraint: type => published.command.fromSelection(type) });
+        addConstraint: type => published.command.fromSelection(type),
+        readOnlyDimensionConstraintForPlacement: (target, value, dimension, options = {}) => published.readOnly.forPlacement(target, value, dimension, options),
+        addReadOnlyDimensionConstraint: (...args) => published.command.readOnly(...args) });
   } : null);
   const g = f.w.GeometrySolver, model = { constraints: [] }, history = [];
   const a = Object.assign(new g.Point('P1',0,0), { sketchId:'S1' }), b = Object.assign(new g.Point('P2',10,0), { sketchId:'S1' });
@@ -953,7 +955,9 @@ function ownedConstraintFixture(composed) {
    :w.ConstraintEditing.createForEditing({...input,
     resolveConstraintIntent:(type,operands)=>support.intentResolver.resolve(type,operands),
     commitConstraintResolution:(...args)=>support.command.resolution(...args),addConstraint:type=>support.command.fromSelection(type),
-    toggleGeometryFixedOperand:value=>operand.toggle(value),toggleSelectedFixed:()=>selected.toggle(),cancelPendingCommand:message=>pending.cancel(message)});
+    toggleGeometryFixedOperand:value=>operand.toggle(value),toggleSelectedFixed:()=>selected.toggle(),cancelPendingCommand:message=>pending.cancel(message),
+    readOnlyDimensionConstraintForPlacement:(target,value,dimension,options={})=>support.readOnly.forPlacement(target,value,dimension,options),
+    addReadOnlyDimensionConstraint:(...args)=>support.command.readOnly(...args)});
  });
  if(composed){assert.equal(f.feature.createCommit,undefined);assert.equal(f.feature.createCommitForWorkspace,undefined);}
  const w=f.w,originals=Object.fromEntries(['ConstraintCommitCommand','ConstraintIntentResolver','FixedToggleCommand'].map(name=>[name,w[name]]));
@@ -961,7 +965,7 @@ function ownedConstraintFixture(composed) {
   assert.equal(this,object);calls.push([tag,object.generation,name,...args]);if(state.actionError)throw state.actionError;return state.result;
  };return object;};
  const fail=name=>{if(state.failAt===name)throw state.error;};
- w.ConstraintCommitCommand={...originals.ConstraintCommitCommand,createWithDimensions(){fail('commit');return {command:make('commit',['resolution','fromSelection']),readOnly:{}};}};
+ w.ConstraintCommitCommand={...originals.ConstraintCommitCommand,createWithDimensions(){fail('commit');return {command:make('commit',['resolution','fromSelection','readOnly']),readOnly:make('read-only',['forPlacement'])};}};
  w.ConstraintIntentResolver={...originals.ConstraintIntentResolver,create(){fail('intent');return make('intent',['resolve']);}};
  w.FixedToggleCommand={...originals.FixedToggleCommand,createOperand(){fail('operand');return make('operand',['toggle']);},createSelection(){fail('selection');return make('selection',['toggle']);}};
  const commitOptions={workspace:{current:()=>({})},checkpoint:{},insertion:{},redundancy:{},solving:{},stabilization:{},referenceState:{}};
@@ -973,7 +977,8 @@ function ownedConstraintFixture(composed) {
  return {...f,state,calls,publishCommit,publishFixed,publishSelection,restore,
   callbacks:{resolve:probe.ports.query.resolveConstraintIntent,resolution:probe.ports.targets.commitConstraintResolution,
    add:probe.ports.targets.addConstraint,operand:probe.ports.targets.toggleGeometryFixedOperand,
-   selection:probe.ports.targets.toggleSelectedFixed,cancel:probe.ports.dimensions.cancelPendingCommand}};
+   selection:probe.ports.targets.toggleSelectedFixed,cancel:probe.ports.dimensions.cancelPendingCommand,
+   candidate:probe.ports.dimensions.readOnlyDimensionConstraintForPlacement,readOnly:probe.ports.dimensions.addReadOnlyDimensionConstraint}};
 }
 
 test('Constraint workspace owns completed Commit/Intent and fixed commands while retaining receivers, argument boundaries and cancellation',()=>{
@@ -1037,4 +1042,53 @@ test('Constraint workspace routes actual Selection intents and Commit completion
   }
   assert.equal(results[1],results[0],String(rejectSolve));
  }
+});
+
+
+test('Readonly dimension capability shares placement callbacks, defaults, receivers and atomically published Commit support',()=>{
+ const traces=[];
+ for(const composed of [false,true]){
+  const f=ownedConstraintFixture(composed);
+  try{
+   const first=f.publishCommit(),target={},dimension={},options={sketchId:'S2'};
+   const api=composed?f.feature.readOnlyDimensions:{forPlacement:f.callbacks.candidate,add:f.callbacks.readOnly};
+   if(composed){assert.equal(Object.isFrozen(api),true);assert.equal(api.forPlacement,f.callbacks.candidate);assert.equal(api.add,f.callbacks.readOnly);}
+   assert.equal(api.forPlacement(target,10,dimension,undefined,'ignored'),f.state.result);
+   const defaultOptions=f.calls.at(-1)[6];assert.equal(Object.keys(defaultOptions).length,0);assert.equal(f.calls.at(-1).length,7);
+   api.forPlacement(target,11,dimension);assert.notEqual(f.calls.at(-1)[6],defaultOptions);
+   assert.equal(api.forPlacement(target,12,dimension,options,'ignored'),f.state.result);assert.equal(f.calls.at(-1)[6],options);
+   assert.equal(api.add(target,undefined,'measurement','extra'),f.state.result);assert.deepEqual(f.calls.at(-1).slice(3),[target,undefined,'measurement','extra']);
+   for(const phase of ['commit','intent']){
+    f.state.failAt=phase;f.state.error=new Error(phase);assert.throws(()=>f.publishCommit(),error=>error===f.state.error);
+    api.forPlacement(target,13,dimension);assert.equal(f.calls.at(-1)[1],first.readOnly.generation);
+    api.add(target);assert.equal(f.calls.at(-1)[1],first.command.generation);
+   }
+   f.state.failAt=null;const next=f.publishCommit();api.forPlacement(target,14,dimension,null);assert.equal(f.calls.at(-1)[1],next.readOnly.generation);assert.equal(f.calls.at(-1)[6],null);
+   api.add(target);assert.equal(f.calls.at(-1)[1],next.command.generation);
+   f.state.actionError=new Error('readonly');for(const action of [()=>api.forPlacement(target,0,dimension),()=>api.add(target)])assert.throws(action,error=>error===f.state.actionError);
+   traces.push(JSON.stringify(f.calls));
+  }finally{f.restore();}
+ }
+ assert.equal(traces[1],traces[0]);
+});
+
+test('Readonly dimension placement uses real classification and Commit insertion with live geometry and shared history',()=>{
+ const results=[];
+ for(const mode of ['legacy-owned','owned']){
+  const f=commitCompositionFixture(true,mode),ports=f.probe.ports.dimensions;
+  const api=mode==='owned'?f.feature.readOnlyDimensions:{forPlacement:ports.readOnlyDimensionConstraintForPlacement,add:ports.addReadOnlyDimensionConstraint};
+  const target={kind:'point-point',p1:f.a,p2:f.b},dimension={axis:'x'};
+  assert.equal(api.forPlacement({kind:'invalid'},10,dimension),null);
+  assert.equal(api.forPlacement(target,10,dimension),null,'nonredundant candidate is not read-only');
+  const candidate=api.forPlacement(target,10,dimension,{readOnlyDimension:true,sketchId:'S2'});
+  assert.equal(candidate.sketchId,'S2');assert.equal(candidate.p1,f.a);assert.equal(candidate.p2,f.b);assert.equal(candidate.dimension,dimension);
+  assert.equal(f.model.constraints.length,0);assert.equal(f.history.length,0);
+  f.b.x=25;
+  assert.equal(api.add(candidate,undefined,'Measurement'),true);
+  assert.equal(f.model.constraints[0],candidate);assert.equal(candidate.target,25);assert.equal(candidate.readOnlyDimension,true);assert.equal(candidate.enabled,false);
+  assert.equal(f.history.length,1);assert.equal(api.add({}),false);assert.equal(f.model.constraints.length,1);
+  assert.equal(f.events.some(event=>['solve','capture','restore'].includes(event[0])),false,'measurement does not become a solving operation');
+  results.push(JSON.stringify({events:f.events,history:f.history,constraints:f.model.constraints}));
+ }
+ assert.equal(results[1],results[0]);
 });
