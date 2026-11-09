@@ -132,7 +132,7 @@ function editingSelectionFixture() {
 test('editing Selection composition uses the same live scope for access and identity selection without an early app callback',()=>{
  const f=editingSelectionFixture(),a=point('P1'),b=point('P2','S2');
  assert.equal(Object.isFrozen(f.feature),true);assert.equal(Object.isFrozen(f.feature.access),true);
- assert.deepEqual(Object.keys(f.feature),['selection','scope','identity','createConstraintOperands','createPresentation','access']);
+ assert.deepEqual(Object.keys(f.feature),['selection','scope','identity','createConstraintOperands','createPresentation','access','createDrawingOrder']);
  f.feature.selection.set('points',[a]);assert.equal(f.feature.scope.selectionItems()[0],a);assert.equal(f.feature.access.guardSelectionEdit(),true);
  f.calls.length=0;f.state.locked.add('S2');f.feature.identity.selectInactive({}, {kind:'point',item:b,sketchId:'S2'});
  assert.equal(f.feature.selection.points[0],b);assert.equal(f.feature.scope.selectionSketchId(),'S2');assert.deepEqual(f.calls.slice(0,3),['clear','ui','draw']);
@@ -150,3 +150,98 @@ test('editing Selection refusal keeps late snap/preview owners, cleanup order an
  assert.throws(()=>f.feature.access.rejectRootSketchCreation(),error=>error===marker);assert.equal(f.calls.at(-1),'snap');assert.equal(f.calls.includes('draw'),false);
  assert.equal(f.calls.some(call=>Array.isArray(call)&&call[0]==='pointer'),false);assert.equal(f.feature.selection.points[0],item);
 });
+
+(function () {
+"use strict";
+function drawingOrderOwnersFixture(composed, constructorError = null) {
+ const calls=[],state={ready:false,active:'S1',ordinary:true,locked:new Set(),failure:null};
+ const ready=()=>assert.equal(state.ready,true,'no eager scope, Selection, Sketch or UI read');
+ const note=name=>function(...args){assert.equal(this,undefined);ready();calls.push([name,...args]);if(state.failure===name)throw state.marker;};
+ const sketches={activeSketchId:()=>{ready();return state.active;},elementSketchId:item=>{ready();return item.sketchId;},
+  canEditSketch:(id,operation)=>{ready();calls.push(['permission',id,operation]);return !state.locked.has(id);},
+  sketchById:id=>{ready();return {id,locked:state.locked.has(id)};}};
+ const base={sketches,isGeometryMode:()=>{ready();return true;},setHint:note('hint'),applicationText:(_ja,en)=>en,
+  clearSnap:note('snap'),clearPointerPreview:note('pointer'),clearSelection:()=>feature.selection.clear(),
+  updateGeometrySelectionUI:note('selection-ui'),draw:note('draw')};
+ const feature=w.CanvasSelectionFeature.createEditing(base);
+ const item=(id,sketchId,order)=>({id,sketchId,drawingOrder:order});
+ const first=item('L1','S1',0),second=item('L2','S1',1),other=item('L3','S2',0),third=item('L4','S3',0);
+ const host={sketches:[{id:'S1'},{id:'S2'},{id:'S3'}],lines:[first,second,other,third]};
+ state.bound=host;state.workspace={sketches:[],lines:[]};
+ const editingScope={get current(){ready();calls.push(['scope']);if(state.failure==='scope')throw state.marker;return state.bound;}};
+ const input={editingScope,ordinarySelectionMode:()=>{ready();calls.push(['ordinary']);if(state.failure==='ordinary')throw state.marker;return state.ordinary;},
+  updateUI:note('ui'),recordHistory:note('history')};
+ const raw={currentScope:()=>editingScope.current,canvasSelection:feature.selection,activeSketchId:sketches.activeSketchId,
+  selectionSketchId:feature.scope.selectionSketchId,ordinarySelectionMode:input.ordinarySelectionMode,guardSelectionEdit:feature.access.guardSelectionEdit,
+  updateUI:input.updateUI,draw:base.draw,recordHistory:input.recordHistory,applicationText:base.applicationText,setHint:base.setHint};
+ const original=w.DrawingOrderCommand;let ports,actual;
+ w.DrawingOrderCommand={...original,create(options){ports=options;if(constructorError)throw constructorError;return actual=original.create(options);}};
+ let command;
+ try{command=composed?feature.createDrawingOrder(input):w.DrawingOrderCommand.create(raw);}
+ finally{w.DrawingOrderCommand=original;}
+ assert.deepEqual(calls,[]);state.ready=true;
+ const snapshot=()=>JSON.stringify({calls,host:host.lines.map(l=>[l.id,l.drawingOrder]),bound:state.bound.lines.map(l=>[l.id,l.drawingOrder]),selection:feature.selection.lines.map(l=>l.id)});
+ return {feature,state,calls,sketches,input,raw,ports,actual,command,host,first,second,other,third,snapshot};
+}
+
+test('Selection-owned drawing order retains cold actual command, shared owners and live bound scope distinct from Workspace',()=>{
+ for(const composed of [false,true]){
+  const f=drawingOrderOwnersFixture(composed);
+  assert.equal(f.command,f.actual);
+  for(const key of Object.keys(f.raw).filter(k=>k!=='currentScope'))assert.equal(f.ports[key],f.raw[key],key);
+  assert.equal(f.ports.currentScope(),f.host);assert.notEqual(f.ports.currentScope(),f.state.workspace);
+  const lines=f.host.lines,sketches=f.host.sketches;
+  assert.equal(f.command.topmostOwner([f.first,f.other,f.third]),f.first);
+  assert.equal(f.command.topmostOwner([f.other,f.third]),f.third);
+  f.state.ordinary=false;assert.equal(f.command.topmostOwner([f.other,f.third]),null);
+  assert.equal(f.host.lines,lines);assert.equal(f.host.sketches,sketches);
+  const a={id:'B1',sketchId:'S1',drawingOrder:0},b={id:'B2',sketchId:'S1',drawingOrder:1};
+  f.state.bound={sketches:[{id:'S1'}],lines:[a,b]};f.feature.selection.set('lines',[a]);
+  assert.equal(f.command.state().canForward,true);assert.equal(f.command.reorder('drawing-front'),true);
+  assert.equal(a.drawingOrder,1);assert.equal(f.first.drawingOrder,0);assert.equal(f.host.lines[0],f.first);
+ }
+});
+
+test('Selection-owned drawing order preserves selected inactive Sketch, mutations, per-Sketch ordering, identities and completion notifications',()=>{
+ for(const scenario of ['drawing-front','drawing-back','drawing-forward','drawing-backward','unknown','locked','empty','inactive']){
+  const results=[];
+  for(const composed of [false,true]){
+   const f=drawingOrderOwnersFixture(composed),lines=f.host.lines;
+   if(scenario==='inactive')f.host.lines.push({id:'L5',sketchId:'S2',drawingOrder:1});
+   f.feature.selection.set('lines',scenario==='empty'?[]:[scenario==='inactive'?f.other:f.first]);
+   if(scenario==='locked')f.state.locked.add('S1');
+   const action=scenario.startsWith('drawing-')||scenario==='unknown'?scenario:'drawing-front';
+   const accepted=!['unknown','locked','empty'].includes(scenario);
+   assert.equal(f.command.reorder(action),accepted);
+   assert.equal(f.host.lines,lines);assert.equal(f.host.lines[0],f.first);
+   assert.equal(f.calls.filter(call=>call[0]==='history').length,accepted?1:0);
+   if(accepted){
+    const ui=f.calls.find(call=>call[0]==='ui');assert.equal(ui.length,2);assert.equal(ui[1].refreshAnalysis,false);assert.deepEqual(Object.keys(ui[1]),['refreshAnalysis']);
+    assert.deepEqual(f.calls.slice(-3).map(call=>call[0]),['draw','history','hint']);
+    assert.equal(f.calls.find(call=>call[0]==='permission')[2],'edit');
+   }
+   if(scenario==='inactive'){assert.equal(f.other.drawingOrder,1);assert.equal(f.first.drawingOrder,0);}
+   results.push(f.snapshot());
+  }
+  assert.equal(results[1],results[0],scenario);
+ }
+});
+
+test('Selection-owned drawing order preserves constructor/query exceptions and partial mutations on UI, draw or history failure',()=>{
+ const constructorError=new Error('construct');
+ for(const composed of [false,true])assert.throws(()=>drawingOrderOwnersFixture(composed,constructorError),error=>error===constructorError);
+ for(const failure of ['scope','ordinary','ui','draw','history','hint']){
+  const results=[];
+  for(const composed of [false,true]){
+   const f=drawingOrderOwnersFixture(composed);f.state.failure=failure;f.state.marker=new Error(failure);
+   f.feature.selection.set('lines',[f.first]);
+   assert.throws(()=>failure==='scope'?f.command.state():failure==='ordinary'?f.command.topmostOwner([f.other,f.third]):f.command.reorder('drawing-front'),error=>error===f.state.marker);
+   assert.equal(f.first.drawingOrder,['scope','ordinary'].includes(failure)?0:1);
+   if(failure==='ui')assert.equal(f.calls.some(call=>call[0]==='draw'),false);
+   if(failure==='draw')assert.equal(f.calls.some(call=>call[0]==='history'),false);
+   results.push(f.snapshot());
+  }
+  assert.equal(results[1],results[0],failure);
+ }
+});
+})();

@@ -16,7 +16,12 @@
       sketchById: sketches.sketchById, selectionItems: scope.selectionItems, elementSketchId: sketches.elementSketchId,
       isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview, draw });
     const feature = assemble({ selection, scope, sketches, guardSketchEdit: access.guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw });
-    return Object.freeze({ ...feature, access });
+    function createDrawingOrder({ editingScope, ordinarySelectionMode, updateUI, recordHistory }) {
+      return window.DrawingOrderCommand.create({ currentScope: () => editingScope.current, canvasSelection: selection,
+        activeSketchId: sketches.activeSketchId, selectionSketchId: scope.selectionSketchId, ordinarySelectionMode,
+        guardSelectionEdit: access.guardSelectionEdit, updateUI, draw, recordHistory, applicationText, setHint });
+    }
+    return Object.freeze({ ...feature, access, createDrawingOrder });
   }
   function assemble({ selection, scope, sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
     const identity = window.CanvasSelectionInteraction.createIdentitySelection({
