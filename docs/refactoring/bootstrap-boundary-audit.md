@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## 配置プレビューのCanvas owner接続（2026-11-09）
+
+CanvasDisplayのWorkspaceがcreatePlacementPreviewを提供し、同じctx／viewport／surface.withCanvasStateで既存PlacementPreviewRendererのrenderer→layerを連続生成する。実GeometryDisplayのSpline painter、Annotation rendererの二painter、Hatch layerの可変長member委譲とGeometryReadServices.hatchesのboundary query、既存HatchDataの外観・pattern originを共有する。LifecycleのreadModeとOperationSessions.preview.pointerは従来どおり操作時に読み、Block／Instance commandとprojection bundle生成の参照を維持する。実layerを返し、可視条件とpointer再読取り回数、描画順・style copy・Canvas save／finally restore・例外同一性を変えない。新しいmodel／state／cache／listener・moduleを追加せず、低水準PlacementPreviewRenderer.create／createLayerを維持する。
+
+app.jsは1,692→1,690行（2行減）、非空白1,243→1,241行。二constructorへの明示入力16→一窓口9項目とし、不要なAnnotation text aliasとHatchの一文委譲を除去した。TEMP cad-placement-preview-owners-proof.cjsで他app AST・既存CanvasDisplay／raw PlacementPreviewRenderer不変、未使用root bindingなし、九入力の初期化済みを確認した。数百行への全体目標は未達である。
+
+関連単体29件、構文627file・全単体2,199件・関連E2E338件が成功（15file、5.3m、exit 0）。実Canvas surface／viewportと実PlacementPreviewRendererを旧接続と比較する三件を追加し、cold生成・callback同一性、Block guardとlive pointer、Instanceのmode非依存・null plan／倍率、paint順と元style不変、constructor／painter例外の短絡・Canvas状態復元を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-placement-preview-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## 作図基盤の共有owner接続（2026-11-09）
 
 BasicDrawingTools.createGeometryがcreateAuthoringForEditingを提供する。親のWorkspace.current／Geometry／ids／endpoint resolver／最小長を保持したまま、DocumentWorkspaceのSketch、GeometryReadServicesのreadsとgeometryAppearanceの可視性、CanvasInteractionのPointUsage／Selection／access／Lifecycle、OperationSessionsのpreview／pending、Presentationの翻訳／通知、viewportのlive倍率を既存createAuthoringへ接続する。Pending cancelは操作時に元sessionのmember receiverへ同じ一引数messageで渡す。samePositionは既存GeometryKernelを使う。checkpointの可変長capture／restore wrapper、後段Spline editing／blank gestureのreset callback、Constraint command取消と広いSelection消去は従来の明示的・遅延入力のまま保持する。新しいmodel／Selection／ID／state／cache／listener・moduleを作らず、返すものは従来の実Authoring APIである。createAuthoringと各primitive constructorの順・生関数参照・例外境界は変更しない。
