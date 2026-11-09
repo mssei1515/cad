@@ -195,5 +195,43 @@
       drawInteractive: interactive.draw,
     });
   }
-  window.CanvasDisplay = Object.freeze({ create, createRendering });
+  function prepareForWorkspace({ canvas, document, window: browserWindow, ctx, documentWorkspace, readServices, interaction, sessions, presentation }) {
+    const { settings, draw, setHint, updatePropertiesUI } = presentation;
+    const { applicationText } = settings, { workspace, sketches } = documentWorkspace;
+    const { pending, targets } = sessions;
+    const { phase: profilePhase } = presentation.profiler;
+    const controls = window.CanvasViewControls.create({ document, window: browserWindow, setHint, draw });
+    function canvasThemeColor(value) { return window.CanvasThemeColors.color(value, settings.theme); }
+    function createForEditing({ initialScale, minLength, fitVisibleGeometry, flushPointerMoves, syncDimensionValueInput }) {
+      const display = create({ canvas, document, initialScale, minZoom: initialScale * 0.001, maxZoom: initialScale * 10000000,
+        minLength, draw, setHint, fitVisibleGeometry, flushPointerMoves, syncDimensionValueInput });
+      function createEditingWorkspace({ dimensionScene, dimensionInput, ...options }) {
+        const displayWorkspace = display.createEditingWorkspace({ ...options,
+          dimensionScene: { ...dimensionScene, currentLines: () => workspace.current().lines, minLineLength: minLength,
+            canvasThemeColor, appearance: readServices.dimensionAppearance, sketches },
+          dimensionInput: { ...dimensionInput, pending },
+          ctx, readPixelRatio: () => browserWindow.devicePixelRatio || 1, ResizeObserverClass: browserWindow.ResizeObserver,
+          withGeometryReadCache: readServices.reads.withGeometryReadCache,
+          isValueInputPending: () => pending.current && ["distance-value", "offset-value"].includes(pending.current.type),
+          window: browserWindow, updatePropertiesUI, applicationText, readLanguage: () => settings.language,
+        });
+        function createSceneForEditing(options) {
+          return displayWorkspace.createSceneForEditing({ ...options, currentScope: workspace.current, sketches, readServices, interaction,
+            targets, pending, readPanelSelection: () => presentation.selectedItem, viewState: controls.state, canvasThemeColor, applicationText });
+        }
+        function createPlacementPreview(options) { return displayWorkspace.createPlacementPreview({ ...options, readServices, interaction, sessions }); }
+        function createInputBinding(options) {
+          return displayWorkspace.createInputBinding({ ...options, pointer: sessions.pointer, readCommandPanel: presentation.readCommandPanel,
+            profileCommit: work => profilePhase("commit", work) });
+        }
+        function createPngExport(options) {
+          return displayWorkspace.createPngExport({ ...options, drawOperationLifecycle: interaction.lifecycle, pendingCommandSession: pending, constraintTargetSession: targets });
+        }
+        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport });
+      }
+      return Object.freeze({ ...display, createEditingWorkspace });
+    }
+    return Object.freeze({ controls, canvasThemeColor, createForEditing });
+  }
+  window.CanvasDisplay = Object.freeze({ prepareForWorkspace, create, createRendering });
 })();

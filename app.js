@@ -273,10 +273,11 @@
     readInput: () => canvasInputBinding, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
-  const canvasViewControls = window.CanvasViewControls.create({ document, window, setHint, draw });
+  const { controls: canvasViewControls, canvasThemeColor, createForEditing: createCanvasDisplay } = window.CanvasDisplay.prepareForWorkspace({
+    canvas, document, window, ctx, documentWorkspace, readServices: geometryReadServices,
+    interaction: canvasInteraction, sessions: operationSessions, presentation,
+  });
   const { state: viewState, constraintStatus: constraintStatusView } = canvasViewControls;
-  const MIN_ZOOM = CSS_PX_PER_MM * 0.001;
-  const MAX_ZOOM = CSS_PX_PER_MM * 10000000;
 
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CENTERLINE_PARALLEL_TOLERANCE = 1e-5;
@@ -307,9 +308,9 @@
   const { connectedComponentFromSeeds, localSolveLines, sketchSolveConstraints } = solveScopeQuery;
   const { constraintIsRedundant } = constraintRedundancy;
   const { statusOf: constraintStatusOf } = constraintAnalysis;
-  const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = window.CanvasDisplay.create({
-    canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
-    draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
+  const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = createCanvasDisplay({
+    initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,
+    fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { worldToCanvasScreen, canvasPoint } = viewport;
   const transientAuthoring = window.TransientAuthoring.create({
@@ -319,15 +320,11 @@
   });
   const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview, createInputBinding: createCanvasInputBinding, createPngExport, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
-    dimensionScene: { currentLines: () => workspace.current().lines, minLineLength: MIN_LINE_LENGTH, canvasThemeColor,
-      onExpressionMark: canvasRenderProbe.captureExpressionMark, appearance: dimensionAppearance, sketches: sketchContext },
-    dimensionInput: { syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback), pending: pendingCommandSession,
+    dimensionScene: { onExpressionMark: canvasRenderProbe.captureExpressionMark },
+    dimensionInput: { syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
       evaluateDimensionExpressionDraft, expressionFromUserInput, cancelPendingCommand, startDistanceValueInput,
       submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue() },
-    ctx, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver, withGeometryReadCache, drawCanvas,
-    isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
-    window, updatePropertiesUI, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
-    applicationText, readLanguage: () => applicationSettings.language,
+    drawCanvas, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
   });
   const { resetCanvasStrokeState, withCanvasState } = canvasSurface;
   const { placement: dimensionPlacement, painter: dimensionPainter } = dimensionDisplay;
@@ -337,10 +334,9 @@
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const { sketchStyle: sketchPresentation, geometry: geometryDisplay,
     overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit, createFrame: createCanvasFrame, createHatchRendering } = createCanvasScene({
-    currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, interaction: canvasInteraction,
-    targets: constraintTargetSession, pending: pendingCommandSession, solveState: sketchSolveResultState, analysis: constraintAnalysis,
-    readPanelSelection: () => presentation.selectedItem, instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
-    selectionHighlight, viewState, isSidebarHighlightedElement, canvasThemeColor, applicationText,
+    solveState: sketchSolveResultState, analysis: constraintAnalysis,
+    instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
+    selectionHighlight, isSidebarHighlightedElement,
     constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
     sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed,
     editingQueries: { isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
@@ -384,8 +380,7 @@
   const { drawDrawingStack } = createDrawingStack();
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const placementPreviewLayer = createPlacementPreview({
-    geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer, readServices: geometryReadServices,
-    interaction: canvasInteraction, sessions: operationSessions,
+    geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer,
     blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle,
   });
   const { geometry: geometryCreation, createAuthoringForEditing: createAuthoringTools } = window.BasicDrawingTools.createGeometry({
@@ -588,9 +583,6 @@
 
 
 
-  function canvasThemeColor(value) {
-    return window.CanvasThemeColors.color(value, applicationSettings.theme);
-  }
 
 
 
@@ -1274,9 +1266,8 @@
 
 
   const canvasInputBinding = createCanvasInputBinding({
-    pointer: pointerInteractionController, readCommandPanel: presentation.readCommandPanel, readPngExportCommand: () => pngExportCommand,
+    readPngExportCommand: () => pngExportCommand,
     blankCanvasGesture, isBlankCommandPanelPoint, scheduler: pointerMoveScheduler,
-    profileCommit: work => profileInteractionPhase("commit", work),
   });
   canvasInputBinding.bind();
   dimensionInput.bind();
@@ -1325,7 +1316,7 @@
   documentFileFeature.bindControls();
   const pngExport = createPngExport({
     documentName: effectiveDocumentName, prepareImages: referenceImageFeature.prepareImages,
-    pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
+    fileSession,
     findSnap: (point, tolerance) => drawingSnap.find(point, tolerance), flushPointerMove: flushScheduledCanvasPointerMove,
   });
   pngExportCommand = pngExport.command;

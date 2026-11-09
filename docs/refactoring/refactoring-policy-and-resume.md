@@ -97,6 +97,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：Canvas表示workspaceの段階的組立てと共有依存（2026-11-10）
+
+CanvasDisplay.prepareForWorkspaceは、同じCanvas／DOM／context、DocumentWorkspace、GeometryReadServices、CanvasInteraction／operation session、Presentationを受け、従来の早期位置で実CanvasViewControlsだけを生成する。後段createForEditingでviewport／navigation／zoom、さらにcreateEditingWorkspaceでsurface／export／layout／寸法表示・入力を元の順に生成する。子のscene／placement／input binding／PNGには同じscope reader・Sketch・外観・Selection／Hover・pending／targets／pointer・表示設定を共有し、実APIへの参照を返す。初期倍率に対する0.001〜10000000倍の既存zoom範囲と、CanvasThemeColorsへ現在themeを渡す読取りも表示ownerへ集約する。scope・言語／theme・DPR・pending・Panel選択は従来の操作時に読む。bind／start／dispose位置と各raw APIを維持し、モデル・session・view値・cacheを複製しない。巨大なapp context・setter中継・追加listenerや新しい仕様は作らない。
+
+app.jsは1,600→1,591行（9行減）、非空白1,151→1,142行。三段階の表示生成と四つの子factoryで共有する依存を既存ownerへ集め、rootのzoom定数二つとtheme色の実装を除いた。独立した機能の生成位置を一括で移さず、early controlsと後段viewport／workspaceの順を保つ。TEMP cad-canvas-workspace-assembly-proof.cjsで他root／既存CanvasDisplay ASTとraw表示owner不変、未使用root bindingなし、直接依存とtheme readerが使用前に初期化済みであることを確認した。数百行への全体目標は未完了。
+
+関連単体42件、構文627file・全単体2,241件・関連E2E273件が成功（15file、4.3m、exit 0）。実controls／viewport／surface／寸法表示・入力／scene／placement／input binding／PNGを旧接続と比較する三件を追加し、段階的な生成順・実体とcapability同一性、cold生成、live scope／言語／theme／DPR／pending・元のzoom上下限、二十か所の生成失敗の同一例外と既存の途中状態を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-canvas-workspace-assembly-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。診断hookなしの通常起動二経路でも、日本語／lightと保存済み英語／dark、空DocumentのUndo無効、Canvasサイズ、commit表示、ブラウザerrorなしを確認した（TEMP cad-canvas-workspace-assembly-smoke.log）。全E2Eの代替結果とは扱わない。
+
 ### 最新：Pointerフレーム処理とpending寸法同期（2026-11-10）
 
 CanvasInteractionFeatureのoperation sessionが公開するcreateMoveSchedulerは、同じPendingCommandSessionを共有して実PointerMoveSchedulerを生成する。preview計測の内側でGeometry read cache→後段input bindingのprocessMove→最新pendingのdistance-value／offset-value判定→寸法入力同期を従来どおり実行する。request／cancel frame、計測、cache、後段input reader、同期だけを明示portとして受け、裸callbackとinput実体のmember receiver、返値と例外を維持する。構築中にinput／pending／DOMを読まず、inputの後段生成をgetterで接続する。PointerMoveSchedulerが引き続きqueue・frame ID・coalescing・flush／discard・統計を所有し、sessionは重複queueやcacheを作らない。旧scheduler API、pointer bind、描画、履歴、保存形式、性能閾値を変更しない。
