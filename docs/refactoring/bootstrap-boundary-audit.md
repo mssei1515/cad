@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## Block作成候補照会のfeature owner接続（2026-11-10）
+
+BlockEditingFeature.createForWorkspaceの後段createSelectionQueryが実BlockSelectionQueryを生成する。同じWorkspace.current、CanvasInteractionのSelection、Block projection、Sketchの所属／active照会、GeometryReadServicesの参照解決、Presentationの翻訳・拘束名表示を共有する。ConstraintReferences、constraint codecへのserialize callback、Annotation boundsは明示入力とし、四つの境界計算は既存GeometryBoundsから取得する。拘束名表示は元の裸関数参照を呼び、生成時にWorkspace／Selection／言語／projection／参照／codecを読まない。実queryのread／center、Geometry参照、内部／外部・参照拘束分類、共有端点／別Sketch／注記・Hatchの参照閉包と既定中心、無関係な選択点を中心に含めない規則、例外と生成順を維持する。最後のbound editing scopeをWorkspaceの代わりに使わず、既存BlockFeature／QueryとGeometryBoundsを変更しない。model／Selection／query cache／listenerを追加しない。
+
+app.jsは1,618→1,615行（3行減）、非空白1,169→1,166行。構築入力15→3項目へ減らし、rootだけに存在した四つのGeometryBounds aliasを除いた。候補のread／center aliasは既存test hook専用として維持する。TEMP cad-block-selection-owners-proof.cjsで他app／既存BlockFeature／raw SelectionQuery・Bounds AST不変、未使用root bindingなし、後段入力の初期化済みを確認した。行数の削減は小さいが、Block作成の照会依存を同じfeatureへ集めた。数百行への全体目標は未完了。
+
+関連単体31件、構文627file・全単体2,229件・関連E2E350件が成功（14file、5.0m、exit 0）。実BlockFeature／Selection／ConstraintReferences／ConstraintPersistence codec／GeometryBounds／BlockSelectionQueryを旧接続と比較する三件を追加し、cold生成と同一性、live Workspaceと別bound scope、内部／外部・参照拘束とGeometry参照、共有端点／Sketch／Annotation／Hatch拒否、live拘束名とprojected point／Annotation boundsによる中心、constructor／codec／参照／label／projection／bounds例外と非変更を確認した。追加fixtureのHatch spanには既存形式が要求するstart／end endpointを補い、製品計算や既存テストは変更していない。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-block-selection-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
 ## Block構成変更のfeature owner接続（2026-11-10）
 
 BlockEditingFeature.createForWorkspaceの後段createConfigurationが既存BlockConfigurationCommandを生成する。同じWorkspace、catalogの定義／drawable・geometry Sketch照会、projection生成・無効化、CanvasInteractionの実Selection／Hover、Presentationのhint／log／UI／drawを共有する。ConstraintReferencesとParameter削除guard、Block UI更新、historyだけを明示入力に残す。GeometryRefのkey／parseとAnnotation参照判定は既存namespaceから取得する。currentScopeはWorkspace.currentで、最後にbindしたeditingScope.currentとは統合しない。Hoverは現在の寸法が除去対象に含まれる場合だけ、従来どおり同じownerへupdate({dimension:null})する。rawの有効Sketch検証・重複排除、注記／Parameter参照による拒否、関連拘束除去、Selection／Hover処理、projection無効化・通知・history順と例外時の途中状態を維持する。既存BlockFeature／BlockConfigurationCommand APIと実commandを保ち、model／Selection／editor／cache／listenerを追加しない。
