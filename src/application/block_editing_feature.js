@@ -110,6 +110,19 @@
       readEditingScope: () => editingScope.current, normalizedSketchCopy, normalizeGeometryInstance,
       isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
       activeSketchId, blockProjectionBundles, geometryElementKey, readViewport, activateScope, reserveScopeSequences, createHistory });
+    function createCommandsWithView({ prepareBlocks, ...options }) {
+      let view;
+      function updateView() { prepareBlocks(); view.render(); }
+      const commands = feature.createCommandsForEditing({ ...options, interaction, presentation, sketches: documentWorkspace.sketches,
+        readView: () => view, updateBlockUI: updateView });
+      const { createView: createBlockView } = commands;
+      function createView(options) {
+        const result = createBlockView({ ...options, localizeApplicationUI: presentation.settings.localizeApplicationUI });
+        view = result;
+        return result;
+      }
+      return Object.freeze({ ...commands, createView, updateView });
+    }
     function createPlacement({ layout, isGeometryMode, clearSelection, isPropertiesCollapsed, setPropertiesPanelCollapsed, solveAndRefresh, recordHistory }) {
       const { canCreateInActiveSketch } = interaction.access, { selection: canvasSelection, lifecycle } = interaction;
       const { preview, pointer } = sessions, { setHint, updateUI, draw } = presentation;
@@ -145,7 +158,7 @@
         clearRemovedHover: removed => { if (removed.has(interaction.hover.current.dimension)) interaction.hover.update({ dimension: null }); },
         invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory });
     }
-    return Object.freeze({ ...feature, createPlacement, createSelectionQuery, createConfiguration });
+    return Object.freeze({ ...feature, createCommandsWithView, createPlacement, createSelectionQuery, createConfiguration });
   }
   window.BlockEditingFeature = Object.freeze({ create, createForWorkspace });
 })();

@@ -98,6 +98,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：Block commandと後段Viewの共有接続（2026-11-10）
+
+BlockEditingFeature.createForWorkspaceにcreateCommandsWithViewを追加した。親が共有するCanvasInteraction／Presentation／Sketchを使い、既存のDefinition→Completion commandを元の位置で生成する。実Viewは後段のcreateViewで生成し、完成後だけ内部参照を公開する。commandのclose／editor-activeと更新は同じ完成済みViewを読み、rootからreadView／updateBlockUIを戻し渡ししない。
+
+更新はprepareBlocksを裸の零引数で呼ぶ→実View.renderをmemberとして呼ぶ、という従来順とvoid返値・例外短絡を保つ。View生成は元と同じ裸のfactory呼出しで、localizeApplicationUIは親のimmutable settingsの同じ関数を渡す。失敗した再生成では以前の完成済みViewを保持する。唯一の内部参照は実componentを指し、モデル・編集session・UI state・cache・listenerを複製しない。rootはcommand生成→後段View生成→既存bind／startの相対順を保つ。
+
+app.jsは1,497→1,494行（3行減）、非空白1,048→1,045行。command構築入力は20→16項目で、localizeApplicationUIのroot別名とView更新本体を所有者へ整理した。AST比較で対象構築・入力・更新委譲以外のroot全体と相対順、旧module API、Definition／Completion／Editor Session／BlockView・index・全E2E不変、新しい未使用／未束縛参照なしを確認した。
+
+関連単体29件、構文631file・全単体2,313件・関連E2E243件が成功（12file、3.4m、exit 0）。三つの新旧比較でcommand／Viewのcold生成、prepare→renderのreceiver・零引数・void返値／例外短絡、実Viewと同じ編集sessionのenter／cancel／creation・表示更新、再生成失敗後の以前の公開先保持を確認した。699製品／test入力と開始HEAD不変、選択12fileのtest list243件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-block-command-view-ownership-{focused,check,unit,e2e,proof,smoke}.logとsource-hashes／selection／filter-environment／e2e-receipt／last-run JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、直前57d5a4bの全589件成功とは区別する。全体目標は未完了。
+
+基準developは57d5a4b、作業branchはcodex/block-command-view-ownership、開始時週枠残量39%。直前57d5a4bの全E2E589件成功（21.4分）とは別に、今回変更後のBlock・固定／投影・編集scope・Properties／UI・Parameter・Spline・保存読込の関連12fileを選択した。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Canvas入力の共有実体と後段接続（2026-11-10）
 
 CanvasInteractionFeatureのOperationSessionsにcreateEditingInputを追加した。同じ実CanvasCommandInputs featureを一度だけ生成し、pointer接続とkeyboard生成をその実体に閉じたimmutable APIとして返す。rootが入力featureを再び選択して渡す二つのfactory接続を除き、Reference Image／Fillet／Offsetの五つの重複入力を初期の実ownerから共有する。rootは元の位置で入力を生成し、Blank Gesture／hit query後にpointerを接続、native inputとDimension inputのbind後にkeyboardを生成・startする。

@@ -50,7 +50,7 @@
   const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
     log, setHint, updateUI, updateGeometrySelectionUI, draw } = presentation;
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
-  const { applicationText, localizeApplicationUI } = applicationSettings;
+  const { applicationText } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
   const documentWorkspace = window.DocumentWorkspace.create({
@@ -565,10 +565,10 @@
   function reserveBlockEditorSequences(draft) { return idReservation.scope(draft); }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
-  const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView } = blockEditingFeature.createCommandsForEditing({
-    interaction: canvasInteraction, isGeometryMode, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion,
-    resetBlockEditorHistory, clearSelection, readView: () => blockView, drawingFit, updateBlockUI, presentation, recordHistory,
-    referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, sketches: sketchContext, choiceDialog,
+  const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView, updateView: updateBlockView } = blockEditingFeature.createCommandsWithView({
+    isGeometryMode, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, prepareBlocks: ensureBlockState,
+    resetBlockEditorHistory, clearSelection, drawingFit, recordHistory,
+    referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, choiceDialog,
     blockLocalGeometryBounds, references: constraintReferences, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
   });
   const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
@@ -967,12 +967,9 @@
 
 
 
-  const blockView = createBlockView({ document, escapeHtml, startBlockPlacement, localizeApplicationUI });
+  const blockView = createBlockView({ document, escapeHtml, startBlockPlacement });
 
-  function updateBlockUI() {
-    ensureBlockState();
-    blockView.render();
-  }
+  function updateBlockUI() { updateBlockView(); }
 
   const expressionInputController = parameterEditor.createReferenceInput({
     TextAreaElement: HTMLTextAreaElement, currentNamespace: () => editingScopeBinding.current, dimensionValueInput, pendingCommandSession,
