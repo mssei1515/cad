@@ -1,5 +1,14 @@
 # Composition rootの残存責務と依存監査
 
+## Parameter適用とBlock伝播のWorkspace組立て（2026-11-10）
+
+ParameterApplication.createForWorkspaceは、同じDocumentWorkspace・編集scope・BlockEditingFeature・History・EditingCheckpoint・現在／保存済みParameter安定化・Presentationを使い、従来のcreateEditingSupport→Block伝播→createApplicationをこの順に組み立てる。DocumentのJSON snapshotとBlock局所の値snapshot、復元時のDocument名fallback、Workspace.currentとeditingScope.currentの違い、Block editorのcapture時二回／restore時のlive読取りを維持する。生成時にmodel・scope・Block session・名前を読まず、Block伝播に同じstabilizeDocumentを共有し、注記Parameter適用にも同じ関数を公開する。後段のload・選択消去と受理閾値だけは明示portに残す。裸関数／member receiver、capture例外がtry外・確定通知の例外が復元対象という境界、親BlockからDocumentへの伝播・revision・cache無効化と途中状態を変えない。既存の三factoryと実support／propagation／applicationを維持し、追加state・履歴・可変context・listenerや保存形式変更は行わない。
+
+app.jsは1,558→1,550行（8行減）、非空白1,109→1,101行。supportの入力は15→11項目、三つの連続した生成を既存Parameter ownerへ集約した。TEMP cad-parameter-application-owners-proof.cjsで受理／load port、他root・既存Parameter AST不変、未使用binding・新しい未束縛参照なし、直接依存の初期化順を確認した。全体目標は未完了。
+
+関連単体27件、構文629file・全単体2,265件・関連E2E391件が成功（22file、6.1m、exit 0）。実ParameterApplication／BlockParameterPropagationを使う三件を追加し、cold生成と伝播生成例外、親Block→Documentのrevision／cache無効化と確定順、別Workspace／編集scopeの判定、現在Sketchのlive読取り、Document／Block局所の回復、十六段階の例外と途中state、確定中のeditor変更後の復元分岐を旧接続と比較した。698製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-parameter-application-owners-{focused,check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutを変更せず、全E2Eの代替結果とは扱わない。
+
+
 ## 履歴のWorkspace／Block復元接続（2026-11-10）
 
 HistoryController.createForWorkspaceは、実DocumentWorkspaceのDocument名adapterと、BlockEditingFeatureの同じsession／live／clone、GeometryReadServicesのprojection無効化、Presentationのhint／log／profilerを既存createFeatureへ接続する。保存／読込とconstraint codec、補助線設定command、操作reset、求解更新、履歴ボタン通知と上限は明示入力に残す。生成時にDocument名・Block current・履歴snapshot・profiler状態を読まず、元の位置で同じEditHistory→Controller→BlockHistorySnapshot→HistoryRestorationを生成する。履歴の内容とscope選択、復元抑制・finally通知、Document名／補助線設定の復元、Block draftのclone／差替え、callback receiver・返値・例外と途中stateは既存ownerのまま維持する。新しいmodel・履歴・可変context・listenerを追加せず、raw create／createFeatureと実feature APIを維持する。通常UIと保存形式は変更しない。
