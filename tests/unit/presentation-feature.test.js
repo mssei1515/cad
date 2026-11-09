@@ -328,3 +328,119 @@ test('toolbar preparation preserves DOM lookup and constructor failure order wit
     if (probe.writes) assert.deepEqual(probe.writes, []);
   }
 });
+
+function commandPanelFixture(composed, probe = {}) {
+  const f = fixture(), w = f.w, context = { window: w, structuredClone };
+  const sources = vm.runInNewContext(fs.readFileSync("index.html", "utf8").match(/const sources = (\[[\s\S]*?\]);/)[1]);
+  for (const file of sources.filter(p => p.startsWith("src/"))) vm.runInNewContext(fs.readFileSync(file, "utf8"), context, { filename: file });
+  const { readCommandPanel, readDerivedPanel, ...canvasRefresh } = f.canvas;
+  f.feature.bindUI(f.ui); f.feature.bindCanvas(canvasRefresh); f.events.length = 0;
+  const state = { ready: false, mode: "select", sketch: "S1", sources: [], regions: [], draft: null, png: false }, steps = [], ports = {}, results = {};
+  Object.assign(probe, { steps, ports, results });
+  const ready = () => assert.equal(state.ready, true, "no eager command state read");
+  const mark = name => { steps.push(name); if (probe.failAt === name) throw probe.error; };
+  function element(tag) {
+    const node = { tagName: tag.toUpperCase(), dataset: {}, children: [], attributes: {}, listeners: {}, textContent: "",
+      classList: { toggle() {} }, setAttribute(key, value) { this.attributes[key] = value; },
+      append(...nodes) { for (const child of nodes) { child.parentElement = this; this.children.push(child); } },
+      replaceChildren(...nodes) { this.children = []; this.append(...nodes); },
+      addEventListener(name, callback) { mark("listen:" + name); this.listeners[name] = callback; },
+      contains(target) { return this === target || this.children.some(child => child.contains(target)); },
+      querySelectorAll(selector) { return this.children.flatMap(child => [...(child.tagName === selector.toUpperCase() ? [child] : []), ...child.querySelectorAll(selector)]); },
+      querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
+      get options() { return this.children; }, focus() { f.document.activeElement = this; } };
+    return node;
+  }
+  f.document.createElement = tag => { mark("dom:" + tag); return element(tag); };
+  const host = { children: [], append(node) { assert.equal(this, host); mark("append"); this.children.push(node); } };
+  const item = { id: "L1", sketchId: "S1" }, reference = { type: "line", id: "L1" };
+  const sketches = { sketchName: id => { ready(); return "Sketch " + id; }, activeSketchId: () => { ready(); return state.sketch; }, elementSketchId: value => value.sketchId };
+  function commit() { "use strict"; assert.equal(this, undefined); ready(); f.events.push("projection-finish"); }
+  function finish(value) { "use strict"; ready(); f.events.push(["source-finish", value, this === source]); }
+  function exit() { "use strict"; assert.equal(this, undefined); ready(); f.events.push("exit"); if (state.failExit) throw probe.error; state.mode = "select"; }
+  const projection = Object.freeze({ get sources() { ready(); return state.sources; }, commit, remove: index => f.events.push(["projection-remove", index]) });
+  const geometry = { pending: null, sources: [], changeSetting(key, value) { assert.equal(this, geometry); f.events.push(["geometry-setting", key, value]); } };
+  const source = Object.freeze({ instance: item, current: { instance: item, sources: [reference] }, finish, remove: () => {} });
+  const hatch = { get regions() { ready(); return state.regions; }, includeConstruction: false,
+    finish() { assert.equal(this, hatch); f.events.push("hatch-finish"); }, changeSetting: (key, value) => f.events.push(["hatch-setting", key, value]), select() {}, remove() {} };
+  const annotation = { get active() { ready(); return Boolean(state.draft); }, get draft() { ready(); return state.draft; }, validContent: () => true, evaluatedValue: () => 12,
+    canFinish: () => true, finish() { assert.equal(this, annotation); f.events.push("annotation-finish"); }, cancel() {}, changeSetting: (key, value) => f.events.push(["annotation-setting", key, value]) };
+  const png = { get active() { ready(); return state.png; }, readState() { assert.equal(this, png); return { id: "png", title: "PNG", actions: [{ id: "cancel", label: "Cancel" }] }; },
+    onAction(action) { assert.equal(this, png); f.events.push(["png-action", action]); }, onSetting() {} };
+  function effectiveAnnotationStyle(value) { "use strict"; assert.equal(this, undefined); ready(); f.events.push(["style", value.sketchId]); return { terminatorType: "arrow", fixedDisplaySize: false }; }
+  const readServices = { reads: { resolveGeometryRef: ref => { ready(); assert.equal(ref, reference); return item; } }, annotationAppearance: { effectiveAnnotationStyle } };
+  const lifecycle = Object.freeze({ readMode: () => { ready(); return state.mode; }, exit });
+  for (const [name, label] of [["DerivedCommandPanel", "derived"], ["HatchCommandPanel", "hatch"], ["AnnotationCommandPanel", "annotation"]]) {
+    const original = w[name]; w[name] = { ...original, create(input) { mark(label); ports[label] = input; return results[label] = original.create(input); } };
+  }
+  const original = w.CommandPanel;
+  w.CommandPanel = { ...original, createFeature(input) { mark("feature"); ports.feature = input; return results.feature = original.createFeature(input); } };
+  const options = { host, documentWorkspace: { sketches }, readServices, lifecycle, projectionCommand: projection, geometryCommand: geometry,
+    sourceCommand: source, changeFreeProperty: (key, value) => f.events.push(["free-property", key, value]), hatchCommand: hatch, annotationCommand: annotation, pngExportCommand: png };
+  const panels = composed ? f.feature.createCommandPanelsForEditing(options) : f.feature.createCommandPanels({ host, readMode: lifecycle.readMode, sketchContext: sketches,
+    projectionCommand: projection, geometryCommand: geometry, sourceCommand: source, resolveGeometryRef: readServices.reads.resolveGeometryRef,
+    geometryRefForItem: w.GeometryObjects.geometryRefForItem, applicationText: f.settings.applicationText, formatDisplayNumber: w.NumberDisplay.formatDisplayNumber,
+    finishProjection: projection.commit, finishSourceEdit: source.finish, exitDrawMode: lifecycle.exit, changeFreeProperty: options.changeFreeProperty,
+    hatchCommand: hatch, annotationCommand: annotation, effectiveAnnotationStyle, pngExportCommand: png,
+    updateUI: f.feature.updateUI, updatePropertiesUI: f.feature.updatePropertiesUI, setHint: f.feature.setHint, draw: f.feature.draw });
+  assert.deepEqual(f.events, []); state.ready = true;
+  const panel = host.children[0];
+  function action(id) { panel.listeners.click({ target: { closest: selector => selector === "button[data-action]" ? { dataset: { action: id } } : null } }); }
+  return { ...f, presentationState: f.state, state, panels, panel, action, host, steps, ports, results, options, item, reference, projection, source, annotation };
+}
+
+test("command panels share presentation and editing owners cold while preserving real factory order and public identity", () => {
+  for (const composed of [false, true]) {
+    const f = commandPanelFixture(composed);
+    assert.deepEqual(f.steps, ["feature", "derived", "hatch", "annotation", "dom:section", "append", "listen:click", "listen:input", "listen:change", "listen:keydown"]);
+    assert.equal(f.panels, f.results.feature); assert.equal(f.feature.readCommandPanel(), f.panels.commandPanel);
+    assert.equal(f.panels.derivedPanel, f.results.derived); assert.equal(Object.isFrozen(f.panels), true);
+    assert.equal(f.ports.feature.finishProjection, f.projection.commit); assert.equal(f.ports.feature.finishSourceEdit, f.source.finish);
+    assert.equal(f.ports.feature.exitDrawMode, f.options.lifecycle.exit); assert.equal(f.ports.feature.updateUI, f.feature.updateUI);
+    assert.equal(f.ports.feature.draw, f.feature.draw); assert.equal(f.panel.hidden, true); assert.equal(f.panels.commandPanel.active, false);
+  }
+});
+
+test("command panels preserve live projection, source, Hatch, annotation and PNG routes, language, style and selected identity", () => {
+  const snapshots = [];
+  for (const composed of [false, true]) {
+    const f = commandPanelFixture(composed), { state, panels } = f;
+    state.mode = "sketch-projection"; state.sources = [{ key: "L1", item: f.item }];
+    panels.commandPanel.update(); assert.equal(f.panel.dataset.command, "sketch-projection");
+    f.action("finish"); assert.equal(f.events.at(-1), "projection-finish");
+    panels.derivedPanel.onSelect("sources", 0); assert.equal(panels.derivedPanel.selectedItem(), f.item); assert.equal(f.feature.selectedItem, f.item);
+    f.settings.language = "en"; state.sketch = "S2"; assert.match(panels.derivedPanel.readState().message, /Destination: Sketch S2/);
+    state.mode = "instance-sources"; f.action("cancel"); assert.deepEqual(f.events.at(-1), ["source-finish", false, false]);
+    f.action("finish"); assert.deepEqual(f.events.at(-1), ["source-finish", true, true]);
+    state.mode = "hatch"; state.regions = [{ id: "R1", area: 1.23456789 }];
+    panels.commandPanel.update(); assert.equal(f.panel.dataset.command, "hatch"); assert.match(f.results.hatch.readState().message, /1.234568/);
+    f.panel.listeners.change({ target: { dataset: { setting: "includeConstruction" }, type: "checkbox", checked: true } });
+    assert.deepEqual(f.events.at(-1), ["hatch-setting", "includeConstruction", true]); f.action("finish"); assert.equal(f.events.at(-1), "hatch-finish");
+    state.draft = { style: {}, text: "live text", parameterEnabled: false, withLeader: false };
+    panels.commandPanel.update(); assert.equal(f.panel.dataset.command, "annotation"); assert.ok(f.events.some(event => Array.isArray(event) && event[0] === "style" && event[1] === "S2"));
+    f.panel.listeners.input({ target: { tagName: "TEXTAREA", dataset: { setting: "text" }, value: "changed" } });
+    assert.deepEqual(f.events.at(-1), ["annotation-setting", "text", "changed"]); f.action("finish"); assert.equal(f.events.at(-1), "annotation-finish");
+    state.png = true; panels.commandPanel.update(); assert.equal(f.panel.dataset.command, "png"); f.action("cancel"); assert.deepEqual(f.events.at(-1), ["png-action", "cancel"]);
+    state.png = false; state.draft = null; state.mode = "sketch-projection"; f.events.length = 0; f.action("cancel");
+    assert.equal(f.events[0], "exit"); assert.equal(f.events.includes("analysis"), false); assert.ok(f.events.some(event => event[0] === "hint" && event[1] === "Command canceled."));
+    assert.equal(f.events.at(-1), "frame"); snapshots.push(JSON.stringify({ events: f.events, state: panels.derivedPanel.readState() }));
+  }
+  assert.equal(snapshots[1], snapshots[0]);
+});
+
+test("command panel construction and cancellation propagate identical exceptions without later construction or refresh effects", () => {
+  const order = ["feature", "derived", "hatch", "annotation", "dom:section", "append", "listen:click"];
+  for (const composed of [false, true]) {
+    for (const failAt of order) {
+      const error = new Error(failAt), probe = { failAt, error };
+      assert.throws(() => commandPanelFixture(composed, probe), value => value === error);
+      assert.deepEqual(probe.steps, order.slice(0, order.indexOf(failAt) + 1));
+    }
+    for (const failAt of ["exit", "name", "input"]) {
+      const error = new Error(failAt), f = commandPanelFixture(composed, { error }); f.state.mode = "sketch-projection"; f.state.sources = [{ key: "L1", item: f.item }];
+      if (failAt === "exit") f.state.failExit = true; else { f.presentationState.fail = failAt; f.presentationState.marker = error; }
+      assert.throws(() => f.action("cancel"), value => value === error);
+      assert.equal(f.events.includes("frame"), false); assert.equal(f.events.at(-1), failAt);
+    }
+  }
+});
