@@ -144,7 +144,19 @@ test('constraint control preparation retains distance exceptions, cancellation a
 });
 
 function commitCompositionFixture(bound = true, ownerCommit = null, probe = {}) {
-  const f = ownerCommit === null ? controlsFixture() : editingOwnersFixture(true), g = f.w.GeometrySolver, model = { constraints: [] }, history = [];
+  let f, published;
+  const owns = ['owned', 'legacy-owned'].includes(ownerCommit);
+  f = ownerCommit === null ? controlsFixture() : editingOwnersFixture(true, {}, owns ? (w, input) => {
+    const documentWorkspace = { sketches: input.sketches, workspace: { current: () => f.state.workspace } };
+    const cancel = input.cancelPendingCommand;
+    input.sessions.pending.cancel = message => cancel(message);
+    return ownerCommit === 'owned' ? w.ConstraintEditing.createForWorkspace({ ...input, documentWorkspace })
+      : w.ConstraintEditing.createForEditing({ ...input,
+        resolveConstraintIntent: (type, operands) => published.intentResolver.resolve(type, operands),
+        commitConstraintResolution: (...args) => published.command.resolution(...args),
+        addConstraint: type => published.command.fromSelection(type) });
+  } : null);
+  const g = f.w.GeometrySolver, model = { constraints: [] }, history = [];
   const a = Object.assign(new g.Point('P1',0,0), { sketchId:'S1' }), b = Object.assign(new g.Point('P2',10,0), { sketchId:'S1' });
   const line = Object.assign(new g.Line('L1',a,b), { sketchId:'S1' }); f.selection.set('lines',[line]);
   f.state.createdConstraint = Object.assign(new g.HorizontalConstraint(line), { sketchId:'S1' });
@@ -192,13 +204,19 @@ function commitCompositionFixture(bound = true, ownerCommit = null, probe = {}) 
   }
   let support, resolver;
   try {
-  support = ownerCommit ? f.feature.createCommitForWorkspace(ownerInputs) : bound ? f.feature.createCommit(options) : f.w.ConstraintCommitCommand.createWithDimensions({...options,...common});
+  if (owns) {
+    Object.assign(f.probe.ownerInputs.operands.operands, { subjectFromOperand: o => o, referenceTargetFromOperand: o => o,
+      referenceSubjectElement: o => o.item, referenceSubjectSketchId: o => o.sketchId });
+    Object.assign(f.probe.ownerInputs.sketches, { isActiveSketchElement: () => true, isEditableSketchElement: () => true });
+  }
+  support = owns ? f.feature.createCommitWithIntentForWorkspace(ownerInputs) : ownerCommit ? f.feature.createCommitForWorkspace(ownerInputs) : bound ? f.feature.createCommit(options) : f.w.ConstraintCommitCommand.createWithDimensions({...options,...common});
   const intentOptions = { operands:{subjectFromOperand:o=>o,referenceTargetFromOperand:o=>o,referenceSubjectElement:o=>o.item,referenceSubjectSketchId:o=>o.sketchId},
     types:g, isActiveSketchElement:()=>true, isEditableSketchElement:()=>true };
-  resolver = bound ? support.createIntentResolver(intentOptions) : f.w.ConstraintIntentResolver.create({...intentOptions,candidates:f.input.candidates,
+  resolver = owns ? support.intentResolver : bound ? support.createIntentResolver(intentOptions) : f.w.ConstraintIntentResolver.create({...intentOptions,candidates:f.input.candidates,
     activeSketchId:f.input.activeSketchId,isReferenceSourceSketchId:options.isReferenceSourceSketchId,descendantSketchIds:options.descendantSketchIds,
     wouldCreateReferenceCycle:options.wouldCreateReferenceCycle,applicationText:f.input.applicationText,invalidConstraintTargetHint:f.input.invalidConstraintTargetHint});
   } finally { for (const [namespace, original] of originals) f.w[namespace] = original; }
+  published = support;
   f.state.resolveIntent=(type,operands)=>resolver.resolve(type,operands); assert.deepEqual(f.events,[]); f.state.ready=true;
   return{...f,...support,resolver,model,history,line,a,b};
 }
@@ -528,7 +546,7 @@ test('constraint control assembly stops at input or View construction failure be
   }
 });
 
-function editingOwnersFixture(composed, probe = {}) {
+function editingOwnersFixture(composed, probe = {}, buildOwner = null) {
   const f = controlsAssemblyFixture(true, probe, (w, options) => {
     Object.assign(options, { selectedGeometryItems: options.selection.selectedGeometryItems, trimConstraintSelection: options.selection.trimConstraintSelection,
       selectedPrimitives: options.selection.selectedPrimitives, targetFromConstraint: w.DimensionQueries.targetFromConstraint,
@@ -557,7 +575,7 @@ function editingOwnersFixture(composed, probe = {}) {
       addReadOnlyDimensionConstraint: options.addReadOnlyDimensionConstraint,
     };
     probe.ownerInputs = input; probe.originalOptions = options;
-    return composed ? w.ConstraintEditing.createForEditing(input) : w.ConstraintEditing.createWithControls(options);
+    return composed ? (buildOwner ? buildOwner(w, input, options) : w.ConstraintEditing.createForEditing(input)) : w.ConstraintEditing.createWithControls(options);
   });
   probe.commandsReady = true; return f;
 }
@@ -923,4 +941,100 @@ test('dimension value stages propagate constructor failures and do not build lat
     assert.throws(() => dimensionStagesFixture(composed, { name, error }, events), value => value === error);
     assert.deepEqual(events.map(event => event[0]), names.slice(0, index + 1));
   }
+});
+
+function ownedConstraintFixture(composed) {
+ const probe={},calls=[],state={generation:0,failAt:null,actionError:null,result:{}};
+ let support,operand,selected;
+ const f=editingOwnersFixture(true,probe,(w,input)=>{
+  const pending=input.sessions.pending;
+  pending.cancel=function(...args){assert.equal(this,pending);calls.push(['cancel',...args]);if(state.actionError)throw state.actionError;return state.result;};
+  return composed?w.ConstraintEditing.createForWorkspace({...input,documentWorkspace:{sketches:input.sketches,workspace:{current:()=>({})}}})
+   :w.ConstraintEditing.createForEditing({...input,
+    resolveConstraintIntent:(type,operands)=>support.intentResolver.resolve(type,operands),
+    commitConstraintResolution:(...args)=>support.command.resolution(...args),addConstraint:type=>support.command.fromSelection(type),
+    toggleGeometryFixedOperand:value=>operand.toggle(value),toggleSelectedFixed:()=>selected.toggle(),cancelPendingCommand:message=>pending.cancel(message)});
+ });
+ if(composed){assert.equal(f.feature.createCommit,undefined);assert.equal(f.feature.createCommitForWorkspace,undefined);}
+ const w=f.w,originals=Object.fromEntries(['ConstraintCommitCommand','ConstraintIntentResolver','FixedToggleCommand'].map(name=>[name,w[name]]));
+ const make=(tag,methods)=>{const object={tag,generation:++state.generation};for(const name of methods)object[name]=function(...args){
+  assert.equal(this,object);calls.push([tag,object.generation,name,...args]);if(state.actionError)throw state.actionError;return state.result;
+ };return object;};
+ const fail=name=>{if(state.failAt===name)throw state.error;};
+ w.ConstraintCommitCommand={...originals.ConstraintCommitCommand,createWithDimensions(){fail('commit');return {command:make('commit',['resolution','fromSelection']),readOnly:{}};}};
+ w.ConstraintIntentResolver={...originals.ConstraintIntentResolver,create(){fail('intent');return make('intent',['resolve']);}};
+ w.FixedToggleCommand={...originals.FixedToggleCommand,createOperand(){fail('operand');return make('operand',['toggle']);},createSelection(){fail('selection');return make('selection',['toggle']);}};
+ const commitOptions={workspace:{current:()=>({})},checkpoint:{},insertion:{},redundancy:{},solving:{},stabilization:{},referenceState:{}};
+ function publishCommit(){const next=f.feature.createCommitWithIntentForWorkspace(commitOptions);support=next;return next;}
+ function publishFixed(){const next=f.feature.createFixedEditing({});operand=next.operand;return next;}
+ function publishSelection(stage){const next=stage.createSelection({});selected=next;return next;}
+ function restore(){for(const [name,original]of Object.entries(originals))w[name]=original;}
+  assert.deepEqual(calls,[]);
+ return {...f,state,calls,publishCommit,publishFixed,publishSelection,restore,
+  callbacks:{resolve:probe.ports.query.resolveConstraintIntent,resolution:probe.ports.targets.commitConstraintResolution,
+   add:probe.ports.targets.addConstraint,operand:probe.ports.targets.toggleGeometryFixedOperand,
+   selection:probe.ports.targets.toggleSelectedFixed,cancel:probe.ports.dimensions.cancelPendingCommand}};
+}
+
+test('Constraint workspace owns completed Commit/Intent and fixed commands while retaining receivers, argument boundaries and cancellation',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=ownedConstraintFixture(composed);
+  try{
+   const commit=f.publishCommit(),fixed=f.publishFixed(),selected=f.publishSelection(fixed);
+   assert.equal(Object.isFrozen(commit),true);assert.equal(fixed.operand.tag,'operand');assert.equal(selected.tag,'selection');
+   const operands=[],resolution={},extra={};
+   assert.equal(f.callbacks.resolve('horizontal',operands,'ignored'),f.state.result);
+   assert.equal(f.callbacks.resolution(resolution,extra),f.state.result);
+   assert.equal(f.callbacks.add('horizontal','ignored'),f.state.result);
+   assert.equal(f.callbacks.operand(extra,'ignored'),f.state.result);
+   assert.equal(f.callbacks.selection('ignored'),f.state.result);
+   assert.equal(f.callbacks.cancel('message','ignored'),f.state.result);
+   assert.deepEqual(f.calls.map(call=>call[0]),['intent','commit','commit','operand','selection','cancel']);
+   assert.equal(f.calls[0].length,5);assert.equal(f.calls[1].length,5);assert.equal(f.calls[2].length,4);assert.equal(f.calls[4].length,3);
+   const error=new Error('action');f.state.actionError=error;assert.throws(()=>f.callbacks.add('x'),value=>value===error);
+   results.push(JSON.stringify(f.calls));
+  }finally{f.restore();}
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('Constraint workspace publishes each component only after successful generation and retains previous targets on constructor failure',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=ownedConstraintFixture(composed);
+  try{
+   const previous=f.publishCommit(),fixed=f.publishFixed(),previousSelection=f.publishSelection(fixed);
+   for(const phase of ['commit','intent','operand','selection']){
+    f.state.failAt=phase;f.state.error=new Error(phase);
+    assert.throws(()=>phase==='operand'?f.publishFixed():phase==='selection'?f.publishSelection(fixed):f.publishCommit(),error=>error===f.state.error);
+    f.callbacks.resolve('horizontal',[]);f.callbacks.add('horizontal');f.callbacks.operand({id:'P'});f.callbacks.selection();
+    assert.equal(f.calls.at(-4)[1],previous.intentResolver.generation);
+    assert.equal(f.calls.at(-3)[1],previous.command.generation);
+    assert.equal(f.calls.at(-2)[1],fixed.operand.generation);
+    assert.equal(f.calls.at(-1)[1],previousSelection.generation);
+   }
+   f.state.failAt=null;const next=f.publishCommit();f.callbacks.add('vertical');assert.equal(f.calls.at(-1)[1],next.command.generation);
+   results.push(JSON.stringify(f.calls));
+  }finally{f.restore();}
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('Constraint workspace routes actual Selection intents and Commit completion through shared owners across acceptance and solver rollback',()=>{
+ for(const rejectSolve of [false,true]){
+  const results=[];
+  for(const mode of ['legacy-owned','owned']){
+   const f=commitCompositionFixture(true,mode),operand={kind:'line',line:f.line,item:f.line,relation:'active',sketchId:'S1'};
+   const resolution=f.probe.ports.query.resolveConstraintIntent('horizontal',[operand]);
+   assert.equal(resolution.constraint,f.state.createdConstraint);
+   f.session.begin('horizontal',[operand]);f.state.rejectSolve=rejectSolve;
+   f.probe.ports.targets.addConstraint('horizontal');
+   assert.equal(f.model.constraints.length,rejectSolve?0:1);assert.equal(f.b.y,0);
+   if(rejectSolve){assert.equal(f.selection.lines[0],f.line);assert.equal(f.history.length,0);}
+   else assert.equal(f.model.constraints[0],f.state.createdConstraint);
+   results.push(JSON.stringify({events:f.events,history:f.history,trace:f.command.readPerformance()}));
+  }
+  assert.equal(results[1],results[0],String(rejectSolve));
+ }
 });

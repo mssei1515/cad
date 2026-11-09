@@ -1,5 +1,18 @@
 # Composition rootの残存責務と依存監査
 
+## 拘束編集の内部command生成と公開（2026-11-10）
+
+ConstraintEditing.createForWorkspaceが、同じDocumentWorkspaceと操作sessionの上でTarget／Selection／Controlsを生成し、後段で自ら生成するCommit＋Intent・固定operand・固定Selectionへ六つのcallbackを内部接続する。三つの内部参照は実componentへの参照であり、Document／Selection／sessionや履歴stateを複製しない。CommitはIntent resolverまで全生成が成功してから、固定operandと固定Selectionもそれぞれのfactoryが正常に返ってから公開する。再生成のconstructor失敗では以前の完成済み参照を保つ。rootは従来の別々の位置でfactoryを呼び、Fixed operand→Tree→Commit＋Intent→UI接続→Fixed Selection→Constraint bindingの相対順を変えない。
+
+app.jsは1,511→1,507行（4行減）、非空白1,062→1,058行。初期構築入力は28→22項目で、Commit構築のWorkspace再注入も除いた。root専用のcommitConstraintResolution／addConstraint／toggleGeometryFixedOperand／toggleSelectedFixedの四委譲を所有者へ移し、未使用になる固定Selection commandのroot bindingも除いた。rootは335文・550binding。Intent resolverのroot参照とresolveConstraintIntentは既存Browser test driverで使うため保持する。全体目標は未完了。
+
+TEMP cad-constraint-command-ownership-proof.cjsで対象構築・四委譲以外のroot AST、六callbackの引数と返値式（共有ownerの参照名を正規化）、旧ConstraintEditing API・raw Commit／Intent／Fixed／Target／DimensionPlacement・index.html不変、未使用binding・新しい未束縛参照なしを確認した。三件の新旧比較でreceiver・可変長／限定引数・返値／例外・session取消、Commit／Intent／固定operand／固定Selection constructor失敗後の以前の公開先保持、実Selection→Intent→Commitの確定と求解拒否復元・履歴／計測を検証する。
+
+新しいowned APIでは公開手順を迂回するcreateCommit／createCommitForWorkspaceを返さない。既存のcreateForEditingと低水準factoryは別入口として維持する。次は残る構築groupと機能間接続を実owner・生成phaseから整理し、巨大contextやsetterだけのbridgeを加えない。数百行への目標は未完了であり、今回の内部command公開を全工程の完了としない。
+
+関連単体34件、構文631file・全単体2,303件・全E2E589件が成功（50file、22.3m、exit 0）。三件の新旧比較で六callbackのreceiver／引数制限／可変長／返値／例外、session取消、Commit／Intent／固定operand／固定Selectionの生成失敗後の以前の公開先保持、実Selection→Intent→Commitの確定・求解拒否復元と履歴／計測を確認した。699製品／test入力と開始HEAD不変、無指定test listと50fileの589件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-command-ownership-{focused,check,unit,e2e,proof,smoke}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。今回の内部command公開とcallback所有変更後の現物で全体検証したが、数百行への全体目標の達成とは区別する。
+
+
 ## TrimとCenterlineの作図編集owner接続（2026-11-10）
 
 BasicDrawingTools.createAuthoringForEditingの後段createEditingへ、createCenterline／createTrimを追加した。既に接続済みのcheckpoint・Parameter安定化・解析・Projection／編集guardと数値方針を再利用し、Centerlineはcommit入口とparallel tolerance、TrimはConstraintReferencesとhit queryだけを後段で受ける。元の別々の位置で同じ実command／featureを生成し、Offset・Fillet・Cross・Splineの生成順も変えない。TrimのWorkspace scopeとSplineのbound editing scopeを統合せず、Centerlineは専用Constructionのarray／point・line ID部分rollback、Trimは実geometry checkpointをそれぞれ使い続ける。Centerlineの解析invalidateは返値なし、Trimは返値ありとし、refreshの既定options・一引数・member receiver・返値／例外を維持する。

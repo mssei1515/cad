@@ -183,6 +183,38 @@
     }
     return Object.freeze({ ...editing, createCommitForWorkspace, createCommitWithIntentForWorkspace });
   }
+  function createForWorkspace({ documentWorkspace, sessions, ...options }) {
+    let commit, fixedOperand, fixedSelection;
+    const editing = createForEditing({ ...options, sessions, sketches: documentWorkspace.sketches,
+      resolveConstraintIntent: (type, operands) => commit.intentResolver.resolve(type, operands),
+      commitConstraintResolution: (...args) => commit.command.resolution(...args),
+      addConstraint: type => commit.command.fromSelection(type),
+      toggleGeometryFixedOperand: operand => fixedOperand.toggle(operand),
+      toggleSelectedFixed: () => fixedSelection.toggle(),
+      cancelPendingCommand: message => sessions.pending.cancel(message),
+    });
+    const { createCommitWithIntentForWorkspace: createCommit, createFixedEditing: createFixed } = editing;
+    function createCommitWithIntentForWorkspace(input) {
+      const result = createCommit({ ...input, workspace: documentWorkspace.workspace });
+      commit = result;
+      return result;
+    }
+    function createFixedEditing(input) {
+      const result = createFixed(input);
+      fixedOperand = result.operand;
+      const { createSelection } = result;
+      function createSelectionForWorkspace(input) {
+        const command = createSelection(input);
+        fixedSelection = command;
+        return command;
+      }
+      return Object.freeze({ ...result, createSelection: createSelectionForWorkspace });
+    }
+    return Object.freeze({ selectionQuery: editing.selectionQuery, targets: editing.targets, dimensions: editing.dimensions,
+      createControls: editing.createControls, createCommandInput: editing.createCommandInput,
+      constraintTargetHint: editing.constraintTargetHint, input: editing.input, controls: editing.controls,
+      createCommitWithIntentForWorkspace, createFixedEditing });
+  }
   function prepareDimensionValues({ workspace, sketches, bounds, minimumLineLength }) {
     const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
       currentScope: workspace.current, activeSketchId: sketches.activeSketchId, constraintSketchId: sketches.constraintSketchId,
@@ -228,5 +260,5 @@
       restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
     });
   }
-  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing, prepareDimensionValues, createDimensionValues });
+  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing, createForWorkspace, prepareDimensionValues, createDimensionValues });
 })();
