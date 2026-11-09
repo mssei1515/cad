@@ -983,4 +983,71 @@ test('later Centerline editor preserves real constraint construction, commit ref
  }
 });
 
+
+function offsetOwnersFixture(composed, probe = {}) {
+ const f=geometryFoundationFixture({composed:true,configure({state,owners,events}){
+  const lifecycle=owners.interaction.lifecycle;
+  owners.interaction.lifecycle={...lifecycle,prepare(mode){assert.equal(this,owners.interaction.lifecycle);assert.equal(arguments.length,1);events.push(['prepare',mode]);if(state.prepareFailure)throw state.error;return state.result;}};
+  owners.presentation.updateGeometrySelectionUI=()=>events.push('selection-ui');
+  const preview=owners.sessions.preview;preview.setPointer=function(point){assert.equal(this,preview);preview.pointer=point;};
+ }}),{state,owners,w,events}=f;
+ state.ready=false;state.bound=state.scope;state.result={};state.error=new Error('offset stage');state.accepted=true;
+ const editingScope={get current(){assert.equal(state.ready,true);if(state.scopeFailure)throw state.error;events.push('bound-scope');return state.bound;}};
+ const sourceSelection=w.OffsetSelection.create({...w.GeometrySolver,getModel:()=>editingScope.current,activeSketchId:()=>state.sketch,
+  elementSketchId:item=>item.sketchId,constraintSketchId:item=>item.sketchId,onSelectionChanged:()=>owners.interaction.selection.applyOffsetSelection(sourceSelection)});
+ const ctx=Object.fromEntries(['beginPath','moveTo','lineTo','arc','stroke','setLineDash'].map(name=>[name,(...args)=>events.push([name,...args])]));
+ const surface={withCanvasState:function(work){'use strict';assert.equal(this,undefined);return work();}},analysis={invalidate(){assert.equal(this,analysis);assert.equal(arguments.length,0);events.push('invalidate');if(state.invalidateFailure)throw state.error;return state.result;}};
+ const input={editingScope,placement:{dimensionWithLabelAt:(target,dimension,pointer)=>({...dimension,x:pointer.x,y:pointer.y}),dimensionFromAnchor:()=>({anchor:true})},
+  sourceSelection,valueInput:{sync:()=>events.push('sync'),focus:()=>events.push('focus'),hide:()=>events.push('hide')},ctx,surface,
+  drawDimension:(...args)=>events.push(['dimension',...args]),commitNewConstraint:(type,constraint)=>{events.push(['commit',type]);if(state.commitFailure)throw state.error;if(state.accepted)state.scope.constraints.push(constraint);return state.accepted;},
+  offsetChainErrorText:plan=>plan.code,analysis};
+ const original=w.OffsetFeature;let feature;w.OffsetFeature={...original,create(options){probe.ports=options;if(probe.constructorFailure)throw probe.error;return probe.result??original.create(options);}};
+ try{feature=composed?f.tools.createOffsetForEditing(input):f.tools.createOffset({currentScope:()=>editingScope.current,placement:input.placement,sourceSelection,pending:owners.sessions.pending,
+  valueInput:input.valueInput,viewport:owners.viewport,ctx,withCanvasState:surface.withCanvasState,drawDimension:input.drawDimension,readMode:owners.interaction.lifecycle.readMode,
+  commitNewConstraint:input.commitNewConstraint,offsetChainErrorText:input.offsetChainErrorText,prepareStart:()=>owners.interaction.lifecycle.prepare('offset'),
+  updateGeometrySelectionUI:owners.presentation.updateGeometrySelectionUI,invalidateAnalysis:()=>{analysis.invalidate();}});}
+ finally{w.OffsetFeature=original;}
+ assert.deepEqual(events,[]);state.ready=true;return {...f,feature,input,probe,sourceSelection};
+}
+
+test('Offset editing assembly shares parent sessions, viewport and notifications while retaining live bound scope and callback contracts',()=>{
+ const traces=[];
+ for(const composed of [false,true]){
+  const result={},f=offsetOwnersFixture(composed,{result}),p=f.probe.ports;
+  assert.equal(f.feature,result);assert.equal(p.pending,f.owners.sessions.pending);assert.equal(p.viewport,f.owners.viewport);assert.equal(p.preview,f.owners.sessions.preview);
+  assert.equal(p.selection,f.owners.interaction.selection);assert.equal(p.valueInput,f.input.valueInput);assert.equal(p.withCanvasState,f.input.surface.withCanvasState);
+  assert.equal(p.updateGeometrySelectionUI,f.owners.presentation.updateGeometrySelectionUI);assert.equal(p.readMode,f.owners.interaction.lifecycle.readMode);
+  f.state.bound={id:'bound'};assert.equal(p.currentScope(),f.state.bound);assert.notEqual(p.currentScope(),f.state.scope);
+  assert.equal(p.prepareStart('ignored'),f.state.result);assert.equal(p.invalidateAnalysis('ignored'),undefined);
+  f.owners.interaction.lifecycle.setMode('offset');assert.equal(p.readMode(),'offset');
+  for(const [flag,action]of [['scopeFailure',()=>p.currentScope()],['prepareFailure',()=>p.prepareStart()],['invalidateFailure',()=>p.invalidateAnalysis()]]){f.state[flag]=true;assert.throws(action,error=>error===f.state.error);f.state[flag]=false;}
+  traces.push(JSON.stringify(f.events));
+ }
+ assert.equal(traces[1],traces[0]);
+});
+
+test('Offset editing assembly retains actual planning, replacement scope, source identities and commit-refusal allocation rollback',()=>{
+ for(const outcome of ['accepted','refused','throw']){
+  const traces=[];
+  for(const composed of [false,true]){
+   const f=offsetOwnersFixture(composed),previous=f.state.scope;f.state.scope=f.empty();f.state.bound=f.state.scope;f.state.sketch='S2';
+   const geometry=f.foundation.geometry,source=geometry.addLine(geometry.addPoint(0,0,false,'endpoint'),geometry.addPoint(40,0,false,'endpoint'));
+   f.sourceSelection.add(source);const plan=f.feature.chainDraft(f.sourceSelection.entries,5,1);assert.equal(plan.ok,true);assert.equal(plan.geometries[0].p1.y,5);
+   const points=f.state.scope.points,lines=f.state.scope.lines,sequences=[f.ids.peek('point'),f.ids.peek('line')];
+   f.state.accepted=outcome==='accepted';f.state.commitFailure=outcome==='throw';
+   if(outcome==='throw')assert.throws(()=>f.feature.createGeometry(source,5,1,{x:20,y:5}),error=>error===f.state.error);
+   else assert.equal(f.feature.createGeometry(source,5,1,{x:20,y:5}),outcome==='accepted');
+   assert.equal(f.state.scope.points,points);assert.equal(f.state.scope.lines,lines);assert.equal(lines[0],source);assert.equal(source.sketchId,'S2');assert.equal(previous.lines.length,0);
+   if(outcome==='refused'){assert.equal(points.length,2);assert.equal(lines.length,1);assert.deepEqual([f.ids.peek('point'),f.ids.peek('line')],sequences);assert.equal(f.state.scope.constraints.length,0);}
+   else{assert.equal(points.length,4);assert.equal(lines.length,2);assert.equal(lines[1].p1.y,5);assert.equal(f.state.scope.constraints.length,outcome==='accepted'?1:0);}
+   traces.push(JSON.stringify({scope:f.state.scope,events:f.events,ids:[f.ids.peek('point'),f.ids.peek('line')]}));
+  }
+  assert.equal(traces[1],traces[0],outcome);
+ }
+});
+
+test('Offset editing assembly propagates constructor failure before reading the scope or changing parent owners',()=>{
+ for(const composed of [false,true]){const probe={constructorFailure:true,error:new Error('offset constructor')};assert.throws(()=>offsetOwnersFixture(composed,probe),error=>error===probe.error);}
+});
+
 })();

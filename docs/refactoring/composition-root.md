@@ -1,5 +1,18 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Offset作図の共有owner接続（2026-11-10）
+
+BasicDrawingTools.createGeometryのcreateAuthoringForEditingが返す作図機能にcreateOffsetForEditingを追加した。既に共有するPending session・viewport・Lifecycle・Presentation通知を使い、Offsetの実featureを元の位置で生成する。後段ではeditingScope・placement／source selection・value input・Canvas surface／描画・commit／エラー表示・Analysisだけを渡す。Workspace.currentへ置き換えず、従来のeditingScope.currentを操作時に読む。
+
+prepareStartはLifecycle.prepareのmember receiver・offset一引数・返値／例外、解析invalidateはmember零引数・void返値／例外を維持する。surface.withCanvasStateとreadMode、Selection通知は同じ実関数参照を渡す。親のGeometry・IDs・Selection／Preview・値入力・mode／pendingを共有し、新しい状態・session・cache・listenerは作らない。Offset作成はcheckpointの前、Fillet／Cross／Spline／Trim等の段階とは別のまま。旧createOffsetと全raw API、計算・確定拒否復元・例外時の部分更新は変更しない。
+
+app.jsは1,494→1,492行（2行減）、非空白1,045→1,043行。Offset構築入力は15→10項目。AST比較で対象構築以外のroot全体と相対順、既存module API、Offset feature／command／construction／preview／chain・index・全E2E不変、callback引数・返値式、新しい未使用／未束縛参照なしを確認した。
+
+関連単体48件、構文631file・全単体2,316件・関連E2E290件が成功（10file、5.0m、exit 0）。三つの新旧比較でcold生成・実owner参照・bound scopeの独立と差替え・callback引数／receiver／返値／例外、実Offsetの計画と生成・確定拒否時の配列／ID復元・確定例外時の部分更新、constructor失敗を確認した。699製品／test入力と開始HEAD不変、選択10fileのtest list290件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-authoring-offset-owners-{focused,check,unit,e2e,proof,smoke}.logとsource-hashes／selection／filter-environment／e2e-receipt／last-run JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、57d5a4bの全589件成功とは区別する。全体目標は未完了。
+
+基準developは89c70be、作業branchはcodex/authoring-offset-owners、開始時週枠残量38%。Offset計算・Solver本体は不変で、今回の共有依存とbound scopeを実単体比較で検証し、操作性能・注記・派生・寸法・権限・Block／UI・保存読込の関連10fileを選択した。直前57d5a4bの全E2E589件成功（21.4分）と、今回変更後の関連検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ## Block commandと後段Viewの共有接続（2026-11-10）
 
 BlockEditingFeature.createForWorkspaceにcreateCommandsWithViewを追加した。親が共有するCanvasInteraction／Presentation／Sketchを使い、既存のDefinition→Completion commandを元の位置で生成する。実Viewは後段のcreateViewで生成し、完成後だけ内部参照を公開する。commandのclose／editor-activeと更新は同じ完成済みViewを読み、rootからreadView／updateBlockUIを戻し渡ししない。
