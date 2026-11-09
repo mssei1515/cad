@@ -87,7 +87,16 @@
     function createTools(options) {
       return createAuthoring({ ...options, currentScope, ids, geometry, endpointAt, minLineLength, minArcLength });
     }
-    return Object.freeze({ geometry, createAuthoring: createTools });
+    function createToolsForEditing({ documentWorkspace, readServices, interaction, sessions, presentation, viewport, ...options }) {
+      return createTools({ ...options, samePosition: window.GeometryKernel.samePosition,
+        sketchContext: documentWorkspace.sketches, pointUsage: interaction.pointUsage, geometryReads: readServices.reads,
+        isVisibleSketchElement: readServices.geometryAppearance.isVisibleSketchElement, scale: () => viewport.scale,
+        selection: interaction.selection, preview: sessions.preview, cancelPendingCommand: message => sessions.pending.cancel(message),
+        canCreateInActiveSketch: interaction.access.canCreateInActiveSketch, rejectRootSketchCreation: interaction.access.rejectRootSketchCreation,
+        setMode: interaction.lifecycle.setMode, applicationText: presentation.settings.applicationText,
+        setHint: presentation.setHint, updateUI: presentation.updateUI, draw: presentation.draw, log: presentation.log });
+    }
+    return Object.freeze({ geometry, createAuthoring: createTools, createAuthoringForEditing: createToolsForEditing });
   }
 
   function createAuthoring({ currentScope, ids, geometry, endpointAt, samePosition, sketchContext, pointUsage, geometryReads,

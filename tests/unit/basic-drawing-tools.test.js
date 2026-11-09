@@ -460,7 +460,7 @@ test('authoring circle cross preserves failed solve rollback and creation reject
   assert.deepEqual(f.calls,[['cancelConstraint',''],['cancelPending',''],'reject']);
  }
 });
-function geometryFoundationFixture(){
+function geometryFoundationFixture({composed=false,probe=null}={}){
  const sandbox={window:{},structuredClone};vm.createContext(sandbox);
  const sources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
  for(const file of sources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),sandbox,{filename:file});
@@ -476,17 +476,32 @@ function geometryFoundationFixture(){
  Object.assign(pointUsage,{isEndpointPoint:p=>p.kind==='endpoint',isExplicitPoint:p=>p.kind==='explicit'});
  const sketchContext={isActiveSketchElement:p=>{read();return p.sketchId===state.sketch;},elementSketchId:p=>p.sketchId,isReferenceSourceSketchId:()=>false,
   sketchName:id=>id,activeSketchId:()=>{read();return state.sketch;},sameSketchElements:()=>true};
- const tools=foundation.createAuthoring({samePosition:(a,b)=>a.x===b.x&&a.y===b.y,sketchContext,pointUsage,
-  geometryReads:Object.fromEntries(['allGeometryPoints','allGeometryLines','allGeometryCircles','allGeometryArcs','allGeometrySplines'].map(k=>[k,()=>{read();return [];} ])),
-  isVisibleSketchElement:()=>true,annotationAnchors:()=>{read();return [];},scale:()=>1,
+ const selection=w.CanvasSelection.create(),preview={setPointer:noop},lifecycle=w.DrawOperationLifecycle.createSession();
+ const pending=w.PendingCommandSession.create({clearPlacement:()=>{read();if(probe)events.push('cancel-pending');}});
+ const isVisibleSketchElement=()=>{read();return true;};
+ const ports={samePosition:w.GeometryKernel.samePosition,sketchContext,pointUsage,
+  geometryReads:Object.fromEntries(['allGeometryPoints','allGeometryLines','allGeometryCircles','allGeometryArcs','allGeometrySplines'].map(k=>[k,()=>{read();return k==='allGeometryPoints'?(state.snapPoints??[]):[];} ])),
+  isVisibleSketchElement,annotationAnchors:()=>{read();return [];},scale:()=>state.scale??1,
   transientAuthoring:Object.fromEntries(['beginTransientLineStartRollback','beginTransientLineCompletionRollback','markCompletedLine','clearTransientLineStartRollback'].map(k=>[k,()=>events.push([k])])),
-  pushModelConstraint:noop,addConstraintIfMissing:noop,selection:w.CanvasSelection.create(),preview:{setPointer:noop},
+  pushModelConstraint:noop,addConstraintIfMissing:noop,selection,preview,
   checkpoint:{capture:(...args)=>checkpoint.capture(...args),restore:(...args)=>checkpoint.restore(...args)},
-  cancelConstraintTargetCommand:noop,cancelPendingCommand:noop,canCreateInActiveSketch:()=>true,rejectRootSketchCreation:noop,
-  setMode:noop,resetEditing:noop,resetBlankCandidate:noop,updateToolbar:noop,projection:{reset:noop},clearSelection:noop,
-  solveAndRefresh:()=>({success:true}),recordHistory:noop,applicationText:(_ja,en)=>en,setHint:noop,updateUI:noop,draw:noop,log:noop});
- assert.deepEqual(events,[]);assert.equal(Object.isFrozen(foundation),true);state.ready=true;checkpoint={capture:noop,restore:noop};
- return {foundation,tools,state,ids,events,empty};
+  cancelConstraintTargetCommand:noop,cancelPendingCommand:message=>pending.cancel(message),canCreateInActiveSketch:()=>{read();return state.allowed!==false;},rejectRootSketchCreation:()=>{read();events.push('reject');},
+  setMode:lifecycle.setMode,resetEditing:()=>{read();if(probe?.editingFailure)throw probe.editingFailure;},resetBlankCandidate:noop,updateToolbar:noop,projection:{reset:noop},clearSelection:noop,
+  solveAndRefresh:()=>({success:true}),recordHistory:noop,applicationText:(_ja,en)=>en,setHint:noop,updateUI:noop,draw:noop,log:noop};
+ const owners={documentWorkspace:{sketches:sketchContext},readServices:{reads:ports.geometryReads,geometryAppearance:{isVisibleSketchElement}},
+  interaction:{pointUsage,selection,lifecycle,access:{canCreateInActiveSketch:ports.canCreateInActiveSketch,rejectRootSketchCreation:ports.rejectRootSketchCreation}},
+  sessions:{preview,pending},presentation:{settings:{applicationText:ports.applicationText},setHint:ports.setHint,updateUI:ports.updateUI,draw:ports.draw,log:ports.log},
+  viewport:{get scale(){read();return state.scale??1;}}};
+ const remaining={...ports};
+ for(const key of ['samePosition','sketchContext','pointUsage','geometryReads','isVisibleSketchElement','scale','selection','preview','cancelPendingCommand',
+  'canCreateInActiveSketch','rejectRootSketchCreation','setMode','applicationText','setHint','updateUI','draw','log'])delete remaining[key];
+ const originals=new Map();if(probe){probe.ports={};probe.order=[];
+  for(const name of ['DrawingSnap','SplineCommand','LineCommand','SlotConstruction']){const original=w[name];originals.set(name,original);w[name]={...original,create(input){
+   probe.order.push(name);probe.ports[name]=input;if(probe.failAt===name)throw probe.error;return original.create(input);}};}}
+ let tools;try{tools=composed?foundation.createAuthoringForEditing({...remaining,...owners}):foundation.createAuthoring(ports);}
+ finally{for(const[name,original]of originals)w[name]=original;}
+ assert.deepEqual(events,[]);assert.equal(Object.isFrozen(foundation),true);state.ready=true;checkpoint=probe?.checkpoint??{capture:noop,restore:noop};
+ return {foundation,tools,state,ids,events,empty,owners,ports,w};
 }
 
 test('geometry foundation shares IDs, scope and construction with real drawing tools and retains endpoint versus explicit Point identity',()=>{
@@ -685,4 +700,50 @@ test('Spline editing assembly retains permission refusals and constructor/solver
     assert.throws(()=>f.command.addPoint(f.spline,{x:5,y:3}),error=>error===marker);assert.equal(f.command.current.spline,f.spline);assert.equal(f.spline.fitPoints.length,5);
     assert.equal(f.calls.filter(c=>c[0]==='history').length,0);
   }
+});
+
+test('editing authoring shares real Geometry, IDs, Selection and owner callbacks without eager reads and keeps live scale and scope',()=>{
+ for(const composed of [false,true]){
+  const probe={},f=geometryFoundationFixture({composed,probe}),{owners:o,ports:p,tools:t,state,foundation}=f;
+  assert.deepEqual(probe.order,['DrawingSnap','SplineCommand','LineCommand','SlotConstruction']);
+  assert.equal(probe.ports.DrawingSnap.geometryReads,o.readServices.reads);assert.equal(probe.ports.DrawingSnap.isVisibleSketchElement,o.readServices.geometryAppearance.isVisibleSketchElement);
+  assert.equal(o.documentWorkspace.sketches.isVisibleSketchElement,undefined);
+  assert.equal(probe.ports.SplineCommand.setMode,o.interaction.lifecycle.setMode);assert.equal(probe.ports.SplineCommand.canCreateInActiveSketch,o.interaction.access.canCreateInActiveSketch);
+  assert.equal(probe.ports.SplineCommand.applicationText,o.presentation.settings.applicationText);assert.equal(probe.ports.SplineCommand.setHint,o.presentation.setHint);
+  assert.equal(probe.ports.LineCommand.selection,o.interaction.selection);assert.equal(probe.ports.LineCommand.addPoint,foundation.geometry.addPoint);
+  assert.equal(probe.ports.SlotConstruction.snapshotGeometryMutationState,p.checkpoint.capture);assert.equal(Object.isFrozen(t),true);
+  const near=foundation.geometry.addPoint(3,0,false,'explicit'),pointer={x:0,y:0};state.snapPoints=[near];state.scale=1;
+  const snapped=t.snapForDrawing(pointer);assert.equal(snapped.x,near.x);assert.equal(snapped.y,near.y);assert.equal(t.snap.active.data.point,near);state.scale=10;
+  assert.equal(t.snapForDrawing(pointer),pointer);assert.equal(t.snap.active,null);state.snapPoints=[];
+  t.tools.line.click({x:10,y:0});const first=state.scope;state.scope=f.empty();state.sketch='S2';state.construction=true;
+  t.tools.line.reset();t.tools.line.click({x:20,y:0});t.tools.line.click({x:21,y:0});
+  assert.equal(first.points.includes(near),true);assert.equal(state.scope.points[0].sketchId,'S2');assert.equal(state.scope.lines[0].construction,true);
+  assert.equal(state.scope.lines[0].length(),4);assert.equal(o.interaction.selection.lines[0],state.scope.lines[0]);
+ }
+});
+
+test('editing authoring starts Spline through the real lifecycle after pending cancellation and keeps rejection and late editing failures',()=>{
+ for(const composed of [false,true]){
+  const probe={},f=geometryFoundationFixture({composed,probe}),{tools:t,owners:o,state,events}=f;
+  t.spline.command.start();assert.equal(o.interaction.lifecycle.mode,'spline');assert.deepEqual(events,['cancel-pending']);
+  o.interaction.lifecycle.setMode('select');state.allowed=false;events.length=0;t.spline.command.start();
+  assert.equal(o.interaction.lifecycle.mode,'select');assert.deepEqual(events,['cancel-pending','reject']);
+  state.allowed=true;probe.editingFailure=new Error('late editing reset');events.length=0;
+  assert.throws(()=>t.spline.command.start(),value=>value===probe.editingFailure);
+  assert.equal(o.interaction.lifecycle.mode,'spline');assert.deepEqual(events,['cancel-pending']);
+ }
+});
+
+test('editing authoring retains constructor stages and late checkpoint failures before Slot model or ID mutation',()=>{
+ for(const composed of [false,true]){
+  const sequence=['DrawingSnap','SplineCommand','LineCommand','SlotConstruction'];
+  for(const failAt of sequence){const error=new Error(failAt),probe={failAt,error};
+   assert.throws(()=>geometryFoundationFixture({composed,probe}),value=>value===error);assert.deepEqual(probe.order,sequence.slice(0,sequence.indexOf(failAt)+1));}
+  const error=new Error('late checkpoint'),calls=[],probe={checkpoint:{capture(){assert.equal(this,probe.checkpoint);calls.push('capture');throw error;},restore(){calls.push('restore');}}};
+  const f=geometryFoundationFixture({composed,probe}),slot=f.tools.tools.input.slot;
+  slot({x:0,y:0});slot({x:10,y:0});const pointSeq=f.ids.peek('point'),lineSeq=f.ids.peek('line'),arcSeq=f.ids.peek('arc'),arrays={...f.state.scope};
+  assert.throws(()=>slot({x:10,y:8}),value=>value===error);assert.deepEqual(calls,['capture']);
+  assert.equal(f.ids.peek('point'),pointSeq);assert.equal(f.ids.peek('line'),lineSeq);assert.equal(f.ids.peek('arc'),arcSeq);
+  for(const key of Object.keys(arrays)){assert.equal(f.state.scope[key],arrays[key]);assert.equal(arrays[key].length,0);}
+ }
 });
