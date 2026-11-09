@@ -1,7 +1,7 @@
 /* Application composition, editing commands, Canvas UI and event handling. */
 (function () {
   "use strict";
-  const { formatDisplayNumber, formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
+  const { formatDisplayNumber } = window.NumberDisplay;
   const { escapeHtml } = window.HtmlText;
   const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageWorldToLocal } = window.ReferenceImageGeometry;
@@ -9,7 +9,7 @@
 
   const {
     CSS_PX_PER_MM, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
-    normalizeAppearance, normalizeDimensionAppearance,
+    normalizeAppearance,
   } = window.Appearance;
   const {
     drawingOrderOwner,
@@ -22,7 +22,6 @@
   const {
     MIN_ORIENTATION_LENGTH,
     arcEndpointPoint,
-    circlePointAtAngle,
     signedPointLineDistance,
   } = window.GeometryKernel;
 
@@ -122,7 +121,7 @@
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, annotationAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { effectiveAppearanceForElement, isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
-  const { effectiveDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState } = dimensionAppearance;
+  const { effectiveDimensionAppearance } = dimensionAppearance;
   const { effectiveAnnotationStyle } = annotationAppearance;
   const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
@@ -313,7 +312,6 @@
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CENTERLINE_PARALLEL_TOLERANCE = 1e-5;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
-  const { DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR } = window.DimensionLayout;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const resultIsAccepted = window.SketchSolving.createResultAcceptance(CONSTRAINT_ACCEPT_ERROR);
@@ -363,11 +361,9 @@
     applicationText, readLanguage: () => applicationSettings.language,
   });
   const { resetCanvasStrokeState, withCanvasState } = canvasSurface;
-  const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR } = window.DimensionMetrics;
-  const { metrics: dimensionMetrics, placement: dimensionPlacement, layouts: dimensionLayouts, painter: dimensionPainter } = dimensionDisplay;
+  const { placement: dimensionPlacement, painter: dimensionPainter } = dimensionDisplay;
   const { controller: dimensionInputController } = dimensionInput;
   const { dimensionFromAnchor, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
-  const { jisDimensionTextAngle, dimensionTextOffset } = dimensionLayouts;
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const { commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, geometry: geometryDisplay,
@@ -1450,7 +1446,7 @@
       currentScope: workspace.current, viewport, canvas, selection: canvasSelection, drag: annotationDrag, annotationLeaderAnchor,
       annotationLeaderTargetFromItem, draw, allGeometryBounds, resetModelState, resizeCanvas, hitAnnotationElement,
     });
-    const { support: dimensionTestSupport, fixtures: dimensionFixtureSupport } = window.DimensionTestDriver.createForEditing({
+    const { support: dimensionTestSupport, fixtures: dimensionFixtureSupport, createDisplayForEditing: createDimensionDisplayTestSupport } = window.DimensionTestDriver.createForEditing({
       geometry: geometryCreation, display: dimensionDisplay, sketches: sketchContext, appearance: geometryAppearance,
       currentScope: workspace.current, viewport, canvasSelection, resetModelState, addDistanceConstraintFromTarget,
       dimensions: dimensionPlacementCommand, serializeModel, serializeDimension, constraintTargetSession, pendingCommandSession,
@@ -1575,13 +1571,8 @@
       stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw, blockProjectionBundle, serializeModel,
       clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, deleteElements, document,
     });
-    const dimensionDisplaySupport = dimensionTestSupport.createDisplay({
-      Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, circlePointAtAngle,
-      screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
-      fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, canvasHover, readDocument: () => documentModel, normalizeDimensionAppearance,
-      effectiveDimensionAppearanceForSketch, dimensionDisplayState, effectiveDimensionAppearance,
-      displayFactor: window.Appearance.annotationDisplayFactor, formatDimensionLabel, formatMeasuredDimensionLabel, jisDimensionTextAngle,
-      dimensionTextOffset,
+    const dimensionDisplaySupport = createDimensionDisplayTestSupport({
+      canvasHover, readDocument: () => documentModel, appearance: dimensionAppearance,
     });
     const { observation: referenceImageTestObservation, dataImport: referenceImageTestImport,
       blockFixture: referenceImageBlockFixture } = window.ReferenceImageTestDriver.createBrowserSupport({

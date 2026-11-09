@@ -1,5 +1,32 @@
 # Composition rootの残存責務と依存監査
 
+## 再監査と寸法表示test依存の分離（2026-11-09）
+
+DimensionTestDriver.createForEditingが後段createDisplayForEditingを返す。既存の実DimensionDisplayからplacement／layouts／metricsを共有し、型・幾何計算・表示定数・正規化・数値formatは既存namespaceからテスト生成時に取得する。後段入力はCanvas hover／Document reader／dimensionAppearanceの三つだけとし、geometryAppearanceのSketch可視性とは別ownerとして扱う。返すものは従来の実createDisplayのappearance六操作・cases二操作である。既存createSupport／createDisplay／createDisplaySupportと八fixtureの生成順、前段編集fixture→他test support→後段表示support→BrowserTestApi公開の順、test gateを維持する。Document／scope／外観／倍率／Selection／hoverは実行時に読み、値やstyleをsnapshot化せず、Canvas method・viewportのfinally復元と例外同一性を変えない。通常起動へ新しい操作・state・listener・moduleを追加しない。
+
+app.jsは1,690→1,681行（9行減）、非空白1,241→1,232行。寸法表示testの明示入力20→3項目とし、不要root alias十三個を除去した。TEMP cad-dimension-display-test-owners-proof.cjsで他app／test gate AST・既存DimensionTestDriver不変、未使用root bindingなし、後段三入力の初期化済みを確認した。200〜500行の全体目標は未達である。
+
+関連単体9件、構文627file・全単体2,202件・関連E2E299件が成功（14file、4.3m、exit 0）。実Geometry／DimensionDisplay／DimensionAppearance／Selection／Hoverで旧接続と比較する三件を追加し、cold生成と同じ八操作、精度・角度・半径・terminator計測、live Document／scope／外観／倍率、Canvas strokeのreceiver／引数／returnとSelection・hover・viewport復元、reader／painter例外同一性を検証した。表示test APIを使用する全3fileも関連E2Eへ含めた。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-dimension-display-test-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全E2Eの代替結果とは扱わない。
+
+### 全体再監査（基準a3bf81b、2026-11-09）
+
+| 指標 | 基準 | 今回後 |
+| --- | ---: | ---: |
+| app.js全行 | 1,690 | 1,681 |
+| 非空白 | 1,241 | 1,232 |
+| root文 | 394 | 391 |
+| CallExpressionで初期化するroot構築文 | 125 | 125 |
+| 上記構築文の非空白行 | 608 | 608 |
+| root関数／一文call委譲 | 75／71 | 75／71 |
+| 一文call委譲の行数 | 91 | 91 |
+| installTestHooks行数（全て非空白） | 230 | 225 |
+| hooksを除く非空白 | 1,011 | 1,007 |
+| hooksだけが参照するroot binding | 77 | 65 |
+
+これはASTの構文集計であり、APIの入力項目数や責務数とは区別する。委譲91行とhooks225行を単純に全て移しても非空白916行が残るため、それだけで数百行目標へ到達するとは扱わない。構築608行を含む機能単位の生成・接続を、既存ownerのprepare／create／bind段階と公開APIから再検討する必要がある。三つのroot let（PNG command、Sketch move、Sketch context controller）は後段接続参照であり、model stateの二重所有とは区別する。
+
+今後は、(1) Constraint／Block／Canvas等の既存featureが生成準備から後段接続まで所有できる境界、(2) 正式なpublic APIへ寄せられる委譲、(3) 各test driverへ閉じられる専用bindingを比較する。receiver／default引数／return／例外／初期化・listener順を保ち、機械的なbind置換・巨大なtest installer／app context移動・空行削除による目標達成は行わない。今回のtest専用整理を通常機能の全体完了と混同しない。TEMP cad-composition-reaudit-nov9.cjs、cad-composition-reaudit-a3bf81b.json、cad-dimension-display-test-owners-audit.json／audit-metrics.cjsが再集計の証跡である。
+
 ## 配置プレビューのCanvas owner接続（2026-11-09）
 
 CanvasDisplayのWorkspaceがcreatePlacementPreviewを提供し、同じctx／viewport／surface.withCanvasStateで既存PlacementPreviewRendererのrenderer→layerを連続生成する。実GeometryDisplayのSpline painter、Annotation rendererの二painter、Hatch layerの可変長member委譲とGeometryReadServices.hatchesのboundary query、既存HatchDataの外観・pattern originを共有する。LifecycleのreadModeとOperationSessions.preview.pointerは従来どおり操作時に読み、Block／Instance commandとprojection bundle生成の参照を維持する。実layerを返し、可視条件とpointer再読取り回数、描画順・style copy・Canvas save／finally restore・例外同一性を変えない。新しいmodel／state／cache／listener・moduleを追加せず、低水準PlacementPreviewRenderer.create／createLayerを維持する。
