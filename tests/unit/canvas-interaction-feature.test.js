@@ -385,3 +385,58 @@ test('Canvas frame assembly propagates stage failures without synchronizing or r
     assert.deepEqual(run(true), run(false), failure);
   }
 });
+function constructionFixture(composed, failure) {
+  'use strict';
+  const f=fixture(),events=f.events,stage={allowed:true,snap:true,drafts:{line:{id:'draft'},rectangle:{id:'rectangle'}},fail:failure},marker=new Error('construction interaction failure');
+  const check=name=>{events.push(name);if(stage.fail===name)throw marker;};
+  const projection={guardSketchProjectionShapeEdit(items,options){assert.equal(this,undefined);check('guard');assert.equal(items[0],f.lines[0]);assert.equal(options.includeSharedNodes,false);assert.equal(options.action,'Construction toggle');return stage.allowed;}};
+  let metadata,snapClear;
+  const options={projection,cancelConstraintTargetCommand(message){assert.equal(this,undefined);assert.equal(message,'');check('cancel');f.sessions.targets.reset();},
+    synchronizeSketchProjectionMetadata:()=>metadata(),updateUI:()=>check('ui'),recordHistory(label){assert.equal(this,undefined);assert.equal(label,'補助線切替');check('history');},
+    clearSnap:()=>snapClear(),updateToolbar:()=>check('toolbar')};
+  const original=f.w.ConstructionCommand;let actual,ports;
+  f.w.ConstructionCommand={create(input){ports=input;check('create');return actual=original.create(input);}};
+  f.state.ready=false;let command;
+  try{command=composed?f.sessions.createConstruction(options):f.w.ConstructionCommand.create({
+    cancelConstraintTargetCommand:options.cancelConstraintTargetCommand,selectedConstructionTogglePrimitives:f.foundation.selection.selectedConstructionTogglePrimitives,
+    guardSketchProjectionShapeEdit:projection.guardSketchProjectionShapeEdit,applicationText:(_ja,en)=>en,
+    synchronizeSketchProjectionMetadata:options.synchronizeSketchProjectionMetadata,setHint:()=>events.push('hint'),clearSelection:()=>f.presentation.clearing.clear(),
+    updateUI:options.updateUI,draw:()=>events.push('draw'),recordHistory:options.recordHistory,
+    setLineMode:()=>{f.foundation.lifecycle.setMode('line');},resetLineInputs:()=>f.foundation.lifecycle.resetInputs('line'),clearSnap:options.clearSnap,updateToolbar:options.updateToolbar});
+  }finally{f.w.ConstructionCommand=original;}
+  assert.deepEqual(events,['create']);events.length=0;
+  const reset=name=>()=>{check(name);stage.drafts[name]=null;};
+  f.foundation.lifecycle.bind({line:{reset:reset('line')},rectangle:{reset:reset('rectangle')},fillet:{reset:reset('fillet')},
+    circular:{resetCircle:reset('circle'),resetArcs:reset('arcs')},preview:{setPointer(value){assert.equal(value,null);check('preview');}}});
+  assert.deepEqual(events,[]);f.state.ready=true;
+  metadata=()=>check('metadata');snapClear=()=>{check('snap');stage.snap=false;};
+  const other=Object.assign(new f.w.GeometrySolver.Point('P2',10,0),{sketchId:'S1'}),third=Object.assign(new f.w.GeometrySolver.Point('P3',20,0),{sketchId:'S1'});
+  const lines=[Object.assign(new f.w.GeometrySolver.Line('L1',f.point,other,true),{sketchId:'S1'}),Object.assign(new f.w.GeometrySolver.Line('L2',other,third,false),{sketchId:'S1'})];
+  f.state.scope.points.push(other,third);f.state.scope.lines.push(...lines);f.lines=lines;
+  return{...f,lines,command,actual,ports,stage,marker,projection,events,
+    snapshot(){return JSON.parse(JSON.stringify({events,mode:f.foundation.lifecycle.mode,enabled:command.enabled,flags:lines.map(l=>l.construction),selected:f.foundation.selection.lines.map(l=>l.id),
+      target:f.sessions.targets.command,drafts:stage.drafts,snap:stage.snap}));}};
+}
+
+test('Canvas interaction constructs the actual construction command cold and shares the same selection and projection guard',()=>{
+  const f=constructionFixture(true);assert.equal(f.command,f.actual);assert.ok(Object.isFrozen(f.command));
+  assert.equal(f.ports.selectedConstructionTogglePrimitives,f.foundation.selection.selectedConstructionTogglePrimitives);assert.equal(f.ports.guardSketchProjectionShapeEdit,f.projection.guardSketchProjectionShapeEdit);
+  assert.deepEqual(f.events,[]);assert.equal(f.foundation.lifecycle.mode,'select');assert.equal(f.command.enabled,false);
+});
+
+test('construction interaction preserves selected and rejected toggles, future preference, line mode and the original input reset sequence',()=>{
+  const run=composed=>{const f=constructionFixture(composed);f.foundation.selection.set('lines',f.lines);assert.equal(f.command.state(true).active,false);
+    assert.equal(f.command.toggle(),undefined);assert.deepEqual(f.lines.map(l=>l.construction),[true,true]);assert.equal(f.command.enabled,false);assert.equal(f.events.at(-1),'history');
+    f.foundation.selection.set('lines',f.lines);f.stage.allowed=false;f.events.length=0;f.command.toggle();assert.deepEqual(f.events,['cancel','guard','draw']);assert.equal(f.foundation.selection.lines[0],f.lines[0]);
+    f.foundation.selection.clear();f.events.length=0;f.command.toggle();assert.equal(f.foundation.lifecycle.mode,'line');assert.equal(f.command.enabled,true);assert.equal(f.stage.drafts.line,null);assert.equal(f.stage.drafts.rectangle,null);assert.equal(f.stage.snap,false);assert.ok(!f.events.includes('history'));
+    assert.deepEqual(f.events,['cancel','line','rectangle','fillet','circle','arcs','preview','snap','toolbar','hint','draw']);
+    f.command.restore(false);assert.equal(f.command.state(false).active,false);return f.snapshot();};assert.deepEqual(run(true),run(false));
+});
+
+test('construction owner assembly preserves command creation and callback/reset failures with the same partly changed preference and geometry',()=>{
+  for(const composed of [false,true])assert.throws(()=>constructionFixture(composed,'create'),/construction interaction failure/);
+  for(const failure of ['cancel','guard','metadata','ui','history','line','rectangle','fillet','circle','arcs','preview','snap','toolbar']){
+    const run=composed=>{const f=constructionFixture(composed,failure);if(['guard','metadata','ui','history'].includes(failure))f.foundation.selection.set('lines',f.lines);
+      assert.throws(()=>f.command.toggle(),error=>error===f.marker);return f.snapshot();};assert.deepEqual(run(true),run(false),failure);
+  }
+});
