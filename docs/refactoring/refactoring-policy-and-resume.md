@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,543行、非空白1,094行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,537行、非空白1,088行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,15 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Block Browser検証APIのWorkspace接続（2026-11-10）
+
+BlockTestDriver.createForWorkspaceは、DocumentWorkspace・GeometryReadServices・Block編集・CanvasInteraction／operation session・Presentation・viewport／Solverと実command群から、従来のcreateBrowserSupportへ限定依存を接続する。Document定義とWorkspace.current、同じSelection・Block editor／chain・placement・hover／target session・投影bundle・GeometryRefを共有し、Solver.getVariablesとplacement.setAnchorのreceiver、裸のcommand関数と座標変換を保つ。構築時にはscope・定義・mode・Solver変数・DOMを読まず、creation→editor actions→observations→rejectionの元の生成順と後段createDimensionCasesを維持する。reset二API・観測五API・寸法／lifecycle十三APIの名前／順序、実Geometry・投影参照、配置数値変換と既定値、取消・求解・読込の例外／途中状態を変更しない。型とGeometryRef関数は既存namespaceから取得し、旧factory・実support APIも維持する。通常のBlock編集とtest query guard／公開位置、保存形式を変更せず、追加model・Selection・session・cache・listenerや汎用contextを作らない。
+
+app.jsは1,543→1,537行（6行減）、非空白1,094→1,088行。supportの入力は39→26項目。Block検証専用alias五つをrootから除いた。TEMP cad-block-browser-owners-proof.cjsで八callback portと他root・既存Block driver AST不変、未使用binding・新しい未束縛参照なし、hook install前の依存初期化を確認した。全体目標は未完了。
+
+関連単体11件、構文629file・全単体2,274件・関連E2E233件が成功（11file、3.2m、exit 0）。実Geometry／Selectionを使う三件の旧接続比較を追加し、cold生成と二reset／五観測／十三actionの公開順、Geometry参照、scope／hover／Solver変数のlive観測、投影寸法・入れ子拘束・子Geometry、配置の数値変換／receiver／返値、取消・求解・load例外の同一性と途中stateを検証した。698製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-block-browser-owners-{focused,check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutは変更せず、直前5d4e17fの全E2E589件成功（21.5m）とは別の関連検証として扱う。全体目標は未完了。
+
 
 ### 最新：Document Browser検証APIの共有Workspace接続（2026-11-10）
 

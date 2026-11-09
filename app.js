@@ -200,8 +200,7 @@
   });
   const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
   const { fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
-  const { chain: blockEditorSessionChain,
-    scopeId: currentBlockDefinitionScopeId } = blockEditor;
+  const { scopeId: currentBlockDefinitionScopeId } = blockEditor;
   const { blockDefinitionScopeError } = blockEditingQueries;
 
   const sketchSolveResultState = window.SketchSolving.createState();
@@ -226,7 +225,7 @@
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
     setPropertiesPanelCollapsed, solveAndRefresh, recordHistory,
   });
-  const { start: startBlockPlacement, commit: commitBlockPlacement,
+  const { start: startBlockPlacement,
     restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;
   const historyFeature = window.HistoryController.createForWorkspace({
     documentWorkspace, blocks: blockEditingFeature, readServices: geometryReadServices, presentation,
@@ -409,8 +408,7 @@
     historyController, recordHistory, resultIsAccepted,
     maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
-  const { solveSketchById,
-    solveSketchAndDependents } = sketchSolving;
+  const { solveSketchAndDependents } = sketchSolving;
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
   const filletCommand = authoringTools.createFillet({
     defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
@@ -424,7 +422,6 @@
   const blockConfigurationCommand = blockEditingFeature.createConfiguration({
     references: constraintReferences, guardDimensionSymbolDeletion, updateBlockUI, recordHistory,
   });
-  const { setEnabledSketchIds: setBlockInstanceEnabledSketchIds } = blockConfigurationCommand;
   const { editing: synchronizedInstanceEditing, changeProperty: changeFreeInstanceProperty, transform: instanceTransformCommand } = createInstanceEditing({
     checkpoint: editingCheckpoint, serializeModel, addPointSnapConstraints,
     rebind: () => constraintRebinding.rebuildDocument(editingScopeBinding.current, [...blockProjectionBundles(), ...geometryInstanceBundles()]),
@@ -592,8 +589,7 @@
     referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, sketches: sketchContext, choiceDialog,
     blockLocalGeometryBounds, references: constraintReferences, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
   });
-  const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit,
-    cancel: cancelBlockDefinitionEdit } = blockDefinitionCommand;
+  const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
 
 
@@ -1375,14 +1371,12 @@
       resetModelState, markReferenceConstraint, serializeModel, loadModelData, analysis: constraintAnalysis, referenceState: referenceConstraintState,
     });
     const constraintCaseTestApi = constraintTestFactories.createEditingCases();
-    const blockTestSupport = window.BlockTestDriver.createBrowserSupport({
-      geometry: geometryCreation, modelTypes: window.GeometrySolver, documentModel, currentScope: workspace.current, sketches: sketchContext,
-      projections: blockProjections, reads: geometryReads, queries: blockEditingQueries, selection: canvasSelection,
-      editor: blockEditor, editorChain: blockEditorSessionChain, placement: blockPlacementCommand, readMode: drawOperationLifecycle.readMode, solver,
-      canvas, viewport, worldToCanvasScreen, resetModelState, pushModelConstraint, fitAllGeometryToViewport, updateUI, draw, commitBlockPlacement,
-      solveSketchById, recordHistory, serializeConstraint, createSketch, cancelBlockDefinitionEdit, completeBlockDefinitionEdit,
-      setBlockInstanceEnabledSketchIds, serializeModel, loadModelData, enterBlockDefinitionEdit, blockInstanceDisplayCenter,
-      buildDragSession, constraintTargetSession, canvasHover, blockSelectionGeometry, geometryRefForItem,
+    const blockTestSupport = window.BlockTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, blocks: blockEditingFeature,
+      interaction: canvasInteraction, sessions: operationSessions, presentation, placement: blockPlacementCommand, solver, canvas, viewport,
+      solving: sketchSolving, definition: blockDefinitionCommand, completion: blockCompletionCommand, configuration: blockConfigurationCommand,
+      sketchEditing, dragging: geometryDragFeature, selectionQuery: blockSelectionQuery,
+      resetModelState, pushModelConstraint, fitAllGeometryToViewport, recordHistory, serializeConstraint, serializeModel, loadModelData, blockInstanceDisplayCenter,
     });
     const sidebarHighlightObservation = propertiesTestFactories.createHighlightObservation();
     const sidebarHoverKeyObservation = propertiesTestFactories.createHoverKeyObservation();

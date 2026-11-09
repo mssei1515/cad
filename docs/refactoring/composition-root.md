@@ -1,5 +1,14 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Block Browser検証APIのWorkspace接続（2026-11-10）
+
+BlockTestDriver.createForWorkspaceは、DocumentWorkspace・GeometryReadServices・Block編集・CanvasInteraction／operation session・Presentation・viewport／Solverと実command群から、従来のcreateBrowserSupportへ限定依存を接続する。Document定義とWorkspace.current、同じSelection・Block editor／chain・placement・hover／target session・投影bundle・GeometryRefを共有し、Solver.getVariablesとplacement.setAnchorのreceiver、裸のcommand関数と座標変換を保つ。構築時にはscope・定義・mode・Solver変数・DOMを読まず、creation→editor actions→observations→rejectionの元の生成順と後段createDimensionCasesを維持する。reset二API・観測五API・寸法／lifecycle十三APIの名前／順序、実Geometry・投影参照、配置数値変換と既定値、取消・求解・読込の例外／途中状態を変更しない。型とGeometryRef関数は既存namespaceから取得し、旧factory・実support APIも維持する。通常のBlock編集とtest query guard／公開位置、保存形式を変更せず、追加model・Selection・session・cache・listenerや汎用contextを作らない。
+
+app.jsは1,543→1,537行（6行減）、非空白1,094→1,088行。supportの入力は39→26項目。Block検証専用alias五つをrootから除いた。TEMP cad-block-browser-owners-proof.cjsで八callback portと他root・既存Block driver AST不変、未使用binding・新しい未束縛参照なし、hook install前の依存初期化を確認した。全体目標は未完了。
+
+関連単体11件、構文629file・全単体2,274件・関連E2E233件が成功（11file、3.2m、exit 0）。実Geometry／Selectionを使う三件の旧接続比較を追加し、cold生成と二reset／五観測／十三actionの公開順、Geometry参照、scope／hover／Solver変数のlive観測、投影寸法・入れ子拘束・子Geometry、配置の数値変換／receiver／返値、取消・求解・load例外の同一性と途中stateを検証した。698製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-block-browser-owners-{focused,check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。通常二経路／test一経路の起動もbrowser errorなし。既存の期待値・性能閾値・timeoutは変更せず、直前5d4e17fの全E2E589件成功（21.5m）とは別の関連検証として扱う。全体目標は未完了。
+
+
 ## Document Browser検証APIの共有Workspace接続（2026-11-10）
 
 DocumentTestDriver.createForWorkspaceは、同じDocumentWorkspace・GeometryCreation・Presentation・History・Block編集session・補助線設定・File feature／sessionとDOMを共有して履歴観測を準備し、元の後段でSketch削除・循環参照・File APIを生成する。Root／Default Sketch定数、Geometry型／参照とfileNameStemは既存namespaceから解決し、モデル／scope／履歴・名前・DOMは生成時に読まない。履歴観測の実state関数、固定Documentのlive名、Workspace.current、Geometryの参照、確認なし削除の第二引数false、循環fixtureの構築→serialize→load→解析→UI→参照エラー／badge読取り順を維持する。解析refreshの既定Object・一引数／member receiver、referenceState.errorReasonsのreceiver、importのawait後の名前とclock読取り、File／structuredClone・loadの既定引数とcatch境界を変えない。実history observation／fixture／File APIと全公開名・順序を保ち、raw factoryも維持する。test query guardと四つの生成位置、通常起動と保存形式は変更せず、新model・履歴・state・cache・listenerや汎用contextを追加しない。
