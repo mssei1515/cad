@@ -182,7 +182,7 @@ function projectionWorkspaceFixture(composed, probe) {
   } finally {w.SketchProjectionQueries=originalQueries;w.SketchProjectionCommand=originalCommand;}
   assert.equal(f.state.reads,0);assert.deepEqual(f.events,[]);
   operandReader=operand=>operand.item;rectangleQuery={readProjection(rect,crossing,geometry,entry){assert.equal(this,rectangleQuery);check('rectangle');return geometry.lines().map(entry).filter(Boolean);}};snap=()=>f.events.push('snap');f.state.ready=true;
-  return {...f,feature,queries,referenceState,selection,interaction,presentation,documentWorkspace,editingScope,workspaceState:state,marker,probe,
+  return {...f,feature,queries,referenceState,selection,interaction,presentation,documentWorkspace,editingScope,readServices,workspaceState:state,marker,probe,
     snapshot(){return JSON.parse(JSON.stringify({events:f.events,hints:f.hints,mode:f.state.mode,count:feature.command.count,seq:state.seq,
       documentInstances:f.state.scope.geometryInstances,boundInstances:state.bound.geometryInstances,selected:selection.geometryInstances.map(i=>i.id),hover:hover.current}));} };
 }
@@ -221,5 +221,75 @@ test('workspace projection preserves constructor and live query, input, notifica
         failure==='guard'?()=>f.feature.guardSketchProjectionShapeEdit([source]):failure==='rectangle'?()=>f.feature.command.addByRect({},true):
         failure==='text'?()=>f.feature.sketchProjectionShapeEditBlockedMessage():()=>f.feature.command.commit();
       assert.throws(operation,error=>error===f.marker);return f.snapshot();};assert.deepEqual(run(true),run(false),failure);
+  }
+});
+for (const file of ['src/document/appearance.js','src/editing/geometry_ids.js','src/editing/geometry_creation.js','src/constraints/references.js','src/editing/sketch_projection_editing.js']) vm.runInContext(fs.readFileSync(file,'utf8'),sandbox);
+function projectionModelFixture(composed, failure) {
+  'use strict';
+  const f=projectionWorkspaceFixture(true),state={failure,normalizations:0},marker=new Error('projection metadata failure');
+  f.workspaceState.bound={...scope(),points:[],lines:[],circles:[],arcs:[],splines:[],annotations:[]};
+  const check=name=>{if(state.failure===name)throw marker;};
+  function resolve(ref){assert.equal(this,undefined);check('resolve');const model=f.state.scope;return [...model.points,...model.lines,...model.circles,...model.arcs,...model.splines].find(item=>item.id===ref.path.at(-1))||null;}
+  f.readServices.reads.resolveGeometryRef=resolve;
+  const ids=w.GeometryIds.create(),creation=w.GeometryCreation.create({currentScope:f.documentWorkspace.workspace.current,ids,assignSketchId:item=>{item.sketchId=f.state.active;},currentConstruction:()=>false,minLineLength:.01,minArcLength:.01});
+  const add=creation.addPointToSketch;
+  const geometry={...creation,addPointToSketch(x,y,sketchId,kind){assert.equal(this,undefined);check('add');return add(x,y,sketchId,kind);}};
+  const actualReferences=w.ConstraintReferences.create({resolveGeometryRef:resolve}),references={constraintReferencesPoint(c,p){assert.equal(this,undefined);check('refs');return actualReferences.constraintReferencesPoint(c,p);}};
+  const original=w.SketchProjectionEditing,appearance=w.Appearance;let ports,actual;
+  if(failure==='normalize')w.Appearance={...appearance,normalizeAppearance(value){if(++state.normalizations===2)throw marker;return appearance.normalizeAppearance(value);}};
+  w.SketchProjectionEditing={create(input){ports=input;check('constructor');return actual=original.create(input);}};
+  let editing;
+  try{editing=composed?f.feature.createModelEditing({geometry,references}):w.SketchProjectionEditing.create({
+    currentScope:f.documentWorkspace.workspace.current,queries:f.queries,resolveGeometryRef:resolve,geometryRefForItem:w.GeometryObjects.geometryRefForItem,geometryKindForItem:w.GeometryObjects.geometryKindForItem,
+    constraintSketchId:f.documentWorkspace.sketches.constraintSketchId,constraintIsOperational:f.referenceState.constraintIsOperational,addPointToSketch:geometry.addPointToSketch,
+    constraintReferencesPoint:references.constraintReferencesPoint,nextSeq:w.GeometryIds.nextSeq,normalizeAppearance:w.Appearance.normalizeAppearance});
+  }finally{w.SketchProjectionEditing=original;w.Appearance=appearance;}
+  assert.equal(f.state.reads,0);assert.deepEqual(f.events,[]);
+  const point=(id,x,y)=>Object.assign(new Point(id,x,y,false,'endpoint'),{sketchId:'target'});
+  function sharedNamespace(){const a=point('P1',1,2),b=point('P2',3,4),spare=point('P9',9,9);a.fixed=true;a.appearance={color:'#123456'};
+    const first=Object.assign(new Line('L1',a,b),{sketchId:'target'}),second=Object.assign(new Line('L2',a,b),{sketchId:'target'}),source=f.line('source');
+    const constraints=[new SketchProjectionConstraint('line',source,first),new SketchProjectionConstraint('line',source,second),new SketchProjectionConstraint('line',source,second)];
+    return{namespace:{points:[a,b,spare],constraints},a,b,first,second};}
+  function splineNamespace(){const p1=point('P1',0,0),p2=point('P2',10,0),p4=point('P4',20,10),t1=point('P31',0,0),t2=point('P32',10,0),obsolete=point('P33',20,0);
+    const source=Object.assign(new w.GeometrySolver.Spline('SP1',[p2,p1,p4]),{sketchId:'source',construction:true,closed:true});
+    const stale=Object.assign(new w.GeometrySolver.Spline('SP1',[p1,p2]),{sketchId:'source'}),target=Object.assign(new w.GeometrySolver.Spline('SP2',[t1,t2,obsolete]),{sketchId:'target',closed:false,_curveCache:{old:true}});
+    const constraint=Object.assign(new SketchProjectionConstraint('spline',stale,target),{sketchId:'target',sourcePointIds:['P1','P2','P3']});
+    const other=new w.GeometrySolver.CoincidentConstraint(p1,p2);other.sketchId='source';
+    const namespace={...scope(),points:[p1,p2,p4,t1,t2,obsolete],lines:[],circles:[],arcs:[],annotations:[],splines:[source,target],constraints:[constraint,other]};f.state.scope=namespace;ids.reserve(namespace);
+    return{namespace,source,target,constraint,t1,t2,obsolete};}
+  return{...f,editing,actual,ports,geometry,references,ids,scopeMarker:f.marker,marker,modelState:state,sharedNamespace,splineNamespace};
+}
+
+test('Projection model editing reuses the actual query, Geometry insertion and reference capabilities at the late cold stage',()=>{
+  const f=projectionModelFixture(true),p=f.ports;
+  assert.equal(f.editing,f.actual);assert.equal(p.queries,f.feature.queries);assert.equal(p.currentScope,f.documentWorkspace.workspace.current);
+  assert.equal(p.addPointToSketch,f.geometry.addPointToSketch);assert.equal(p.constraintReferencesPoint,f.references.constraintReferencesPoint);
+  assert.equal(p.resolveGeometryRef,f.readServices.reads.resolveGeometryRef);assert.equal(p.constraintIsOperational,f.referenceState.constraintIsOperational);
+  assert.equal(p.nextSeq,w.GeometryIds.nextSeq);assert.equal(p.normalizeAppearance,w.Appearance.normalizeAppearance);
+});
+
+test('Projection model editing keeps explicit namespace repair, endpoint identities, live Workspace and Spline metadata synchronization',()=>{
+  const run=composed=>{const f=projectionModelFixture(composed),shared=f.sharedNamespace();
+    f.workspaceState.fail='workspace';assert.equal(f.editing.separateSharedSketchProjectionTargetPoints(shared.namespace),2);f.workspaceState.fail=null;
+    assert.equal(shared.first.p1,shared.a);assert.notEqual(shared.second.p1,shared.a);assert.equal(shared.second.p1.id,'P10');assert.equal(shared.second.p2.id,'P11');
+    assert.equal(shared.second.p1.fixed,true);assert.equal(shared.second.p1.sketchId,'target');assert.deepEqual(shared.second.p1.appearance,w.Appearance.normalizeAppearance(shared.a.appearance));
+    assert.equal(f.editing.separateSharedSketchProjectionTargetPoints(shared.namespace),0);
+    const s=f.splineNamespace();assert.equal(f.editing.synchronizeSketchProjectionMetadata('other'),false);assert.equal(f.editing.synchronizeSketchProjectionMetadata('target'),true);
+    assert.equal(s.constraint.source,s.source);assert.equal(s.target.fitPoints[0],s.t2);assert.equal(s.target.fitPoints[1],s.t1);assert.equal(s.target.fitPoints[2],s.namespace.points.at(-1));
+    assert.equal(s.namespace.points.includes(s.obsolete),false);assert.equal(s.target._curveCache,null);assert.equal(s.target.closed,true);assert.equal(s.target.construction,true);
+    assert.equal(f.workspaceState.bound.points.length,0);assert.equal(f.editing.synchronizeSketchProjectionMetadata(),false);
+    s.constraint.enabled=false;s.source.closed=false;assert.equal(f.editing.synchronizeSketchProjectionMetadata(),false);assert.equal(s.target.closed,true);
+    return JSON.parse(JSON.stringify({shared:shared.namespace,model:s.namespace,seq:f.ids.peek('point')}));};
+  assert.deepEqual(run(true),run(false));
+});
+
+test('Projection model editing preserves constructor errors and partial endpoint repair and Spline synchronization on failures',()=>{
+  for(const composed of [false,true])assert.throws(()=>projectionModelFixture(composed,'constructor'),/projection metadata failure/);
+  for(const failure of ['workspace','resolve','add','refs','normalize']){
+    const run=composed=>{const f=projectionModelFixture(composed,failure);let namespace,operation;
+      if(failure==='normalize'){namespace=f.sharedNamespace().namespace;operation=()=>f.editing.separateSharedSketchProjectionTargetPoints(namespace);}
+      else{namespace=f.splineNamespace().namespace;if(failure==='workspace')f.workspaceState.fail='workspace';operation=()=>f.editing.synchronizeSketchProjectionMetadata();}
+      assert.throws(operation,error=>error===(failure==='workspace'?f.scopeMarker:f.marker));
+      return JSON.parse(JSON.stringify({namespace,seq:f.ids.peek('point')}));};assert.deepEqual(run(true),run(false),failure);
   }
 });

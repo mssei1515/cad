@@ -7,7 +7,6 @@
 
   const {
     CSS_PX_PER_MM, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
-    normalizeAppearance,
   } = window.Appearance;
   const {
     drawingOrderOwner,
@@ -92,7 +91,7 @@
     sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
   } = sketchContext;
 
-  const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
+  const { geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
   const { services: geometryReadServices, createEditingScope, createPersistence } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
@@ -204,7 +203,6 @@
   const offsetSelection = window.OffsetFeature.createSelectionForEditing({
     editingScope: editingScopeBinding, sketches: sketchContext, selection: canvasSelection,
   });
-  const { nextSeq } = window.GeometryIds;
   const constraintRebinding = window.ConstraintRebinding.create({
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
@@ -386,9 +384,8 @@
     hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
   });
   const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
-  const sketchProjectionEditing = window.SketchProjectionEditing.create({
-    currentScope: workspace.current, queries: sketchProjectionQueries, resolveGeometryRef, geometryRefForItem, geometryKindForItem,
-    constraintSketchId, constraintIsOperational, addPointToSketch, constraintReferencesPoint, nextSeq, normalizeAppearance,
+  const sketchProjectionEditing = sketchProjectionFeature.createModelEditing({
+    geometry: geometryCreation, references: constraintReferences,
   });
   const { separateSharedSketchProjectionTargetPoints, synchronizeSketchProjectionMetadata } = sketchProjectionEditing;
   const authoringTools = createAuthoringTools({
