@@ -61,6 +61,23 @@
     return Object.freeze({ stabilizeDocument, createApplication });
   }
 
+  function createForWorkspace({ documentWorkspace, editingScope, blocks, history, checkpoint, parameters,
+    storedDefinitions, presentation, acceptError, loadDocument, clearSelection }) {
+    const { document: documentModel, workspace, sketches, parameters: namespace } = documentWorkspace;
+    const { applicationText } = presentation.settings;
+    const support = createEditingSupport({ namespace, currentScope: workspace.current, acceptError, applicationText,
+      readEditingScope: () => editingScope.current, readBlockEditor: () => blocks.session.current,
+      snapshotDocument: history.captureDocument, snapshotValues: checkpoint.captureValues, restoreValues: checkpoint.restoreValues,
+      loadDocument, readDocumentName: () => documentModel.documentName,
+      stabilizeNamespace: parameters.stabilize, stabilizeStoredNamespace: storedDefinitions.stabilize,
+      activeSketchId: sketches.activeSketchId, isRootSketch: sketches.isRootSketch });
+    const propagation = blocks.createPropagation({ clearSelection, applicationText,
+      stabilizeDefinition: storedDefinitions.stabilize, stabilizeDocument: support.stabilizeDocument });
+    const { createApplication } = support;
+    const application = createApplication({ propagate: propagation.propagate });
+    return Object.freeze({ ...support, propagation, application });
+  }
+
   // Guard symbol removal shared by Geometry, Sketch, Block and annotation edits.
   function createDeletionGuard({ currentNamespace, symbolDeletionDependents, readLanguage, setHint, log }) {
     function guard(constraints, namespace = currentNamespace()) {
@@ -75,5 +92,5 @@
     }
     return Object.freeze({ guard });
   }
-  window.ParameterApplication = Object.freeze({ create, createEditingSupport, createDeletionGuard });
+  window.ParameterApplication = Object.freeze({ create, createEditingSupport, createForWorkspace, createDeletionGuard });
 })();

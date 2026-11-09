@@ -447,19 +447,11 @@
     acceptError: CONSTRAINT_ACCEPT_ERROR, recordHistory, resetDimensionDrag: () => dimensionDrag.reset(), addDistanceConstraintFromTarget,
   });
   const { submit: submitDistanceValue } = dimensionValueCommand;
-  const { stabilizeDocument: stabilizeDocumentParameters, createApplication: createParameterApplication } = window.ParameterApplication.createEditingSupport({
-    namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
-    readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
-    snapshotDocument: historySnapshot, snapshotValues: snapshotModelState, restoreValues: restoreModelState,
-    loadDocument: loadModelData, readDocumentName: () => documentModel.documentName,
-    stabilizeNamespace: stabilizeActiveParameterNamespace, stabilizeStoredNamespace: storedDefinitionStabilization.stabilize,
-    activeSketchId, isRootSketch,
+  const { stabilizeDocument: stabilizeDocumentParameters, application: parameterApplication } = window.ParameterApplication.createForWorkspace({
+    documentWorkspace, editingScope: editingScopeBinding, blocks: blockEditingFeature, history: historyFeature, checkpoint: editingCheckpoint,
+    parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization, presentation,
+    acceptError: CONSTRAINT_ACCEPT_ERROR, loadDocument: loadModelData, clearSelection,
   });
-  const blockParameterPropagation = blockEditingFeature.createPropagation({
-    clearSelection, applicationText,
-    stabilizeDefinition: storedDefinitionStabilization.stabilize, stabilizeDocument: stabilizeDocumentParameters,
-  });
-  const parameterApplication = createParameterApplication({ propagate: blockParameterPropagation.propagate });
   const centerlineCommand = authoringTools.createCenterline({
     commitNewConstraint,
     parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,

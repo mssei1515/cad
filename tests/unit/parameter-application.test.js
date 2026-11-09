@@ -163,3 +163,97 @@ test("parameter editing capture errors escape before draft mutation and recovery
   assert.throws(() => f.application.apply(f.session, () => assert.fail("no commit")), error => error === marker);
   assert.equal(f.scope.parameters, original); assert.deepEqual(f.events.map(event => event[0]), ["editor", "document snapshot"]);
 });
+
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/parameters/block_propagation.js'), 'utf8'), sandbox);
+function workspaceFixture(composed, options) {
+  'use strict';
+  options ||= {};
+  const events = [], marker = new Error('workspace parameter failure');
+  const scope = { parameters: [], sketches: [{ id: 'ROOT', root: true }, { id: 'S1' }] };
+  const child = { id: 'child', parentDefinitionId: 'parent', revision: 0, parameters: [] }, parent = { id: 'parent', revision: 0 };
+  const state = { workspace: scope, editing: scope, editor: options.block ? {} : null, active: 'S1', name: 'Before', failure: options.failure };
+  const check = name => { events.push(name); if (state.failure === name) throw marker; };
+  const raw = (name, work) => function (...args) { assert.equal(this, undefined); check(name); return work?.(...args); };
+  const namespace = { expressionFromUserInput(value) { assert.equal(this, namespace); check('expression'); return value; },
+    ensureParameterNamespace() { assert.equal(this, namespace); check('normalize'); } };
+  const current = raw('workspace', () => state.workspace);
+  const sketches = { activeSketchId: raw('active', () => state.active), isRootSketch: raw('root', item => Boolean(item.root)) };
+  const documentModel = { get documentName() { check('name'); return state.name; } };
+  const documentWorkspace = { document: documentModel, workspace: { current }, sketches, parameters: namespace };
+  const editingScope = { get current() { check('editing'); return state.editing; } };
+  const session = { get current() { check('editor'); return state.editor; } };
+  const parameters = { stabilize: raw('stabilize', (id, input) => { assert.equal(id, state.active); assert.deepEqual(Array.from(input.allSketches), ['S1']); return { success: true, result: { errorNorm: 0 } }; }) };
+  const storedDefinitions = { stabilize() {
+    if (this !== undefined) assert.equal(this.stabilize, storedDefinitions.stabilize);
+    check('stored'); return { success: true, result: { errorNorm: 0 } };
+  } };
+  const history = { captureDocument: raw('snapshot', () => JSON.stringify({ name: state.name })) };
+  const local = Object.freeze({ original: scope.parameters });
+  const checkpoint = { captureValues: raw('values', () => local), restoreValues: raw('restore', value => { assert.equal(value, local); }) };
+  const loadDocument = raw('load', (data, input) => { assert.equal(data.name, 'Before'); assert.equal(input.documentNameFallback, state.name); });
+  const clearSelection = raw('clear');
+  const presentation = { settings: { applicationText: (_ja, en) => en } };
+  let actualPropagation;
+  const blocks = { session, createPropagation(input) {
+    assert.equal(this, blocks); check('create propagation');
+    assert.equal(input.stabilizeDefinition, storedDefinitions.stabilize); assert.equal(input.clearSelection, clearSelection);
+    const catalog = { blockDefinitionById(id) { assert.equal(this, catalog); check('parent'); assert.equal(id, 'parent'); return parent; } };
+    const definitions = { rebuild() { assert.equal(this, definitions); check('rebuild'); }, stabilize: input.stabilizeDefinition };
+    return actualPropagation = sandbox.window.BlockParameterPropagation.create({
+      catalog, invalidateProjection: raw('invalidate'), definitions,
+      document: { rebuild() { check('document'); clearSelection(); }, stabilize: input.stabilizeDocument }, applicationText: input.applicationText });
+  } };
+  const ports = { documentWorkspace, editingScope, blocks, history, checkpoint, parameters, storedDefinitions, presentation,
+    acceptError: 1, loadDocument, clearSelection };
+  let support;
+  if (composed) support = sandbox.window.ParameterApplication.createForWorkspace(ports);
+  else {
+    const previous = sandbox.window.ParameterApplication.createEditingSupport({ namespace, currentScope: current, acceptError: 1,
+      applicationText: presentation.settings.applicationText, readEditingScope: () => editingScope.current, readBlockEditor: () => session.current,
+      snapshotDocument: history.captureDocument, snapshotValues: checkpoint.captureValues, restoreValues: checkpoint.restoreValues,
+      loadDocument, readDocumentName: () => documentModel.documentName, stabilizeNamespace: parameters.stabilize,
+      stabilizeStoredNamespace: storedDefinitions.stabilize, activeSketchId: sketches.activeSketchId, isRootSketch: sketches.isRootSketch });
+    const propagation = blocks.createPropagation({ clearSelection, applicationText: presentation.settings.applicationText,
+      stabilizeDefinition: storedDefinitions.stabilize, stabilizeDocument: previous.stabilizeDocument });
+    const { createApplication } = previous;
+    support = { ...previous, propagation, application: createApplication({ propagate: propagation.propagate }) };
+  }
+  assert.deepEqual(events, ['create propagation']); assert.equal(support.propagation, actualPropagation); events.length = 0;
+  return { state, scope, child, parent, marker, events, support,
+    apply(stored = false, committed = () => check('commit')) { return support.application.apply({ namespace: stored ? child : scope, parameters: [{ name: ' width ', expression: '12' }], dimensions: [] }, committed); },
+    snapshot() { return JSON.parse(JSON.stringify({ events, scope, child, parent, name: state.name })); } };
+}
+
+test('workspace parameter composition preserves cold construction and actual outward Block propagation before commit', () => {
+  for (const composed of [false, true]) assert.throws(() => workspaceFixture(composed, { failure: 'create propagation' }), /workspace parameter failure/);
+  const run = composed => { const f = workspaceFixture(composed, { block: true });
+    assert.equal(f.apply(true).success, true); assert.equal(f.child.revision, 1); assert.equal(f.parent.revision, 1);
+    assert.deepEqual(f.events.slice(-8), ['document', 'clear', 'active', 'editing', 'root', 'root', 'stabilize', 'commit']);
+    return f.snapshot(); };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('workspace parameter composition keeps Workspace and editing scope separate and reads replacement scopes and active Sketch live', () => {
+  const run = composed => { const f = workspaceFixture(composed); assert.equal(f.apply().success, true);
+    f.state.workspace = {}; f.state.editing = { sketches: [{ id: 'S1' }] }; f.state.active = 'S1';
+    const before = f.events.length; assert.equal(f.apply().success, true);
+    assert.ok(f.events.slice(before).includes('stored')); assert.ok(f.events.slice(before).includes('document'));
+    return f.snapshot(); };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('workspace parameter composition preserves capture failures, local or Document recovery and propagation partial state', () => {
+  for (const block of [false, true]) for (const failure of ['editor', block ? 'values' : 'snapshot', 'expression', 'normalize', 'editing', 'stored', 'workspace', 'invalidate', 'parent', 'rebuild', 'document', 'clear', 'active', 'root', 'stabilize', 'commit']) {
+    const run = composed => { const f = workspaceFixture(composed, { block, failure }); let outcome;
+      try { const value = f.apply(true); outcome = { success: value.success, original: value.error === f.marker }; }
+      catch (error) { assert.equal(error, f.marker); outcome = 'escaped'; }
+      assert.ok(outcome === 'escaped' || outcome.original, failure); return { outcome, snapshot: f.snapshot() }; };
+    assert.deepEqual(run(true), run(false), `${block}/${failure}`);
+  }
+  for (const block of [false, true]) {
+    const run = composed => { const f = workspaceFixture(composed, { block });
+      const result = f.apply(false, () => { f.events.push('commit'); f.state.name = 'Changed during commit'; f.state.editor = block ? null : {}; throw f.marker; });
+      assert.equal(result.error, f.marker); return f.snapshot(); };
+    assert.deepEqual(run(true), run(false), `editor changed during commit/${block}`);
+  }
+});
