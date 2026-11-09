@@ -118,8 +118,7 @@
     clearSelection, updateGeometrySelectionUI, draw,
   });
   const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection,
-    access: sketchEditAccess, pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
-  const { guardSketchEdit } = sketchEditAccess;
+    pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -405,7 +404,7 @@
   });
   const { solveSketchAndDependents } = sketchSolving;
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
-  const { fillet: filletCommand, createCircleCenterCross, createSplineEditing } = authoringTools.createEditing({
+  const { fillet: filletCommand, createCircleCenterCross, createSplineEditing, createCenterline, createTrim } = authoringTools.createEditing({
     checkpoint: editingCheckpoint, solving: sketchSolving, parameters: parameterStabilization, analysis: constraintAnalysis,
     editingScope: editingScopeBinding, solver, placement: dimensionPlacement, valueInput: dimensionInputController,
     projection: sketchProjectionFeature, acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -435,10 +434,9 @@
     parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization, presentation,
     acceptError: CONSTRAINT_ACCEPT_ERROR, loadDocument: loadModelData, clearSelection,
   });
-  const centerlineCommand = authoringTools.createCenterline({
+  const centerlineCommand = createCenterline({
     commitNewConstraint,
     parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
-    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { start: startCenterlineCommand, projectPointToCenterlineSupport } = centerlineCommand;
   const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreview({
@@ -1116,10 +1114,8 @@
 
 
 
-  const trimFeature = authoringTools.createTrim({
-    references: constraintReferences, checkpoint: editingCheckpoint, hitSketchIdentityElement, guardSketchEdit, guardSketchProjectionShapeEdit,
-    stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    invalidateAnalysis: () => constraintAnalysis.invalidate(), refreshConstraintAnalysis,
+  const trimFeature = createTrim({
+    references: constraintReferences, hitSketchIdentityElement,
   });
 
   const { presentCandidate: canvasContextCandidatePresentation, createInteraction: createCanvasContextInteraction } = createCanvasContextScene({

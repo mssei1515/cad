@@ -789,8 +789,8 @@ function editingToolStagesFixture(composed, failAt = null, construction = []) {
   }
  }});
  parent.state.ready=false;
- let fillet,createCircleCenterCross,createSplineEditing;
- if(composed)({fillet,createCircleCenterCross,createSplineEditing}=parent.tools.createEditing(common));
+ let fillet,createCircleCenterCross,createSplineEditing,editors;
+ if(composed){editors=parent.tools.createEditing(common);({fillet,createCircleCenterCross,createSplineEditing}=editors);}
  else {
   const {activeSketchId}=parent.owners.documentWorkspace.sketches,{stabilize}=parameters;
   fillet=parent.tools.createFillet({defaultDimensionForTarget:common.placement.defaultDimensionForTarget,syncLineOrientationHints:()=>solver.syncLineOrientationHints?.(),
@@ -813,7 +813,7 @@ function editingToolStagesFixture(composed, failAt = null, construction = []) {
   return JSON.stringify({calls,ids:parent.ids.snapshot(),points:scope.points.map(p=>[p.id,p.x,p.y]),lines:scope.lines.map(l=>[l.id,l.p1.id,l.p2.id]),
    arcs:scope.arcs.map(a=>[a.id,a.radiusValue]),constraints:scope.constraints.map(c=>c.constructor.name),splines:scope.splines.map(s=>s.fitPoints.map(p=>p.id))});
  }
- return {...parent,state,calls,captured,actual,construction,common,fillet,cross,spline,snapshot};
+ return {...parent,state,calls,captured,actual,construction,common,fillet,cross,spline,editors,snapshot};
 }
 
 test('authoring editing stages keep real Fillet, cross and Spline construction cold and separate while sharing existing owners',()=>{
@@ -895,6 +895,91 @@ test('authoring editing stages preserve constructor and live callback error iden
   }
   const f=editingToolStagesFixture(composed),error=new Error('refresh');f.state.failure=error;
   assert.throws(()=>f.captured.FilletFeature.refreshConstraintAnalysis(),value=>value===error);
+ }
+});
+
+function laterAuthoringEditorsFixture(composed, failAt = null, constructors = []) {
+ const f=editingToolStagesFixture(composed),{common}=f,ports={},actual={},w=f.w;
+ f.state.ready=false;f.state.parent.ready=false;
+ f.owners.sessions.preview.setTrim=function(value){assert.equal(this,f.owners.sessions.preview);assert.equal(f.state.ready,true);f.calls.push(['trim-preview',value]);};
+ const references=w.ConstraintReferences.create({resolveGeometryRef:()=>null});
+ const trimInput={references,hitSketchIdentityElement:(x,y,options)=>{assert.equal(f.state.ready,true);f.calls.push(['hit',x,y,options.allowInactiveGeometry]);return {sketchId:f.state.parent.sketch};}};
+ const centerInput={parallelTolerance:1e-4,commitNewConstraint:function(type,constraint){
+  assert.equal(this,undefined);assert.equal(f.state.ready,true);f.calls.push(['commit',type,constraint.constructor.name]);
+  if(f.state.failure)throw f.state.failure;
+  f.ports.pushModelConstraint(constraint);if(f.state.success)f.ports.recordHistory('centerline');return f.state.success;
+ }};
+ const names=['CenterlineCommand','TrimFeature'],originals=Object.fromEntries(names.map(name=>[name,w[name]]));
+ for(const name of names)w[name]={...w[name],create(options){constructors.push(name);ports[name]=options;if(failAt?.name===name)throw failAt.error;return actual[name]=originals[name].create(options);}};
+ let centerline,trim;
+ try{
+  centerline=composed?f.editors.createCenterline(centerInput):f.tools.createCenterline({...centerInput,invalidateAnalysis:()=>{common.analysis.invalidate();}});
+  assert.deepEqual(constructors,['CenterlineCommand']);assert.deepEqual(f.calls,[]);
+  trim=composed?f.editors.createTrim(trimInput):f.tools.createTrim({...trimInput,checkpoint:common.checkpoint,
+   guardSketchEdit:f.owners.interaction.access.guardSketchEdit,guardSketchProjectionShapeEdit:common.projection.guardSketchProjectionShapeEdit,
+   stabilizeActiveParameterNamespace:common.parameters.stabilize,acceptError:common.acceptError,
+   invalidateAnalysis:()=>common.analysis.invalidate(),refreshConstraintAnalysis:(options={})=>common.analysis.refresh(options)});
+ }finally{for(const name of names)w[name]=originals[name];}
+ assert.deepEqual(f.calls,[]);f.state.ready=true;f.state.parent.ready=true;
+ return {...f,centerline,trim,latePorts:ports,lateActual:actual,trimInput,centerInput,constructors};
+}
+
+test('later authoring editors share actual Trim/Centerline and common owners without early reads or collapsing Workspace into bound scope',()=>{
+ for(const composed of [false,true]){
+  const f=laterAuthoringEditorsFixture(composed);
+  assert.deepEqual(f.constructors,['CenterlineCommand','TrimFeature']);
+  assert.equal(f.centerline,f.lateActual.CenterlineCommand);assert.equal(f.trim,f.lateActual.TrimFeature);
+  const p=f.latePorts.TrimFeature;
+  assert.equal(p.checkpoint,f.common.checkpoint);assert.equal(p.references,f.trimInput.references);
+  assert.equal(p.guardSketchEdit,f.owners.interaction.access.guardSketchEdit);
+  assert.equal(p.guardSketchProjectionShapeEdit,f.common.projection.guardSketchProjectionShapeEdit);
+  assert.equal(p.stabilizeActiveParameterNamespace,f.common.parameters.stabilize);assert.equal(p.acceptError,f.common.acceptError);
+  f.state.bound=f.w.DocumentState.create();assert.equal(p.currentScope(),f.state.parent.scope);assert.notEqual(p.currentScope(),f.common.editingScope.current);
+  f.state.result={token:true};assert.equal(f.latePorts.CenterlineCommand.invalidateAnalysis(),undefined);
+  assert.equal(p.invalidateAnalysis(),f.state.result);assert.equal(p.refreshConstraintAnalysis(),f.state.result);
+  const options={force:true};assert.equal(p.refreshConstraintAnalysis(options,'ignored'),f.state.result);assert.equal(f.calls.at(-1)[1],options);
+ }
+});
+
+test('later Trim editor preserves real line trimming, checkpoint/ID rollback, guard rejection and solver exception partial state',()=>{
+ for(const scenario of ['accepted','rejected','projection-refused','edit-refused','solver-threw']){
+  const results=[];
+  for(const composed of [false,true]){
+   const f=laterAuthoringEditorsFixture(composed),g=f.foundation.geometry,scope=f.state.parent.scope;
+   const line=(x1,y1,x2,y2)=>g.addLine(g.addPoint(x1,y1,false,'endpoint'),g.addPoint(x2,y2,false,'endpoint'));
+   const target=line(0,0,30,0);line(10,-10,10,10);line(20,-10,20,10);const originalEnd=target.p2;
+   f.state.success=scenario!=='rejected';f.state.projectionAllowed=scenario!=='projection-refused';f.state.editable=scenario!=='edit-refused';
+   const error=new Error('solve');f.state.failure=scenario==='solver-threw'?error:null;
+   if(f.state.failure)assert.throws(()=>f.trim.execute({x:15,y:0}),value=>value===error);
+   else assert.equal(f.trim.execute({x:15,y:0}),scenario==='accepted');
+   const kept=scenario==='accepted'||scenario==='solver-threw';assert.equal(scope.lines.length,kept?4:3);
+   assert.equal(target.p2===originalEnd,!kept);assert.equal(f.calls.filter(c=>c[0]==='history').length,scenario==='accepted'?1:0);
+   assert.equal(f.calls.some(c=>c[0]==='restoreGeometry'),scenario==='rejected');results.push(f.snapshot());
+  }
+  assert.equal(results[1],results[0],scenario);
+ }
+});
+
+test('later Centerline editor preserves real constraint construction, commit refusal rollback and exception identities',()=>{
+ for(const scenario of ['accepted','refused','commit-threw']){
+  const results=[];
+  for(const composed of [false,true]){
+   const f=laterAuthoringEditorsFixture(composed),g=f.foundation.geometry,scope=f.state.parent.scope;
+   const a=g.addPoint(0,0,false,'endpoint'),b=g.addPoint(100,0,false,'endpoint'),ids=f.ids.snapshot();
+   assert.equal(f.centerline.prepare([a,b]),true);f.centerline.click({x:50,y:-20});const first=f.centerline.firstPoint;
+   f.state.success=scenario!=='refused';const marker=new Error('commit');f.state.failure=scenario==='commit-threw'?marker:null;
+   if(f.state.failure)assert.throws(()=>f.centerline.click({x:50,y:20}),error=>error===marker);else f.centerline.click({x:50,y:20});
+   assert.equal(scope.lines.length,scenario==='refused'?0:1);
+   assert.equal(f.calls.filter(c=>c[0]==='history').length,scenario==='accepted'?1:0);
+   if(scenario==='accepted'){assert.ok(scope.constraints[0] instanceof f.w.GeometrySolver.PointPairCenterlineConstraint);assert.equal(scope.lines[0].p1.x,50);assert.equal(f.centerline.firstPoint,null);}
+   if(scenario==='refused'){assert.deepEqual(f.ids.snapshot(),ids);assert.equal(f.centerline.firstPoint,first);}
+   results.push(f.snapshot());
+  }
+  assert.equal(results[1],results[0],scenario);
+ }
+ for(const composed of [false,true])for(const [index,name]of ['CenterlineCommand','TrimFeature'].entries()){
+  const constructors=[],error=new Error(name);assert.throws(()=>laterAuthoringEditorsFixture(composed,{name,error},constructors),value=>value===error);
+  assert.deepEqual(constructors,['CenterlineCommand','TrimFeature'].slice(0,index+1));
  }
 });
 

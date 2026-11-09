@@ -116,7 +116,16 @@
           return tools.createSplineEditing({ editingScope, checkpoint, parameters, analysis, access: interaction.access,
             guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion });
         }
-        return Object.freeze({ fillet, createCircleCenterCross, createSplineEditing });
+        function createCenterline({ commitNewConstraint, parallelTolerance }) {
+          return tools.createCenterline({ commitNewConstraint, parallelTolerance, invalidateAnalysis: () => { analysis.invalidate(); } });
+        }
+        function createTrim({ references, hitSketchIdentityElement }) {
+          return tools.createTrim({ references, checkpoint, hitSketchIdentityElement, guardSketchEdit: interaction.access.guardSketchEdit,
+            guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit,
+            stabilizeActiveParameterNamespace: stabilize, acceptError, invalidateAnalysis: () => analysis.invalidate(),
+            refreshConstraintAnalysis: (options = {}) => analysis.refresh(options) });
+        }
+        return Object.freeze({ fillet, createCircleCenterCross, createSplineEditing, createCenterline, createTrim });
       }
       return Object.freeze({ ...tools, createEditing });
     }
