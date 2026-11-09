@@ -45,7 +45,6 @@
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
-    SplineSplineTangentConstraint,
     SketchProjectionConstraint,
     ConstraintSolver,
   } = window.GeometrySolver;
@@ -103,7 +102,6 @@
     activeSketchId, assignSketchId,
     elementSketchId, canEditSketch,
     sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
-    isActiveSketchElement, isEditableSketchElement,
   } = sketchContext;
 
   const { geometryKindForItem, geometryRefForItem, geometryIdForItem: constraintGeometryId, geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
@@ -954,7 +952,7 @@
   function updateToolbar() { toolbarView.update(); }
 
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
-    createCommitForWorkspace: createConstraintCommit, createFixedEditing, constraintTargetHint,
+    createCommitWithIntentForWorkspace: createConstraintCommit, createFixedEditing, constraintTargetHint,
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging },
     controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForEditing({
     document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, sketches: sketchContext, presentation,
@@ -1159,7 +1157,7 @@
 
   function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
-  const { command: constraintCommitCommand, readOnly: dimensionReadOnlyQuery, createIntentResolver: createConstraintIntentResolver } = createConstraintCommit({
+  const { command: constraintCommitCommand, readOnly: dimensionReadOnlyQuery, intentResolver: constraintIntentResolver } = createConstraintCommit({
     workspace, checkpoint: editingCheckpoint, insertion: constraintInsertion, redundancy: constraintRedundancy,
     solving: sketchSolving, stabilization: parameterStabilization, referenceState: referenceConstraintState,
     solvePreparation: constraintSolvePreparation, lineCollapseQuery, acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -1168,10 +1166,6 @@
   function commitNewConstraint(...args) { return constraintCommitCommand.ordinary(...args); }
   function markReferenceConstraint(...args) { return constraintCommitCommand.markReference(...args); }
 
-  const constraintIntentResolver = createConstraintIntentResolver({
-    operands: constraintOperandValues, types: { PointOnSplineConstraint, SplineLineTangentConstraint, SplineSplineTangentConstraint },
-    isActiveSketchElement, isEditableSketchElement,
-  });
   function resolveConstraintIntent(type, operands) { return constraintIntentResolver.resolve(type, operands); }
 
 

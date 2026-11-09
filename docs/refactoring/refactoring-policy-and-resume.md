@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,640行、非空白1,191行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の最新単位ではapp.jsは1,634行、非空白1,185行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,7 +97,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
-### 最新：Canvas hit sceneと矩形選択のowner接続（2026-11-10、検証完了）
+### 最新：拘束確定と意図解決の生成境界（2026-11-10、検証完了）
+
+ConstraintEditing.createForEditingがcreateCommitWithIntentForWorkspaceを提供する。既存createCommitForWorkspaceで実ConstraintCommitCommand／寸法factory／read-only queryを生成した直後、同じeditingが保持するcandidates・operand values・Sketch照会・参照循環検証・feedbackとGeometrySolverの三Spline拘束型で実ConstraintIntentResolverを生成する。返す凍結APIは従来の実command／readOnly／個別createIntentResolverに実intentResolverを加える。裸のcreateIntentResolverを呼び、receiver・引数・戻り値を維持する。appの二生成の間はhoisted関数宣言だけだったため、constructorの実行順と既存生成引数を変えず一構築へまとめる。通常／参照／Splineの意図解決、拒否順、Geometry参照、求解・復元・履歴・performanceの所有は元モジュールに残す。既存createCommitForWorkspace／createIntentResolverとraw Commit／Intent APIを維持し、model／session／lastPerformance／候補state・listenerを追加しない。
+
+app.jsは1,640→1,634行（6行減）、非空白1,191→1,185行。rootのcreate系構築123→122文。意図解決器の追加四入力（operand・types・active／editable照会）を共有owner内へ閉じ、rootの三aliasを除いた。PointOnSpline／SplineLine型のroot aliasは既存test hook専用として残る。TEMP cad-constraint-commit-intent-proof.cjsで他app／既存ConstraintEditing／raw Commit・Intent AST不変、元の二生成間は関数宣言のみ、既存commit生成引数不変、未使用root bindingなしを確認した。数百行への全体目標は未完了。
+
+関連単体34件、構文627file・全単体2,220件・関連E2E357件が成功（21file、5.8m、exit 0）。実Commit／寸法factory／read-only query／Intentを旧接続と比較する三件を追加し、cold constructor順、同じ候補・operand・guard・API、三Spline拘束の実型と参照、live先祖参照／編集権限／循環、Selectionからの確定と求解失敗の復元・履歴・計測、constructor／guard例外の同一性と後続処理停止を検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-constraint-commit-intent-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。今回の関連検証を、直前9d3f3cbの全E2E589件成功の代替とは扱わない。
+
+基準developは9d3f3cb。作業branchはcodex/constraint-commit-intent。開始時週枠残量55%。mainは停止条件到達時まで17d4cb0に保持する。直前の全E2E589件成功（21.1m）は9d3f3cbの証跡であり、今回変更後の関連検証と区別する。DimensionDisplayは既に配置／layout／painter／Traversal／Previewを共有し、今回調べた追加窓口は薄い中継になるため見送った。次は残る構築groupと初期化・bindの境界を再監査し、setter-only adapter／巨大contextを増やさず実ownerをまとめる。
+
+### 直前：Canvas hit sceneと矩形選択のowner接続（2026-11-10、検証完了）
 
 CanvasHitInteraction.createSceneForWorkspaceが、DocumentWorkspaceのWorkspace／Sketch／Parameter、GeometryReadServicesのGeometry／外観／Block／Hatch、CanvasInteractionのpoint usage／Selection／scope／Lifecycle、OperationSessionsと同じviewportをsceneへ接続する。寸法の表示scopeは明示入力とし、通常Geometry／region／instanceのWorkspaceと区別する。型に依存する寸法target query、Hatch外観、描画順owner、画像座標変換とbox判定は既存namespaceを使う。返すsceneは従来のpolicy／createQueriesを保持し、後段createRectangleSelectionで同じ読取り・可視性・Selectionへ実RectangleSelectionFeatureを接続する。矩形のcurrentScopeは寸法表示scope、Instance矩形のGeometry readsはWorkspace由来のまま。dimension boundsは従来のTraversal生成後に渡し、policy→query群→後段矩形の生成位置と順を変えない。広いSelection消去は明示callbackに残し、pointer capture解除のmember receiverと例外を握りつぶす既存処理、裸のhint／UI／draw参照を維持する。判定・矩形session・Selection更新のアルゴリズムと所有者は既存モジュールに残し、model／query cache／session／listenerを複製しない。
 

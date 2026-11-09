@@ -172,7 +172,16 @@
         wouldCreateReferenceCycle: referenceState.wouldCreateReferenceCycle, sketchName, now,
       });
     }
-    return Object.freeze({ ...editing, createCommitForWorkspace });
+    function createCommitWithIntentForWorkspace(options) {
+      const commit = createCommitForWorkspace(options);
+      const { createIntentResolver } = commit;
+      const { PointOnSplineConstraint, SplineLineTangentConstraint, SplineSplineTangentConstraint } = window.GeometrySolver;
+      const intentResolver = createIntentResolver({ operands: values,
+        types: { PointOnSplineConstraint, SplineLineTangentConstraint, SplineSplineTangentConstraint },
+        isActiveSketchElement: sketches.isActiveSketchElement, isEditableSketchElement: sketches.isEditableSketchElement });
+      return Object.freeze({ ...commit, intentResolver });
+    }
+    return Object.freeze({ ...editing, createCommitForWorkspace, createCommitWithIntentForWorkspace });
   }
   function createDimensionValues({ parameters, sketches, interaction, pending, valueInput, checkpoint, presentation,
     annotationFeature, modelQueries, stabilization, viewport, bounds, placement, synchronizedInstanceEditing,
