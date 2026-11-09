@@ -1,5 +1,13 @@
 # Composition rootの残存責務と依存監査
 
+## Pointerフレーム処理とpending寸法同期（2026-11-10）
+
+CanvasInteractionFeatureのoperation sessionが公開するcreateMoveSchedulerは、同じPendingCommandSessionを共有して実PointerMoveSchedulerを生成する。preview計測の内側でGeometry read cache→後段input bindingのprocessMove→最新pendingのdistance-value／offset-value判定→寸法入力同期を従来どおり実行する。request／cancel frame、計測、cache、後段input reader、同期だけを明示portとして受け、裸callbackとinput実体のmember receiver、返値と例外を維持する。構築中にinput／pending／DOMを読まず、inputの後段生成をgetterで接続する。PointerMoveSchedulerが引き続きqueue・frame ID・coalescing・flush／discard・統計を所有し、sessionは重複queueやcacheを作らない。旧scheduler API、pointer bind、描画、履歴、保存形式、性能閾値を変更しない。
+
+app.jsは1,602→1,600行（2行減）、非空白1,153→1,151行。行数よりも、pointerフレームの処理順とpending判定をsession側へ集約し、rootから操作状態に依存するフレーム処理本体を除くことを優先した。TEMP cad-pointer-frame-processing-proof.cjsで他root／既存CanvasInteraction AST、raw scheduler／pending不変、未使用root bindingなし、直接入力が初期化済みであることを確認した。全体の数百行目標は未完了。
+
+関連単体21件、構文627file・全単体2,238件・全E2E589件が成功（50file、21.5m、exit 0）。実sessionと実PointerMoveSchedulerを使う旧接続との比較三件を追加し、cold生成・後段input binding・callback receiver、最新入力の一frame統合、input後のpending再読取り、同期flush／discard・再入queue・統計、七段階の例外同一性と消費済みmoveを再実行しないことを検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-pointer-frame-processing-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。共通pointer処理変更後の現物で全体検証を実施した。数百行への全体目標の完了とは区別する。
+
 ## Offset source選択とCanvas選択同期のowner接続（2026-11-10）
 
 OffsetFeature.createSelectionForEditingは、実OffsetSelectionを従来の早期生成位置で一つ生成し、その実APIを返す。editingScope.currentとSketchContextのactive／element／constraint所属照会、既存GeometrySolverのLine／Arcと四つの拘束型を接続する。source更新後の通知は同じCanvasSelection.applyOffsetSelectionへ同じsource実体を渡し、member receiver・返値・例外を維持する。Workspace.currentと最後にbindしたeditingScope.currentを統合せず、モデル・Sketch・Selectionは操作時に読み、生成時に読まない。source／Chain配列・確定flag、端点接続・向き・閉鎖判定・拒否・resetは既存OffsetSelection、Canvas選択は既存CanvasSelectionが所有する。後段Offset command／preview／lifecycle／診断も同じsource実体を使い、追加のstate・cache・listenerやsetter中継を作らない。既存OffsetFeature.createとraw OffsetSelection.createは維持する。

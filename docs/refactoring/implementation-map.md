@@ -8,6 +8,8 @@ app.jsのローカルaliasと委譲関数は、実際の接続またはテスト
 
 ## 1. 実装ファイルの責務
 
+- CanvasInteractionFeatureのoperation sessionが公開するcreateMoveSchedulerは、同じPendingCommandSessionを共有して実PointerMoveSchedulerを生成する。preview計測の内側でGeometry read cache→後段input bindingのprocessMove→最新pendingのdistance-value／offset-value判定→寸法入力同期を従来どおり実行する。request／cancel frame、計測、cache、後段input reader、同期だけを明示portとして受け、裸callbackとinput実体のmember receiver、返値と例外を維持する。構築中にinput／pending／DOMを読まず、inputの後段生成をgetterで接続する。PointerMoveSchedulerが引き続きqueue・frame ID・coalescing・flush／discard・統計を所有し、sessionは重複queueやcacheを作らない。旧scheduler API、pointer bind、描画、履歴、保存形式、性能閾値を変更しない。
+
 - OffsetFeature.createSelectionForEditingは、実OffsetSelectionを従来の早期生成位置で一つ生成し、その実APIを返す。editingScope.currentとSketchContextのactive／element／constraint所属照会、既存GeometrySolverのLine／Arcと四つの拘束型を接続する。source更新後の通知は同じCanvasSelection.applyOffsetSelectionへ同じsource実体を渡し、member receiver・返値・例外を維持する。Workspace.currentと最後にbindしたeditingScope.currentを統合せず、モデル・Sketch・Selectionは操作時に読み、生成時に読まない。source／Chain配列・確定flag、端点接続・向き・閉鎖判定・拒否・resetは既存OffsetSelection、Canvas選択は既存CanvasSelectionが所有する。後段Offset command／preview／lifecycle／診断も同じsource実体を使い、追加のstate・cache・listenerやsetter中継を作らない。既存OffsetFeature.createとraw OffsetSelection.createは維持する。
 
 - PresentationFeature.createStartupが実RuntimeVersionViewの生成と表示系の起動順を所有する。同じsettings・UI／Canvas更新・通知を使い、UI更新→描画→ログ→言語→theme→runtime metadata読取／表示→resize→Canvas開始の順で実行する。生成時にDOMや設定・metadataを読まず、UI／Canvasの後段bindを許す。言語／theme setterは元の裸関数参照、version loadとsurface startは元の実体をreceiverとして呼ぶ。設定値とmetadataは元の段階でliveに取得し、既定option・返値undefined・例外と途中状態を維持する。Document reset、履歴開始、保存checkpoint、File開始はappに残す。モデル・操作session・履歴・保存形式や新しい表示stateを追加せず、既存RuntimeVersionView／ApplicationSettings／Canvas APIを変更しない。

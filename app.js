@@ -266,13 +266,11 @@
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
 
 
-  const pointerMoveScheduler = window.PointerMoveScheduler.create({
+  const pointerMoveScheduler = operationSessions.createMoveScheduler({
     requestFrame: (callback) => requestAnimationFrame(callback),
     cancelFrame: (frame) => cancelAnimationFrame(frame),
-    processMove: (pointer) => profileInteractionPhase("preview", () => {
-      withGeometryReadCache(() => canvasInputBinding.processMove(pointer));
-      if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput();
-    }),
+    profilePhase: profileInteractionPhase, withGeometryReadCache,
+    readInput: () => canvasInputBinding, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
   const canvasViewControls = window.CanvasViewControls.create({ document, window, setHint, draw });

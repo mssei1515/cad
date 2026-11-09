@@ -322,3 +322,66 @@ test('editing keyboard preserves constructor and command failures without swallo
   }
  }
 });
+function frameFixture(composed, failure) {
+  'use strict';
+  const f = fixture(), frames = new Map(), trace = [], marker = new Error('frame processing failure');
+  let next = 0, input = null, afterMove = null;
+  const step = name => { trace.push(name); if (failure === name) throw marker; };
+  function requestFrame(callback) { assert.equal(this, undefined); step('request'); const id = next++; frames.set(id, callback); return id; }
+  function cancelFrame(id) { assert.equal(this, undefined); step('cancel'); frames.delete(id); }
+  function profilePhase(label, work) { assert.equal(this, undefined); assert.equal(label, 'preview'); step('phase'); const result = work(); step('phase end'); return result; }
+  function withGeometryReadCache(work) { assert.equal(this, undefined); step('cache'); const result = work(); step('cache end'); return result; }
+  function readInput() { assert.equal(this, undefined); step('input read'); assert.ok(input, 'late input binding'); return input; }
+  function syncDimensionValueInput() { assert.equal(this, undefined); step('sync'); }
+  const scheduler = composed ? f.sessions.createMoveScheduler({ requestFrame, cancelFrame, profilePhase, withGeometryReadCache, readInput, syncDimensionValueInput }) :
+    f.w.PointerMoveScheduler.create({ requestFrame, cancelFrame, processMove: pointer => profilePhase('preview', () => {
+      withGeometryReadCache(() => readInput().processMove(pointer));
+      if (f.sessions.pending.current && ['distance-value', 'offset-value'].includes(f.sessions.pending.current.type)) syncDimensionValueInput();
+    }) });
+  assert.deepEqual(trace, []); assert.equal(frames.size, 0);
+  function bind() {
+    const bound = { processMove(pointer) { assert.equal(this, bound); step('move'); trace.push(JSON.parse(JSON.stringify(pointer))); if (afterMove) afterMove(pointer); return marker; } }; input = bound; return bound;
+  }
+  return { ...f, scheduler, trace, frames, marker, bind, afterMove(fn) { afterMove = fn; },
+    tick() { const [id, callback] = frames.entries().next().value; frames.delete(id); callback(); },
+    result() { return JSON.parse(JSON.stringify({ trace, stats: scheduler.stats(), pending: f.sessions.pending.current, frames: frames.size })); } };
+}
+
+test('Canvas frame assembly creates the actual scheduler cold and coalesces copied input before late binding', () => {
+  const run = composed => {
+    const f = frameFixture(composed); assert.ok(Object.isFrozen(f.scheduler)); f.scheduler.resetStats();
+    const event = { offsetX: 1, offsetY: 2, shiftKey: false }; f.scheduler.schedule(event); event.offsetX = 99;
+    f.scheduler.schedule({ offsetX: 3, offsetY: 4, shiftKey: true }); assert.equal(f.frames.size, 1);
+    f.bind(); f.afterMove(() => f.sessions.pending.replace({ type: 'distance-value' })); f.tick();
+    assert.deepEqual(f.trace, ['request', 'phase', 'cache', 'input read', 'move', { offsetX: 3, offsetY: 4, shiftKey: true }, 'cache end', 'sync', 'phase end']);
+    assert.equal(f.scheduler.stats().coalescedMoves, 1); assert.equal(f.scheduler.stats().animationFrames, 1); return f.result();
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Canvas frame processing reads pending state after input and keeps synchronous flush, discard and reentrant moves', () => {
+  const run = composed => {
+    const f = frameFixture(composed); f.bind(); f.scheduler.resetStats();
+    f.sessions.pending.replace({ type: 'distance-value' }); f.afterMove(() => f.sessions.pending.clear());
+    f.scheduler.schedule({ offsetX: 1 }); assert.equal(f.scheduler.flush(), true); assert.ok(!f.trace.includes('sync'));
+    f.afterMove(() => f.sessions.pending.replace({ type: 'offset-value' }));
+    f.scheduler.schedule({ offsetX: 2 }); f.tick(); assert.equal(f.trace.filter(s => s === 'sync').length, 1);
+    f.scheduler.schedule({ offsetX: 3 }); assert.equal(f.scheduler.flush({ discard: true }), false);
+    f.afterMove(pointer => { f.sessions.pending.replace({ type: 'other' }); if (pointer.offsetX === 4) f.scheduler.schedule({ offsetX: 5 }); });
+    f.scheduler.schedule({ offsetX: 4 }); f.tick(); assert.equal(f.frames.size, 1); f.tick();
+    assert.equal(f.scheduler.flush(), false); assert.equal(f.scheduler.stats().processedMoves, 4); return f.result();
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Canvas frame assembly propagates stage failures without synchronizing or replaying an already consumed move', () => {
+  for (const failure of ['phase', 'cache', 'input read', 'move', 'cache end', 'sync', 'phase end']) {
+    const run = composed => {
+      const f = frameFixture(composed, failure); f.bind(); f.scheduler.resetStats(); f.sessions.pending.replace({ type: 'offset-value' });
+      f.scheduler.schedule({ offsetX: 1 }); assert.throws(() => f.tick(), error => error === f.marker);
+      assert.equal(f.scheduler.flush(), false); assert.equal(f.scheduler.stats().processedMoves, 1); assert.equal(f.trace.at(-1), failure);
+      return f.result();
+    };
+    assert.deepEqual(run(true), run(false), failure);
+  }
+});

@@ -19,6 +19,14 @@
         clearPreviewPointer: () => preview.setPointer(null), hideInput, setHint, updateToolbar, updateConstraintButtons, draw });
       const targets = window.ConstraintTargetSession.create({ acceptTarget });
       const pointer = window.PointerInteractionController.createSession();
+      function createMoveScheduler({ requestFrame, cancelFrame, profilePhase, withGeometryReadCache, readInput, syncDimensionValueInput }) {
+        return window.PointerMoveScheduler.create({ requestFrame, cancelFrame,
+          processMove: pointer => profilePhase("preview", () => {
+            withGeometryReadCache(() => readInput().processMove(pointer));
+            if (pending.current && ["distance-value", "offset-value"].includes(pending.current.type)) syncDimensionValueInput();
+          }),
+        });
+      }
       function createSelectionPresentation({ projections, constraintReferences }) {
         return selectionFeature.createPresentation({ hover, constraintTargets: targets, pointer, projections, constraintReferences, clearSnap });
       }
@@ -71,7 +79,7 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      return Object.freeze({ preview, pending, targets, pointer, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      return Object.freeze({ preview, pending, targets, pointer, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
     }
     return Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
       identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions });
