@@ -254,3 +254,71 @@ test('Canvas cancellation composition preserves constructor and operation failur
   }
  }
 });
+
+function editingKeyboardFixture(composed, probe = {}) {
+ const f=inputFixture(),{sessions:s,foundation:b,events,w,state}=f,listeners=new Map();
+ state.ready=false;
+ const stage=name=>{assert.equal(state.ready,true);events.push(name);if(state.failAt===name)throw state.error;};
+ const browser={addEventListener(name,listener){assert.equal(listeners.has(name),false);listeners.set(name,listener);},
+  removeEventListener(name,listener){assert.equal(listeners.get(name),listener);listeners.delete(name);}};
+ const constraints={cancel(message){assert.equal(this,constraints);assert.equal(arguments.length,1);assert.equal(message,undefined);stage('constraint-cancel');s.targets.reset();},
+  completeLineLength(){assert.equal(this,constraints);assert.equal(arguments.length,0);stage('complete');return Boolean(state.complete);}};
+ const spline={finalize(value){assert.equal(this,probe.operations);assert.equal(arguments.length,1);assert.equal(value,false);stage('spline-finish');},
+  removeLast(){assert.equal(this,probe.operations);assert.equal(arguments.length,0);stage('spline-remove');}};
+ const projection={commit(){assert.equal(this,probe.operations);assert.equal(arguments.length,0);stage('projection');}};
+ const hatch={finish(){assert.equal(this,probe.operations);assert.equal(arguments.length,0);stage('hatch');}};
+ const options={window:browser,menus:{closeSketch:()=>false,canvasVisible:()=>false},sketchMove:{active:false},constraintStatusView:{hold:()=>false},
+  dimensionInput:{handleKey:()=>false},shortcuts:{},referenceImage:{},splineEditing:{},blockPlacement:{},
+  offset:{canConfirmSelection:()=>true,confirmSelection:p=>{stage('offset-confirm');events.push(p);}},isTextEditingTarget:()=>false,deleteSelection:()=>false};
+ const original=w.KeyboardInput,controller=w.KeyboardInteractionController;
+ w.KeyboardInput={create(ports){probe.ports=ports;if(probe.constructError)throw probe.constructError;return probe.actual=original.create(ports);}};
+ w.KeyboardInteractionController={...controller,create(ports){probe.operations=ports.operations;return controller.create(ports);}};
+ let keyboard;
+ try{keyboard=composed?s.createKeyboardForEditing(f.inputs,{...options,constraints,spline,projection,hatch}):s.createKeyboard(f.inputs,{...options,projection,
+  cancelPendingCommand:message=>s.pending.cancel(message),cancelConstraintTargetCommand:message=>constraints.cancel(message),
+  completeLineLength:()=>constraints.completeLineLength(),finishSpline:spline.finalize,removeSplinePoint:spline.removeLast,finishProjection:projection.commit,finishHatch:hatch.finish});}
+ finally{w.KeyboardInput=original;w.KeyboardInteractionController=controller;}
+ assert.deepEqual(events,[]);assert.equal(listeners.size,0);state.ready=true;
+ function key(key){listeners.get('keydown')({key,target:{},preventDefault:()=>events.push('prevent')});}
+ return {...f,keyboard,probe,listeners,key,constraints,spline,projection,hatch};
+}
+
+test('editing keyboard keeps original callback receivers, arguments and live mode/pointer without eager listeners or state reads',()=>{
+ for(const composed of [false,true]){
+  const f=editingKeyboardFixture(composed),{sessions:s,foundation:b,events,keyboard,probe:{ports:p}}=f;
+  assert.equal(keyboard,f.probe.actual);assert.equal(p.pendingCommandSession,s.pending);assert.equal(p.constraintTargetSession,s.targets);assert.equal(p.readPointer,s.pointer.readLastPointer);
+  assert.equal(p.finishSpline,f.spline.finalize);assert.equal(p.removeSplinePoint,f.spline.removeLast);assert.equal(p.finishProjection,f.projection.commit);assert.equal(p.finishHatch,f.hatch.finish);
+  assert.equal(p.cancelPendingCommand.length,1);assert.equal(p.cancelConstraintTargetCommand.length,1);assert.equal(p.completeLineLength.length,0);
+  keyboard.start();keyboard.start();assert.equal(f.listeners.size,1);
+  for(const [mode,key,stage]of [['spline','Enter','spline-finish'],['spline','Backspace','spline-remove'],['sketch-projection','Enter','projection'],['hatch','Enter','hatch'],['hatch-repair','Enter','hatch']]){
+   b.lifecycle.setMode(mode);events.length=0;f.key(key);assert.deepEqual(events,['prevent',stage]);
+  }
+  const point={x:8,y:12};s.pointer.setLastPointer(point);b.lifecycle.setMode('offset');events.length=0;f.key('Enter');assert.deepEqual(events,['prevent','offset-confirm',point]);
+  b.lifecycle.setMode('select');f.state.complete=true;events.length=0;f.key('Enter');assert.deepEqual(events,['complete','prevent']);
+  keyboard.dispose();keyboard.dispose();assert.equal(f.listeners.size,0);
+ }
+});
+
+test('editing keyboard cancels the real pending session before the independent constraint command and retains callback capture timing',()=>{
+ for(const composed of [false,true]){
+  const f=editingKeyboardFixture(composed),{sessions:s,events}=f;f.keyboard.start();
+  s.pending.replace({type:'offset-value'});s.targets.begin('distance',[]);const command=s.targets.command;events.length=0;
+  f.key('Escape');assert.equal(s.pending.current,null);assert.equal(s.targets.command,command);
+  assert.deepEqual(events,['prevent','placement','offset','hide','hint','toolbar','buttons','draw']);
+  events.length=0;f.key('Escape');assert.equal(s.targets.command,null);assert.deepEqual(events,['prevent','constraint-cancel']);
+  f.spline.finalize=()=>{throw new Error('must use the originally captured callback');};
+  f.foundation.lifecycle.setMode('spline');events.length=0;f.key('Enter');assert.deepEqual(events,['prevent','spline-finish']);f.keyboard.dispose();
+ }
+});
+
+test('editing keyboard preserves constructor and command failures without swallowing the error or executing later effects',()=>{
+ for(const composed of [false,true]){
+  const constructError=new Error('keyboard construction');assert.throws(()=>editingKeyboardFixture(composed,{constructError}),value=>value===constructError);
+  for(const [mode,key,stage]of [['spline','Enter','spline-finish'],['spline','Backspace','spline-remove'],['sketch-projection','Enter','projection'],['hatch','Enter','hatch'],['select','Enter','complete'],['select','Escape','constraint-cancel']]){
+   const f=editingKeyboardFixture(composed),marker=new Error(stage);f.keyboard.start();f.foundation.lifecycle.setMode(mode);f.state.error=marker;f.state.failAt=stage;
+   if(stage==='constraint-cancel')f.sessions.targets.begin('distance',[]);const command=f.sessions.targets.command;f.events.length=0;
+   assert.throws(()=>f.key(key),value=>value===marker);assert.deepEqual(f.events,stage==='complete'?['complete']:['prevent',stage]);
+   assert.equal(f.sessions.targets.command,command);f.keyboard.dispose();
+  }
+ }
+});

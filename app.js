@@ -215,7 +215,7 @@
   });
   const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
     pointer: pointerInteractionController, createSelectionPresentation, createInputForEditing: createCanvasInputFeature,
-    bindEditingPointer: bindCanvasPointer, createKeyboard: createCanvasKeyboard } = operationSessions;
+    bindEditingPointer: bindCanvasPointer, createKeyboardForEditing: createCanvasKeyboard } = operationSessions;
   const constructionCommand = window.ConstructionCommand.create({
     cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
     synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), setHint, clearSelection, updateUI, draw, recordHistory,
@@ -460,7 +460,7 @@
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
   const { clear: clearSnap } = drawingSnap;
   function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
-  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation } = splineCommand;
+  const { start: beginSplineCreation } = splineCommand;
   const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, circular: circularCommands } = basicDrawingTools;
   const offsetFeature = authoringTools.createOffset({
@@ -1010,7 +1010,6 @@
   });
 
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
-  function completePendingDimensionLineLength() { return constraintTargetCommand.completeLineLength(); }
 
   function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
 
@@ -1365,12 +1364,9 @@
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
-    projection: sketchProjectionCommand,
+    projection: sketchProjectionCommand, constraints: constraintTargetCommand, spline: splineCommand, hatch: hatchCommand,
     referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
-    cancelPendingCommand, cancelConstraintTargetCommand,
-    finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
-    removeSplinePoint: removeLastSplineInputPoint, offset: offsetCommand,
-    deleteSelection: deleteCurrentSelection, completeLineLength: completePendingDimensionLineLength,
+    offset: offsetCommand, deleteSelection: deleteCurrentSelection,
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
   keyboardInput.start();
