@@ -277,7 +277,7 @@ test('Block lookup and parameter propagation share the current bound scope while
   assert.equal(f.workspace.current(),f.document);assert.equal(f.document.blockInstances[0],decoy);assert.equal(f.document.constraints.length,0);assert.ok(f.events.includes('shared-bound'));
 });
 
-function editingCommands(f, composed = true, overrides = {}) {
+function editingCommands(f, composed = true, overrides = {}, buildOwner = null) {
   let lateView;
   const state = { modeAllowed: true, creationAllowed: true, selectionAllowed: true, errors: 0, choiceResult: null };
   const drawing = w.DrawOperationLifecycle.createSession();
@@ -302,7 +302,7 @@ function editingCommands(f, composed = true, overrides = {}) {
       resultIsAccepted: ports.resultIsAccepted, sketches: { sketchName: ports.sketchName }, choiceDialog, blockLocalGeometryBounds: ports.blockLocalGeometryBounds,
       references: { constraintGraphNodes: ports.constraintGraphNodes }, acceptError: ports.acceptError,
       solveState: { setSketchSolveOk: ports.setSketchSolveOk, setSketchSolveError: ports.setSketchSolveError } };
-    return composed ? feature.createCommandsForEditing(options) : feature.createCommands(ports);
+    return buildOwner ? buildOwner(feature, options) : composed ? feature.createCommandsForEditing(options) : feature.createCommands(ports);
   });
   function replaceView() { const view = { closeDefinitions() { assert.equal(this, view); f.events.push('close-definitions'); },
     setEditorActive(active) { assert.equal(this, view); f.events.push(['editor-active', active]); } }; lateView = view; }
@@ -646,4 +646,80 @@ test("Block selection feature preserves constructor, reference, codec, label, pr
       assert.equal(f.calls.at(-1), failAt); assert.equal(JSON.stringify(f.document), before); assert.deepEqual(f.events, []);
     }
   }
+});
+
+
+function commandViewOwnersFixture(owned) {
+ const f=workspacePlacementFixture(true),state={generation:0,constructorFailure:false,prepareFailure:false,renderFailure:false,error:new Error('view owner')};
+ let view,api;const reads=[],listeners=[],elements={};
+ for(const id of ['blockList','blockOverlayTitle','blockEditorOverlay','blockEditorNameInput','blockEditorActions','openBlockDefinitionsBtn','completeBlockEditBtn','cancelBlockEditBtn','blockDefinitionsDialog']){
+  const element={value:'',hidden:false,style:{},dataset:{},classList:{toggle(){}},addEventListener(type,handler){listeners.push([id,type,handler]);},
+   close(){assert.equal(this,element);f.events.push('dialog-close');},showModal(){assert.equal(this,element);f.events.push('dialog-show');}};elements[id]=element;
+ }
+ const document={getElementById(id){reads.push(id);return elements[id]||null;},querySelectorAll:()=>[],body:{classList:{toggle(){}}}};
+ const localize=()=>f.events.push('localize');
+ function prepareBlocks(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);f.events.push('prepare');if(state.prepareFailure)throw state.error;return state;}
+ function updateView(){prepareBlocks();view.render();}
+ f.state.ready=false;f.state.bound=f.document;
+ const bundle=editingCommands(f,true,{},(feature,options)=>{
+  Object.assign(f.owners.interaction,options.interaction);Object.assign(f.owners.presentation,options.presentation);
+  f.owners.presentation.settings.localizeApplicationUI=localize;Object.assign(f.owners.documentWorkspace.sketches,options.sketches);
+  const {interaction,presentation,sketches,readView,updateBlockUI,...input}=options;
+  return api=owned?feature.createCommandsWithView({...input,prepareBlocks}):feature.createCommandsForEditing({...options,readView:()=>view,updateBlockUI:updateView});
+ });
+ assert.deepEqual(f.events,[]);assert.deepEqual(reads,[]);assert.deepEqual(listeners,[]);
+ const update=owned?bundle.updateView:updateView;
+ function publish(){
+  const original=w.BlockView;w.BlockView={create(input){assert.equal(this,w.BlockView);state.ports=input;if(state.constructorFailure)throw state.error;
+   const actual=original.create(input),generation=++state.generation;
+   const result={...actual,render(){assert.equal(this,result);f.events.push(['render',generation]);if(state.renderFailure)throw state.error;return actual.render();},
+    closeDefinitions(){assert.equal(this,result);f.events.push(['close',generation]);return actual.closeDefinitions();},
+    setEditorActive(active){assert.equal(this,result);f.events.push(['active',generation,active]);return actual.setEditorActive(active);}};
+   return Object.freeze(result);
+  }};
+  try{const {createView}=bundle;const result=createView({document,escapeHtml:String,startBlockPlacement:()=>{},...(!owned?{localizeApplicationUI:localize}:{})});view=result;return result;}
+  finally{w.BlockView=original;}
+ }
+ f.state.ready=true;return {...f,bundle,api,update,publish,viewState:state,reads,listeners,elements};
+}
+
+test('Block command View owner stays cold, shares preparation and later View, and preserves void rendering and failure order',()=>{
+ const traces=[];
+ for(const owned of [false,true]){
+  const f=commandViewOwnersFixture(owned);if(owned)assert.equal(Object.isFrozen(f.api),true);
+  f.publish();assert.deepEqual(f.events,[]);assert.deepEqual(f.reads,[]);assert.deepEqual(f.listeners,[]);
+  assert.equal(f.viewState.ports.refresh,f.update);
+  assert.equal(f.update(),undefined);assert.deepEqual(f.events.slice(0,2),['prepare',['render',1]]);
+  f.events.length=0;f.viewState.prepareFailure=true;assert.throws(()=>f.update(),error=>error===f.viewState.error);assert.deepEqual(f.events,['prepare']);
+  f.viewState.prepareFailure=false;f.viewState.renderFailure=true;f.events.length=0;assert.throws(()=>f.update(),error=>error===f.viewState.error);assert.deepEqual(f.events,['prepare',['render',1]]);
+  traces.push(JSON.stringify(f.events));
+ }
+ assert.equal(traces[1],traces[0]);
+});
+
+test('Block command View owner routes opening, cancellation and refresh to the latest completed View without replacing the editing session',()=>{
+ const traces=[];
+ for(const owned of [false,true]){
+  const f=commandViewOwnersFixture(owned),session=f.feature.session,first=f.publish(),second=f.publish();assert.notEqual(first,second);
+  const outer=scope('outer');f.geometry(outer);f.document.blockDefinitions.push(outer);f.events.length=0;
+  f.bundle.definition.enter('outer');f.update();assert.equal(f.feature.session,session);assert.ok(session.current);assert.notEqual(f.workspace.current(),f.document);
+  assert.ok(f.events.some(e=>Array.isArray(e)&&e[0]==='active'&&e[1]===2&&e[2]===true));
+  assert.equal(f.elements.blockEditorNameInput.hidden,false);assert.equal(f.elements.blockEditorNameInput.value,'outer');
+  f.bundle.definition.cancel();f.update();assert.equal(session.current,null);assert.equal(f.workspace.current(),f.document);assert.equal(f.elements.blockEditorNameInput.hidden,true);
+  assert.equal(f.document.blockDefinitions[0],outer);assert.equal(f.events.some(e=>e==='history'),false);
+  f.bundle.definition.startCreation();assert.ok(f.events.some(e=>Array.isArray(e)&&e[0]==='close'&&e[1]===2));f.bundle.definition.cancel();
+  traces.push(JSON.stringify(f.events));
+ }
+ assert.equal(traces[1],traces[0]);
+});
+
+test('Block command View owner retains the previously published View after constructor failure',()=>{
+ const traces=[];
+ for(const owned of [false,true]){
+  const f=commandViewOwnersFixture(owned);f.publish();f.viewState.constructorFailure=true;
+  assert.throws(()=>f.publish(),error=>error===f.viewState.error);f.events.length=0;assert.equal(f.update(),undefined);
+  assert.deepEqual(f.events.slice(0,2),['prepare',['render',1]]);assert.equal(f.feature.session.current,null);assert.equal(f.workspace.current(),f.document);
+  traces.push(JSON.stringify(f.events));
+ }
+ assert.equal(traces[1],traces[0]);
 });
