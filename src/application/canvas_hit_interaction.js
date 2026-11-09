@@ -86,6 +86,29 @@
     }
     return Object.freeze({ policy, createQueries });
   }
+  function createSceneForWorkspace({ documentWorkspace, readServices, interaction, sessions, viewport, dimensionScope,
+    dimensions, dimensionLabelForConstraint, annotationBounds, hitAnnotationElement, operandValues }) {
+    const { reads: geometryReads, catalog, projections, hatches, geometryAppearance, dimensionAppearance } = readServices;
+    const { sketches: sketchContext } = documentWorkspace;
+    const { readMode } = interaction.lifecycle;
+    const { hatchAppearanceForDisplay } = window.HatchData;
+    const scene = createScene({ currentScope: documentWorkspace.workspace.current, dimensionScope, viewport, pointUsage: interaction.pointUsage,
+      sketchContext, geometryAppearance, geometryReads, catalog, projections, hatches, dimensions,
+      effectiveDimensionAppearance: dimensionAppearance.effectiveDimensionAppearance, dimensionLabelForConstraint,
+      dimensionUsesExpression: documentWorkspace.parameters.dimensionUsesExpression, annotationBounds, hitAnnotationElement, hatchAppearanceForDisplay,
+      targetFromConstraint: window.DimensionQueries.targetFromConstraint, drawingOrderOwner: window.DrawingOrder.drawingOrderOwner,
+      referenceImageWorldToLocal: window.ReferenceImageGeometry.referenceImageWorldToLocal, pointInExpandedBox: window.GeometryBounds.pointInExpandedBox,
+      readMode, readPendingCommand: () => sessions.pending.current, readConstraintCommand: () => sessions.targets.command, operandValues });
+    function createRectangleSelection({ dimensionBounds, instanceSourceCommand, geometryInstanceCommand, sketchProjection, canvas, clearSelection, presentation }) {
+      return window.RectangleSelectionFeature.create({ currentScope: dimensionScope, viewport,
+        canvasSelection: interaction.selection, selectionScope: interaction.scope, sketches: sketchContext, pointUsage: interaction.pointUsage,
+        appearance: geometryAppearance, geometryReads, projections, hatches, dimensionBounds, annotationBounds, hatchAppearanceForDisplay,
+        readMode, instanceSourceCommand, geometryInstanceCommand, sketchProjection,
+        releasePointer: id => { try { canvas.releasePointerCapture(id); } catch (_) {} },
+        clearSelection, setHint: presentation.setHint, updateGeometrySelectionUI: presentation.updateGeometrySelectionUI, draw: presentation.draw });
+    }
+    return Object.freeze({ ...scene, createRectangleSelection });
+  }
   function create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint,
     geometry: { hitPoint, hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
     scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
@@ -109,5 +132,5 @@
 
     return Object.freeze({ press, hover });
   }
-  window.CanvasHitInteraction = Object.freeze({ create, createScene });
+  window.CanvasHitInteraction = Object.freeze({ create, createScene, createSceneForWorkspace });
 })();
