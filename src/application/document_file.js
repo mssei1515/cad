@@ -1,12 +1,25 @@
 /* Compose Document file commands, save status and browser controls. */
 (() => {
   "use strict";
+  function prepare() {
+    const session = window.DocumentFiles.create();
+    function createForWorkspace({ window: browserWindow, document, documentWorkspace, history, blockEditor, presentation, fit,
+      serializeModel, requestChoice, loadModelData, solveAndRefresh, repairMessage }) {
+      return create({ window: browserWindow, document, fileSession: session, applicationText: presentation.settings.applicationText,
+        readDocumentName: () => documentWorkspace.document.documentName, currentSnapshot: () => history.documentHistory.currentSnapshot,
+        isEditingBlock: () => Boolean(blockEditor.current), serializeModel, requestChoice, loadModelData, solveAndRefresh,
+        resetHistory: history.controller.resetDocument, fitAllGeometryToViewport: fit.fitAllGeometryToViewport,
+        repairMessage, setHint: presentation.setHint, log: presentation.log, draw: presentation.draw });
+    }
+    return Object.freeze({ session, createForWorkspace });
+  }
   function create({ window: browserWindow, document, fileSession, applicationText,
     readDocumentName, currentSnapshot, isEditingBlock, serializeModel, requestChoice,
     loadModelData, solveAndRefresh, resetHistory, fitAllGeometryToViewport, repairMessage, setHint, log, draw }) {
     const { effectiveDocumentNameFromValue, fileNameStem } = window.DocumentFiles;
+    function effectiveDocumentName() { return effectiveDocumentNameFromValue(readDocumentName()); }
     const status = window.DocumentStatusView.create({
-      document, applicationText, fileSession, getDocumentName: () => effectiveDocumentNameFromValue(readDocumentName()),
+      document, applicationText, fileSession, getDocumentName: effectiveDocumentName,
       currentSnapshot, isEditingBlock,
     });
     function refreshStatus() { status.render(); }
@@ -79,8 +92,8 @@
       if (started) browserWindow.removeEventListener("beforeunload", command.beforeUnload);
       started = false;
     }
-    return Object.freeze({ refreshStatus, markCheckpoint, createDxf, createDxfForEditing, bindControls: controls.bind, start, dispose,
+    return Object.freeze({ effectiveDocumentName, refreshStatus, markCheckpoint, createDxf, createDxfForEditing, bindControls: controls.bind, start, dispose,
       save: command.save, saveAs: command.saveAs, open: command.open, importFileData: command.importFileData });
   }
-  window.DocumentFileFeature = Object.freeze({ create });
+  window.DocumentFileFeature = Object.freeze({ create, prepare });
 })();

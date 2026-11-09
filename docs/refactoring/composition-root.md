@@ -1,5 +1,13 @@
 # app.jsを起動・接続専用にする継続作業
 
+## ファイル機能のSession準備とWorkspace接続（2026-11-10）
+
+DocumentFileFeature.prepareが従来の位置で実DocumentFiles Sessionを一つ生成し、同じsessionと後段createForWorkspaceを凍結APIとして返す。後段でDocumentWorkspaceの表示名、Historyのsnapshot／reset、Block editor、Presentationの翻訳・hint・log・draw、DrawingFitを接続し、従来どおりStatus→Bookmarks→FileCommand→Controlsを生成する。後段choice dialogとDocumentApplicationのrepair messageはappの遅延callbackに残す。FileSessionの値・checkpoint・保存／読込排他は従来のDocumentFilesが所有し、PNG／DXF／テストも同じ実sessionを共有する。表示名の正規化は既存create内のeffectiveDocumentNameに集約し、Statusと公開reader、appのPNG／testへ同じlive読取りを渡す。name／snapshot／Blockを生成時に読まず、裸のreset／fit／通知、読込・求解・history・checkpoint・status・fit・repairの順と例外・listenerのbind／start／dispose時機を維持する。既存create／DXF／FileCommand／Status／Controls APIと保存形式を維持し、新しいmodel・session・handle・排他state・listenerを追加しない。
+
+app.jsは1,634→1,626行（8行減）、非空白1,185→1,177行。FileSessionの生成とファイル機能の接続を既存ownerへ閉じ、後段の明示入力17→12項目へ減らした。表示名のroot実装と正規化aliasを除き、rootの読取りは実featureの公開APIへ接続する。TEMP cad-document-file-owners-proof.cjsで他app／名称reader抽出以外の既存FileFeature／raw Session・Command・Status・Controls AST不変、未使用root bindingなし、名称readerの全参照が後段初期化後、遅延callbackを除く入力の初期化済みを確認した。数百行への全体目標は未完了。
+
+関連単体12件、構文627file・全単体2,223件・関連E2E242件が成功（15file、3.2m、exit 0）。実FileSession／Status／Bookmarks／FileCommand／Controlsを旧接続と比較する三件を追加し、early Session→後段生成のcold順、共有sessionと実command、live表示名／history状態・unload保護、保存中のopen拒否、読込後のcheckpointと完了順、constructor／live reader／load失敗の境界とdisposeを検証した。696製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。TEMP cad-document-file-owners-{check,unit,e2e}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.json、proof.cjsに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。今回の関連検証を、9d3f3cbの全E2E589件成功の代替とは扱わない。
+
 ## 拘束確定と意図解決の生成境界（2026-11-10）
 
 ConstraintEditing.createForEditingがcreateCommitWithIntentForWorkspaceを提供する。既存createCommitForWorkspaceで実ConstraintCommitCommand／寸法factory／read-only queryを生成した直後、同じeditingが保持するcandidates・operand values・Sketch照会・参照循環検証・feedbackとGeometrySolverの三Spline拘束型で実ConstraintIntentResolverを生成する。返す凍結APIは従来の実command／readOnly／個別createIntentResolverに実intentResolverを加える。裸のcreateIntentResolverを呼び、receiver・引数・戻り値を維持する。appの二生成の間はhoisted関数宣言だけだったため、constructorの実行順と既存生成引数を変えず一構築へまとめる。通常／参照／Splineの意図解決、拒否順、Geometry参照、求解・復元・履歴・performanceの所有は元モジュールに残す。既存createCommitForWorkspace／createIntentResolverとraw Commit／Intent APIを維持し、model／session／lastPerformance／候補state・listenerを追加しない。

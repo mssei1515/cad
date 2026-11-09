@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict'); const fs = require('node:fs');
 const path = require('node:path'); const vm = require('node:vm'); const test = require('node:test');
-function fixture(extraFiles = []) {
+function fixture(extraFiles = [], build = (w, ports) => w.DocumentFileFeature.create(ports), createSession = w => w.DocumentFiles.create()) {
   const events = [], browser = new EventTarget(), nodes = Object.fromEntries(['exportBtn', 'saveAsBtn', 'importBtn', 'documentFileInput', 'dxfImportBtn', 'dxfFileInput'].map(id => [id, new EventTarget()]));
   nodes.documentFileInput.click = () => events.push('fileInput');
   nodes.dxfFileInput.click = () => events.push('dxf-input');
@@ -17,8 +17,8 @@ function fixture(extraFiles = []) {
   browser.addEventListener = (type, handler) => { events.push(['listen', type]); nativeListen(type, handler); };
   const sandbox = { window: {} }; vm.createContext(sandbox);
   for (const file of [...extraFiles, 'src/persistence/document_files.js', 'src/persistence/document_bookmarks.js', 'src/commands/document_file_command.js', 'src/ui/document_status_view.js', 'src/ui/document_file_controls.js', 'src/application/document_file.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
-  const session = sandbox.window.DocumentFiles.create();
-  const feature = sandbox.window.DocumentFileFeature.create({ window: browser, document, fileSession: session, applicationText: (_ja, en) => en,
+  const session = createSession(sandbox.window);
+  const feature = build(sandbox.window, { window: browser, document, fileSession: session, applicationText: (_ja, en) => en,
     readDocumentName: () => state.data.documentName, currentSnapshot: () => state.snapshot, isEditingBlock: () => state.block,
     serializeModel: () => { events.push('serialize'); return state.data; }, requestChoice: async options => state.choice ? state.choice(options) : 'discard',
     loadModelData(data, options) { events.push(['load', options.documentNameOverride]); if (state.failLoad) throw state.failLoad; state.data = { ...data, documentName: options.documentNameOverride }; },
@@ -174,5 +174,90 @@ test('DXF editing binds actual controls at the later stage and preserves flush, 
     assert.equal(await f.dxf.command.importFile(f.file), true); assert.equal(f.state.data.lines.length, 1); assert.equal(f.state.data.lines[0].p1, f.state.data.points[0]);
     assert.equal(f.events.filter(event => Array.isArray(event) && event[0] === 'dxf-history').length, 1); assert.equal(f.session.busy, false);
     controls.dispose(); f.events.length = 0; f.nodes.dxfImportBtn.dispatchEvent(new Event('click')); assert.deepEqual(f.events, []);
+  }
+});
+
+function fileOwnersFixture(composed, probe = {}) {
+  const order = [], ports = {}, results = {}, reads = [], restorations = [];
+  Object.assign(probe, { order, ports, results, reads, ready: false }); let prepared;
+  try {
+    const f = fixture([], (w, input) => {
+      order.push("between");
+      for (const [key, name] of [["readDocumentName", "name"], ["currentSnapshot", "snapshot"], ["isEditingBlock", "block"]]) {
+        const original = input[key]; input[key] = () => { assert.equal(probe.ready, true); reads.push(name); if (probe.failRead === name) throw probe.error; return original(); };
+      }
+      const options = { window: input.window, document: input.document,
+        documentWorkspace: { document: { get documentName() { return input.readDocumentName(); } } },
+        history: { documentHistory: { get currentSnapshot() { return input.currentSnapshot(); } }, controller: { resetDocument: input.resetHistory } },
+        blockEditor: { get current() { return input.isEditingBlock() ? {} : null; } },
+        presentation: { settings: { applicationText: input.applicationText }, setHint: input.setHint, log: input.log, draw: input.draw },
+        fit: { fitAllGeometryToViewport: input.fitAllGeometryToViewport }, serializeModel: input.serializeModel, requestChoice: input.requestChoice,
+        loadModelData: input.loadModelData, solveAndRefresh: input.solveAndRefresh, repairMessage: input.repairMessage };
+      probe.input = input; probe.options = options;
+      return composed ? prepared.createForWorkspace(options) : w.DocumentFileFeature.create(input);
+    }, w => {
+      for (const [name, method, label] of [["DocumentFiles", "create", "session"], ["DocumentStatusView", "create", "status"],
+        ["DocumentBookmarks", "create", "bookmarks"], ["DocumentFileCommand", "create", "command"], ["DocumentFileControls", "createDocument", "controls"]]) {
+        const original = w[name]; restorations.push(() => { w[name] = original; });
+        w[name] = { ...original, [method](input) { order.push(label); ports[label] = input; if (probe.failAt === label) throw probe.error; return results[label] = original[method](input); } };
+      }
+      prepared = composed ? w.DocumentFileFeature.prepare() : { session: w.DocumentFiles.create() };
+      return prepared.session;
+    });
+    assert.deepEqual(reads, []); assert.deepEqual(f.events, []); probe.ready = true;
+    return { ...f, prepared, probe };
+  } finally { for (const restore of restorations) restore(); }
+}
+
+test("file owners retain early shared Session and cold late Status, Bookmarks, Command and Controls construction without extra listeners", () => {
+  for (const composed of [false, true]) {
+    const f = fileOwnersFixture(composed), { ports, results, input } = f.probe;
+    assert.deepEqual(f.probe.order, ["session", "between", "status", "bookmarks", "command", "controls"]);
+    assert.equal(f.session, results.session); assert.equal(ports.status.fileSession, f.session); assert.equal(ports.command.fileSession, f.session);
+    assert.equal(ports.controls.documentFileCommand, results.command); assert.equal(f.feature.save, results.command.save);
+    assert.equal(f.feature.saveAs, results.command.saveAs); assert.equal(f.feature.importFileData, results.command.importFileData);
+    assert.equal(ports.status.getDocumentName, f.feature.effectiveDocumentName);
+    assert.equal(ports.command.setHint, input.setHint); assert.equal(ports.command.log, input.log);
+    assert.equal(Object.isFrozen(f.feature), true); if (composed) assert.equal(Object.isFrozen(f.prepared), true);
+    f.state.data.documentName = "  Live\nName  "; assert.equal(f.feature.effectiveDocumentName(), "Live Name");
+    f.feature.refreshStatus(); assert.equal(f.document.title, "Live Name - Jot2D");
+    f.state.data.documentName = " \t "; assert.equal(f.feature.effectiveDocumentName(), "無題");
+  }
+});
+
+test("prepared file owners preserve live history status, shared save exclusion, unload, import checkpoint and original completion order", async () => {
+  const traces = [];
+  for (const composed of [false, true]) {
+    const f = fileOwnersFixture(composed); f.feature.markCheckpoint("new"); f.events.length = 0;
+    f.session.beginSave(); f.browser.showOpenFilePicker = async () => assert.fail("busy shared Session must reject opening");
+    assert.equal(await f.feature.open(), false); assert.equal(f.session.savePending, true); f.session.finishSave();
+    f.feature.start(); f.state.data.points.push({ id: "P" }); f.feature.refreshStatus(); assert.equal(f.status.dataset.dirty, "false");
+    const unload = new Event("beforeunload", { cancelable: true }); f.browser.dispatchEvent(unload); assert.equal(unload.defaultPrevented, true);
+    f.state.snapshot = JSON.stringify(f.state.data); f.feature.refreshStatus(); assert.equal(f.status.dataset.dirty, "true");
+    f.events.length = 0; f.state.repair = "repaired";
+    assert.equal(await f.feature.importFileData({ name: "Part.jot2d", content: '{"documentName":"Stored","points":[]}' }), true);
+    assert.equal(f.feature.effectiveDocumentName(), "Part"); assert.equal(f.session.checkpointKind, "saved"); assert.equal(f.session.matchesCheckpoint(f.state.data), true);
+    assert.deepEqual(f.events, [["load", "Part"], ["solve", "ファイル読み込み"], ["history", "ファイル読み込み"], "serialize", "status", "status", "fit", "draw", ["hint", "repaired"], ["log", "ファイルを読み込みました: Part.jot2d"]]);
+    f.state.block = true; const blocked = new Event("beforeunload", { cancelable: true }); f.browser.dispatchEvent(blocked); assert.equal(blocked.defaultPrevented, true);
+    f.feature.dispose(); f.state.data.points.push({ id: "dirty-after-dispose" }); const disposed = new Event("beforeunload", { cancelable: true }); f.browser.dispatchEvent(disposed); assert.equal(disposed.defaultPrevented, false);
+    traces.push(JSON.stringify({ events: f.events, reads: f.probe.reads, status: f.status, title: f.document.title }));
+  }
+  assert.equal(traces[1], traces[0]);
+});
+
+test("file owner preparation and late construction keep failure boundaries; live reader and load failures retain original state and feedback", async () => {
+  const order = ["session", "between", "status", "bookmarks", "command", "controls"];
+  for (const composed of [false, true]) {
+    for (const failAt of order.filter(name => name !== "between")) {
+      const error = new Error(failAt), probe = { failAt, error }; assert.throws(() => fileOwnersFixture(composed, probe), value => value === error);
+      assert.deepEqual(probe.order, order.slice(0, order.indexOf(failAt) + 1)); assert.deepEqual(probe.reads, []);
+    }
+    for (const failRead of ["name", "snapshot", "block"]) {
+      const error = new Error(failRead), f = fileOwnersFixture(composed, { error }); f.probe.failRead = failRead;
+      assert.throws(() => f.feature.refreshStatus(), value => value === error); assert.equal(f.probe.reads.at(-1), failRead); assert.deepEqual(f.events, []);
+    }
+    const f = fileOwnersFixture(composed), before = f.state.data; f.state.failLoad = new Error("invalid");
+    assert.equal(await f.feature.importFileData({ name: "bad.jot2d", content: "{}" }), false); assert.equal(f.state.data, before);
+    assert.equal(f.session.checkpointKind, "new"); assert.deepEqual(f.events, [["load", "bad"], ["hint", "ファイル読み込みに失敗しました: invalid"], ["log", "ファイル読み込みに失敗しました: invalid"]]);
   }
 });

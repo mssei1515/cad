@@ -13,10 +13,7 @@
   const {
     drawingOrderOwner,
   } = window.DrawingOrder;
-  const {
-    fileNameStem,
-    effectiveDocumentNameFromValue,
-  } = window.DocumentFiles;
+  const { fileNameStem } = window.DocumentFiles;
 
   const {
     MIN_ORIENTATION_LENGTH,
@@ -132,7 +129,7 @@
   function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
   const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = constraintInsertion;
-  const fileSession = window.DocumentFiles.create();
+  const { session: fileSession, createForWorkspace: createDocumentFileFeature } = window.DocumentFileFeature.prepare();
 
   const canvasInteraction = window.CanvasInteractionFeature.create({
     sketches: sketchContext, readServices: geometryReadServices, constraintReferencesPoint, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
@@ -528,18 +525,13 @@
 
   const { localizedConstraintName } = constraintFeedback;
 
-  function effectiveDocumentName() {
-    return effectiveDocumentNameFromValue(documentModel.documentName);
-  }
 
-  const documentFileFeature = window.DocumentFileFeature.create({
-    window, document, fileSession, applicationText,
-    readDocumentName: () => documentModel.documentName, currentSnapshot: () => documentHistory.currentSnapshot,
-    isEditingBlock: () => Boolean(blockEditor.current), serializeModel, requestChoice: options => choiceDialog.show(options),
-    loadModelData, solveAndRefresh, resetHistory, fitAllGeometryToViewport,
-    repairMessage: () => documentApplication.blockConstraintRepairMessage, setHint, log, draw,
+  const documentFileFeature = createDocumentFileFeature({
+    window, document, documentWorkspace, history: historyFeature, blockEditor, presentation, fit: drawingFit,
+    serializeModel, requestChoice: options => choiceDialog.show(options), loadModelData, solveAndRefresh,
+    repairMessage: () => documentApplication.blockConstraintRepairMessage,
   });
-  const { refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint,
+  const { effectiveDocumentName, refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint,
     save: saveJot2DFile, saveAs: saveJot2DFileAs, importFileData } = documentFileFeature;
 
 
