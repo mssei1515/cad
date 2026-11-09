@@ -103,7 +103,30 @@
             drawExportOverlay: () => readPngCommand()?.drawOverlay(ctx, viewport.scale) });
           return Object.freeze({ frame, overlays });
         }
-        return Object.freeze({ ...scene, commandTargets, sketchStyle, createFrame });
+        function createHatchRendering({ readCommand }) {
+          const { Line, Circle, Arc, Spline } = window.GeometrySolver;
+          const { hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
+          const { isVisibleSketchId, isVisibleSketchElement, isVisibleValue } = readServices.geometryAppearance;
+          const { hatchBoundaryGeometryItems, resolvedHatchBoundary } = readServices.hatches;
+          const { visibleWorldBounds } = viewport;
+          const { drawLines, drawCircles, drawArcs, drawSplines } = scene.geometry;
+          const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport,
+            visibleWorldBounds: () => exportRenderer.frame?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
+          const layer = window.HatchRenderer.createLayer({ ctx, drawResolvedHatchContent, hatchBoundaryGeometryItems,
+            boundaryPainters: [{ type: Line, draw: drawLines }, { type: Circle, draw: drawCircles }, { type: Arc, draw: drawArcs }, { type: Spline, draw: drawSplines }],
+            allHatches: readServices.reads.allHatches, isVisibleSketchId, hatchAppearanceForDisplay,
+            isConstraintOperandSelected: commandTargets.isConstraintOperandSelected, canvasSelection: interaction.selection, activeSketchId: sketches.activeSketchId,
+            readHover: () => interaction.hover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(exportRenderer.frame),
+            sketchAlpha: sketchStyle.sketchAlpha, readMode: interaction.lifecycle.readMode, readCommand });
+          function drawHatches(...args) { return layer.drawHatches(...args); }
+          function createStack() {
+            return window.DrawingStack.create({ currentScope, activeSketchId: sketches.activeSketchId, geometryReads: readServices.reads,
+              isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
+              painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines } });
+          }
+          return Object.freeze({ layer, drawHatches, createStack });
+        }
+        return Object.freeze({ ...scene, commandTargets, sketchStyle, createFrame, createHatchRendering });
       }
       function createWorkspaceRendering(options) {
         return createRendering({ ...options, canvas, ctx, viewport, surface, zoomControl,

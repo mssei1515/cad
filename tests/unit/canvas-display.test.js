@@ -417,7 +417,7 @@ const sceneSandbox = { window: {} }; vm.createContext(sceneSandbox);
 const sceneSources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sceneSources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sceneSandbox, { filename: file });
 const sceneWindow = sceneSandbox.window;
-function sceneFixture(fromEditing = false) {
+function sceneFixture(fromEditing = false, configure = null) {
   const f = fixture(() => true, sceneWindow), reads = [], strokes = [], stack = [];
   const state = { active: 'S1', sidebar: null, language: 'en', failure: null,
     scope: Object.fromEntries(['points','lines','circles','arcs','splines','annotations','hatches','referenceImages'].map(key => [key, []])) };
@@ -456,6 +456,7 @@ function sceneFixture(fromEditing = false) {
       isDraggingCenter: () => { read('drag-center'); return false; }, editedSpline: () => { read('spline-edit'); return null; } },
     annotationBounds: () => { read('annotation-bounds'); return null; }, resolvedLoopBounds: () => { read('hatch-bounds'); return null; }, hatchAppearanceForDisplay: () => ({ visible: true }),
   };
+  configure?.({ f, state, sceneOptions, read });
   let scene, editing;
   if (fromEditing) {
     Object.assign(state, { mode:'select', operands:[], command:null, pending:null, panel:null, status:'under', sourceRefs:[], projected:[], reference:null });
@@ -814,5 +815,102 @@ test('scene frame keeps constructor and drawing exception identity and the origi
   const f=sceneFrameFixture(composed),error=new Error('export annotations');f.state.failAt='annotations';f.state.error=error;
   assert.throws(()=>f.workspace.exportRenderer.render({x:0,y:0,width:10,height:10},{x:2,y:2}),value=>value===error);
   assert.ok(f.workspace.exportRenderer.frame);assert.equal(f.stack.length,1);assert.deepEqual(f.operations.map(e=>e[0]),['images','hatches','stack','dimensions','annotations']);
+ }
+});
+
+function hatchStackSceneFixture(composed, probe = {}) {
+ let options;
+ const f=sceneFixture(true,({state,sceneOptions,read})=>{
+  options=sceneOptions;state.scope=sceneWindow.DocumentState.create();state.scope.sketches=[{id:'S1',name:'One'},{id:'S2',name:'Two'}];state.hidden=new Set();
+  sceneOptions.canvasSelection=sceneWindow.CanvasSelection.create();sceneOptions.canvasHover=sceneWindow.CanvasHover.create({isEndpointPoint:()=>false});
+  sceneOptions.readServices.reads.allHatches=()=>{read('hatches');return state.scope.hatches;};
+  sceneOptions.readServices.geometryAppearance.isVisibleSketchId=id=>{read('sketch-visible');return !state.hidden.has(id);};
+  sceneOptions.readServices.geometryAppearance.isVisibleSketchElement=item=>{read('element-visible');return item.visible!==false&&!state.hidden.has(item.sketchId);};
+  sceneOptions.readServices.hatches.resolvedHatchBoundary=hatch=>{read('boundary');if(state.boundaryFailure)throw state.boundaryFailure;return hatch.resolved;};
+  sceneOptions.readServices.hatches.hatchBoundaryGeometryItems=()=>{read('boundary-items');return state.boundaryItems??[];};
+ });
+ const {sceneState:state}=f,selection=f.editing.interaction.selection,hover=f.editing.interaction.hover,paints=[],fills=[];
+ f.state.ready=false;f.calls.length=0;f.reads.length=0;
+ f.ctx.clip=(...args)=>{assert.equal(f.state.ready,true);f.calls.push(['clip',...args]);};
+ const fill=f.ctx.fill;f.ctx.fill=(...args)=>{fills.push({color:f.ctx.fillStyle,alpha:f.ctx.globalAlpha});if(state.fillFailure)throw state.fillFailure;return fill(...args);};
+ state.command={regions:[],preview:null};state.commandReads=0;
+ function readCommand(){assert.equal(f.state.ready,true);state.commandReads++;return state.command;}
+ const originalHatch=sceneWindow.HatchRenderer,originalStack=sceneWindow.DrawingStack;
+ probe.order=[];probe.ports={};
+ sceneWindow.HatchRenderer={...originalHatch,create(ports){probe.order.push('content');probe.ports.content=ports;if(probe.failAt==='content')throw probe.error;return originalHatch.create(ports);},
+  createLayer(ports){probe.order.push('layer');probe.ports.layer=ports;if(probe.failAt==='layer')throw probe.error;return probe.layer=originalHatch.createLayer(ports);}};
+ sceneWindow.DrawingStack={create(ports){probe.order.push('stack');probe.ports.stack=ports;if(probe.failAt==='stack')throw probe.error;
+  const painters=Object.fromEntries(Object.entries(ports.painters).map(([name,paint])=>[name,(...args)=>{paints.push([name,...args]);return paint.apply(ports.painters,args);}]));
+  return probe.stack=originalStack.create({...ports,painters});}};
+ let rendering,stack;
+ try{
+  if(composed)rendering=f.scene.createHatchRendering({readCommand});
+  else{
+   const {Line,Circle,Arc,Spline}=sceneWindow.GeometrySolver,{hatchAppearanceForDisplay,hatchPatternOrigin}=sceneWindow.HatchData;
+   const {drawLines,drawCircles,drawArcs,drawSplines}=f.scene.geometry,{isVisibleSketchId,isVisibleSketchElement,isVisibleValue}=options.readServices.geometryAppearance;
+   const {visibleWorldBounds}=f.display.viewport;
+   const {drawResolvedHatchContent}=sceneWindow.HatchRenderer.create({viewport:f.display.viewport,visibleWorldBounds:()=>f.workspace.exportRenderer.frame?.worldBounds||visibleWorldBounds(),canvasThemeColor:options.canvasThemeColor,isVisibleValue});
+   const layer=sceneWindow.HatchRenderer.createLayer({ctx:f.ctx,drawResolvedHatchContent,hatchBoundaryGeometryItems:options.readServices.hatches.hatchBoundaryGeometryItems,
+    boundaryPainters:[{type:Line,draw:drawLines},{type:Circle,draw:drawCircles},{type:Arc,draw:drawArcs},{type:Spline,draw:drawSplines}],
+    allHatches:options.readServices.reads.allHatches,isVisibleSketchId,hatchAppearanceForDisplay,isConstraintOperandSelected:f.scene.commandTargets.isConstraintOperandSelected,canvasSelection:selection,
+    activeSketchId:options.sketches.activeSketchId,readHover:()=>hover.current,resolvedHatchBoundary:options.readServices.hatches.resolvedHatchBoundary,hatchPatternOrigin,
+    isExporting:()=>Boolean(f.workspace.exportRenderer.frame),sketchAlpha:f.scene.sketchStyle.sketchAlpha,readMode:f.editing.interaction.lifecycle.readMode,readCommand});
+   function drawHatches(...args){return layer.drawHatches(...args);}
+   rendering={layer,drawHatches,createStack:()=>sceneWindow.DrawingStack.create({currentScope:options.currentScope,activeSketchId:options.sketches.activeSketchId,geometryReads:options.readServices.reads,
+    isVisibleSketchId,isVisibleSketchElement,hatchAppearanceForDisplay,isVisibleValue,painters:{hatch:items=>drawHatches(items,{includePreview:false}),line:drawLines,circle:drawCircles,arc:drawArcs,spline:drawSplines}})};
+  }
+  assert.deepEqual(probe.order,['content','layer']);assert.deepEqual(f.reads,[]);probe.order.push('between');stack=rendering.createStack();
+ }finally{sceneWindow.HatchRenderer=originalHatch;sceneWindow.DrawingStack=originalStack;}
+ assert.deepEqual(f.reads,[]);assert.deepEqual(f.calls,[]);assert.equal(state.commandReads,0);f.state.ready=true;
+ const hatch=(id,sketchId='S1',drawingOrder=1)=>({id,sketchId,drawingOrder,appearance:{patternType:'solid',color:'#556677',opacity:0.5},
+  resolved:{ok:true,loops:[{points:[{x:0,y:0},{x:20,y:0},{x:20,y:20},{x:0,y:20}]}]}});
+ const line=(id,sketchId='S1',drawingOrder=2)=>Object.assign(new sceneWindow.GeometrySolver.Line(id,new sceneWindow.GeometrySolver.Point(id+'A',0,0),new sceneWindow.GeometrySolver.Point(id+'B',20,0)),{sketchId,drawingOrder});
+ return {...f,selection,hover,rendering,drawingStack:stack,probe,options,paints,fills,hatch,line};
+}
+
+test('scene Hatch and stack assembly shares real content, painter and query owners at separate cold construction stages',()=>{
+ for(const composed of [false,true]){
+  const f=hatchStackSceneFixture(composed),{ports:p}=f.probe;
+  assert.deepEqual(f.probe.order,['content','layer','between','stack']);assert.equal(f.rendering.layer,f.probe.layer);assert.equal(f.drawingStack,f.probe.stack);
+  assert.equal(p.layer.ctx,f.ctx);assert.equal(p.content.viewport,f.display.viewport);assert.equal(p.layer.canvasSelection,f.selection);
+  assert.equal(p.layer.isConstraintOperandSelected,f.scene.commandTargets.isConstraintOperandSelected);assert.equal(p.layer.sketchAlpha,f.scene.sketchStyle.sketchAlpha);
+  assert.equal(p.layer.hatchBoundaryGeometryItems,f.options.readServices.hatches.hatchBoundaryGeometryItems);
+  assert.equal(p.stack.geometryReads,f.options.readServices.reads);assert.equal(p.stack.isVisibleSketchElement,f.options.readServices.geometryAppearance.isVisibleSketchElement);
+  assert.equal(p.layer.boundaryPainters[0].type,sceneWindow.GeometrySolver.Line);assert.equal(p.layer.boundaryPainters[0].draw,f.scene.geometry.drawLines);
+  assert.equal(p.stack.painters.line,f.scene.geometry.drawLines);assert.equal(f.rendering.drawHatches.length,0);
+  const h=f.hatch('H1'),l=f.line('L1');f.sceneState.scope.hatches.push(h);f.sceneState.scope.lines.push(l);
+  f.drawingStack.drawDrawingStack();assert.deepEqual(f.paints.map(e=>e[0]),['hatch','line','circle','arc','spline']);
+  assert.equal(f.paints[0][1],f.sceneState.scope.hatches);assert.equal(f.paints[1][1][0],l);assert.equal(f.sceneState.commandReads,0);assert.equal(f.stack.length,0);
+ }
+});
+
+test('scene Hatch and stack composition preserves sorted batching, preview exclusion, live visibility/selection and export bounds',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=hatchStackSceneFixture(composed),h=f.hatch('H2','S2',7),l=f.line('L1','S1',1);f.sceneState.scope.hatches.push(h);f.sceneState.scope.lines.push(l);
+  f.sceneState.mode='hatch';f.sceneState.command.regions=[{resolved:h.resolved,selected:true}];
+  f.drawingStack.drawDrawingStack();assert.deepEqual(f.paints.map(e=>e[0]),['hatch','line']);assert.equal(f.sceneState.commandReads,0);
+  const order=f.drawingStack.drawingStackEntries().map(e=>[e.kind,e.item.id]);f.sceneState.hidden.add('S2');f.fills.length=0;f.rendering.drawHatches([h],{includePreview:false});assert.equal(f.fills.length,0);
+  f.sceneState.hidden.clear();h.sketchId='S1';f.selection.set('hatches',[h]);f.hover.update({hatch:h});f.fills.length=0;
+  f.rendering.drawHatches([h],{includePreview:false});const normal=f.fills[0];assert.ok(normal.color.includes('2563eb'));
+  f.rendering.drawHatches([],{includePreview:true});assert.ok(f.sceneState.commandReads>0);const reads=f.sceneState.commandReads;
+  f.workspace.exportRenderer.render({x:0,y:0,width:10,height:10},{x:2,y:2});assert.equal(f.probe.ports.content.visibleWorldBounds(),f.workspace.exportRenderer.frame.worldBounds);
+  f.fills.length=0;f.rendering.drawHatches([h]);const exported=f.fills[0];assert.ok(exported.color.includes('556677'));assert.equal(f.sceneState.commandReads,reads);
+  f.workspace.exportRenderer.restore();assert.equal(f.stack.length,0);
+  results.push(JSON.stringify({order,normal,exported,model:f.sceneState.scope}));
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('scene Hatch and stack keep constructor, query and paint failure identity and existing partial-state boundaries',()=>{
+ for(const composed of [false,true]){
+  for(const failAt of ['content','layer','stack']){const probe={failAt,error:new Error(failAt)};assert.throws(()=>hatchStackSceneFixture(composed,probe),value=>value===probe.error);
+   const order=['content','layer','between','stack'];assert.deepEqual(probe.order,order.slice(0,order.indexOf(failAt)+1));}
+  for(const failAt of ['scope','boundary','fill']){
+   const f=hatchStackSceneFixture(composed),error=new Error(failAt),model=f.sceneState.scope,h=f.hatch('H1');model.hatches.push(h);
+   if(failAt==='scope')f.sceneState.failure=error;else if(failAt==='boundary')f.sceneState.boundaryFailure=error;else f.sceneState.fillFailure=error;
+   assert.throws(()=>failAt==='scope'?f.drawingStack.drawDrawingStack():f.rendering.drawHatches([h]),value=>value===error);
+   assert.equal(f.sceneState.scope,model);assert.equal(model.hatches[0],h);assert.equal(f.stack.length,failAt==='fill'?1:0);
+  }
  }
 });

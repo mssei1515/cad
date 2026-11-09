@@ -5,7 +5,7 @@
   const { escapeHtml } = window.HtmlText;
   const { pointInExpandedBox, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageWorldToLocal } = window.ReferenceImageGeometry;
-  const { serializeHatch, hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
+  const { serializeHatch, hatchAppearanceForDisplay } = window.HatchData;
 
   const {
     CSS_PX_PER_MM, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
@@ -123,7 +123,7 @@
   const { effectiveAppearanceForElement, isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = geometryAppearance;
   const { effectiveDimensionAppearance } = dimensionAppearance;
   const { effectiveAnnotationStyle } = annotationAppearance;
-  const { hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems } = hatchGeometryQuery;
+  const { hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds } = blockCatalog;
   const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
@@ -342,7 +342,7 @@
     canvas, document, initialScale: CSS_PX_PER_MM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
     draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
-  const { worldToCanvasScreen, canvasPoint, visibleWorldBounds } = viewport;
+  const { worldToCanvasScreen, canvasPoint } = viewport;
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
@@ -366,8 +366,8 @@
   const { dimensionFromAnchor, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
-  const { commandTargets: commandTargetPresentation, sketchStyle: sketchPresentation, geometry: geometryDisplay,
-    overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit, createFrame: createCanvasFrame } = createCanvasScene({
+  const { sketchStyle: sketchPresentation, geometry: geometryDisplay,
+    overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit, createFrame: createCanvasFrame, createHatchRendering } = createCanvasScene({
     currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, interaction: canvasInteraction,
     targets: constraintTargetSession, pending: pendingCommandSession, solveState: sketchSolveResultState, analysis: constraintAnalysis,
     readPanelSelection: () => presentation.selectedItem, instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
@@ -379,9 +379,8 @@
       editedSpline: () => splineEditing.current?.spline },
     annotationBounds,
   });
-  const { isConstraintOperandSelected } = commandTargetPresentation;
-  const { constraintStatusColor, sketchStrokeWidth, sketchAlpha } = sketchPresentation;
-  const { geometryDisplayColor, traceSplinePath, drawLines, drawCircles, drawArcs, drawSplines } = geometryDisplay;
+  const { constraintStatusColor, sketchStrokeWidth } = sketchPresentation;
+  const { geometryDisplayColor, traceSplinePath } = geometryDisplay;
   const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { fitSketchToViewport, fitAllGeometryToViewport } = drawingFit;
@@ -390,13 +389,8 @@
     currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
   });
 
-  const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds: () => pngRendering.frame?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
-  const hatchLayer = window.HatchRenderer.createLayer({
-    ctx, drawResolvedHatchContent, hatchBoundaryGeometryItems,
-    boundaryPainters: [{ type: Line, draw: drawLines }, { type: Circle, draw: drawCircles }, { type: Arc, draw: drawArcs }, { type: Spline, draw: drawSplines }],
-    allHatches, isVisibleSketchId, hatchAppearanceForDisplay, isConstraintOperandSelected, canvasSelection, activeSketchId,
-    readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRendering.frame),
-    sketchAlpha, readMode: drawOperationLifecycle.readMode, readCommand: () => hatchCommand,
+  const { layer: hatchLayer, drawHatches, createStack: createDrawingStack } = createHatchRendering({
+    readCommand: () => hatchCommand,
   });
   const annotationFeature = createAnnotationFeature({
     ctx, viewport, surface: canvasSurface, editingScope: editingScopeBinding, sessions: operationSessions,
@@ -418,11 +412,7 @@
     isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
   const { renderer: referenceImageRenderer, interaction: referenceImageInteraction, input: referenceImageInput } = referenceImageFeature;
-  const { drawDrawingStack } = window.DrawingStack.create({
-    currentScope: workspace.current, activeSketchId, geometryReads,
-    isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
-    painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
-  });
+  const { drawDrawingStack } = createDrawingStack();
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const placementPreviewLayer = createPlacementPreview({
     geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer, readServices: geometryReadServices,
@@ -892,7 +882,6 @@
 
 
 
-  function drawHatches(...args) { return hatchLayer.drawHatches(...args); }
 
 
 
