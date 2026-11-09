@@ -261,3 +261,91 @@ test("file owner preparation and late construction keep failure boundaries; live
     assert.equal(f.session.checkpointKind, "new"); assert.deepEqual(f.events, [["load", "bad"], ["hint", "ファイル読み込みに失敗しました: invalid"], ["log", "ファイル読み込みに失敗しました: invalid"]]);
   }
 });
+
+(function () {
+"use strict";
+function ownedDxfFixture(composed, failConstructor = null) {
+ const f=fileOwnersFixture(true),w=f.w,trace=[],state={ready:false,allowed:true,active:false,pending:null,target:null,mode:'select',sketch:'S1',historyError:null};
+ for(const file of ['src/geometry/geometry_kernel.js','src/geometry/spline_geometry.js','src/solver/constraint_solver.js','src/editing/geometry_ids.js','src/editing/geometry_creation.js','src/persistence/dxf_import.js','src/commands/dxf_import_command.js']){
+  vm.runInNewContext(fs.readFileSync(file,'utf8'),{window:w});
+ }
+ Object.assign(f.state.data,{lines:[],circles:[],arcs:[],constraints:[]});
+ const ready=()=>assert.equal(state.ready,true,'no model/guard/notification reads during DXF construction');
+ const ids=w.GeometryIds.create(),workspace={current:()=>{ready();return f.state.data;}},sketches={activeSketchId:()=>{ready();return state.sketch;}};
+ const geometry=w.GeometryCreation.create({currentScope:workspace.current,ids,assignSketchId:item=>{ready();item.sketchId=state.sketch;},
+  currentConstruction:()=>false,minLineLength:1e-6,minArcLength:1e-6});
+ const parent=f.probe.options;
+ Object.assign(parent.documentWorkspace,{workspace,geometryIds:ids,sketches});
+ parent.history.record=function(label){assert.equal(this,parent.history);assert.equal(arguments.length,1);ready();f.events.push(['record',label]);if(state.historyError)throw state.historyError;return state.historyResult;};
+ parent.presentation.updateUI=()=>{ready();f.events.push('ui');};
+ const input={geometry,interaction:{access:{canCreateInActiveSketch:()=>{ready();trace.push('permission');return state.allowed;}},
+  lifecycle:{active:()=>{ready();trace.push('active');return state.active;},get mode(){ready();trace.push('mode');return state.mode;}}},
+  sessions:{pending:{get current(){ready();trace.push('pending');return state.pending;}},targets:{get command(){ready();trace.push('target');return state.target;}}},
+  minimumLength:1e-6,clearSelection:()=>{ready();f.events.push('clear');}};
+ const original=w.DxfImportCommand;let actual,ports;
+ w.DxfImportCommand={...original,create(options){ports=options;if(failConstructor)throw failConstructor;return actual=original.create(options);}};
+ let child;
+ try{
+  child=composed?f.feature.createDxfForWorkspace(input):f.feature.createDxfForEditing({...input,documentWorkspace:parent.documentWorkspace,
+   updateUI:parent.presentation.updateUI,recordHistory:function(label='変更'){return parent.history.record(label);}});
+ }finally{w.DxfImportCommand=original;}
+ assert.deepEqual(f.events,[]);assert.deepEqual(trace,[]);state.ready=true;
+ const file={size:100,name:'same.dxf',text:async()=>dxfText()};
+ const button=new EventTarget(),fileInput=Object.assign(new EventTarget(),{files:[],value:'',click:()=>f.events.push('input')});
+ f.nodes.dxfImportBtn=button;f.nodes.dxfFileInput=fileInput;
+ const snapshot=()=>JSON.stringify({events:f.events,trace,ids:ids.snapshot(),data:f.state.data,busy:f.session.busy,checkpoint:f.session.checkpointKind});
+ return {...f,documentState:f.state,state,child,actual,ports,input,file,button,fileInput,snapshot};
+}
+
+test('parent-owned DXF shares file Session, Document and actual command cold while retaining independent late control binding',()=>{
+ for(const composed of [false,true]){
+  const f=ownedDxfFixture(composed);
+  assert.equal(f.child.command,f.actual);assert.equal(f.ports.fileSession,f.session);
+  assert.equal(f.ports.ids,f.probe.options.documentWorkspace.geometryIds);
+  assert.equal(f.ports.currentScope,f.probe.options.documentWorkspace.workspace.current);
+  assert.equal(f.ports.activeSketchId,f.probe.options.documentWorkspace.sketches.activeSketchId);
+  f.button.dispatchEvent(new Event('click'));assert.deepEqual(f.events,[]);
+  const controls=f.child.bindControls({flushScheduledCanvasPointerMove:()=>f.events.push('flush')});
+  f.button.dispatchEvent(new Event('click'));assert.deepEqual(f.events,['flush','input']);
+  controls.dispose();f.events.length=0;f.button.dispatchEvent(new Event('click'));assert.deepEqual(f.events,[]);
+ }
+});
+
+test('parent-owned DXF preserves real import, history receiver, dirty checkpoint and live guard or scope refusals',async()=>{
+ for(const scenario of ['accepted','permission-refused','busy','scope-changed']){
+  const results=[];
+  for(const composed of [false,true]){
+   const f=ownedDxfFixture(composed);f.feature.markCheckpoint('saved');f.events.length=0;const original=f.documentState.data;
+   if(scenario==='permission-refused')f.state.allowed=false;
+   if(scenario==='busy')assert.equal(f.session.beginOpen(),true);
+   if(scenario==='scope-changed')f.documentState.choice=async()=>{f.documentState.data={documentName:'Other',points:[],lines:[],circles:[],arcs:[],constraints:[]};return 1;};
+   const file=scenario==='scope-changed'?{...f.file,text:async()=>dxfText(0)}:f.file;
+   assert.equal(await f.child.command.importFile(file),scenario==='accepted');
+   assert.equal(f.documentState.data.lines.length,scenario==='accepted'?1:0);
+   if(scenario==='accepted'){
+    assert.equal(f.documentState.data.lines[0].p1,f.documentState.data.points[0]);assert.equal(f.documentState.data.lines[0].sketchId,'S1');
+    assert.equal(f.session.matchesCheckpoint(f.documentState.data),false);assert.equal(f.session.checkpointKind,'saved');
+    assert.deepEqual(f.events.filter(e=>Array.isArray(e)&&e[0]==='record'),[['record','DXF読み込み']]);
+   }
+   if(scenario==='scope-changed')assert.equal(original.lines.length,0);
+   if(scenario==='busy')f.session.finishOpen();
+   assert.equal(f.session.busy,false);results.push(f.snapshot());
+  }
+  assert.equal(results[1],results[0],scenario);
+ }
+});
+
+test('parent-owned DXF preserves constructor and completion failure identity or handling without changing rollback and file exclusion',async()=>{
+ for(const composed of [false,true]){
+  const marker=new Error('DXF constructor');assert.throws(()=>ownedDxfFixture(composed,marker),error=>error===marker);
+ }
+ const results=[];
+ for(const composed of [false,true]){
+  const f=ownedDxfFixture(composed);f.state.historyError=new Error('history failed');
+  assert.equal(await f.child.command.importFile(f.file),false);assert.equal(f.session.busy,false);
+  assert.ok(f.events.some(e=>Array.isArray(e)&&e[0]==='hint'&&String(e[1]).includes('history failed')));
+  results.push(f.snapshot());
+ }
+ assert.equal(results[1],results[0]);
+});
+})();

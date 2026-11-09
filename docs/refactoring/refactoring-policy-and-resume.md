@@ -98,6 +98,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：DocumentとDXFの共有Workspace接続（2026-11-10）
+
+DocumentFileFeature.prepareのcreateForWorkspaceが、元のDocument／History／Presentationを保持したcreateDxfForWorkspaceを公開する。DXFの後段生成は同じraw createDxfForEditingへ委譲し、DocumentWorkspace・UI更新・履歴記録を親の実ownerから接続する。rootで二度目のDocumentWorkspaceを選択させず、Geometry・CanvasInteraction・操作session・最小長・Selection消去だけを後段入力とする。履歴委譲の既定label・一引数・member receiver・返値／例外は元のroot関数と一致させる。共有File Session、モデル更新・非同期guard再確認・rollback・dirty判定・controlの後段bind／disposeは既存ownerのまま維持する。
+
+app.jsは1,517→1,517行、非空白1,068→1,068行。DXF生成の入力は8→5項目。行数を減らすための整形や別の巨大bootstrap化は行っていない。新state・listener・Session・modelや汎用contextを追加せず、既存create／prepare／createForWorkspace／createDxf／createDxfForEditingと公開method参照を維持する。全体目標は未完了。
+
+TEMP cad-document-import-workspace-proof.cjsで、DXF呼出し以外のroot AST、残した五port、履歴delegateの既定値・関数body（captured owner名以外）、既存module API／DXF parser・command／FileControls・FileSession・index.html不変、未使用binding・新しい未束縛参照なしを確認した。三件の新旧比較では実DXF parser／import command／Geometryと共有File Sessionを使い、coldな生成・実API／IDs／scope・後段bind／dispose、取込と履歴receiver・checkpointのdirty化、permission／busy／待機中scope変更の拒否、constructor例外と完了通知失敗後の既存処理を検証する。
+
+Document load／snapshotとPNG renderingはそれぞれ既存のDocumentApplication／DocumentWorkspace／Canvas側に残す。File／Document／Canvasを一つの大きいcontextへ束ねる案は採用していない。次は残る構築groupと機能間接続を実ownerと生成phaseから検討し、委譲移動や入力の袋詰めだけで200〜500行に届いたと扱わない。
+
+関連単体15件、構文631file・全単体2,294件・関連E2E200件が成功（8file、2.8m、exit 0）。三件の新旧比較で実DXF取込と共有Session／Document／Geometry／IDs、cold生成と後段control bind／dispose、履歴receiver・一引数とdirty checkpoint、permission／busy／非同期scope変更の拒否、constructor例外と通知失敗後のrollback／busy復帰を確認した。699製品／test入力と開始HEAD不変、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-document-import-workspace-{focused,check,unit,e2e,proof,smoke}.log、source-hashes.json、selection.json、filter-environment.json、e2e-receipt.json、last-run.jsonに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。直近07f5936の全E2E589件成功（21.6m）とは別の今回変更後の関連検証であり、全体目標は未完了。
+
+基準developは4a29e62、作業branchはcodex/document-import-workspace。開始時週枠残量43%。直近の全E2E589件成功は07f5936（21.6m）の証跡で、今回変更後の関連検証と区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Workspace UIの準備と起動（2026-11-10）
 
 PresentationFeature.prepareWorkspaceControlsへ、連続していたWorkspace UIの接続・起動を集約した。prepareは既存editing binding→Canvas view controlsのbind→同じToolNavigation生成を行い、元のmenu close関数とstartを返す。rootはcloseAppMenusを受け取ってからstartを呼び、navigation start（menu→flyout）→layout bind→Parameter editor start→Appearance UI start→ApplicationSettings start→Block view bindの順を保つ。keyboard／window接続はこの前、drawing toolbar／file controls／PNG等はこの後のまま。各componentは既存の実体とlistener／stateを所有し、追加のglobal・model・listener・起動flagや汎用contextを作らない。

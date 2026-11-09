@@ -5,11 +5,17 @@
     const session = window.DocumentFiles.create();
     function createForWorkspace({ window: browserWindow, document, documentWorkspace, history, blockEditor, presentation, fit,
       serializeModel, requestChoice, loadModelData, solveAndRefresh, repairMessage }) {
-      return create({ window: browserWindow, document, fileSession: session, applicationText: presentation.settings.applicationText,
+      const feature = create({ window: browserWindow, document, fileSession: session, applicationText: presentation.settings.applicationText,
         readDocumentName: () => documentWorkspace.document.documentName, currentSnapshot: () => history.documentHistory.currentSnapshot,
         isEditingBlock: () => Boolean(blockEditor.current), serializeModel, requestChoice, loadModelData, solveAndRefresh,
         resetHistory: history.controller.resetDocument, fitAllGeometryToViewport: fit.fitAllGeometryToViewport,
         repairMessage, setHint: presentation.setHint, log: presentation.log, draw: presentation.draw });
+      function createDxfForWorkspace({ geometry, interaction, sessions, minimumLength, clearSelection }) {
+        function recordHistory(label = "変更") { return history.record(label); }
+        return feature.createDxfForEditing({ documentWorkspace, geometry, interaction, sessions, minimumLength, clearSelection,
+          updateUI: presentation.updateUI, recordHistory });
+      }
+      return Object.freeze({ ...feature, createDxfForWorkspace });
     }
     return Object.freeze({ session, createForWorkspace });
   }

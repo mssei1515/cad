@@ -619,9 +619,9 @@
     return documentApplication.load(data, options);
   }
 
-  const dxfImportFeature = documentFileFeature.createDxfForEditing({
-    documentWorkspace, geometry: geometryCreation, interaction: canvasInteraction, sessions: operationSessions,
-    minimumLength: MIN_LINE_LENGTH, clearSelection, updateUI, recordHistory,
+  const dxfImportFeature = documentFileFeature.createDxfForWorkspace({
+    geometry: geometryCreation, interaction: canvasInteraction, sessions: operationSessions,
+    minimumLength: MIN_LINE_LENGTH, clearSelection,
   });
 
   referenceImageInput.bindClipboard();
