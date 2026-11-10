@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の求解準備owner統合単位ではapp.jsは1,348行、非空白902行。AST監査ではroot288文・468束縛、構築・接続488非空白行、別名・設定120行、委譲42行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の作図checkpoint owner統合単位ではapp.jsは1,348行、非空白902行。AST監査ではroot288文・467束縛、構築・接続488非空白行、別名・設定120行、委譲42行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：作図用checkpointの遅延capture／restoreを生成ownerへ集約（2026-11-10）
+
+GeometryMutationFeature.prepareForWorkspace（src/application/geometry_mutation_feature.js）は、実TransientAuthoringと後段createCheckpointに加え、作図用geometryCheckpoint（capture／restore）の安定した凍結interfaceを返す。既存位置のcreateCheckpointが実EditingCheckpointを生成し、成功したcomponentだけをprivateに公開して、その実objectを従来どおり返す。geometryCheckpointは操作時に完成済みcomponentのcaptureGeometry／restoreGeometryを選び、元と同じ裸関数呼出しで全引数・返値・元例外を保つ。raw関数をmember呼出しへ変えず、snapshotやgeometryを複製しない。
+
+生成前は従来のsnapshotGeometryMutationState／restoreGeometryMutationStateの初期化前ReferenceErrorを維持する。初回の生成失敗では未初期化のまま、以後の生成失敗では以前の完成componentを保持する。同じ作図interfaceは次に成功したcomponentへ接続される。実EditingCheckpointの公開fieldは凍結された通常propertyであり、操作時の選択でも同じraw関数を得る。model値用captureValues／restoreValuesと、rootの実editingCheckpointの共有先は維持する。
+
+appは一時作図とcheckpointを準備する従来の位置で作図interfaceを受け、BasicDrawingToolsへ直接渡す。後段checkpoint生成の位置は変えず、rootの二つの遅延callbackと二つのGeometry snapshot別名を外す。Workspace.current、Geometry Object同一性・配列membership・ID、Transient rollbackとの独立性、履歴復元中の短絡、投影→解析の無効化順と失敗時の部分復元は既存EditingCheckpoint／TransientAuthoringが所有する。新しいmodel・snapshot形式・採番・session・listener・汎用app contextや外部代入setterは作らない。UI・操作・保存形式v26は不変。
+
+app.jsは1,348→1,348行（増減0）、非空白902行・root288文は不変、root束縛468→467。構築・接続488行、別名・設定120行、委譲42行、test hooks165行も不変。行数削減とは扱わず、遅延接続と実componentの生成・公開を同じownerへまとめ、root内の二つのcallbackと二つのGeometry snapshot別名を、一つの作図checkpoint依存へ整理した。目安200〜500行の全体目標は未完了。
+
+追加単体三件で、coldなinterfaceと初期化前の拒否・初回生成失敗、実checkpointと旧裸関数接続によるscope切替／Geometry復元・ID・Transient独立性、投影／解析無効化の元例外と部分復元、全引数・bare receiver・返値・例外、再生成失敗時の旧component保持と成功時の接続更新を確認する。rootは対象三編集以外が全文一致し、EditingCheckpoint／TransientAuthoring／BasicDrawingTools／indexは不変。自由識別子一覧不変と新しい未使用bindingなしを照合した。構文635file・全単体2,452件・関連単体7件・関連E2E407件が成功（33file、6.3m、exit 0）。関連E2E実行中の705入力と開始HEAD不変、選択33fileの一覧407件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-authoring-checkpoint-ownership-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直前4619cd2の全589件成功（22.1分）とは区別する。
+
+基準develop 4619cd2、作業branch codex/authoring-checkpoint-ownership、開始時週枠残量9%。直前4619cd2の全E2E589件成功（22.1分）と、今回の関連33file・407件の検証を区別する。全体E2Eは停止条件到達時の正式反映前に確認し、mainは最後に反映する。
 
 ### 最新：求解state・段階生成・更新入口を既存Solver機能ownerへ集約（2026-11-10）
 
