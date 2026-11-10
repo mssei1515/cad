@@ -88,7 +88,18 @@
           startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand, startGeometryInstanceCommand,
           filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation });
       }
-      return Object.freeze({ updateHistory: history.update, createControls, prepareControls, createEditingBinding, createDrawingBinding });
+      function prepareWorkspace({ window: browserWindow, editing, drawing, canvasViewControls, layout, parameters, appearance, blocks }) {
+        const editingTools = createEditingBinding(editing);
+        const controls = prepareWorkspaceControls({ window: browserWindow, editingTools, canvasViewControls, layout, parameters, appearance, blocks });
+        function createWorkspaceDrawingBinding() {
+          const { centerline, circleCenterCross, projection, instances, fillet, blockCreation, offset, spline, hatch } = drawing;
+          return createDrawingBinding({ startCenterlineCommand: centerline.start, startCircleCenterCrossCommand: circleCenterCross.start,
+            startSketchProjectionCommand: projection.start, startGeometryInstanceCommand: instances.start, filletCommand: fillet,
+            startBlockCreation: blockCreation.startCreation, offsetCommand: offset, beginSplineCreation: spline.start, startHatchCreation: hatch.startHatchCreation });
+        }
+        return Object.freeze({ ...controls, createDrawingBinding: createWorkspaceDrawingBinding });
+      }
+      return Object.freeze({ updateHistory: history.update, createControls, prepareControls, createEditingBinding, createDrawingBinding, prepareWorkspace });
     }
     function bindUI({ syncAnnotationResize, prepareParameterNamespace, refreshConstraintAnalysis, updateDocumentName,
       updateToolbar, renderSketch, updateBlockUI, renderProperties, readSketchMoving, updateStatusUI, updateConstraintButtons,
