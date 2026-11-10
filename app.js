@@ -1151,29 +1151,17 @@
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, geometryDragging: geometryDragFeature, blockDragging, referenceImage: referenceImageInteraction,
   });
 
-  const blankCanvasGesture = authoringTools.createBlankGesture({
-    lifecycle: drawOperationLifecycle, pending: pendingCommandSession, constraintTargets: constraintTargetSession,
-    splineEditing, dimensionValues: dimensionValueCommand, offset: offsetCommand, annotationInput: annotationInputController,
-    updateGeometrySelectionUI,
+  const { blankGesture: blankCanvasGesture, createBinding: createCanvasPointerBinding } = canvasEditingInput.preparePointerForEditing({
+    splineEditing, dimensionValues: dimensionValueCommand, annotationInput: annotationInputController,
   });
 
-  const { press: canvasPressQuery, hover: pointerHover, isBlankCommandPanelPoint } = sceneHitQueries.createInteraction({
-    canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget, blankCanvasGesture, instanceSourceCommand, hatchCommand,
-  });
-
-  canvasEditingInput.bindPointer({
-    canvasNavigation, recordHistory, pointerHover,
+  const canvasInputBinding = createCanvasPointerBinding({
+    canvasNavigation, recordHistory,
     updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
-    hatch: hatchCommand, spline: splineCommand, splineEditing,
-    blockPlacement: blockPlacementCommand, annotationInput: annotationInputController, dimensionValues: dimensionValueCommand, dimensions: dimensionPlacementCommand,
+    hatch: hatchCommand, spline: splineCommand, blockPlacement: blockPlacementCommand, dimensions: dimensionPlacementCommand,
     expressions: expressionInputController, discardMoves: flushScheduledCanvasPointerMove, enterBlock: enterBlockDefinitionEdit,
-    query: canvasPressQuery, closeContextMenu: closeCanvasContextMenu, blankGesture: blankCanvasGesture,
-  });
-
-
-  const canvasInputBinding = createCanvasInputBinding({
-    readPngExportCommand: pngExportLifecycle.readCommand,
-    blankCanvasGesture, isBlankCommandPanelPoint, scheduler: pointerMoveScheduler,
+    closeContextMenu: closeCanvasContextMenu, hitBlockRotationHandle, hitAnnotationTarget,
+    createCanvasInputBinding, readPngExportCommand: pngExportLifecycle.readCommand, scheduler: pointerMoveScheduler,
   });
   canvasInputBinding.bind();
   dimensionInput.bind();

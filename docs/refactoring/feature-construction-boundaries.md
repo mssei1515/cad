@@ -1,6 +1,10 @@
 # 機能単位の構築境界の再監査
 
-基準はdevelop `4e80981691158807905f39e4426cd23cbc0f39d6`（2026-11-10）。以下の行番号と数値は、このcommitのsnapshotである。**提案は未実装であり、現在の正式な仕様は変更しない。**
+基準はdevelop `4e80981691158807905f39e4426cd23cbc0f39d6`（2026-11-10）。以下の行番号と数値は、このcommitのsnapshotである。**以下の数値・比較は監査時点のsnapshotであり、現在の実装状況は次節を参照する。**
+
+## 二段階案の実装状況（2026-11-10）
+
+監査後の基準ade455fからCanvasInteractionFeatureのpreparePointerForEditing／createBindingを実装した。前段で実空白操作を返し、rootの公開後に後段でquery→pointer接続→native生成を行う。未bindの実native componentを返し、rootのconst初期化後にbindする。dimension bindとkeyboard起動は従来位置に残す。app.jsは1,468→1,456行。以下の候補比較と旧行番号は基準4e80981の記録として保持する。関連単体87件、構文632file・全単体2,347件・全E2E589件が成功（50file、22.1m、exit 0）。五つの追加単体で空白操作の先行公開、同じScene／Pointer session／nativeのidentity、生成中のcallbackとTDZ、panel→PNGの優先順・座標／移動・keyboard取消、各構築例外と以前のcontroller、native生成失敗後のPointer接続、bind失敗時の部分登録を新旧比較した。702製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-canvas-pointer-assembly-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のAPI key列挙の期待値には新methodを追加したが、既存機能の期待値・性能閾値・timeoutは変更していない。全体目標は未完了。
 
 ## 残存責務と計測の限界
 
@@ -44,7 +48,7 @@ root範囲に対する入力は「その範囲外のroot束縛への参照」の
 
 reset→Presentation→History→file checkpoint→file startをFileFeatureへ移すと、ファイル処理が言語・Canvas起動まで所有することになる。七つの起動呼出しを別ファイルの関数に移すだけの案も目的に合わない。現在のrootが複数featureの起動順を示す構成を維持する。
 
-## 次の実装：Canvas入力の準備と接続
+## 監査時点の実装案：Canvas入力の準備と接続
 
 所有先候補は[CanvasInteractionFeature](../../src/application/canvas_interaction_feature.js)のcreateOperationSessions内、既存createEditingInputが返すfeatureである。ここは既に同じLifecycle、Pending、Constraint target、Pointer session、Hover、Selectionと入力componentを結び付けている。
 
@@ -100,7 +104,7 @@ dimensionInput.bind();
 | native binding生成 | 成功済みのPointer接続を自動で巻き戻さない |
 | nativeイベントbind | 新bindingはrootへ返却済み。部分登録や元の例外を隠さない |
 
-## 次単位の検証と採用条件
+## 監査時点の検証・採用条件
 
 - 既存createEditingInput／bindPointer／createKeyboardを維持し、raw APIの利用者を巻き込まない。
 - 準備・query・pointer・native生成・native bind・dimension bind・keyboard startの相対順を、constructor spyと実sessionの両方で確認する。
@@ -111,7 +115,7 @@ dimensionInput.bind();
 - APIの明示入力が元の33束縛を別bagへ移すだけになったり、rootの一部が丸ごと別ファイルへ移るだけになったりする場合は実装案を見直す。
 - ASTの入出力数は候補選定の材料に限定する。実装後のroot差分、callbackと生成順の証明、機能テスト、app.js行数を別々に記録する。
 
-## この監査単位の検証
+## 監査commit 5011836時点の検証
 
 製品・テスト・index・検証toolは変更していない。app.jsは**1,468→1,468行（0行変化）**。実装は次単位として残す。
 
