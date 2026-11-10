@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のWorkspace hit入口単位ではapp.jsは1,414行、非空白968行。AST監査ではroot307文・500束縛、構築・接続503非空白行、別名・設定127行、委譲63行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の固定状態query共有単位ではapp.jsは1,414行、非空白968行。AST監査ではroot307文・498束縛、構築・接続503非空白行、別名・設定127行、委譲63行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：描画・dragの固定状態query owner共有（2026-11-10）
+
+CanvasDisplayのcreateSceneForEditingとGeometryDragFeature.createForWorkspaceは、明示callbackがundefinedのときだけ、受け取ったfixedState ownerの既存関数を選ぶ。dragのBlock world変換も未指定時だけ既存readServices.projections.blockWorldPointを選ぶ。appは同じConstraintReferences.createFixedStateの凍結query ownerを共有し、固定照会のbound editing scopeをWorkspace.currentへ置き換えない。実queryのenabled／Object照合、操作時のscope読取り、描画・plan・solver・commandの本体と生成順、明示callback／null・戻り値・例外は維持する。新しいstate・cache・listener・module・wrapper ownerを作らず、保存形式v26も不変。
+
+六つの個別接続を二つのowner接続へ置き換え、不要になったrootのblockWorldPoint／pointLockedByLineFixed別名を除いた。app.jsは1,414→1,414行（増減0）。行を詰めず、root束縛500→498、Canvas scene構築のroot入力18→17、drag構築27→24とする。行数・機能の分離済み件数を水増しせず、今回は既存の責務境界に沿った依存整理である。数百行という全体目標は未完了。
+
+追加単体四件で実Line／Arc endpoint固定拘束によるdrag拒否、有効flag変更とscope交換、Block pivotへの同じInstance／local center／receiver、実point描画の固定色とSelection identity、明示callback／nullで既定ownerを読まない短絡を確認する。ASTでrootの対象port置換と未使用別名だけの変更、六つの既定値追加だけの変更、既存factory・下位処理・E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体57件、構文635file・全単体2,387件・関連E2E328件が成功（24file、5.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択24fileのtest list328件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-shared-fixed-state-queries-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、6f64d18の全589件成功と区別する。
+
+基準develop 6f64d18、作業branch codex/shared-fixed-state-queries、開始時週枠残量25%。全体E2Eの最新基準6f64d18（589件成功）と今回の関連検証を区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Workspace hit照会入口と現在operandの所有（2026-11-10）
 

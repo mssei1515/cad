@@ -83,7 +83,9 @@
   }
   function createForWorkspace({ documentWorkspace, interaction, presentation, sourceQueries, projectionQueries,
     solver, scopeQuery, solving, checkpoint, geometry, readServices, viewport, pointer, acceptError, previewMaxModelError, minimumLength,
-    blockLocalGeometryBounds, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    fixedState, blockLocalGeometryBounds, blockWorldPoint = readServices.projections.blockWorldPoint,
+    pointLockedByLineFixed = fixedState?.pointLockedByLineFixed, findLineFixedConstraint = fixedState?.findLineFixedConstraint,
+    findArcEndpointFixedConstraint = fixedState?.findArcEndpointFixedConstraint,
     projectionBlockedMessage, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection }) {
     const { workspace, sketches } = documentWorkspace;
     const { access: { guardSketchEdit: canEdit }, selection: canvasSelection } = interaction;
