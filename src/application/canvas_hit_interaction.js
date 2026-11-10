@@ -99,6 +99,16 @@
       targetFromConstraint: window.DimensionQueries.targetFromConstraint, drawingOrderOwner: window.DrawingOrder.drawingOrderOwner,
       referenceImageWorldToLocal: window.ReferenceImageGeometry.referenceImageWorldToLocal, pointInExpandedBox: window.GeometryBounds.pointInExpandedBox,
       readMode, readPendingCommand: () => sessions.pending.current, readConstraintCommand: () => sessions.targets.command, operandValues });
+    function createQueries() {
+      const queries = scene.createQueries();
+      const { dimensions: dimensionHitQuery, instances: instanceHitQuery,
+        operands: { hitConstraintOperand: queryConstraintOperand } } = queries;
+      const { targets: constraintTargetSession } = sessions;
+      function hitDimension(...args) { return dimensionHitQuery.hitDimension(...args); }
+      function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
+      function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
+      return Object.freeze({ ...queries, hitDimension, hitBlockInstance, hitConstraintOperand });
+    }
     function createRectangleSelection({ dimensionBounds, instanceSourceCommand, geometryInstanceCommand, sketchProjection, canvas, clearSelection, presentation }) {
       return window.RectangleSelectionFeature.create({ currentScope: dimensionScope, viewport,
         canvasSelection: interaction.selection, selectionScope: interaction.scope, sketches: sketchContext, pointUsage: interaction.pointUsage,
@@ -107,7 +117,7 @@
         releasePointer: id => { try { canvas.releasePointerCapture(id); } catch (_) {} },
         clearSelection, setHint: presentation.setHint, updateGeometrySelectionUI: presentation.updateGeometrySelectionUI, draw: presentation.draw });
     }
-    return Object.freeze({ ...scene, createRectangleSelection });
+    return Object.freeze({ ...scene, createQueries, createRectangleSelection });
   }
   function create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint,
     geometry: { hitPoint, hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },

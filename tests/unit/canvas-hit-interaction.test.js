@@ -341,7 +341,8 @@ function workspaceSceneFixture(composed, probe = {}) {
   for (const [name, methods] of Object.entries(factories)) {
     const original = w[name], wrapped = { ...original }; restorations.push(() => { w[name] = original; });
     for (const [method, stage] of Object.entries(methods)) wrapped[method] = input => {
-      stages.push(stage); captured[stage] = input; if (probe.failAt === stage) throw probe.error; return original[method](input);
+      stages.push(stage); captured[stage] = input; if (probe.failAt === stage) throw probe.error;
+      const result = original[method](input); return probe.decorate ? probe.decorate(stage, result) : result;
     };
     w[name] = wrapped;
   }
@@ -361,6 +362,7 @@ function workspaceSceneFixture(composed, probe = {}) {
         sessions: { pending: { get current() { return ports.readPendingCommand(); } }, targets: { get command() { return ports.readConstraintCommand(); } } },
         viewport: ports.viewport, dimensionScope: ports.dimensionScope, dimensions: ports.dimensions, dimensionLabelForConstraint: ports.dimensionLabelForConstraint,
         annotationBounds: ports.annotationBounds, hitAnnotationElement: ports.hitAnnotationElement, operandValues: ports.operandValues };
+      if (probe.configure) probe.configure(owners, state);
     }, ports => composed ? w.CanvasHitInteraction.createSceneForWorkspace(owners) : w.CanvasHitInteraction.createScene(ports));
     f.state.ready = false; stages.push("between");
     function effect(name) { "use strict"; return function(...args) { assert.equal(this, undefined); assert.equal(f.state.ready, true); effects.push([name, ...args]); if (f.state.failEffect === name) throw probe.error; }; }
@@ -515,4 +517,40 @@ test('annotation scene policy retains actual annotation identities and scope acr
 
 test('annotation scene construction fails at the original policy or geometry stage without invoking annotation or reading the model',()=>{
  for(const composed of [false,true])for(const failAt of ['policy','geometry']){const probe={};assert.throws(()=>annotationPolicyFixture(composed,{failAt,probe}),error=>error===probe.error);assert.deepEqual(probe.rawCalls,[]);assert.deepEqual(probe.state.reads,[]);}
+});
+
+test('Workspace hit entry points preserve query receivers, argument limits, fresh defaults and live operand read order',()=>{
+ const calls=[],state={operands:[],error:null,fail:null},result={hit:true};let owners;
+ const f=workspaceSceneFixture(true,{
+  configure(o,s){owners=o;Object.defineProperty(o.sessions.targets,'operands',{get(){assert.equal(s.ready,true,'no operands read during construction');calls.push(['operands']);if(state.fail==='operands')throw state.error;return state.operands;}});},
+  decorate(stage,raw){'use strict';const names={dimensions:'hitDimension',instances:'hitBlockInstance',operands:'hitConstraintOperand'};const name=names[stage];if(!name)return raw;
+   const api={...raw,[name]:function(...args){assert.equal(this,stage==='operands'?undefined:api);calls.push([name,...args]);if(state.fail===name)throw state.error;return result;}};return Object.freeze(api);}
+ });
+ assert.deepEqual(calls,[]);assert.equal(Object.isFrozen(f.queries),true);
+ const {hitDimension,hitBlockInstance,hitConstraintOperand}=f.queries;
+ const point={x:3,y:7},hits={hitP:point},extra={extra:true};
+ assert.equal(hitDimension(1,2,extra),result);assert.deepEqual(calls.pop(),['hitDimension',1,2,extra]);
+ assert.equal(hitBlockInstance(1,2,false,extra),result);assert.deepEqual(calls.pop(),['hitBlockInstance',1,2,false,extra]);
+ assert.equal(hitConstraintOperand(point,'symmetry',hits,extra),result);assert.deepEqual(calls.map(c=>c[0]),['operands','hitConstraintOperand']);
+ assert.equal(calls[1].length,5);assert.equal(calls[1][3],state.operands);assert.equal(calls[1][4],hits);
+ calls.length=0;hitConstraintOperand(point,'symmetry');const first=calls[1][4];calls.length=0;
+ state.operands=[{kind:'line'}];hitConstraintOperand(point,'symmetry',undefined);assert.notEqual(calls[1][4],first);assert.deepEqual(Object.keys(first),[]);assert.equal(calls[1][3],state.operands);
+ calls.length=0;hitConstraintOperand(point,'symmetry',null);assert.equal(calls[1][4],null);
+ for(const name of ['operands','hitConstraintOperand','hitDimension','hitBlockInstance']){
+  state.fail=name;state.error=new Error(name);calls.length=0;
+  const action=name==='hitDimension'?()=>hitDimension(3,4):name==='hitBlockInstance'?()=>hitBlockInstance(3,4):()=>hitConstraintOperand(point,'fixed',hits);
+  assert.throws(action,error=>error===state.error);
+  assert.deepEqual(calls.map(c=>c[0]),name==='operands'?['operands']:name==='hitConstraintOperand'?['operands',name]:[name]);
+ }
+ assert.equal(owners.sessions.targets.command,null);
+});
+
+test('Workspace operand entry uses the current Target session through actual symmetry hit priority without mutating selection',()=>{
+ const f=workspaceSceneFixture(true),p=f.point('p',3,4),line={id:'line',sketchId:'S1'},pointer={x:300,y:400},hits={hitP:p,hitL:line};
+ f.owners.sessions.targets.operands=[];
+ const selected=f.selection.points;
+ const first=f.queries.hitConstraintOperand(pointer,'symmetry',hits);assert.equal(first.kind,'line');assert.equal(first.line,line);
+ f.owners.sessions.targets.operands=[{kind:'line'},{kind:'point'}];
+ const second=f.queries.hitConstraintOperand(pointer,'symmetry',hits);assert.equal(second.kind,'point');assert.equal(second.point,p);
+ assert.equal(f.selection.points,selected);assert.equal(selected.length,0);assert.equal(f.owners.sessions.targets.operands.length,2);
 });
