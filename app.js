@@ -46,7 +46,7 @@
   const documentWorkspace = window.DocumentWorkspace.create({
     applicationText, constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
   });
-  const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
+  const { workspace, parameters: parameterNamespace, sketches: sketchContext,
     geometryIds, createReadContext } = documentWorkspace;
   const currentParameterNamespace = workspace.current;
   const { guard: guardDimensionSymbolDeletion } = window.ParameterApplication.createDeletionGuard({
@@ -101,7 +101,7 @@
     clearSelection, updateGeometrySelectionUI, draw,
   });
   const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection,
-    pointUsage, hover: canvasHover, createOperationSessions } = canvasInteraction;
+    pointUsage, createOperationSessions } = canvasInteraction;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -1190,12 +1190,6 @@
       currentScope: workspace.current, viewport, canvas, selection: canvasSelection, drag: annotationDrag, annotationLeaderAnchor,
       annotationLeaderTargetFromItem, draw, allGeometryBounds, resetModelState, resizeCanvas, hitAnnotationElement,
     });
-    const { fixtures: dimensionFixtureSupport, createDisplayForEditing: createDimensionDisplayTestSupport, createInteractionForEditing: createDimensionInteractionTestSupport } = window.DimensionTestDriver.createForEditing({
-      geometry: geometryCreation, display: dimensionDisplay, sketches: sketchContext, appearance: geometryAppearance,
-      currentScope: workspace.current, viewport, canvasSelection, resetModelState, addDistanceConstraintFromTarget,
-      dimensions: dimensionPlacementCommand, serializeModel, serializeDimension, constraintTargetSession, pendingCommandSession,
-      dimensionValueInput, ctx, layer: dimensionLayer, dimensionLabelForConstraint,
-    });
     const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint, currentScope: workspace.current,
     });
@@ -1238,10 +1232,16 @@
       defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement: readOnlyDimensions.forPlacement,
       addReadOnlyDimensionConstraint: readOnlyDimensions.add, blockDefinitionById,
     });
-    const dimensionInteractionSupport = createDimensionInteractionTestSupport({
+    const dimensionTestSupport = window.DimensionTestDriver.createBrowserSupportForWorkspace({
+      documentWorkspace, interaction: canvasInteraction, sessions: operationSessions,
+      geometry: geometryCreation, display: dimensionDisplay, appearance: geometryAppearance,
+      viewport, resetModelState, addDistanceConstraintFromTarget,
+      dimensions: dimensionPlacementCommand, serializeModel, serializeDimension,
+      dimensionValueInput, ctx, layer: dimensionLayer, dimensionLabelForConstraint,
+    }, {
       canvasDriver: canvasTestDriver, dimensionValues: dimensionValueCommand, clearSelection, presentation, fit: drawingFit, references: constraintReferences, canvas,
       solving: sketchSolving, checkpoint: editingCheckpoint, analysis: constraintAnalysis, dimensionDrag,
-    });
+    }, dimensionAppearance);
     const documentTestApi = documentTestSupport.createFileApi({
       performance, File, serializeModel, loadModelData,
     });
@@ -1278,9 +1278,6 @@
       pushModelConstraint, dimensionFromAnchor, createEmptyBlockDefinition, invalidateBlockProjectionCache,
       stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw, blockProjectionBundle, serializeModel,
       clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, deleteElements, document,
-    });
-    const dimensionDisplaySupport = createDimensionDisplayTestSupport({
-      canvasHover, readDocument: () => documentModel, appearance: dimensionAppearance,
     });
     const { observation: referenceImageTestObservation, dataImport: referenceImageTestImport,
       blockFixture: referenceImageBlockFixture } = window.ReferenceImageTestDriver.createBrowserSupport({
@@ -1327,7 +1324,7 @@
       derived: derivedInstanceTestApi,
       sketches: { ...constraintReferenceCases, sketchProjectionTestSupport, sketchTreeTestApi, sketchDeletionFixture },
       images: { referenceImageTestObservation, referenceImageTestImport, referenceImageBlockFixture },
-      dimensions: { dimensionDisplaySupport, dimensionFixtureSupport, dimensionInteractionSupport },
+      dimensions: dimensionTestSupport,
       parameters: { parameterFixture, parameterObservation, parameterInteraction },
       properties: propertiesTestSupport, selectionTestApi,
       annotations: annotationTestSupport,
