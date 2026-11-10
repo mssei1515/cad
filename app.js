@@ -127,9 +127,9 @@
     updateStatusUI, updateConstraintButtons, syncDimensionInput: () => syncDimensionValueInput(),
     refreshSketchSelection: () => sketchTreeView.refreshSelection(),
   });
-  const { controller: canvasContextController, element: canvasContextMenu, createSceneForEditing: createCanvasContextScene } = window.CanvasContextInteraction.createMenu({
-    document, window, canvas, escapeHtml, applicationText, canvasHover, draw,
-    readPresentation: () => canvasContextCandidatePresentation, readInteraction: () => canvasContextInteraction,
+  const { controller: canvasContextController, element: canvasContextMenu, createSceneForEditing: createCanvasContextScene } = window.CanvasContextInteraction.createMenuForWorkspace({
+    document, window, canvas, escapeHtml, documentWorkspace, readServices: geometryReadServices,
+    interaction: canvasInteraction, presentation,
   });
   const closeCanvasContextMenu = canvasContextController.close;
   const { dragSources: derivedDragQueries, createCommands: createDerivedCommands } = window.DerivedInstanceFeature.createForEditing({
@@ -1102,8 +1102,7 @@
   });
 
   const { presentCandidate: canvasContextCandidatePresentation, createInteraction: createCanvasContextInteraction } = createCanvasContextScene({
-    sceneQueries: sceneHitQueries, splineEditing, canvasContextAnnotationHit, documentWorkspace, readServices: geometryReadServices,
-    interaction: canvasInteraction, sessions: operationSessions, presentation,
+    sceneQueries: sceneHitQueries, splineEditing, canvasContextAnnotationHit, sessions: operationSessions,
     candidates: { toolbarSvgMarkup, formatDisplayNumber, constraintToolbarIcon, localizedConstraintName,
       geometryInstanceTypeLabel, hatchPatternTypeLabel, hatchAppearanceForDisplay },
   });
@@ -1141,7 +1140,7 @@
 
 
 
-  const canvasContextInteraction = createCanvasContextInteraction({
+  createCanvasContextInteraction({
     constraintSelection: constraintSelectionQuery, blockQueries: blockEditingQueries, dimensions: dimensionDragFeature,
     cancellation: canvasCommandCancellation, clipboard: clipboardFeature, history: historyController,
     viewport, projection: sketchProjectionCommand,

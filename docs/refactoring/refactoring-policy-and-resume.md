@@ -98,6 +98,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：Canvas Context Menuの段階的な生成と公開（2026-11-10）
+
+CanvasContextInteraction.createMenuForWorkspaceが、同じDocumentWorkspace／read services・CanvasInteraction・Presentationの上で早期Menu→後段query／候補表示→操作実体の生成を接続する。候補表示と操作の内部参照は各factoryが正常に返ってから公開し、生成失敗では以前の完成済み参照を保持する。Menuの遅延getterをrootへ戻さず、command構築位置とcontroller.startの位置は従来どおり分ける。
+
+二つの内部参照は実表示関数と実操作APIを指し、Selection／Hover／pointer・mode／pending・モデル・listenerを複製しない。既存のraw Menu／Scene／Interaction factoryは維持し、owned APIから公開手順を迂回するraw生成口を返さない。候補表示の実関数は従来どおり返し、Browserのauthoring観測にも同じ関数を渡す。supported operationは従来同様に必要な生成後に呼び、新しい早期実行guardやfallbackを追加しない。
+
+app.jsは1,492→1,491行（1行減）、非空白1,043→1,042行。初期Menu入力は9→8項目、Scene入力は9→5項目。操作実体のroot参照と二つの遅延getterを除き、同じ実Menu Controller／elementと実Interactionを元のphaseで生成する。AST比較で対象構築・入力・操作参照以外のroot全体と相対順、旧module API、Menu／Actions／Presentation・index・全E2E不変、新しい未使用／未束縛参照なしを確認した。
+
+関連単体15件、構文631file・全単体2,318件・関連E2E276件が成功（12file、3.8m、exit 0）。既存Scene比較五件をraw／既存／ownedの三経路で行い、cold生成・構築順・実Geometry／pointer・Spline順位・Hover復元・guard／寸法更新・callback捕捉と例外を確認した。二件の追加テストで実Menuへの表示・操作の段階別公開、query／formatter／action生成失敗時の以前の公開先保持、Menuを閉じてから最新Undoを実行する順とdispose後のlistener解除を確認した。699製品／test入力と開始HEAD不変、選択12fileのtest list276件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-canvas-context-owned-stages-{focused,check,unit,e2e,proof,smoke}.logとsource-hashes／selection／filter-environment／e2e-receipt／last-run JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、57d5a4bの全589件成功とは区別する。全体目標は未完了。
+
+基準developはdc8bcde、作業branchはcodex/canvas-context-owned-stages、開始時週枠残量38%。既存Scene比較五件へ新入口を加え、実Context Menuを使う描画順・Hatch・Sketch編集／移動／権限・Spline・UI／可視性とBlock・注記・保存読込の関連12fileを選択した。57d5a4bの全E2E589件成功（21.4分）と今回変更後の関連検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Offset作図の共有owner接続（2026-11-10）
 
 BasicDrawingTools.createGeometryのcreateAuthoringForEditingが返す作図機能にcreateOffsetForEditingを追加した。既に共有するPending session・viewport・Lifecycle・Presentation通知を使い、Offsetの実featureを元の位置で生成する。後段ではeditingScope・placement／source selection・value input・Canvas surface／描画・commit／エラー表示・Analysisだけを渡す。Workspace.currentへ置き換えず、従来のeditingScope.currentを操作時に読む。
