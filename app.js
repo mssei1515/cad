@@ -100,7 +100,7 @@
     isGeometryMode, setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null),
     clearSelection, updateGeometrySelectionUI, draw,
   });
-  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection,
+  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, resetBlankCandidate,
     pointUsage, createOperationSessionsForAuthoring: createOperationSessions } = canvasInteraction;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
@@ -138,8 +138,8 @@
   const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
     sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
   const { toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
-  const { createGeometry: createDrawingGeometry, createEditing: createDrawingEditing, createCenterline, createTrim,
-    preview: authoringPreview } = window.BasicDrawingTools.prepare();
+  const { createGeometry: createDrawingGeometry, createEditing: createDrawingEditing, createCenterline, createTrim, createSplineEditing,
+    resetSplineEditing, preview: authoringPreview } = window.BasicDrawingTools.prepare();
   const operationSessions = createOperationSessions({
     authoringPreview, readOffsetSelection: () => offsetSelection,
     hits: { hitPoint: (x, y) => hitPoint(x, y), hitLine: (x, y) => hitLine(x, y),
@@ -341,8 +341,7 @@
     annotationAnchors: annotationFeature.drawingAnchors,
     transientAuthoring, pushModelConstraint, addConstraintIfMissing,
     checkpoint: authoringCheckpoint,
-    cancelConstraintTargetCommand, resetEditing: () => splineEditing.reset(),
-    resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar, projection: sketchProjectionCommand, clearSelection,
+    cancelConstraintTargetCommand, resetEditing: resetSplineEditing, resetBlankCandidate, updateToolbar, projection: sketchProjectionCommand, clearSelection,
     solveAndRefresh, recordHistory,
   });
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
@@ -369,7 +368,7 @@
     maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
-  const { fillet: filletCommand, createCircleCenterCross, createSplineEditing } = createDrawingEditing({
+  const { fillet: filletCommand, createCircleCenterCross } = createDrawingEditing({
     checkpoint: editingCheckpoint, solving: sketchSolving, parameters: parameterStabilization, analysis: constraintAnalysis,
     editingScope: editingScopeBinding, solver, placement: dimensionPlacement, valueInput: dimensionInputController,
     projection: sketchProjectionFeature, acceptError: CONSTRAINT_ACCEPT_ERROR,

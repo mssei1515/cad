@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の作図preview owner統合単位ではapp.jsは1,339行、非空白893行。AST監査ではroot280文・465束縛、構築・接続488非空白行、別名・設定123行、委譲30行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のSpline開始reset owner統合単位ではapp.jsは1,338行、非空白892行。AST監査ではroot280文・467束縛、構築・接続487非空白行、別名・設定123行、委譲30行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,7 +96,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-11-10）
+## 8. 再開地点（2026-11-11）
+
+### 最新：Spline開始時の二つの解除操作を生成ownerへ統合（2026-11-11）
+
+BasicDrawingTools.prepareのcreateSplineEditingは、同じ編集準備の実factoryを従来どおり裸関数として呼び、成功した実SplineEditCommandだけをprivateに保持し、同じobjectを返す。resetSplineEditingは操作時にその実componentのresetを零引数のmember呼出しで実行する。CanvasInteractionFeature.createは、preparePointerForEditingが実BlankCanvasGestureを生成した後にだけ同じobjectをprivateに保持し、resetBlankCandidateを公開する。こちらも操作時に同じ実componentのresetCandidateを零引数のmember呼出しで実行する。外部登録setter・独自session・Geometry・ID・snapshot・listenerや汎用app contextを追加しない。
+
+appは二つの解除入口を既存Spline作図へ渡し、実Spline編集／Blank Gestureの生成位置と他の共有先を保つ。生成前は従来のsplineEditing／blankCanvasGesture相当のReferenceError、生成失敗時は以前の成功component、呼出しのreceiver・返値・元例外を維持する。Spline開始のresetEditing→resetBlankCandidateの順と、実reset本体は不変。Blankはcandidateだけを消してsuppressionを保持し、編集resetは実Spline編集sessionだけを解除する。明示された既存portやnullの扱いに新たなfallbackを加えない。Blank公開からrootへの返却までには関数宣言と凍結recordの生成しかなく、外部callbackやawaitを挟まない。生成・公開・bind／startの副作用順、UI・操作・履歴・保存形式v26は不変。旧raw factoryも維持する。
+
+app.jsは1,339→1,338行（1行減）、非空白893→892行、root280文不変・465→467束縛。構築・接続488→487行、別名・設定123行、委譲30行、条件付きtest hooks165行は不変。rootの二つの解除callbackを各生成ownerの名前付き操作へ置き換えたためbindingは二つ増える。行数より所有境界を優先した小単位であり、200〜500行の全体目標は未完了。
+
+既存BasicDrawingTools／CanvasInteractionFeature単体へ計4件を加え、実session解除とSpline開始からの接続、candidateとsuppressionの独立、生成前guard・失敗時の旧target保持、receiver・零引数・返値・例外を検証する。rootの四編集と両ownerへの追加以外の全文一致、raw SplineCommand／SplineEditCommand／BlankCanvasGesture不変、公開前後の順序、未使用／未束縛／初期化前参照の追加なしを照合した。構文635file・全単体2,461件・関連単体90件・関連E2E441件が成功（36file、7.1m、exit 0）。関連E2E実行中の705入力と開始HEAD不変、選択36fileの一覧441件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-spline-start-reset-ownership-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、基準develop c44f5abの全589件成功（21.7分）とは区別する。
+
+基準develop c44f5ab、作業branch codex/spline-start-reset-ownership、開始時週枠残量7%。関連E2Eは既存36file・441件を選択し、最後の全体検証c44f5abの589件成功（21.7分）と区別する。mainは停止時の最終全体検証後に最後に反映する。
 
 ### 最新：作図previewの五操作と段階生成を既存作図ownerへ集約（2026-11-10）
 
