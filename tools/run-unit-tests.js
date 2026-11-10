@@ -2,6 +2,7 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "tests/unit/authoring-test-workspace.test.js",
   "tests/unit/geometry-mutation-feature.test.js",
   "tests/unit/composition-root-audit.test.js",
   "tests/unit/browser-test-api.test.js",

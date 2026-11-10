@@ -1,5 +1,14 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Hatch／描画順のテスト専用Workspace組立て（2026-11-10）
+
+HatchTestDriver.createForWorkspaceとDrawingOrderTestDriver.createForWorkspaceは、既存のHatch／描画順のfixture・観測APIへDocumentWorkspace、Geometry、read services、Selection／lifecycle、Presentation、fit、Block／Clipboardの実ownerを接続する。型・定数・Hatch codec・GeometryRefとDocument定義への追加を各TestDriver内で選び、rootはテスト専用の低水準aliasを持たない。固定Documentの最新blockDefinitions配列とWorkspace.currentを分け、Clipboardのcopy／paste receiver・引数／戻り値・例外を保持する。旧factoryの生成順、既存の凍結公開APIと実Geometry／Selection／投影参照、境界修復前の無効状態・通知／履歴順は変更しない。CanvasTestDriverは従来と同じPoint／Lineだけを既存Solver namespaceから読む。test query guardとhook公開位置、通常機能・index／読込方式・保存形式v26は不変。新たなmodel／cache／sessionや汎用app contextを追加しない。 app.jsは1,445→1,433行（12行減）。既存の二つのTestDriverへ集約し、新しい製品moduleやnamespaceは作らない。追加fileは対応単体一つで、標準の単体／構文一覧へ登録した。
+
+追加単体4件で実GeometryCreation／GeometryReadServices・Hatch境界計算・Block投影・描画順を使い、生成時の無照会、公開名／順序、穴つきHatch・表示倍率・境界差替え後の修復待ち状態、固定Documentへの定義追加と現在WorkspaceへのInstance追加、scope交換後の照会、実Selection／Geometry identity、描画順の変更と履歴観測、Clipboard receiverと失敗時の後続停止を新旧比較した。ASTでrootの二組立て・Canvas型の同値選択・未使用alias10個だけの変更、両factoryのport／callback本体の対応、既存TestDriver本体／公開APIと通常機能／index／E2E不変、新しい未使用／未束縛参照なしを照合した。関連単体22件、構文635file・全単体2,365件・関連E2E281件が成功（18file、4.0m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択18fileのtest list281件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-authoring-test-workspace-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存の期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、直前4b33718の全589件成功とは区別する。
+
+基準develop 4b33718、作業branch codex/authoring-test-workspace、開始時週枠残量29%。4b33718の全E2E589件成功と今回の関連検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ### 最新：Geometry編集の準備とcheckpointの組立て（2026-11-10）
 
 GeometryMutationFeature（src/application/geometry_mutation_feature.js）は、一時作図と後段のGeometry編集checkpointを同じDocumentWorkspace・GeometryIds・Selection・History・解析／投影cache ownerへ接続する。prepareForWorkspaceは実TransientAuthoringのみを生成して返し、rootの既存位置で呼ぶcreateCheckpointが実EditingCheckpointを生成する。独自snapshot／採番／履歴・transaction stateを作らず、Workspace.currentをbound editing scopeや固定Documentで置換しない。仮作図rollbackの経路ごとのGeometry／Selection／採番とprovisional履歴の扱い、履歴復元中の短絡、checkpointの投影→解析無効化の順、返値・例外時の途中状態を維持する。既存二moduleの算法と公開API、通常UI・保存形式v26は不変。 app.jsは1,449→1,445行（4行減）。新fileはapplication内の機能組立て一つと対応単体一つ。従来のsrc/editing/transient_authoring.jsとcheckpoint.jsはそのまま状態・復元処理を所有する。rootの二つの生成位置と相対順を保ち、createCheckpointを作図準備時に暗黙実行しない。

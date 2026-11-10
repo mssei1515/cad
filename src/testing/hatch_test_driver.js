@@ -218,5 +218,22 @@
       restoreClosedBoundaryForHatchTest: hatch.restoreBoundary,
     });
   }
-  window.HatchTestDriver = Object.freeze({ create, createProjection, createTransfer, createBrowserApi });
+  function createForWorkspace({ documentWorkspace, geometry, readServices, interaction, presentation, viewport, canvas, document,
+    fit, blocks, blockSelection, clipboard, resetModelState, resetHistory, serializeModel, hitBlockInstance, hatchCommand, hatchRegionErrorText, clearSelection }) {
+    const { document: model, workspace, sketches } = documentWorkspace;
+    const { Point, Line } = window.GeometrySolver;
+    const { DEFAULT_SKETCH_ID } = window.SketchHierarchy, { DEFAULT_HATCH_APPEARANCE, CSS_PX_PER_MM } = window.Appearance;
+    return createBrowserApi({ resetModelState, viewport, addPoint: geometry.addPoint, addLine: geometry.addLine, addCircle: geometry.addCircle,
+      currentScope: workspace.current, fitSketchToViewport: fit.fitSketchToViewport, activeSketchId: sketches.activeSketchId,
+      resetHistory, updateUI: presentation.updateUI, draw: presentation.draw, canvas, worldToCanvasScreen: viewport.worldToCanvasScreen, serializeModel,
+      readMode: interaction.lifecycle.readMode, allHatches: readServices.reads.allHatches, hatchGeometryQuery: readServices.hatches,
+      serializeHatch: window.HatchData.serializeHatch, hatchRegionErrorText, canvasSelection: interaction.selection, hatchCommand, document,
+      DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, HATCH_SCREEN_PX_PER_MM: CSS_PX_PER_MM, createEmptyBlockDefinition: blocks.editing.empty, Point, Line,
+      appendDefinitions: (...definitions) => model.blockDefinitions.push(...definitions), invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache,
+      fitAllGeometryToViewport: fit.fitAllGeometryToViewport, blockProjectionBundle: readServices.projections.blockProjectionBundle, hitBlockInstance,
+      clearSelection, copyableSelectionPayload: () => clipboard.copyableSelectionPayload(),
+      clipboardSession: clipboard.session, pasteGeometryClipboard: () => clipboard.command.paste(), geometryRefId: window.GeometryRef.id,
+      blockSelectionGeometry: blockSelection.read, createBlockDefinitionFromSelection: blocks.editing.fromSelection, blockSelectionBoundsCenter: blockSelection.center });
+  }
+  window.HatchTestDriver = Object.freeze({ create, createProjection, createTransfer, createBrowserApi, createForWorkspace });
 })();
