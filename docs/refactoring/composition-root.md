@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：寸法入力・previewのParameter／Pending接続（2026-11-10）
+
+CanvasDisplay.prepareForWorkspaceの寸法入力組立ては、元のdimensionInput objectをspreadして同じpendingを設定した新しい設定recordに、欠けたpropertyだけを補う。evaluateDimensionExpressionDraft／expressionFromUserInputは同じDocumentWorkspace.parametersの実関数、cancelPendingCommandは同じPending sessionへmessage一引数で委譲する入口を使う。copy結果に存在する明示callback・null・undefinedはそのまま保持し、元objectへの書込み・getter再読取りやfallback ownerの不要な照会をしない。後段workspaceのcreateDimensionPreviewは同じDimensionDisplay.createPreviewへ現在Pending reader・Fillet painter・同じ式評価を接続し、実preview APIを返す。値やscopeをsnapshot化せず、モデル・UI操作・保存形式v26は不変。
+
+appは入力の三つの既定接続とpreviewの詳細接続を既存ownerへ戻し、未使用の式評価別名を除く。app.jsは1,408→1,406行（2行減）。後で生成するDimension command／Offset commandへのstart／submit callbackは従来どおりrootに残し、生成・公開・bind順を維持する。新しいmodel・session・cache・listener・module・app contextを作らず、低水準DimensionInput／DimensionDisplay／controller／previewの本体と注入APIは維持する。
+
+追加単体四件でParameter関数と実Pending ownerの共有、取消のreceiver／一引数制限／戻り値と例外、明示overrideと既定ownerの無照会、同じ実preview API・現在Pending読取り・constructor例外、Parameter default取得失敗の停止位置を確認する。ASTでrootの対象接続と未使用別名だけの変更、元objectのcopyと既存Canvas本体不変、欠けたown propertyだけの補完、元の取消callbackとpreview portの一致、新しい未使用／未束縛参照なしを照合する。Parameter namespaceの実関数は既存の凍結APIであり、入力・previewで評価規則を再実装しない。
+
+関連単体65件、構文635file・全単体2,396件・関連E2E328件が成功（24file、5.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択24fileのtest list328件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-dimension-input-composition-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、a504620の全589件成功と区別する。
+
+基準develop a504620、作業branch codex/dimension-input-composition、開始時週枠残量23%。全体E2Eの最新基準a504620（589件成功）と今回の関連検証を区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。数百行への全体目標は未完了。
+
 ### 最新：dragテスト実行・応答性fixtureのWorkspace組立て（2026-11-10）
 
 GeometryDragTestDriver.createForWorkspaceはDocumentWorkspace.workspace.current、既存Geometry／scope query／drag feature／Solverと、明示されたmodelTypes・arc endpoint計算・時計・拘束観測から従来のcreateExecutionSupportを生成する。executionは従来の三公開APIだけを持つ実APIであり、BrowserTestApiへ新たなfactoryを漏らさない。後段createResponsiveForEditingは同じGeometryのaddPoint／addLine、明示されたConstraintInsertion／Presentation／DrawingFitと、後段で明示されたmodelTypes・reset／寸法既定値／求解／履歴／serializeから従来の応答性fixtureを生成する。二段階の生成位置と公開順を変えず、型をDriverのglobalから直接取得しない。通常機能・既存Driver本体・BrowserTestApi・保存形式v26は不変で、新しいmodel／scope／session／cache・module・汎用contextを作らない。

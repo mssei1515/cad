@@ -943,6 +943,7 @@ function preparedWorkspaceFixture(composed, probe) {
   const readServices = { ...seed.readServices, reads: { ...seed.readServices.reads, withGeometryReadCache: work => { f.calls.push('cache'); return work(); } },
     dimensionAppearance: { effectiveDimensionAppearance: () => w.Appearance.DEFAULT_DIMENSION_APPEARANCE, dimensionDisplayState: () => w.Appearance.DEFAULT_DIMENSION_APPEARANCE } };
   const documentWorkspace = { workspace: { current: seed.currentScope }, sketches: seed.sketches };
+  if (probe.configureOwners) probe.configureOwners({ documentWorkspace, sessions, pending, state, f });
   f.browser.devicePixelRatio = 2; f.browser.ResizeObserver = class { observe() { f.calls.push('observe'); } disconnect() {} };
   const originals = new Map(); probe.order = []; probe.ports = {}; probe.results = {}; probe.calls = f.calls;
   const factories = [['CanvasViewControls','create','controls'],['CanvasViewport','create','viewport'],['CanvasNavigation','create','navigation'],['CanvasZoomControl','create','zoom'],
@@ -964,6 +965,7 @@ function preparedWorkspaceFixture(composed, probe) {
     display = composed ? prepared.createForEditing(displayOptions) : w.CanvasDisplay.create({ ...displayOptions, canvas: f.canvas, document: f.document, minZoom: .002, maxZoom: 20000000, draw: presentation.draw, setHint: presentation.setHint });
     const dimensionInput = { syncHighlight() {}, scheduleFrame() {}, evaluateDimensionExpressionDraft: (_c,text) => Number(text), expressionFromUserInput: text => text,
       cancelPendingCommand() {}, startDistanceValueInput() {}, submitOffsetValue() {}, submitDistanceValue() {} };
+    if (probe.configureInput) probe.configureInput(dimensionInput);
     const workspaceOptions = { dimensionScene: { onExpressionMark() {} }, dimensionInput, drawCanvas: () => f.calls.push('content'), closeContextMenu: () => f.calls.push('close'), applySketchTreeWidth: () => f.calls.push('tree') };
     workspace = display.createEditingWorkspace(composed ? workspaceOptions : { ...workspaceOptions,
       dimensionScene: { ...workspaceOptions.dimensionScene, currentLines: () => documentWorkspace.workspace.current().lines, minLineLength: 1e-6, canvasThemeColor: color, appearance: readServices.dimensionAppearance, sketches: seed.sketches },
@@ -1148,4 +1150,49 @@ test('scene fixed-state defaults preserve explicit callbacks and null instead of
  const f=sceneFixture(true,({sceneOptions})=>{sceneOptions.fixedState=new Proxy({},{get(){throw error;}});sceneOptions.pointLockedByLineFixed=null;});
  const p=Object.assign(new sceneWindow.GeometrySolver.Point('p',0,0),{sketchId:'S1',kind:'explicit'});f.sceneState.scope.points=[p];f.selection.points.push(p);
  assert.throws(()=>f.scene.geometry.drawPoints(),/not a function/);
+});
+
+test('Workspace inline input defaults share Parameter functions and cancel the actual Pending owner with the original argument and result boundary',()=>{
+ 'use strict';
+ const events=[],value={result:true},marker=new Error('cancel failed');let pendingOwner,fail=false;
+ const evaluate=function(...args){assert.equal(this,undefined);events.push(['evaluate',...args]);return value;};
+ const expression=function(...args){assert.equal(this,undefined);events.push(['expression',...args]);return value;};
+ const f=preparedWorkspaceFixture(true,{configureOwners({documentWorkspace,sessions,pending}){
+  documentWorkspace.parameters={evaluateEditingExpressionDraft:evaluate,expressionFromUserInput:expression};
+  pendingOwner={read:pending.read,get current(){return pending.current;},cancel(message){assert.equal(this,pendingOwner);events.push(['cancel',...arguments]);if(fail)throw marker;pending.clear();return value;}};sessions.pending=pendingOwner;
+ },configureInput(input){for(const name of ['evaluateDimensionExpressionDraft','expressionFromUserInput','cancelPendingCommand'])delete input[name];}});
+ assert.deepEqual(events,[]);const ports=f.probe.ports.input;assert.equal(ports.pending,pendingOwner);assert.equal(ports.evaluateDimensionExpressionDraft,evaluate);assert.equal(ports.expressionFromUserInput,expression);
+ const {evaluateDimensionExpressionDraft,expressionFromUserInput,cancelPendingCommand}=ports,extra={extra:true},constraint={id:'D1'};
+ assert.equal(evaluateDimensionExpressionDraft(constraint,'p+1',extra),value);assert.equal(expressionFromUserInput('p+1',extra),value);
+ f.pending.replace({type:'distance-value'});assert.equal(cancelPendingCommand('cancel',extra),value);assert.equal(f.pending.current,null);assert.equal(events.at(-1).length,2);
+ fail=true;assert.throws(()=>cancelPendingCommand(undefined,extra),error=>error===marker);assert.deepEqual(events.at(-1),['cancel',undefined]);
+});
+
+test('Workspace input preserves explicit callbacks, null and undefined without reading Parameter defaults',()=>{
+ for(const supplied of [null,undefined,()=>false]){
+  const marker=new Error('default must stay unread');
+  const f=preparedWorkspaceFixture(true,{configureOwners({documentWorkspace}){documentWorkspace.parameters=new Proxy({},{get(){throw marker;}});},configureInput(input){
+   for(const name of ['evaluateDimensionExpressionDraft','expressionFromUserInput','cancelPendingCommand'])input[name]=supplied;
+  }});
+  for(const name of ['evaluateDimensionExpressionDraft','expressionFromUserInput','cancelPendingCommand'])assert.equal(f.probe.ports.input[name],supplied);
+ }
+});
+
+test('Workspace dimension preview uses the same display API and live Pending and Parameter source without early drawing',()=>{
+ const marker=new Error('preview failed'),evaluation=(...args)=>args,fillet=()=>{},f=preparedWorkspaceFixture(true,{configureOwners({documentWorkspace}){documentWorkspace.parameters={evaluateEditingExpressionDraft:evaluation};}});
+ const raw=sceneWindow.DimensionPreview;let ports,actual,result;
+ sceneWindow.DimensionPreview={...raw,create(options){ports=options;return actual=raw.create(options);}};
+ const calls=f.calls.slice(),reads=f.reads.slice();
+ try{result=f.workspace.createDimensionPreview({drawFilletPreviewArc:fillet});}finally{sceneWindow.DimensionPreview=raw;}
+ assert.equal(result,actual);assert.equal(ports.drawFilletPreviewArc,fillet);assert.equal(ports.evaluateDimensionExpressionDraft,evaluation);assert.deepEqual(f.calls,calls);assert.deepEqual(f.reads,reads);
+ assert.equal(ports.readPending(),null);const pending={type:'distance-place'};f.pending.replace(pending);assert.equal(ports.readPending(),pending);f.pending.clear();assert.equal(ports.readPending(),null);
+ sceneWindow.DimensionPreview={...raw,create(){throw marker;}};
+ try{assert.throws(()=>f.workspace.createDimensionPreview({drawFilletPreviewArc:fillet}),error=>error===marker);}finally{sceneWindow.DimensionPreview=raw;}
+ assert.equal(f.pending.current,null);
+});
+
+test('Workspace input Parameter default failure stops before creating the surface and later input owners',()=>{
+ const marker=new Error('Parameter defaults failed'),probe={configureOwners({documentWorkspace}){documentWorkspace.parameters={get evaluateEditingExpressionDraft(){throw marker;}};},configureInput(input){delete input.evaluateDimensionExpressionDraft;}};
+ assert.throws(()=>preparedWorkspaceFixture(true,probe),error=>error===marker);
+ assert.deepEqual(probe.order,['controls','viewport','navigation','zoom']);
 });

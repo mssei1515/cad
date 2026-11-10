@@ -54,7 +54,6 @@
     readLanguage: () => applicationSettings.language, setHint, log,
   });
   const {
-    evaluateEditingExpressionDraft: evaluateDimensionExpressionDraft,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
     ensureParameterNamespace,
   } = parameterNamespace;
@@ -268,11 +267,12 @@
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction,
     history: historyFeature, analysis: constraintAnalysis, updateHistoryButtons,
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview, createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, dragPointer,
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview,
+    createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
     dimensionScene: { onExpressionMark: canvasRenderProbe.captureExpressionMark },
     dimensionInput: { syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
-      evaluateDimensionExpressionDraft, expressionFromUserInput, cancelPendingCommand, startDistanceValueInput,
+      startDistanceValueInput,
       submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue() },
     drawCanvas, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
   });
@@ -787,9 +787,7 @@
     endPointer: dragPointer.release,
   });
 
-  const dimensionPreview = dimensionDisplay.createPreview({
-    readPending: () => pendingCommandSession.current, drawFilletPreviewArc, evaluateDimensionExpressionDraft,
-  });
+  const dimensionPreview = createDimensionPreview({ drawFilletPreviewArc });
   function drawDimensionPreview() { return dimensionPreview.draw(); }
 
 
