@@ -126,7 +126,14 @@
               isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
               painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines } });
           }
-          return Object.freeze({ layer, drawHatches, createStack });
+          function prepareFrame() {
+            const stack = createStack();
+            function createFrameWithStack(options) {
+              return createFrame({ ...options, drawHatches, drawDrawingStack: stack.drawDrawingStack });
+            }
+            return Object.freeze({ stack, createFrame: createFrameWithStack });
+          }
+          return Object.freeze({ layer, drawHatches, createStack, prepareFrame });
         }
         return Object.freeze({ ...scene, commandTargets, sketchStyle, createFrame, createHatchRendering });
       }
