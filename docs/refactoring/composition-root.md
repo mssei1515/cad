@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 停止checkpoint：週枠残量4%（2026-11-11）
+
+usage toolの週枠usedPercent 96、残量4%を確認し、合意した5%未満の停止条件に達したため、新しい分離を停止する。全体目標は未完了であり、クレジット回復後にユーザーの再開指示で継続する。app.jsは1,333行・非空白887行、root280文・465束縛、構築・接続483行・別名／設定122行・委譲30行・test hooks165行。数百行（目安200〜500行）には未到達である。空白削除や別の巨大bootstrapへの移動で数値を合わせない。
+
+最新実装commitは399409b6ba378945a28e0ff48a20a67d49912e74、develop統合は4358a3edfad86964ffbec7146030f4075933e443。通常の主作業場所はC:/dev/cad（develop）、このgoalのmanaged作業場所はC:/Users/osamu/.codex/worktrees/app-refactoring-resume/cad。統合済みcodex/block-layout-read-ownerはlocal／originとも削除済み。本停止記録の後、developを先にPushし、最後にmainへrelease merge／Pushして、直ちにdevelopをmainへff-only同期／Pushする。停止記録とreleaseの最終commitはGit logとlocal／originのmain・developで確認する。
+
+最新コードで構文635file・全単体2,468件・関連単体19件・全E2E589件が成功（全50file、27.4分、exit 0）。通常二経路／test一経路もbrowser errorなし。全E2E中の705入力と開始HEAD不変、全件一覧589件一致、CAD三filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空、検証した7fileのcanonical Git blobと実装commit／develop統合の一致を確認済み。証跡はTEMP cad-block-layout-read-owner-{check,unit,focused,e2e,proof,smoke}.log、同source-hashes／selection／e2e-verified／tested-blobs JSON。本停止作業はdocsのみで、runtime／test／検証runnerの全705入力を実装commitと照合し、再実行した検証と既存の成功結果を混同しない。テスト期待値・性能閾値・timeout・Solver数値policy・保存形式v26は不変。
+
+次の対象は構築・接続483行を中心とする依存再監査。Document reset／Canvas編集入力／Clipboard／Deletion／Sketch navigation等の明示port数が多い箇所について、共有済みowner由来の依存と、その操作に固有の入力を区別する。raw関数を任意recordへ束ねるだけでは採用しない。Geometry Read ServicesへBlock layout生成を揃えた今回のように、実生成と共有依存を同じ責務へ集める。構築順の移動が必要ならcold生成と外部callback／DOM／model副作用を調べ、観測可能な順序、live read、scopeとObject同一性、guard・引数・receiver・返値・例外を証明する。小さな遅延委譲を移すだけで200〜500行に届くとは見積もらない。
+
+再開時は、AGENTS.mdと本方針・最新仕様／テストを読み、usageの残量、両worktreeの変更状態、fetch後のmain／develop local・originの一致と祖先関係を確認する。managed worktreeは停止後のdevelopへdetachedで置くため、main上で実装せず、最新developから新しいcodex/* branchを作りruntime-version.jsを再生成する。サブエージェント・Computer Useは使わない。1単位ごとに検証・diff確認・Commit・作業branch／develop Pushとapp.jsの行数差を報告する。現在の成果で全体完了とせず、目標を縮小しない。
+
 ### 最新：Block境界・配置照会の生成をGeometry Read Servicesへ統合（2026-11-11）
 
 GeometryReadServices.createBlockLayout（src/application/geometry_read_services.js）は、同じservicesが生成・共有するCatalog、Block Projection、Instance ProjectionとHatch queryの実関数から既存BlockLayoutを生成する。外部入力は操作時に使うannotationBoundsの一関数に限定する。appは同じ位置でこの入口を呼び、従来の四つの境界／配置照会を受け取る。計算本体はsrc/geometry/block_layout.jsに残し、既存のapplication／geometry配置を維持する。appのInstance ProjectionとHatch primitiveの二つの中間bindingは不要になる。
