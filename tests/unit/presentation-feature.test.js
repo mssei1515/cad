@@ -724,3 +724,28 @@ test('Toolbar Workspace startup retains the existing repeat behavior and never r
  }
 });
 })();
+
+test('toolbar icon composition stays lazy, returns the actual View API and shares current SVG and constraint classification',()=>{
+ const f=fixture(),reads=[],selectors=[],types=Object.fromEntries(['LineFixedConstraint','ArcEndpointFixedConstraint','GeometryFixedConstraint','SketchProjectionConstraint','ParallelLinesCenterlineConstraint','PointPairCenterlineConstraint'].map(name=>[name,class {}]));
+ const classifier=function(value){'use strict';assert.equal(this,undefined);reads.push(['classify',value]);return value?.dimension;};
+ Object.defineProperty(f.w,'DimensionQueries',{get(){reads.push('dimension-query');return{isDimensionConstraint:classifier};}});
+ Object.defineProperty(f.w,'GeometrySolver',{get(){reads.push('types');return types;}});
+ let markup='<svg data-version="1"></svg>',failure=null,captured,actual;
+ f.document.querySelector=selector=>{selectors.push(selector);if(failure)throw failure;return{querySelector:tag=>{assert.equal(tag,'svg');return markup?{outerHTML:markup}:null;}};};
+ const raw=f.w.ToolbarView,view={...raw,createIcons(options){assert.equal(this,view);captured=options;return actual=raw.createIcons(options);}};f.w.ToolbarView=view;
+ const toolbar=f.feature.createToolbar({readHistory:()=>({undoCount:1,redoCount:0})});assert.deepEqual(reads,[]);assert.deepEqual(selectors,[]);
+ const api=toolbar.createIcons();assert.equal(api,actual);assert.ok(Object.isFrozen(api));assert.equal(captured.document,f.document);assert.equal(captured.types,types);assert.equal(captured.isDimensionConstraint,classifier);
+ assert.deepEqual(reads,['dimension-query','types']);assert.deepEqual(selectors,[]);
+ const fixed=new types.LineFixedConstraint();assert.equal(api.constraintToolbarIcon(fixed),'<svg class="sketch-object-icon" data-version="1"></svg>');assert.deepEqual(selectors,['#fixPointBtn']);assert.equal(reads.length,2);
+ markup='<svg data-version="2"></svg>';const dimension={name:'水平',dimension:true};assert.equal(api.constraintToolbarIcon(dimension),'<svg class="sketch-object-icon" data-version="2"></svg>');assert.equal(reads.at(-1)[1],dimension);assert.equal(selectors.at(-1),'[data-constraint="distance"]');
+ markup=null;assert.equal(api.toolbarSvgMarkup('#missing'),'');failure=new Error('SVG query failed');assert.throws(()=>api.toolbarSvgMarkup('#line'),error=>error===failure);
+});
+
+test('toolbar icon assembly preserves constructor and namespace failures without caching or changing the existing toolbar',()=>{
+ const f=fixture(),toolbar=f.feature.createToolbar({readHistory:()=>({undoCount:1,redoCount:0}),updateDocumentStatus:()=>f.events.push('history-status')}),raw=f.w.ToolbarView,marker=new Error('icons failed');
+ f.w.DimensionQueries={isDimensionConstraint:()=>false};f.w.GeometrySolver={};let count=0;
+ f.w.ToolbarView={...raw,createIcons(){count++;throw marker;}};
+ assert.throws(()=>toolbar.createIcons(),error=>error===marker);assert.equal(count,1);const history=toolbar.updateHistory;toolbar.updateHistory();assert.equal(f.events.at(-1),'history-status');assert.equal(toolbar.updateHistory,history);
+ const next={icons:true};f.w.ToolbarView={...raw,createIcons(){count++;return next;}};assert.equal(toolbar.createIcons(),next);assert.equal(count,2);
+ Object.defineProperty(f.w,'DimensionQueries',{get(){throw marker;}});assert.throws(()=>toolbar.createIcons(),error=>error===marker);assert.equal(count,2);
+});

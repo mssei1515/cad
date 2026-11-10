@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の固定状態query共有単位ではapp.jsは1,414行、非空白968行。AST監査ではroot307文・498束縛、構築・接続503非空白行、別名・設定127行、委譲63行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のtoolbar icon組立て単位ではapp.jsは1,409行、非空白963行。AST監査ではroot306文・497束縛、構築・接続501非空白行、別名・設定124行、委譲63行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：toolbarアイコン生成のPresentation所有（2026-11-10）
+
+PresentationFeature.createToolbarのcreateIconsは、保持済みdocumentと既存DimensionQueriesの寸法判定・GeometrySolverの型を既存ToolbarView.createIconsへ接続し、その実View APIをそのまま返す。親toolbarの生成時には型・分類・DOMを読まず、元の後段位置で六constructorを選ぶ。DimensionQueriesの分類関数は凍結された既存namespaceの同じ関数を用いる。SVG取得・class付与・欠損fallback・拘束型／寸法／名前patternの優先順とDOMの操作時読取りは引き続きToolbarViewが所有し、低水準createIconsの明示入力APIは不変。新しいstate・cache・listener・module・contextを作らず、起動・bind順と通常UI・保存形式v26を維持する。
+
+appからアイコン構築の具体的入力と未使用の寸法判定別名を除いた。app.jsは1,414→1,409行（5行減）。TreeとCanvas候補へ渡す二つの実APIと関数参照は従来どおり保持する。型の選択はapplication層の既存toolbar組立てに置き、UI leafへ新しいmodel namespace依存を追加しない。
+
+追加単体二件でcoldな親／icon生成、同じ実View API・型／分類関数・document、現在SVGの差替え、固定優先と寸法判定、selector／namespace／constructorの例外、失敗後の既存toolbar保持と再生成を確認する。ASTでrootの対象call・未使用別名だけの変更、三portと元View factory呼出し・返却の一致、他のPresentation本体・ToolbarView・E2E不変、新しい未使用／未束縛参照なしを照合する。製品sourceのDimensionQueries代入が既存の凍結namespace定義のみであることも確認する。
+
+関連単体48件、構文635file・全単体2,389件・関連E2E352件が成功（25file、5.7m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択25fileのtest list352件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-toolbar-icon-composition-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、6f64d18の全589件成功と区別する。
+
+基準develop 584df7d、作業branch codex/toolbar-icon-composition、開始時週枠残量25%。全体E2Eの最新基準6f64d18（589件成功）と今回の関連検証を区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。数百行への全体目標は未完了。
 
 ### 最新：描画・dragの固定状態query owner共有（2026-11-10）
 

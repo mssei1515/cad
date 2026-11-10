@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：toolbarアイコン生成のPresentation所有（2026-11-10）
+
+PresentationFeature.createToolbarのcreateIconsは、保持済みdocumentと既存DimensionQueriesの寸法判定・GeometrySolverの型を既存ToolbarView.createIconsへ接続し、その実View APIをそのまま返す。親toolbarの生成時には型・分類・DOMを読まず、元の後段位置で六constructorを選ぶ。DimensionQueriesの分類関数は凍結された既存namespaceの同じ関数を用いる。SVG取得・class付与・欠損fallback・拘束型／寸法／名前patternの優先順とDOMの操作時読取りは引き続きToolbarViewが所有し、低水準createIconsの明示入力APIは不変。新しいstate・cache・listener・module・contextを作らず、起動・bind順と通常UI・保存形式v26を維持する。
+
+appからアイコン構築の具体的入力と未使用の寸法判定別名を除いた。app.jsは1,414→1,409行（5行減）。TreeとCanvas候補へ渡す二つの実APIと関数参照は従来どおり保持する。型の選択はapplication層の既存toolbar組立てに置き、UI leafへ新しいmodel namespace依存を追加しない。
+
+追加単体二件でcoldな親／icon生成、同じ実View API・型／分類関数・document、現在SVGの差替え、固定優先と寸法判定、selector／namespace／constructorの例外、失敗後の既存toolbar保持と再生成を確認する。ASTでrootの対象call・未使用別名だけの変更、三portと元View factory呼出し・返却の一致、他のPresentation本体・ToolbarView・E2E不変、新しい未使用／未束縛参照なしを照合する。製品sourceのDimensionQueries代入が既存の凍結namespace定義のみであることも確認する。
+
+関連単体48件、構文635file・全単体2,389件・関連E2E352件が成功（25file、5.7m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択25fileのtest list352件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-toolbar-icon-composition-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、6f64d18の全589件成功と区別する。
+
+基準develop 584df7d、作業branch codex/toolbar-icon-composition、開始時週枠残量25%。全体E2Eの最新基準6f64d18（589件成功）と今回の関連検証を区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。数百行への全体目標は未完了。
+
 ### 最新：描画・dragの固定状態query owner共有（2026-11-10）
 
 CanvasDisplayのcreateSceneForEditingとGeometryDragFeature.createForWorkspaceは、明示callbackがundefinedのときだけ、受け取ったfixedState ownerの既存関数を選ぶ。dragのBlock world変換も未指定時だけ既存readServices.projections.blockWorldPointを選ぶ。appは同じConstraintReferences.createFixedStateの凍結query ownerを共有し、固定照会のbound editing scopeをWorkspace.currentへ置き換えない。実queryのenabled／Object照合、操作時のscope読取り、描画・plan・solver・commandの本体と生成順、明示callback／null・戻り値・例外は維持する。新しいstate・cache・listener・module・wrapper ownerを作らず、保存形式v26も不変。

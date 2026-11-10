@@ -59,6 +59,9 @@
     }
     function createToolbar({ lifecycle, pending, constraints, constructionCommand, readSplineEditing, readHistory, updateDocumentStatus, isGeometryMode }) {
       const history = window.ToolbarView.createHistory({ document, readHistory, updateDocumentStatus });
+      function createIcons() {
+        return window.ToolbarView.createIcons({ document, isDimensionConstraint: window.DimensionQueries.isDimensionConstraint, types: window.GeometrySolver });
+      }
       function createControls({ selectedVisibilityTargets, selectionVisibilityIsHidden, canEditTarget, syncFlyouts = syncToolFlyouts, updateCursor }) {
         const view = window.ToolbarView.create({ document, isGeometryMode,
           constructionToggleState: (geometryMode = isGeometryMode()) => constructionCommand.state(geometryMode),
@@ -99,7 +102,7 @@
         }
         return Object.freeze({ ...controls, createDrawingBinding: createWorkspaceDrawingBinding });
       }
-      return Object.freeze({ updateHistory: history.update, createControls, prepareControls, createEditingBinding, createDrawingBinding, prepareWorkspace });
+      return Object.freeze({ updateHistory: history.update, createIcons, createControls, prepareControls, createEditingBinding, createDrawingBinding, prepareWorkspace });
     }
     function bindUI({ syncAnnotationResize, prepareParameterNamespace, refreshConstraintAnalysis, updateDocumentName,
       updateToolbar, renderSketch, updateBlockUI, renderProperties, readSketchMoving, updateStatusUI, updateConstraintButtons,
