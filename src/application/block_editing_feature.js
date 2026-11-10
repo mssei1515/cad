@@ -99,7 +99,8 @@
     return Object.freeze({ editing, session, queries, createCommands, createCommandsForEditing, createPropagation });
   }
   function createForWorkspace({ documentWorkspace, readServices, rebinding, editingScope, normalizeGeometryInstance,
-    readViewport, activateScope, reserveScopeSequences, createHistory, interaction, sessions, presentation }) {
+    readViewport, activateScope = (...args) => editingScope.activate(...args),
+    reserveScopeSequences = draft => documentWorkspace.reservation.scope(draft), createHistory, interaction, sessions, presentation }) {
     const { workspace, document: documentModel, documentIds: ids, sketches: { activeSketchId }, parameters } = documentWorkspace;
     const { catalog, projections, instances, reads: { blockProjectionBundles } } = readServices;
     const { copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;

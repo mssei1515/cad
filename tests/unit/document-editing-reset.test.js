@@ -6,7 +6,7 @@ const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(source => source.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture({ composed = false, configure = null, overrides = {} } = {}) {
+function fixture({ composed = false, configure = null, overrides = {}, activationMode = null } = {}) {
   const document = w.DocumentState.create(), workspace = w.EditingWorkspace.create(document), selection = w.CanvasSelection.create();
   const geometryIds = w.GeometryIds.create(), documentIds = w.DocumentIds.create(), calls = [];
   const point = new w.GeometrySolver.Point('P9', 1, 2);
@@ -49,10 +49,39 @@ function fixture({ composed = false, configure = null, overrides = {} } = {}) {
     readServices: { projections: { invalidateBlockProjectionCache: deps.invalidateBlockProjectionCache }, hatches: deps.hatchGeometryQuery },
     interaction: { lifecycle: deps.drawOperationLifecycle }, sessions: { pending: deps.pendingCommandSession, targets: deps.constraintTargetSession },
     blocks: { session: deps.blockEditor }, constraints: { clearPerformance: deps.clearAuthoringPerformance } };
-  const controller = composed ? w.DocumentEditingReset.createForWorkspace({ ...deps, ...overrides, ...owners }) : w.DocumentEditingReset.create({ ...deps, ...overrides });
+  let binding;
+  if (activationMode) {
+    binding = w.EditingScopeBinding.create({ workspace, Solver: w.GeometrySolver.ConstraintSolver,
+      closeSketchContext: () => effect('activate'), resetSketchMove() {}, clearGeometryReads() {}, invalidateProjection() {} });
+    owners.editingScope = binding; deps.activateEditingScope = (...args) => binding.activate(...args);
+  }
+  const input = { ...deps, ...overrides, ...owners };
+  if (activationMode === 'owned' && !Object.hasOwn(overrides, 'activateEditingScope')) delete input.activateEditingScope;
+  const controller = composed ? w.DocumentEditingReset.createForWorkspace(input) : w.DocumentEditingReset.create({ ...deps, ...overrides });
   assert.deepEqual(calls, []); state.ready = true;
-  return { document, workspace, blockScope, selection, geometryIds, documentIds, state, calls, controller, point, owners, deps };
+  return { document, workspace, blockScope, selection, geometryIds, documentIds, state, calls, controller, point, owners, deps, binding };
 }
+
+test('owned reset activation synchronizes real binding and Solver before clearing Document and preserves failure and explicit null', () => {
+  for (const failAt of [null, 'activate']) {
+    const outcomes = [];
+    for (const activationMode of ['explicit', 'owned']) {
+      const f = fixture({ composed: true, activationMode }); f.state.failAt = failAt;
+      f.state.observations.set('flush', () => {
+        assert.equal(f.binding.current, f.document); assert.equal(f.binding.solver.model, f.document); assert.equal(f.document.points[0], f.point);
+      });
+      if (failAt) {
+        assert.throws(() => f.controller.reset(), error => error === f.state.failure);
+        assert.equal(f.binding.current, f.blockScope); assert.equal(f.document.points[0], f.point);
+      } else { f.controller.reset(); assert.equal(f.document.points.length, 0); assert.equal(f.binding.current, f.document); }
+      assert.equal(f.binding.solver.model, f.workspace.current()); outcomes.push(JSON.stringify({ calls: f.calls, points: f.document.points.length }));
+    }
+    assert.equal(outcomes[1], outcomes[0]);
+  }
+  const f = fixture({ composed: true, activationMode: 'owned', overrides: { activateEditingScope: null } });
+  assert.throws(() => f.controller.reset(), error => error.name === 'TypeError'); assert.deepEqual(f.calls, ['sketchMove']);
+  assert.equal(f.workspace.current(), f.blockScope); assert.equal(f.document.points[0], f.point);
+});
 
 test('reset returns to document ownership, discards queued input and preserves the two document reset phases', () => {
   const f = fixture(), points = f.document.points, sketches = f.document.sketches, annotations = f.document.annotations;

@@ -47,7 +47,7 @@
     applicationText, constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
   });
   const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
-    geometryIds, reservation: idReservation, createReadContext } = documentWorkspace;
+    geometryIds, createReadContext } = documentWorkspace;
   const currentParameterNamespace = workspace.current;
   const { guard: guardDimensionSymbolDeletion } = window.ParameterApplication.createDeletionGuard({
     currentNamespace: currentParameterNamespace, symbolDeletionDependents: parameterNamespace.symbolDeletionDependents,
@@ -91,7 +91,6 @@
     Solver: ConstraintSolver,
     closeSketchContext: sketchNavigation.closeContext, resetSketchMove: sketchNavigation.resetMove,
   });
-  function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
   const { assignSketch: assignConstraintSketchId, push: pushModelConstraint } = constraintInsertion;
   const { session: fileSession, createForWorkspace: createDocumentFileFeature } = window.DocumentFileFeature.prepare();
@@ -169,7 +168,7 @@
   const constraintRebinding = createRebinding();
   const blockEditingFeature = window.BlockEditingFeature.createForWorkspace({
     documentWorkspace, readServices: geometryReadServices, rebinding: constraintRebinding, editingScope: editingScopeBinding, normalizeGeometryInstance,
-    readViewport: () => viewport, activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences, createHistory: createBlockEditHistory,
+    readViewport: () => viewport, createHistory: createBlockEditHistory,
     interaction: canvasInteraction, sessions: operationSessions, presentation,
   });
   const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
@@ -523,7 +522,6 @@
 
 
 
-  function reserveBlockEditorSequences(draft) { return idReservation.scope(draft); }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
   const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView, updateView: updateBlockView } = blockEditingFeature.createCommandsWithView({
@@ -1370,7 +1368,7 @@
 
   const documentEditingReset = window.DocumentEditingReset.createForWorkspace({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions, blocks: blockEditingFeature, constraints: constraintCommitCommand,
-    sketchMoveCommand, activateEditingScope, flushPointerMoves: flushScheduledCanvasPointerMove, referenceImageRenderer,
+    sketchMoveCommand, editingScope: editingScopeBinding, flushPointerMoves: flushScheduledCanvasPointerMove, referenceImageRenderer,
     sketchSolving, referenceConstraintState, constraintAnalysis, clearSelection, geometryDrag, dimensionDrag,
     referenceImageInteraction, canvasNavigation, blankCanvasGesture, constructionCommand, documentCanvasReset,
     blockPlacementCommand, hatchCommand, sketchTreeView, annotationDrag,
