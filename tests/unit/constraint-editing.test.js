@@ -945,6 +945,115 @@ test('dimension value stages propagate constructor failures and do not build lat
   }
 });
 
+function workspaceFixedFixture(assembled) {
+  const probe = {}, trace = [], state = { ready: false, scope: { constraints: [] }, result: true }, ports = {};
+  let owners;
+  const cold = () => assert.equal(state.ready, true);
+  const bare = name => function(...args) { assert.equal(this, undefined); cold(); trace.push([name, ...args]); if (state.fail === name) throw state.error; return state.result; };
+  const f = editingOwnersFixture(true, probe, (w, input) => {
+    const current = () => { cold(); return state.scope; };
+    const fixedState = { findArcEndpointFixedConstraint: bare('find-endpoint') };
+    const projection = { guardSketchProjectionShapeEdit: bare('projection') };
+    const selectionHighlight = { sameConstraintDisplayElement: (a, b) => a === b };
+    input.operands.operands.operandElement = operand => operand.element;
+    input.presentation.updateUI = bare('ui');
+    input.findLineFixedConstraint = line => { cold(); return state.scope.constraints.find(c => c.line === line); };
+    input.sessions.pending.cancel = () => {};
+    const documentWorkspace = { sketches: input.sketches, workspace: { current } };
+    const readServices = { catalog: { blockDefinitionById: id => { cold(); trace.push(['definition', id]); return state.definition; } } };
+    owners = { input, documentWorkspace, readServices, projection, fixedState, selectionHighlight,
+      checkpoint: { captureValues: bare('capture'), restoreValues: bare('restore') }, insertion: { push: bare('push') }, solving: { solveSketchAndDependents: bare('solve') },
+      deleteElements: bare('delete'), commitNewConstraint: bare('commit'), solveAndRefresh: bare('refresh'),
+      refreshConstraintAnalysis: bare('analysis'), recordHistory: bare('history') };
+    return w.ConstraintEditing.createForWorkspace({ ...input, documentWorkspace, readServices });
+  });
+  const original = f.w.FixedToggleCommand;
+  f.w.FixedToggleCommand = {
+    createOperand(options) { trace.push('operand'); if (state.fail === 'operand') throw state.error; ports.operand = options; return original.createOperand(options); },
+    createSelection(options) { trace.push('selection'); if (state.fail === 'selection') throw state.error; ports.selection = options; return original.createSelection(options); },
+  };
+  function prepare() {
+    if (assembled) return f.feature.createFixedForWorkspace(owners);
+    return f.feature.createFixedEditing({ operandElement: owners.input.operands.operands.operandElement,
+      guardSketchProjectionShapeEdit: owners.projection.guardSketchProjectionShapeEdit,
+      findArcEndpointFixedConstraint: owners.fixedState.findArcEndpointFixedConstraint, arcEndpointPoint: f.w.GeometryKernel.arcEndpointPoint,
+      currentScope: owners.documentWorkspace.workspace.current, sameConstraintDisplayElement: owners.selectionHighlight.sameConstraintDisplayElement,
+      deleteElements: owners.deleteElements, commitNewConstraint: owners.commitNewConstraint, solveAndRefresh: owners.solveAndRefresh });
+  }
+  function select(stage) {
+    const late = { ...owners, acceptError: .001 };
+    return assembled ? stage.createSelectionForWorkspace(late) : stage.createSelection({
+      blockDefinitionById: owners.readServices.catalog.blockDefinitionById, updateUI: owners.input.presentation.updateUI,
+      recordHistory: owners.recordHistory, snapshotModelState: owners.checkpoint.captureValues, restoreModelState: owners.checkpoint.restoreValues,
+      pushModelConstraint: owners.insertion.push, solveSketchAndDependents: owners.solving.solveSketchAndDependents,
+      acceptError: .001, refreshConstraintAnalysis: owners.refreshConstraintAnalysis });
+  }
+  return { ...f, owners, trace, fixedState: state, ports, prepare, select, restore: () => { f.w.FixedToggleCommand = original; } };
+}
+
+test('Workspace fixed assembly keeps cold separate stages and actual live Workspace, model, Selection and checkpoint owners', () => {
+  for (const assembled of [false, true]) {
+    const f = workspaceFixedFixture(assembled);
+    try {
+      assert.deepEqual(f.trace, []); const stage = f.prepare(); assert.deepEqual(f.trace, ['operand']);
+      assert.equal(Object.isFrozen(stage), true); const command = f.select(stage); assert.deepEqual(f.trace, ['operand', 'selection']);
+      const { operand, selection } = f.ports, o = f.owners;
+      assert.equal(operand.currentScope, o.documentWorkspace.workspace.current);
+      assert.equal(operand.operandElement, o.input.operands.operands.operandElement);
+      assert.equal(operand.sameConstraintDisplayElement, o.selectionHighlight.sameConstraintDisplayElement);
+      assert.equal(selection.snapshotModelState, o.checkpoint.captureValues); assert.equal(selection.restoreModelState, o.checkpoint.restoreValues);
+      assert.equal(selection.pushModelConstraint, o.insertion.push); assert.equal(selection.solveSketchAndDependents, o.solving.solveSketchAndDependents);
+      assert.equal(selection.canvasSelection, f.selection); assert.equal(selection.acceptError, .001);
+      f.fixedState.ready = true; assert.equal(operand.currentScope(), f.fixedState.scope);
+      f.fixedState.scope = { constraints: [] }; assert.equal(operand.currentScope(), f.fixedState.scope);
+      const block = { id: 'B1', definitionId: 'definition', fixed: false }; f.selection.set('blockInstances', [block]);
+      f.fixedState.definition = { name: 'Live definition' }; f.trace.length = 0;
+      assert.equal(command.toggle(), true); assert.equal(block.fixed, true);
+      assert.deepEqual(f.trace.map(e => e[0]), ['definition', 'ui', 'history']);
+      assert.equal(f.trace.at(-1)[1], 'ブロック固定切替');
+      const point = new f.w.GeometrySolver.Point('P', 1, 2), line = new f.w.GeometrySolver.Line('L', point, new f.w.GeometrySolver.Point('Q', 3, 4));
+      assert.equal(stage.operand.toggle({ kind: 'line', element: line }), true);
+      const constraint = f.trace.find(e => e[0] === 'commit')[2]; assert.equal(constraint.line, line);
+      f.fixedState.scope.constraints.push(constraint); f.trace.length = 0;
+      assert.equal(stage.operand.toggle({ kind: 'line', element: line }), true); assert.equal(f.trace.at(-1)[0], 'delete');
+      assert.equal(f.trace.at(-1)[1].constraints[0], constraint);
+    } finally { f.restore(); }
+  }
+});
+
+test('Workspace fixed assembly preserves projection refusal and original callback failures without later work', () => {
+  for (const assembled of [false, true]) {
+    const f = workspaceFixedFixture(assembled);
+    try {
+      const stage = f.prepare(); f.fixedState.ready = true; f.fixedState.result = false; f.trace.length = 0;
+      assert.equal(stage.operand.toggle({ kind: 'line', element: {} }), false); assert.deepEqual(f.trace.map(e => e[0]), ['projection']);
+      f.fixedState.result = true; f.fixedState.fail = 'commit'; f.fixedState.error = new Error('commit'); f.trace.length = 0;
+      const p = new f.w.GeometrySolver.Point('P', 0, 0), line = new f.w.GeometrySolver.Line('L', p, p);
+      assert.throws(() => stage.operand.toggle({ kind: 'line', element: line }), error => error === f.fixedState.error);
+      assert.deepEqual(f.trace.map(e => e[0]), ['projection', 'commit']);
+      assert.equal(f.fixedState.scope.constraints.length, 0);
+    } finally { f.restore(); }
+  }
+});
+
+test('Workspace fixed constructor failures retain the previously published operand and Selection commands', () => {
+  for (const assembled of [false, true]) {
+    const f = workspaceFixedFixture(assembled);
+    try {
+      const stage = f.prepare(); f.select(stage);
+      for (const phase of ['operand', 'selection']) {
+        f.fixedState.ready = false; f.fixedState.fail = phase; f.fixedState.error = new Error(phase); f.trace.length = 0;
+        assert.throws(() => phase === 'operand' ? f.prepare() : f.select(stage), error => error === f.fixedState.error);
+        assert.deepEqual(f.trace, [phase]);
+        f.fixedState.ready = true; f.fixedState.fail = 'projection'; f.fixedState.error = new Error('previous operand');
+        assert.throws(() => f.probe.ports.targets.toggleGeometryFixedOperand({ kind: 'line', element: {} }), error => error === f.fixedState.error);
+        const block = { id: 'B', fixed: false }; f.selection.set('blockInstances', [block]);
+        assert.equal(f.probe.ports.targets.toggleSelectedFixed(), true); assert.equal(block.fixed, true);
+      }
+    } finally { f.restore(); }
+  }
+});
+
 function ownedConstraintFixture(composed) {
  const probe={},calls=[],state={generation:0,failAt:null,actionError:null,result:{}};
  let support,operand,selected;

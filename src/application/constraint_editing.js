@@ -183,7 +183,8 @@
     }
     return Object.freeze({ ...editing, createCommitForWorkspace, createCommitWithIntentForWorkspace });
   }
-  function createForWorkspace({ documentWorkspace, sessions, ...options }) {
+  function createForWorkspace({ documentWorkspace, sessions, readServices, ...options }) {
+    const { operands, presentation } = options;
     let commit, fixedOperand, fixedSelection;
     function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
       return commit.readOnly.forPlacement(target, value, dimension, options);
@@ -216,10 +217,23 @@
       }
       return Object.freeze({ ...result, createSelection: createSelectionForWorkspace });
     }
+    function createFixedForWorkspace({ projection, fixedState, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh }) {
+      const result = createFixedEditing({ operandElement: operands.operands.operandElement,
+        guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit,
+        findArcEndpointFixedConstraint: fixedState.findArcEndpointFixedConstraint, arcEndpointPoint: window.GeometryKernel.arcEndpointPoint,
+        currentScope: documentWorkspace.workspace.current, sameConstraintDisplayElement: selectionHighlight.sameConstraintDisplayElement,
+        deleteElements, commitNewConstraint, solveAndRefresh });
+      function createSelectionForWorkspace({ checkpoint, insertion, solving, acceptError, refreshConstraintAnalysis, recordHistory }) {
+        return result.createSelection({ blockDefinitionById: readServices.catalog.blockDefinitionById,
+          updateUI: presentation.updateUI, recordHistory, snapshotModelState: checkpoint.captureValues, restoreModelState: checkpoint.restoreValues,
+          pushModelConstraint: insertion.push, solveSketchAndDependents: solving.solveSketchAndDependents, acceptError, refreshConstraintAnalysis });
+      }
+      return Object.freeze({ ...result, createSelectionForWorkspace });
+    }
     return Object.freeze({ selectionQuery: editing.selectionQuery, targets: editing.targets, dimensions: editing.dimensions,
       createControls: editing.createControls, createCommandInput: editing.createCommandInput,
       constraintTargetHint: editing.constraintTargetHint, input: editing.input, controls: editing.controls,
-      createCommitWithIntentForWorkspace, createFixedEditing, readOnlyDimensions });
+      createCommitWithIntentForWorkspace, createFixedEditing, createFixedForWorkspace, readOnlyDimensions });
   }
   function prepareDimensionValues({ workspace, sketches, bounds, minimumLineLength }) {
     const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
