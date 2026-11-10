@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：dragテスト実行・応答性fixtureのWorkspace組立て（2026-11-10）
+
+GeometryDragTestDriver.createForWorkspaceはDocumentWorkspace.workspace.current、既存Geometry／scope query／drag feature／Solverと、明示されたmodelTypes・arc endpoint計算・時計・拘束観測から従来のcreateExecutionSupportを生成する。executionは従来の三公開APIだけを持つ実APIであり、BrowserTestApiへ新たなfactoryを漏らさない。後段createResponsiveForEditingは同じGeometryのaddPoint／addLine、明示されたConstraintInsertion／Presentation／DrawingFitと、後段で明示されたmodelTypes・reset／寸法既定値／求解／履歴／serializeから従来の応答性fixtureを生成する。二段階の生成位置と公開順を変えず、型をDriverのglobalから直接取得しない。通常機能・既存Driver本体・BrowserTestApi・保存形式v26は不変で、新しいmodel／scope／session／cache・module・汎用contextを作らない。
+
+appの二つのtest構築を既存ownerへまとめ、使われなくなったvectorNorm／sketchSolveConstraints／addPoint／addLineの別名を除く。app.jsは1,409→1,408行（1行減）。実行支援の九入力はWorkspace等のownerを含む九入力へ、後段fixtureの十二入力は九入力へ整理し、行数以上に依存の供給元と生成段階を明確にする。nowの生callback、Solver receiver、現在scope／Geometry／sessionの同一性、preview→final→正規化→誤差／status観測、fixtureの求解→fit→draw→履歴reset→serializeと例外／途中状態を維持する。
+
+追加単体三件で、既存の三実行ルートの結果・観測順・現在scope・対象なし／session拒否／preview例外を新旧比較する。後段fixtureでは共有Point／Line／Constraint参照、型の生成時捕捉、再reset、型取得失敗後の既存execution保持、求解例外の後続停止を確認する。ASTで二構築と未使用別名だけのroot変更、全低水準port・時計本体の一致、既存Driver／通常機能／BrowserTestApi／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体12件、構文635file・全単体2,392件・全E2E589件が成功（50file、22.2m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-drag-test-workspace-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop e4b91d0、作業branch codex/drag-test-workspace、開始時週枠残量24%。三実行ルートを使う全九E2E fileを確認し、重いdrag回帰も含めて今回は全E2Eを実行する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：toolbarアイコン生成のPresentation所有（2026-11-10）
 
 PresentationFeature.createToolbarのcreateIconsは、保持済みdocumentと既存DimensionQueriesの寸法判定・GeometrySolverの型を既存ToolbarView.createIconsへ接続し、その実View APIをそのまま返す。親toolbarの生成時には型・分類・DOMを読まず、元の後段位置で六constructorを選ぶ。DimensionQueriesの分類関数は凍結された既存namespaceの同じ関数を用いる。SVG取得・class付与・欠損fallback・拘束型／寸法／名前patternの優先順とDOMの操作時読取りは引き続きToolbarViewが所有し、低水準createIconsの明示入力APIは不変。新しいstate・cache・listener・module・contextを作らず、起動・bind順と通常UI・保存形式v26を維持する。

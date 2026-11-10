@@ -21,7 +21,6 @@
 
 
   const {
-    vectorNorm,
     ConstraintSolver,
   } = window.GeometrySolver;
 
@@ -259,7 +258,7 @@
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, referenceState: referenceConstraintState,
     annotationDrag: constrainedAnnotationDrag, solver, pointUsage, presentation, solveState: sketchSolveResultState, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
-  const { connectedComponentFromSeeds, localSolveLines, sketchSolveConstraints } = solveScopeQuery;
+  const { connectedComponentFromSeeds, localSolveLines } = solveScopeQuery;
   const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = createCanvasDisplay({
     initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,
     fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
@@ -336,7 +335,7 @@
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
     hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
   });
-  const { addPoint, addLine, addSpline, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
+  const { addSpline, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
   const sketchProjectionEditing = sketchProjectionFeature.createModelEditing({
     geometry: geometryCreation, references: constraintReferences,
   });
@@ -1211,9 +1210,9 @@
       pushModelConstraint, fitAllGeometryToViewport, acceptError: CONSTRAINT_ACCEPT_ERROR,
     });
     const { readStatuses: readTestConstraintStatuses, publicAPI: constraintModelTestApi } = constraintTestFactories.createModelSupport();
-    const dragExecutionSupport = window.GeometryDragTestDriver.createExecutionSupport({
-      feature: geometryDragFeature, solver, currentScope: workspace.current, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
-      arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
+    const { execution: dragExecutionSupport, createResponsiveForEditing: createResponsiveDragFixture } = window.GeometryDragTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, scopeQuery: solveScopeQuery, feature: geometryDragFeature, solver,
+      modelTypes: window.GeometrySolver, arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
     });
     const annotationTestSupport = window.AnnotationTestDriver.createForFeature({
       feature: annotationFeature, geometry: geometryCreation, readServices: geometryReadServices, dimensionDisplay, dimensionLabelForConstraint,
@@ -1283,9 +1282,9 @@
       performance, File, serializeModel, loadModelData,
     });
     const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
-    const responsiveDragFixture = window.GeometryDragTestDriver.createResponsiveFixture({
-      resetModelState, addPoint, addLine, pushModelConstraint, modelTypes: window.GeometrySolver,
-      ensureDimensionDefaults, solveAndRefresh, log, fitAllGeometryToViewport, draw, resetHistory, serializeModel,
+    const responsiveDragFixture = createResponsiveDragFixture({
+      insertion: constraintInsertion, presentation, fit: drawingFit, modelTypes: window.GeometrySolver,
+      resetModelState, ensureDimensionDefaults, solveAndRefresh, resetHistory, serializeModel,
     });
     const offsetTestSupport = window.OffsetTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, insertion: constraintInsertion, offset: offsetFeature, sourceSelection: offsetSelection,
