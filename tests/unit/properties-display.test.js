@@ -325,7 +325,7 @@ test('Properties editing view retains Block changes and dimension property callb
   f.panel.onchange({target:new Input({property:'constraint-expression'},'=2+8')});assert.equal(f.calls[0][0],'dimension-property');assert.equal(f.calls[0][1],constraint);assert.deepEqual(f.calls[0].slice(2),['constraint-expression','=2+8']);assert.deepEqual(f.calls.slice(1),['ui','draw']);
 });
 
-function workspaceFixture(composed) {
+function workspaceFixture(composed, onSelectionReady) {
   const f = operationsFixture(), { viewOptions: v, editingOptions: e, operations } = f;
   const readServices = { ...f.services, hatches: { resolvedHatchBoundary: v.resolvedHatchBoundary } };
   const current = () => { assert.equal(f.state.ready, true); f.state.scopeReads = (f.state.scopeReads || 0) + 1; return f.state.scope; };
@@ -343,6 +343,7 @@ function workspaceFixture(composed) {
   const composition = composed ? w.PropertiesDisplay.createForWorkspace(inputs) : w.PropertiesDisplay.createFeature({
     document: f.document, documentModel: f.model, currentScope: current, canvasSelection: f.selection,
     readServices, sketchContext: f.sketchContext, hatchAppearanceForDisplay: w.HatchData.hatchAppearanceForDisplay, operations });
+  if (onSelectionReady) onSelectionReady(composition.selection, f);
   const editingInputs = { editingScope: { get current() { assert.equal(f.state.ready, true); return f.state.appearanceScope || f.state.scope; } },
     viewport: e.viewport, checkpoint: e.checkpoint, parameters: e.parameterStabilization, projection, projectionEditing, annotationFeature,
     isGeometryMode: e.isGeometryMode, toggleSketchVisibility: e.toggleSketchVisibility, recordHistory: e.recordHistory, escapeHtml };
@@ -418,4 +419,54 @@ test('Properties workspace connection keeps guarded actions, member receivers, r
     return f.snapshot();
   };
   assert.deepEqual(run(true), run(false));
+});
+
+test('Properties selection capabilities feed a real Toolbar before later workspace editing and View creation', () => {
+  const runs = [];
+  for (const direct of [false, true]) {
+    const events = []; let query, point;
+    const f = workspaceFixture(true, (selection, scene) => {
+      query = selection; assert.equal(Object.isFrozen(query), true); assert.equal(scene.state.ready, false);
+      assert.equal(scene.state.operationReads, undefined); assert.equal(scene.panel.innerHTML, '');
+      const callbacks = direct ? { selectedVisibilityTargets: query.visibilityTargets, selectionVisibilityIsHidden: query.visibilityIsHidden }
+        : { selectedVisibilityTargets() { return query.visibilityTargets(); }, selectionVisibilityIsHidden(targets) { return query.visibilityIsHidden(targets); } };
+      const button = { classList: { toggle(key, value) { events.push(['class', key, value]); } }, setAttribute(key, value) { events.push(['attribute', key, value]); } };
+      const toolbar = w.ToolbarView.create({ document: { getElementById: id => id === 'selectionVisibilityBtn' ? button : null },
+        isGeometryMode: () => true, constructionToggleState: () => ({ active: false }), readInteraction: () => ({ mode: 'select' }),
+        updateHistoryButtons() {}, canEditTarget: () => true, syncFlyouts() {}, updateCursor() {}, ...callbacks });
+      assert.deepEqual(events, []); scene.state.ready = true; point = scene.point('P1'); scene.selection.set('points', [point]);
+      for (const visible of [true, false]) {
+        point.appearance = { visible }; toolbar.update(); assert.equal(button.disabled, false);
+        assert.equal(events.at(-1)[2], String(!visible));
+        const target = direct ? query.selectedDisplayTarget.call({ unrelated: true }) : query.selectedDisplayTarget();
+        assert.equal(target.item, point); assert.equal(target.kind, 'geometry');
+      }
+      scene.state.ready = false; delete scene.state.operationReads; delete scene.state.scopeReads; scene.calls.length = 0;
+    });
+    assert.equal(f.composition.selection, query); f.state.ready = true;
+    assert.equal(query.visibilityTargets()[0].item, point); f.view.render(query.selectedDisplayTarget());
+    runs.push({ events, snapshot: f.snapshot() });
+  }
+  assert.deepEqual(runs[1], runs[0]);
+});
+
+test('direct Properties query functions retain live operations and original failures before and after later stages', () => {
+  const runs = [];
+  for (const direct of [false, true]) {
+    let selectedDisplayTarget, query;
+    const f = workspaceFixture(true, (selection, scene) => {
+      query = selection; selectedDisplayTarget = direct ? query.selectedDisplayTarget : () => query.selectedDisplayTarget();
+      scene.state.ready = true;
+      const instance = { id: 'FI1', sketchId: scene.sketchContext.activeSketchId() };
+      scene.state.operation = { freeInstancePlacement: instance }; assert.equal(selectedDisplayTarget().item, instance);
+      const marker = new Error('operation read'); scene.state.operationFailure = marker; scene.state.operationReads = [];
+      assert.throws(() => selectedDisplayTarget(), error => error === marker); assert.deepEqual(scene.state.operationReads, ['mode']);
+      scene.state.operationFailure = null; scene.state.operation = {}; scene.state.ready = false;
+      delete scene.state.operationReads; delete scene.state.scopeReads; scene.calls.length = 0;
+    });
+    f.state.ready = true; const point = f.point('new selection'); f.selection.set('points', [point]);
+    assert.equal(selectedDisplayTarget().item, point); assert.equal(f.composition.selection.selectedDisplayTarget, query.selectedDisplayTarget);
+    runs.push(f.snapshot());
+  }
+  assert.deepEqual(runs[1], runs[0]);
 });
