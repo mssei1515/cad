@@ -188,6 +188,8 @@ function workspaceFixture(composed, failure) {
       constraintIsOperational: referenceState.constraintIsOperational, readReferenceErrors: () => referenceState.errorReasons(), document });
   assert.deepEqual(events, []);
   return { state, events, marker, observation, deletion, cyclic, geometry,
+    options: { documentWorkspace, geometry, presentation, document, history, blocks, constructionCommand },
+    caseOptions: { resetModelState, deleteSketch, markReferenceConstraint, serializeModel, loadModelData, analysis, referenceState },
     snapshot() { return plain({ events, scope: state.scope, history: state.history, editor: state.editor, enabled: state.enabled }); } };
 }
 
@@ -213,4 +215,86 @@ test('Document workspace adapters preserve observation and fixture failures with
       assert.throws(action, error => error === f.marker); return f.snapshot(); };
     assert.deepEqual(run(true), run(false), failure);
   }
+});
+
+function browserDocumentFixture(assembled, failure) {
+  const f = workspaceFixture(true, failure), w = workspaceSandbox.window;
+  const root = f.options.documentWorkspace.document, fileSession = w.DocumentFiles.create();
+  root.documentName = 'Root'; f.options.document.title = 'Root | Jot2D';
+  f.state.importGate = Promise.resolve(); f.state.time = 10;
+  const files = {
+    effectiveDocumentName: () => { assert.equal(f.state.ready, true); return root.documentName + ' display'; },
+    async importFileData(file) {
+      assert.equal(f.state.ready, true); f.events.push('import');
+      const data = JSON.parse(await file.text()); await f.state.importGate;
+      if (f.state.importFailure) throw f.marker;
+      root.documentName = data.documentName; f.options.document.title = data.documentName + ' | Jot2D';
+      fileSession.setHandle({ name: file.name }); return true;
+    },
+  };
+  const options = { ...f.options, files, fileSession }, cases = { ...f.caseOptions,
+    performance: { now: () => { assert.equal(f.state.ready, true); return f.state.time; } }, File };
+  let support;
+  if (assembled) support = w.DocumentTestDriver.createBrowserSupportForWorkspace(options, cases);
+  else {
+    const raw = w.DocumentTestDriver.createForWorkspace(options), readTestHistory = raw.history.state;
+    const sketchDeletionFixture = raw.createSketchDeletion(cases), cyclicReferenceFixture = raw.createCyclicReference(cases);
+    const documentTestApi = raw.createFileApi(cases);
+    support = Object.freeze({ documents: Object.freeze({ documentTestApi, readTestHistory, cyclicReferenceFixture }), sketchDeletionFixture });
+  }
+  assert.deepEqual(f.events, []);
+  return { ...f, root, fileSession, options, cases, support };
+}
+
+test('Document browser support publishes the same cold groups and shares live history, fixed document and current scope', () => {
+  function run(assembled) {
+    const f = browserDocumentFixture(assembled), { documents, sketchDeletionFixture } = f.support;
+    assert.ok(Object.isFrozen(f.support)); assert.ok(Object.isFrozen(documents));
+    assert.deepEqual(Object.keys(documents), ['documentTestApi','readTestHistory','cyclicReferenceFixture']);
+    f.state.ready = true; f.state.history = { undoCount: 5, redoCount: 2 };
+    assert.equal(documents.readTestHistory().undoCount, 5);
+    f.state.scope = workspaceSandbox.window.DocumentState.create(); f.state.scope.documentName = 'Bound';
+    const names = documents.documentTestApi.observations.documentNameState();
+    assert.equal(names.modelName, 'Root'); assert.equal(names.serializedName, 'Bound');
+    const deleted = sketchDeletionFixture.reset();
+    assert.ok(f.state.scope.lines[0] instanceof workspaceSandbox.window.GeometrySolver.Line);
+    assert.equal(f.state.scope.lines[0].p1, f.state.scope.points[0]);
+    assert.equal(sketchDeletionFixture.remove('S3'), 'deleted:S3');
+    const cyclic = documents.cyclicReferenceFixture.loadCase();
+    return plain({ names, deleted, cyclic, state: f.snapshot() });
+  }
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Document browser support preserves file import waiting, cloning and original fixture exceptions', async () => {
+  async function run(assembled) {
+    const f = browserDocumentFixture(assembled), api = f.support.documents.documentTestApi; f.state.ready = true;
+    const snapshot = api.observations.serializedModelForTest(); assert.notEqual(snapshot, f.state.scope);
+    let finish; f.state.importGate = new Promise(resolve => { finish = resolve; });
+    const pending = api.fixtures.importDocumentNameFixture({ documentName: 'Imported' }, 'new.jot2d');
+    assert.equal(f.root.documentName, 'Root'); f.state.time = 35; finish();
+    const imported = await pending; assert.equal(imported.elapsedMs, 25); assert.equal(imported.modelName, 'Imported');
+    assert.equal(f.fileSession.handle.name, 'new.jot2d');
+    f.state.importFailure = true; await assert.rejects(api.fixtures.importDocumentNameFixture({}, 'bad.jot2d'), error => error === f.marker);
+    return plain({ imported, events: f.events, files: api.observations.fileSystemAccessStateForTest() });
+  }
+  assert.deepEqual(await run(true), await run(false));
+  for (const failure of ['history','dom','delete','mark','serialize','load','analysis','ui','operational','errors','badges']) {
+    const run = assembled => {
+      const f = browserDocumentFixture(assembled, failure); f.state.ready = true;
+      const action = ['history','dom'].includes(failure) ? f.support.documents.readTestHistory :
+        failure === 'delete' ? f.support.sketchDeletionFixture.reset : f.support.documents.cyclicReferenceFixture.loadCase;
+      assert.throws(action, error => error === f.marker); return f.snapshot();
+    };
+    assert.deepEqual(run(true), run(false), failure);
+  }
+});
+
+test('Document browser support only publishes after the last factory succeeds and leaves previous support usable', () => {
+  const f = browserDocumentFixture(true), before = f.snapshot(), marker = new Error('file binding failed');
+  const files = { get effectiveDocumentName() { throw marker; } };
+  assert.throws(() => workspaceSandbox.window.DocumentTestDriver.createBrowserSupportForWorkspace({ ...f.options, files }, f.cases), error => error === marker);
+  assert.deepEqual(f.snapshot(), before); f.state.ready = true;
+  assert.equal(f.support.documents.readTestHistory().undoCount, 2);
+  assert.equal(f.support.sketchDeletionFixture.remove('S3'), 'deleted:S3');
 });
