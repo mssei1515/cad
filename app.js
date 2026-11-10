@@ -246,9 +246,10 @@
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
+  const geometryDragPreparation = window.GeometryDragFeature.prepare();
   const constrainedAnnotationDrag = createConstrainedAnnotationDrag({
     readFeature: () => annotationFeature,
-    buildPlan: (...args) => buildDragSession(...args), beginGeometryDrag: (event, plan) => geometryDrag.begin(event, plan),
+    buildPlan: geometryDragPreparation.build, beginGeometryDrag: geometryDragPreparation.begin,
     invalidateAnalysis: () => constraintAnalysis.invalidate(),
   });
   const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving } = createSolveContext({
@@ -286,9 +287,7 @@
     selectionHighlight, isSidebarHighlightedElement,
     constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
     sameArcEndpoint, arcEndpointPoint, fixedState: fixedStateQueries,
-    editingQueries: { isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
-      isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point),
-      editedSpline: () => splineEditing.current?.spline },
+    editingQueries: { ...geometryDragPreparation.queries, editedSpline: () => splineEditing.current?.spline },
     annotationBounds,
   });
   const { drawBlockInstanceHandles } = geometryDisplay;
@@ -661,7 +660,7 @@
     splineEditing, guardDimensionSymbolDeletion, geometry: geometryCreation, sessions: operationSessions, lineCommand, circularCommands,
     solving: sketchSolving, analysis: constraintAnalysis, presentation, updateToolbar, recordHistory,
     referenceImageInteraction, clearSelection, solveAndRefresh,
-    resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
+    resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
   });
   const { remove: deleteElements, removeSelection: deleteCurrentSelection } = deletionFeature;
 
@@ -814,7 +813,7 @@
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
     constraintTargets: constraintTargetCommand, valueInput: dimensionInputController, presentation, constraintReferences, recordHistory,
     clearSelection, clearSnap, updateToolbar,
-    resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(),
+    resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(),
     referenceImage: referenceImageInteraction, selectionRectangle, projection: sketchProjectionCommand, instances: geometryInstanceCommand, instanceSources: instanceSourceCommand,
     clearInteractionForSketchChange, promptName: (title, name) => window.prompt(title, name), clearTreeHover: () => sketchTreeController.clearHoverSketch(),
   });
@@ -979,7 +978,7 @@
   function addDistanceConstraintFromTarget(...args) { return constraintCommitCommand.dimension(...args); }
 
 
-  const geometryDragFeature = window.GeometryDragFeature.createForWorkspace({
+  const geometryDragFeature = geometryDragPreparation.createForWorkspace({
     documentWorkspace, interaction: canvasInteraction, presentation, sourceQueries: derivedDragQueries, projectionQueries: sketchProjectionQueries,
     solver, scopeQuery: solveScopeQuery, solving: sketchSolving,
     checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
@@ -989,7 +988,7 @@
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
   });
-  const { command: geometryDrag, build: buildDragSession } = geometryDragFeature;
+  const { command: geometryDrag } = geometryDragFeature;
 
   const { input: constraintInputFeature, dragging: dimensionDragFeature } = createConstraintInputWithDragging({
     pointer: dragPointer, clearSnap, recordHistory,
