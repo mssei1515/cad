@@ -31,9 +31,6 @@
     constraintGraphNodes,
   } = constraintReferences;
 
-  const {
-    isDimensionConstraint,
-  } = window.DimensionQueries;
 
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
@@ -880,9 +877,7 @@
   const { remove: deleteSketch } = sketchDeletionCommand;
 
 
-  const { toolbarSvgMarkup, constraintToolbarIcon } = window.ToolbarView.createIcons({
-    document, isDimensionConstraint, types: window.GeometrySolver,
-  });
+  const { toolbarSvgMarkup, constraintToolbarIcon } = toolbarPresentation.createIcons();
 
 
 
