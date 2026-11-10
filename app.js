@@ -6,7 +6,7 @@
   const { serializeHatch, hatchAppearanceForDisplay } = window.HatchData;
 
   const {
-    CSS_PX_PER_MM, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
+    CSS_PX_PER_MM, DEFAULT_HATCH_APPEARANCE,
   } = window.Appearance;
   const {
     drawingOrderOwner,
@@ -26,8 +26,6 @@
     vectorNorm,
     Point,
     Line,
-    PointOnSplineConstraint,
-    SplineLineTangentConstraint,
     ConstraintSolver,
   } = window.GeometrySolver;
 
@@ -1422,20 +1420,12 @@
       fitAllGeometryToViewport, blockProjectionBundle, hitBlockInstance, clearSelection, copyableSelectionPayload,
       clipboardSession, pasteGeometryClipboard, geometryRefId, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter,
     });
-    const splineTestDriver = window.SplineTestDriver.create({
-      resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
-      readOperation: () => ({ mode: drawOperationLifecycle.mode, editSplineId: splineEditing.current?.spline?.id || null }),
-      canvasSelection, document, addPoint, addSpline, hatchGeometryQuery,
-      readSpline: () => editingScopeBinding.current.splines[0] || null, splineGeometry: window.SplineGeometry, addLine,
-      PointOnSplineConstraint, SplineLineTangentConstraint, pushModelConstraint, solveAndRefresh, serializeConstraint,
-    });
-    const splineTransferDriver = window.SplineTestDriver.createTransfer({
-      currentScope: workspace.current, splineGeometry: window.SplineGeometry, annotationLeaderTargetFromItem,
-      nextAnnotationId: () => documentIds.allocate("annotation"), activeSketchId, defaultAnnotationStyle: DEFAULT_ANNOTATION_STYLE,
-      clearSelection, canvasSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
-      blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      blockDefinitionDrawableSketchIds, invalidateBlockProjectionCache, blockProjectionBundle, updateUI, draw,
+    const { setup: splineTestDriver, transfer: splineTransferDriver } = window.SplineTestDriver.createForWorkspace({
+      documentWorkspace, editingScope: editingScopeBinding, geometry: geometryCreation, readServices: geometryReadServices,
+      interaction: canvasInteraction, presentation, splineEditing, blockSelection: blockSelectionQuery, blocks: blockEditingFeature,
+      viewport, canvas, document, resizeCanvas, resetModelState, resetHistory, serializeModel,
+      pushModelConstraint, solveAndRefresh, serializeConstraint, annotationLeaderTargetFromItem,
+      clearSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
     });
     const interactionProfilingTestApi = window.CanvasTestDriver.createInteractionProfiling({ profiler: interactionProfiler, scheduler: pointerMoveScheduler });
     window.__jot2dTest = window.BrowserTestApi.create({

@@ -1,5 +1,16 @@
 # Composition rootの残存責務と依存監査
 
+## Splineブラウザ支援のWorkspace組立て（2026-11-10）
+
+SplineTestDriver.createForWorkspaceが、隣接していたsetup／transferの生成を同じGeometry・Workspace・SelectionとBlock機能から組み立て、実APIをsetup／transferとして返す。既存create／createTransferはそのまま維持する。Spline拘束型と注記styleの選択、採番、Documentへの定義追加も同じ実ownerから取得し、rootの個別部品選択を減らす。Clipboardの入口は既存の関数を明示入力として保持する。
+
+setupのreadSplineはbound editing scope、transferはWorkspace.currentを従来どおり使う。mode／Spline編集session、採番・モデル・DOMは操作時に読み、Geometry同一性、裸callback／member receiver、例外の短絡、setup→transferの生成順を維持する。通常起動では生成せずtest queryの条件内に残す。新しいモデル・Selection・clipboard session・cache・listenerは作らない。.jot2d v26の形式と移行、BrowserTestApi・全E2Eは変更しない。
+
+app.jsは1,485→1,475行（10行減）。不要になった三つのimport別名も除去した。AST比較で対象二factoryとimport以外のroot全体・相対順、既存raw factoryの全体、所有側の全引数値／callbackの対応一致、新しい未束縛参照なしを確認した。新しい単体fileは構文・全単体の明示一覧に追加した。新旧比較単体3件、構文632file・全単体2,330件・全E2E589件が成功（50file、22.1m、exit 0）。実Geometryを使ったsetup／観測／拘束追加とtransferの返値・callback順・receiver、bound scopeとWorkspaceの分離、mode／編集sessionの遅延読取り、各失敗境界の例外同一性を確認した。702製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧の一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-spline-browser-support-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全体目標は未完了。
+
+基準develop 8208e1a、作業branch codex/spline-browser-support、開始時週枠残量36%。全体目標は未完了。直近の注記hit・Instance正規化を含む最新状態で全E2Eを実行する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ## 編集Instance正規化のWorkspace既定値（2026-11-10）
 
 DocumentWorkspace.createReadContext().createPersistenceが、既存GeometryInstance codecと同じWorkspaceのSketchContextを接続し、normalizeGeometryInstanceを公開する。Sketch指定がfalseyなら操作時のactiveSketchIdをString化する従来の既定resolverを所有する。raw geometryInstances APIとDocumentLoadingの明示resolverは維持し、保存検査に編集時の既定値を混ぜない。.jot2d v26の形式・移行・幾何モデルは変更しない。
