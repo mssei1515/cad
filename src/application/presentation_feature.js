@@ -5,6 +5,14 @@
     let ui, canvas;
     let toolFlyouts = null;
     let commandPanels = null;
+    let toolbar = null;
+    function requireToolbar(binding) {
+      if (!toolbar) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return toolbar;
+    }
+    function updateToolbar() { requireToolbar("toolbarView").update(); }
+    function updateStatusUI() { return requireToolbar("commandStatusView").updateStatus(); }
+    function updateHistoryButtons() { return requireToolbar("toolbarPresentation").updateHistory(); }
     function updateUI(options) { return ui.refresh(options); }
     function updateGeometrySelectionUI() { return ui.selection(); }
     function updatePropertiesUI() { return ui.properties(); }
@@ -59,6 +67,13 @@
     }
     function createToolbar({ lifecycle, pending, constraints, constructionCommand, readSplineEditing, readHistory, updateDocumentStatus, isGeometryMode }) {
       const history = window.ToolbarView.createHistory({ document, readHistory, updateDocumentStatus });
+      let controls = null;
+      function requireControls(binding) {
+        if (!controls) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+        return controls;
+      }
+      function update() { requireControls("toolbarView").view.update(); }
+      function updateStatus() { return requireControls("commandStatusView").status.update(); }
       function createIcons() {
         return window.ToolbarView.createIcons({ document, isDimensionConstraint: window.DimensionQueries.isDimensionConstraint, types: window.GeometrySolver });
       }
@@ -71,7 +86,8 @@
           updateHistoryButtons: history.update, selectedVisibilityTargets, selectionVisibilityIsHidden, canEditTarget, syncFlyouts, updateCursor });
         const status = window.ToolbarView.createCommandStatus({ document, applicationText: settings.applicationText,
           readMode: lifecycle.readMode, readPendingType: () => pending.current?.type, readConstraintCommand: () => constraints.command });
-        return Object.freeze({ view, status });
+        controls = Object.freeze({ view, status });
+        return controls;
       }
       function prepareControls({ canvas }) {
         const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
@@ -102,7 +118,8 @@
         }
         return Object.freeze({ ...controls, createDrawingBinding: createWorkspaceDrawingBinding });
       }
-      return Object.freeze({ updateHistory: history.update, createIcons, createControls, prepareControls, createEditingBinding, createDrawingBinding, prepareWorkspace });
+      toolbar = Object.freeze({ updateHistory: history.update, createIcons, createControls, prepareControls, createEditingBinding, createDrawingBinding, prepareWorkspace, update, updateStatus });
+      return toolbar;
     }
     function bindUI({ syncAnnotationResize, prepareParameterNamespace, refreshConstraintAnalysis, updateDocumentName,
       updateToolbar, renderSketch, updateBlockUI, renderProperties, readSketchMoving, updateStatusUI, updateConstraintButtons,
@@ -142,7 +159,7 @@
       return canvas;
     }
     return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createStartup, createToolbar, createToolNavigation, prepareWorkspaceControls, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
-      log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw,
+      log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw, updateToolbar, updateStatusUI, updateHistoryButtons,
       get selectedItem() { return canvas.selectedItem; } });
   }
   window.PresentationFeature = Object.freeze({ create });

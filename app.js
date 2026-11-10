@@ -38,7 +38,7 @@
     document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
   });
   const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
-    log, setHint, updateUI, updateGeometrySelectionUI, draw } = presentation;
+    log, setHint, updateUI, updateGeometrySelectionUI, draw, updateToolbar, updateStatusUI, updateHistoryButtons } = presentation;
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const { applicationText } = applicationSettings;
   const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
@@ -545,7 +545,6 @@
   function createBlockEditHistory() { return historyFeature.createBlockHistory(); }
 
 
-  function updateHistoryButtons() { return toolbarPresentation.updateHistory(); }
 
 
   function recordHistory(label = "変更") { return historyFeature.record(label); }
@@ -789,11 +788,10 @@
   });
   function toggleSelectedVisibility() { return selectionVisibilityCommand.toggle(); }
 
-  const { view: toolbarView, status: commandStatusView } = createToolbarControls({
+  createToolbarControls({
     selectedVisibilityTargets, selectionVisibilityIsHidden,
     canEditTarget: target => canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)),
   });
-  function updateToolbar() { toolbarView.update(); }
 
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
     createCommitWithIntentForWorkspace: createConstraintCommit, createFixedForWorkspace, constraintTargetHint, readOnlyDimensions,
@@ -968,7 +966,6 @@
 
 
 
-  function updateStatusUI() { return commandStatusView.update(); }
 
 
 

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の寸法テスト支援生成単位ではapp.jsは1,356行、非空白910行。AST監査ではroot292文・470束縛、構築・接続492非空白行、別名・設定120行、委譲46行、条件付きtest hooks169行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のToolbar更新owner統合単位ではapp.jsは1,353行、非空白907行。AST監査ではroot289文・468束縛、構築・接続488非空白行、別名・設定120行、委譲43行、条件付きtest hooks169行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Toolbar表示と状態・履歴の更新入口を生成ownerへ統合（2026-11-10）
+
+PresentationFeatureは、自身が生成に成功したToolbarをprivateに保持し、updateToolbar／updateStatusUI／updateHistoryButtonsを生成直後から安定したcallbackとして公開する。ToolbarはcreateControlsで生成した実Toolbar View／CommandStatusの凍結recordを保持し、update／updateStatusを提供する。appは従来の各位置でcreateToolbar／createControlsを実行し、返された表示部品を保持する代わりにPresentationの更新入口を接続する。外部から状態を代入するsetter、第二のView・model・session・listener、汎用app contextは追加しない。既存raw factoryと各公開部品は引き続き使用できる。
+
+View／Status生成の順、UIRefreshへの明示callback注入、履歴生成・bind・起動の順は維持する。Toolbar表示更新は同じViewをmemberとして零引数で呼び、戻り値を捨てる。状態表示は同じStatusをmemberとして零引数で呼び、履歴は同じToolbar APIのupdateHistoryをmemberとして零引数で呼び、それぞれ実戻り値と元例外を伝播する。未生成時は従来のtoolbarView／commandStatusView／toolbarPresentationの初期化前ReferenceErrorを維持する。生成失敗では未完成のcomponentを公開せず、以前の成功したcomponentを保持する。初期化順の依存を消したとは扱わず、所有者が段階的な生成と更新の境界を持つ。UI・操作・保存形式v26は不変。
+
+app.jsは1,356→1,353行（3行減）、非空白910→907行、root292→289文・470→468束縛。三つの委譲関数と二つの表示部品aliasを外し、更新を既存Presentation ownerへ統合した。構築分類492→488行はconst宣言から呼出し文への分類変更も含むため、単独で責務削減量とは扱わない。条件付きtest hooks169行は不変。目安200〜500行の全体目標は未完了。
+
+追加単体四件で、生成前のcoldなcallbackと初期化前エラー、同一component・receiver・引数・戻り値・例外、再生成失敗時の旧component保持、実Toolbarを用いた旧接続との履歴・mode・表示結果一致を確認する。rootは既知の五編集以外が全文一致し、自由識別子一覧も不変。構文635file・全単体2,443件・関連単体35件・全E2E589件が成功（50file、22.2m、exit 0）。通常二経路／test一経路の起動もbrowser errorなし。全E2E実行中の705入力と開始HEAD不変、全50fileの一覧589件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。実行後、追加した単体のmode切替をgetterへの代入から正式なsetModeと明示assertへ修正し、構文・関連単体・全単体を再実行して成功した。残る704入力は引き続き不変であり、単体fixture一箇所の強化だけを理由に全E2Eは再実行していない。TEMP cad-presentation-toolbar-updates-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop 7f54c1c、作業branch codex/presentation-toolbar-updates、開始時週枠残量11%。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：寸法ブラウザテスト支援の共通owner接続と完成セット生成（2026-11-10）
 
