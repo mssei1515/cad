@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のBlock handle所有単位ではapp.jsは1,421行、非空白975行。AST監査ではroot311文・504束縛、構築・接続504非空白行、別名・設定128行、委譲66行、条件付きtest hooks194行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のClipboard test組立て単位ではapp.jsは1,419行、非空白973行。AST監査ではroot311文・503束縛、構築・接続504非空白行、別名・設定128行、委譲66行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,16 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Clipboardテスト支援のWorkspace組立て（2026-11-10）
+
+ClipboardTestDriver.createForWorkspaceはDocumentWorkspaceのDocument／現在scope／Sketch query／Document IDsと、既存Geometry・GeometryReadServices・Selection・Clipboard session・Block編集・Presentationを従来のcreateSupportへ接続する。定義の追加先は固定Documentのその時点のblockDefinitions配列、Instanceの挿入先はWorkspace.current、採番は同じDocument IDsのblockInstanceとする。元のappend／allocate callbackの引数・member receiver・戻り値・例外を保持し、明示された履歴／serialize／reset／寸法配置callbackと三公開APIをそのまま使う。既存fixture／観測本体・test gate・生成順、通常機能・保存形式v26は不変で、新state・module・namespace・contextは作らない。app.jsは1,421→1,419行（2行減）。Document IDの最後の直接利用がtest側へ移るため、rootの未使用別名も除く。
+
+既存authoring-test-workspace.test.jsへ三つの境界テストを追加した。実Geometry／Constraint／DocumentWorkspace／IDs／Selection／Clipboard sessionと従来のraw組立てを比較し、cold生成、同じ選択Object、scope切替後のDocument定義追加とInstance挿入、配列差替え、Document採番、八つの失敗段階での例外同一性と途中状態／後続停止を確認する。投影とBlock定義生成はこの比較用fixtureの限定stubであり、そのGeometry変換自体の単体検証を代替しない。ASTでrootの対象callと未使用ID別名だけの変更、全port／二callback本体の対応、既存Driver本体・通常機能・E2E不変と新しい未使用／未束縛参照なしを照合する。
+
+関連単体7件、構文635file・全単体2,379件・関連E2E209件が成功（6file、3.0m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択6fileのtest list209件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-clipboard-test-workspace-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、4b33718の全589件成功と区別する。
+
+基準develop f455e86、作業branch codex/clipboard-test-workspace、開始時週枠残量27%。全体目標は未完了。全体E2Eの最新基準4b33718と今回の関連検証は区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Block handle方針のhit／描画ownerへの移管（2026-11-10）
 

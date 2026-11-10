@@ -132,3 +132,79 @@ test('Hatch transfer preserves Clipboard method receivers and query failures ret
     assert.deepEqual(results[1], results[0]);
   }
 });
+
+function clipboardWorkspaceFixture(composed) {
+  const context={window:{},structuredClone};vm.createContext(context);
+  for(const file of sources.filter(file=>file.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),context,{filename:file});
+  const w=context.window,events=[],state={ready:false,fail:null,history:'initial'};
+  const stage=name=>{assert.equal(state.ready,true,'Clipboard test construction must stay cold');events.push(name);if(state.fail===name)throw state.error;};
+  const base=w.DocumentWorkspace.create({applicationText:(_ja,en)=>en,constraintGraphNodes:()=>[],nextHatchIndex:()=>1});
+  const documentIds={allocate(kind){assert.equal(this,documentIds);stage('allocate:'+kind);return base.documentIds.allocate(kind);}};
+  const documentWorkspace={...base,documentIds},selection=w.CanvasSelection.create(),session=w.ClipboardSession.create({});
+  const current=()=>{stage('scope');return base.workspace.current();};
+  documentWorkspace.workspace={current};
+  const geometry=w.GeometryCreation.create({currentScope:current,ids:base.geometryIds,assignSketchId:item=>{item.sketchId=base.sketches.activeSketchId();},currentConstruction:()=>false,minLineLength:.01,minArcLength:.01});
+  const viewport={scale:2,update(value){assert.equal(this,viewport);stage('viewport');Object.assign(this,value);}};
+  const projections={invalidateBlockProjectionCache:()=>stage('invalidate'),blockProjectionBundle:instance=>{
+    stage('projection');return{lines:base.document.blockDefinitions.find(d=>d.id===instance.definitionId).lines};}};
+  const blocks={editing:{empty:name=>{stage('empty');return{id:base.documentIds.allocate('blockDefinition'),name,points:[],lines:[],constraints:[]};}}};
+  const options={documentWorkspace,geometry,readServices:{projections},interaction:{selection},clipboard:{session},blocks,
+    presentation:{updateUI:()=>stage('ui'),draw:()=>stage('draw')},viewport,
+    dimensionFromAnchor:w.DimensionPlacement.create({viewport}).dimensionFromAnchor,
+    readSelected:()=>{stage('selected');return{points:selection.points.map(p=>p.id),lines:selection.lines.map(p=>p.id)};},
+    readHistory:()=>{stage('history');return state.history;},
+    resetModelState:()=>{stage('reset');const scope=base.workspace.current();Object.assign(scope,w.DocumentState.create());selection.clear();base.geometryIds.reset();},
+    serializeModel:()=>{stage('serialize');return{constraints:base.workspace.current().constraints.map(c=>({type:c.constructor.name,sketchId:c.sketchId,dimension:c.dimension}))};},
+    pushModelConstraint:c=>{stage('constraint');c.sketchId=base.sketches.activeSketchId();base.workspace.current().constraints.push(c);return c;},
+    resetHistory:label=>{stage('reset-history');state.history=label;}};
+  const support=composed?w.ClipboardTestDriver.createForWorkspace(options):w.ClipboardTestDriver.createSupport({
+    currentScope:current,serializeModel:options.serializeModel,sketchContext:base.sketches,readSelected:options.readSelected,canvasSelection:selection,clipboardSession:session,readHistory:options.readHistory,
+    resetModelState:options.resetModelState,viewport,geometry,types:w.GeometrySolver,dimensionFromAnchor:options.dimensionFromAnchor,arcEndpointPoint:w.GeometryKernel.arcEndpointPoint,
+    rootSketchId:w.SketchHierarchy.ROOT_SKETCH_ID,defaultSketchId:w.SketchHierarchy.DEFAULT_SKETCH_ID,createEmptyBlockDefinition:blocks.editing.empty,
+    appendDefinition:definition=>base.document.blockDefinitions.push(definition),nextInstanceId:()=>documentIds.allocate('blockInstance'),
+    ...projections,pushModelConstraint:options.pushModelConstraint,resetHistory:options.resetHistory,...options.presentation});
+  assert.deepEqual(events,[]);state.ready=true;
+  return{w,base,options,support,selection,session,state,events};
+}
+
+test('Clipboard Workspace assembly preserves real geometry, constraints, Selection and observation order',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=clipboardWorkspaceFixture(composed);assert.equal(Object.isFrozen(f.support),true);
+  f.session.replaceForDiagnostics({pasteCount:4});
+  const result=f.support.resetForGeometryClipboardTest();
+  assert.equal(f.session.payload,null);assert.equal(f.selection.lines[0],f.base.document.lines[0]);
+  assert.ok(f.selection.arcs[0] instanceof f.w.GeometrySolver.Arc);assert.equal(f.base.document.constraints.length,7);
+  assert.equal(f.options.viewport.scale,1);assert.equal(result.history,'clipboard geometry test');
+  results.push(plain({result,events:f.events,keys:Object.keys(f.support)}));
+ }
+ assert.deepEqual(results[1],results[0]);
+});
+
+test('Clipboard Block fixture appends to current Document definitions while inserting into the live editing scope with Document IDs',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=clipboardWorkspaceFixture(composed),firstDefinitions=f.base.document.blockDefinitions,local=f.w.DocumentState.create();
+  f.base.document.blockDefinitions=[];f.base.workspace.activate(local);
+  const result=f.support.resetForBlockClipboardTest(),instance=local.blockInstances[0];
+  assert.equal(firstDefinitions.length,0);assert.equal(f.base.document.blockDefinitions.length,1);assert.equal(f.base.document.blockInstances.length,0);
+  assert.equal(f.selection.blockInstances[0],instance);assert.equal(instance.id,'BI1');assert.equal(f.base.documentIds.peek('blockInstance'),2);
+  assert.equal(local.constraints[0].line,f.base.document.blockDefinitions[0].lines[0]);
+  assert.equal(result.selectedBlockInstanceIds[0],instance.id);
+  results.push(plain({result,events:f.events}));
+ }
+ assert.deepEqual(results[1],results[0]);
+});
+
+test('Clipboard fixture assembly preserves failure boundaries and partial Document ID state',()=>{
+ for(const fail of ['empty','allocate:blockInstance','projection','constraint','reset-history','ui','draw','serialize']){
+  const results=[];
+  for(const composed of [false,true]){
+   const f=clipboardWorkspaceFixture(composed);f.state.fail=fail;f.state.error=new Error(fail);
+   assert.throws(()=>f.support.resetForBlockClipboardTest(),error=>error===f.state.error);
+   results.push(plain({events:f.events,definitions:f.base.document.blockDefinitions.length,instances:f.base.document.blockInstances.length,
+    constraints:f.base.document.constraints.length,selected:f.selection.blockInstances.map(i=>i.id),ids:f.base.documentIds.snapshot(),history:f.state.history}));
+  }
+  assert.deepEqual(results[1],results[0],fail);
+ }
+});

@@ -1,6 +1,20 @@
 /* Clipboard browser fixtures and observations without duplicate session state. */
 (() => {
   "use strict";
+  function createForWorkspace({ documentWorkspace, geometry, readServices, interaction, clipboard, blocks, presentation,
+    viewport, dimensionFromAnchor, readSelected, readHistory, resetModelState, serializeModel, pushModelConstraint, resetHistory }) {
+    const { document: model, workspace, sketches, documentIds } = documentWorkspace;
+    const { blockProjectionBundle, invalidateBlockProjectionCache } = readServices.projections;
+    const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
+    const { arcEndpointPoint } = window.GeometryKernel;
+    return createSupport({ currentScope: workspace.current, serializeModel, sketchContext: sketches, readSelected,
+      canvasSelection: interaction.selection, clipboardSession: clipboard.session, readHistory,
+      resetModelState, viewport, geometry, types: window.GeometrySolver, dimensionFromAnchor, arcEndpointPoint,
+      rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, createEmptyBlockDefinition: blocks.editing.empty,
+      appendDefinition: definition => model.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
+      invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, resetHistory,
+      updateUI: presentation.updateUI, draw: presentation.draw });
+  }
   function createSupport({ currentScope, serializeModel, sketchContext, readSelected, canvasSelection, clipboardSession, readHistory,
     resetModelState, viewport, geometry, types, dimensionFromAnchor, arcEndpointPoint, rootSketchId, defaultSketchId,
     createEmptyBlockDefinition, appendDefinition, nextInstanceId, invalidateBlockProjectionCache, blockProjectionBundle,
@@ -126,5 +140,5 @@
     }
     return Object.freeze({ reset });
   }
-  window.ClipboardTestDriver = Object.freeze({ createSupport, createObservation, createGeometryFixture, createBlockFixture });
+  window.ClipboardTestDriver = Object.freeze({ createForWorkspace, createSupport, createObservation, createGeometryFixture, createBlockFixture });
 })();
