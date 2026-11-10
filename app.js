@@ -274,11 +274,11 @@
     drawCanvas, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
   });
   const { withCanvasState } = canvasSurface;
-  const { placement: dimensionPlacement, painter: dimensionPainter } = dimensionDisplay;
+  const { resizeCanvas } = canvasWorkspaceLayout;
+  const { placement: dimensionPlacement, painter: { drawDimension }, layout: dimensionLayout } = dimensionDisplay;
   const { controller: dimensionInputController } = dimensionInput;
   const { dimensionFromAnchor, defaultDimensionForTarget } = dimensionPlacement;
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput } = dimensionInputController;
-  function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const { sketchStyle: sketchPresentation, geometry: geometryDisplay,
     overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit, createHatchRendering } = createCanvasScene({
     solveState: sketchSolveResultState, analysis: constraintAnalysis,
@@ -395,7 +395,7 @@
     synchronizedInstanceEditing,
     acceptError: CONSTRAINT_ACCEPT_ERROR, recordHistory, resetDimensionDrag: () => dimensionDrag.reset(), addDistanceConstraintFromTarget,
   });
-  const { submit: submitDistanceValue } = dimensionValueCommand;
+  const { submit: submitDistanceValue, startEdit: startDimensionEditInput } = dimensionValueCommand;
   const { stabilizeDocument: stabilizeDocumentParameters, application: parameterApplication } = window.ParameterApplication.createForWorkspace({
     documentWorkspace, editingScope: editingScopeBinding, blocks: blockEditingFeature, history: historyFeature, checkpoint: editingCheckpoint,
     parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization, presentation,
@@ -580,7 +580,6 @@
 
 
 
-  function resizeCanvas(...args) { return canvasWorkspaceLayout.resizeCanvas(...args); }
   function setPropertiesPanelCollapsed(...args) { return canvasWorkspaceLayout.setPropertiesPanelCollapsed(...args); }
 
 
@@ -668,8 +667,7 @@
     referenceImageInteraction, clearSelection, solveAndRefresh,
     resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
   });
-  function deleteElements(options) { return deletionFeature.remove(options); }
-  function deleteCurrentSelection() { return deletionFeature.removeSelection(); }
+  const { remove: deleteElements, removeSelection: deleteCurrentSelection } = deletionFeature;
 
   const clipboardFeature = window.ClipboardFeature.createForEditing({
     documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices, interaction: canvasInteraction,
@@ -679,8 +677,7 @@
     pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX, imageClipboard, updateToolbar, deleteSelection: deleteCurrentSelection,
     isGeometryMode, clearSelection, solveAndRefresh,
   });
-  const { session: clipboardSession, command: clipboardCommand } = clipboardFeature;
-  function copyableSelectionPayload() { return clipboardFeature.copyableSelectionPayload(); }
+  const { session: clipboardSession, command: clipboardCommand, copyableSelectionPayload } = clipboardFeature;
   function copySelectionToClipboard(options = {}) { return clipboardCommand.copy(options); }
 
   function pasteGeometryClipboard() { return clipboardCommand.paste(); }
@@ -734,7 +731,6 @@
 
 
 
-  function drawDimension(...args) { return dimensionPainter.drawDimension(...args); }
 
 
 
@@ -805,7 +801,7 @@
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
 
 
-  function handleConstraintOperandClick(pointer, type, hits = {}) { return constraintTargetCommand.operandClick(pointer, type, hits); }
+  const { operandClick: handleConstraintOperandClick } = constraintTargetCommand;
 
 
 
@@ -815,7 +811,6 @@
 
 
 
-  function startDimensionEditInput(hit) { return dimensionValueCommand.startEdit(hit); }
 
   function updateConstraintButtons() { constraintControlsView.update(); }
 
@@ -970,16 +965,15 @@
 
 
 
-  const { command: constraintCommitCommand, intentResolver: constraintIntentResolver } = createConstraintCommit({
+  const { command: constraintCommitCommand, intentResolver: { resolve: resolveConstraintIntent } } = createConstraintCommit({
     checkpoint: editingCheckpoint, insertion: constraintInsertion, redundancy: constraintRedundancy,
     solving: sketchSolving, stabilization: parameterStabilization, referenceState: referenceConstraintState,
     solvePreparation: constraintSolvePreparation, lineCollapseQuery, acceptError: CONSTRAINT_ACCEPT_ERROR,
     refreshConstraintAnalysis, recordHistory, now: () => performance.now(),
   });
   function commitNewConstraint(...args) { return constraintCommitCommand.ordinary(...args); }
-  function markReferenceConstraint(...args) { return constraintCommitCommand.markReference(...args); }
+  const { markReference: markReferenceConstraint } = constraintCommitCommand;
 
-  function resolveConstraintIntent(type, operands) { return constraintIntentResolver.resolve(type, operands); }
 
 
   function startDistanceResolution(resolution, pointer) { return dimensionPlacementCommand.startDistanceResolution(resolution, pointer); }
