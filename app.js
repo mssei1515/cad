@@ -51,7 +51,7 @@
     applicationText, constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
   });
   const { document: documentModel, workspace, parameters: parameterNamespace, sketches: sketchContext,
-    geometryIds, documentIds, reservation: idReservation, createReadContext } = documentWorkspace;
+    geometryIds, reservation: idReservation, createReadContext } = documentWorkspace;
   const currentParameterNamespace = workspace.current;
   const { guard: guardDimensionSymbolDeletion } = window.ParameterApplication.createDeletionGuard({
     currentNamespace: currentParameterNamespace, symbolDeletionDependents: parameterNamespace.symbolDeletionDependents,
@@ -1348,12 +1348,10 @@
       canvasTestDriver, document, hatchGeometryQuery, sketchPresentation, resetModelState, resetHistory,
       serializeModel, loadModelData, deleteElements, deleteCurrentSelection, normalizeGeometryInstance,
     });
-    const clipboardTestSupport = window.ClipboardTestDriver.createSupport({
-      currentScope: workspace.current, serializeModel, sketchContext, readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
-      resetModelState, viewport, geometry: geometryCreation, types: window.GeometrySolver, dimensionFromAnchor, arcEndpointPoint,
-      rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID, createEmptyBlockDefinition,
-      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
-      invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, resetHistory, updateUI, draw,
+    const clipboardTestSupport = window.ClipboardTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction,
+      clipboard: clipboardFeature, blocks: blockEditingFeature, presentation, viewport, dimensionFromAnchor,
+      readSelected: readTestSelectedGeometry, readHistory: readTestHistory, resetModelState, serializeModel, pushModelConstraint, resetHistory,
     });
     const forcedConstraintCommit = constraintTestFactories.createForcedCommit();
     const drawingOrderTestApi = window.DrawingOrderTestDriver.createForWorkspace({

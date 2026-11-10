@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Clipboardテスト支援のWorkspace組立て（2026-11-10）
+
+ClipboardTestDriver.createForWorkspaceはDocumentWorkspaceのDocument／現在scope／Sketch query／Document IDsと、既存Geometry・GeometryReadServices・Selection・Clipboard session・Block編集・Presentationを従来のcreateSupportへ接続する。定義の追加先は固定Documentのその時点のblockDefinitions配列、Instanceの挿入先はWorkspace.current、採番は同じDocument IDsのblockInstanceとする。元のappend／allocate callbackの引数・member receiver・戻り値・例外を保持し、明示された履歴／serialize／reset／寸法配置callbackと三公開APIをそのまま使う。既存fixture／観測本体・test gate・生成順、通常機能・保存形式v26は不変で、新state・module・namespace・contextは作らない。app.jsは1,421→1,419行（2行減）。Document IDの最後の直接利用がtest側へ移るため、rootの未使用別名も除く。
+
+既存authoring-test-workspace.test.jsへ三つの境界テストを追加した。実Geometry／Constraint／DocumentWorkspace／IDs／Selection／Clipboard sessionと従来のraw組立てを比較し、cold生成、同じ選択Object、scope切替後のDocument定義追加とInstance挿入、配列差替え、Document採番、八つの失敗段階での例外同一性と途中状態／後続停止を確認する。投影とBlock定義生成はこの比較用fixtureの限定stubであり、そのGeometry変換自体の単体検証を代替しない。ASTでrootの対象callと未使用ID別名だけの変更、全port／二callback本体の対応、既存Driver本体・通常機能・E2E不変と新しい未使用／未束縛参照なしを照合する。
+
+関連単体7件、構文635file・全単体2,379件・関連E2E209件が成功（6file、3.0m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択6fileのtest list209件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-clipboard-test-workspace-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、4b33718の全589件成功と区別する。
+
+基準develop f455e86、作業branch codex/clipboard-test-workspace、開始時週枠残量27%。全体目標は未完了。全体E2Eの最新基準4b33718と今回の関連検証は区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Block handle方針のhit／描画ownerへの移管（2026-11-10）
 
 GeometryHitQuery.createInstancesが無効なBlock回転handleのnull判定を所有し、CanvasHitInteractionのscene createInteractionが未指定時だけ接続する。GeometryDisplayがBlock handle描画stageを所有し、従来どおりGeometryもSelectionも読まずCanvasSurfaceのstroke resetだけを行う。CanvasDisplayのscene createFrameが未指定時だけ同じGeometryDisplayの関数を使う。明示callbackとnull override、低水準APIは維持する。rootの互換用二関数と二つの冗長な接続を除き、testのdash観測にも同じ描画関数を共有する。通常描画のdimension直前のstage、export時の非実行、resetの戻り値の無視と例外伝播、生成・bind順を変えない。新しいstate・module・listener・contextは作らず、保存形式v26も不変。app.jsは1,425→1,421行（4行減）。
