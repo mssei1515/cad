@@ -1472,13 +1472,12 @@
     changeFreeProperty: changeFreeInstanceProperty, hatchCommand, annotationCommand, pngExportCommand,
   });
 
-  const documentEditingReset = window.DocumentEditingReset.create({
-    documentModel, sketchMoveCommand, activateEditingScope, flushPointerMoves: flushScheduledCanvasPointerMove,
-    selectMode: drawOperationLifecycle.selectMode, clearAuthoringPerformance: constraintCommitCommand.clearPerformance,
-    referenceImageRenderer, invalidateBlockProjectionCache, sketchSolving, referenceConstraintState, constraintAnalysis,
-    clearSelection, geometryDrag, dimensionDrag, referenceImageInteraction, canvasNavigation, blankCanvasGesture,
-    drawOperationLifecycle, pendingCommandSession, constraintTargetSession, constructionCommand, documentCanvasReset,
-    geometryIds, documentIds, blockPlacementCommand, blockEditor, hatchCommand, hatchGeometryQuery, sketchTreeView, annotationDrag,
+  const documentEditingReset = window.DocumentEditingReset.createForWorkspace({
+    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions, blocks: blockEditingFeature, constraints: constraintCommitCommand,
+    sketchMoveCommand, activateEditingScope, flushPointerMoves: flushScheduledCanvasPointerMove, referenceImageRenderer,
+    sketchSolving, referenceConstraintState, constraintAnalysis, clearSelection, geometryDrag, dimensionDrag,
+    referenceImageInteraction, canvasNavigation, blankCanvasGesture, constructionCommand, documentCanvasReset,
+    blockPlacementCommand, hatchCommand, sketchTreeView, annotationDrag,
   });
 
   installTestHooks();
