@@ -387,7 +387,7 @@
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
   const { dimensions: { serialize: serializeDimension }, codecs: constraintCodecs, metadata: constraintMetadata,
-    preparation: documentPreparation, writer: documentWriter, geometryInstances: geometryInstancePersistence, ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
+    preparation: documentPreparation, writer: documentWriter, normalizeGeometryInstance: normalizeEditingGeometryInstance, ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
   });
@@ -480,9 +480,7 @@
 
 
 
-  function normalizeGeometryInstance(raw, normalizeSketch = value => String(value || activeSketchId()), index = 0) {
-    return geometryInstancePersistence.normalize(raw, normalizeSketch, index);
-  }
+  function normalizeGeometryInstance(raw, ...args) { return normalizeEditingGeometryInstance(raw, ...args); }
 
 
 
