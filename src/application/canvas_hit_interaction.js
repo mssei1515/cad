@@ -45,7 +45,7 @@
         points: { isExplicitPoint, isPointUsedByPrimitive, isReferencePoint },
         makeConstraintOperand: operandValues.makeConstraintOperand, operandFromReferenceTarget: operandValues.operandFromReferenceTarget,
         hits: geometry });
-      function createInteraction({ canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget,
+      function createInteraction({ canvasHover, sameArcEndpoint, hitBlockRotationHandle = instances.hitBlockRotationHandle, hitAnnotationTarget,
         blankCanvasGesture, instanceSourceCommand, hatchCommand }) {
         const interaction = create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint, geometry,
           scene: { hitHatchAt: (...args) => regions.hitHatchAt(...args), hitReferenceImageAt: (...args) => regions.hitReferenceImageAt(...args),

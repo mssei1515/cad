@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Block handle方針のhit／描画ownerへの移管（2026-11-10）
+
+GeometryHitQuery.createInstancesが無効なBlock回転handleのnull判定を所有し、CanvasHitInteractionのscene createInteractionが未指定時だけ接続する。GeometryDisplayがBlock handle描画stageを所有し、従来どおりGeometryもSelectionも読まずCanvasSurfaceのstroke resetだけを行う。CanvasDisplayのscene createFrameが未指定時だけ同じGeometryDisplayの関数を使う。明示callbackとnull override、低水準APIは維持する。rootの互換用二関数と二つの冗長な接続を除き、testのdash観測にも同じ描画関数を共有する。通常描画のdimension直前のstage、export時の非実行、resetの戻り値の無視と例外伝播、生成・bind順を変えない。新しいstate・module・listener・contextは作らず、保存形式v26も不変。app.jsは1,425→1,421行（4行減）。
+
+追加単体4件で無効handleの無照会、stroke resetのみの実行と元例外／途中状態、sceneの既定関数と明示callback・null、通常frameの描画順とexport分岐を確認する。ASTで元の二関数の完全一致、rootの対象関数・接続だけの変更、既存ownerの本体不変と二つの既定値追加を照合する。移動した無効hit関数の既存未使用引数x／y以外に新しい未使用束縛はなく、新しい未束縛参照もない。
+
+関連単体90件、構文635file・全単体2,376件・関連E2E328件が成功（24file、5.3m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択24fileのtest list328件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-block-handle-ownership-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、4b33718の全589件成功と区別する。
+
+基準develop c41f66e、作業branch codex/block-handle-ownership、開始時週枠残量27%。全体目標は未完了。全体E2Eの最新基準4b33718と今回の関連検証は区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：文字入力判定と拘束control focusのUI所有（2026-11-10）
 
 KeyboardInteractionController.isTextEditingTargetは、HTMLInputElement／HTMLTextAreaElement／isContentEditableによる従来の判定を共有する。KeyboardInputとReferenceImageInputは未指定時だけこのUI関数を選び、明示callback（nullを含む）をそのまま保持する。ConstraintControlsView.createFocusは拘束control／Fixのfocus解除を所有し、ConstraintEditing.createForEditingが未指定時だけ接続する。生成時にDOM／型を照会せず、元のinstanceofのrealmと動的な型参照、短絡・生の戻り値、activeElementの各read／selector／blur receiver、undefined返却と例外／後続停止を維持する。既存controller／Clipboard／拘束commandの処理本体と相対生成・bind順、通常UI・保存形式v26は不変。新state・listenerやDOM cache、汎用contextを作らない。 app.jsは1,428→1,425行（3行減）。重複した文字入力判定二つとfocus解除のDOM判断をrootから除き、既存UI moduleとapplication adapterを使用する。新file・namespaceは追加しない。

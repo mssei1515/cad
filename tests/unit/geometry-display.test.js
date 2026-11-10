@@ -44,6 +44,24 @@ function fixture() {
 }
 function line(x, extra = {}) { return { p1: new Point(x, 0), p2: new Point(x + 10, 0), sketchId: 'S1', ...extra }; }
 
+test('disabled Block handles reset the drawing context without reading or painting geometry', () => {
+  const f = fixture();
+  Object.assign(f.ctx, { lineDashOffset: 9, shadowBlur: 8, shadowColor: 'red', globalAlpha: .2,
+    globalCompositeOperation: 'xor', lineCap: 'round', lineJoin: 'round', lineWidth: 7 });
+  const { drawBlockInstanceHandles } = f.display;
+  assert.equal(drawBlockInstanceHandles('ignored'), undefined);
+  assert.deepEqual(f.calls.map(call => call[0]), ['setLineDash']);
+  assert.equal(f.calls[0][1].length, 0);
+  assert.deepEqual(f.reads, []); assert.deepEqual(f.strokes, []);
+  assert.deepEqual(['lineDashOffset', 'shadowBlur', 'shadowColor', 'globalAlpha', 'globalCompositeOperation', 'lineCap', 'lineJoin', 'lineWidth'].map(key => f.ctx[key]),
+    [0, 0, 'transparent', 1, 'source-over', 'butt', 'miter', 1]);
+  const error = new Error('reset failed');
+  f.ctx.setLineDash = () => { throw error; };
+  f.ctx.shadowBlur = 9;
+  assert.throws(() => drawBlockInstanceHandles(), value => value === error);
+  assert.equal(f.ctx.shadowBlur, 9);
+});
+
 test('geometry display retains scene ordering, explicit lists, selection options and shared DPR', () => {
   const f = fixture(), a = line(10), b = line(20, { sketchId: 'S2' }), hidden = line(30, { visible: false });
   f.state.scope.lines = [a, hidden, b]; f.selection.lines.push(a); f.display.drawLines();
