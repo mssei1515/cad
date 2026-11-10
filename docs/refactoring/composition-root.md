@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Document読取contextによる保存操作の所有（2026-11-10）
+
+DocumentWorkspace.createReadContextは、保持するread servicesと同じcontextにserializeConstraint／deserializeConstraint／decorateSerializedConstraint／serializeModelを公開する。既存createPersistenceがcodec・metadata・preparation・writer・loadingを従来位置で生成し、すべて成功した後にだけ完成した凍結bundleをprivate参照へ公開する。公開前の呼出しは従来の未初期化bindingに対応するReferenceError、再生成失敗時は以前の成功bundleを維持する。公開APIへのsetterは作らず、別ReadContextの保存操作とは共有しない。四入口は元のmember receiver・引数数／可変長・返値と例外を維持し、実Geometry／Workspaceとbound editing scope・保存形式v26を変えない。
+
+rootから四つの委譲と三つの低水準component別名を除き、app.jsは1,406→1,399行（7行減）、非空白960→953行、root306→302文・493→490束縛となった。既存ownerが実factoryの生成と成功後の公開を一体で所有するため、単なる変数setterや汎用app contextは追加しない。Block準備のhoisted入口はread context自体の生成引数にも必要なためrootへ残す。寸法serializeは旧angle labelの移行とlive viewport読取りを含むため、codecの生成を前倒ししたり純粋な読取りへ置換したりしない。生成・公開・bind順、低水準codec／writer／loading本体と通常UIは不変。
+
+追加単体四件で公開前と途中生成・初回失敗の境界、実codecによるv26の寸法／Geometry参照roundtripとWorkspace切替、四操作のmember receiver・引数数／返値／例外同一性、失敗後の旧bundle保持とReadContext間の独立を確認する。ASTで対象四delegateと三別名以外のroot全体、各委譲本体と全既存factoryの順序・内容、Block準備・保存／描画本体／index／E2E不変、新しい未使用／未束縛参照なしを比較する。
+
+関連単体51件、構文635file・全単体2,400件・全E2E589件が成功（50file、21.7m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-persistence-context-operations-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop 54a28fb、作業branch codex/persistence-context-operations、開始時週枠残量22%。最新コードで全E2Eを実行する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：寸法入力・previewのParameter／Pending接続（2026-11-10）
 
 CanvasDisplay.prepareForWorkspaceの寸法入力組立ては、元のdimensionInput objectをspreadして同じpendingを設定した新しい設定recordに、欠けたpropertyだけを補う。evaluateDimensionExpressionDraft／expressionFromUserInputは同じDocumentWorkspace.parametersの実関数、cancelPendingCommandは同じPending sessionへmessage一引数で委譲する入口を使う。copy結果に存在する明示callback・null・undefinedはそのまま保持し、元objectへの書込み・getter再読取りやfallback ownerの不要な照会をしない。後段workspaceのcreateDimensionPreviewは同じDimensionDisplay.createPreviewへ現在Pending reader・Fillet painter・同じ式評価を接続し、実preview APIを返す。値やscopeをsnapshot化せず、モデル・UI操作・保存形式v26は不変。

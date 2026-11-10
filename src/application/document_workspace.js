@@ -17,6 +17,16 @@
     }
     function createReadContext({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead }) {
       const services = createGeometryReadServices({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead });
+      let currentPersistence;
+      function requirePersistence(binding) {
+        if (currentPersistence === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+        return currentPersistence;
+      }
+      function serializeConstraint(c) { return requirePersistence("constraintCodecs").codecs.serialize(c); }
+      function deserializeConstraint(...args) { return requirePersistence("constraintCodecs").codecs.deserialize(...args); }
+      function decorateSerializedConstraint(data, constraint) { return requirePersistence("constraintMetadata").metadata.decorate(data, constraint); }
+      function serializeModel() { return requirePersistence("documentWriter").writer.serialize(); }
+      const persistence = Object.freeze({ serializeConstraint, deserializeConstraint, decorateSerializedConstraint, serializeModel });
       function createScopeBinding({ Solver, closeSketchContext, resetSketchMove }) {
         return window.EditingScopeBinding.create({ workspace, Solver, closeSketchContext, resetSketchMove,
           clearGeometryReads: () => services.reads.clearReadCache(),
@@ -71,9 +81,11 @@
             restoreSequences: sequences => { reservation.geometry(sequences.geometry); documentIds.restore(sequences); },
             ensureAppearanceState: () => preparation.appearance(), ensureBlockState: () => preparation.blocks(), log });
         }
-        return Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, normalizeGeometryInstance, ensureDimensionDefaults, createApplication });
+        const result = Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, normalizeGeometryInstance, ensureDimensionDefaults, createApplication });
+        currentPersistence = result;
+        return result;
       }
-      return Object.freeze({ services, createScopeBinding, createEditingScope, createPersistence });
+      return Object.freeze({ services, persistence, createScopeBinding, createEditingScope, createPersistence });
     }
     return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, createGeometryReadServices, createReadContext });
   }

@@ -70,7 +70,8 @@
     constraintSketchId,
   } = sketchContext;
 
-  const { services: geometryReadServices, createEditingScope, createPersistence } = createReadContext({
+  const { services: geometryReadServices, createEditingScope, createPersistence,
+    persistence: { serializeConstraint, deserializeConstraint, decorateSerializedConstraint, serializeModel } } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
@@ -364,8 +365,8 @@
   function computeTrimPreview(pointer) { return trimFeature.computePreview(pointer); }
   const editingCheckpoint = createEditingCheckpoint();
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
-  const { dimensions: { serialize: serializeDimension }, codecs: constraintCodecs, metadata: constraintMetadata,
-    preparation: documentPreparation, writer: documentWriter, normalizeGeometryInstance: normalizeEditingGeometryInstance, ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
+  const { dimensions: { serialize: serializeDimension }, preparation: documentPreparation,
+    normalizeGeometryInstance: normalizeEditingGeometryInstance, ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
   });
@@ -464,7 +465,6 @@
   function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
 
-  function decorateSerializedConstraint(data, constraint) { return constraintMetadata.decorate(data, constraint); }
 
 
 
@@ -549,12 +549,8 @@
 
 
 
-  function serializeConstraint(c) {
-    return constraintCodecs.serialize(c);
-  }
 
 
-  function serializeModel() { return documentWriter.serialize(); }
 
 
 
@@ -568,9 +564,6 @@
 
 
 
-  function deserializeConstraint(...args) {
-    return constraintCodecs.deserialize(...args);
-  }
 
 
   const documentApplication = createDocumentApplication({
