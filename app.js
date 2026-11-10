@@ -76,16 +76,13 @@
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
-  const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
+  const { catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
-  const { hatchPrimitivesForScope } = hatchGeometryQuery;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
   const { createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
-  const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
-    catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
-  });
+  const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = geometryReadServices.createBlockLayout({ annotationBounds });
   const sketchNavigation = window.SketchEditingFeature.prepareNavigation();
   const { binding: editingScopeBinding, solver, dimensionQueries: dimensionModelQueries, insertion: constraintInsertion } = createEditingScope({
     Solver: ConstraintSolver,

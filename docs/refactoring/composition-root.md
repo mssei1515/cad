@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Block境界・配置照会の生成をGeometry Read Servicesへ統合（2026-11-11）
+
+GeometryReadServices.createBlockLayout（src/application/geometry_read_services.js）は、同じservicesが生成・共有するCatalog、Block Projection、Instance ProjectionとHatch queryの実関数から既存BlockLayoutを生成する。外部入力は操作時に使うannotationBoundsの一関数に限定する。appは同じ位置でこの入口を呼び、従来の四つの境界／配置照会を受け取る。計算本体はsrc/geometry/block_layout.jsに残し、既存のapplication／geometry配置を維持する。appのInstance ProjectionとHatch primitiveの二つの中間bindingは不要になる。
+
+実Catalog／Projection／Instance／Hatchと注記readerの同一参照、raw BlockLayout.createのmember receiver・一引数・返値・元例外を保つ。生成時にDocument・Block定義・Geometry・scope・viewport・注記を読まず、新state／cache／ID／snapshot・listener・外部代入setter・汎用app contextを作らない。通常とHatch込みの両servicesから同じ入口を使え、definition置換・enabled Sketch・再帰cycle・派生形状・注記可視性・Hatchの既存計算方針を変えない。annotationBoundsの操作時参照、Workspace scopeとbound editing scope、配置時の回転／鏡像・中心と実Geometry同一性、UI・操作・保存形式v26は不変。既存servicesとBlockLayoutのraw APIを維持する。
+
+Hatch primitiveの関数選択はrootの早いalias宣言からBlockLayout生成入口へ揃う。従来の二地点の間は、凍結Catalog／Projection／Read APIの通常fieldの選択と関数宣言だけであり、外部callbackやawaitを含まない。Hatch関数も凍結APIの通常data propertyであり、factoryとその副作用の順を保つ。全てのfield取得位置が不変であるとは扱わない。
+
+app.jsは1,336→1,333行（3行減）、非空白890→887行。root281→280文・467→465束縛、構築・接続485→483行、別名・設定123→122行、委譲30行・test hooks165行は不変。BlockLayout生成のroot入力5→1、構文依存辺1,179→1,177。五関数を任意recordへ束ねるのではなく、実読み取りserviceの所有依存を内部で接続する。構築文数116自体は不変であり、200〜500行の全体目標は未完了。
+
+既存Geometry Read Services単体へ2件を加え、通常／Hatch込みのcold生成、実Block境界・配置中心・anchor・回転、注記readerの遅延と元例外、定義置換と元Geometryの同一性、raw factoryへ渡す実owner／Hatch関数の同一性・receiver・返値・失敗時の無変更を確認した。rootの三編集以外、既存services factoryとBlockLayout／Projection／Catalog／Hatch本体の全文一致、凍結metadataだけの取得位置差、未使用／未束縛／初期化前root参照の追加なしを照合した。構文635file・全単体2,468件・関連単体19件・全E2E589件が成功（50file、27.4m、exit 0）。全E2E実行中の705入力と開始HEAD不変、選択全50fileの一覧589件が無指定の全件一覧と一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-block-layout-read-owner-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop 8ce4271、作業branch codex/block-layout-read-owner、開始時週枠残量5%。全50file・589件のE2Eを選択する。停止条件に達した場合、この最新コードの全体検証後に停止記録をCommit・Pushし、developの後にmainを反映・同期して再開地点を残す。
+
 ### 最新：ヒット判定の生成をCanvas操作sessionの組立てへ統合（2026-11-11）
 
 CanvasInteractionFeatureの操作sessionがcreateSceneWithAnnotationsを提供し、保持済みRead Services・同じ実Canvas基盤・同じ実操作sessionを既存CanvasHitInteractionへ接続する。appはDocumentWorkspace、viewport、寸法scope・表示・label、注記bounds・空間query、operand値の八入力だけを渡す。rootでRead Services／Canvas基盤／sessionの三依存を選び直さず、入力の生成とそのscope policy／hit queryを同じ既存application ownerへ揃える。Canvas描画器・GeometryHitQuery・OperandHitQuery・注記判定の実装は従来の所有先に残す。
