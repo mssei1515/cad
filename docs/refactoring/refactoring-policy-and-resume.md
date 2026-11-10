@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のClipboard test組立て単位ではapp.jsは1,419行、非空白973行。AST監査ではroot311文・503束縛、構築・接続504非空白行、別名・設定128行、委譲66行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の拘束入力依存共有単位ではapp.jsは1,418行、非空白972行。AST監査ではroot311文・503束縛、構築・接続503非空白行、別名・設定128行、委譲66行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：拘束入力・寸法dragのWorkspace依存共有（2026-11-10）
+
+再監査の基準403b0fdではapp.jsは1,419行／非空白973行、root311文・503束縛、構築116文／504非空白行、test hooks192非空白行だった。小さな委譲や空白の除去だけで200〜500行へ到達できるとは見積もらない。主要構築の入力・出口と今回の選定理由は[構築境界の再監査](feature-construction-boundaries.md)へ追記した。
+
+ConstraintEditing.createForWorkspaceがinput.createWithDraggingForWorkspaceを提供する。親が保持済みのviewport・DocumentWorkspaceのWorkspace.current／Sketch query・read services・Presentation.updateUIを従来のcreateWithDraggingへ接続し、後段の明示入力をpointer・clearSnap・recordHistoryの三つに限定する。旧八portから五つの再注入を除き、実CommandInput→実DimensionDragFeatureの生成順と公開位置、Selection／Pending／Target／寸法配置・倍率の共有、current scopeのlive読取り、戻り値・例外・途中状態を維持する。低水準createWithDragging／createFeature等はそのまま残す。新state・cache・listener・module・汎用contextは作らず、保存形式v26も不変。app.jsは1,419→1,418行（1行減）。行数より五つの重複依存の除去を目的とする。
+
+追加単体二件でcold生成、同じowner／session／Selection／viewport、可視性とscope切替、実寸法のグループdragと一回の履歴、二constructorの例外と後続停止を新旧比較する。ASTでrootの対象adapter名・五port除去だけの変更、八つの低水準入力の一致、既存factory本体・E2E不変と新しい未使用／未束縛参照なしを照合する。
+
+関連単体41件、構文635file・全単体2,381件・関連E2E251件が成功（10file、4.0m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択10fileのtest list251件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-input-workspace-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、4b33718の全589件成功と区別する。
+
+基準develop 403b0fd、作業branch codex/constraint-input-workspace、開始時週枠残量26%。全体目標は未完了。全体E2Eの最新基準4b33718と今回の関連検証は区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Clipboardテスト支援のWorkspace組立て（2026-11-10）
 

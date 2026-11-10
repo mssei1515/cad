@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：拘束入力・寸法dragのWorkspace依存共有（2026-11-10）
+
+再監査の基準403b0fdではapp.jsは1,419行／非空白973行、root311文・503束縛、構築116文／504非空白行、test hooks192非空白行だった。小さな委譲や空白の除去だけで200〜500行へ到達できるとは見積もらない。主要構築の入力・出口と今回の選定理由は[構築境界の再監査](feature-construction-boundaries.md)へ追記した。
+
+ConstraintEditing.createForWorkspaceがinput.createWithDraggingForWorkspaceを提供する。親が保持済みのviewport・DocumentWorkspaceのWorkspace.current／Sketch query・read services・Presentation.updateUIを従来のcreateWithDraggingへ接続し、後段の明示入力をpointer・clearSnap・recordHistoryの三つに限定する。旧八portから五つの再注入を除き、実CommandInput→実DimensionDragFeatureの生成順と公開位置、Selection／Pending／Target／寸法配置・倍率の共有、current scopeのlive読取り、戻り値・例外・途中状態を維持する。低水準createWithDragging／createFeature等はそのまま残す。新state・cache・listener・module・汎用contextは作らず、保存形式v26も不変。app.jsは1,419→1,418行（1行減）。行数より五つの重複依存の除去を目的とする。
+
+追加単体二件でcold生成、同じowner／session／Selection／viewport、可視性とscope切替、実寸法のグループdragと一回の履歴、二constructorの例外と後続停止を新旧比較する。ASTでrootの対象adapter名・五port除去だけの変更、八つの低水準入力の一致、既存factory本体・E2E不変と新しい未使用／未束縛参照なしを照合する。
+
+関連単体41件、構文635file・全単体2,381件・関連E2E251件が成功（10file、4.0m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択10fileのtest list251件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-input-workspace-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、4b33718の全589件成功と区別する。
+
+基準develop 403b0fd、作業branch codex/constraint-input-workspace、開始時週枠残量26%。全体目標は未完了。全体E2Eの最新基準4b33718と今回の関連検証は区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Clipboardテスト支援のWorkspace組立て（2026-11-10）
 
 ClipboardTestDriver.createForWorkspaceはDocumentWorkspaceのDocument／現在scope／Sketch query／Document IDsと、既存Geometry・GeometryReadServices・Selection・Clipboard session・Block編集・Presentationを従来のcreateSupportへ接続する。定義の追加先は固定Documentのその時点のblockDefinitions配列、Instanceの挿入先はWorkspace.current、採番は同じDocument IDsのblockInstanceとする。元のappend／allocate callbackの引数・member receiver・戻り値・例外を保持し、明示された履歴／serialize／reset／寸法配置callbackと三公開APIをそのまま使う。既存fixture／観測本体・test gate・生成順、通常機能・保存形式v26は不変で、新state・module・namespace・contextは作らない。app.jsは1,421→1,419行（2行減）。Document IDの最後の直接利用がtest側へ移るため、rootの未使用別名も除く。

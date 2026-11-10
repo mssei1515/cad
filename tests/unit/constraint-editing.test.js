@@ -1201,3 +1201,60 @@ test('Readonly dimension placement uses real classification and Commit insertion
  }
  assert.equal(results[1],results[0]);
 });
+
+function workspaceInputDragFixture(composed, failAt = null) {
+ const probe={},order=[],received={},state={scope:{constraints:[]},visible:true},marker=new Error('input construction');let w,ports;
+ const f=editingOwnersFixture(true,probe,(owner,input)=>{
+  w=owner;
+  const note=name=>(...args)=>{assert.equal(probe.commandsReady,true);order.push([name,...args]);};
+  const current=()=>{assert.equal(probe.commandsReady,true);return state.scope;};
+  const sketches={...input.sketches,constraintSketchId:c=>c.sketchId,isEditableSketchId:()=>true};
+  const readServices={geometryAppearance:{isVisibleSketchId:()=>state.visible,isVisibleValue:v=>v!==false},dimensionAppearance:{effectiveDimensionAppearance:()=>({visible:true})}};
+  input.presentation.updateUI=note('ui');
+  ports={viewport:input.viewport,currentScope:current,sketches,readServices,pointer:{markThenCapture:note('capture'),release:note('release')},clearSnap:note('snap'),updateUI:input.presentation.updateUI,recordHistory:note('history')};
+  return w.ConstraintEditing.createForWorkspace({...input,documentWorkspace:{workspace:{current},sketches},readServices});
+ });
+ assert.deepEqual(order,[]);
+ function create(){
+  const originals=[];
+  for(const[name,key]of [['ConstraintCommandInput','createFeature'],['DimensionDragFeature','create']]){
+   const original=w[name];originals.push([name,original]);
+   w[name]={...original,[key](options){order.push(name);received[name]=options;if(failAt===name)throw marker;return original[key](options);}};
+  }
+  try{return composed?f.feature.input.createWithDraggingForWorkspace({pointer:ports.pointer,clearSnap:ports.clearSnap,recordHistory:ports.recordHistory}):f.feature.input.createWithDragging(ports);}
+  finally{for(const[name,original]of originals)w[name]=original;}
+ }
+ return{f,w,ports,state,order,received,marker,create};
+}
+
+test('Workspace dimension input reuses current scope, selection, viewport and actual command owners in the original cold construction order',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const q=workspaceInputDragFixture(composed),{f,w,ports,state,received}=q,result=q.create();
+  assert.deepEqual(q.order,['ConstraintCommandInput','DimensionDragFeature']);assert.ok(Object.isFrozen(result));
+  const p=received.DimensionDragFeature;assert.equal(p.viewport,ports.viewport);assert.equal(p.currentScope,ports.currentScope);assert.equal(p.canvasSelection,f.selection);assert.equal(p.commandInput,result.input.dimension);
+  assert.equal(p.beginPointer,ports.pointer.markThenCapture);assert.equal(p.endPointer,ports.pointer.release);assert.equal(p.updateUI,ports.updateUI);
+  assert.equal(received.ConstraintCommandInput.targets,f.session);
+  function distance(id,y){const c=new w.GeometrySolver.DistanceConstraint(new w.GeometrySolver.Point(id+'a',0,y),new w.GeometrySolver.Point(id+'b',100,y),100);c.sketchId='S1';
+   const target=w.DimensionQueries.targetFromConstraint(c);c.dimension=f.probe.ownerInputs.placement.dimensionFromAnchor(target,{x:50,y:y-20});return{constraint:c,target,dimension:c.dimension};}
+  const a=distance('a',0),b=distance('b',40);state.scope.constraints=[a.constraint,b.constraint];f.selection.set('dimensionConstraints',[a.constraint,b.constraint]);
+  assert.equal(result.dragging.selectedLineGroup(a.constraint).members[1].constraint,b.constraint);
+  state.visible=false;assert.equal(result.dragging.selectedLineGroup(a.constraint),null);state.visible=true;
+  q.order.length=0;const command=result.dragging.command;command.begin({pointerId:4},a,{x:0,y:0});command.update({x:12,y:8});command.finish({pointerId:4});
+  assert.equal(command.active,false);assert.equal(q.order.filter(e=>e[0]==='history').length,1);
+  state.scope={constraints:[a.constraint]};assert.equal(result.dragging.selectedLineGroup(a.constraint),null);
+  results.push(JSON.stringify({order:q.order,events:f.events,dimensions:[a.constraint.dimension,b.constraint.dimension],keys:Object.keys(result)}));
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('Workspace dimension input propagates each constructor failure at the original stage without constructing later owners',()=>{
+ for(const failAt of ['ConstraintCommandInput','DimensionDragFeature']){
+  for(const composed of [false,true]){
+   const q=workspaceInputDragFixture(composed,failAt);
+   assert.throws(q.create,error=>error===q.marker);
+   assert.deepEqual(q.order,failAt==='ConstraintCommandInput'?['ConstraintCommandInput']:['ConstraintCommandInput','DimensionDragFeature']);
+   assert.deepEqual(q.f.events,[]);assert.deepEqual(q.state.scope.constraints,[]);
+  }
+ }
+});

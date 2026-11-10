@@ -230,9 +230,13 @@
       }
       return Object.freeze({ ...result, createSelectionForWorkspace });
     }
+    function createWithDraggingForWorkspace({ pointer, clearSnap, recordHistory }) {
+      return editing.input.createWithDragging({ viewport: options.viewport, currentScope: documentWorkspace.workspace.current,
+        sketches: documentWorkspace.sketches, readServices, pointer, clearSnap, updateUI: presentation.updateUI, recordHistory });
+    }
     return Object.freeze({ selectionQuery: editing.selectionQuery, targets: editing.targets, dimensions: editing.dimensions,
       createControls: editing.createControls, createCommandInput: editing.createCommandInput,
-      constraintTargetHint: editing.constraintTargetHint, input: editing.input, controls: editing.controls,
+      constraintTargetHint: editing.constraintTargetHint, input: Object.freeze({ ...editing.input, createWithDraggingForWorkspace }), controls: editing.controls,
       createCommitWithIntentForWorkspace, createFixedEditing, createFixedForWorkspace, readOnlyDimensions });
   }
   function prepareDimensionValues({ workspace, sketches, bounds, minimumLineLength }) {

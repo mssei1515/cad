@@ -826,7 +826,7 @@
 
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
     createCommitWithIntentForWorkspace: createConstraintCommit, createFixedForWorkspace, constraintTargetHint, readOnlyDimensions,
-    input: { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging },
+    input: { updateHover: updatePendingDistanceRetargetHover, createWithDraggingForWorkspace: createConstraintInputWithDragging },
     controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForWorkspace({
     document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, readServices: geometryReadServices, presentation,
     operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController,
@@ -1045,8 +1045,7 @@
   const { command: geometryDrag, build: buildDragSession } = geometryDragFeature;
 
   const { input: constraintInputFeature, dragging: dimensionDragFeature } = createConstraintInputWithDragging({
-    viewport, currentScope: workspace.current, sketches: sketchContext, readServices: geometryReadServices, pointer: dragPointer,
-    clearSnap, updateUI, recordHistory,
+    pointer: dragPointer, clearSnap, recordHistory,
   });
   const { command: dimensionDrag } = dimensionDragFeature;
 

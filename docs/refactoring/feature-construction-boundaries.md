@@ -1,5 +1,38 @@
 # 機能単位の構築境界の再監査
 
+## 最新再監査：Workspace依存の重複注入（2026-11-10）
+
+基準develop 403b0fd。以下はこの基準のsnapshotであり、旧4e80981の監査は後段に保持する。app.jsは1,419行／非空白973行、root311文・503束縛。構築116文／504非空白行、別名・設定93文／128行、委譲58文／66行、test hooks192行。後段可変参照・代入はゼロだが、遅延構文を含む最大循環成分は216文あり、初期化順の自由な変更や循環解消を証明しない。
+
+入力はそのroot文の範囲外にあるroot束縛への参照数（calleeを含む）。公開出口は他のroot文から使われる束縛数で、全公開method数ではない。行数は非空白行を数える。
+
+| 構築（403b0fdの行） | 行 | root入力 | 外部出口 |
+| --- | ---: | ---: | ---: |
+| createCanvasScene（289–300） | 12 | 18 | 7 |
+| createOperationSessions（147–157） | 11 | 18 | 1 |
+| ConstraintEditing.createForWorkspace（827–836） | 10 | 19 | 11 |
+| GeometryDragFeature.createForWorkspace（1035–1044） | 10 | 27 | 1 |
+| createAuthoringTools（347–355） | 9 | 21 | 1 |
+| sketchEditing.createTreeForEditing（897–905） | 9 | 24 | 3 |
+| createCanvasEditingInput（1120–1128） | 9 | 28 | 1 |
+| canvasEditingInput.createKeyboard（1145–1153） | 9 | 20 | 1 |
+
+### 今回選んだ境界
+
+ConstraintEditingの後段createWithDraggingは、親が持つviewport・Workspace.current・Sketch query・read services・Presentation.updateUIを毎回rootから再注入していた。親のcreateForWorkspaceに限定したadapterを置き、後段の八portを三portへ減らす。対象callのroot依存はcallee込み九→四となる。低水準APIは残し、実CommandInputとDimensionDragFeatureの生成を従来の後段位置で行う。input groupの公開method追加だけで、可変contextや公開setterは作らない。
+
+### 引き続き一括化しないもの
+
+- Canvas sceneのdrag照会は後段のgeometryDrag／splineEditingを操作時に読む。早期にconstを直接渡すとTDZとなり、setter holderで隠すだけの案にも改善はない。fixed stateの共有は候補だが、scene全体の18入力と七出口を解消する案とは区別する。
+- OperationSessionsのhit／preview／取消callbackも後段のquery・Line／Centerline／Offset／Annotationを読む。単一の巨大readerやcommands bagへ包むだけでは所有責務が変わらない。
+- GeometryDragでは固定状態の照会owner・read servicesからの再注入をさらに確認できる。ただしscope／solver／checkpoint／pointerの異なる役割を一つの自由なcontextにまとめない。Workspaceとbound editing scopeの差を維持する。
+- Propertiesの三段階生成と最終起動については、下記の以前の不採用理由を維持する。構築504行をそのまま別ファイルへ移して数百行を達成したことにはしない。
+
+次の判断では、既存owner内での実component接続、live読取りの時機、constructor／公開／bindの段階が明確になることを優先する。削減行数を足し合わせて完了見込みを作らず、200〜500行の目標と現在の未到達を維持する。
+
+## 旧監査snapshot（4e80981）
+
+
 基準はdevelop `4e80981691158807905f39e4426cd23cbc0f39d6`（2026-11-10）。以下の行番号と数値は、このcommitのsnapshotである。**以下の数値・比較は監査時点のsnapshotであり、現在の実装状況は次節を参照する。**
 
 ## 二段階案の実装状況（2026-11-10）
