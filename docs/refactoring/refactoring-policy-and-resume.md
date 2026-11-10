@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の拘束query共有単位ではapp.jsは1,391行、非空白945行。AST監査ではroot300文・488束縛、構築・接続497非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のHatch Frame接続単位ではapp.jsは1,390行、非空白944行。AST監査ではroot300文・486束縛、構築・接続496非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Hatch・描画順stackとFrameの段階的接続（2026-11-10）
+
+CanvasDisplayのscene.createHatchRenderingが返すprepareFrameは、既存createStackを明示呼出しして同じ実DrawingStackを生成し、そのstackと接続済みのcreateFrameを凍結recordで返す。後段createFrameは設定recordをcopyし、同じHatch描画関数とstack.drawDrawingStackを同じsceneの既存createFrameへ渡す。Frame生成ごとにstackを再生成せず、Frame／overlayの実返却参照と例外をそのまま返す。描画stateを複製せず、公開setter・新しい可変参照・cache・listenerや汎用app contextを追加しない。
+
+rootはHatch content／layerを従来位置で生成し、ReferenceImage feature生成後の従来Stack位置でprepareFrameを呼び、後段の従来Frame位置で返されたfactoryを呼ぶ。既存createStack／scene.createFrameの明示入力APIは維持する。previewを含むHatch→previewを除外した描画順stack、通常描画／export／overlayの順序と現在scope・可視性・Selection／Hover・export boundsの読取りは既存rendererが所有し、その本体は変えない。通常UI・保存形式v26を維持する。
+
+appはdrawHatches／drawDrawingStackの二つの低水準別名を取り出してFrameへ渡し直さなくなり、Frame構築入力は14→12、root束縛488→486となる。app.jsは1,391→1,390行（1行減）、非空白945→944行、root300文。構築・接続496非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。二つの生成段階を同じ描画ownerへまとめた責務分離であり、数百行への全体目標は未完了。
+
+追加単体三件で、同じ実stackのcoldな別段階生成とfactory返却参照、従来接続と準備済み接続の実Hatch preview／描画順painters・現在Geometry／描画結果の一致とstack再生成なし、stack／Frame／設定getterの同じ例外と成功済みstackの保持を確認する。Frame factoryの最下層返却参照の試験は限定stubを使い、既存の通常／export実描画試験と区別する。ASTで対象root接続と二別名以外のroot全体・順、prepareFrame追加以外のCanvasDisplay本体とraw renderer／index／E2E不変、同じ二つのpaint port、新しい未使用／未束縛参照なしを照合する。
+
+関連単体80件、構文635file・全単体2,411件・全E2E589件が成功（50file、22.3m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-hatch-frame-composition-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop 16c188d、作業branch codex/hatch-frame-composition、開始時週枠残量21%。今回の描画組立てと直近の保存・Block・拘束query整理を含む最新コードで全E2Eを実行する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：拘束編集の共有query owner接続（2026-11-10）
 

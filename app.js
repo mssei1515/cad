@@ -280,7 +280,7 @@
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const { sketchStyle: sketchPresentation, geometry: geometryDisplay,
-    overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit, createFrame: createCanvasFrame, createHatchRendering } = createCanvasScene({
+    overlay: interactionOverlay, bounds: drawingBounds, fit: drawingFit, createHatchRendering } = createCanvasScene({
     solveState: sketchSolveResultState, analysis: constraintAnalysis,
     instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
     selectionHighlight, isSidebarHighlightedElement,
@@ -299,7 +299,7 @@
     workspace, sketches: sketchContext, bounds: drawingBounds, minimumLineLength: MIN_LINE_LENGTH,
   });
 
-  const { layer: hatchLayer, drawHatches, createStack: createDrawingStack } = createHatchRendering({
+  const { layer: hatchLayer, prepareFrame: prepareCanvasFrame } = createHatchRendering({
     readCommand: () => hatchCommand,
   });
   const annotationFeature = createAnnotationFeature({
@@ -321,7 +321,7 @@
     pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard, isGeometryMode,
   });
   const { renderer: referenceImageRenderer, interaction: referenceImageInteraction, input: referenceImageInput } = referenceImageFeature;
-  const { drawDrawingStack } = createDrawingStack();
+  const { createFrame: createCanvasFrame } = prepareCanvasFrame();
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const placementPreviewLayer = createPlacementPreview({
     geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer,
@@ -722,7 +722,6 @@
     recordDraw: () => pointerMoveScheduler.recordDraw(), referenceImageLayer: referenceImageFeature.layer, readPngCommand: pngExportLifecycle.readCommand,
     dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
     authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
-    drawHatches, drawDrawingStack,
   });
 
   function drawCanvas() { return canvasFrameRenderer.draw(); }
