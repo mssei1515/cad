@@ -1,4 +1,59 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+test('presentation toolbar callbacks stay cold until their component is published',()=>{
+  const f=fixture(), {updateToolbar,updateStatusUI,updateHistoryButtons}=f.feature;
+  const early=(callback,binding)=>assert.throws(callback,error=>error.name==='ReferenceError'&&error.message===`Cannot access '${binding}' before initialization`);
+  early(updateToolbar,'toolbarView');early(updateStatusUI,'commandStatusView');early(updateHistoryButtons,'toolbarPresentation');
+  const toolbar=f.feature.createToolbar({readHistory:()=>({undoCount:0,redoCount:0}),updateDocumentStatus:()=>{}});
+  early(updateToolbar,'toolbarView');early(updateStatusUI,'commandStatusView');
+  assert.equal(updateHistoryButtons(),toolbar.updateHistory());
+  assert.equal(updateToolbar,f.feature.updateToolbar);assert.equal(updateStatusUI,f.feature.updateStatusUI);
+});
+
+test('presentation dispatches to actual toolbar components with original receivers, arguments, returns and errors',()=>{
+  const f=fixture(),calls=[],result={},marker=new Error('update failed');let failure=null;
+  const history={update(...args){calls.push(['history',this,args]);if(failure==='history')throw marker;return result;}};
+  const view={update(...args){calls.push(['view',this,args]);if(failure==='view')throw marker;return result;}};
+  const status={update(...args){calls.push(['status',this,args]);if(failure==='status')throw marker;return result;}};
+  f.w.ToolbarView={createHistory:()=>history,create:()=>view,createCommandStatus:()=>status};
+  const toolbar=f.feature.createToolbar({lifecycle:{readMode:()=> 'select'}}),controls=toolbar.createControls({});
+  assert.equal(controls.view,view);assert.equal(controls.status,status);assert.ok(Object.isFrozen(controls));
+  const {updateToolbar,updateStatusUI,updateHistoryButtons}=f.feature;
+  assert.equal(updateToolbar('ignored'),undefined);assert.equal(updateStatusUI('ignored'),result);assert.equal(updateHistoryButtons('ignored'),result);
+  assert.deepEqual(calls,[['view',view,[]],['status',status,[]],['history',toolbar,[]]]);
+  for(const [name,callback] of [['view',updateToolbar],['status',updateStatusUI],['history',updateHistoryButtons]]){
+    failure=name;assert.throws(callback,error=>error===marker);
+  }
+});
+
+test('failed toolbar or controls construction preserves the last completed components',()=>{
+  const f=fixture(),calls=[],marker=new Error('construction failed');let fail=null,generation=0;
+  f.w.ToolbarView={createHistory(){if(fail==='history')throw marker;const id=++generation;return{update(){calls.push(['history',id]);return id;}};},
+    create(){const id=generation;return{update(){calls.push(['view',id]);}};},
+    createCommandStatus(){if(fail==='status')throw marker;const id=generation;return{update(){calls.push(['status',id]);return id;}};}};
+  const options={lifecycle:{readMode:()=> 'select'}},first=f.feature.createToolbar(options),original=first.createControls({});
+  fail='status';assert.throws(()=>first.createControls({}),error=>error===marker);
+  f.feature.updateToolbar();assert.equal(f.feature.updateStatusUI(),1);
+  fail='history';assert.throws(()=>f.feature.createToolbar(options),error=>error===marker);
+  assert.equal(f.feature.updateHistoryButtons(),1);f.feature.updateToolbar();
+  fail=null;const second=f.feature.createToolbar(options);assert.notEqual(first,second);
+  assert.throws(()=>f.feature.updateToolbar(),error=>error.name==='ReferenceError');
+  const next=second.createControls({});assert.notEqual(next,original);f.feature.updateToolbar();assert.equal(f.feature.updateStatusUI(),2);
+  original.view.update();assert.equal(f.feature.updateHistoryButtons(),2);
+  assert.deepEqual(calls,[['view',1],['status',1],['history',1],['view',1],['view',2],['status',2],['view',1],['history',2]]);
+});
+
+test('presentation-owned toolbar updates retain real history, pending state and display behavior',()=>{
+  function run(owned){
+    const f=toolbarPresentationFixture(),toolbar=owned?f.feature.updateToolbar:()=>f.controls.view.update(),
+      status=owned?f.feature.updateStatusUI:()=>f.controls.status.update(),history=owned?f.feature.updateHistoryButtons:()=>f.toolbar.updateHistory();
+    f.events.length=0;f.state.snapshot=1;f.documentHistory.record();history();toolbar();status();
+    f.lifecycle.setMode('line');assert.equal(f.lifecycle.mode,'line');toolbar();status();
+    const nodes=[...f.nodes].map(([id,node])=>[id,node.disabled,node.textContent,[...node.classes],node.attributes]);
+    f.state.historyFailure=true;assert.throws(history,error=>error===f.marker);
+    return{events:f.events,nodes};
+  }
+  assert.deepEqual(run(true),run(false));
+});
 function fixture(){
   const events=[],created={},state={moving:false,dialog:false,panel:null,derived:null,png:null,pending:null,mode:'select',frame:{id:'frame'},fail:null,domReads:0};
   const document={getElementById(id){state.domReads++;return id==='propertiesPanel'?state.properties:id==='blockDefinitionsDialog'?{open:state.dialog}:null;}};state.properties={inert:false};
