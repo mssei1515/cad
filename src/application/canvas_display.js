@@ -153,8 +153,8 @@
           coordinateStatus: () => document.getElementById("statusCoordinates") });
       }
       function createPngExport({ documentName, prepareImages, drawOperationLifecycle, pendingCommandSession,
-        fileSession, constraintTargetSession, findSnap, flushPointerMove }) {
-        return window.PngExport.create({ document, window: browserWindow, canvas, rendering: exportRenderer,
+        fileSession, constraintTargetSession, findSnap, flushPointerMove, pngExport = window.PngExport }) {
+        return pngExport.create({ document, window: browserWindow, canvas, rendering: exportRenderer,
           text: applicationText, documentName, prepareImages, readViewScale: () => viewport.scale,
           readMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
           pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,

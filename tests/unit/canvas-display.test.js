@@ -268,7 +268,7 @@ test('composition retains failure boundaries without adding restoration or swall
   f.state.failure = null; f.calls.length = 0; f.png.restore(); assert.equal(f.png.frame, null); assert.ok(f.stages().includes('export-overlay'));
 });
 
-function workspacePngFixture() {
+function workspacePngFixture(pngExport) {
   const f = fixture(), stages = [], s = f.state; s.mode = 'line';
   const button = new EventTarget(), originalGet = f.document.getElementById;
   f.document.getElementById = id => id === 'pngExportBtn' ? button : originalGet(id);
@@ -291,7 +291,7 @@ function workspacePngFixture() {
     drawOperationLifecycle: lifecycle, pendingCommandSession: pending, fileSession: { get busy() { return s.fileBusy; } },
     constraintTargetSession: { get command() { return s.constraint; } },
     findSnap: (point, tolerance) => { s.snapArgs = [point, tolerance]; if (s.snapError) throw s.snapError; return s.snap; },
-    flushPointerMove: () => { f.calls.push('flush'); if (s.flushError) throw s.flushError; } });
+    flushPointerMove: () => { f.calls.push('flush'); if (s.flushError) throw s.flushError; }, pngExport });
   assert.deepEqual(f.calls, []); assert.deepEqual(stages, []); s.ready = true;
   return { ...f, feature, stages, button, pending, resolveFonts };
 }
@@ -1097,4 +1097,20 @@ test('Canvas dimension traversal preserves factory and reader/paint failures, co
       assert.throws(() => f.traversal.layer.draw(), error => error === f.probe.marker); return f.snapshot(); };
     assert.deepEqual(run(true), run(false), failure);
   }
+});
+
+test('Workspace PNG can use the prepared export owner without changing mode, capture or viewport restoration', async () => {
+  const owner = sandbox.window.PngExport.prepare(), f = workspacePngFixture(owner);
+  assert.equal(owner.readCommand(), f.feature.command); assert.deepEqual(f.calls, []);
+  f.display.viewport.update({ x: 10, y: 20, scale: 4 });
+  owner.start(); f.button.dispatchEvent(new Event('click')); assert.equal(f.feature.command.active, true);
+  assert.equal(f.state.mode, 'png-export');
+  f.feature.command.pick({ x: 0, y: 0 }); f.feature.command.pick({ x: 10, y: 5 }); f.feature.command.onSetting('dpi', 96);
+  const viewport = { ...f.display.viewport.snapshot() }, bitmap = [f.canvas.width, f.canvas.height];
+  const saving = f.feature.command.onAction('finish'); await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(f.stages, ['picker','fonts']); f.resolveFonts(); await saving;
+  assert.deepEqual(f.stages, ['picker','fonts','images','output','copy','blob','write','close']);
+  assert.equal(f.workspace.exportRenderer.frame, null); assert.deepEqual([f.canvas.width, f.canvas.height], bitmap);
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, viewport); assert.equal(f.state.mode, 'line');
+  assert.equal(f.pending.current, null); assert.equal(owner.readCommand(), f.feature.command); f.feature.dispose();
 });

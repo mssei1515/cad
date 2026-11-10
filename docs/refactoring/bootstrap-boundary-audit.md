@@ -1,5 +1,16 @@
 # Composition rootの残存責務と依存監査
 
+## PNG exportの段階的な参照所有（2026-11-10）
+
+PngExport.prepareが実export featureの生成・成功後の保持とreadCommand／cancel／startを所有する。CanvasDisplayのcreatePngExportは既定では従来のPngExportを使い、明示された実export componentにも同じ依存を渡せる。rootは早期のread／cancelを同じownerへ接続し、後段で実commandをconstとして受け取る。外部setterや任意factoryの登録は設けず、mode session・描画buffer・保存transactionを複製しない。
+
+生成前のreadCommandはnull、cancelは従来どおりnullのcancel読取りで例外となる。生成が完了するまで旧featureを保持し、完了後はstart前に新featureを公開する。bind失敗による自動巻戻しは加えない。start／cancelは実componentへのmember callで、返値・元の例外を保つ。実commandはraw createが返す凍結featureのdata propertyであり、遅延readは同じidentityを返す。raw PngExport.create・PNG command・保存とcapture復元の処理、rootでの生成／start順を維持する。
+
+app.jsは1,472→1,471行（1行減）。rootの最後のletと公開用代入がなくなった。AST比較で対象参照・factory接続以外のroot全体と相対順、raw PNG factory不変、CanvasDisplayの既存依存不変、後段constへの早期参照なし、新しい未束縛参照なしを確認した。関連単体49件、構文632file・全単体2,339件・関連E2E262件が成功（13file、3.9m、exit 0）。追加五単体で初期null／cancel例外、明示start前の無動作、四つの構築失敗境界、start失敗時の新command保持、cancelのreceiver・返値・例外同一性、実CanvasDisplay経由での保存と同じbitmap／viewport復元を確認した。700製品／test入力と開始HEAD不変、選択13fileのtest list262件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-png-export-lifecycle-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、a6912a5の全589件成功とは区別する。
+
+基準develop 232bb45、作業branch codex/png-export-lifecycle、開始時週枠残量35%。直近a6912a5の全E2E589件成功（22.1分）と今回の関連検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ## Sketch navigationの段階的な参照所有（2026-11-10）
 
 SketchEditingFeature.prepareNavigationが、後段で生成される実Sketch Move commandとTree context menuの参照を所有する。早期のcloseContext／resetMoveとreadMovingを公開し、createForInteractionの同じ実featureからcreateMoveWithInput／createTreeForEditingを呼ぶ。参照は各factoryの成功後にのみ公開する。外部setterは設けず、commandの操作stateやmenu sessionを複製しない。既存raw create／createForInteractionは変更しない。
