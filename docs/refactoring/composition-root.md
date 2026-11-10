@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：作図プレビューの共有owner・Canvas読取接続（2026-11-10）
+
+BasicDrawingTools.createGeometryのcreateAuthoringForEditingが返すcreatePreviewForEditing（src/application/basic_drawing_tools.js）は、保持するviewportとCanvasInteraction.lifecycleのreadMode、指定されたsurface.withCanvasStateとGeometryDisplay.traceSplinePathを既存createPreviewへ接続する。明示入力はctx・surface・GeometryDisplay・canvas・Centerline commandの五つとし、共有済みownerをrootから取り出して渡し直さない。readCanvasSizeは描画時だけ同じcanvasのclientWidth→clientHeightを読み、新しい寸法recordを返す。生成時にmode・Canvas寸法・倍率・draft・modelを読まず、リサイズ後の寸法と現在倍率をsnapshot化しない。
+
+既存createPreviewが実AuthoringPreviewRenderer→Layerを従来順に生成し、同じrenderer／layerとFillet painterを返す。Spline／Line／Centerline等のdraft・previewとmode、幾何計算・描画命令・Canvas状態、Centerlineの短絡と投影／寸法照会の順、例外時の後続停止を既存ownerに残す。新しいmodel・preview state・cache・listenerや汎用contextは追加しない。raw createPreviewと段階API、rootの各生成・公開・bind・起動位置、通常UI・操作・保存形式v26は維持する。
+
+app.jsは1,371→1,370行（1行減）、非空白925→924行。root298文・478→477束縛、構築・接続492→491非空白行。別名・設定121行、委譲50行、条件付きtest hooks179行は不変。プレビュー生成の構築入力は七つから五つとなり、不要になったSpline描画readerの別名を除いた。減少行数よりも、作図ownerへ接続判断とCanvas寸法readerを移したことを成果とする。数百行への全体目標は未完了。
+
+追加単体三件でcoldな実renderer／layer生成と元の参照・順、実作図draftのLine／Centerline／Spline／Trim描画命令とmode切替の一致、リサイズと倍率変更後のCenterline範囲、Canvas getterのreceiver／width→heightの順、renderer／layer constructor・Canvas寸法／Spline描画の同じ例外と停止／Canvas状態境界を旧接続と比較する。ASTで元のCanvas寸法callback本体との一致、新factory以外のBasicDrawingTools本体、対象root接続・一別名以外のroot全体・順、raw renderer／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体63件、構文635file・全単体2,428件・関連E2E407件が成功（31file398件／6.5m、Centerline・円弧作図の専用2file9件／7.9s、いずれもexit 0）。両実行の705製品／test／検証入力と開始HEADが一致・不変、選択33fileに重複なし、test list件数一致、CAD filter三つ未設定、各receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-authoring-preview-composition-{focused,check,unit,e2e,proof,smoke}.log、同extra-*と検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、38409adの全589件成功と区別する。
+
+基準develop 8118abb、作業branch codex/authoring-preview-composition、開始時週枠残量17%。直前8118abbの関連398件成功と、全体E2Eの最新基準38409ad（589件成功、22.4m）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：派生配置の再接続対象組立てをFeatureへ移管（2026-11-10）
 
 DerivedInstanceFeature.createForEditingの後段createEditingWithTransforms（src/application/derived_instance_feature.js）は、rebindがundefinedかつrebinding ownerが指定された場合だけ、保持するEditingScopeBindingとGeometryReadServicesから再接続callbackを生成する。操作時にbound editing scope→Block投影一覧→派生配置投影一覧の順で読み、各一覧を展開した新しい配列を同じConstraintRebinding.rebuildDocumentへ二引数でmember呼出しする。readerは零引数の裸呼出し、返値・例外はそのまま伝播する。Geometry／投影Objectの参照、同じ再接続ownerを維持し、Workspace.currentへの置換や一覧のsnapshot化はしない。

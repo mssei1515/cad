@@ -290,7 +290,7 @@
       editedSpline: () => splineEditing.current?.spline },
     annotationBounds,
   });
-  const { traceSplinePath, drawBlockInstanceHandles } = geometryDisplay;
+  const { drawBlockInstanceHandles } = geometryDisplay;
   const { allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { fitAllGeometryToViewport } = drawingFit;
   function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
@@ -407,9 +407,8 @@
     parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
   });
   const { projectPointToCenterlineSupport } = centerlineCommand;
-  const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreview({
-    ctx, viewport, withCanvasState, traceSplinePath, readMode: drawOperationLifecycle.readMode, centerlineCommand,
-    readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
+  const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreviewForEditing({
+    ctx, surface: canvasSurface, geometry: geometryDisplay, canvas, centerlineCommand,
   });
   const { versionView: runtimeVersionView, initialize: initializePresentation } = presentation.createStartup({
     canvasSurface, resizeCanvas, readVersion: () => window.__JOT2D_RUNTIME_VERSION__,
