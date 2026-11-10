@@ -53,8 +53,12 @@
         sketchProjectionEntryFromItem: projectionSources.sketchProjectionEntryFromItem, sketchProjectionSourceIsCovered: projectionSources.sketchProjectionSourceIsCovered,
         geometryInstanceBundlesForScope, blockProjectionBundles, geometryElementKey, geometryInstanceBundle, constraintGraphNodes,
         guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry, clearSketchSolveState: solveState.clearSketchSolveState });
-      function createEditingWithTransforms({ checkpoint, serializeModel, addPointSnapConstraints, rebind, parameters, acceptError,
+      function createEditingWithTransforms({ checkpoint, serializeModel, addPointSnapConstraints, rebinding, rebind, parameters, acceptError,
         scopeQuery, solver, solveState, blockLayout, solving, updateBlockUI, refreshConstraintAnalysis }) {
+        if (rebind === undefined && rebinding !== undefined) {
+          const { geometryInstanceBundles } = readServices.reads;
+          rebind = () => rebinding.rebuildDocument(editingScope.current, [...blockProjectionBundles(), ...geometryInstanceBundles()]);
+        }
         const { captureValues: snapshotModelState, restoreValues: restoreModelState } = checkpoint;
         const { stabilize: stabilizeActiveParameterNamespace } = parameters;
         const { sourceObjects: geometryInstanceSourceObjects } = dragSources;

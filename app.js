@@ -81,7 +81,7 @@
   const { hatchPrimitivesForScope } = hatchGeometryQuery;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
   const { createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
-  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, resolveGeometryRef } = geometryReads;
+  const { withGeometryReadCache, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
@@ -383,7 +383,7 @@
   });
   const { editing: synchronizedInstanceEditing, changeProperty: changeFreeInstanceProperty, transform: instanceTransformCommand } = createInstanceEditing({
     checkpoint: editingCheckpoint, serializeModel, addPointSnapConstraints,
-    rebind: () => constraintRebinding.rebuildDocument(editingScopeBinding.current, [...blockProjectionBundles(), ...geometryInstanceBundles()]),
+    rebinding: constraintRebinding,
     parameters: parameterStabilization, acceptError: CONSTRAINT_ACCEPT_ERROR, scopeQuery: solveScopeQuery, solver, solveState: sketchSolveResultState,
     blockLayout: { blockLocalGeometryBounds, snappedBlockRotation }, solving: sketchSolving, updateBlockUI, refreshConstraintAnalysis,
   });

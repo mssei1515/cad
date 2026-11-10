@@ -219,6 +219,14 @@ function stagedFeatureFixture(composed, success = true, probe = {}) {
     const currentScope = placement.currentScope; placement.currentScope = () => shared.workspace || currentScope();
     placement.geometryRefForItem = w.GeometryObjects.geometryRefForItem; placement.geometryRefsEqual = w.GeometryRef.equals;
     source.geometryElementKey = w.GeometryObjects.geometryKeyForItem; source.annotationReferencesRemovedGeometry = w.AnnotationAnchorData.referencesRemovedGeometry;
+    if (probe.rebindingOwner) {
+      const readBlocks = source.blockProjectionBundles;
+      source.blockProjectionBundles = function () {
+        'use strict'; ready(); if (probe.checkBare) assert.equal(this, undefined); assert.equal(arguments.length, 0);
+        shared.queryEvents.push('blocks'); if (probe.failRebindAt === 'blocks') throw probe.error;
+        return probe.blocks || readBlocks();
+      };
+    }
     const ids = { peek(kind) { assert.equal(this, ids); ready(); shared.queryEvents.push(['peek', kind]); return kind === 'mirror' ? 3 : 5; },
       allocate(kind) { assert.equal(this, ids); ready(); shared.queryEvents.push(['allocate', kind]); return kind === 'mirror' ? 'MI3' : 'PI5'; } };
     const projector = w.InstanceProjection.create({ elementSketchId: placement.elementSketchId, applicationText: placement.applicationText });
@@ -230,6 +238,11 @@ function stagedFeatureFixture(composed, success = true, probe = {}) {
       interaction: { selection, access: { canCreateInActiveSketch: placement.canCreateInActiveSketch, rejectRootSketchCreation: placement.rejectRootSketchCreation, guardSketchEdit: source.guardSketchEdit }, lifecycle: { readMode: placement.getMode, setMode: placement.setMode, exit: source.exitDrawMode } },
       editingScope: { get current() { ready(); shared.queryEvents.push('bound'); return shared.bound || options.currentScope(); } },
       presentation: { settings: { applicationText: placement.applicationText }, updateUI: placement.updateUI, draw: placement.draw, setHint: placement.setHint, updatePropertiesUI: source.updatePropertiesUI } };
+    if (probe.rebindingOwner) owners.readServices.reads.geometryInstanceBundles = function () {
+      'use strict'; ready(); assert.equal(this, undefined); assert.equal(arguments.length, 0);
+      shared.queryEvents.push('instances'); if (probe.failRebindAt === 'instances') throw probe.error;
+      return probe.instances || [];
+    };
     placement.previewFreeId = type => type === 'mirror' ? 'MI' + ids.peek('mirror') : 'PI' + ids.peek('pattern');
     placement.nextInstanceId = type => type === 'mirror' ? ids.allocate('mirror') : ids.allocate('pattern');
     const originals = new Map();
@@ -276,6 +289,14 @@ function stagedFeatureFixture(composed, success = true, probe = {}) {
         const updateBlockUI = () => events.push('blockUI'), refreshConstraintAnalysis = () => events.push('analysis');
         const input = { checkpoint, serializeModel: options.serializeModel, addPointSnapConstraints: options.addPointSnapConstraints, rebind: options.rebind,
           parameters, acceptError: options.acceptError, scopeQuery, solver, solveState, blockLayout, solving, updateBlockUI, refreshConstraintAnalysis };
+        if (probe.rebindingOwner) {
+          input.rebinding = probe.rebindingOwner;
+          input.rebind = Object.hasOwn(probe, 'rebindOverride') ? probe.rebindOverride : undefined;
+          const { blockProjectionBundles } = source, { geometryInstanceBundles } = owners.readServices.reads;
+          options.rebind = input.rebind === undefined
+            ? () => probe.rebindingOwner.rebuildDocument(owners.editingScope.current, [...blockProjectionBundles(), ...geometryInstanceBundles()])
+            : input.rebind;
+        }
         probe.editingInput = input;
         const originals = new Map();
         for (const [namespace, name] of [['DerivedInstanceEditing', 'editing'], ['InstanceTransformCommand', 'transform']]) {
@@ -384,5 +405,53 @@ test('composed instance editing keeps failed solve restoration and transform con
       assert.throws(() => stagedFeatureFixture(composed, true, broken), value => value === error);
       assert.deepEqual(broken.order, ['drag', 'selection', 'placement', 'source', 'editing', ...(failEditAt === 'transform' ? ['transform'] : [])]);
     }
+  }
+});
+
+test('derived rebinding uses the live bound scope, ordered projection references and original member return without early reads', () => {
+  for (const composed of [false, true]) {
+    const marker = {}, calls = [], owner = { rebuildDocument(scope, bundles) { assert.equal(this, owner); assert.equal(arguments.length, 2); calls.push([scope, bundles]); return marker; } };
+    const block = {}, instance = {}, probe = { transforms: true, rebindingOwner: owner, blocks: [block], instances: [instance], checkBare: true };
+    const f = stagedFeatureFixture(composed, true, probe);
+    assert.deepEqual(f.shared.queryEvents, []); assert.deepEqual(calls, []);
+    for (const scope of [{ name: 'first bound scope' }, { name: 'next bound scope' }]) {
+      f.shared.bound = scope; f.shared.workspace = { name: 'different Workspace' }; f.shared.queryEvents.length = 0;
+      assert.equal(probe.ports.editing.rebind(), marker); assert.deepEqual(f.shared.queryEvents, ['bound', 'blocks', 'instances']);
+      assert.equal(calls.at(-1)[0], scope); assert.equal(calls.at(-1)[1][0], block); assert.equal(calls.at(-1)[1][1], instance);
+      assert.notEqual(calls.at(-1)[1], probe.blocks); assert.notEqual(calls.at(-1)[1], probe.instances);
+    }
+    assert.notEqual(calls[0][1], calls[1][1]); assert.equal(f.histories(), 0);
+  }
+});
+
+test('derived rebinding preserves query failure order and the same exception before later work', () => {
+  for (const composed of [false, true]) for (const failure of ['scope', 'blocks', 'instances', 'rebuild']) {
+    const marker = new Error(failure), owner = { rebuildDocument() { throw marker; } };
+    const probe = { transforms: true, rebindingOwner: owner, failRebindAt: failure, error: marker };
+    const f = stagedFeatureFixture(composed, true, probe), before = JSON.stringify(f.instance);
+    if (failure === 'scope') Object.defineProperty(f.owners.editingScope, 'current', { get() { throw marker; } });
+    assert.throws(() => probe.ports.editing.rebind(), error => error === marker);
+    assert.deepEqual(f.shared.queryEvents, failure === 'scope' ? [] : failure === 'blocks' ? ['bound', 'blocks'] : ['bound', 'blocks', 'instances']);
+    assert.equal(JSON.stringify(f.instance), before); assert.equal(f.histories(), 0);
+  }
+});
+
+test('derived edits retain commit history and rollback when the owned rebinding fails', () => {
+  for (const composed of [false, true]) for (const failure of [false, true]) {
+    let calls = 0; const marker = new Error('rebind failed'), owner = { rebuildDocument() { calls++; if (failure) throw marker; } };
+    const probe = { transforms: true, rebindingOwner: owner }, f = stagedFeatureFixture(composed, true, probe), before = JSON.stringify(f.instance);
+    assert.equal(f.changeProperty(f.instance, 'count', 5), !failure); assert.equal(calls, 1);
+    assert.equal(f.scope.geometryInstances[0], f.instance); assert.equal(f.histories(), failure ? 0 : 1);
+    if (failure) assert.equal(JSON.stringify(f.instance), before); else assert.equal(f.instance.count, 5);
+    assert.equal(f.p.x, 20); assert.equal(f.q.x, 40);
+  }
+});
+
+test('explicit derived rebinding callbacks and null keep precedence over the supplied owner', () => {
+  for (const rebindOverride of [null, function () { return 'explicit'; }]) {
+    const owner = { rebuildDocument() { assert.fail('owner must not be invoked'); } }, probe = { transforms: true, rebindingOwner: owner, rebindOverride };
+    const f = stagedFeatureFixture(true, true, probe); assert.equal(probe.ports.editing.rebind, rebindOverride);
+    if (rebindOverride) assert.equal(probe.ports.editing.rebind(), 'explicit');
+    assert.deepEqual(f.shared.queryEvents, []); assert.equal(f.histories(), 0);
   }
 });
