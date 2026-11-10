@@ -1,5 +1,21 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：注記拘束dragの遅延Feature依存を既存ownerへ集約（2026-11-10）
+
+AnnotationFeature.prepareForWorkspaceが返すcreateConstrainedDragForFeature（src/application/annotation_feature.js）は、完成後の注記Featureを返すreadFeatureとbuildPlan／beginGeometryDrag／invalidateAnalysisを受け、既存createConstrainedDragへ必要な位置・引出線表示の照会を接続する。生成時はreadFeatureを呼ばず、Featureより先に拘束dragを生成する従来の順を維持する。位置照会は操作時に同じFeatureのplacementAnchorを可変長でmember呼出しし、引出線表示は同じrendererのannotationLeaderDisplayGeometryを取り出して一引数の裸関数として呼ぶ。readFeature自体は零引数の裸関数で、対象照会ごとに一度だけ呼ぶ。
+
+引出線表示関数の取得は、rootでFeature生成直後に取り出す形から操作時の選択へ変わる。実Feature／AnnotationDisplay／AnnotationRendererの該当APIは凍結された通常propertyであり、同じ関数参照を選ぶ。Objectの差替え用stateやsetter、第二のrenderer・model・cache・sessionは作らない。現在Workspace、Geometry参照解決と同じanchor targets、仮Geometry session、begin／同期／onEnd、Analysis／UI／描画と例外時の途中状態は既存AnnotationDragが所有する。raw createConstrainedDragと各段階APIも維持する。
+
+appは完成Featureへの一つの遅延readerを渡し、位置／引出線表示の個別関数を取り出さない。Feature読取り・位置照会・引出線表示の元の例外、位置同期前後の仮Geometry保持と終了時解除、live倍率・注記Objectと元Geometryの参照を維持する。通常の生成・公開・bind・起動順、UI・操作・保存形式v26は不変。annotationBoundsの橋渡しは文字レイアウト・Canvas／現在倍率を持つ後段rendererに依存し、早期BlockLayoutでも必要なため残す。この単位で境界計算を複製したり、照会ownerを状態保持だけのcontainerへ移したりしない。
+
+app.jsは1,360→1,359行（1行減）、非空白914→913行。root293→292文・474→472束縛、delegate45→44文・47→46非空白行。構築・接続492行、別名・設定120行、条件付きtest hooks172行は不変。拘束dragの構築入力は五つから四つとなり、位置delegateと引出線表示の別名を除いた。数百行への全体目標は未完了。
+
+追加単体二件と既存三試験の三経路化で、旧raw接続・既存準備API・新しいFeature接続を比較する。Feature生成前のcoldなdrag構築、同じtargets／scope／表示API、live倍率での引出線座標と同じ注記・元Geometry、readerの零引数／裸receiver・位置member呼出し／引出線の裸一引数、reader／位置／引出線表示の同じ例外と仮Geometry保持・終了範囲、constructor失敗時の停止を確認する。単体のdrag計画・Geometry生成は限定fixtureを使い、実UI／求解は注記anchor・表示サイズを含む関連E2Eで検証する。ASTで対象二port・一delegate・一別名以外のroot全体・順、新helper以外のAnnotationFeature全体、実Feature／Display／rendererの凍結method record、raw command／renderer／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体44件、構文635file・全単体2,436件・関連E2E455件が成功（33file、7.6m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択33fileのtest list455件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-annotation-constrained-drag-composition-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、ad7e576の全589件成功と区別する。
+
+基準develop d3c2120、作業branch codex/annotation-constrained-drag-composition、開始時週枠残量13%。直前d3c2120の関連398件成功と、全体E2Eの最新基準ad7e576（589件成功、21.8m）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Properties編集・Viewの後段組立てを同じownerへ集約（2026-11-10）
 
 PropertiesDisplay.createForWorkspaceのcreateEditingWithViewForWorkspace（src/application/properties_display.js）は、後段の編集設定とView設定readerを受け取り、既存createEditingForWorkspace→View設定reader→既存createViewForWorkspaceの順で生成する。readerは編集機能とAppearance UIが完成してから零引数の裸関数として一度だけ呼ぶ。rootの元のView設定object literalをこのreaderへ移すことで、型や操作ownerの取得を編集生成前へ前倒ししない。返すのは実editing・appearanceUI・viewの三参照を持つ凍結recordで、query・model・操作状態や描画器の複製を作らない。

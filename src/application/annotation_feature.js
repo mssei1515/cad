@@ -9,13 +9,22 @@
       return window.AnnotationDrag.createConstrained({ currentScope: workspace.current, placementAnchor, resolveGeometryRef: readServices.reads.resolveGeometryRef,
         buildPlan, beginGeometryDrag, leaderDisplay, leaderAnchor: targets.annotationLeaderAnchor, invalidateAnalysis, applicationText, setHint, updateUI, draw });
     }
+    function createConstrainedDragForFeature({ readFeature, ...options }) {
+      return createConstrainedDrag({ ...options,
+        placementAnchor: (...args) => readFeature().placementAnchor(...args),
+        leaderDisplay: annotation => {
+          const { annotationLeaderDisplayGeometry } = readFeature().renderer;
+          return annotationLeaderDisplayGeometry(annotation);
+        },
+      });
+    }
     function createFeature({ ctx, viewport, surface, editingScope, sessions, placement, readAppearance, readExportFrame, canvasThemeColor,
       resizeEnabled, constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand, startDistanceResolution, clearSelection, updateToolbar }) {
       return createForEditing({ documentWorkspace, readServices, interaction, presentation, targets,
         ctx, viewport, surface, editingScope, sessions, placement, readAppearance, readExportFrame, canvasThemeColor,
         resizeEnabled, constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand, startDistanceResolution, clearSelection, updateToolbar });
     }
-    return Object.freeze({ targets, createConstrainedDrag, createFeature });
+    return Object.freeze({ targets, createConstrainedDrag, createConstrainedDragForFeature, createFeature });
   }
   function createAnchorQuery({ sketches, readServices, pointUsage, selection, viewportScale }) {
     const { reads, geometryAppearance } = readServices;
