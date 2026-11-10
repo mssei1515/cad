@@ -638,7 +638,7 @@
 
 
   const sceneHitQueries = sceneHitInteraction.createQueries();
-  const { regions: regionHitQuery, dimensions: dimensionHitQuery, instances: instanceHitQuery } = sceneHitQueries;
+  const { regions: regionHitQuery, hitDimension, hitBlockInstance, hitConstraintOperand } = sceneHitQueries;
   const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = sceneHitQueries.geometry;
 
 
@@ -657,11 +657,6 @@
 
   function addConstraintIfMissing(...args) { return constraintCommitCommand.ifMissing(...args); }
 
-  function hitDimension(...args) { return dimensionHitQuery.hitDimension(...args); }
-
-
-
-  function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
 
 
 
@@ -683,7 +678,9 @@
 
 
 
-  const { hitConstraintOperand: queryConstraintOperand } = sceneHitQueries.operands;
+
+
+
 
 
 
@@ -837,7 +834,6 @@
 
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
 
-  function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
 
   function handleConstraintOperandClick(pointer, type, hits = {}) { return constraintTargetCommand.operandClick(pointer, type, hits); }
 

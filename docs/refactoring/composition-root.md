@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Workspace hit照会入口と現在operandの所有（2026-11-10）
+
+CanvasHitInteraction.createSceneForWorkspaceの後段createQueriesは、従来どおり実region／dimension／instance／geometry／operand queryを生成した後、hitDimension・hitBlockInstance・hitConstraintOperandを同じquery groupへ公開する。前二者は元のquery memberへ可変長委譲し、operandは元の生関数へ現在Target sessionのoperandsを同じ一回のgetter読取りで渡す。hitsの省略／undefinedで毎回新しいObjectを生成し、明示nullと余分な引数の扱い、receiver・戻り値・例外と後続停止を保持する。既存query・press／hover・rectangleのObject同一性と生成順、Workspaceとdimension scopeの差は変えない。Reference Imageの早期接続用hoisted入口は必要なままrootへ残す。新state・cache・listener・module・contextは作らず、低水準createScene／各query API・通常UI・保存形式v26は不変。app.jsは1,418→1,414行（4行減）。rootの三委譲／現在operand判断と不要なquery別名を除く。
+
+追加単体二件でqueryのcold生成、member／生関数のreceiver、可変長委譲とoperandの四引数制限、現在operandsの参照同一性とgetter順、fresh default／明示null、各段階の例外と後続停止、実対称拘束でのoperand段階によるhit優先順位とSelection無変更を確認する。ASTで三関数の引数・既定値・本体の完全一致、rootの対象委譲／別名だけの変更、既存scene／query本体・E2E不変、新しい未使用／未束縛参照なしを照合する。移動先のconst公開より前にrootから三入口を参照する箇所がないことも確認する。
+
+関連単体32件、構文635file・全単体2,383件・全E2E589件が成功（50file、22.3m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-workspace-hit-queries-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop f77a95e、作業branch codex/workspace-hit-queries、開始時週枠残量26%。全体目標は未完了。全E2Eを今回の最新コードで実行し、結果を前回4b33718の全体基準と区別して保持する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：拘束入力・寸法dragのWorkspace依存共有（2026-11-10）
 
 再監査の基準403b0fdではapp.jsは1,419行／非空白973行、root311文・503束縛、構築116文／504非空白行、test hooks192非空白行だった。小さな委譲や空白の除去だけで200〜500行へ到達できるとは見積もらない。主要構築の入力・出口と今回の選定理由は[構築境界の再監査](feature-construction-boundaries.md)へ追記した。
