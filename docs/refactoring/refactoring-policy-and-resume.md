@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のDocumentテスト支援生成単位ではapp.jsは1,349行、非空白903行。AST監査ではroot289文・468束縛、構築・接続488非空白行、別名・設定120行、委譲43行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の求解準備owner統合単位ではapp.jsは1,348行、非空白902行。AST監査ではroot288文・468束縛、構築・接続488非空白行、別名・設定120行、委譲42行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：求解state・段階生成・更新入口を既存Solver機能ownerへ集約（2026-11-10）
+
+SketchSolvingFeature.prepareForWorkspace（src/application/sketch_solving_feature.js）は、DocumentWorkspace／Geometry read／Constraint references／Reference state／solver／PointUsage／Presentationの七つの既存ownerを受け、従来の結果state生成位置で同じSketchSolving.createStateを一度だけ呼ぶ。実solveState、後段createContextForWorkspaceと安定したsolveAndRefreshを凍結APIで返す。後段contextはAnnotation drag／minimumLength／acceptErrorの三依存を受け、保存したownerと同じstateを既存createContextForWorkspaceへ接続する。Query／Analysis／Redundancyは従来の位置で生成し、既存のraw APIを維持する。
+
+contextのcreateSolvingは既存の生成関数を裸関数として同じ一引数で呼び、SketchSolving／ParameterStabilization／stored definition／SolveRefreshの完成後だけ実featureをprivateに公開する。返す実componentとraw APIは同じで、外部生成物を代入するsetterや汎用app contextは追加しない。親のsolveAndRefreshは操作時に同じrefresh.runをmember receiverのまま全引数で呼び、実戻り値と元例外を返す。未完成時は従来のsolveRefreshCommandの初期化前ReferenceErrorを保つ。初回生成失敗では未初期化のまま、後続のcontext／求解生成失敗では以前の完成featureを保持する。
+
+appは同じ結果stateをDerived／Analysis／描画／編集へ共有し、求解更新commandの単独bindingと委譲関数を外す。state→Query／Analysis→checkpoint等が揃ってから求解という既存順、Annotation仮scopeとWorkspace.current、最後にactivateしたEditingScope、profiling、求解／Parameter失敗復元、UI／履歴順は変更しない。ReferenceConstraintStateと受理関数・各数値policyは従来の生成位置と値を保つ。解析更新callbackは最初の受渡しがprepared ownerより早いためrootに残し、再監査に挙げたSolver周辺全てを分離済みとは扱わない。UI・操作・保存形式v26は不変。
+
+app.jsは1,349→1,348行（1行減）、非空白903→902行、root289→288文・468束縛不変、委譲43→42非空白行。構築・接続488行、別名・設定120行、条件付きtest hooks165行は不変。rootが保持する求解更新commandを外し、既存機能ownerが結果state・実componentの生成と更新を一緒に持つ。contextへの11入力は初期七owner＋後段三入力となり、stateをrootから再注入しない。目安200〜500行の全体目標は未完了。
+
+追加単体三件で、coldな段階生成と同じ実state、既存contextとの求解結果／default label・profiling・履歴抑止・失敗診断・例外の比較、初期化前の拒否、初回のSolveRefresh生成失敗と後続のQuery／Analysis／SolveRefresh生成失敗時の未公開／旧feature保持、完成後commandへの全引数・receiver・返値・元例外を確認する。rootは対象四編集以外が全文一致し、旧SketchSolvingFeature本体は追加入口以外が全文一致する。新しい更新callbackの全参照はprepared ownerの生成後で、自由識別子一覧不変と新しい未使用bindingなしを照合した。構文635file・全単体2,449件・関連単体12件・全E2E589件が成功（50file、22.1m、exit 0）。全E2E実行中の705入力と開始HEAD不変、全50fileの一覧589件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-solving-preparation-ownership-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop 5932dbb、作業branch codex/solving-preparation-ownership、開始時週枠残量10%。直前の製品・テスト入力は8162d28と同一で、全E2E589件成功（22.6分）を今回の検証とは区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 次の実装前の構築依存再監査（2026-11-10）
 

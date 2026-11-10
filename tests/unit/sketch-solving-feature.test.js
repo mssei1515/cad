@@ -71,7 +71,14 @@ function contextFixture(composed, failureAt=null) {
   let context;try {
    const contextInput={documentWorkspace:owners.documentWorkspace,readServices:owners.readServices,references:owners.references,referenceState:owners.referenceState,
     annotationDrag,solver,pointUsage:{isExplicitPoint:()=>true},presentation:owners.presentation,solveState:owners.solveState,minimumLength:0.001,acceptError:owners.acceptError};
-   if(composed)context=w.SketchSolvingFeature.createContextForWorkspace(contextInput);
+   probe.contextInput=contextInput;
+   if(composed==='prepared') {
+    const prepared=w.SketchSolvingFeature.prepareForWorkspace(contextInput);probe.preparation=prepared;
+    assert.throws(()=>prepared.solveAndRefresh(),e=>e.name==='ReferenceError'&&e.message==="Cannot access 'solveRefreshCommand' before initialization");
+    owners.solveState=prepared.solveState;
+    context=prepared.createContextForWorkspace(contextInput);
+   }
+   else if(composed)context=w.SketchSolvingFeature.createContextForWorkspace(contextInput);
    else {
     const scopeQuery=w.SolveScopeQuery.create({currentScope:annotationDrag.scope,additionalVariables:annotationDrag.additionalVariables,geometryReads:owners.readServices.reads,
      activeSketchId:input.activeSketchId,elementSketchId:input.elementSketchId,constraintSketchId:input.constraintSketchId,isVisibleSketchElement:owners.readServices.geometryAppearance.isVisibleSketchElement,
@@ -82,7 +89,7 @@ function contextFixture(composed, failureAt=null) {
     context={scopeQuery,analysis,redundancy,createSolving:late=>w.SketchSolvingFeature.createForWorkspace({...owners,...late,scopeQuery,analysis})};
    }
   } finally {w.SolveScopeQuery=originalQuery;w.ConstraintAnalysis=originalAnalysis;}
-  probe.context=context;probe.owners=owners;probe.point=point;probe.earlySolver=solver;
+  probe.context=context;probe.owners=owners;probe.point=point;probe.earlySolver=solver;probe.window=w;
   const lateSolver={solveSubset(options){read();assert.equal(this,lateSolver);events.push(['late-solve',options]);if(state.failure)throw state.failure.error;return state.result;}};
   Object.defineProperty(owners.editingScope,'solver',{get(){probe.order.push('late-solver');return lateSolver;}});
   assert.deepEqual(probe.order,['query','analysis']);
@@ -172,4 +179,41 @@ test('Workspace solving composition retains failed result state, draw exception 
   f.state.failure=null;f.state.restoringOnDraw=true;f.events.length=0;f.api.refresh.run('restoring');assert.equal(f.history.restoring,true);assert.equal(f.events.some(e=>e[0]==='history'),false);
   results.push(JSON.stringify({events:f.events,result:f.solveState.sketchSolveState('A')}));
  }assert.equal(results[1],results[0]);
+});
+
+test('prepared solving shares its real state through cold context and solving phases, preserving refresh defaults, live scope and failure recovery',()=>{
+ const run=kind=>{
+  const f=contextFixture(kind),run=f.probe.preparation?.solveAndRefresh||((...args)=>f.api.refresh.run(...args)),state=f.owners.solveState;
+  assert.equal(f.probe.analysisPorts.sketchHasSolveError,state.hasError);
+  assert.equal(run(),f.state.result);assert.equal(state.sketchSolveState('A').result,f.state.result);
+  f.state.profiling=true;f.state.result={success:false,errorNorm:2};assert.equal(run('failed','A'),f.state.result);assert.equal(state.hasError('A'),true);
+  f.state.result={success:true,errorNorm:0};f.history.restoring=true;assert.equal(run('restoring'),f.state.result);f.history.restoring=false;
+  const marker=new Error('late solver failure');f.state.failure={error:marker};assert.throws(()=>run('exception'),e=>e===marker);
+  return JSON.parse(JSON.stringify({events:f.events,solveState:state.sketchSolveState('A')}));
+ };
+ assert.deepEqual(run('prepared'),run(true));
+});
+
+test('prepared solving publishes only completed construction and retains previous refresh through context and solving failures',()=>{
+ const f=contextFixture('prepared'),w=f.probe.window,p=f.probe.preparation,marker=new Error('build failed'),state=p.solveState;
+ for(const [namespace,method,build]of [['SolveScopeQuery','create',()=>p.createContextForWorkspace(f.probe.contextInput)],
+   ['ConstraintAnalysis','createWithRedundancy',()=>p.createContextForWorkspace(f.probe.contextInput)],
+   ['SolveRefreshCommand','create',()=>f.probe.context.createSolving(f.owners)]]){
+  const original=w[namespace];w[namespace]={...original,[method](){throw marker;}};f.events.length=0;
+  try{assert.throws(build,e=>e===marker);}finally{w[namespace]=original;}
+  assert.deepEqual(f.events,[]);assert.equal(p.solveState,state);assert.equal(p.solveAndRefresh('retained'),f.state.result);
+ }
+ const fresh=w.SketchSolvingFeature.prepareForWorkspace(f.probe.contextInput),context=fresh.createContextForWorkspace(f.probe.contextInput),original=w.SolveRefreshCommand;
+ w.SolveRefreshCommand={create(){throw marker;}};
+ try{assert.throws(()=>context.createSolving(f.owners),e=>e===marker);}finally{w.SolveRefreshCommand=original;}
+ assert.throws(()=>fresh.solveAndRefresh(),e=>e.name==='ReferenceError'&&e.message==="Cannot access 'solveRefreshCommand' before initialization");
+});
+
+test('prepared refresh forwards all arguments to the completed command with its receiver, result and original exception',()=>{
+ const f=contextFixture('prepared'),w=f.probe.window,p=f.probe.preparation,original=w.SolveRefreshCommand,calls=[],result={},marker=new Error('refresh failed');let fail=false;
+ const refresh={run(...args){assert.equal(this,refresh);calls.push(args);if(fail)throw marker;return result;}};
+ w.SolveRefreshCommand={create:()=>refresh};
+ try{const api=f.probe.context.createSolving(f.owners);assert.equal(api.refresh,refresh);}finally{w.SolveRefreshCommand=original;}
+ const run=p.solveAndRefresh;assert.equal(run(undefined,null,'extra'),result);assert.deepEqual(calls,[[undefined,null,'extra']]);
+ fail=true;assert.throws(()=>run('next'),e=>e===marker);assert.deepEqual(calls[1],['next']);
 });
