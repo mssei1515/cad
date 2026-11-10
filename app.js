@@ -54,7 +54,7 @@
     readLanguage: () => applicationSettings.language, setHint, log,
   });
   const {
-    dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
+    dimensionUsesExpression,
     ensureParameterNamespace,
   } = parameterNamespace;
   const parameterEditor = window.ParameterEditor.createForWorkspace({
@@ -259,7 +259,7 @@
     initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,
     fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
-  const { worldToCanvasScreen, canvasPoint } = viewport;
+  const { canvasPoint } = viewport;
   const { transient: transientAuthoring, createCheckpoint: createEditingCheckpoint } = window.GeometryMutationFeature.prepareForWorkspace({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction,
     history: historyFeature, analysis: constraintAnalysis, updateHistoryButtons,
@@ -437,11 +437,10 @@
 
 
 
-  const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationFeature.createEditor({
+  const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationFeature.createEditorForEditing({
     document, host: canvas.parentElement, capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
-    readParameterNamespace: currentParameterNamespace, expressionFromUserInput,
     stabilize: stabilizeDocumentParameters,
-    resetDrag: () => annotationDrag.reset(), toScreen: worldToCanvasScreen, expressionInputValue,
+    resetDrag: () => annotationDrag.reset(),
   });
 
   function isGeometryMode() {
@@ -765,11 +764,8 @@
 
 
 
-  const annotationDrag = annotationFeature.createDrag({
-    beginConstrainedDrag: constrainedAnnotationDrag.begin,
-    resizeText: (item, height) => appearanceEditing.applyAnnotationStyleValue(item, "textHeight", height),
-    beginPointer: dragPointer.captureThenMark,
-    endPointer: dragPointer.release,
+  const annotationDrag = annotationFeature.createDragForEditing({
+    constrained: constrainedAnnotationDrag, pointer: dragPointer,
   });
 
   const dimensionPreview = createDimensionPreview({ drawFilletPreviewArc });

@@ -34,7 +34,7 @@
     geometryRefForItem, constraintOperandsFromSelection, recordHistory, updateUI, draw, setHint,
     cancelPendingCommand, cancelConstraintTargetCommand, applicationText, startDistanceResolution,
     defaultDimensionForTarget, normalizeDimension, evaluateDimensionExpressionDraft, parameterNamespace,
-    ensureDimensionParameter, applyStyle, parameterErrorText, exitDrawMode, nextAnnotationId,
+    ensureDimensionParameter, applyStyle, readAppearance, parameterErrorText, exitDrawMode, nextAnnotationId,
     canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar, annotationLeaderTargetFromHit }) {
     const display = window.AnnotationDisplay.create({ ctx, viewport, surface, effectiveAnnotationStyle, canvasSelection,
       readHover, readExportFrame, canvasThemeColor, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement,
@@ -108,8 +108,18 @@
         resizeText, beginPointer, endPointer,
       });
     }
+    function createEditorForEditing(options) {
+      return createEditor({ ...options, readParameterNamespace: currentScope,
+        expressionFromUserInput: parameterNamespace.expressionFromUserInput, expressionInputValue: parameterNamespace.expressionInputValue,
+        toScreen: viewport.worldToCanvasScreen });
+    }
+    function createDragForEditing({ constrained, pointer }) {
+      return createDrag({ beginConstrainedDrag: constrained.begin,
+        resizeText: (item, height) => readAppearance().applyAnnotationStyleValue(item, "textHeight", height),
+        beginPointer: pointer.captureThenMark, endPointer: pointer.release });
+    }
     return Object.freeze({ renderer: display.renderer, layer: display.layer, spatial, anchors, dimensions, command,
-      placementAnchor, drawingAnchors, materialize, dimensionScope, startAnchorConstraint, createEditor, createDrag });
+      placementAnchor, drawingAnchors, materialize, dimensionScope, startAnchorConstraint, createEditor, createDrag, createEditorForEditing, createDragForEditing });
   }
   // Keep Workspace reads separate from the activated editing scope and late drag callbacks.
   function createForEditing({ ctx, viewport, surface, documentWorkspace, editingScope, readServices, interaction, sessions, targets,
@@ -132,7 +142,7 @@
       elementSketchId, guardSketchEdit, isReferenceSourceSketchId, geometryRefForItem, constraintOperandsFromSelection,
       recordHistory, updateUI, draw, setHint, cancelPendingCommand, cancelConstraintTargetCommand, applicationText, startDistanceResolution,
       defaultDimensionForTarget, normalizeDimension, evaluateDimensionExpressionDraft, parameterNamespace, ensureDimensionParameter,
-      applyStyle: (style, key, value, effective) => readAppearance().applyLeaderAppearanceValue(style, key, value, { viewportScale: viewport.scale, effective }),
+      applyStyle: (style, key, value, effective) => readAppearance().applyLeaderAppearanceValue(style, key, value, { viewportScale: viewport.scale, effective }), readAppearance,
       parameterErrorText, exitDrawMode: interaction.lifecycle.exit, nextAnnotationId: () => documentIds.allocate("annotation"),
       canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar, annotationLeaderTargetFromHit });
   }
