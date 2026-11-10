@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11再開後の選択編集組立て統合単位ではapp.jsは1,326行、非空白881行。AST監査ではroot278文・462束縛、構築・接続478非空白行、別名・設定121行、委譲30行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のDocumentApplication owner統合単位ではapp.jsは1,323行、非空白878行。AST監査ではroot276文・461束縛、構築・接続473非空白行、別名・設定122行、委譲26行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：DocumentApplicationと遅延load／正規化入口を生成ownerへ統合（2026-11-11）
+
+DocumentWorkspace.createReadContextのpersistence APIがnormalizeGeometryInstance／loadModelData／readRepairMessageを提供する。normalizeは生成済み実persistence bundleの同じ正規化関数を裸関数として呼び、既存のcreateApplicationが実DocumentApplicationを従来位置で生成し、成功後だけ同じcontext内に保持して同じobjectを返す。loadと修復messageは操作時にその実componentを読む。rootのDocumentApplication保持と二つの遅延委譲・修復getter callbackを外し、History／File／Parameter／testへ同じ狭い操作APIを共有する。raw DocumentApplication／DocumentLoading／GeometryInstance codec／Snapshot実装は各既存folderに残す。
+
+loadModelData(data, options = {})は旧rootと同じfresh default object、二引数のmember呼出し、余剰引数の破棄、返値と元例外を保つ。readRepairMessageは実componentのblockConstraintRepairMessageを毎回読む零引数のgetterで、getter receiver・動的な値・元例外を保つ。正規化はraw＋可変長引数を同じ裸関数へ渡し、元の既定resolver／index・Workspaceのactive Sketch読取りは実normalize関数が所有する。persistence生成前のnormalizeEditingGeometryInstance、Application生成前のdocumentApplicationに対応するReferenceErrorを維持する。
+
+read contextごとに成功済み実Applicationを所有する。constructorやreadEditingScopeが失敗した場合は以前の完成Applicationを維持し、初回失敗では未生成guardを保つ。persistence bundleの再生成だけでは既存Applicationを消したり再生成したりしない。実Applicationが捕捉するbound target、load時のWorkspace活性化／reset・Tree保存復元・ID復元、失敗時の部分更新は従来のDocumentApplicationが所有する。新しいmodel／scope／session・snapshot形式・cache・listenerや外部登録setter、汎用app contextを作らない。生成・bind／start、UI・操作・保存形式v26は不変。
+
+app.jsは1,326→1,323行（3行減）、非空白881→878行。root278→276文・462→461束縛。委譲30→26行、別名・設定121→122行、test hooks165行は不変。実createDocumentApplication呼出し自体は残り、戻り値のroot保持を外したため、その5行はAST分類上の構築からその他callへ移る（構築478→473行、その他call35→40行）。constructorの削減とは扱わない。構文依存辺1,166→1,159。実componentの生成と操作入口の所有先を揃えた段階であり、200〜500行の全体目標は未完了。
+
+既存DocumentWorkspace単体へ4件を追加し、初期guardのbinding名、実codecでのlive正規化、実loadによる捕捉target／Tree順／Geometry参照・ID復元、member receiver・二引数・fresh default／null／余剰引数／返値・元例外、修復getterのlive読取り、context独立・初回と再構築失敗・成功後だけの公開・bundle再生成時のApplication保持を検証する。root六編集以外、既存生成と読込・正規化・保存アルゴリズム不変、元のparameter／引数／裸呼出し、未使用／未束縛／初期化前root参照の追加なしを照合した。構文637file・全単体2,476件・関連E2E445件が成功（37file、7.7m、exit 0）。関連E2E実行中の707入力と開始HEAD不変、選択37fileの一覧445件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-document-application-ownership-{check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、最後の全体検証b42e963の全589件成功（27.1分）とは区別する。
+
+基準develop b42e963、作業branch codex/document-application-ownership、開始時週枠残量99%。関連E2Eは既存36fileにDXFを追加した37file・445件を選ぶ。直前の基準develop b42e963の全589件成功（27.1分）とは区別する。停止条件は残量50%未満、mainは停止時の最新全体検証後に最後に反映・同期する。
 
 ### 最新：選択削除とClipboardの生成・共有を選択編集の組立てへ統合（2026-11-11再開）
 

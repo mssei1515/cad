@@ -16,7 +16,7 @@
         showHiddenElements, viewportScale, profileRead });
     }
     function createReadContext({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead }) {
-      let currentPersistence;
+      let currentPersistence, currentApplication;
       function requirePersistence(binding) {
         if (currentPersistence === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
         return currentPersistence;
@@ -28,7 +28,18 @@
       function deserializeConstraint(...args) { return requirePersistence("constraintCodecs").codecs.deserialize(...args); }
       function decorateSerializedConstraint(data, constraint) { return requirePersistence("constraintMetadata").metadata.decorate(data, constraint); }
       function serializeModel() { return requirePersistence("documentWriter").writer.serialize(); }
-      const persistence = Object.freeze({ serializeConstraint, deserializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState });
+      function normalizeGeometryInstance(raw, ...args) {
+        const { normalizeGeometryInstance: normalize } = requirePersistence("normalizeEditingGeometryInstance");
+        return normalize(raw, ...args);
+      }
+      function requireApplication() {
+        if (currentApplication === undefined) throw new ReferenceError("Cannot access 'documentApplication' before initialization");
+        return currentApplication;
+      }
+      function loadModelData(data, options = {}) { return requireApplication().load(data, options); }
+      function readRepairMessage() { return requireApplication().blockConstraintRepairMessage; }
+      const persistence = Object.freeze({ serializeConstraint, deserializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState,
+        normalizeGeometryInstance, loadModelData, readRepairMessage });
       function createRebinding() {
         return window.ConstraintRebinding.create({ catalog: services.catalog, projections: services.projections,
           geometryInstanceBundlesForScope: services.instances.geometryInstanceBundlesForScope,
@@ -83,10 +94,12 @@
             (target, dimension) => placement.normalizeDimension(target, dimension));
         }
         function createApplication({ resetEditingState, sketchTreeView, refreshReferenceConstraintValidity, enforceMinimumLineLengths, log }) {
-          return window.DocumentApplication.create({ documentLoading: loading, document, model: readEditingScope(), resetEditingState, sketchTreeView,
+          const application = window.DocumentApplication.create({ documentLoading: loading, document, model: readEditingScope(), resetEditingState, sketchTreeView,
             refreshReferenceConstraintValidity, enforceMinimumLineLengths, ensureDimensionDefaults,
             restoreSequences: sequences => { reservation.geometry(sequences.geometry); documentIds.restore(sequences); },
             ensureAppearanceState: () => preparation.appearance(), ensureBlockState: () => preparation.blocks(), log });
+          currentApplication = application;
+          return application;
         }
         const result = Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, normalizeGeometryInstance, ensureDimensionDefaults, createApplication });
         currentPersistence = result;

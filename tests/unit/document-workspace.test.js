@@ -592,3 +592,49 @@ test('Document editing scope keeps failed activation and insertion partial effec
     assert.equal(editing.dimensionQueries.hasDirectRadiusDimension(circle), true); assert.equal(binding.current, draft); assert.equal(editing.solver.model, draft);
   }
 });
+
+test('Document persistence entry points keep initialization guards and normalize against the live Workspace through the actual codec',()=>{
+ const f=persistenceFixture(context=>{
+  for(const [run,binding]of [[()=>context.persistence.normalizeGeometryInstance({}),'normalizeEditingGeometryInstance'],[()=>context.persistence.loadModelData({}),'documentApplication'],[context.persistence.readRepairMessage,'documentApplication']])assert.throws(run,error=>error.name==='ReferenceError'&&error.message==="Cannot access '"+binding+"' before initialization");
+ });
+ const api=f.context.persistence;assert.equal(api.normalizeGeometryInstance.length,1);assert.equal(api.loadModelData.length,1);assert.equal(api.readRepairMessage.length,0);
+ for(const run of [()=>api.loadModelData({}),api.readRepairMessage])assert.throws(run,error=>error.name==='ReferenceError'&&error.message==="Cannot access 'documentApplication' before initialization");
+ assert.equal(api.normalizeGeometryInstance({type:'pattern'},undefined,4).id,'PI5');assert.equal(api.normalizeGeometryInstance({type:'pattern'}).sketchId,'S1');
+ const other=w.DocumentState.create();other.sketches[1].id='S9';other.activeSketchId='S9';f.model.workspace.activate(other);
+ assert.equal(api.normalizeGeometryInstance({type:'pattern'}).sketchId,'S9');assert.equal(f.state.bound,f.model.document);
+ assert.equal(api.normalizeGeometryInstance({type:'pattern'},value=>'explicit:'+value).sketchId,'explicit:undefined');
+});
+
+test('owned Document load retains the captured target, Tree sequencing, references and ID restoration across a different current scope',()=>{
+ const f=applicationCompositionFixture(true),api=f.context.persistence,root=f.model.document,source=addPersistedLine(root,'L42');source.p1.id='P20';source.p2.id='P21';f.model.documentIds.restore({hatchSeq:12});const data=f.persistence.writer.serialize();
+ const local=w.DocumentState.create();addPersistedLine(local,'LOCAL');f.model.workspace.activate(local);f.state.bound=local;const before=JSON.stringify(local);
+ api.loadModelData(data,{preserveSketchTreeState:true});assert.equal(JSON.stringify(local),before);assert.equal(f.state.bound,root);assert.equal(root.lines[0].id,'L42');
+ assert.equal(root.lines[0].p1,root.points[0]);assert.equal(root.constraints[0].p2,root.points[1]);assert.deepEqual(f.events.slice(0,3),['capture','reset','tree']);
+ assert.equal(f.model.geometryIds.allocate('point'),'P22');assert.equal(f.model.geometryIds.allocate('line'),'L43');assert.equal(f.model.documentIds.peek('hatch'),12);
+ assert.equal(api.readRepairMessage(),f.application.blockConstraintRepairMessage);
+});
+
+test('owned Document load preserves receiver, two arguments, fresh default options, return and original load or repair getter exceptions',()=>{
+ const f=persistenceFixture(),api=f.context.persistence,original=w.DocumentApplication,marker=new Error('application failed'),calls=[],result={},message={};let fail=false,gets=0;
+ const component=Object.freeze({load(...args){assert.equal(this,component);calls.push(args);if(fail)throw marker;return result;},get blockConstraintRepairMessage(){assert.equal(this,component);gets++;if(fail)throw marker;return message;}});
+ const ports={resetEditingState(){},sketchTreeView:{capture(){},restore(){}},refreshReferenceConstraintValidity(){},enforceMinimumLineLengths(){},log(){}};
+ w.DocumentApplication={...original,create:()=>component};
+ try{assert.equal(f.persistence.createApplication(ports),component);}finally{w.DocumentApplication=original;}
+ const data={};assert.equal(api.loadModelData(data),result);assert.equal(api.loadModelData(data,undefined,'ignored'),result);assert.equal(api.loadModelData(data,null,'ignored'),result);
+ assert.equal(calls.length,3);assert.ok(calls.every(args=>args.length===2&&args[0]===data));assert.deepEqual(Object.keys(calls[0][1]),[]);assert.notEqual(calls[0][1],calls[1][1]);assert.equal(calls[2][1],null);
+ assert.equal(api.readRepairMessage('ignored'),message);assert.equal(gets,1);fail=true;assert.throws(()=>api.loadModelData(data),error=>error===marker);assert.throws(api.readRepairMessage,error=>error===marker);
+});
+
+test('each read context publishes only completed Document applications and persistence reconstruction keeps its previous application',()=>{
+ const f=persistenceFixture(),g=persistenceFixture(),original=w.DocumentApplication,marker=new Error('application construction failed'),seen=[];
+ const make=label=>Object.freeze({load(data){seen.push([label,this]);return data;},get blockConstraintRepairMessage(){return label;}}),first=make('first'),other=make('other'),replacement=make('replacement');
+ const ports={resetEditingState(){},sketchTreeView:{capture(){},restore(){}},refreshReferenceConstraintValidity(){},enforceMinimumLineLengths(){},log(){}};let fail=false,next=first;
+ w.DocumentApplication={...original,create(options){if(fail)throw marker;return options.document===f.model.document?next:other;}};
+ try{
+  assert.equal(f.persistence.createApplication(ports),first);assert.equal(g.persistence.createApplication(ports),other);const data={};assert.equal(f.context.persistence.loadModelData(data),data);
+  fail=true;assert.throws(()=>f.persistence.createApplication(ports),error=>error===marker);const empty=persistenceFixture();assert.throws(()=>empty.persistence.createApplication(ports),error=>error===marker);assert.throws(empty.context.persistence.readRepairMessage,error=>error.name==='ReferenceError');assert.equal(f.context.persistence.readRepairMessage(),'first');assert.equal(g.context.persistence.readRepairMessage(),'other');
+  const fresh=f.context.createPersistence({...f.options,version:27});assert.equal(f.context.persistence.readRepairMessage(),'first');assert.equal(f.context.persistence.serializeModel().version,27);
+  fail=false;next=replacement;assert.equal(fresh.createApplication(ports),replacement);f.context.persistence.loadModelData(data);g.context.persistence.loadModelData(data);
+  assert.equal(seen[0][1],first);assert.equal(seen[1][1],replacement);assert.equal(seen[2][1],other);assert.equal(g.context.persistence.readRepairMessage(),'other');
+ }finally{w.DocumentApplication=original;}
+});
