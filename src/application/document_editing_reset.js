@@ -42,5 +42,13 @@
     }
     return Object.freeze({ reset });
   }
-  window.DocumentEditingReset = Object.freeze({ create });
+  function createForWorkspace({ documentWorkspace, readServices, interaction, sessions, blocks, constraints, ...options }) {
+    return create({ ...options, documentModel: documentWorkspace.document,
+      geometryIds: documentWorkspace.geometryIds, documentIds: documentWorkspace.documentIds,
+      invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache, hatchGeometryQuery: readServices.hatches,
+      drawOperationLifecycle: interaction.lifecycle, selectMode: interaction.lifecycle.selectMode,
+      pendingCommandSession: sessions.pending, constraintTargetSession: sessions.targets,
+      blockEditor: blocks.session, clearAuthoringPerformance: constraints.clearPerformance });
+  }
+  window.DocumentEditingReset = Object.freeze({ create, createForWorkspace });
 })();

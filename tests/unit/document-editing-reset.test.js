@@ -6,7 +6,7 @@ const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(source => source.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const w = sandbox.window;
-function fixture() {
+function fixture({ composed = false, configure = null, overrides = {} } = {}) {
   const document = w.DocumentState.create(), workspace = w.EditingWorkspace.create(document), selection = w.CanvasSelection.create();
   const geometryIds = w.GeometryIds.create(), documentIds = w.DocumentIds.create(), calls = [];
   const point = new w.GeometrySolver.Point('P9', 1, 2);
@@ -43,8 +43,15 @@ function fixture() {
   deps.blankCanvasGesture = { clearSuppression: () => effect('gesture') };
   deps.drawOperationLifecycle = { resetForDocument: () => effect('drawing') };
   deps.hatchGeometryQuery = { clear: () => effect('hatchCache') };
-  const controller = w.DocumentEditingReset.create(deps); assert.deepEqual(calls, []); state.ready = true;
-  return { document, workspace, blockScope, selection, geometryIds, documentIds, state, calls, controller, point };
+  if (configure) configure(deps, state, calls);
+  deps.drawOperationLifecycle.selectMode = deps.selectMode;
+  const owners = { documentWorkspace: { document, geometryIds, documentIds },
+    readServices: { projections: { invalidateBlockProjectionCache: deps.invalidateBlockProjectionCache }, hatches: deps.hatchGeometryQuery },
+    interaction: { lifecycle: deps.drawOperationLifecycle }, sessions: { pending: deps.pendingCommandSession, targets: deps.constraintTargetSession },
+    blocks: { session: deps.blockEditor }, constraints: { clearPerformance: deps.clearAuthoringPerformance } };
+  const controller = composed ? w.DocumentEditingReset.createForWorkspace({ ...deps, ...overrides, ...owners }) : w.DocumentEditingReset.create({ ...deps, ...overrides });
+  assert.deepEqual(calls, []); state.ready = true;
+  return { document, workspace, blockScope, selection, geometryIds, documentIds, state, calls, controller, point, owners, deps };
 }
 
 test('reset returns to document ownership, discards queued input and preserves the two document reset phases', () => {
@@ -96,4 +103,59 @@ test('repeated resets keep model collections stable while IDs and sessions retur
   assert.equal(f.geometryIds.allocate('point'), 'P1'); assert.equal(f.documentIds.allocate('annotation'), 'AN1');
   assert.equal(f.state.mode, 'select'); assert.equal(f.state.pending, null); assert.equal(f.selection.selectedElementCount(), 0);
   assert.equal(f.calls.filter(call => call === 'imageInteraction').length, 2);
+});
+
+
+function resetResult(f) {
+ return JSON.stringify({document:f.document,documentScope:f.workspace.current()===f.document,selection:f.selection.selectedElementCount(),
+  geometryPoint:f.geometryIds.peek('point'),annotationId:f.documentIds.peek('annotation'),state:{mode:f.state.mode,performance:f.state.performance,
+   pending:f.state.pending,constraint:f.state.constraint,pointerQueued:f.state.pointerQueued,imageStages:f.state.imageStages},calls:f.calls});
+}
+
+test('Workspace reset assembly retains Document and ID ownership, exact operation order, repeated reset and Block scope separation',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=fixture({composed}),points=f.document.points,sketches=f.document.sketches;
+  assert.equal(Object.isFrozen(f.controller),true);assert.equal(f.workspace.current(),f.blockScope);assert.deepEqual(f.calls,[]);
+  assert.equal(f.controller.reset(),undefined);assert.equal(f.workspace.current(),f.document);assert.equal(f.document.points,points);assert.equal(f.document.sketches,sketches);assert.equal(f.blockScope.points[0],f.point);
+  assert.equal(f.state.imageStages.length,2);assert.notEqual(f.state.imageStages[0],f.state.imageStages[1]);
+  f.document.points.push(f.point);f.geometryIds.allocate('point');f.documentIds.allocate('annotation');f.state.pending={type:'offset-value'};f.state.mode='offset';
+  f.controller.reset();assert.equal(f.document.points.length,0);assert.equal(f.geometryIds.peek('point'),1);assert.equal(f.documentIds.peek('annotation'),1);assert.equal(f.state.mode,'select');
+  results.push(resetResult(f));
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('Workspace reset assembly preserves every original effect failure boundary and the last image reset failure after defaults',()=>{
+ const baseline=fixture();baseline.controller.reset();
+ for(const failAt of new Set(baseline.calls)){
+  const results=[];
+  for(const composed of [false,true]){const f=fixture({composed});f.state.failAt=failAt;assert.throws(()=>f.controller.reset(),error=>error===f.state.failure);assert.equal(f.calls.at(-1),failAt);results.push(resetResult(f));}
+  assert.equal(results[1],results[0],failAt);
+ }
+ const results=[];
+ for(const composed of [false,true]){
+  const f=fixture({composed,configure(deps,state){const original=deps.referenceImageInteraction.reset;let count=0;deps.referenceImageInteraction.reset=function(){assert.equal(this,deps.referenceImageInteraction);if(++count===2)throw state.failure;return original();};}});
+  assert.throws(()=>f.controller.reset(),error=>error===f.state.failure);assert.equal(f.document.activeSketchId,w.SketchHierarchy.DEFAULT_SKETCH_ID);assert.equal(f.state.imageStages.length,1);results.push(resetResult(f));
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('Workspace reset captures bare capabilities once, retains member receivers and ignores inconsistent lower-level overrides',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=fixture({composed,configure(deps){
+   for(const name of ['selectMode','clearAuthoringPerformance','invalidateBlockProjectionCache']){const original=deps[name];deps[name]=function(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);return original();};}
+   for(const [owner,name]of [[deps.referenceImageRenderer,'clear'],[deps.hatchGeometryQuery,'clear'],[deps.blockEditor,'reset'],[deps.pendingCommandSession,'clear'],[deps.constraintTargetSession,'reset']]){const original=owner[name];owner[name]=function(){assert.equal(this,owner);assert.equal(arguments.length,0);return original();};}
+  }});
+  f.owners.interaction.lifecycle.selectMode=()=>assert.fail('captured select method must not be replaced');
+  f.owners.constraints.clearPerformance=()=>assert.fail('captured performance method must not be replaced');
+  f.controller.reset();results.push(resetResult(f));
+ }
+ assert.equal(results[1],results[0]);
+ const unexpected=()=>assert.fail('lower-level override must not replace its owner');
+ const f=fixture({composed:true,overrides:{documentModel:{points:[{id:'wrong'}]},geometryIds:{reset:unexpected},documentIds:{reset:unexpected},
+  drawOperationLifecycle:{resetForDocument:unexpected},selectMode:unexpected,clearAuthoringPerformance:unexpected,invalidateBlockProjectionCache:unexpected,
+  pendingCommandSession:{clear:unexpected},constraintTargetSession:{reset:unexpected},blockEditor:{reset:unexpected},hatchGeometryQuery:{clear:unexpected}}});
+ f.controller.reset();assert.equal(f.workspace.current(),f.document);assert.equal(f.document.points.length,0);assert.equal(f.geometryIds.peek('point'),1);assert.equal(f.documentIds.peek('annotation'),1);
 });

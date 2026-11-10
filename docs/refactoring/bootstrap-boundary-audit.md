@@ -1,5 +1,20 @@
 # Composition rootの残存責務と依存監査
 
+## Document編集resetの所有者依存（2026-11-10）
+
+DocumentEditingReset.createForWorkspaceが、同じDocumentWorkspaceのDocument／Geometry IDs／Document IDs、read servicesのBlock投影／Hatch cache、CanvasInteractionのLifecycle、OperationSessionsのPending／Target、Block editor sessionとConstraint Commitの性能解除を、既存createへ接続する。rootは同じ関係の低水準部品を別々に選択せず、残る実componentとflush／scope切替の入口だけを明示する。
+
+実reset controllerを直接返し、新しい状態・session・cache・listener・guard／fallbackは追加しない。Document scopeへ戻る位置、content clearとdefaults resetの二段階、画像操作の前後二回のreset、採番・Selection・Block draftとの参照関係を保つ。裸のselect／性能解除／投影invalidateは生成時に同じ関数を捕捉し、member reset／clearは同じcomponentを操作時に読む。確定例外で追加の復元を行わず、既存の例外短絡と部分更新を維持する。
+
+app.jsは1,491→1,490行（1行減）、非空白1,042→1,041行。reset構築入力は30→25項目。AST比較で対象構築以外のroot全体と起動順、reset本体・旧API、DocumentWorkspace／Workspace・index・全E2E不変、所有者からの十一依存の参照、新しい未使用／未束縛参照なしを確認した。rootは全owner生成後・test hooksと起動resetの前の位置で生成する。
+
+次の候補（未実装）は注記hitのscope既定値。appのhitAnnotationElementはraw Annotation spatial queryへactiveOnly: !ordinarySelectionMode()を付け、caller optionsを後から展開している。既存CanvasHitInteractionはpolicyをquery生成より先に作り、createQueriesまでsceneを読まないため、raw注記queryと同じpolicyを所有側で接続する境界を検証できる。rootの利用先はSceneへの接続・後段Parameter参照入力・Browser注記支援で、候補採用時には原queryの裸呼出し、options既定値と上書き順、policyの毎回読取り、通常選択／操作中のSketch範囲と実注記参照、constructor無読取りを新旧比較する。ordinarySelectionModeは描画順の後段入力にも使われるので保持する。現在のreset単位へこの変更は含めず、全E2E中のソースは固定する。
+
+関連単体6件、構文631file・全単体2,321件・全E2E589件が成功（50file、21.8m、exit 0）。三つの新旧比較で実Document／採番・Block scopeと配列参照、再reset、既存fixtureで記録するcallbackの各失敗地点とdefaults後の最後の画像reset失敗、裸／member receiver・零引数・捕捉時機、低水準の不整合overrideを所有者で置き換えることを確認した。699製品／test入力と開始HEAD不変、無指定test listと選択50fileの589件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-document-reset-owners-{focused,check,unit,e2e,proof,smoke}.logとsource-hashes／selection／filter-environment／e2e-receipt／last-run JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。今回のreset所有者接続の変更後の全体検証であり、数百行への全体目標の達成とは区別する。
+
+基準developは58f0556、作業branchはcodex/document-reset-owners、開始時週枠残量37%。起動／新規／読込の共通resetを通るため、今回変更後の全E2E589件（50file）を選択した。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ## Canvas Context Menuの段階的な生成と公開（2026-11-10）
 
 CanvasContextInteraction.createMenuForWorkspaceが、同じDocumentWorkspace／read services・CanvasInteraction・Presentationの上で早期Menu→後段query／候補表示→操作実体の生成を接続する。候補表示と操作の内部参照は各factoryが正常に返ってから公開し、生成失敗では以前の完成済み参照を保持する。Menuの遅延getterをrootへ戻さず、command構築位置とcontroller.startの位置は従来どおり分ける。
