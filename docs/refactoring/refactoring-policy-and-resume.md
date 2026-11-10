@@ -98,6 +98,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：注記の作図スナップ候補の所有（2026-11-10）
+
+AnnotationFeature.drawingAnchorsが、liveなGeometryReadServicesの注記一覧からSketch可視性と注記visibleを絞り、既存placementAnchorで作図スナップ候補を生成する。rootは完成したreaderをDrawingSnapへ接続し、注記一覧と可視性のraw aliasを保持しない。filter完了後にmapする順、非表示の短絡、投影／inactive Sketchを含む元の候補方針、注記Objectの同一性と新しい候補record、bare callbackと例外を維持する。生成時にscope／注記／座標を読まず、新cache・state・modelを追加しない。従来factory／描画／DrawingSnapの再判定／保存形式v26とUIを変更しない。 app.jsは1,451→1,450行（1行減）。既存AnnotationFeatureに責務を集め、新fileやフォルダを増やさない。
+
+追加単体3件でliveな一覧と位置の変更、hidden／visibleの短絡、filter→mapの段階順、Symbolを含むspread、inactive／locked／Block projectionのidentity、照会・可視性・座標取得の例外同一性を旧callbackと比較した。実DrawingSnapも使い、一覧交換／非表示後の候補と元の注記参照、miss時の入力同一性を確認する。AST比較でrootは二つのreader aliasと候補callbackだけの変更、AnnotationFeatureはquery／visibility portだけの追加、旧算法・既存生成順・raw API・index・保存／描画／Geometry／command・E2E不変、新しい未使用／未束縛参照なしを確認した。関連単体34件、構文632file・全単体2,354件・関連E2E331件が成功（13file、5.3m、exit 0）。702製品／test／検証入力と開始HEAD不変、選択13fileのtest list331件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-annotation-snap-sources-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。全E2Eの再実行ではなく、45cc3a7の全589件成功とは区別する。
+
+基準develop 8260409、作業branch codex/annotation-snap-sources、開始時週枠残量31%。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Toolbar／Workspace controlsの段階的な組立て（2026-11-10）
 
 toolbarPresentation.prepareWorkspaceが編集Toolbar bindingの生成と既存Workspace controlsの準備を同じPresentation owner内で行い、実close／startと後段createDrawingBindingを返す。rootはcloseAppMenusを公開してstartし、その後に実描画bindingを生成・bindする。既存のcreateEditingBinding／createDrawingBinding／prepareWorkspaceControlsは維持する。新しいUI session・model・登録用setterを作らない。
