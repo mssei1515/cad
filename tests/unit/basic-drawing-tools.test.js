@@ -1112,3 +1112,73 @@ test('Hatch editing assembly returns the existing command directly and leaves co
   const error=new Error('Hatch construction');assert.throws(()=>hatchOwnersFixture(composed,{failure:true,error}),caught=>caught===error);
  }
 });
+
+function previewOwnersFixture(composed, probe = {}) {
+ const f=geometryFoundationFixture({composed:true}),calls=[],reads=[],state={width:800,height:600},w=f.w;
+ const ctx=new Proxy({}, {set(target,key,value){calls.push(['set',key,value]);target[key]=value;return true;}});
+ for(const name of ['save','restore','beginPath','moveTo','lineTo','arc','stroke','fill','strokeRect','setLineDash'])ctx[name]=(...args)=>calls.push([name,...args]);
+ calls.length=0;
+ const ready=()=>assert.equal(f.state.ready,true),surface={withCanvasState:function(fn){'use strict';assert.equal(this,undefined);ready();calls.push(['enter']);try{return fn();}finally{calls.push(['exit']);}}};
+ const canvas={get clientWidth(){assert.equal(this,canvas);ready();reads.push('width');if(state.widthError)throw state.widthError;return state.width;},
+  get clientHeight(){assert.equal(this,canvas);ready();reads.push('height');if(state.heightError)throw state.heightError;return state.height;}};
+ const display={traceSplinePath:function(spline){'use strict';assert.equal(this,undefined);ready();calls.push(['spline',spline.closed]);if(state.traceError)throw state.traceError;}};
+ const centerline={support:{ok:true,anchor:{x:10,y:20},ux:1,uy:0},firstPoint:null,
+  projectPointToCenterlineSupport:function(point){'use strict';assert.equal(this,undefined);ready();reads.push('project');return point;}};
+ const original=w.AuthoringPreviewRenderer;probe.order=[];probe.ports={};probe.actual={};probe.f={...f,state,calls,reads};
+ w.AuthoringPreviewRenderer={...original};for(const name of ['create','createLayer'])w.AuthoringPreviewRenderer[name]=options=>{
+  probe.order.push(name);probe.ports[name]=options;if(probe.failure===name)throw probe.error;return probe.actual[name]=original[name](options);
+ };
+ f.state.ready=false;let preview;
+ try{preview=composed?f.tools.createPreviewForEditing({ctx,surface,geometry:display,canvas,centerlineCommand:centerline})
+  :f.tools.createPreview({ctx,viewport:f.owners.viewport,withCanvasState:surface.withCanvasState,traceSplinePath:display.traceSplinePath,
+    readMode:f.owners.interaction.lifecycle.readMode,centerlineCommand:centerline,readCanvasSize:()=>({width:canvas.clientWidth,height:canvas.clientHeight})});}
+ finally{w.AuthoringPreviewRenderer=original;}
+ assert.deepEqual(calls,[]);assert.deepEqual(reads,[]);f.state.ready=true;
+ return {...f,preview,ctx,surface,display,canvas,centerline,drawState:state,calls,reads,probe};
+}
+
+test('authoring preview assembly shares the real renderer, layer, viewport and live command owners without reading Canvas state',()=>{
+ for(const composed of [false,true]){
+  const f=previewOwnersFixture(composed),p=f.probe.ports;
+  assert.deepEqual(f.probe.order,['create','createLayer']);assert.equal(f.preview.renderer,f.probe.actual.create);assert.equal(f.preview.layer,f.probe.actual.createLayer);
+  assert.ok(Object.isFrozen(f.preview));assert.equal(p.create.viewport,f.owners.viewport);assert.equal(p.create.ctx,f.ctx);
+  assert.equal(p.create.withCanvasState,f.surface.withCanvasState);assert.equal(p.create.traceSplinePath,f.display.traceSplinePath);
+  assert.equal(p.createLayer.readMode,f.owners.interaction.lifecycle.readMode);assert.equal(p.createLayer.lineCommand,f.tools.tools.line);
+  assert.equal(p.createLayer.splineDraft,f.tools.spline.draft);assert.equal(p.createLayer.centerlineCommand,f.centerline);
+  assert.equal(f.ids.peek('point'),1);assert.equal(f.state.scope.points.length,0);
+ }
+});
+
+test('authoring preview keeps real drawing traces, live Canvas dimensions and scale across mode and draft changes',()=>{
+ const traces=[];
+ for(const composed of [false,true]){
+  const f=previewOwnersFixture(composed),lifecycle=f.owners.interaction.lifecycle;
+  f.tools.tools.line.click({x:0,y:0});f.owners.sessions.preview.pointer={x:20,y:10};
+  f.tools.spline.draft.points.push({x:0,y:0},{x:10,y:10});
+  f.owners.sessions.preview.trim={kind:'line',interval:{left:{point:{x:1,y:2}},right:{point:{x:3,y:4}}}};
+  for(const mode of ['select','line','centerline','spline','trim']){lifecycle.setMode(mode);f.preview.layer.draw();if(mode==='trim')f.preview.layer.drawTrimPreview();}
+  assert.ok(f.calls.some(c=>c[0]==='spline'));const modeTrace=JSON.stringify({calls:f.calls,reads:f.reads});
+  lifecycle.setMode('centerline');f.owners.sessions.preview.pointer=null;f.calls.length=0;f.reads.length=0;
+  f.drawState.width=1000;f.drawState.height=700;f.state.scale=2;f.preview.layer.drawCenterlinePreview();
+  assert.deepEqual(f.calls.find(c=>c[0]==='moveTo'),['moveTo',-365,20]);assert.deepEqual(f.reads,['width','height']);
+  f.drawState.width=200;f.drawState.height=400;f.state.scale=4;f.preview.layer.drawCenterlinePreview();
+  assert.deepEqual(f.calls.filter(c=>c[0]==='moveTo').at(-1),['moveTo',-65,20]);assert.deepEqual(f.reads,['width','height','width','height']);
+  traces.push(JSON.stringify({modeTrace,calls:f.calls,reads:f.reads,points:f.state.scope.points.map(p=>[p.id,p.x,p.y])}));
+ }assert.equal(traces[1],traces[0]);
+});
+
+test('authoring preview retains constructor and Canvas getter exceptions with the original stop and drawing-state boundaries',()=>{
+ for(const composed of [false,true]){
+  for(const failure of ['create','createLayer']){const error=new Error(failure),probe={failure,error};
+   assert.throws(()=>previewOwnersFixture(composed,probe),value=>value===error);assert.deepEqual(probe.order,failure==='create'?['create']:['create','createLayer']);
+   assert.deepEqual(probe.f.reads,[]);assert.deepEqual(probe.f.calls,[]);assert.equal(probe.f.ids.peek('point'),1);
+  }
+  for(const failure of ['width','height']){const f=previewOwnersFixture(composed),error=new Error(failure);f.drawState[failure+'Error']=error;
+   f.owners.interaction.lifecycle.setMode('centerline');assert.throws(()=>f.preview.layer.drawCenterlinePreview(),value=>value===error);
+   assert.deepEqual(f.reads,failure==='width'?['width']:['width','height']);assert.deepEqual(f.calls,[]);
+  }
+  const f=previewOwnersFixture(composed),error=new Error('Spline path');f.drawState.traceError=error;
+  f.tools.spline.draft.points.push({x:0,y:0},{x:10,y:10});f.owners.sessions.preview.pointer={x:20,y:10};f.owners.interaction.lifecycle.setMode('spline');
+  assert.throws(()=>f.preview.layer.drawSplinePreview(),value=>value===error);assert.deepEqual(f.calls.at(-1),['exit']);assert.deepEqual(f.reads,[]);
+ }
+});

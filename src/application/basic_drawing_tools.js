@@ -139,7 +139,12 @@
         return tools.createHatch({ hatchGeometryQuery: readServices.hatches, readMode: interaction.lifecycle.readMode,
           lastPointer: sessions.pointer.readLastPointer, documentIds: documentWorkspace.documentIds, updateStatusUI, hatchRegionErrorText });
       }
-      return Object.freeze({ ...tools, createEditing, createOffsetForEditing, createHatchForEditing });
+      function createPreviewForEditing({ ctx, surface, geometry: display, canvas, centerlineCommand }) {
+        return tools.createPreview({ ctx, viewport, withCanvasState: surface.withCanvasState, traceSplinePath: display.traceSplinePath,
+          readMode: interaction.lifecycle.readMode, centerlineCommand,
+          readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }) });
+      }
+      return Object.freeze({ ...tools, createEditing, createOffsetForEditing, createHatchForEditing, createPreviewForEditing });
     }
     return Object.freeze({ geometry, createAuthoring: createTools, createAuthoringForEditing: createToolsForEditing });
   }
