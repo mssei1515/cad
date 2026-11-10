@@ -46,5 +46,17 @@
     }
     return Object.freeze({ command, open, start, dispose });
   }
-  window.PngExport = Object.freeze({ create });
+  function prepare() {
+    let feature = null;
+    function readCommand() { return feature === null ? null : feature.command; }
+    function cancel() { return readCommand().cancel(); }
+    function start() { return feature.start(); }
+    function createFeature(options) {
+      const next = create(options);
+      feature = next;
+      return next;
+    }
+    return Object.freeze({ create: createFeature, readCommand, cancel, start });
+  }
+  window.PngExport = Object.freeze({ create, prepare });
 })();

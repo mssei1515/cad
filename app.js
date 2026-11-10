@@ -41,7 +41,7 @@
 
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
-  let pngExportCommand = null;
+  const pngExportLifecycle = window.PngExport.prepare();
   const presentation = window.PresentationFeature.create({
     document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
   });
@@ -158,7 +158,7 @@
     hits: { hitPoint: (x, y) => hitPoint(x, y), hitLine: (x, y) => hitLine(x, y),
       hitCircle: (x, y) => hitCircle(x, y), hitArc: (x, y) => hitArc(x, y) },
     clearPlacement: () => geometryInstanceCommand.clearPlacement(), cancelAnnotation: () => annotationCommand.cancel(),
-    cancelPngExport: () => pngExportCommand.cancel(), resetOffset: () => offsetSelection.reset(),
+    cancelPngExport: pngExportLifecycle.cancel, resetOffset: () => offsetSelection.reset(),
     hideInput: () => hideDimensionValueInput(), updateToolbar, updateConstraintButtons,
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
@@ -198,7 +198,7 @@
   });
   const HISTORY_LIMIT = 80;
   presentation.bindCanvas({
-    readPngCommand: () => pngExportCommand, readPending: () => pendingCommandSession.current, readMode: drawOperationLifecycle.readMode,
+    readPngCommand: pngExportLifecycle.readCommand, readPending: () => pendingCommandSession.current, readMode: drawOperationLifecycle.readMode,
     syncAnnotationInput: () => annotationInputController.sync(),
     withGeometryReadCache, drawCanvas,
   });
@@ -761,7 +761,7 @@
 
   const { frame: canvasFrameRenderer, overlays: { drawSelectionRect } } = createCanvasFrame({
     rectangle: selectionRectangle, snap: drawingSnap, pointer: pointerInteractionController,
-    recordDraw: () => pointerMoveScheduler.recordDraw(), referenceImageLayer: referenceImageFeature.layer, readPngCommand: () => pngExportCommand,
+    recordDraw: () => pointerMoveScheduler.recordDraw(), referenceImageLayer: referenceImageFeature.layer, readPngCommand: pngExportLifecycle.readCommand,
     dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
     authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
     drawBlockInstanceHandles, drawHatches, drawDrawingStack,
@@ -1175,7 +1175,7 @@
 
 
   const canvasInputBinding = createCanvasInputBinding({
-    readPngExportCommand: () => pngExportCommand,
+    readPngExportCommand: pngExportLifecycle.readCommand,
     blankCanvasGesture, isBlankCommandPanelPoint, scheduler: pointerMoveScheduler,
   });
   canvasInputBinding.bind();
@@ -1218,13 +1218,12 @@
   drawingToolBinding.bind();
 
   documentFileFeature.bindControls();
-  const pngExport = createPngExport({
+  const { command: pngExportCommand } = createPngExport({
     documentName: effectiveDocumentName, prepareImages: referenceImageFeature.prepareImages,
-    fileSession,
+    fileSession, pngExport: pngExportLifecycle,
     findSnap: (point, tolerance) => drawingSnap.find(point, tolerance), flushPointerMove: flushScheduledCanvasPointerMove,
   });
-  pngExportCommand = pngExport.command;
-  pngExport.start();
+  pngExportLifecycle.start();
   dxfImportFeature.bindControls({ flushScheduledCanvasPointerMove });
   referenceImageInput.bindControls();
   sketchTreeView.bindCreation(createSketch);
