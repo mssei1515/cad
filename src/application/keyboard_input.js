@@ -5,7 +5,8 @@
     readMode, isGeometryMode, instances, projection, referenceImage, splineEditing, blockPlacement, annotationDrag,
     pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand,
     drawing, hasSelection, clearSelection, annotation, finishSources, finishSpline, finishProjection, finishHatch,
-    removeSplinePoint, offset, readPointer, deleteSelection, completeLineLength, isTextEditingTarget, setHint, updateUI, draw }) {
+    removeSplinePoint, offset, readPointer, deleteSelection, completeLineLength,
+    isTextEditingTarget = window.KeyboardInteractionController.isTextEditingTarget, setHint, updateUI, draw }) {
     const cancel = window.KeyboardInteractionController.createCancellation({
       getMode: readMode, instances, projection, referenceImage, splineEditing, blockPlacement,
       annotationDrag: { active: () => annotationDrag.resizing || annotationDrag.handlesActive,

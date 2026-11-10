@@ -3,6 +3,44 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs'); const path = require('node:path'); const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui/keyboard_interaction_controller.js'), 'utf8'), sandbox);
+test('text editing policy reads current DOM constructors and preserves short circuit and raw editable values', () => {
+  class Input {} class TextArea {}
+  sandbox.HTMLInputElement = Input; sandbox.HTMLTextAreaElement = TextArea;
+  const read = sandbox.window.KeyboardInteractionController.isTextEditingTarget;
+  const input = new Input(), textarea = new TextArea();
+  for (const item of [input, textarea]) Object.defineProperty(item, 'isContentEditable', { get() { throw new Error('must short circuit'); } });
+  assert.equal(read(input), true); assert.equal(read(textarea), true);
+  assert.equal(read(null), undefined); assert.equal(read(undefined), undefined); assert.equal(read({}), undefined);
+  for (const value of [false, true, 0, 'editable']) assert.equal(read({ isContentEditable: value }), value);
+  sandbox.HTMLInputElement = class Replacement {};
+  assert.equal(read(new sandbox.HTMLInputElement()), true);
+});
+
+test('text editing policy propagates editable getter and instanceof failures without normalization', () => {
+  const error = new Error('editable'); sandbox.HTMLInputElement = class {}; sandbox.HTMLTextAreaElement = class {};
+  const read = sandbox.window.KeyboardInteractionController.isTextEditingTarget;
+  assert.throws(() => read({ get isContentEditable() { throw error; } }), value => value === error);
+  sandbox.HTMLInputElement = class { static [Symbol.hasInstance]() { throw error; } };
+  assert.throws(() => read({}), value => value === error);
+});
+
+test('keyboard and native image input share the UI policy by default and retain explicit callback overrides', () => {
+  const context = { window: {} }; vm.createContext(context);
+  vm.runInContext(fs.readFileSync('src/ui/keyboard_interaction_controller.js', 'utf8'), context);
+  const w = context.window, policy = w.KeyboardInteractionController.isTextEditingTarget, received = [];
+  w.KeyboardInteractionController = { ...w.KeyboardInteractionController, createCancellation: () => () => {},
+    create: options => { received.push(options.isTextEditingTarget); return {}; } };
+  w.ReferenceImageImport = { create: () => ({}) }; w.ReferenceImageCommand = { create: () => ({ importFile() {} }) };
+  w.ImageClipboard = { create: options => { received.push(options.isTextEditingTarget); return {}; } };
+  for (const file of ['src/application/keyboard_input.js', 'src/application/reference_image_input.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), context);
+  const custom = () => assert.fail('must not read text target at construction');
+  for (const owner of [w.KeyboardInput, w.ReferenceImageInput]) for (const value of [undefined, custom, null]) {
+    owner.create({ window: {}, document: {}, isTextEditingTarget: value });
+    assert.equal(received.at(-1), value === undefined ? policy : value);
+  }
+  assert.equal(received.length, 6);
+});
+
 function fixture() {
   const calls = []; const state = { mode: 'select' }; const record = name => (...args) => { calls.push([name, ...args]); };
   const controller = sandbox.window.KeyboardInteractionController.create({

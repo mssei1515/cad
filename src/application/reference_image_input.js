@@ -3,7 +3,8 @@
   "use strict";
   function create({ document, window: browserWindow, applicationText, canvas, viewport, screenToWorld,
     currentScope, activeSketchId, nextId, canCreateInActiveSketch, clearSelection, canvasSelection,
-    updateUI, draw, recordHistory, setHint, pasteGeometry, copyGeometry, isGeometryMode, isTextEditingTarget }) {
+    updateUI, draw, recordHistory, setHint, pasteGeometry, copyGeometry, isGeometryMode,
+    isTextEditingTarget = window.KeyboardInteractionController.isTextEditingTarget }) {
     const referenceImageImport = window.ReferenceImageImport.create({ window: browserWindow, document, applicationText });
     const command = window.ReferenceImageCommand.create({
       referenceImageImport, canvas, viewport, screenToWorld, currentScope, activeSketchId, nextId,
