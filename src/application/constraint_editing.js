@@ -130,7 +130,7 @@
   }
   function createForEditing({ document, controls, interaction, sessions, sketches, presentation, operands, viewport, annotationFeature, instances,
     valueInput, resolveConstraintIntent, isGeometryMode, findLineFixedConstraint, clearSelection, commitConstraintResolution,
-    updateToolbar, updateConstraintButtons, blurConstraintControl, addConstraint, hitConstraintOperand,
+    updateToolbar, updateConstraintButtons, blurConstraintControl = window.ConstraintControlsView.createFocus({ document }).blur, addConstraint, hitConstraintOperand,
     toggleGeometryFixedOperand, toggleSelectedFixed, geometryInstanceBundle, cancelPendingCommand, placement,
     readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint }) {
     const { selection, access, lifecycle, hover } = interaction;

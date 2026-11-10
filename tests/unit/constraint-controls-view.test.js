@@ -2,6 +2,26 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const sandbox={window:{}};vm.createContext(sandbox);vm.runInContext(fs.readFileSync('src/ui/constraint_controls_view.js','utf8'),sandbox);
 vm.runInContext(fs.readFileSync('src/ui/constraint_feedback.js','utf8'),sandbox);
 
+test('constraint focus preparation stays cold and keeps activeElement reads, matches and blur receiver in order', () => {
+ class Element {} const calls=[];sandbox.HTMLElement=Element;
+ const first=new Element(),second={matches(selector){assert.equal(this,second);calls.push(selector);return true;}},third={blur(){assert.equal(this,third);calls.push('blur');return 'ignored';}};
+ let elements=[first,second,third];const document={get activeElement(){calls.push('active');return elements.shift();}};
+ const focus=sandbox.window.ConstraintControlsView.createFocus({document});assert.equal(Object.isFrozen(focus),true);assert.deepEqual(calls,[]);
+ assert.equal(focus.blur(),undefined);assert.deepEqual(calls,['active','active','[data-constraint], #fixPointBtn','active','blur']);
+ calls.length=0;elements=[null];assert.equal(focus.blur(),undefined);assert.deepEqual(calls,['active']);
+ calls.length=0;elements=[first,{matches(){calls.push('miss');return false;}}];focus.blur();assert.deepEqual(calls,['active','active','miss']);
+});
+
+test('constraint focus keeps getter, selector and blur exceptions and stops later reads', () => {
+ class Element {} sandbox.HTMLElement=Element;const error=new Error('focus');
+ for(const stage of ['read','matches','blur']){
+  let reads=0,blurs=0;const element=new Element();element.matches=function(){assert.equal(this,element);if(stage==='matches')throw error;return true;};
+  element.blur=function(){assert.equal(this,element);blurs++;throw error;};
+  const focus=sandbox.window.ConstraintControlsView.createFocus({document:{get activeElement(){reads++;if(stage==='read')throw error;return element;}}});
+  assert.throws(()=>focus.blur(),value=>value===error);assert.equal(reads,stage==='read'?1:stage==='matches'?2:3);assert.equal(blurs,stage==='blur'?1:0);
+ }
+});
+
 test('command feedback reads current button labels with fixed short-circuit and original fallbacks', () => {
  let language='ja',reads=0;
  const applicationText=(ja,en)=>language==='en'?en:ja;

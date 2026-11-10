@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のDimension操作テスト組立て単位ではapp.jsは1,428行、非空白982行。AST監査ではroot313文・506束縛、構築・接続507非空白行、別名・設定128行、委譲69行、条件付きtest hooks194行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のUI focus判断単位ではapp.jsは1,425行、非空白979行。AST監査ではroot313文・506束縛、構築・接続504非空白行、別名・設定128行、委譲69行、条件付きtest hooks194行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：文字入力判定と拘束control focusのUI所有（2026-11-10）
+
+KeyboardInteractionController.isTextEditingTargetは、HTMLInputElement／HTMLTextAreaElement／isContentEditableによる従来の判定を共有する。KeyboardInputとReferenceImageInputは未指定時だけこのUI関数を選び、明示callback（nullを含む）をそのまま保持する。ConstraintControlsView.createFocusは拘束control／Fixのfocus解除を所有し、ConstraintEditing.createForEditingが未指定時だけ接続する。生成時にDOM／型を照会せず、元のinstanceofのrealmと動的な型参照、短絡・生の戻り値、activeElementの各read／selector／blur receiver、undefined返却と例外／後続停止を維持する。既存controller／Clipboard／拘束commandの処理本体と相対生成・bind順、通常UI・保存形式v26は不変。新state・listenerやDOM cache、汎用contextを作らない。 app.jsは1,428→1,425行（3行減）。重複した文字入力判定二つとfocus解除のDOM判断をrootから除き、既存UI moduleとapplication adapterを使用する。新file・namespaceは追加しない。
+
+追加単体5件でDOM型の操作時取得、Input／TextAreaの短絡、editable値の非Boolean保持、instanceof／getterの例外、Keyboard／画像入力が同じ既定関数を使うことと明示override、focus生成時無照会、activeElement三readとmatches／blurのreceiver・返値、各段階の例外と後続停止を確認した。ASTで元の二つの判定式とfocus本体の完全一致、rootの三callback除去だけの変更、application側の三つの既定値追加だけの変更と既存本体／E2E不変を照合した。追加のplatform globalsはUI側の既存DOM型だけで、新しい未使用／未束縛参照はない。関連単体62件、構文635file・全単体2,372件・関連E2E306件が成功（22file、4.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択22fileのtest list306件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-ui-focus-policy-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、4b33718の全589件成功と区別する。
+
+基準develop 29c7753、作業branch codex/ui-focus-policy、開始時週枠残量28%。全体目標は未完了。最新全体基準4b33718と今回の関連検証を区別し、mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Dimension操作テスト支援の後段組立て（2026-11-10）
 

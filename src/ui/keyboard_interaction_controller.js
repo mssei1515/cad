@@ -1,6 +1,9 @@
 /* Route application keyboard input without owning document or operation state. */
 (() => {
   "use strict";
+  function isTextEditingTarget(target) {
+    return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable;
+  }
   // Escape unwinds one operation only; command owners retain their own state.
   function createCancellation({ getMode, instances, projection, referenceImage, splineEditing, blockPlacement,
     pending, constraint, drawing, selection, annotationDrag }) {
@@ -128,5 +131,5 @@
     }
     return Object.freeze({ keydown });
   }
-  window.KeyboardInteractionController = Object.freeze({ create, createCancellation });
+  window.KeyboardInteractionController = Object.freeze({ create, createCancellation, isTextEditingTarget });
 })();

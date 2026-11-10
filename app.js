@@ -326,7 +326,6 @@
     documentWorkspace, editingScope: editingScopeBinding, interaction: canvasInteraction, presentation, appearance: geometryAppearance,
     clearSelection, clearSnap: () => clearSnap(), hitReferenceImageAt, recordHistory,
     pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard, isGeometryMode,
-    isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
   const { renderer: referenceImageRenderer, interaction: referenceImageInteraction, input: referenceImageInput } = referenceImageFeature;
   const { drawDrawingStack } = createDrawingStack();
@@ -836,7 +835,6 @@
     document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, readServices: geometryReadServices, presentation,
     operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController,
     isGeometryMode, findLineFixedConstraint, clearSelection, updateToolbar, updateConstraintButtons,
-    blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
     hitConstraintOperand,
     geometryInstanceBundle, placement: dimensionPlacement,
   });
@@ -1156,7 +1154,6 @@
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
     projection: sketchProjectionCommand, constraints: constraintTargetCommand, spline: splineCommand, hatch: hatchCommand,
     splineEditing, blockPlacement: blockPlacementCommand, deleteSelection: deleteCurrentSelection,
-    isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
   keyboardInput.start();
   canvasViewControls.bindWindow();
