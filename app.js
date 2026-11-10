@@ -3,10 +3,10 @@
   "use strict";
   const { formatDisplayNumber } = window.NumberDisplay;
   const { escapeHtml } = window.HtmlText;
-  const { serializeHatch, hatchAppearanceForDisplay } = window.HatchData;
+  const { hatchAppearanceForDisplay } = window.HatchData;
 
   const {
-    CSS_PX_PER_MM, DEFAULT_HATCH_APPEARANCE,
+    CSS_PX_PER_MM,
   } = window.Appearance;
   const {
     drawingOrderOwner,
@@ -18,14 +18,11 @@
     signedPointLineDistance,
   } = window.GeometryKernel;
 
-  const { id: geometryRefId } = window.GeometryRef;
 
 
 
   const {
     vectorNorm,
-    Point,
-    Line,
     ConstraintSolver,
   } = window.GeometrySolver;
 
@@ -73,14 +70,12 @@
   });
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
-    isRootSketch,
     isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
     elementSketchId, canEditSketch,
     constraintSketchId,
   } = sketchContext;
 
-  const { geometryRefForItem } = window.GeometryObjects;
   const { services: geometryReadServices, createEditingScope, createPersistence } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
@@ -92,7 +87,7 @@
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
   const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
-  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allHatches, resolveGeometryRef } = geometryReads;
+  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
@@ -246,7 +241,6 @@
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CENTERLINE_PARALLEL_TOLERANCE = 1e-5;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
-  const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const resultIsAccepted = window.SketchSolving.createResultAcceptance(CONSTRAINT_ACCEPT_ERROR);
   const constraintOperandFeature = selectionFeature.createConstraintOperands({
@@ -307,7 +301,7 @@
   });
   const { traceSplinePath } = geometryDisplay;
   const { allGeometryBounds, visibleGeometryBounds } = drawingBounds;
-  const { fitSketchToViewport, fitAllGeometryToViewport } = drawingFit;
+  const { fitAllGeometryToViewport } = drawingFit;
   function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
   const dimensionValueEditing = window.ConstraintEditing.prepareDimensionValues({
     workspace, sketches: sketchContext, bounds: drawingBounds, minimumLineLength: MIN_LINE_LENGTH,
@@ -1263,7 +1257,7 @@
       layers: { authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer },
       blocks: { createEmptyBlockDefinition, blockPlacementCommand, drawBlockInstanceHandles },
       drawSelectionRect, drawAnnotationLeader, resizeCanvas, resetModelState, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID,
-      cssPxPerMm: CSS_PX_PER_MM, types: { Point, Line }, evaluateSpline: window.SplineGeometry.evaluate,
+      cssPxPerMm: CSS_PX_PER_MM, types: window.GeometrySolver, evaluateSpline: window.SplineGeometry.evaluate,
       hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
     });
     const sketchDeletionFixture = documentTestSupport.createSketchDeletion({ resetModelState, deleteSketch });
@@ -1374,21 +1368,15 @@
       invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, resetHistory, updateUI, draw,
     });
     const forcedConstraintCommit = constraintTestFactories.createForcedCommit();
-    const drawingOrderTestApi = window.DrawingOrderTestDriver.createBrowserApi({
-      drawingOrder: window.DrawingOrder, resetModelState, viewport, addPoint, addLine, currentScope: workspace.current,
-      hatchGeometryQuery, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, ROOT_SKETCH_ID, createEmptyBlockDefinition, Point,
-      Line, appendDefinition: definition => documentModel.blockDefinitions.push(definition), normalizeGeometryInstance, geometryRefForItem, invalidateBlockProjectionCache, fitSketchToViewport,
-      resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
-      isRootSketch, readHistory: readTestHistory, clearSelection, canvasSelection, reorderSelectedDrawingObjects,
+    const drawingOrderTestApi = window.DrawingOrderTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
+      blocks: blockEditingFeature, viewport, canvas, fit: drawingFit, resetModelState, resetHistory, serializeModel, normalizeGeometryInstance,
+      readHistory: readTestHistory, clearSelection, reorderSelectedDrawingObjects,
     });
-    const hatchTestApi = window.HatchTestDriver.createBrowserApi({
-      resetModelState, viewport, addPoint, addLine, addCircle, currentScope: workspace.current,
-      fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
-      readMode: drawOperationLifecycle.readMode, allHatches, hatchGeometryQuery, serializeHatch, hatchRegionErrorText, canvasSelection, hatchCommand, document,
-      DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, HATCH_SCREEN_PX_PER_MM, createEmptyBlockDefinition, Point, Line,
-      appendDefinitions: (...definitions) => documentModel.blockDefinitions.push(...definitions), invalidateBlockProjectionCache,
-      fitAllGeometryToViewport, blockProjectionBundle, hitBlockInstance, clearSelection, copyableSelectionPayload,
-      clipboardSession, pasteGeometryClipboard, geometryRefId, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter,
+    const hatchTestApi = window.HatchTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
+      viewport, canvas, document, fit: drawingFit, blocks: blockEditingFeature, blockSelection: blockSelectionQuery, clipboard: clipboardFeature,
+      resetModelState, resetHistory, serializeModel, hitBlockInstance, hatchCommand, hatchRegionErrorText, clearSelection,
     });
     const { setup: splineTestDriver, transfer: splineTransferDriver } = window.SplineTestDriver.createForWorkspace({
       documentWorkspace, editingScope: editingScopeBinding, geometry: geometryCreation, readServices: geometryReadServices,

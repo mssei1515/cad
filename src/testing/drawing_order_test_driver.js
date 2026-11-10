@@ -141,5 +141,17 @@
     });
   }
 
-  window.DrawingOrderTestDriver = Object.freeze({ createBrowserApi, createFixture, createInteraction });
+  function createForWorkspace({ documentWorkspace, geometry, readServices, interaction, presentation, blocks, viewport, canvas, fit,
+    resetModelState, resetHistory, serializeModel, normalizeGeometryInstance, readHistory, clearSelection, reorderSelectedDrawingObjects }) {
+    const { document: model, workspace, sketches } = documentWorkspace;
+    const { Point, Line } = window.GeometrySolver, { DEFAULT_SKETCH_ID, ROOT_SKETCH_ID } = window.SketchHierarchy;
+    return createBrowserApi({ drawingOrder: window.DrawingOrder, resetModelState, viewport, addPoint: geometry.addPoint, addLine: geometry.addLine,
+      currentScope: workspace.current, hatchGeometryQuery: readServices.hatches, DEFAULT_SKETCH_ID,
+      DEFAULT_HATCH_APPEARANCE: window.Appearance.DEFAULT_HATCH_APPEARANCE, ROOT_SKETCH_ID, createEmptyBlockDefinition: blocks.editing.empty, Point, Line,
+      appendDefinition: definition => model.blockDefinitions.push(definition), normalizeGeometryInstance, geometryRefForItem: window.GeometryObjects.geometryRefForItem,
+      invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache, fitSketchToViewport: fit.fitSketchToViewport,
+      resetHistory, updateUI: presentation.updateUI, draw: presentation.draw, canvas, worldToCanvasScreen: viewport.worldToCanvasScreen, serializeModel,
+      isRootSketch: sketches.isRootSketch, readHistory, clearSelection, canvasSelection: interaction.selection, reorderSelectedDrawingObjects });
+  }
+  window.DrawingOrderTestDriver = Object.freeze({ createBrowserApi, createFixture, createInteraction, createForWorkspace });
 })();
