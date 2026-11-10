@@ -783,8 +783,11 @@
 
 
 
-  function selectedVisibilityTargets() { return propertySelection.visibilityTargets(); }
-  function selectionVisibilityIsHidden(targets) { return propertySelection.visibilityIsHidden(targets); }
+  const { selection: { visibilityTargets: selectedVisibilityTargets, visibilityIsHidden: selectionVisibilityIsHidden,
+    selectedDisplayTarget: selectedPropertiesTarget }, createEditingForWorkspace: createPropertyEditing } = window.PropertiesDisplay.createForWorkspace({
+    document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
+    operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
+  });
   function toggleSelectedVisibility() { return selectionVisibilityCommand.toggle(); }
 
   const { view: toolbarView, status: commandStatusView } = createToolbarControls({
@@ -912,11 +915,6 @@
 
 
 
-  const { selection: propertySelection, createEditingForWorkspace: createPropertyEditing } = window.PropertiesDisplay.createForWorkspace({
-    document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
-    operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
-  });
-  function selectedPropertiesTarget() { return propertySelection.selectedDisplayTarget(); }
   const { editing: propertyEditing, appearanceUI, createViewForWorkspace: createPropertiesView } = createPropertyEditing({
     editingScope: editingScopeBinding, viewport, checkpoint: editingCheckpoint, parameters: parameterStabilization,
     projection: sketchProjectionFeature, projectionEditing: sketchProjectionEditing, annotationFeature,

@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Properties選択queryをconsumerより先に生成（2026-11-10）
+
+appはPropertiesDisplay.createForWorkspaceによる選択queryを最初のToolbar利用直前に生成し、凍結されたPropertySelectionのvisibilityTargets／visibilityIsHidden／selectedDisplayTargetを直接取り出してToolbar・Sketchツリー・Properties表示・テスト支援へ接続する。query生成は関数宣言と静的method recordの凍結だけを行い、model・操作状態・Selection・DOMを読まない。公開query関数もthis／argumentsに依存せず、旧零引数・一引数delegateと同じ入力・返値・実Geometry参照・例外を保つ。公開recordは凍結されており、途中でmethodが交換される前提の接続ではない。
+
+以前はToolbar生成後のさらに後段でqueryを生成し、hoisted関数で橋渡ししていた。queryを先に用意することで三つのapp側委譲とquery全体のローカル別名が不要になり、consumerは完成済みの実queryだけを受け取る。Propertiesの編集機能／AppearanceUIとController／Viewの生成は元の位置・順に残し、各段階を一括生成しない。新しい準備container・setter・可変参照・cache・listenerや汎用app contextは追加しない。queryだけは他機能に対して前倒しになるため、全constructor位置が不変とは扱わず、query生成失敗の伝播位置も新しい生成地点になる。通常の有効な起動で外部stateを照会しないこと、操作時のliveなmode／scope・Selection・lock・外観の読取りを保つことを検証する。raw module・通常UI・操作・保存形式v26は変更しない。
+
+app.jsは1,370→1,368行（2行減）、非空白924→922行。root298→295文・477→476束縛、delegate48→45文・50→47非空白行。構築・接続は491→492行、別名・設定121行、条件付きtest hooks179行は不変。単なる別名の改称ではなく、query生成→consumer接続の順へ揃えて遅延の橋渡しを除いた。数百行への全体目標は未完了。
+
+追加単体二件で、後段のworkspace編集・View生成前に同じ実PropertySelectionを実Toolbarへ接続し、現在の選択・非表示判定・button状態・Properties表示とGeometry参照が旧delegate接続と一致することを確認する。生成時の無照会、後段も同じqueryを維持すること、配置中Instanceと後段Selectionのlive切替、操作readerの同じ例外・最初のmode照会での停止も比較する。ASTで元のquery生成引数の一致、同constructorの前倒しと三delegateの直接接続以外のroot全体・順、PropertySelection生成のcoldな構造とqueryのthis／arguments非依存、全src／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体48件、構文635file・全単体2,430件・全E2E589件が成功（50file、22.2m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-properties-query-before-consumers-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop 058011a、作業branch codex/properties-query-before-consumers、開始時週枠残量16%。直前058011aの関連407件成功と、全体E2Eの最新基準38409ad（589件成功、22.4m）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：作図プレビューの共有owner・Canvas読取接続（2026-11-10）
 
 BasicDrawingTools.createGeometryのcreateAuthoringForEditingが返すcreatePreviewForEditing（src/application/basic_drawing_tools.js）は、保持するviewportとCanvasInteraction.lifecycleのreadMode、指定されたsurface.withCanvasStateとGeometryDisplay.traceSplinePathを既存createPreviewへ接続する。明示入力はctx・surface・GeometryDisplay・canvas・Centerline commandの五つとし、共有済みownerをrootから取り出して渡し直さない。readCanvasSizeは描画時だけ同じcanvasのclientWidth→clientHeightを読み、新しい寸法recordを返す。生成時にmode・Canvas寸法・倍率・draft・modelを読まず、リサイズ後の寸法と現在倍率をsnapshot化しない。
