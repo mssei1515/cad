@@ -1216,14 +1216,13 @@
       hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
     });
     const sketchDeletionFixture = documentTestSupport.createSketchDeletion({ resetModelState, deleteSketch });
-    const propertiesTestFactories = window.PropertiesTestDriver.createBrowserFactories({
+    const propertiesTestSupport = window.PropertiesTestDriver.createBrowserSupport({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, blockQueries: blockEditingQueries,
       selectionHighlight, presentation, display: geometryDisplay, placement: dimensionPlacement, viewport, document, canvas, fixPointBtn,
       readHistory: readTestHistory, resetModelState, clearSelection, resetHistory, fitAllGeometryToViewport, pushModelConstraint,
       assignConstraintSketchId, recordHistory, canvasThemeColor, isSidebarHighlightedElement, selectedPropertiesTarget,
       findLineFixedConstraint, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
     });
-    const strokeStyleCases = propertiesTestFactories.createStrokeStyleCases();
     const sketchTreeTestApi = window.SketchTreeTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
       sketchPresentation, overlay: interactionOverlay, viewport, canvasDriver: canvasTestDriver, drawingFit, blocks: blockEditingFeature, dimensionDisplay,
@@ -1243,8 +1242,6 @@
       sketchEditing, dragging: geometryDragFeature, selectionQuery: blockSelectionQuery,
       resetModelState, pushModelConstraint, fitAllGeometryToViewport, recordHistory, serializeConstraint, serializeModel, loadModelData, blockInstanceDisplayCenter,
     });
-    const sidebarHighlightObservation = propertiesTestFactories.createHighlightObservation();
-    const sidebarHoverKeyObservation = propertiesTestFactories.createHoverKeyObservation();
     const blockTestActions = blockTestSupport.createDimensionCases({
       defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement: readOnlyDimensions.forPlacement,
       addReadOnlyDimensionConstraint: readOnlyDimensions.add, blockDefinitionById,
@@ -1253,7 +1250,6 @@
       canvasDriver: canvasTestDriver, dimensionValues: dimensionValueCommand, clearSelection, presentation, fit: drawingFit, references: constraintReferences, canvas,
       solving: sketchSolving, checkpoint: editingCheckpoint, analysis: constraintAnalysis, dimensionDrag,
     });
-    const themeObservation = propertiesTestFactories.createThemeObservation();
     const documentTestApi = documentTestSupport.createFileApi({
       performance, File, serializeModel, loadModelData,
     });
@@ -1267,19 +1263,16 @@
       solvePreparation: constraintSolvePreparation, solving: sketchSolving, checkpoint: editingCheckpoint, sessions: operationSessions, presentation, viewport,
       resetModelState, serializeModel, loadModelData, clearSelection, fitAllGeometryToViewport, resetHistory, solveAndRefresh, canvas, document,
     });
-    const sidebarInspectionFixture = propertiesTestFactories.createInspectionFixture();
-    const appearanceTestAction = propertiesTestFactories.createAppearanceAction();
     const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, projection: sketchProjectionFeature,
       display: geometryDisplay, sketchPresentation, analysis: constraintAnalysis, redundancy: constraintRedundancy, presentation, canvasDriver: canvasTestDriver,
       history: historyController, solving: sketchSolving, blocks: blockEditingFeature, blockDefinition: blockDefinitionCommand, blockCompletion: blockCompletionCommand, blockSelection: blockSelectionQuery,
       document, readHistory: readTestHistory, resetModelState, serializeModel, loadModelData, markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata,
-      clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection: appearanceTestAction.set, version: CURRENT_JSON_VERSION,
+      clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection: propertiesTestSupport.appearanceTestAction.set, version: CURRENT_JSON_VERSION,
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
     });
     const constraintInputObservation = constraintTestFactories.createInputObservation();
     const constraintIntentTestDriver = constraintTestFactories.createIntentResolution();
-    const hoverDisplayObservation = propertiesTestFactories.createHoverObservation();
     const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
       readMode: drawOperationLifecycle.readMode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
@@ -1289,10 +1282,6 @@
       decorateSerializedConstraint, serializeConstraint, serializeModel, resetModelState, resetHistory,
       canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport,
     });
-    const propertyAppearanceObservation = propertiesTestFactories.createAppearanceObservation();
-    const propertiesFixture = propertiesTestFactories.createFixture();
-    const propertiesObservation = propertiesTestFactories.createPropertiesObservation();
-    const fixedObservation = propertiesTestFactories.createFixedObservation();
     const { fixture: parameterFixture, observation: parameterObservation,
       interaction: parameterInteraction } = window.ParameterTestDriver.createBrowserSupport({
       resetModelState, documentWorkspace, geometry: geometryCreation,
@@ -1337,10 +1326,9 @@
       clearSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
     });
     const interactionProfilingTestApi = window.CanvasTestDriver.createInteractionProfiling({ profiler: interactionProfiler, scheduler: pointerMoveScheduler });
-    window.__jot2dTest = window.BrowserTestApi.create({
-      canvas: { themeObservation, interactionProfilingTestApi, responsiveDragFixture, canvasTestDriver, viewObservation,
-        hoverDisplayObservation, authoringObservation, dragExecutionSupport, canvasRenderingTestSupport, canvasRenderProbe,
-        strokeStyleCases },
+    window.__jot2dTest = window.BrowserTestApi.createWithProperties({
+      canvas: { interactionProfilingTestApi, responsiveDragFixture, canvasTestDriver, viewObservation,
+        authoringObservation, dragExecutionSupport, canvasRenderingTestSupport, canvasRenderProbe },
       splines: { splineTestDriver, splineTransferDriver },
       authoring: { hatchTestApi, drawingOrderTestApi, offsetTestSupport, trimLineTransferFixture, trimConstructionFixture,
         trimDiameterFixture },
@@ -1353,8 +1341,7 @@
       images: { referenceImageTestObservation, referenceImageTestImport, referenceImageBlockFixture },
       dimensions: { dimensionDisplaySupport, dimensionFixtureSupport, dimensionInteractionSupport },
       parameters: { parameterFixture, parameterObservation, parameterInteraction },
-      properties: { propertyAppearanceObservation, propertiesFixture, propertiesObservation, fixedObservation, selectionTestApi,
-        sidebarInspectionFixture, sidebarHighlightObservation, sidebarHoverKeyObservation },
+      properties: propertiesTestSupport, selectionTestApi,
       annotations: annotationTestSupport,
       blocks: { blockTestSupport, blockTestActions },
     });
