@@ -10,7 +10,7 @@
 
 ユーザーは長時間の段階的な実装を許可している。「無理に終わらせる必要はない」「今後の開発に過不足なく良い単位で分離する」が最新方針であり、残りクレジットに合わせて設計を急いだり、分離数を固定したりしない。
 
-2026-11-09の最新再開指示に従い、週枠の残量が5%を下回った時点で新たな分離を停止する。残量はusage toolの100−usedPercentとして確認する。停止時は現在の単位の検証・Commit・Pushを終え、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。以前の50%条件は過去の停止記録として扱う。
+2026-11-11の最新再開指示に従い、週枠の残量が50%を下回った時点で新たな分離を停止する。残量はusage toolの100−usedPercentとして確認する。停止時は現在の単位の検証・Commit・Pushを終え、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。直前の5%条件と停止checkpointは過去の記録として扱う。
 
 ## 2. 維持するもの
 
@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のBlock layout read owner統合単位ではapp.jsは1,333行、非空白887行。AST監査ではroot280文・465束縛、構築・接続483非空白行、別名・設定122行、委譲30行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11再開後の選択編集組立て統合単位ではapp.jsは1,326行、非空白881行。AST監査ではroot278文・462束縛、構築・接続478非空白行、別名・設定121行、委譲30行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -71,7 +71,7 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 ## 6. 実装・検証・履歴の進め方
 
 - サブエージェントは使わない（ユーザーの明示指示）。
-- 2026-11-09の最新指示による停止条件は週枠残量5%未満。以前の70%／60%／50%は過去の記録として扱う。停止時は検証・Commit・Push後、develop先行・main最後・両ブランチ同期の手順を守る。
+- 2026-11-11の最新指示による停止条件は週枠残量50%未満。直前の5%条件や以前の70%／60%条件は過去の記録として扱う。停止時は検証・Commit・Push後、develop先行・main最後・両ブランチ同期の手順を守る。
 - 開始時にAGENTS.md、Gitのbranch／status、関連仕様・テストを確認する。既存の無関係な変更を混ぜない。
 - 責務としてまとまった単位で実装し、差分を確認し、関連仕様を更新して検証・Commit・Pushする。将来の原因調査で区切りを追える履歴を残す。
 - 構文は`npm run check`、単体は`npm run test:unit`。関連E2Eを実施し、全体完了前には全体E2Eも確認する。
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：選択削除とClipboardの生成・共有を選択編集の組立てへ統合（2026-11-11再開）
+
+SelectionEditingFeature.createForEditing（src/application/selection_editing_feature.js）は、同じSelection・guard・Document／Read Services・Presentationから、既存DeletionFeatureとClipboardFeatureをこの順で生成し、実deletion／clipboardを凍結recordで返す。Cutが使うdeleteSelectionには、同じ実deletion.removeSelectionをそのまま接続する。削除計画・Geometry変更・履歴は既存削除owner、Clipboardのpayload・cut保持・paste graph・codecは各既存ownerに残る。新しいSelection・操作state・scope・Geometry・ID・snapshot・listenerは作らず、全アプリを扱えるcontextや登録setterは受け取らない。
+
+rootは共有済みAnnotationFeature／BlockEditingFeature／DocumentWorkspaceの実persistence APIを渡し、組立て側がdimensions／renderer、Block scope ID／error、serialize／decorate／deserializeの同じ凍結data propertyを選ぶ。DocumentPersistenceはcreateReadContextが返す同じ読み取りAPIで、実codecは操作時に読む。DeletionのWorkspace.currentとClipboardのbound editingScope.current、Parameter側のWorkspace.currentを別々に保つ。45の既存子factory入力が同一参照または同じcallback本体であることを照合した。明示null／undefinedにfallbackを追加せず、裸callback・member receiver・引数数／default・返値・元例外、拒否時のpaste可能なcut payload保持、履歴・失敗復元・UI・保存形式v26を維持する。
+
+rootの削除別名は、従来のClipboard生成前から両feature完成後の束縛へ変わる。Clipboardの七つの子constructorは関数／既存stateの確保と凍結API生成のみで、生成時にmodel・scope・DOMを読まず、操作callbackやlistenerを実行しないことを照合した。両factoryの実行順、全引数と実componentを維持し、構築失敗は元例外をそのまま伝える。未完成の組立てrecordを返したり、新たなcatch／rollbackを加えたりしない。通常bind／startとtest guard／公開順は不変。全てのalias位置が不変であるとは扱わない。
+
+app.jsは1,333→1,326行（7行減）、非空白887→881行。root280→278文・465→462束縛、構築・接続483→478行（116→115文）、別名・設定122→121行、委譲30行・test hooks165行は不変。二つのroot factoryの計45明示入力を一つの31入力へ整理し、codec APIの一つのbindingを追加する一方、四つの不要になった中間bindingを外す。Block queryはCanvasメニュー・test hooksにも必要なため維持する。構文依存辺1,177→1,166。新しい組立て入口が一段増える負担と引き換えに、共通依存とCut／削除APIの同一性を一か所で検証できる。独立依存数が45から31へ減ったという意味ではなく、200〜500行の全体目標は未完了。
+
+新規境界単体4件で、順序／cold生成と実owner・codec・返却objectの同一性、実ClipboardSessionによるcopy／cutの保存→削除・拒否／throw時payload保持、Workspaceとbound scopeの区別・置換、両構築失敗の元例外・順序、明示null／undefinedを検証する。root六編集以外の全文一致、全45子入力のAST上の等価性、Clipboard七constructorのcold生成、raw Deletion／Clipboard本体と子実装不変、新しい未使用／未束縛／初期化前bindingなしを照合した。indexと構文／unit明示一覧・unified UIのscript順期待へ新module／unitを追加し、既存機能の期待値・性能閾値・timeoutは変更しない。構文637file・全単体2,472件・関連単体19件・全E2E589件が成功（全50file、27.1m、exit 0）。全E2E実行中の707入力と開始HEAD不変、全件一覧589件と無filterの全件数一致、CAD三filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路もbrowser errorなし。TEMP cad-selection-editing-assembly-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存機能の期待値・性能閾値・timeoutは変更していない。
+
+再開時は週枠残量100%、main／develop local・originともc2edef192bbbcd5a6d8620417e9c000fae706390で同期・clean。最新のユーザー指示により停止条件を残量50%未満へ戻した。基準develop c2edef1、作業branch codex/selection-editing-assembly。新moduleは選択編集の組立てとしてsrc/application/へ置き、各計算・操作stateの既存folderを維持する。全体目標はactive・未完了。mainは停止時の最新全体検証後に最後に反映・同期する。
 
 ### 停止checkpoint：週枠残量4%（2026-11-11）
 

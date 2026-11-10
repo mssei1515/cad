@@ -71,11 +71,12 @@
   } = sketchContext;
 
   const { services: geometryReadServices, createEditingScope, createPersistence, createRebinding,
-    persistence: { serializeConstraint, deserializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState } } = createReadContext({
+    persistence: documentPersistence } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
+  const { serializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState } = documentPersistence;
   const { catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
@@ -170,8 +171,6 @@
   });
   const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
   const { fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
-  const { scopeId: currentBlockDefinitionScopeId } = blockEditor;
-  const { blockDefinitionScopeError } = blockEditingQueries;
 
   const { solveState: sketchSolveResultState, createContextForWorkspace: createSolveContext, solveAndRefresh } = window.SketchSolvingFeature.prepareForWorkspace({
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, referenceState: referenceConstraintState, solver, pointUsage, presentation,
@@ -305,7 +304,7 @@
     constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand,
     startDistanceResolution, clearSelection, updateToolbar,
   });
-  const { layer: annotationLayer, dimensions: annotationDimensions, command: annotationCommand,
+  const { layer: annotationLayer, command: annotationCommand,
     dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { canvasContextAnnotationHit } = annotationFeature.spatial;
   const { drawAnnotationLeader } = annotationFeature.renderer;
@@ -651,23 +650,17 @@
 
 
 
-  const deletionFeature = window.DeletionFeature.createForEditing({
-    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, references: constraintReferences, annotationDimensions,
+  const { deletion: deletionFeature, clipboard: clipboardFeature } = window.SelectionEditingFeature.createForEditing({
+    documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices, interaction: canvasInteraction,
+    references: constraintReferences, annotationFeature, annotationLeaderAnchor,
     splineEditing, guardDimensionSymbolDeletion, geometry: geometryCreation, sessions: operationSessions, lineCommand, circularCommands,
     solving: sketchSolving, analysis: constraintAnalysis, presentation, updateToolbar, recordHistory,
     referenceImageInteraction, clearSelection, solveAndRefresh,
     resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
+    viewport, persistence: documentPersistence, normalizeGeometryInstance, blocks: blockEditingFeature,
+    pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX, imageClipboard, isGeometryMode,
   });
   const { remove: deleteElements, removeSelection: deleteCurrentSelection } = deletionFeature;
-
-  const clipboardFeature = window.ClipboardFeature.createForEditing({
-    documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices, interaction: canvasInteraction,
-    geometry: geometryCreation, annotationRenderer: annotationFeature.renderer, references: constraintReferences, annotationLeaderAnchor, viewport,
-    serializeConstraint, decorateSerializedConstraint, normalizeGeometryInstance, deserializeConstraint,
-    blockScopeId: currentBlockDefinitionScopeId, blockDefinitionScopeError, presentation,
-    pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX, imageClipboard, updateToolbar, deleteSelection: deleteCurrentSelection,
-    isGeometryMode, clearSelection, solveAndRefresh,
-  });
   const { session: clipboardSession, command: clipboardCommand, copyableSelectionPayload } = clipboardFeature;
   function copySelectionToClipboard(options = {}) { return clipboardCommand.copy(options); }
 
