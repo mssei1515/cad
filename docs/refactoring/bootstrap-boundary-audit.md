@@ -1,5 +1,55 @@
 # Composition rootの残存責務と依存監査
 
+## 構築依存の再監査と次の分離境界（2026-11-10）
+
+基準はdevelop `8162d28`、app.jsのGit blobは`57c7c49821c6f171f3bfed4c11f4715b56f56bd6`。`tools/audit-composition-root.js`と同じBabel ASTで再計測した。app.jsは1,349行・非空白903行、root289文・468束縛。直前の正式な全体検証は同じ製品／テスト入力で構文635file・単体2,446件・全E2E589件成功（22.6分）。本区切りは設計監査の更新のみで、製品・テスト・正式仕様を変更しない。
+
+| 区分 | root文数 | 非空白行数 |
+| --- | ---: | ---: |
+| 構築・接続 | 114 | 488 |
+| 別名・設定 | 89 | 120 |
+| 委譲 | 41 | 43 |
+| bind呼出し | 15 | 27 |
+| policy値 | 10 | 10 |
+| その他の呼出し | 11 | 35 |
+| その他の関数 | 1 | 3 |
+| 起動 | 7 | 7 |
+| 条件付きtest hooks | 1 | 165 |
+
+分類内の合計は898非空白行で、IIFE等の分類外5行を加えて903行となる。行数計測と責務の削減量は区別する。app.jsの空白行を削除したり、同じ引数を横に並べたりすることを、分離の進捗として扱わない。
+
+### 委譲だけを削っても数百行には届かない
+
+一文でmemberを呼ぶ委譲38個を、実ownerの宣言と最初の参照の位置で比較した。28個は最初の参照よりownerの生成が後にある。これは即時呼出しの証明ではなく、関数を渡す位置の構文上の比較である。hoisted functionをそのままconstへ替えると初期化前参照になるため、一括置換しない。
+
+残り10個はdimensionLayout、resizeCanvas、deleteElements、deleteCurrentSelection、copyableSelectionPayload、drawDimension、handleConstraintOperandClick、startDimensionEditInput、markReferenceConstraint、resolveConstraintIntent。これらも直接別名にできると確定したわけではない。member receiver、引数の個数とdefault、戻り値・元例外、関数取得時機、owner APIのfreezeと通常propertyを個別に照合する必要がある。
+
+仮に委譲43行・test hooks165行・別名120行を全て消せたとしても、非空白575行が残る。実際にはこれらの接続も必要なため、この仮定を削減見積りには使えない。200〜500行へ向けた中心課題は、構築488行の中から機能として一緒に生成・操作できる境界を整えることである。小さなadapterを移すだけで到達すると見積もらない。
+
+### 優先候補：求解機能の段階的な生成と共有state
+
+現在のSketchSolvingFeatureはScope query／Analysis／Redundancyと、後段のSketchSolving／ParameterStabilization／stored definition／SolveRefreshを既に組み立てる。一方、結果stateと受理関数はrootで別々に生成し、解析更新・求解更新もrootの遅延委譲を通る。
+
+| 現在の段階 | 待つ依存・先行利用 | 次に確認する境界 |
+| --- | --- | --- |
+| ReferenceConstraintState生成（app127行） | DocumentWorkspace.currentとSketch照会。Projectionが直後から共有する | reference診断を求解ownerへ含める妥当性と同一state／scope・診断Map更新境界の維持 |
+| SketchSolving.createState（179行） | Derived commandが189行から利用する | 同じstateを先に公開し、解析・求解へ一度だけ接続できるか |
+| createResultAcceptance（235行） | acceptError。求解・円中心十字・Block commandで同じ関数を共有 | 受理policyと明示callbackの上書き／null／未指定を混同しない入口 |
+| createContextForWorkspace（252行） | ConstrainedAnnotationDrag、PointUsage、solver、minimumLength | AnnotationのscopeとWorkspace scope、遅延plan／drag callbackの維持 |
+| createSolving（367〜368行） | checkpoint、Geometry、Projection編集、履歴、EditingScope | 現在Workspaceと最後にactivateしたscope、求解失敗復元・UI／履歴順の維持 |
+
+解析更新callbackの最初の受渡しはapp108行で、結果state生成より早い。SolveRefreshの呼出しcallbackもapp197行から渡される。単一のcreateへ一括移動する案は、この順序を満たさない。ReferenceConstraintStateと結果stateの生成はMapとclosureの確保にとどまり、createResultAcceptanceもclosure生成だが、生成位置の移動を無条件に許可する根拠にはしない。
+
+次の実装では、既存SketchSolvingFeatureが実componentを生成する段階的な入口を持つ案と、初期の遅延callbackをrootへ残す案を比較する。単なるstate代入用setterや、外部で生成したcomponentを格納するだけのholderは採用しない。実stateを共有すること、解析と求解をcoldに生成すること、初期化前呼出し・構築失敗・明示callback・receiver／引数／返値と例外、求解／Parameter失敗時の復元範囲を境界テストで確かめてから実装単位を確定する。数値閾値・Solverアルゴリズムはこの責務分離と混ぜない。
+
+### 同時に広げないもの
+
+Selectionの削除操作はDeletionFeatureのremove／removeSelectionとして既に実装済みで、rootの二委譲の最初の参照はowner生成後である。直接APIを利用できるか確認する候補だが、これだけを大きな責務分離とは扱わない。Parameterのsymbol削除guardはDerived／Block／Annotation／Spline／全体削除／Sketch削除の各経路が共有するため、UIのParameterEditorへ押し込まない。
+
+起動列はDocument reset→Presentation初期化→履歴→file checkpoint→FileFeature.startという複数ownerの順序である。FileFeatureだけの責務にはしない。test hooks全体を別の巨大bootstrapへ移す案や、全driverに共通の汎用app contextを配る案も採用しない。
+
+配置は既存のsrc/application/sketch_solving_feature.jsを第一候補とし、求解実装と数値policyはsrc/solver、参照診断はsrc/constraintsに残す。テスト支援はsrc/testingのままとする。実際の責務が決まる前に、新しいbootstrapフォルダや汎用生成レジストリを作らない。この監査は次の判断の根拠であり、上記候補の実装完了や200〜500行への到達を意味しない。
+
 ## Toolbar／Workspace controlsの段階的な組立て（2026-11-10）
 
 toolbarPresentation.prepareWorkspaceが編集Toolbar bindingの生成と既存Workspace controlsの準備を同じPresentation owner内で行い、実close／startと後段createDrawingBindingを返す。rootはcloseAppMenusを公開してstartし、その後に実描画bindingを生成・bindする。既存のcreateEditingBinding／createDrawingBinding／prepareWorkspaceControlsは維持する。新しいUI session・model・登録用setterを作らない。

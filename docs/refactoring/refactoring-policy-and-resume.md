@@ -98,6 +98,12 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 次の実装前の構築依存再監査（2026-11-10）
+
+基準develop 8162d28の製品・テストは変更せず、[構築依存の再監査](bootstrap-boundary-audit.md)を更新した。app.jsは1,349行（この区切りは増減0）、非空白903行、構築488行が中心である。一文member委譲38個のうち28個は最初の参照よりowner生成が後で、一括const置換はしない。残る10個もreceiver／引数／default／返値・例外と関数取得時機の検証が必要であり、削除可能と確定していない。
+
+次はSketchSolvingFeatureの結果state・受理policy・解析context・後段求解の段階的な生成を優先して調査する。解析callbackの受渡し108行、結果state179行、受理235行、context252行、求解367〜368行の依存を保ち、巨大holder・setter登録や一括生成で順序を隠さない。選択削除の二委譲は副候補であり、それだけで数百行へ到達すると見積もらない。正式仕様・数値閾値・UIを変更する判断は含まない。直前の全E2E589件成功は8162d28の同一製品入力に対する22.6分の実行結果で、この文書だけの区切りで再実行したとは扱わない。週枠残量10%、停止条件5%未満・main最後は不変。
+
 ### 最新：Documentブラウザテスト支援の公開セットを既存ownerへ集約（2026-11-10）
 
 DocumentTestDriver.createBrowserSupportForWorkspace（src/testing/document_test_driver.js）は、既存createForWorkspaceが受ける九つの共通ownerと、reset／Sketch削除／循環参照／保存読込／解析／参照状態／File／計時の九つの依存から、履歴観測→Sketch削除fixture→循環参照fixture→ファイルAPIを組み立てる。返す凍結recordはdocuments（documentTestApi／readTestHistory／cyclicReferenceFixtureの同じ順）とsketchDeletionFixtureで、BrowserTestApiへ既存と同じ関数参照・field順を渡す。raw createForWorkspaceと各段階factory・各fixture APIは維持する。
