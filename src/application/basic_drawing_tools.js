@@ -135,7 +135,11 @@
           prepareStart: () => interaction.lifecycle.prepare("offset"),
           updateGeometrySelectionUI: presentation.updateGeometrySelectionUI, invalidateAnalysis: () => { analysis.invalidate(); } });
       }
-      return Object.freeze({ ...tools, createEditing, createOffsetForEditing });
+      function createHatchForEditing({ updateStatusUI, hatchRegionErrorText }) {
+        return tools.createHatch({ hatchGeometryQuery: readServices.hatches, readMode: interaction.lifecycle.readMode,
+          lastPointer: sessions.pointer.readLastPointer, documentIds: documentWorkspace.documentIds, updateStatusUI, hatchRegionErrorText });
+      }
+      return Object.freeze({ ...tools, createEditing, createOffsetForEditing, createHatchForEditing });
     }
     return Object.freeze({ geometry, createAuthoring: createTools, createAuthoringForEditing: createToolsForEditing });
   }

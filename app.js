@@ -895,10 +895,7 @@
   });
   // The command is published before enabling destination-only input.
   sketchMoveInputBinding.bind();
-  const hatchCommand = authoringTools.createHatch({
-    hatchGeometryQuery, readMode: drawOperationLifecycle.readMode, lastPointer: pointerInteractionController.readLastPointer,
-    documentIds, updateStatusUI, hatchRegionErrorText,
-  });
+  const hatchCommand = authoringTools.createHatchForEditing({ updateStatusUI, hatchRegionErrorText });
   const { startHatchCreation, startHatchBoundaryRepair } = hatchCommand;
 
 

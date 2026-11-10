@@ -1051,3 +1051,64 @@ test('Offset editing assembly propagates constructor failure before reading the 
 });
 
 })();
+
+function hatchOwnersFixture(composed, probe = {}) {
+ const f=geometryFoundationFixture({composed:true,configure({w,state,owners,ports,events}){
+  const ready=()=>assert.equal(state.ready,true);state.pointer={x:7,y:9};state.history=[];
+  const rawIds=w.DocumentIds.create();
+  const documentIds={allocate(kind){assert.equal(this,documentIds);ready();events.push(['allocate',kind]);if(state.allocateFailure)throw state.error;return rawIds.allocate(kind);},
+   peek(kind){assert.equal(this,documentIds);ready();return rawIds.peek(kind);}};
+  owners.documentWorkspace.documentIds=documentIds;
+  owners.sessions.pointer={readLastPointer:function(){'use strict';assert.equal(this,undefined);ready();events.push('pointer');return state.pointer;}};
+  const preview=owners.sessions.preview;preview.setPointer=function(value){assert.equal(this,preview);ready();preview.pointer=value;};
+  owners.readServices.hatches={hatchFaceAt(pointer,options){'use strict';assert.equal(this,undefined);ready();events.push(['face',pointer,options.includeConstruction]);
+   if(state.queryFailure)throw state.error;return {ok:true,boundaryLoops:[{role:'outer',spans:[]}],resolved:{area:12}};},forget(item){ready();state.forgotten=item;}};
+  ports.recordHistory=label=>{ready();state.history.push(label);};
+  ports.clearSelection=()=>{ready();owners.interaction.selection.clear();events.push('clear');};
+ }}),{state,owners,w,events}=f;
+ state.ready=false;state.scope.hatches=[];state.error=new Error('hatch owner boundary');
+ const options={updateStatusUI:function(){'use strict';assert.equal(this,undefined);assert.equal(state.ready,true);events.push('status');return state.statusResult;},
+  hatchRegionErrorText:error=>error.code};
+ const original=w.HatchCommand;let hatch;
+ w.HatchCommand={...original,create(input){probe.ports=input;if(probe.failure)throw probe.error;return probe.result??original.create(input);}};
+ try{hatch=composed?f.tools.createHatchForEditing(options):f.tools.createHatch({hatchGeometryQuery:owners.readServices.hatches,readMode:owners.interaction.lifecycle.readMode,
+  lastPointer:owners.sessions.pointer.readLastPointer,documentIds:owners.documentWorkspace.documentIds,...options});}
+ finally{w.HatchCommand=original;}
+ assert.deepEqual(events,[]);state.ready=true;return {...f,hatch,options,probe};
+}
+test('Hatch editing assembly shares actual parent mode, pointer, preview, Selection and Document counters',()=>{
+ const results=[];for(const composed of [false,true]){
+  const f=hatchOwnersFixture(composed),{state,owners,hatch,probe}=f;
+  assert.equal(probe.ports.getMode,owners.interaction.lifecycle.readMode);assert.equal(probe.ports.lastPointer,owners.sessions.pointer.readLastPointer);
+  assert.equal(probe.ports.updateStatusUI,f.options.updateStatusUI);assert.equal(probe.ports.hatchRegionErrorText,f.options.hatchRegionErrorText);
+  hatch.startHatchCreation();assert.equal(owners.interaction.lifecycle.mode,'hatch');assert.equal(owners.sessions.preview.pointer,state.pointer);
+  assert.equal(hatch.commitHatchAt({x:10,y:20}),true);assert.equal(hatch.finish(),true);
+  const first=state.scope.hatches[0];assert.equal(first.id,'H1');assert.equal(first.sketchId,'S1');assert.equal(owners.interaction.selection.hatches[0],first);
+  state.scope={hatches:[]};state.sketch='LOCAL-S2';state.pointer={x:30,y:40};
+  assert.equal(hatch.commitHatchAt(state.pointer),true);assert.equal(hatch.finish(),true);
+  assert.equal(state.scope.hatches[0].id,'H2');assert.equal(state.scope.hatches[0].sketchId,'LOCAL-S2');
+  assert.equal(state.scope.nextHatchIndex,3);assert.equal(f.ids.peek('point'),1);
+  results.push(JSON.stringify({events:f.events,scope:state.scope,history:state.history,first}));
+ }assert.equal(results[1],results[0]);
+});
+test('Hatch editing assembly retains guard, query and allocation failure boundaries without advancing Geometry IDs',()=>{
+ for(const stage of ['guard','query','allocate']){
+  const results=[];for(const composed of [false,true]){
+   const f=hatchOwnersFixture(composed),{state,hatch,owners}=f;
+   if(stage==='guard'){state.allowed=false;hatch.startHatchCreation();assert.equal(owners.interaction.lifecycle.mode,'select');}
+   else{
+    hatch.startHatchCreation();
+    if(stage==='query'){state.queryFailure=true;assert.throws(()=>hatch.commitHatchAt(state.pointer),error=>error===state.error);}
+    else{assert.equal(hatch.commitHatchAt(state.pointer),true);state.allocateFailure=true;assert.throws(()=>hatch.finish(),error=>error===state.error);}
+   }
+   assert.equal(state.scope.hatches.length,0);assert.equal(state.history.length,0);assert.equal(f.ids.peek('point'),1);
+   results.push(JSON.stringify({events:f.events,scope:state.scope,mode:owners.interaction.lifecycle.mode}));
+  }assert.equal(results[1],results[0]);
+ }
+});
+test('Hatch editing assembly returns the existing command directly and leaves constructor failures unchanged',()=>{
+ for(const composed of [false,true]){
+  const result=Object.freeze({command:true}),probe={result};assert.equal(hatchOwnersFixture(composed,probe).hatch,result);
+  const error=new Error('Hatch construction');assert.throws(()=>hatchOwnersFixture(composed,{failure:true,error}),caught=>caught===error);
+ }
+});
