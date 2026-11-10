@@ -460,17 +460,19 @@ test('authoring circle cross preserves failed solve rollback and creation reject
   assert.deepEqual(f.calls,[['cancelConstraint',''],['cancelPending',''],'reject']);
  }
 });
-function geometryFoundationFixture({composed=false,probe=null,configure=null}={}){
+function geometryFoundationFixture({composed=false,prepared=false,probe=null,configure=null}={}){
  const sandbox={window:{},structuredClone};vm.createContext(sandbox);
  const sources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
  for(const file of sources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),sandbox,{filename:file});
  const w=sandbox.window,events=[],empty=()=>({points:[],lines:[],circles:[],arcs:[],splines:[],constraints:[]});
  const state={ready:false,scope:empty(),sketch:'S1',construction:false,endpoint:null,explicit:null,failure:null};
  const read=()=>{assert.equal(state.ready,true,'no eager scope or hit read');return state.scope;},ids=w.GeometryIds.create();
- const foundation=w.BasicDrawingTools.createGeometry({currentScope:read,ids,assignSketchId:item=>{read();item.sketchId=state.sketch;},
+ const preparation=prepared?w.BasicDrawingTools.prepare():null;
+ const geometryOptions={currentScope:read,ids,assignSketchId:item=>{read();item.sketchId=state.sketch;},
   currentConstruction:()=>{read();return state.construction;},minLineLength:4,minArcLength:6,
   hitEndpointPoint:(...args)=>{read();events.push(['endpoint',...args]);if(state.failure)throw state.failure;return state.endpoint;},
-  hitExplicitPoint:(...args)=>{read();events.push(['explicit',...args]);return state.explicit;}});
+  hitExplicitPoint:(...args)=>{read();events.push(['explicit',...args]);return state.explicit;}};
+ const foundation=preparation?preparation.createGeometry(geometryOptions):w.BasicDrawingTools.createGeometry(geometryOptions);
  let checkpoint;
  const noop=()=>{},pointUsage=Object.fromEntries(['isSplineOnlyFitPoint','isReferencePoint','isPrimitiveCenterPoint','isPointUsedByPrimitive'].map(k=>[k,()=>false]));
  Object.assign(pointUsage,{isEndpointPoint:p=>p.kind==='endpoint',isExplicitPoint:p=>p.kind==='explicit'});
@@ -502,7 +504,7 @@ function geometryFoundationFixture({composed=false,probe=null,configure=null}={}
  let tools;try{tools=composed?foundation.createAuthoringForEditing({...remaining,...owners}):foundation.createAuthoring(ports);}
  finally{for(const[name,original]of originals)w[name]=original;}
  assert.deepEqual(events,[]);assert.equal(Object.isFrozen(foundation),true);state.ready=true;checkpoint=probe?.checkpoint??{capture:noop,restore:noop};
- return {foundation,tools,state,ids,events,empty,owners,ports,w};
+ return {foundation,preparation,geometryOptions,tools,state,ids,events,empty,owners,ports,w};
 }
 
 test('geometry foundation shares IDs, scope and construction with real drawing tools and retains endpoint versus explicit Point identity',()=>{
@@ -754,7 +756,7 @@ test('editing authoring retains constructor stages and late checkpoint failures 
 function editingToolStagesFixture(composed, failAt = null, construction = []) {
  const calls=[],captured={},actual={},state={ready:false,success:true,projectionAllowed:true,editable:true,failure:null,pointer:{x:10,y:10}};
  let common,checkpoint,solving,parameters,analysis,solver,projection,editingScope;
- const parent=geometryFoundationFixture({composed:true,configure(f){
+ const parent=geometryFoundationFixture({composed:true,prepared:composed==='prepared',configure(f){
   const {w,owners,ports}=f,ready=()=>assert.equal(state.ready,true,'no eager editor/model/UI read');
   f.state.scope=w.DocumentState.create();state.parent=f.state;
   const note=name=>(...args)=>{ready();calls.push([name,...args]);};
@@ -790,7 +792,7 @@ function editingToolStagesFixture(composed, failAt = null, construction = []) {
  }});
  parent.state.ready=false;
  let fillet,createCircleCenterCross,createSplineEditing,editors;
- if(composed){editors=parent.tools.createEditing(common);({fillet,createCircleCenterCross,createSplineEditing}=editors);}
+ if(composed){editors=composed==='prepared'?parent.preparation.createEditing(common):parent.tools.createEditing(common);({fillet,createCircleCenterCross,createSplineEditing}=editors);}
  else {
   const {activeSketchId}=parent.owners.documentWorkspace.sketches,{stabilize}=parameters;
   fillet=parent.tools.createFillet({defaultDimensionForTarget:common.placement.defaultDimensionForTarget,syncLineOrientationHints:()=>solver.syncLineOrientationHints?.(),
@@ -913,9 +915,9 @@ function laterAuthoringEditorsFixture(composed, failAt = null, constructors = []
  for(const name of names)w[name]={...w[name],create(options){constructors.push(name);ports[name]=options;if(failAt?.name===name)throw failAt.error;return actual[name]=originals[name].create(options);}};
  let centerline,trim;
  try{
-  centerline=composed?f.editors.createCenterline(centerInput):f.tools.createCenterline({...centerInput,invalidateAnalysis:()=>{common.analysis.invalidate();}});
+  centerline=composed==='prepared'?f.preparation.createCenterline(centerInput):composed?f.editors.createCenterline(centerInput):f.tools.createCenterline({...centerInput,invalidateAnalysis:()=>{common.analysis.invalidate();}});
   assert.deepEqual(constructors,['CenterlineCommand']);assert.deepEqual(f.calls,[]);
-  trim=composed?f.editors.createTrim(trimInput):f.tools.createTrim({...trimInput,checkpoint:common.checkpoint,
+  trim=composed==='prepared'?f.preparation.createTrim(trimInput):composed?f.editors.createTrim(trimInput):f.tools.createTrim({...trimInput,checkpoint:common.checkpoint,
    guardSketchEdit:f.owners.interaction.access.guardSketchEdit,guardSketchProjectionShapeEdit:common.projection.guardSketchProjectionShapeEdit,
    stabilizeActiveParameterNamespace:common.parameters.stabilize,acceptError:common.acceptError,
    invalidateAnalysis:()=>common.analysis.invalidate(),refreshConstraintAnalysis:(options={})=>common.analysis.refresh(options)});
@@ -1048,6 +1050,56 @@ test('Offset editing assembly retains actual planning, replacement scope, source
 
 test('Offset editing assembly propagates constructor failure before reading the scope or changing parent owners',()=>{
  for(const composed of [false,true]){const probe={constructorFailure:true,error:new Error('offset constructor')};assert.throws(()=>offsetOwnersFixture(composed,probe),error=>error===probe.error);}
+});
+
+test('prepared authoring preview keeps real Snap, Line, Centerline and Trim behavior with live scale and scope',()=>{
+ const run=owned=>{
+  const f=laterAuthoringEditorsFixture(owned?'prepared':true),g=f.foundation.geometry,scope=f.state.parent.scope;
+  const {projectPointToCenterlineSupport}=f.centerline;
+  const preview=owned?f.preparation.preview:{snapForDrawing:p=>f.tools.snapForDrawing(p),linePreviewPoint:(p,s)=>f.tools.tools.line.previewPoint(p,s),
+   readCenterline:()=>f.centerline,projectPointToCenterlineSupport:p=>projectPointToCenterlineSupport(p),computeTrimPreview:p=>f.trim.computePreview(p)};
+  const a=g.addPoint(0,0,false,'endpoint'),b=g.addPoint(100,0,false,'endpoint');assert.equal(f.centerline.prepare([a,b]),true);
+  const projected=preview.projectPointToCenterlineSupport({x:30,y:10});assert.equal(preview.readCenterline(),f.centerline);
+  const snap=preview.snapForDrawing({x:30,y:8});f.state.parent.scale=2;const scaled=preview.snapForDrawing({x:30,y:8});
+  f.tools.tools.line.click({x:0,y:0});const linePreview=preview.linePreviewPoint({x:30,y:8},true);
+  const line=(x1,y1,x2,y2)=>g.addLine(g.addPoint(x1,y1,false,'endpoint'),g.addPoint(x2,y2,false,'endpoint'));
+  line(0,0,30,0);line(10,-10,10,10);line(20,-10,20,10);const trim=preview.computeTrimPreview({x:15,y:0});
+  return JSON.parse(JSON.stringify({projected,snap,scaled,linePreview,trim,model:f.snapshot(),ids:f.ids.snapshot(),points:scope.points.length}));
+ };
+ assert.deepEqual(run(true),run(false));
+});
+
+test('prepared drawing ports stay cold and only replace completed authoring, editing, Centerline and Trim components',()=>{
+ const w=geometryFoundationFixture().w,p=w.BasicDrawingTools.prepare();assert.ok(Object.isFrozen(p));assert.ok(Object.isFrozen(p.preview));
+ for(const [method,binding]of [['snapForDrawing','authoringTools'],['linePreviewPoint','lineCommand'],['readCenterline','centerlineCommand'],
+   ['projectPointToCenterlineSupport','projectPointToCenterlineSupport'],['computeTrimPreview','trimFeature']])
+  assert.throws(()=>p.preview[method](),e=>e.name==='ReferenceError'&&e.message===`Cannot access '${binding}' before initialization`);
+ const f=laterAuthoringEditorsFixture('prepared'),prepared=f.preparation,marker=new Error('constructor failed'),before=f.snapshot(),ids=f.ids.snapshot();
+ const builds=[['DrawingSnap',()=>prepared.createGeometry(f.geometryOptions).createAuthoringForEditing({...f.ports,...f.owners})],
+  ['FilletFeature',()=>prepared.createEditing(f.common)],['CenterlineCommand',()=>prepared.createCenterline(f.centerInput)],['TrimFeature',()=>prepared.createTrim(f.trimInput)]];
+ for(const [name,build]of builds){const original=f.w[name];f.w[name]={...original,create(){throw marker;}};
+  try{assert.throws(build,e=>e===marker);}finally{f.w[name]=original;}
+  assert.equal(prepared.preview.readCenterline(),f.centerline);assert.equal(f.snapshot(),before);assert.deepEqual(f.ids.snapshot(),ids);
+ }
+ const next=prepared.createCenterline(f.centerInput);assert.notEqual(next,f.centerline);assert.equal(prepared.preview.readCenterline(),next);
+});
+
+test('prepared preview preserves raw member and bare receivers, exact arguments, results and exceptions',()=>{
+ const f=laterAuthoringEditorsFixture('prepared'),p=f.preparation,w=f.w,calls=[],result={},marker=new Error('preview failed');let fail=false;
+ const snap={resolve(...args){assert.equal(this,snap);calls.push(['snap',...args]);if(fail)throw marker;return result;},clear(){}},
+  line={previewPoint(...args){assert.equal(this,line);calls.push(['line',...args]);return result;}};
+ const originals={DrawingSnap:w.DrawingSnap,LineCommand:w.LineCommand};w.DrawingSnap={create:()=>snap};w.LineCommand={create:()=>line};
+ try{p.createGeometry(f.geometryOptions).createAuthoringForEditing({...f.ports,...f.owners});}finally{Object.assign(w,originals);}
+ const point={x:10,y:20},pointer={x:30,y:40};f.state.parent.scale=2;
+ assert.equal(p.preview.snapForDrawing(point,'ignored'),result);assert.equal(p.preview.linePreviewPoint(point,true,'ignored'),result);
+ const centerline=Object.freeze({projectPointToCenterlineSupport:function(...args){assert.equal(this,undefined);calls.push(['project',...args]);return result;}}),
+  trim=Object.freeze({computePreview(...args){assert.equal(this,trim);calls.push(['trim',...args]);if(fail)throw marker;return result;}});
+ const c=w.CenterlineCommand,t=w.TrimFeature;w.CenterlineCommand={create:()=>centerline};w.TrimFeature={create:()=>trim};
+ try{assert.equal(p.createCenterline(f.centerInput),centerline);assert.equal(p.createTrim(f.trimInput),trim);}finally{w.CenterlineCommand=c;w.TrimFeature=t;}
+ assert.equal(p.preview.readCenterline('ignored'),centerline);assert.equal(p.preview.projectPointToCenterlineSupport(point,'ignored'),result);
+ assert.equal(p.preview.computeTrimPreview(pointer,'ignored'),result);
+ assert.deepEqual(calls,[['snap',point,5],['line',point,true],['project',point],['trim',pointer]]);
+ fail=true;assert.throws(()=>p.preview.snapForDrawing(point),e=>e===marker);assert.throws(()=>p.preview.computeTrimPreview(pointer),e=>e===marker);
 });
 
 })();

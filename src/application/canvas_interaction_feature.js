@@ -8,6 +8,11 @@
       clearSnap, clearPointerPreview, clearSelection, updateGeometrySelectionUI, draw });
     const pointUsage = readServices.createPointUsage({ constraintReferencesPoint, editedFitPoints });
     const hover = window.CanvasHover.create({ isEndpointPoint: pointUsage.isEndpointPoint });
+    function createOperationSessionsForAuthoring({ authoringPreview, ...options }) {
+      return createOperationSessions({ ...options, snapForDrawing: authoringPreview.snapForDrawing, linePreviewPoint: authoringPreview.linePreviewPoint,
+        readCenterline: authoringPreview.readCenterline, projectPointToCenterlineSupport: authoringPreview.projectPointToCenterlineSupport,
+        computeTrimPreview: authoringPreview.computeTrimPreview });
+    }
     function createOperationSessions({ snapForDrawing, linePreviewPoint, readCenterline, projectPointToCenterlineSupport,
       readOffsetSelection, computeTrimPreview, hits, clearPlacement, cancelAnnotation, cancelPngExport, resetOffset,
       hideInput, updateToolbar, updateConstraintButtons, acceptTarget }) {
@@ -116,7 +121,7 @@
       return Object.freeze({ preview, pending, targets, pointer, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
     }
     return Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
-      identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions });
+      identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring });
   }
   window.CanvasInteractionFeature = Object.freeze({ create });
 })();

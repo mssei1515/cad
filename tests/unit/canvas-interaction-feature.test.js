@@ -609,3 +609,31 @@ test('two-stage pointer assembly keeps the prior controller if a later pointer c
   assert.equal(f.events.some(e=>Array.isArray(e)&&e[0]==='text'),true);
  }
 });
+
+test('authoring operation sessions select the same five preview callbacks cold and keep the remaining ports and real sessions',()=>{
+ const f=fixture(),w=f.w,original=w.DrawingPreview,seen=[],calls=[];
+ const authoringPreview=Object.freeze(Object.fromEntries(['snapForDrawing','linePreviewPoint','readCenterline','projectPointToCenterlineSupport','computeTrimPreview'].map(name=>[name,()=>{calls.push(name);throw Error('no eager preview');}])));
+ const noop=()=>{},hits={},options={authoringPreview,readOffsetSelection:noop,hits,clearPlacement:noop,cancelAnnotation:noop,cancelPngExport:noop,resetOffset:noop,
+  hideInput:noop,updateToolbar:noop,updateConstraintButtons:noop,acceptTarget:noop};
+ w.DrawingPreview={...original,create(ports){seen.push(ports);return original.create(ports);}};f.state.ready=false;f.events.length=0;
+ let sessions;try{sessions=f.foundation.createOperationSessionsForAuthoring(options);}finally{w.DrawingPreview=original;f.state.ready=true;}
+ assert.deepEqual(calls,[]);assert.deepEqual(f.events,[]);assert.equal(seen.length,1);
+ for(const name of Object.keys(authoringPreview))assert.equal(seen[0][name],authoringPreview[name]);
+ assert.equal(seen[0].readOffsetSelection,options.readOffsetSelection);assert.equal(seen[0].hits,hits);
+ assert.ok(Object.isFrozen(sessions));assert.notEqual(sessions.pending,f.sessions.pending);assert.notEqual(sessions.targets,f.sessions.targets);assert.notEqual(sessions.pointer,f.sessions.pointer);
+ const point={x:2,y:3};sessions.preview.setPointer(point);assert.equal(sessions.preview.pointer,point);assert.equal(sessions.pending.current,null);
+});
+
+test('authoring operation session binding retains original errors and never constructs later sessions after preview failure',()=>{
+ const f=fixture(),w=f.w,previewOriginal=w.DrawingPreview,pendingOriginal=w.PendingCommandSession,marker=new Error('preview failed');let pendingBuilds=0;
+ const noop=()=>{},ports={snapForDrawing:noop,linePreviewPoint:noop,readCenterline:noop,projectPointToCenterlineSupport:noop,computeTrimPreview:noop};
+ const options={authoringPreview:ports,readOffsetSelection:noop,hits:{},clearPlacement:noop,cancelAnnotation:noop,cancelPngExport:noop,resetOffset:noop,
+  hideInput:noop,updateToolbar:noop,updateConstraintButtons:noop,acceptTarget:noop};
+ w.PendingCommandSession={create(){pendingBuilds++;return pendingOriginal.create(...arguments);}};f.events.length=0;
+ try{
+  w.DrawingPreview={create(){throw marker;}};assert.throws(()=>f.foundation.createOperationSessionsForAuthoring(options),error=>error===marker);
+  w.DrawingPreview=previewOriginal;const lateFailure={...ports,get computeTrimPreview(){throw marker;}};
+  assert.throws(()=>f.foundation.createOperationSessionsForAuthoring({...options,authoringPreview:lateFailure}),error=>error===marker);
+ }finally{w.DrawingPreview=previewOriginal;w.PendingCommandSession=pendingOriginal;}
+ assert.equal(pendingBuilds,0);assert.deepEqual(f.events,[]);assert.equal(f.state.scope.points[0],f.point);assert.equal(f.state.scope.points.length,1);
+});

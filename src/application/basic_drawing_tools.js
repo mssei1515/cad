@@ -1,6 +1,53 @@
 /* Compose drawing features around shared geometry, snap and preview owners. */
 (() => {
   "use strict";
+  function prepare() {
+    let authoring = null, editing = null, centerline = null, trim = null;
+    function requireComponent(component, binding) {
+      if (!component) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return component;
+    }
+    function publishAuthoring(build, options) {
+      const completed = build(options);
+      authoring = completed;
+      return completed;
+    }
+    function createPreparedGeometry(options) {
+      const geometry = createGeometry(options);
+      const build = geometry.createAuthoring, buildForEditing = geometry.createAuthoringForEditing;
+      return Object.freeze({ ...geometry,
+        createAuthoring: options => publishAuthoring(build, options),
+        createAuthoringForEditing: options => publishAuthoring(buildForEditing, options) });
+    }
+    function createEditing(options) {
+      const completed = requireComponent(authoring, "authoringTools").createEditing(options);
+      editing = completed;
+      return completed;
+    }
+    function createCenterline(options) {
+      const { createCenterline } = requireComponent(editing, "createCenterline");
+      const completed = createCenterline(options);
+      centerline = completed;
+      return completed;
+    }
+    function createTrim(options) {
+      const { createTrim } = requireComponent(editing, "createTrim");
+      const completed = createTrim(options);
+      trim = completed;
+      return completed;
+    }
+    const preview = Object.freeze({
+      snapForDrawing(point) { return requireComponent(authoring, "authoringTools").snapForDrawing(point); },
+      linePreviewPoint(point, shiftKey) { return requireComponent(authoring, "lineCommand").tools.line.previewPoint(point, shiftKey); },
+      readCenterline() { return requireComponent(centerline, "centerlineCommand"); },
+      projectPointToCenterlineSupport(point) {
+        const { projectPointToCenterlineSupport } = requireComponent(centerline, "projectPointToCenterlineSupport");
+        return projectPointToCenterlineSupport(point);
+      },
+      computeTrimPreview(pointer) { return requireComponent(trim, "trimFeature").computePreview(pointer); },
+    });
+    return Object.freeze({ createGeometry: createPreparedGeometry, createEditing, createCenterline, createTrim, preview });
+  }
   function createCanvasInput({ point, drawing }) {
     const pointCommand = window.PointCommand.create(point);
     return window.DrawingCommandInput.create({ ...drawing, pointCommand });
@@ -284,5 +331,5 @@
     }
     return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createHatch, createBlankGesture, createCanvasInput: createAuthoringInput, createSplineEditing });
   }
-  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createGeometry, createAuthoring, createCanvasInput });
+  window.BasicDrawingTools = Object.freeze({ prepare, create, createSpline, createCenterline, createGeometry, createAuthoring, createCanvasInput });
 })();
