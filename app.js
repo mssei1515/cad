@@ -784,7 +784,7 @@
 
 
   const { selection: { visibilityTargets: selectedVisibilityTargets, visibilityIsHidden: selectionVisibilityIsHidden,
-    selectedDisplayTarget: selectedPropertiesTarget }, createEditingForWorkspace: createPropertyEditing } = window.PropertiesDisplay.createForWorkspace({
+    selectedDisplayTarget: selectedPropertiesTarget }, createEditingWithViewForWorkspace: createPropertiesForEditing } = window.PropertiesDisplay.createForWorkspace({
     document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
     operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
@@ -915,20 +915,19 @@
 
 
 
-  const { editing: propertyEditing, appearanceUI, createViewForWorkspace: createPropertiesView } = createPropertyEditing({
+  const { editing: { appearanceEditing, visibility: selectionVisibilityCommand }, appearanceUI,
+    view: propertiesView } = createPropertiesForEditing({
     editingScope: editingScopeBinding, viewport, checkpoint: editingCheckpoint, parameters: parameterStabilization,
     projection: sketchProjectionFeature, projectionEditing: sketchProjectionEditing, annotationFeature,
     isGeometryMode, toggleSketchVisibility, recordHistory, escapeHtml,
-  });
-  const { appearanceEditing, visibility: selectionVisibilityCommand } = propertyEditing;
-  const propertiesView = createPropertiesView({
+  }, () => ({
     analysis: constraintAnalysis, selectionHighlight, snappedBlockRotation, hatchRegionErrorText,
     geometryInstanceTypeLabel, installExpressionInputHighlights,
     HTMLTextAreaElement, HTMLInputElement,
     changeFreeInstanceProperty, commitAnnotationParameterEdit,
     instanceTransform: instanceTransformCommand, blockConfiguration: blockConfigurationCommand,
     dimensionValues: dimensionValueCommand, dimensions: dimensionPlacementCommand, referenceImages: referenceImageInteraction, hatch: hatchCommand, splineEditing,
-  });
+  }));
 
 
 

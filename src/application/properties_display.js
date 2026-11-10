@@ -29,7 +29,12 @@
       }
       return Object.freeze({ ...editor, createViewForWorkspace });
     }
-    return Object.freeze({ ...feature, createEditingForWorkspace });
+    function createEditingWithViewForWorkspace(editingOptions, readViewOptions) {
+      const { editing, appearanceUI, createViewForWorkspace } = createEditingForWorkspace(editingOptions);
+      const view = createViewForWorkspace(readViewOptions());
+      return Object.freeze({ editing, appearanceUI, view });
+    }
+    return Object.freeze({ ...feature, createEditingForWorkspace, createEditingWithViewForWorkspace });
   }
   function createFeature({ document, documentModel, currentScope, canvasSelection, readServices, sketchContext,
     hatchAppearanceForDisplay, operations, selectionOperation = operations ? () => ({ mode: operations.lifecycle.mode,

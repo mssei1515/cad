@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の拘束テスト支援生成単位ではapp.jsは1,361行、非空白915行。AST監査ではroot295文・476束縛、構築・接続492非空白行、別名・設定121行、委譲47行、条件付きtest hooks172行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のProperties後段組立て単位ではapp.jsは1,360行、非空白914行。AST監査ではroot293文・474束縛、構築・接続492非空白行、別名・設定120行、委譲47行、条件付きtest hooks172行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,22 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Properties編集・Viewの後段組立てを同じownerへ集約（2026-11-10）
+
+PropertiesDisplay.createForWorkspaceのcreateEditingWithViewForWorkspace（src/application/properties_display.js）は、後段の編集設定とView設定readerを受け取り、既存createEditingForWorkspace→View設定reader→既存createViewForWorkspaceの順で生成する。readerは編集機能とAppearance UIが完成してから零引数の裸関数として一度だけ呼ぶ。rootの元のView設定object literalをこのreaderへ移すことで、型や操作ownerの取得を編集生成前へ前倒ししない。返すのは実editing・appearanceUI・viewの三参照を持つ凍結recordで、query・model・操作状態や描画器の複製を作らない。
+
+選択queryは従来どおり最初のToolbar利用直前に生成し、編集／Appearance UI→Controller／Rows／Presentation／Content／Viewは従来の後段位置と同じ順に生成する。同じPropertySelectionと操作owner、Workspace.currentとAppearanceUIのeditingScope.current、選択用と表示用の別operation readerを共有する。raw factoryと従来の段階APIは維持し、部分生成が必要な呼出側は引き続き利用できる。new bundleは全生成成功後だけ返し、rootの局所参照もその後で揃う。生成中にそれらを使うUI操作を起こさず、constructor／設定readerの元の例外・後続停止、成功済み内部componentの途中状態を変更しない。新たな復元処理・setter・可変context・cache・listener・moduleは追加しない。
+
+appは編集結果の展開、次のView factoryの取得と個別呼出しを所有せず、同じProperties ownerに完成を依頼する。実Geometry・Selection参照、Property編集／Appearance UI／Viewと各commandの本体、guard・preview／commit・履歴と例外境界、他の生成・公開・bind・起動順は不変。通常UI・操作・保存形式v26も変更しない。
+
+app.jsは1,361→1,360行（1行減）、非空白915→914行。root295→293文・476→474束縛、別名・設定121→120非空白行。構築・接続492行、委譲47行、条件付きtest hooks172行は不変。不要なpropertyEditing／createPropertiesViewの二別名と、二つの別段階のroot組立てを除いた。行数では小さな差だが、同じPropertiesの後段生成順と完成した公開参照を既存ownerへ集めた。数百行への全体目標は未完了。
+
+追加単体二件と既存三試験の比較経路追加で、旧raw接続・従来のworkspace段階API・新しい組立てAPIの実表示／編集／lock・live scopeとGeometry同一性を比較する。実editing／Appearance UI／Viewの返却参照、七constructorの同じ順、View設定readerが二constructor後に裸receiver・零引数で一度だけ読まれること、七constructorと設定readerの八段階の同じ例外／後続停止、生成中のmodel／DOM／操作状態無照会を確認する。ASTで元の編集・View入力と設定object本体、対象root接続と二別名以外のroot全体／順、新組立て関数以外のPropertiesDisplay本体とraw module／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体33件、構文635file・全単体2,434件・関連E2E398件が成功（31file、6.5m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択31fileのtest list398件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-properties-editing-view-composition-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、ad7e576の全589件成功と区別する。
+
+基準develop ad7e576、作業branch codex/properties-editing-view-composition、開始時週枠残量14%。直前ad7e576の全E2E589件成功（21.8m）と今回の関連検証を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：拘束ブラウザテスト支援の生成と限定公開（2026-11-10）
 
