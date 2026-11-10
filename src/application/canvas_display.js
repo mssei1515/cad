@@ -201,6 +201,12 @@
     const { settings, draw, setHint, updatePropertiesUI } = presentation;
     const { applicationText } = settings, { workspace, sketches } = documentWorkspace;
     const { pending, targets } = sessions;
+    function dimensionInputOptions(input) {
+      if (!Object.hasOwn(input, "evaluateDimensionExpressionDraft")) input.evaluateDimensionExpressionDraft = documentWorkspace.parameters?.evaluateEditingExpressionDraft;
+      if (!Object.hasOwn(input, "expressionFromUserInput")) input.expressionFromUserInput = documentWorkspace.parameters?.expressionFromUserInput;
+      if (!Object.hasOwn(input, "cancelPendingCommand")) input.cancelPendingCommand = message => pending.cancel(message);
+      return input;
+    }
     const { phase: profilePhase } = presentation.profiler;
     const controls = window.CanvasViewControls.create({ document, window: browserWindow, setHint, draw });
     function canvasThemeColor(value) { return window.CanvasThemeColors.color(value, settings.theme); }
@@ -211,7 +217,7 @@
         const displayWorkspace = display.createEditingWorkspace({ ...options,
           dimensionScene: { ...dimensionScene, currentLines: () => workspace.current().lines, minLineLength: minLength,
             canvasThemeColor, appearance: readServices.dimensionAppearance, sketches },
-          dimensionInput: { ...dimensionInput, pending },
+          dimensionInput: dimensionInputOptions({ ...dimensionInput, pending }),
           ctx, readPixelRatio: () => browserWindow.devicePixelRatio || 1, ResizeObserverClass: browserWindow.ResizeObserver,
           withGeometryReadCache: readServices.reads.withGeometryReadCache,
           isValueInputPending: () => pending.current && ["distance-value", "offset-value"].includes(pending.current.type),
@@ -239,7 +245,11 @@
             readConstraintStatus: () => controls.state.constraintStatus, inactiveColor: window.GeometryPresentation.INACTIVE_CONSTRAINT_STATUS_COLOR,
             dimensionLabelForConstraint: displayWorkspace.dimensions.labels.label, dimensionUsesExpression });
         }
-        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal });
+        function createDimensionPreview({ drawFilletPreviewArc }) {
+          return displayWorkspace.dimensions.display.createPreview({ readPending: () => pending.current, drawFilletPreviewArc,
+            evaluateDimensionExpressionDraft: documentWorkspace.parameters?.evaluateEditingExpressionDraft });
+        }
+        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview });
       }
       return Object.freeze({ ...display, createEditingWorkspace });
     }
