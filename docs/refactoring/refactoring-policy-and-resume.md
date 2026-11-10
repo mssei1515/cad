@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の寸法入力／preview組立て単位ではapp.jsは1,406行、非空白960行。AST監査ではroot306文・493束縛、構築・接続500非空白行、別名・設定122行、委譲63行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の保存操作所有単位ではapp.jsは1,399行、非空白953行。AST監査ではroot302文・490束縛、構築・接続501非空白行、別名・設定122行、委譲55行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Document読取contextによる保存操作の所有（2026-11-10）
+
+DocumentWorkspace.createReadContextは、保持するread servicesと同じcontextにserializeConstraint／deserializeConstraint／decorateSerializedConstraint／serializeModelを公開する。既存createPersistenceがcodec・metadata・preparation・writer・loadingを従来位置で生成し、すべて成功した後にだけ完成した凍結bundleをprivate参照へ公開する。公開前の呼出しは従来の未初期化bindingに対応するReferenceError、再生成失敗時は以前の成功bundleを維持する。公開APIへのsetterは作らず、別ReadContextの保存操作とは共有しない。四入口は元のmember receiver・引数数／可変長・返値と例外を維持し、実Geometry／Workspaceとbound editing scope・保存形式v26を変えない。
+
+rootから四つの委譲と三つの低水準component別名を除き、app.jsは1,406→1,399行（7行減）、非空白960→953行、root306→302文・493→490束縛となった。既存ownerが実factoryの生成と成功後の公開を一体で所有するため、単なる変数setterや汎用app contextは追加しない。Block準備のhoisted入口はread context自体の生成引数にも必要なためrootへ残す。寸法serializeは旧angle labelの移行とlive viewport読取りを含むため、codecの生成を前倒ししたり純粋な読取りへ置換したりしない。生成・公開・bind順、低水準codec／writer／loading本体と通常UIは不変。
+
+追加単体四件で公開前と途中生成・初回失敗の境界、実codecによるv26の寸法／Geometry参照roundtripとWorkspace切替、四操作のmember receiver・引数数／返値／例外同一性、失敗後の旧bundle保持とReadContext間の独立を確認する。ASTで対象四delegateと三別名以外のroot全体、各委譲本体と全既存factoryの順序・内容、Block準備・保存／描画本体／index／E2E不変、新しい未使用／未束縛参照なしを比較する。
+
+関連単体51件、構文635file・全単体2,400件・全E2E589件が成功（50file、21.7m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-persistence-context-operations-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+次の調査候補は、同じread contextのcatalog→Block準備→保存preparationの循環接続と、保持済みcatalog／projections／codecを使うConstraintRebindingの組立てである。今回は四操作の公開境界までを検証・統合し、次の単位でprepareBlocksの未指定時だけの既定接続を検討する。明示callback／null、生成中の早期呼出しとReferenceError、factoryのreceiver・引数・失敗境界を維持できるか現物で確認する。単なるdelegate追加やcontextの肥大化だけになるなら採用しない。
+
+基準develop 54a28fb、作業branch codex/persistence-context-operations、開始時週枠残量22%。最新コードで全E2Eを実行する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：寸法入力・previewのParameter／Pending接続（2026-11-10）
 
