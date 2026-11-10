@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の作図checkpoint owner統合単位ではapp.jsは1,348行、非空白902行。AST監査ではroot288文・467束縛、構築・接続488非空白行、別名・設定120行、委譲42行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の生成済みowner直接接続単位ではapp.jsは1,342行、非空白896行。AST監査ではroot282文・465束縛、構築・接続488非空白行、別名・設定124行、委譲32行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：生成済みownerの十操作をrootへ直接接続（2026-11-10）
+
+app.jsは、生成済みのDimensionDisplay.layout／painter.drawDimension、CanvasWorkspaceLayout.resizeCanvas、DeletionFeature.remove／removeSelection、ClipboardFeature.copyableSelectionPayload、ConstraintTargetCommand.operandClick、DimensionValueCommand.startEdit、ConstraintCommitCommand.markReference、ConstraintIntentResolver.resolveを直接選択して既存consumerへ接続する。各操作の実装は既存ownerにあり、rootの単純なmember呼出し十関数と、寸法painter／intent resolverの二つの中間bindingを外す。新しいcomponent・state・setter・module・汎用contextを追加しない。
+
+選択する実component APIは凍結された通常fieldで、operationを呼ぶまで変わらない。対象のraw関数はthis／arguments／super／new.target／evalに依存せず、restの旧委譲は全引数を渡すもの、固定引数の旧委譲はraw関数と同じ引数・defaultを持つものに限定する。したがって裸callbackへ接続しても、内部のmember呼出し、操作時のliveなscope・既定値、返値・元例外、Geometryの同一性は維持される。rootのcallback名は既存consumerの設定名として維持するが、元のwrapperを保持するとは扱わない。bindingの全参照は各初期化完了後であり、初期化前参照が必要な他の委譲は一括置換しない。生成・公開・bind・startとtest guard／公開位置、通常UI・操作・保存形式v26は不変。
+
+app.jsは1,348→1,342行（6行減）、非空白902→896行、root288→282文・467→465束縛。委譲40→30文・42→32非空白行、別名・設定89→93文・120→124行。構築・接続488行とtest hooks165行は不変。関数本体を別fileへ移すのではなく、既存の実操作APIと初期化順が確定した接続へ統一した。目安200〜500行の全体目標は未完了。
+
+ASTでrootの対象十二編集以外が全文一致、各owner file本体が不変、十操作の凍結data property／receiverやargumentsへの非依存／全引数または同一parameter・default、全参照が初期化後であること、自由識別子一覧不変と新しい未使用bindingなしを照合する。既存の単体／E2Eの期待値とtest sourceは変更しない。構文635file・全単体2,452件・関連E2E441件が成功（36file、7.0m、exit 0）。関連E2E実行中の705入力と開始HEAD不変、選択36fileの一覧441件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-ready-owner-operations-{check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、最後の全体検証4619cd2の全589件成功（22.1分）とは区別する。
+
+基準develop a8ff945、作業branch codex/ready-owner-operations、開始時週枠残量9%。今回の関連E2Eは既存の作図・取消・保存読込・UIに加え、直接選択するoperand click／startEditの固定拘束・slot寸法・bolt径操作を含めた36file・441件を選ぶ。直前の関連407件成功と、最後の全体検証4619cd2の全E2E589件成功（22.1分）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：作図用checkpointの遅延capture／restoreを生成ownerへ集約（2026-11-10）
 
