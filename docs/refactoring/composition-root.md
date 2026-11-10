@@ -1,5 +1,21 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：寸法ブラウザテスト支援の共通owner接続と完成セット生成（2026-11-10）
+
+DimensionTestDriver.createBrowserSupportForWorkspace（src/testing/dimension_test_driver.js）は、fixture設定とDocumentWorkspace／CanvasInteraction／操作sessions、操作支援の設定、Dimension appearanceを受け、既存createForEditing→createInteractionForEditing→createDisplayForEditingをこの順で呼ぶ。SketchContext・Workspace.current、同じSelection／Target／PendingとHoverを既存ownerから選び、Document readerは固定Documentの同じ参照を返す。現在Workspaceの編集scopeやgeometryAppearanceのSketch可視性を、Document defaultsとdimensionAppearanceへ混同しない。返すのはdimensionDisplaySupport／dimensionFixtureSupport／dimensionInteractionSupportの凍結recordで、BrowserTestApiが受けていた同じ三fieldと順序を保つ。
+
+appはCanvas支援が完成した従来の寸法操作支援生成位置で、この完成セットを一度だけ依頼する。従来のfixtureと表示支援はその位置へ寄るため、全TestDriverのconstructor位置が不変とは扱わない。寸法支援内のfixture→操作→表示という相対順は維持し、32factoryの生成経路は関数・静的な支援recordを組み立てるだけで、生成時にモデル操作・DOM／倍率照会・Geometry生成を行わない。型・数値関数等のmetadata取得は新しい生成位置になり、model・scope・Document・表示／外観・Selection・sessionとViewportは既存raw APIの操作時にliveに読む。固定Document参照は実DocumentWorkspaceの凍結された通常fieldから選び、値をsnapshot化しない。
+
+raw createForEditingと個別／段階factory、実支援のAPI・Geometry同一性、既存のfixture／編集／観測・拒否／復元／例外境界、Canvas method／viewportのfinally復元は維持する。途中失敗では完成セットもブラウザAPIも公開せず、model／Selection／既存支援を変更しない。製品の生成・bind・起動順、test query guard、window.__jot2dTestの公開位置、公開名／挿入順／関数参照、通常UI・操作・保存形式v26は不変。新しいmodel・Selection・cache・session・listenerや汎用app contextを追加しない。
+
+app.jsは1,359→1,356行（3行減）、非空白913→910行、条件付きtest hooks172→169非空白行。root292文・472→470束縛、構築・接続492行、別名・設定120行、委譲46行は不変。共通ownerの選択と公開用の三支援の組立てを移し、rootのDocument／Hoverの二別名と、test hooks内の五束縛を一つの完成支援へ整理した。root入力は18＋11＋3項目から16＋11＋1項目となる。数百行への全体目標は未完了。
+
+追加単体三件で、coldな三支援生成、固定Documentと切替後Workspaceの既定値の分離・live更新、同じSelection／session、実fixtureで作るGeometry／寸法と編集結果・元例外、最後の表示依存の取得が失敗した時の無変更と以前の支援保持を、旧段階接続と新しいWorkspace接続で比較する。既存の個別fixture・操作・表示・公開contract試験も維持する。ASTで元のfixture／操作／表示入力・Document reader、同じ三公開field、対象test接続と二つの不要alias以外のroot全体・順、新入口以外のDimensionTestDriver本体、32factoryのcoldな生成構造、BrowserTestApi／製品module／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体27件、構文635file・全単体2,439件・全E2E589件が成功（50file、22.1m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-dimension-browser-support-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop 5fadcc7、作業branch codex/dimension-browser-support、開始時週枠残量12%。直前5fadcc7の関連455件成功と、全体E2Eの最新基準ad7e576（589件成功、21.8m）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：注記拘束dragの遅延Feature依存を既存ownerへ集約（2026-11-10）
 
 AnnotationFeature.prepareForWorkspaceが返すcreateConstrainedDragForFeature（src/application/annotation_feature.js）は、完成後の注記Featureを返すreadFeatureとbuildPlan／beginGeometryDrag／invalidateAnalysisを受け、既存createConstrainedDragへ必要な位置・引出線表示の照会を接続する。生成時はreadFeatureを呼ばず、Featureより先に拘束dragを生成する従来の順を維持する。位置照会は操作時に同じFeatureのplacementAnchorを可変長でmember呼出しし、引出線表示は同じrendererのannotationLeaderDisplayGeometryを取り出して一引数の裸関数として呼ぶ。readFeature自体は零引数の裸関数で、対象照会ごとに一度だけ呼ぶ。

@@ -954,5 +954,13 @@
     return Object.freeze({ support, fixtures, createDisplayForEditing, createInteractionForEditing });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createForEditing, createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
+  function createBrowserSupportForWorkspace({ documentWorkspace, interaction, sessions, ...fixtureOptions }, interactionOptions, dimensionAppearance) {
+    const { document: documentModel, workspace, sketches } = documentWorkspace;
+    const support = createForEditing({ ...fixtureOptions, sketches, currentScope: workspace.current, canvasSelection: interaction.selection,
+      constraintTargetSession: sessions.targets, pendingCommandSession: sessions.pending });
+    const dimensionInteractionSupport = support.createInteractionForEditing(interactionOptions);
+    const dimensionDisplaySupport = support.createDisplayForEditing({ canvasHover: interaction.hover, readDocument: () => documentModel, appearance: dimensionAppearance });
+    return Object.freeze({ dimensionDisplaySupport, dimensionFixtureSupport: support.fixtures, dimensionInteractionSupport });
+  }
+  window.DimensionTestDriver = Object.freeze({ createForEditing, createBrowserSupportForWorkspace, createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
 })();

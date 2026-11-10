@@ -121,7 +121,8 @@ function editingSupportFixture(composed){
  const serializeModel=()=>structuredClone(currentScope()),serializeDimension=dimension=>structuredClone(dimension),dimensionLabelForConstraint=c=>String(c.target);
  const ports={geometry,display,sketches,appearance,currentScope,viewport,canvasSelection:selection,resetModelState,addDistanceConstraintFromTarget,dimensions,serializeModel,serializeDimension,constraintTargetSession,pendingCommandSession,dimensionValueInput,ctx,layer,dimensionLabelForConstraint};
  let assembled;
- if(composed)assembled=w.DimensionTestDriver.createForEditing(ports);
+ if(composed==='ports')assembled={};
+ else if(composed)assembled=w.DimensionTestDriver.createForEditing(ports);
  else{
   const support=w.DimensionTestDriver.createSupport({resetModelState,addPoint:geometry.addPoint,addLine:geometry.addLine,dimensionFromAnchor:display.placement.dimensionFromAnchor,addDistanceConstraintFromTarget,activeSketchId:sketches.activeSketchId,currentScope,
    isDimensionConstraint:w.DimensionQueries.isDimensionConstraint,dimensionLayout:(...args)=>display.layout(...args),hypot2:w.GeometrySolver.hypot2,targetFromConstraint:w.DimensionQueries.targetFromConstraint,serializeModel,constraintTargetSession,pendingCommandSession,dimensionValueInput,ctx,drawDimensions:()=>layer.draw(),constraintSketchId:sketches.constraintSketchId,canvasSelection:selection,viewport});
@@ -223,5 +224,69 @@ test('display test composition preserves viewport, Canvas method and live select
   assert.equal(ctx.stroke,originalStroke);assert.equal(selection.dimensionConstraint,dimension);assert.equal(selection.constraint,constraint);assert.equal(f.hover.current.dimension,hovered);
   const readError=new Error('document read failed');f.state.readFailure=readError;
   assert.throws(()=>a.dimensionArrowTipAlignmentForTest({viewportScale:7}),value=>value===readError);assert.equal(f.ports.viewport.scale,2);
+ }
+});
+
+function browserSupportFixture(owned) {
+ const f=editingSupportFixture('ports'),{w,ports:p,state}=f;state.ready=false;
+ const root=w.DocumentState.create();root.defaultDimensionAppearance={dimensionTextHeight:6};
+ const canvasStack=[];p.ctx.save=()=>canvasStack.push(p.ctx.font);p.ctx.restore=()=>{p.ctx.font=canvasStack.pop();};
+ p.viewport.update=function(values){assert.equal(this,p.viewport);assert.equal(state.ready,true);Object.assign(this,values);};
+ p.viewport.worldToCanvasScreen=point=>{assert.equal(state.ready,true);return{x:point.x*p.viewport.scale,y:point.y*p.viewport.scale};};
+ const hover=w.CanvasHover.create({isEndpointPoint:()=>false});
+ const dimensionAppearance=w.GeometryAppearanceQuery.createDimension({document:root,currentSketches:()=>p.currentScope().sketches,
+  activeSketchId:p.sketches.activeSketchId,isRootSketch:sketch=>sketch?.id===w.SketchHierarchy.ROOT_SKETCH_ID});
+ const documentWorkspace=Object.freeze({document:root,workspace:Object.freeze({current:p.currentScope}),sketches:p.sketches});
+ const interaction=Object.freeze({selection:p.canvasSelection,hover}),sessions=Object.freeze({targets:p.constraintTargetSession,pending:p.pendingCommandSession});
+ const values={startEdit(hit){assert.equal(this,values);assert.equal(state.ready,true);if(state.editError)throw state.editError;f.events.push(['edit',hit]);return state.editResult;}};
+ const interactionOptions={canvasDriver:{clientPosition:point=>({x:point.x+10,y:point.y+20})},dimensionValues:values,clearSelection:()=>p.canvasSelection.clear(),
+  presentation:{updateUI:()=>f.events.push('ui'),draw:()=>f.events.push('draw')},fit:{},references:{},canvas:{},solving:{},checkpoint:{},analysis:{},dimensionDrag:{active:false}};
+ const omitted=new Set(['sketches','currentScope','canvasSelection','constraintTargetSession','pendingCommandSession']);
+ const fixtureOptions=Object.freeze({...Object.fromEntries(Object.entries(p).filter(([key])=>!omitted.has(key))),documentWorkspace,interaction,sessions});
+ function build(appearance=dimensionAppearance){
+  if(owned)return w.DimensionTestDriver.createBrowserSupportForWorkspace(fixtureOptions,interactionOptions,appearance);
+  const stage=w.DimensionTestDriver.createForEditing(p),dimensionInteractionSupport=stage.createInteractionForEditing(interactionOptions);
+  const dimensionDisplaySupport=stage.createDisplayForEditing({canvasHover:hover,readDocument:()=>root,appearance});
+  return Object.freeze({dimensionDisplaySupport,dimensionFixtureSupport:stage.fixtures,dimensionInteractionSupport});
+ }
+ const browserSupport=build();assert.deepEqual(f.events,[]);assert.equal(state.scope,null);state.ready=true;
+ return{...f,root,documentWorkspace,interaction,sessions,dimensionAppearance,interactionOptions,fixtureOptions,browserSupport,build};
+}
+
+test('dimension browser support stays cold, shares real capabilities and keeps fixed Document reads separate from live Workspace',()=>{
+ const results=[];for(const owned of [false,true]){
+  const f=browserSupportFixture(owned),s=f.browserSupport;assert.ok(Object.isFrozen(s));
+  assert.deepEqual(Object.keys(s),['dimensionDisplaySupport','dimensionFixtureSupport','dimensionInteractionSupport']);
+  for(const value of Object.values(s))assert.ok(Object.isFrozen(value));
+  f.state.scope=f.w.DocumentState.create();f.state.scope.defaultDimensionAppearance={dimensionTextHeight:19};
+  const before=s.dimensionDisplaySupport.appearance.dimensionAppearanceStateForTest();assert.equal(before.documentDefault.dimensionTextHeight,6);
+  const original=f.state.scope;f.state.scope=f.w.DocumentState.create();f.state.scope.defaultDimensionAppearance={dimensionTextHeight:31};f.root.defaultDimensionAppearance={dimensionTextHeight:8};
+  const after=s.dimensionDisplaySupport.appearance.dimensionAppearanceStateForTest();assert.equal(after.documentDefault.dimensionTextHeight,8);
+  assert.equal(original.defaultDimensionAppearance.dimensionTextHeight,19);assert.equal(f.documentWorkspace.document,f.root);
+  assert.equal(f.interaction.selection,f.ports.canvasSelection);assert.equal(f.sessions.pending,f.ports.pendingCommandSession);
+  results.push(JSON.stringify({before,after}));
+ }assert.equal(results[1],results[0]);
+});
+
+test('dimension browser support retains real fixture Geometry, Selection, edit results and original operation exceptions',()=>{
+ const results=[];for(const owned of [false,true]){
+  const f=browserSupportFixture(owned),s=f.browserSupport;s.dimensionFixtureSupport.readOnly.resetForReadOnlyDimensionPlacement();
+  const constraint=f.state.scope.constraints[0],selection=s.dimensionInteractionSupport.selection;
+  const result=f.state.editResult={edited:true};assert.equal(selection.startDimensionExpressionEditForTest(),result);
+  assert.equal(f.events.at(-1)[1].constraint,constraint);assert.equal(selection.selectDimensionForPropertiesForTest(),true);
+  assert.equal(f.ports.canvasSelection.dimensionConstraint,constraint);const position=selection.dimensionClientPositionForTest();assert.ok(Number.isFinite(position.x));
+  const error=new Error('dimension edit');f.state.editError=error;assert.throws(()=>selection.startDimensionExpressionEditForTest(),value=>value===error);
+  f.state.scope=f.w.DocumentState.create();assert.equal(selection.startDimensionExpressionEditForTest(),false);
+  results.push(JSON.stringify({position,events:f.events,selectedId:constraint.id}));
+ }assert.equal(results[1],results[0]);
+});
+
+test('dimension browser support propagates final display dependency failures without changing model, Selection or prior support',()=>{
+ for(const owned of [false,true]){
+  const f=browserSupportFixture(owned),existing=f.browserSupport,error=new Error('display dependency');f.state.ready=false;
+  const appearance=new Proxy(f.dimensionAppearance,{get(target,key){if(key==='effectiveDimensionAppearance')throw error;return Reflect.get(target,key);}});
+  assert.throws(()=>f.build(appearance),value=>value===error);assert.equal(f.browserSupport,existing);
+  assert.equal(f.state.scope,null);assert.equal(f.ports.canvasSelection.hasSelection(),false);assert.deepEqual(f.events,[]);
+  assert.equal(f.root.defaultDimensionAppearance.dimensionTextHeight,6);assert.equal(Object.hasOwn(f.w,'__jot2dTest'),false);
  }
 });
