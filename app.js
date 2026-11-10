@@ -15,7 +15,6 @@
   const {
     MIN_ORIENTATION_LENGTH,
     arcEndpointPoint,
-    signedPointLineDistance,
   } = window.GeometryKernel;
 
 
@@ -284,7 +283,7 @@
   const { resetCanvasStrokeState, withCanvasState } = canvasSurface;
   const { placement: dimensionPlacement, painter: dimensionPainter } = dimensionDisplay;
   const { controller: dimensionInputController } = dimensionInput;
-  const { dimensionFromAnchor, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
+  const { dimensionFromAnchor, defaultDimensionForTarget } = dimensionPlacement;
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput } = dimensionInputController;
   function dimensionLayout(...args) { return dimensionDisplay.layout(...args); }
   const { sketchStyle: sketchPresentation, geometry: geometryDisplay,
@@ -341,7 +340,7 @@
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
     hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
   });
-  const { addPoint, addLine, addCircle, addArc, addSpline, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
+  const { addPoint, addLine, addSpline, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
   const sketchProjectionEditing = sketchProjectionFeature.createModelEditing({
     geometry: geometryCreation, references: constraintReferences,
   });
@@ -381,7 +380,6 @@
     historyController, recordHistory, resultIsAccepted,
     maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
-  const { solveSketchAndDependents } = sketchSolving;
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
   const { fillet: filletCommand, createCircleCenterCross, createSplineEditing, createCenterline, createTrim } = authoringTools.createEditing({
     checkpoint: editingCheckpoint, solving: sketchSolving, parameters: parameterStabilization, analysis: constraintAnalysis,
@@ -850,7 +848,6 @@
   function handleConstraintOperandClick(pointer, type, hits = {}) { return constraintTargetCommand.operandClick(pointer, type, hits); }
 
 
-  function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
 
   function cancelPendingCommand(message) { return pendingCommandSession.cancel(message); }
 
@@ -1240,7 +1237,7 @@
       currentScope: workspace.current, viewport, canvas, selection: canvasSelection, drag: annotationDrag, annotationLeaderAnchor,
       annotationLeaderTargetFromItem, draw, allGeometryBounds, resetModelState, resizeCanvas, hitAnnotationElement,
     });
-    const { support: dimensionTestSupport, fixtures: dimensionFixtureSupport, createDisplayForEditing: createDimensionDisplayTestSupport } = window.DimensionTestDriver.createForEditing({
+    const { fixtures: dimensionFixtureSupport, createDisplayForEditing: createDimensionDisplayTestSupport, createInteractionForEditing: createDimensionInteractionTestSupport } = window.DimensionTestDriver.createForEditing({
       geometry: geometryCreation, display: dimensionDisplay, sketches: sketchContext, appearance: geometryAppearance,
       currentScope: workspace.current, viewport, canvasSelection, resetModelState, addDistanceConstraintFromTarget,
       dimensions: dimensionPlacementCommand, serializeModel, serializeDimension, constraintTargetSession, pendingCommandSession,
@@ -1294,11 +1291,9 @@
       defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement: readOnlyDimensions.forPlacement,
       addReadOnlyDimensionConstraint: readOnlyDimensions.add, blockDefinitionById,
     });
-    const dimensionInteractionSupport = dimensionTestSupport.createInteraction({
-      clientPosition: canvasTestDriver.clientPosition, startDimensionEditInput, clearSelection, updateUI, draw, addCircle, addArc,
-      fitAllGeometryToViewport, startDistanceCommand, constraintGraphNodes, worldToCanvasScreen, canvas, dimensionAnchor,
-      modelTypes: window.GeometrySolver, signedPointLineDistance, vectorNorm, solveSketchAndDependents,
-      snapshotModelState, refreshConstraintAnalysis, dimensionDrag,
+    const dimensionInteractionSupport = createDimensionInteractionTestSupport({
+      canvasDriver: canvasTestDriver, dimensionValues: dimensionValueCommand, clearSelection, presentation, fit: drawingFit, references: constraintReferences, canvas,
+      solving: sketchSolving, checkpoint: editingCheckpoint, analysis: constraintAnalysis, dimensionDrag,
     });
     const themeObservation = propertiesTestFactories.createThemeObservation();
     const documentTestApi = documentTestSupport.createFileApi({
