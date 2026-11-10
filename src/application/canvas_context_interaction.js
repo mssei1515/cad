@@ -94,5 +94,23 @@
     }
     return Object.freeze({ controller, element, createInteraction, createEditingInteraction, createSceneForEditing });
   }
-  window.CanvasContextInteraction = Object.freeze({ create, createMenu });
+  function createMenuForWorkspace({ documentWorkspace, readServices, interaction, presentation, ...options }) {
+    let candidatePresentation, commandInteraction;
+    const menu = createMenu({ ...options, applicationText: presentation.settings.applicationText, canvasHover: interaction.hover, draw: presentation.draw,
+      readPresentation: () => candidatePresentation, readInteraction: () => commandInteraction });
+    const { createSceneForEditing: createScene } = menu;
+    function createSceneForEditing(options) {
+      const scene = createScene({ ...options, documentWorkspace, readServices, interaction, presentation });
+      candidatePresentation = scene.presentCandidate;
+      const { createInteraction: createSceneInteraction } = scene;
+      function createInteraction(options) {
+        const result = createSceneInteraction(options);
+        commandInteraction = result;
+        return result;
+      }
+      return Object.freeze({ ...scene, createInteraction });
+    }
+    return Object.freeze({ controller: menu.controller, element: menu.element, createSceneForEditing });
+  }
+  window.CanvasContextInteraction = Object.freeze({ create, createMenu, createMenuForWorkspace });
 })();
