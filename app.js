@@ -101,7 +101,7 @@
     clearSelection, updateGeometrySelectionUI, draw,
   });
   const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection,
-    pointUsage, createOperationSessions } = canvasInteraction;
+    pointUsage, createOperationSessionsForAuthoring: createOperationSessions } = canvasInteraction;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
@@ -138,10 +138,10 @@
   const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
     sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
   const { toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
+  const { createGeometry: createDrawingGeometry, createEditing: createDrawingEditing, createCenterline, createTrim,
+    preview: authoringPreview } = window.BasicDrawingTools.prepare();
   const operationSessions = createOperationSessions({
-    snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
-    readCenterline: () => centerlineCommand, projectPointToCenterlineSupport: point => projectPointToCenterlineSupport(point),
-    readOffsetSelection: () => offsetSelection, computeTrimPreview,
+    authoringPreview, readOffsetSelection: () => offsetSelection,
     hits: { hitPoint: (x, y) => hitPoint(x, y), hitLine: (x, y) => hitLine(x, y),
       hitCircle: (x, y) => hitCircle(x, y), hitArc: (x, y) => hitArc(x, y) },
     clearPlacement: () => geometryInstanceCommand.clearPlacement(), cancelAnnotation: () => annotationCommand.cancel(),
@@ -326,7 +326,7 @@
     geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer,
     blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle,
   });
-  const { geometry: geometryCreation, createAuthoringForEditing: createAuthoringTools } = window.BasicDrawingTools.createGeometry({
+  const { geometry: geometryCreation, createAuthoringForEditing: createAuthoringTools } = createDrawingGeometry({
     currentScope: workspace.current, ids: geometryIds, assignSketchId, currentConstruction: () => constructionCommand.enabled,
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
     hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
@@ -347,7 +347,6 @@
   });
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
   const { clear: clearSnap } = drawingSnap;
-  function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
   const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, circular: circularCommands } = basicDrawingTools;
   const offsetFeature = authoringTools.createOffsetForEditing({
@@ -357,7 +356,6 @@
   });
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, chainDraft: offsetChainDraft } = offsetFeature;
   const { submit: submitOffsetValue } = offsetCommand;
-  function computeTrimPreview(pointer) { return trimFeature.computePreview(pointer); }
   const editingCheckpoint = createEditingCheckpoint();
   const { captureValues: snapshotModelState, restoreValues: restoreModelState } = editingCheckpoint;
   const { dimensions: { serialize: serializeDimension }, normalizeGeometryInstance: normalizeEditingGeometryInstance,
@@ -371,7 +369,7 @@
     maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
-  const { fillet: filletCommand, createCircleCenterCross, createSplineEditing, createCenterline, createTrim } = authoringTools.createEditing({
+  const { fillet: filletCommand, createCircleCenterCross, createSplineEditing } = createDrawingEditing({
     checkpoint: editingCheckpoint, solving: sketchSolving, parameters: parameterStabilization, analysis: constraintAnalysis,
     editingScope: editingScopeBinding, solver, placement: dimensionPlacement, valueInput: dimensionInputController,
     projection: sketchProjectionFeature, acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -405,7 +403,6 @@
     commitNewConstraint,
     parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
   });
-  const { projectPointToCenterlineSupport } = centerlineCommand;
   const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreviewForEditing({
     ctx, surface: canvasSurface, geometry: geometryDisplay, canvas, centerlineCommand,
   });

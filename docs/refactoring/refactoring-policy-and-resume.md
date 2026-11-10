@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の生成済みowner直接接続単位ではapp.jsは1,342行、非空白896行。AST監査ではroot282文・465束縛、構築・接続488非空白行、別名・設定124行、委譲32行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の作図preview owner統合単位ではapp.jsは1,339行、非空白893行。AST監査ではroot280文・465束縛、構築・接続488非空白行、別名・設定123行、委譲30行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,22 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：作図previewの五操作と段階生成を既存作図ownerへ集約（2026-11-10）
+
+BasicDrawingTools.prepare（src/application/basic_drawing_tools.js）は、実componentをまだ生成せず、Geometry／Authoring／編集準備／Centerline／Trimを既存factoryで生成する段階的な入口と、五操作だけの凍結preview interfaceを返す。Geometry factoryは従来と同じ位置で呼び、createAuthoringとcreateAuthoringForEditingの成功後に実authoringを保持する。createEditingは実authoringのmember、Centerline／Trim factoryは従来どおり裸関数として呼び、成功後だけ実componentを保持して同じobjectを返す。独自の作図state・Geometry・ID・snapshot、外部代入setterや汎用app contextを作らない。
+
+previewはsnapForDrawing(point)、linePreviewPoint(point, shiftKey)、readCenterline()、projectPointToCenterlineSupport(point)、computeTrimPreview(pointer)を提供する。Snap／Line／Trimは同じ実componentをmember呼出しし、Centerline本体は同じ参照を返し、projection helperは同じ裸関数を一引数で呼ぶ。引数の省略・余剰の扱い、返値・元例外、liveなScale／Workspace reader、生成前のauthoringTools／lineCommand／centerlineCommand／projectPointToCenterlineSupport／trimFeatureに対応するReferenceErrorを保つ。各段階の構築失敗では以前の成功componentを保持し、未完成componentを公開しない。
+
+CanvasInteractionFeature.createOperationSessionsForAuthoring（src/application/canvas_interaction_feature.js）は、この五関数を同じ参照のまま既存createOperationSessionsへ渡す。Offset読取り・hits・取消・入力・toolbar等のその他portは変更せず、Preview→Pending→Target→Pointerの既存生成を同じ位置で行う。旧raw createOperationSessions、BasicDrawingToolsの各raw factoryと公開component APIは維持する。rootの五つのpreview callback接続とSnap／Trimの委譲、projection helperの中間bindingを外し、公開後にuser操作を受けるbind／startとtest guard／公開位置を保つ。
+
+Lineとprojection helperの利用可能性は、実component生成成功時の公開へ揃う。従来のLine aliasまでの間は凍結APIの通常fieldの読取りと関数宣言のみで、projection aliasはCenterline生成直後の通常fieldである。外部callback呼出しやawaitを含まないことを照合し、constructorの副作用順を維持する。全てのalias宣言位置が不変とは扱わない。prepare自体はclosureと凍結recordのみを作り、Geometry作成・scope読取り・DOM／viewport照会を前倒ししない。UI・操作・保存形式v26は不変。
+
+app.jsは1,342→1,339行（3行減）、非空白896→893行、root282→280文・465束縛不変。委譲30→28文・32→30非空白行、別名・設定124→123行、構築・接続488行とtest hooks165行は不変。rootの作図preview依存は五つの操作callbackから一つの狭いinterfaceとなり、componentの生成とそのpreview操作を同じ既存ownerへ揃えた。目安200〜500行の全体目標は未完了。
+
+追加単体五件で、実Snap／Line／Centerline／Trimのpreview結果とScale更新、Geometry／IDの維持、生成前の拒否と後続生成失敗時の旧component保持、成功時の更新、member／裸関数のreceiverと引数・返値・元例外、Canvasへの五関数の同一参照・その他port・実sessionと構築失敗後の停止を確認する。rootは対象七編集以外が全文一致し、両moduleの旧factory本体・APIと低水準commandは変更しない。準備時のcold性、旧aliasまでの副作用なし、通常の凍結field、新しい初期化前・未使用・未束縛参照なしを照合する。構文635file・全単体2,457件・関連単体86件・全E2E589件が成功（50file、21.7m、exit 0）。全E2E実行中の705入力と開始HEAD不変、全50fileの一覧589件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-authoring-preview-ports-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。実行後に追加単体file末尾の余分な空行だけを除去し、前後のAST完全一致を照合した。実行コードの変更はなく、空行除去だけによるテスト再実行は行っていない。
+
+基準develop 6a689ea、作業branch codex/authoring-preview-ports、開始時週枠残量8%。直前の関連441件成功と、最後の全体検証4619cd2の全E2E589件成功（22.1分）を区別し、この単位では最新製品入力で全E2Eを実行する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：生成済みownerの十操作をrootへ直接接続（2026-11-10）
 
