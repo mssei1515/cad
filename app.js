@@ -85,7 +85,7 @@
   const { hatchPrimitivesForScope } = hatchGeometryQuery;
   const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
-  const { blockWorldPoint, createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
+  const { createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
@@ -167,7 +167,7 @@
   const fixedStateQueries = window.ConstraintReferences.createFixedState({
     currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement: selectionHighlight.sameConstraintDisplayElement,
   });
-  const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = fixedStateQueries;
+  const { findArcEndpointFixedConstraint, findLineFixedConstraint } = fixedStateQueries;
   const offsetSelection = window.OffsetFeature.createSelectionForEditing({
     editingScope: editingScopeBinding, sketches: sketchContext, selection: canvasSelection,
   });
@@ -292,7 +292,7 @@
     instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
     selectionHighlight, isSidebarHighlightedElement,
     constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
-    sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed,
+    sameArcEndpoint, arcEndpointPoint, fixedState: fixedStateQueries,
     editingQueries: { isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
       isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point),
       editedSpline: () => splineEditing.current?.spline },
@@ -1034,7 +1034,7 @@
     checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
     viewport, pointer: dragPointer, acceptError: CONSTRAINT_ACCEPT_ERROR,
     previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR, minimumLength: MIN_ORIENTATION_LENGTH,
-    blockLocalGeometryBounds, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint, findArcEndpointFixedConstraint,
+    blockLocalGeometryBounds, fixedState: fixedStateQueries,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
   });

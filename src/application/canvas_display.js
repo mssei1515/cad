@@ -77,7 +77,8 @@
       function createSceneForEditing({ currentScope, sketches, readServices, interaction, targets, pending, solveState, analysis,
         readPanelSelection, instanceSources, projection, instances, operandElement, selectionHighlight, viewState,
         isSidebarHighlightedElement, canvasThemeColor, applicationText, constructionAlpha, constructionExtensionScreenPx,
-        sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed, editingQueries, annotationBounds }) {
+        sameArcEndpoint, arcEndpointPoint, fixedState, findArcEndpointFixedConstraint = fixedState?.findArcEndpointFixedConstraint,
+        pointLockedByLineFixed = fixedState?.pointLockedByLineFixed, editingQueries, annotationBounds }) {
         const commandTargets = window.GeometryPresentation.createCommandTargets({
           readPanelSelection, readMode: interaction.lifecycle.readMode, instanceSourceCommand: instanceSources, sketchProjectionCommand: projection,
           geometryInstanceCommand: instances, geometryRefsEqual: window.GeometryRef.equals, geometryRefForItem: window.GeometryObjects.geometryRefForItem,

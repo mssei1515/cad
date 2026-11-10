@@ -1128,3 +1128,24 @@ test('Workspace PNG can use the prepared export owner without changing mode, cap
   assert.deepEqual({ ...f.display.viewport.snapshot() }, viewport); assert.equal(f.state.mode, 'line');
   assert.equal(f.pending.current, null); assert.equal(owner.readCommand(), f.feature.command); f.feature.dispose();
 });
+
+test('scene rendering shares the actual fixed-state owner and reads enabled constraints from the current scope at paint time',()=>{
+ let fixed;
+ const f=sceneFixture(true,({state,sceneOptions,read})=>{
+  state.scope.constraints=[];
+  fixed=sceneWindow.ConstraintReferences.createFixedState({currentScope:()=>{read('fixed-scope');return state.scope;},sameConstraintDisplayElement:(a,b)=>a===b});
+  sceneOptions.fixedState=fixed;delete sceneOptions.pointLockedByLineFixed;delete sceneOptions.findArcEndpointFixedConstraint;
+ });
+ const G=sceneWindow.GeometrySolver,p=Object.assign(new G.Point('p',0,0),{sketchId:'S1',kind:'explicit'}),q=Object.assign(new G.Point('q',10,0),{sketchId:'S1'}),line=new G.Line('l',p,q);
+ const lock=new G.LineFixedConstraint(line,0,0,10,0);f.sceneState.scope.points=[p];f.sceneState.scope.constraints=[lock];f.selection.points.push(p);
+ f.scene.geometry.drawPoints();assert.equal(f.strokes.at(-1).color,'#dc2626');assert.ok(f.reads.includes('fixed-scope'));
+ lock.enabled=false;f.scene.geometry.drawPoints();assert.equal(f.strokes.at(-1).color,'#1d4ed8');
+ f.sceneState.scope={...f.sceneState.scope,constraints:[]};f.scene.geometry.drawPoints();assert.equal(f.strokes.at(-1).color,'#1d4ed8');assert.equal(f.selection.points[0],p);
+});
+
+test('scene fixed-state defaults preserve explicit callbacks and null instead of reading the fallback owner',()=>{
+ const error=new Error('unexpected fixed default');
+ const f=sceneFixture(true,({sceneOptions})=>{sceneOptions.fixedState=new Proxy({},{get(){throw error;}});sceneOptions.pointLockedByLineFixed=null;});
+ const p=Object.assign(new sceneWindow.GeometrySolver.Point('p',0,0),{sketchId:'S1',kind:'explicit'});f.sceneState.scope.points=[p];f.selection.points.push(p);
+ assert.throws(()=>f.scene.geometry.drawPoints(),/not a function/);
+});

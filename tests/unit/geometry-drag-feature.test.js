@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js',
-  'src/constraints/dimension_queries.js', 'src/editing/geometry_drag_plan.js', 'src/solver/geometry_drag_solver.js',
+  'src/constraints/dimension_queries.js', 'src/constraints/references.js', 'src/editing/geometry_drag_plan.js', 'src/solver/geometry_drag_solver.js',
   'src/editing/geometry_drag_editing.js', 'src/commands/geometry_drag.js', 'src/application/geometry_drag_feature.js',
   'src/diagnostics/interaction_profiler.js', 'src/ui/canvas_input_binding.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
@@ -221,6 +221,7 @@ function workspaceFixture(composed, probe = {}) {
       recordHistory: options.recordHistory, clearSelection: options.clearSelection,
     };
     probe.input = input;
+    if (probe.configure) probe.configure(input, options);
     return composed ? w.GeometryDragFeature.createForWorkspace(input) : w.GeometryDragFeature.createForEditing(options);
   });
 }
@@ -266,4 +267,29 @@ test('Workspace drag keeps supplied selection clearing, derived mapping, late Bl
     assert.equal(f.feature.command.active, false); assert.equal(f.events.includes('history'), false);
     assert.deepEqual(f.pointerEvents.slice(-2), [['remove', 'is-dragging'], ['release', 34]]);
   }
+});
+
+test('Workspace drag shares actual fixed queries across current scopes and uses the projection owner for Block pivots',()=>{
+ const pivots=[],probe={configure(input,options){
+  input.fixedState=w.ConstraintReferences.createFixedState({currentScope:options.currentScope,sameConstraintDisplayElement:(a,b)=>a===b});
+  for(const name of ['pointLockedByLineFixed','findLineFixedConstraint','findArcEndpointFixedConstraint','blockWorldPoint'])delete input[name];
+  input.readServices.catalog.blockDefinitionById=()=>({origin:{x:4,y:5}});input.readServices.catalog.blockInstanceEnabledSketchSet=()=>new Set(['S1']);
+  input.readServices.projections.blockWorldPoint=function(instance,point){"use strict";assert.equal(this,undefined);pivots.push([instance,point]);return{x:instance.x+point.x,y:instance.y+point.y};};
+ }};
+ const f=workspaceFixture(true,probe),G=w.GeometrySolver;assert.equal(f.state.reads,0);assert.deepEqual(pivots,[]);f.state.ready=true;
+ const q=Object.assign(new G.Point('P2',10,0),{sketchId:'S1'}),line=Object.assign(new G.Line('L1',f.point,q),{sketchId:'S1'}),fixed=new G.LineFixedConstraint(line,0,0,10,0);
+ f.state.scope.constraints=[fixed];assert.equal(f.feature.build('point',f.point,{x:0,y:0}),null);assert.equal(f.feature.build('line',line,{x:0,y:0}),null);
+ fixed.enabled=false;assert.ok(f.feature.build('point',f.point,{x:0,y:0}));fixed.enabled=true;
+ const arc=Object.assign(new G.Arc('A1',f.point,5,0,Math.PI),{sketchId:'S1'});f.state.scope.constraints=[new G.ArcEndpointFixedConstraint(arc,'start',5,0)];
+ assert.equal(f.feature.build('arc-endpoint',{arc,endpoint:'start'},{x:5,y:0}),null);
+ f.state.scope={...f.state.scope,constraints:[]};assert.ok(f.feature.build('arc-endpoint',{arc,endpoint:'start'},{x:5,y:0}));
+ const instance={id:'BI1',sketchId:'S1',definitionId:'B1',x:20,y:30,rotation:0};const plan=f.feature.build('block',instance,{x:0,y:0});
+ assert.equal(pivots[0][0],instance);assert.equal(plan.rotationPivot.x,24);assert.equal(plan.rotationPivot.y,35);assert.equal(f.state.scope.constraints.length,0);
+});
+
+test('Workspace drag retains explicit callbacks including null without reading fallback query owners',()=>{
+ const error=new Error('unexpected default'),probe={configure(input){input.fixedState=new Proxy({},{get(){throw error;}});
+  Object.defineProperty(input.readServices.projections,'blockWorldPoint',{get(){throw error;}});input.pointLockedByLineFixed=null;}};
+ const f=workspaceFixture(true,probe);assert.equal(f.state.reads,0);f.state.ready=true;
+ assert.throws(()=>f.feature.build('point',f.point,{x:0,y:0}),/not a function/);
 });
