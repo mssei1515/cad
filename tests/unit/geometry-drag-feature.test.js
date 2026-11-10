@@ -222,12 +222,16 @@ function workspaceFixture(composed, probe = {}) {
     };
     probe.input = input;
     if (probe.configure) probe.configure(input, options);
+    if (composed === 'prepared') {
+      probe.preparation = w.GeometryDragFeature.prepare();
+      return probe.preparation.createForWorkspace(input);
+    }
     return composed ? w.GeometryDragFeature.createForWorkspace(input) : w.GeometryDragFeature.createForEditing(options);
   });
 }
 
 test('Workspace drag composition retains cold owners, live scope and scale, actual pointer capture and one history step', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'prepared']) {
     const probe = {}, f = workspaceFixture(composed, probe);
     assert.equal(f.state.reads, 0); assert.equal(f.scaleReads(), 0); assert.equal(probe.clears, 0);
     assert.deepEqual(f.events, []); assert.deepEqual(f.pointerEvents, []); assert.equal(Object.isFrozen(f.feature), true);
@@ -247,7 +251,7 @@ test('Workspace drag composition retains cold owners, live scope and scale, actu
 });
 
 test('Workspace drag keeps supplied selection clearing, derived mapping, late Block refusals and failed/throwing solve cleanup', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'prepared']) {
     const probe = { highlight: {} }, f = workspaceFixture(composed, probe); f.state.ready = true;
     const instance = { id: 'SPI1', type: 'sketchProjection', sketchId: 'S1' };
     f.state.resolved = { item: f.point, pointer: { x: 0, y: 0 }, mapPointer: p => ({ x: p.x - 100, y: p.y }) };
@@ -292,4 +296,39 @@ test('Workspace drag retains explicit callbacks including null without reading f
   Object.defineProperty(input.readServices.projections,'blockWorldPoint',{get(){throw error;}});input.pointLockedByLineFixed=null;}};
  const f=workspaceFixture(true,probe);assert.equal(f.state.reads,0);f.state.ready=true;
  assert.throws(()=>f.feature.build('point',f.point,{x:0,y:0}),/not a function/);
+});
+test('prepared drag operations are cold, guarded and share the actual point session with rendering queries and reset',()=>{
+ const p=w.GeometryDragFeature.prepare(),point={};
+ for(const run of [()=>p.build('point',point,point),()=>p.begin({},{}),p.reset,()=>p.queries.isDraggingPoint(point),()=>p.queries.isDraggingCenter(point),()=>p.queries.isDraggingArcEndpoint(point,'start')])
+  assert.throws(run,e=>e.name==='ReferenceError');
+ const probe={},f=workspaceFixture('prepared',probe),ready=probe.preparation;assert.equal(f.state.reads,0);assert.equal(f.scaleReads(),0);assert.deepEqual(f.events,[]);assert.deepEqual(f.pointerEvents,[]);
+ f.state.ready=true;const plan=ready.build('point',f.point,{x:0,y:0});let ended=0;plan.onEnd=()=>ended++;
+ assert.equal(plan.points[0].point,f.point);assert.equal(ready.queries.isDraggingPoint(f.point),false);assert.equal(ready.begin({pointerId:41},plan),true);
+ assert.equal(ready.queries.isDraggingPoint(f.point),true);assert.equal(ready.queries.isDraggingPoint({...f.point}),false);
+ assert.equal(ready.queries.isDraggingCenter(f.point),false);assert.equal(ready.queries.isDraggingArcEndpoint(f.point,'start'),false);
+ assert.equal(ready.reset('ignored'),undefined);assert.equal(ready.queries.isDraggingPoint(f.point),false);assert.equal(f.feature.command.active,false);assert.equal(ended,1);
+ assert.equal(f.state.scope.points[0],f.point);assert.equal(f.point.x,0);assert.equal(f.point.y,0);assert.equal(f.events.includes('history'),false);
+});
+
+test('prepared drag keeps bare plan calls, command receivers, exact arguments, results and original exceptions',()=>{
+ const oldCommand=w.GeometryDrag,oldPlan=w.GeometryDragPlan,marker=new Error('drag failed'),result={},calls=[];let fail=false;
+ const command=Object.freeze(Object.fromEntries(['begin','reset','isArcEndpoint','isPoint','isCenter'].map(name=>[name,function(...args){assert.equal(this,command);calls.push([name,args]);if(fail)throw marker;return result;}])));
+ w.GeometryDrag={...oldCommand,create:()=>command};
+ w.GeometryDragPlan={create(options){const plan=oldPlan.create(options);return {...plan,build:function(){'use strict';assert.equal(this,undefined);calls.push(['build',Array.from(arguments)]);if(fail)throw marker;return result;}};}};
+ let f,probe={};try{f=workspaceFixture('prepared',probe);}finally{w.GeometryDrag=oldCommand;w.GeometryDragPlan=oldPlan;}
+ const p=probe.preparation,a={},b={},c={};assert.equal(f.feature.command,command);assert.deepEqual(calls,[]);
+ assert.equal(p.build(a,b,c,null),result);assert.equal(p.begin(a,b,c),result);assert.equal(p.reset(a),result);
+ assert.equal(p.queries.isDraggingArcEndpoint(a,b,c),result);assert.equal(p.queries.isDraggingPoint(a,b),result);assert.equal(p.queries.isDraggingCenter(a,b),result);
+ assert.deepEqual(calls,[['build',[a,b,c,null]],['begin',[a,b]],['reset',[]],['isArcEndpoint',[a,b]],['isPoint',[a]],['isCenter',[a]]]);
+ fail=true;for(const run of [()=>p.build(a),()=>p.begin(a,b),p.reset,()=>p.queries.isDraggingArcEndpoint(a,b),()=>p.queries.isDraggingPoint(a),()=>p.queries.isDraggingCenter(a)])assert.throws(run,e=>e===marker);
+});
+
+test('prepared drag publishes only completed features and preserves the prior session after construction failure',()=>{
+ const probe={},f=workspaceFixture('prepared',probe),p=probe.preparation,unready=w.GeometryDragFeature.prepare(),old=w.GeometryDrag,marker=new Error('constructor failed');f.state.ready=true;
+ const plan=p.build('point',f.point,{x:0,y:0});p.begin({pointerId:42},plan);assert.equal(p.queries.isDraggingPoint(f.point),true);
+ w.GeometryDrag={...old,create(){throw marker;}};
+ try{assert.throws(()=>p.createForWorkspace(probe.input),e=>e===marker);assert.throws(()=>unready.createForWorkspace(probe.input),e=>e===marker);}finally{w.GeometryDrag=old;}
+ assert.equal(p.queries.isDraggingPoint(f.point),true);assert.throws(unready.reset,e=>e.name==='ReferenceError');p.reset();assert.equal(f.feature.command.active,false);
+ const next=p.createForWorkspace(probe.input);assert.notEqual(next,f.feature);assert.equal(next.command.active,false);
+ const nextPlan=p.build('point',f.point,{x:0,y:0});p.begin({pointerId:43},nextPlan);assert.equal(next.command.active,true);assert.equal(f.feature.command.active,false);p.reset();assert.equal(next.command.active,false);
 });

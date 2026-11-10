@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のSpline開始reset owner統合単位ではapp.jsは1,338行、非空白892行。AST監査ではroot280文・467束縛、構築・接続487非空白行、別名・設定123行、委譲30行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のGeometryドラッグ操作owner統合単位ではapp.jsは1,337行、非空白891行。AST監査ではroot281文・467束縛、構築・接続486非空白行、別名・設定123行、委譲30行、条件付きtest hooks165行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：Geometryドラッグの開始・解除・描画照会を生成ownerへ統合（2026-11-11）
+
+GeometryDragFeature.prepare（src/application/geometry_drag_feature.js）は、実ドラッグfeatureを生成しない段階で、plan構築・開始・解除の三操作と、Arc端点／Point／Centerの三つの描画照会を用意する。createForWorkspaceが同じ既存factoryを従来位置で呼び、成功した実featureだけをprivateに保持し、同じobjectを返す。実command・plan・editing・solverは従来の生成と所有を保つ。rootは注記ドラッグのbuild／begin、Canvas表示の三照会、削除とSketch切替のresetをこの入口へ接続する。Spline編集の照会は別ownerの既存callbackとして維持する。
+
+plan構築は同じraw buildを裸関数で全引数を渡して呼び、開始は実commandへevent／planの二引数、解除は零引数、描画照会は元の固定引数でmember呼出しする。操作時のliveなscope／viewport・Object同一性、receiver・返値・元例外、生成前のbuildDragSession／geometryDrag相当のReferenceErrorを保つ。constructorが失敗しても以前の成功featureへ接続したままとし、未完成componentを公開しない。実feature公開からrootのcommand aliasまでに外部callbackやawaitを挟まない。prepareはclosureと凍結recordだけを生成し、model・scope・viewport・DOMを読書きせず、listenerを登録しない。独自drag session・Geometry・ID・snapshot・外部代入setter・汎用app contextは作らない。旧raw API・数値閾値・restore／onEnd・履歴・bind／start順、UI・保存形式v26は不変。
+
+app.jsは1,338→1,337行（1行減）、非空白892→891行。root280→281文、467束縛不変、構築・接続487→486行、別名・設定123行・委譲30行・test hooks165行は不変。六つの狭い入口を実componentの生成ownerへ揃えた小単位であり、準備生成の一文が増えることも記録する。旧buildDragSessionの中間bindingは不要になった。行数の減少と構築複雑度の解消を同一視せず、200〜500行の全体目標は未完了。構文依存graphは全辺1,180→1,181、即時辺932→937、遅延構文辺248→244、遅延込み最大SCC191文は不変、即時SCCなし。これは実行順の安全性や実際の循環解消を証明せず、今回の所有境界の整理を依存総数削減とは扱わない。
+
+既存Workspace単体の通常二経路にprepare経路を加えて同じ実dragの移動・scope切替・履歴・pointer cleanup・拒否・失敗／throwを検証する。追加3件で実Point sessionと描画照会／onEnd付きreset、生成前guard・cold準備、裸buildとcommand receiver／固定・可変長引数／返値／元例外、生成失敗時の旧target保持を確認した。rootの七箇所以外と既存factory／plan／editing／command／solver本体の全文一致、prepareのcold生成、raw Workspace factoryのreceiver非依存、未使用／未束縛／初期化前参照の追加なしを照合した。構文635file・全単体2,464件・関連単体15件・全E2E589件が成功（50file、27.2m、exit 0）。全E2E実行中の705入力と開始HEAD不変、選択全50fileの一覧589件が無指定の全件一覧と一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-geometry-drag-owner-ports-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop c856f8e、作業branch codex/geometry-drag-owner-ports、開始時週枠残量6%。この単位では全50file・589件のE2Eを選択する。停止条件到達時はこの検証を最新コードの根拠として停止記録を残し、developの後にmainを反映・同期する。
+
+次の再監査は構築・接続486行を主対象とし、単純な遅延callbackの移管だけを続けない。現在のroot factory第一引数の明示property数はDocumentEditingReset 25、Canvas編集入力24、ClipboardとGeometryDrag 23、削除とSketch navigation 22。これは独立した依存数ではなく、引数recordを束ねるだけで削減したことにしない。既にあるDocumentWorkspace.createReadContextの凍結persistence API等、複数のraw依存の実所有者を確認し、生成段階とlive読取り・失敗境界を保って同じ責務の構築をまとめられる箇所を優先する。UI・モデル・操作resetが別々の責務のものを一つの万能contextへ混ぜず、追加の境界テストや構築が増えるデメリットも比較する。TEMP cad-geometry-drag-owner-ports-root-construction.{cjs,json}は今回のproperty一覧の再現資料であり、採用済み設計や削減見積りではない。
 
 ### 最新：Spline開始時の二つの解除操作を生成ownerへ統合（2026-11-11）
 

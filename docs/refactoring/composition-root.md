@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Geometryドラッグの開始・解除・描画照会を生成ownerへ統合（2026-11-11）
+
+GeometryDragFeature.prepare（src/application/geometry_drag_feature.js）は、実ドラッグfeatureを生成しない段階で、plan構築・開始・解除の三操作と、Arc端点／Point／Centerの三つの描画照会を用意する。createForWorkspaceが同じ既存factoryを従来位置で呼び、成功した実featureだけをprivateに保持し、同じobjectを返す。実command・plan・editing・solverは従来の生成と所有を保つ。rootは注記ドラッグのbuild／begin、Canvas表示の三照会、削除とSketch切替のresetをこの入口へ接続する。Spline編集の照会は別ownerの既存callbackとして維持する。
+
+plan構築は同じraw buildを裸関数で全引数を渡して呼び、開始は実commandへevent／planの二引数、解除は零引数、描画照会は元の固定引数でmember呼出しする。操作時のliveなscope／viewport・Object同一性、receiver・返値・元例外、生成前のbuildDragSession／geometryDrag相当のReferenceErrorを保つ。constructorが失敗しても以前の成功featureへ接続したままとし、未完成componentを公開しない。実feature公開からrootのcommand aliasまでに外部callbackやawaitを挟まない。prepareはclosureと凍結recordだけを生成し、model・scope・viewport・DOMを読書きせず、listenerを登録しない。独自drag session・Geometry・ID・snapshot・外部代入setter・汎用app contextは作らない。旧raw API・数値閾値・restore／onEnd・履歴・bind／start順、UI・保存形式v26は不変。
+
+app.jsは1,338→1,337行（1行減）、非空白892→891行。root280→281文、467束縛不変、構築・接続487→486行、別名・設定123行・委譲30行・test hooks165行は不変。六つの狭い入口を実componentの生成ownerへ揃えた小単位であり、準備生成の一文が増えることも記録する。旧buildDragSessionの中間bindingは不要になった。行数の減少と構築複雑度の解消を同一視せず、200〜500行の全体目標は未完了。構文依存graphは全辺1,180→1,181、即時辺932→937、遅延構文辺248→244、遅延込み最大SCC191文は不変、即時SCCなし。これは実行順の安全性や実際の循環解消を証明せず、今回の所有境界の整理を依存総数削減とは扱わない。
+
+既存Workspace単体の通常二経路にprepare経路を加えて同じ実dragの移動・scope切替・履歴・pointer cleanup・拒否・失敗／throwを検証する。追加3件で実Point sessionと描画照会／onEnd付きreset、生成前guard・cold準備、裸buildとcommand receiver／固定・可変長引数／返値／元例外、生成失敗時の旧target保持を確認した。rootの七箇所以外と既存factory／plan／editing／command／solver本体の全文一致、prepareのcold生成、raw Workspace factoryのreceiver非依存、未使用／未束縛／初期化前参照の追加なしを照合した。構文635file・全単体2,464件・関連単体15件・全E2E589件が成功（50file、27.2m、exit 0）。全E2E実行中の705入力と開始HEAD不変、選択全50fileの一覧589件が無指定の全件一覧と一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-geometry-drag-owner-ports-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop c856f8e、作業branch codex/geometry-drag-owner-ports、開始時週枠残量6%。この単位では全50file・589件のE2Eを選択する。停止条件到達時はこの検証を最新コードの根拠として停止記録を残し、developの後にmainを反映・同期する。
+
 ### 最新：Spline開始時の二つの解除操作を生成ownerへ統合（2026-11-11）
 
 BasicDrawingTools.prepareのcreateSplineEditingは、同じ編集準備の実factoryを従来どおり裸関数として呼び、成功した実SplineEditCommandだけをprivateに保持し、同じobjectを返す。resetSplineEditingは操作時にその実componentのresetを零引数のmember呼出しで実行する。CanvasInteractionFeature.createは、preparePointerForEditingが実BlankCanvasGestureを生成した後にだけ同じobjectをprivateに保持し、resetBlankCandidateを公開する。こちらも操作時に同じ実componentのresetCandidateを零引数のmember呼出しで実行する。外部登録setter・独自session・Geometry・ID・snapshot・listenerや汎用app contextを追加しない。

@@ -1,6 +1,30 @@
 /* Compose drag planning, numeric editing and lifecycle without taking over their state. */
 (() => {
   "use strict";
+  function prepare() {
+    let feature = null;
+    function requireFeature(binding) {
+      if (!feature) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return feature;
+    }
+    function createPreparedWorkspace(options) {
+      const completed = createForWorkspace(options);
+      feature = completed;
+      return completed;
+    }
+    function build(...args) {
+      const { build } = requireFeature("buildDragSession");
+      return build(...args);
+    }
+    function begin(event, plan) { return requireFeature("geometryDrag").command.begin(event, plan); }
+    function reset() { return requireFeature("geometryDrag").command.reset(); }
+    const queries = Object.freeze({
+      isDraggingArcEndpoint(arc, endpoint) { return requireFeature("geometryDrag").command.isArcEndpoint(arc, endpoint); },
+      isDraggingPoint(point) { return requireFeature("geometryDrag").command.isPoint(point); },
+      isDraggingCenter(point) { return requireFeature("geometryDrag").command.isCenter(point); },
+    });
+    return Object.freeze({ createForWorkspace: createPreparedWorkspace, build, begin, reset, queries });
+  }
   function create({ solver, currentScope, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
     viewScale, arcEndpointPoint, acceptError, previewMaxModelError,
     elementSketchId, isEditableSketchId, blockDefinitionById, blockLocalGeometryBounds, blockInstanceEnabledSketchSet,
@@ -97,5 +121,5 @@
       stabilizeActiveParameterNamespace, refreshConstraintAnalysis, applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
       geometryInstanceSourceObjects: sourceQueries.sourceObjects, clearSelection, resolveDerivedDragSource: sourceQueries.resolve });
   }
-  window.GeometryDragFeature = Object.freeze({ create, createForEditing, createForWorkspace });
+  window.GeometryDragFeature = Object.freeze({ prepare, create, createForEditing, createForWorkspace });
 })();
