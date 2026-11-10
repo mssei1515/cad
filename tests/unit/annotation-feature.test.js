@@ -126,6 +126,90 @@ test('existing annotation editor is generated separately and keeps real commands
   assert.deepEqual(f.events, ['elementSketchId', 'guard']);
 });
 
+test('owned editor uses the same Parameter helpers and viewport projection with real commit, live Workspace and rollback', () => {
+  const actual = { window: {} }; vm.runInNewContext(fs.readFileSync('src/commands/annotation_parameter_command.js', 'utf8'), actual);
+  const outcomes = [];
+  for (const owned of [false, true]) {
+    let parameterPorts;
+    const f = fixture((w, input) => {
+      w.AnnotationParameterCommand = { create(options) { parameterPorts = options; return actual.window.AnnotationParameterCommand.create(options); } };
+      return w.AnnotationFeature.create(input);
+    });
+    const namespace = f.input.parameterNamespace, calls = [];
+    namespace.expressionFromUserInput = function(value) { assert.equal(this, undefined); assert.equal(arguments.length, 1); calls.push('expression'); return value.slice(1); };
+    namespace.expressionInputValue = item => item.expression;
+    f.input.viewport.worldToCanvasScreen = point => ({ x: point.x * 2, y: point.y * 2 });
+    f.item.text = 'Current note'; f.state.workspace = { id: 'host', annotations: [f.item] };
+    let solved = { success: true };
+    const options = { document: {}, host: {}, capture: () => { calls.push('capture'); return structuredClone(f.item); },
+      restore(snapshot) { calls.push('restore'); for (const key of Object.keys(f.item)) delete f.item[key]; Object.assign(f.item, snapshot); },
+      guardDimensionSymbolDeletion: () => true, stabilize: () => solved, resetDrag() {} };
+    f.events.length = 0;
+    const editor = owned ? f.feature.createEditorForEditing(options) : f.feature.createEditor({ ...options,
+      readParameterNamespace: f.input.currentScope, expressionFromUserInput: namespace.expressionFromUserInput,
+      expressionInputValue: namespace.expressionInputValue, toScreen: f.input.viewport.worldToCanvasScreen });
+    assert.equal(editor.controller, f.editor); assert.equal(editor.commitParameterEdit, f.ports['text-editing'].commitParameterEdit);
+    assert.equal(parameterPorts.expressionFromUserInput, namespace.expressionFromUserInput);
+    assert.equal(f.ports.editor.expressionInputValue, namespace.expressionInputValue); assert.equal(f.ports.editor.toScreen, f.input.viewport.worldToCanvasScreen);
+    assert.deepEqual(calls, []); assert.equal(f.state.scaleReads, 0);
+    assert.equal(editor.commitParameterEdit(f.item, 'annotation-parameter-enabled', true), true);
+    assert.equal(f.item.style.prefix, 'Current note'); assert.equal(f.events.find(e => e[0] === 'ensure')[2], f.state.workspace);
+    const bound = f.state.scope; f.state.workspace = { id: 'local', annotations: [f.item] }; f.item.parameterEnabled = false; f.events.length = 0;
+    assert.equal(editor.commitParameterEdit(f.item, 'annotation-parameter-enabled', true), true);
+    assert.equal(f.events.find(e => e[0] === 'ensure')[2], f.state.workspace); assert.equal(f.state.scope, bound);
+    assert.equal(editor.commitParameterEdit(f.item, 'annotation-expression', '=n+2'), true); assert.equal(f.item.expression, 'n+2');
+    const before = JSON.stringify(f.item); solved = { success: false, result: { reason: 'rejected' } };
+    assert.equal(editor.commitParameterEdit(f.item, 'annotation-expression', '=rollback'), false); assert.equal(JSON.stringify(f.item), before);
+    assert.equal(calls.at(-1), 'restore'); outcomes.push(JSON.stringify({ item: f.item, calls }));
+  }
+  assert.equal(outcomes[1], outcomes[0]);
+});
+
+test('owned drag retains pointer functions, resize receiver and argument boundary, live appearance methods and original errors', () => {
+  const outcomes = [];
+  for (const owned of [false, true]) {
+    const calls = [], result = {}, failure = new Error('resize failed'); let ready = false, appearanceReads = 0, currentAppearance;
+    const f = fixture((w, input) => w.AnnotationFeature.create({ ...input, readAppearance: () => {
+      assert.equal(ready, true, 'appearance is initialized after the drag factory'); appearanceReads++; return currentAppearance;
+    } }));
+    const appearance = { applyAnnotationStyleValue(item, key, height) {
+      assert.equal(this, appearance); assert.equal(arguments.length, 3); calls.push([item, key, height]); return result;
+    } };
+    function begin(id) { assert.equal(this, undefined); calls.push(['begin', id]); return result; }
+    function end(id) { assert.equal(this, undefined); calls.push(['end', id]); return result; }
+    const constrained = { begin }, pointer = { captureThenMark: begin, release: end };
+    const drag = owned ? f.feature.createDragForEditing({ constrained, pointer }) : f.feature.createDrag({
+      beginConstrainedDrag: constrained.begin, resizeText: (item, height) => currentAppearance.applyAnnotationStyleValue(item, 'textHeight', height),
+      beginPointer: pointer.captureThenMark, endPointer: pointer.release });
+    assert.equal(drag, f.drag); assert.deepEqual(calls, []); assert.equal(appearanceReads, 0); currentAppearance = appearance; ready = true;
+    assert.equal(f.ports.drag.beginConstrainedDrag, constrained.begin); assert.equal(f.ports.drag.beginPointer, pointer.captureThenMark); assert.equal(f.ports.drag.endPointer, pointer.release);
+    const resize = f.ports.drag.resizeText; assert.equal(resize.length, 2); assert.equal(resize(f.item, 12, 'ignored'), result);
+    assert.equal(calls[0][0], f.item); assert.equal(calls[0][1], 'textHeight'); assert.equal(calls[0][2], 12);
+    appearance.applyAnnotationStyleValue = function() { assert.equal(this, appearance); throw failure; };
+    assert.throws(() => resize(f.item, 14), error => error === failure);
+    const replacement = { applyAnnotationStyleValue() { assert.equal(this, replacement); return result; } }; currentAppearance = replacement;
+    assert.equal(resize(f.item, 16), result); assert.equal(appearanceReads, owned ? 3 : 0);
+    const start = f.ports.drag.beginPointer, stop = f.ports.drag.endPointer; assert.equal(start(7), result); assert.equal(stop(7), result);
+    outcomes.push(JSON.stringify(calls));
+  }
+  assert.equal(outcomes[1], outcomes[0]);
+});
+
+test('owned editor and drag preserve factory failure stages and stop before creating later owners', () => {
+  for (const owned of [false, true]) for (const stage of ['parameter-editing', 'text-editing', 'editor', 'drag']) {
+    let owner;
+    const f = fixture((w, input) => { owner = w; return w.AnnotationFeature.create(input); });
+    const failure = new Error(stage), keys = { 'parameter-editing': ['AnnotationParameterCommand', 'create'],
+      'text-editing': ['AnnotationCommand', 'createTextEditing'], editor: ['AnnotationInputController', 'create'], drag: ['AnnotationDrag', 'create'] };
+    const [name, method] = keys[stage]; owner[name][method] = () => { f.events.push(stage); throw failure; }; f.events.length = 0;
+    const create = stage === 'drag' ? () => owned ? f.feature.createDragForEditing({ constrained: {}, pointer: {} }) : f.feature.createDrag({})
+      : () => owned ? f.feature.createEditorForEditing({}) : f.feature.createEditor({});
+    assert.throws(create, error => error === failure);
+    const order = stage === 'drag' ? ['drag'] : ['parameter-editing', 'text-editing', 'editor'];
+    assert.deepEqual(f.events, order.slice(0, order.indexOf(stage) + 1));
+  }
+});
+
 test('editor layout uses live scale and preserves layout-first, text and leader metric fallback without changing boxes', () => {
   const f = fixture(); f.feature.createEditor({});
   f.state.layout = { x: 3, y: 4, fontSize: 2 }; f.state.scale = 5; f.events.length = 0;

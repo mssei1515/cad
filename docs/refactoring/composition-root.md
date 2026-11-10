@@ -1,5 +1,21 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：注記editor・dragの既存owner組立て（2026-11-10）
+
+AnnotationFeatureのcreateEditorForEditingは残りの設定をcopyし、保持するcurrentScope reader・Parameter namespaceのexpressionFromUserInput／expressionInputValue・ViewportのworldToCanvasScreenを既存createEditorへ接続する。Parameter readerはWorkspace.currentの同じ関数であり、操作時のParameter名確保と現在namespaceを読み、bound editing scopeへ置き換えない。editorの実controller／commit返却参照、構築順、guard・履歴・失敗時の復元を維持する。
+
+createDragForEditingはconstrained.beginとpointer.captureThenMark／releaseを既存createDragへ接続する。文字サイズ変更だけは保持済みreadAppearanceをresize操作時に一度呼び、その実ownerへapplyAnnotationStyleValue(item, "textHeight", height)をmember呼出しする。appearanceはdrag生成より後に公開されるため、生成時には読まない。二引数のresize callback、三引数のstyle操作、返値・例外と後段停止、pointer関数の同一性を保つ。raw createEditor／createDragと各低水準command／controller／renderの本体・明示callback API、生成・公開・bind順、通常UI・保存形式v26は不変。新state・cache・listener・module・汎用contextは追加しない。
+
+appからParameter reader・二つの入力変換関数・座標変換の選択と文字サイズ変更の詳細接続を除き、未使用の三別名も削除した。editorの構築入力は11→7、dragは4→2、root束縛486→483。app.jsは1,390→1,386行（4行減）、非空白944→940行、root300文。構築・接続492非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。annotationBoundsはBlockLayout生成時から必要でprepareForWorkspaceより前に渡されるため、既存hoisted橋渡しは残す。全体目標は未完了。
+
+追加単体三件で実AnnotationParameterCommandのParameter有効化／式変更・現在Workspaceの交換／rollbackとhelper参照、appearance生成前のdrag構築と無読取り／操作ごとの実owner交換・method receiver／引数／返値／例外、各factory失敗の同じ段階と後続停止を従来接続と比較する。controllerとdrag返却参照の試験は限定stubを使い、実UIはE2Eで確認する。ASTでrootの対象二call・三別名以外のroot全体／順、二factoryとreadAppearanceの受渡し以外の既存Feature本体、元のresize callbackと同じreader先・三引数、低水準module／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+初回E2Eでは、drag生成時に後段appearanceEditingを直接渡した変更により初期化順を壊し、起動待ちtimeoutを検出した。専用wrapper配下と確認したPlaywright CLIのprocess treeだけを停止し、exit 1／listeners 0を回収した。既存readAppearanceをFeatureへ受け渡し、resize callback内でだけ読む形に修正。appearance公開前にdragを生成する回帰条件を単体に追加し、修正後は日本語通常／英語dark／testの起動三経路がbrowser errorなし。初回ログ・入力hash・receiptはTEMP cad-annotation-editing-composition-initial-*へ保持し、修正後の構文・全単体・E2Eを再実行した。初回から全成功だったとは扱わない。
+
+関連単体44件、構文635file・全単体2,414件・関連E2E449件が成功（32file、7.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択32fileのtest list449件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-annotation-editing-composition-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、79b604cの全589件成功と区別する。
+
+基準develop 79b604c、作業branch codex/annotation-editing-composition、開始時週枠残量20%。直前79b604cの全E2E589件成功（22.3m）と今回の関連検証を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Hatch・描画順stackとFrameの段階的接続（2026-11-10）
 
 CanvasDisplayのscene.createHatchRenderingが返すprepareFrameは、既存createStackを明示呼出しして同じ実DrawingStackを生成し、そのstackと接続済みのcreateFrameを凍結recordで返す。後段createFrameは設定recordをcopyし、同じHatch描画関数とstack.drawDrawingStackを同じsceneの既存createFrameへ渡す。Frame生成ごとにstackを再生成せず、Frame／overlayの実返却参照と例外をそのまま返す。描画stateを複製せず、公開setter・新しい可変参照・cache・listenerや汎用app contextを追加しない。
