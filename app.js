@@ -148,7 +148,7 @@
     updateToolbar, normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory,
   });
   const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
-    guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
+    sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
   const { toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
   const operationSessions = createOperationSessions({
     snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
@@ -170,10 +170,10 @@
   const { highlight: selectionHighlight, clearing: selectionClearing, documentReset: documentCanvasReset } = createSelectionPresentation({
     projections: blockProjections, constraintReferences,
   });
-  const { sameConstraintDisplayElement } = selectionHighlight;
-  const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = window.ConstraintReferences.createFixedState({
-    currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement,
+  const fixedStateQueries = window.ConstraintReferences.createFixedState({
+    currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement: selectionHighlight.sameConstraintDisplayElement,
   });
+  const { findArcEndpointFixedConstraint, findLineFixedConstraint, pointLockedByLineFixed } = fixedStateQueries;
   const offsetSelection = window.OffsetFeature.createSelectionForEditing({
     editingScope: editingScopeBinding, sketches: sketchContext, selection: canvasSelection,
   });
@@ -842,10 +842,10 @@
   function updateToolbar() { toolbarView.update(); }
 
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
-    createCommitWithIntentForWorkspace: createConstraintCommit, createFixedEditing, constraintTargetHint, readOnlyDimensions,
+    createCommitWithIntentForWorkspace: createConstraintCommit, createFixedForWorkspace, constraintTargetHint, readOnlyDimensions,
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDragging: createConstraintInputWithDragging },
     controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForWorkspace({
-    document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, presentation,
+    document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, readServices: geometryReadServices, presentation,
     operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController,
     isGeometryMode, findLineFixedConstraint, clearSelection, updateToolbar, updateConstraintButtons,
     blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
@@ -909,9 +909,8 @@
 
 
 
-  const { operand: fixedOperandCommand, createSelection: createFixedSelection } = createFixedEditing({
-    operandElement, guardSketchProjectionShapeEdit, findArcEndpointFixedConstraint, arcEndpointPoint,
-    currentScope: workspace.current, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
+  const { operand: fixedOperandCommand, createSelectionForWorkspace: createFixedSelection } = createFixedForWorkspace({
+    projection: sketchProjectionFeature, fixedState: fixedStateQueries, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
   const { view: sketchTreeView, controller: sketchTreeController, menu: sketchContextController } = sketchEditing.createTreeForEditing({
@@ -1212,8 +1211,8 @@
 
 
   createFixedSelection({
-    blockDefinitionById, updateUI, recordHistory, snapshotModelState, restoreModelState, pushModelConstraint,
-    solveSketchAndDependents, acceptError: CONSTRAINT_ACCEPT_ERROR, refreshConstraintAnalysis,
+    checkpoint: editingCheckpoint, insertion: constraintInsertion, solving: sketchSolving,
+    acceptError: CONSTRAINT_ACCEPT_ERROR, refreshConstraintAnalysis, recordHistory,
   });
 
   const constraintControlBinding = createConstraintControlBinding();

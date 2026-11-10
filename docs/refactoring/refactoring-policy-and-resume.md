@@ -98,6 +98,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：固定操作の段階的なWorkspace組立て（2026-11-10）
+
+ConstraintEditing.createForWorkspaceのcreateFixedForWorkspaceは、既存のOperand／Selection固定commandへDocumentWorkspace・共通operand・Sketch投影guard・固定状態query・SelectionHighlightとcheckpoint／insertion／solving／catalog／Presentationを段階的に接続する。単独対象の生成後に実operandを公開し、後段createSelectionForWorkspaceが成功した時だけ既存fixedSelectionを更新する。Workspace.currentとbound editing scopeを混同せず、元のGeometry・Selection・checkpoint・Solver／履歴を共有する。裸のcallback、引数と返値・例外、guard／snapshot／復元／通知順、失敗時の以前のcommandを維持する。旧createFixedEditing／createSelectionとFixedToggleCommand本体、通常UI・保存形式v26は不変。新state／setter／cache・汎用contextや新fileを追加しない。 app.jsは1,450→1,449行（1行減）。rootでは既存ownerを接続し、低水準の依存選択を既存ConstraintEditingへ集める。
+
+追加単体3件で実FixedToggleCommandを使い、二段階のcold生成、同じScope／Selection／Geometry・checkpoint／Solver、Block固定と履歴、Line固定追加／解除、投影guard拒否とcallback例外、生成失敗時の以前のOperand／Selectionを新旧比較した。ASTでrootの変更範囲と両段のport対応・生成順、既存factory本体・FixedToggle／Solver／保存／E2E不変、新しい未使用／未束縛参照なしを照合する。関連単体66件、構文632file・全単体2,357件・関連E2E273件が成功（15file、4.1m、exit 0）。追加の固定専用E2E12件も成功（2file、exit 0）。二つの実行とも702製品／test／検証入力と開始HEAD不変、test list一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-fixed-editing-assembly-{focused,check,unit,e2e,proof,smoke}.log、cad-fixed-editing-cases-e2e.logと検証JSONに証跡を保持する。全E2Eの再実行ではなく、45cc3a7の全589件成功とは区別する。
+
+基準develop 34f939d、作業branch codex/fixed-editing-assembly、開始時週枠残量31%。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：注記の作図スナップ候補の所有（2026-11-10）
 
 AnnotationFeature.drawingAnchorsが、liveなGeometryReadServicesの注記一覧からSketch可視性と注記visibleを絞り、既存placementAnchorで作図スナップ候補を生成する。rootは完成したreaderをDrawingSnapへ接続し、注記一覧と可視性のraw aliasを保持しない。filter完了後にmapする順、非表示の短絡、投影／inactive Sketchを含む元の候補方針、注記Objectの同一性と新しい候補record、bare callbackと例外を維持する。生成時にscope／注記／座標を読まず、新cache・state・modelを追加しない。従来factory／描画／DrawingSnapの再判定／保存形式v26とUIを変更しない。 app.jsは1,451→1,450行（1行減）。既存AnnotationFeatureに責務を集め、新fileやフォルダを増やさない。
