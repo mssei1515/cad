@@ -1174,7 +1174,8 @@
     const { readSelectedGeometry: readTestSelectedGeometry, createApiForEditing: createSelectionTestApi } = window.CanvasSelectionTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation, clearSelection,
     });
-    const constraintTestFactories = window.ConstraintTestDriver.createBrowserFactories({
+    const { readStatuses: readTestConstraintStatuses, constraints: constraintTestSupport,
+      referenceCases: constraintReferenceCases } = window.ConstraintTestDriver.createBrowserSupport({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, scopeQuery: solveScopeQuery,
       solving: sketchSolving, analysis: constraintAnalysis, solver, referenceState: referenceConstraintState, blockQueries: blockEditingQueries,
       operandValues: constraintOperandValues, interaction: canvasInteraction, sessions: operationSessions, placement: dimensionPlacement,
@@ -1182,7 +1183,6 @@
       commitNewConstraint, markReferenceConstraint, serializeModel, serializeConstraint, resolveConstraintIntent, resetModelState,
       pushModelConstraint, fitAllGeometryToViewport, acceptError: CONSTRAINT_ACCEPT_ERROR,
     });
-    const { readStatuses: readTestConstraintStatuses, publicAPI: constraintModelTestApi } = constraintTestFactories.createModelSupport();
     const { execution: dragExecutionSupport, createResponsiveForEditing: createResponsiveDragFixture } = window.GeometryDragTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, scopeQuery: solveScopeQuery, feature: geometryDragFeature, solver,
       modelTypes: window.GeometrySolver, arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
@@ -1226,12 +1226,9 @@
       referenceState: referenceConstraintState, document, canvas, getComputedStyle: element => getComputedStyle(element),
       serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter,
     });
-    const referenceLineMove = constraintTestFactories.createReferenceLineMove();
-    const dependencyOrderFixture = constraintTestFactories.createDependencyOrderFixture();
     const cyclicReferenceFixture = documentTestSupport.createCyclicReference({
       resetModelState, markReferenceConstraint, serializeModel, loadModelData, analysis: constraintAnalysis, referenceState: referenceConstraintState,
     });
-    const constraintCaseTestApi = constraintTestFactories.createEditingCases();
     const blockTestSupport = window.BlockTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, blocks: blockEditingFeature,
       interaction: canvasInteraction, sessions: operationSessions, presentation, placement: blockPlacementCommand, solver, canvas, viewport,
@@ -1268,8 +1265,6 @@
       clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection: propertiesTestSupport.appearanceTestAction.set, version: CURRENT_JSON_VERSION,
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
     });
-    const constraintInputObservation = constraintTestFactories.createInputObservation();
-    const constraintIntentTestDriver = constraintTestFactories.createIntentResolution();
     const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
       readMode: drawOperationLifecycle.readMode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
@@ -1304,7 +1299,6 @@
       clipboard: clipboardFeature, blocks: blockEditingFeature, presentation, viewport, dimensionFromAnchor,
       readSelected: readTestSelectedGeometry, readHistory: readTestHistory, resetModelState, serializeModel, pushModelConstraint, resetHistory,
     });
-    const forcedConstraintCommit = constraintTestFactories.createForcedCommit();
     const drawingOrderTestApi = window.DrawingOrderTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
       blocks: blockEditingFeature, viewport, canvas, fit: drawingFit, resetModelState, resetHistory, serializeModel, normalizeGeometryInstance,
@@ -1329,12 +1323,11 @@
       splines: { splineTestDriver, splineTransferDriver },
       authoring: { hatchTestApi, drawingOrderTestApi, offsetTestSupport, trimLineTransferFixture, trimConstructionFixture,
         trimDiameterFixture },
-      constraints: { forcedConstraintCommit, constraintInputObservation, constraintIntentTestDriver, constraintModelTestApi,
-        constraintCaseTestApi },
+      constraints: constraintTestSupport,
       clipboard: clipboardTestSupport,
       documents: { documentTestApi, readTestHistory, cyclicReferenceFixture },
       derived: derivedInstanceTestApi,
-      sketches: { sketchProjectionTestSupport, sketchTreeTestApi, sketchDeletionFixture, referenceLineMove, dependencyOrderFixture },
+      sketches: { ...constraintReferenceCases, sketchProjectionTestSupport, sketchTreeTestApi, sketchDeletionFixture },
       images: { referenceImageTestObservation, referenceImageTestImport, referenceImageBlockFixture },
       dimensions: { dimensionDisplaySupport, dimensionFixtureSupport, dimensionInteractionSupport },
       parameters: { parameterFixture, parameterObservation, parameterInteraction },
