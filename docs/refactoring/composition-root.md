@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：編集scope切替・ID予約の既存owner接続（2026-11-10）
+
+BlockEditingFeature.createForWorkspaceは、activateScopeがundefinedのときだけ保持済みEditingScopeBindingへ可変長でactivateをmember呼出しする関数を選び、reserveScopeSequencesがundefinedのときだけDocumentWorkspace.reservation.scopeへdraft一引数で委譲する関数を選ぶ。DocumentEditingReset.createForWorkspaceもactivateEditingScopeがundefinedのときだけ受け取ったeditingScopeのactivateを同じ可変長で呼ぶ。明示callbackとnullはそのまま保持する。関数を生成した時点ではscope切替・ID予約・owner method読取りを行わず、操作時のreceiver・引数数／返値／例外を維持する。
+
+Block編集開始／復帰とDocument resetは同じ実Workspace・EditingScopeBinding・Solver・DocumentのID ownerを使う。Geometry／Document IDの予約、host復帰前後の参照、resetの二段階と途中失敗時の残存状態は既存ownerに残す。raw createとBlockEditorSession／EditingScopeBinding／DocumentIds／reset本体、生成・公開・bind順、UI・保存形式v26は不変。新state・setter・cache・moduleや汎用contextを追加しない。readViewportとBlock履歴生成は後段ownerを遅延参照するため、rootの既存callbackを維持する。
+
+rootのactivateEditingScope／reserveBlockEditorSequencesの二delegateと未使用のreservation別名を除き、Block構築入力は12→10となる。Document resetへは既存EditingScopeBindingを接続する。app.jsは1,386→1,384行（2行減）、非空白940→938行、root300→298文・483→480束縛。構築・接続492非空白行、別名・設定121行、委譲50行、条件付きtest hooks192行。数百行への全体目標は未完了。
+
+追加単体四件で、実Binding／SolverとID reservationを使うBlock開始・host復帰、同じGeometry参照とhatch／annotation採番、activate／cache／予約途中の同じ例外と部分状態、可変長activationと予約一引数・member receiver／返値・明示callback／null、Document reset前の同期と失敗時の未消去を旧delegate接続と比較する。ASTで対象二delegate・一別名と対応port以外のroot全体・順、二moduleのdefaultとreset activation受渡し以外の全本体、元delegate本体／引数／returnとの一致、低水準module／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体51件、構文635file・全単体2,418件・関連E2E449件が成功（32file、7.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択32fileのtest list449件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-editing-scope-operation-ownership-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、79b604cの全589件成功と区別する。
+
+基準develop 0ca5e5e、作業branch codex/editing-scope-operation-ownership、開始時週枠残量19%。直前0ca5e5eの修正後関連449件成功と、全体E2Eの最新基準79b604c（589件成功、22.3m）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：注記editor・dragの既存owner組立て（2026-11-10）
 
 AnnotationFeatureのcreateEditorForEditingは残りの設定をcopyし、保持するcurrentScope reader・Parameter namespaceのexpressionFromUserInput／expressionInputValue・ViewportのworldToCanvasScreenを既存createEditorへ接続する。Parameter readerはWorkspace.currentの同じ関数であり、操作時のParameter名確保と現在namespaceを読み、bound editing scopeへ置き換えない。editorの実controller／commit返却参照、構築順、guard・履歴・失敗時の復元を維持する。

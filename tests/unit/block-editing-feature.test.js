@@ -73,6 +73,86 @@ function commands(f, overrides = {}, build = (feature, options) => feature.creat
   }) };
 }
 
+function scopeOperationFixture(owned, overrides = {}) {
+  const probe = {}; let binding, geometryIds, documentIds, scopeOwner, reservationOwner;
+  const f = fixture({ sharedScope: true, buildFeature(options, { state, events }) {
+    state.scopeFailure = null; state.scopeError = new Error('scope operation failed'); state.ownerCalls = [];
+    const effect = name => { assert.equal(state.ready, true); events.push(name); if (state.scopeFailure === name) throw state.scopeError; };
+    binding = w.EditingScopeBinding.create({ workspace: options.workspace, Solver: g.ConstraintSolver,
+      closeSketchContext: () => effect('close'), resetSketchMove: () => effect('move'), clearGeometryReads: () => effect('reads'), invalidateProjection: () => effect('projection') });
+    geometryIds = w.GeometryIds.create(); documentIds = w.DocumentIds.create();
+    const reservation = w.DocumentIds.createReservation({ geometryIds, documentIds, nextHatchIndex: () => { effect('hatch'); return binding.current.nextHatchIndex; } });
+    scopeOwner = { get current() { return binding.current; }, activate() {
+      assert.equal(this, scopeOwner); state.ownerCalls.push(['activate', Array.from(arguments)]); return binding.activate(...arguments);
+    } };
+    reservationOwner = { scope() { assert.equal(this, reservationOwner); assert.equal(arguments.length, 1);
+      state.ownerCalls.push(['reserve', Array.from(arguments)]); return reservation.scope(...arguments); } };
+    const input = { documentWorkspace: { document: options.documentModel, workspace: options.workspace, documentIds,
+      reservation: reservationOwner, sketches: { activeSketchId: options.activeSketchId },
+      parameters: { numericDimensionExpression: options.numericDimensionExpression, ensureParameterNamespace: options.ensureParameterNamespace } },
+      readServices: { catalog: options.catalog, projections: options.projections, instances: options.instances, reads: { blockProjectionBundles: options.blockProjectionBundles } },
+      rebinding: options.rebinding, editingScope: scopeOwner, normalizeGeometryInstance: options.normalizeGeometryInstance,
+      readViewport: options.readViewport, createHistory: options.createHistory,
+      ...(!owned ? { activateScope: (...args) => scopeOwner.activate(...args), reserveScopeSequences: draft => reservationOwner.scope(draft) } : {}), ...overrides };
+    const original = w.BlockEditorSession;
+    w.BlockEditorSession = { ...original, create(options) { probe.session = options; return original.create(options); } };
+    try { return w.BlockEditingFeature.createForWorkspace(input); } finally { w.BlockEditorSession = original; }
+  } });
+  assert.deepEqual(f.events, []); assert.deepEqual(f.state.ownerCalls, []); f.state.ready = true;
+  return { ...f, probe, binding, geometryIds, documentIds, scopeOwner, reservationOwner };
+}
+
+test('owned Block scope operations share the real binding, Solver and reservation through open and host restoration', () => {
+  const outcomes = [];
+  for (const owned of [false, true]) {
+    const f = scopeOperationFixture(owned), hostPoint = f.geometry(f.document), draft = scope('BD7'), point = f.geometry(draft);
+    point.id = 'P29'; draft.annotations.push({ id: 'AN9' }); draft.hatches.push({ id: 'H11' }); draft.nextHatchIndex = 40;
+    const session = f.feature.session.open(draft);
+    assert.equal(f.workspace.current(), draft); assert.equal(f.binding.current, draft); assert.equal(f.binding.solver.model, draft);
+    assert.equal(draft.lines[0].p1, point); assert.equal(f.document.points[0], hostPoint);
+    assert.equal(f.geometryIds.peek('point'), 30); assert.equal(f.documentIds.peek('annotation'), 10); assert.equal(f.documentIds.peek('hatch'), 40);
+    f.feature.session.restoreHost(session);
+    assert.equal(f.workspace.current(), f.document); assert.equal(f.binding.current, f.document); assert.equal(f.binding.solver.model, f.document);
+    assert.equal(f.document.points[0], hostPoint); assert.equal(f.feature.session.current, null);
+    outcomes.push(JSON.stringify({ events: f.events, ids: f.documentIds.snapshot() }));
+  }
+  assert.equal(outcomes[1], outcomes[0]);
+});
+
+test('owned Block scope and reservation failures retain the same original error and partial activation and ID state', () => {
+  for (const phase of ['close', 'reads', 'hatch']) {
+    const outcomes = [];
+    for (const owned of [false, true]) {
+      const f = scopeOperationFixture(owned), draft = scope('BD1'); f.geometry(draft); draft.annotations.push({ id: 'AN9' }); draft.hatches.push({ id: 'H11' });
+      f.state.scopeFailure = phase;
+      assert.throws(() => f.feature.session.open(draft), error => error === f.state.scopeError);
+      assert.equal(f.feature.session.current.draft, draft);
+      assert.equal(f.workspace.current(), phase === 'close' ? f.document : draft); assert.equal(f.binding.current, f.workspace.current());
+      assert.equal(f.binding.solver.model, f.workspace.current());
+      assert.equal(f.geometryIds.peek('point'), phase === 'hatch' ? 3 : 1); assert.equal(f.documentIds.peek('annotation'), 1);
+      assert.equal(f.documentIds.peek('hatch'), phase === 'hatch' ? 12 : 1);
+      outcomes.push(JSON.stringify({ events: f.events, ids: f.documentIds.snapshot() }));
+    }
+    assert.equal(outcomes[1], outcomes[0], phase);
+  }
+});
+
+test('Block operation defaults keep activation rest arguments, reservation single argument and explicit callbacks including null', () => {
+  const f = scopeOperationFixture(true), target = scope('BD2'), extra = {};
+  const activate = f.probe.session.activateScope, reserve = f.probe.session.reserveScopeSequences;
+  assert.equal(activate.length, 0); assert.equal(reserve.length, 1); assert.equal(activate(target, extra), target); assert.equal(reserve(target, extra), undefined);
+  assert.equal(f.state.ownerCalls[0][1].length, 2); assert.equal(f.state.ownerCalls[0][1][1], extra);
+  assert.equal(f.state.ownerCalls[1][1].length, 1); assert.equal(f.state.ownerCalls[1][1][0], target);
+  const result = {}, calls = [];
+  function explicit() { 'use strict'; assert.equal(this, undefined); calls.push(Array.from(arguments)); return result; }
+  const overridden = scopeOperationFixture(true, { activateScope: explicit, reserveScopeSequences: explicit });
+  const explicitActivate = overridden.probe.session.activateScope, explicitReserve = overridden.probe.session.reserveScopeSequences;
+  assert.equal(explicitActivate, explicit); assert.equal(explicitReserve, explicit);
+  assert.equal(explicitActivate(target, extra), result); assert.equal(explicitReserve(target), result); assert.equal(calls.length, 2);
+  const empty = scopeOperationFixture(true, { activateScope: null, reserveScopeSequences: null });
+  assert.equal(empty.probe.session.activateScope, null); assert.equal(empty.probe.session.reserveScopeSequences, null); assert.deepEqual(empty.state.ownerCalls, []);
+});
+
 test('Block composition defers registry, viewport, sequences and history until the corresponding operation', () => {
   const f = fixture(); assert.deepEqual(f.events, []); assert.equal(f.state.definitionSeq, 1); assert.equal(f.state.history, 0);
   assert.equal(Object.isFrozen(f.feature), true); f.state.ready = true;
