@@ -79,14 +79,30 @@
       }
       function createEditingInput(options) {
         const inputs = createInputForEditing(options);
-        const { referenceImage, drawingCommands: { fillet, offset } } = options;
+        const { referenceImage, authoring, sceneQueries, sameArcEndpoint, instanceSourceCommand, drawingCommands: { fillet, offset } } = options;
         function bindPointer(options) {
           return bindEditingPointer(inputs, { ...options, referenceImageInteraction: referenceImage, fillet, offset });
         }
         function createKeyboard(options) {
           return createKeyboardForEditing(inputs, { ...options, referenceImage, offset });
         }
-        return Object.freeze({ bindPointer, createKeyboard });
+        function preparePointerForEditing({ splineEditing, dimensionValues, annotationInput }) {
+          const blankGesture = authoring.createBlankGesture({ lifecycle, pending, constraintTargets: targets,
+            splineEditing, dimensionValues, offset, annotationInput, updateGeometrySelectionUI });
+          function createBinding({ canvasNavigation, recordHistory, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
+            hatch, spline, blockPlacement, dimensions, expressions, discardMoves, enterBlock, closeContextMenu,
+            hitBlockRotationHandle, hitAnnotationTarget, createCanvasInputBinding, readPngExportCommand, scheduler }) {
+            const { press: query, hover: pointerHover, isBlankCommandPanelPoint } = sceneQueries.createInteraction({
+              canvasHover: hover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget,
+              blankCanvasGesture: blankGesture, instanceSourceCommand, hatchCommand: hatch });
+            bindPointer({ canvasNavigation, recordHistory, pointerHover, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
+              hatch, spline, splineEditing, blockPlacement, annotationInput, dimensionValues, dimensions, expressions, discardMoves, enterBlock,
+              query, closeContextMenu, blankGesture });
+            return createCanvasInputBinding({ readPngExportCommand, blankCanvasGesture: blankGesture, isBlankCommandPanelPoint, scheduler });
+          }
+          return Object.freeze({ blankGesture, createBinding });
+        }
+        return Object.freeze({ bindPointer, createKeyboard, preparePointerForEditing });
       }
       function createCommandCancellation({ instances, constraints, blockPlacementCommand, restoreBlockPlacementPropertiesPanel, updateUI }) {
         return window.CanvasCommandCancellation.create({

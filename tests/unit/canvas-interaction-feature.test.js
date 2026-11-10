@@ -134,9 +134,9 @@ function editingInputsFixture(composed,probe={}){
   const owner=w[name];w[name]={...owner,create(...args){probe.order.push(name);if(probe.failAt===name)throw probe.error;return owner.create(...args);}};
  }
  const raw=w.CanvasCommandInputs;w.CanvasCommandInputs={...raw,createFeature(options){probe.ports=options;const actual=raw.createFeature(options);probe.actualInputs=actual;
-  if(!probe.stubBindings)return actual;
-  const owner={...actual,bindPointerForEditing(pointer,options){assert.equal(this,owner);probe.pointer={pointer,options};if(probe.bindError)throw probe.bindError;return probe.result;},
-   createKeyboard(options){assert.equal(this,owner);probe.keyboard=options;if(probe.keyboardError)throw probe.keyboardError;return probe.result;}};
+  if(!probe.stubBindings&&!probe.observeBindings)return actual;
+  const owner={...actual,bindPointerForEditing(pointer,options){assert.equal(this,owner);probe.pointer={pointer,options};if(probe.bindError)throw probe.bindError;return probe.observeBindings?actual.bindPointerForEditing(pointer,options):probe.result;},
+   createKeyboard(options){assert.equal(this,owner);probe.keyboard=options;if(probe.keyboardError)throw probe.keyboardError;return probe.observeBindings?actual.createKeyboard(options):probe.result;}};
   return probe.boundInputs=owner;}};
  const inputs=composed==='owned'?s.createEditingInput(source):composed?s.createInputForEditing(source):s.createInputFeature({document:source.document,canvas:source.canvas,updateUI:source.updateUI,
   annotationCommand:annotationFeature.command,annotationDrag:source.annotationDrag,startAnnotationAnchorConstraint:annotationFeature.startAnchorConstraint,
@@ -448,7 +448,7 @@ test('construction owner assembly preserves command creation and callback/reset 
 
 test('Owned Canvas input shares its private feature, pointer identity and command dependencies across separately generated bindings',()=>{
  const f=editingInputsFixture('owned',{stubBindings:true,result:{}}),{inputs:api,probe:p,source:o,sessions:s,foundation:b}=f;
- assert.equal(Object.isFrozen(api),true);assert.deepEqual(Object.keys(api),['bindPointer','createKeyboard']);assert.equal(api.inputs,undefined);
+ assert.equal(Object.isFrozen(api),true);assert.deepEqual(Object.keys(api),['bindPointer','createKeyboard','preparePointerForEditing']);assert.equal(api.inputs,undefined);
  assert.equal(p.pointer,undefined);assert.equal(p.keyboard,undefined);
  const pointerOptions={query:{},canvasNavigation:{}};
  assert.equal(api.bindPointer(pointerOptions),p.result);
@@ -485,4 +485,127 @@ test('Owned Canvas input preserves real pointer placement, keyboard pending canc
   keyboard.dispose();keyboard.dispose();assert.equal(listeners.size,0);traces.push(JSON.stringify(events));
  }
  assert.equal(traces[1],traces[0]);
+});
+
+function pointerAssemblyFixture(composed, failure) {
+ const probe={observeBindings:true},f=editingInputsFixture('owned',probe),{w,source:o,sessions:s,foundation:b,state}=f;
+ const trace=[],listeners=new Map(),marker=new Error('pointer assembly '+failure),snapshot={};state.ready=false;
+ const step=name=>{trace.push(name);if((state.failureStage??failure)===name)throw marker;};
+ const splineEditing={current:null},dimensionValues={submit(){}},annotationInput={finish(){},start(){}};
+ o.authoring.createBlankGesture=function(ports){assert.equal(this,o.authoring);step('blank');snapshot.blankPorts=ports;
+  return snapshot.blank=w.BlankCanvasGesture.create({getMode:ports.lifecycle.readMode,getPending:()=>ports.pending.current,
+   getPendingConstraint:()=>ports.constraintTargets.command,getSplineEditSession:()=>ports.splineEditing.current,
+   getLineCommand:()=>({}),getTransientAuthoring:()=>({}),getTime:()=>100,hypot2:(x,y)=>Math.hypot(x,y),
+   hasActiveDrawOperation:()=>false,hasSelection:b.selection.hasSelection,updateGeometrySelectionUI:ports.updateGeometrySelectionUI});};
+ let querySequence=0;
+ o.sceneQueries.createInteraction=function(ports){assert.equal(this,o.sceneQueries);step('query');snapshot.scenePorts=ports;
+  assert.equal(state.readBlank(),snapshot.blank);state.readBlank().resetCandidate();
+  const id=++querySequence;
+  return snapshot.scene={press:{read:()=>{f.events.push(['query',id]);return {};}},hover:{updateConstraint:()=>false,updateOrdinary:()=>false},isBlankCommandPanelPoint:()=>true};};
+ let registrations=0;
+ o.canvas.addEventListener=function(type,listener){assert.equal(this,o.canvas);assert.equal(state.readBinding(),snapshot.native);trace.push('listen:'+type);
+  if(failure==='native-bind'&&++registrations===3)throw marker;listeners.set(type,listener);};
+ const navigation={movePan:()=>false,doubleClickFit(){},zoom(){}};
+ const scheduler={flush(){assert.equal(state.readBinding(),snapshot.native);f.events.push('flush');},schedule(){}};
+ const hatch={};Object.defineProperty(hatch,'updateHatchPreview',{get(){step('pointer');return ()=>{};}});
+ const readPngExportCommand=()=>state.png;
+ function createCanvasInputBinding(ports){'use strict';assert.equal(this,undefined);step('native');snapshot.nativePorts=ports;
+  assert.throws(()=>state.readBinding(),error=>error.name==='ReferenceError');assert.equal(state.readBlank(),snapshot.blank);
+  const routing=w.CanvasInputBinding.createCommandRouting({pointer:s.pointer,readCommandPanel:()=>state.panel,readPngExportCommand:ports.readPngExportCommand,
+   blankCanvasGesture:ports.blankCanvasGesture,canvasScreenPoint:()=>({x:0,y:0}),canvasPoint:()=>f.point,isBlankCommandPanelPoint:ports.isBlankCommandPanelPoint,
+   screenToWorld:()=>f.point,navigation});
+  return snapshot.native=w.CanvasInputBinding.create({canvas:o.canvas,pointer:routing,scheduler:ports.scheduler,navigation,
+   profileCommit:work=>work(),closeContextMenu:()=>f.events.push('close-native'),afterZoom(){},screenToWorld:()=>f.point,formatCoordinate:String,coordinateStatus:()=>null});
+ }
+ function assemble(){
+  state.readBlank=()=>blankCanvasGesture;state.readBinding=()=>canvasInputBinding;
+  const prepared=composed?f.inputs.preparePointerForEditing({splineEditing,dimensionValues,annotationInput}):
+   {blankGesture:o.authoring.createBlankGesture({lifecycle:b.lifecycle,pending:s.pending,constraintTargets:s.targets,
+    splineEditing,dimensionValues,offset:o.drawingCommands.offset,annotationInput,updateGeometrySelectionUI:()=>f.events.push('ui')})};
+  const {blankGesture:blankCanvasGesture}=prepared;
+  const ports={canvasNavigation:navigation,recordHistory:()=>f.events.push('history'),updatePendingDistanceRetargetHover:()=>{},hitDimension:()=>null,hitSketchIdentityElement:()=>null,
+   hatch,spline:{},blockPlacement:{},dimensions:{},expressions:{pointerReferences:{}},discardMoves(){},enterBlock(){},closeContextMenu:()=>f.events.push('close'),
+   hitBlockRotationHandle:()=>null,hitAnnotationTarget:()=>null,createCanvasInputBinding,readPngExportCommand,scheduler};
+  function legacy(){
+   const scene=o.sceneQueries.createInteraction({canvasHover:b.hover,sameArcEndpoint:o.sameArcEndpoint,hitBlockRotationHandle:ports.hitBlockRotationHandle,
+    hitAnnotationTarget:ports.hitAnnotationTarget,blankCanvasGesture,instanceSourceCommand:o.instanceSourceCommand,hatchCommand:hatch});
+   f.inputs.bindPointer({canvasNavigation:navigation,recordHistory:ports.recordHistory,pointerHover:scene.hover,updatePendingDistanceRetargetHover:ports.updatePendingDistanceRetargetHover,
+    hitDimension:ports.hitDimension,hitSketchIdentityElement:ports.hitSketchIdentityElement,hatch,spline:ports.spline,splineEditing,blockPlacement:ports.blockPlacement,
+    annotationInput,dimensionValues,dimensions:ports.dimensions,expressions:ports.expressions,discardMoves:ports.discardMoves,enterBlock:ports.enterBlock,
+    query:scene.press,closeContextMenu:ports.closeContextMenu,blankGesture:blankCanvasGesture});
+   return createCanvasInputBinding({readPngExportCommand,blankCanvasGesture,isBlankCommandPanelPoint:scene.isBlankCommandPanelPoint,scheduler});
+  }
+  const canvasInputBinding=composed?prepared.createBinding(ports):legacy();
+  return {blankCanvasGesture,canvasInputBinding,ports,recreate:composed?()=>prepared.createBinding(ports):legacy};
+ }
+ function keyboard(){step('dimension-bind');step('keyboard-create');const keys=new Map();
+  const input=f.inputs.createKeyboard({window:{addEventListener:(type,listener)=>{trace.push('keyboard-bind');keys.set(type,listener);},removeEventListener:type=>keys.delete(type)},
+   menus:{closeSketch:()=>false,canvasVisible:()=>false},sketchMove:{active:false},constraintStatusView:{hold:()=>false},dimensionInput:{handleKey:()=>false},shortcuts:{},
+   projection:{commit(){}},constraints:{cancel(){f.events.push('constraint-cancel');},completeLineLength:()=>false},spline:{finalize(){},removeLast(){}},hatch:{finish(){}},
+   splineEditing,blockPlacement:{},isTextEditingTarget:()=>false,deleteSelection:()=>false});input.start();return {input,keys};
+ }
+ assert.deepEqual(trace,[]);assert.deepEqual(f.events,[]);return {...f,trace,listeners,snapshot,marker,assemble,keyboard};
+}
+test('two-stage pointer assembly publishes blank state before query, keeps shared identities and returns an unbound native component',()=>{
+ const traces=[];for(const composed of [false,true]){
+  const f=pointerAssemblyFixture(composed),result=f.assemble(),{snapshot:p,sessions:s,foundation:b}=f;
+  assert.equal(Object.isFrozen(result.canvasInputBinding),true);assert.equal(result.canvasInputBinding,p.native);assert.equal(f.listeners.size,0);
+  assert.deepEqual(f.trace,['blank','query','pointer','native']);assert.deepEqual(f.events,[]);
+  assert.equal(p.blankPorts.lifecycle,b.lifecycle);assert.equal(p.blankPorts.pending,s.pending);assert.equal(p.blankPorts.constraintTargets,s.targets);
+  assert.equal(p.blankPorts.offset,f.source.drawingCommands.offset);assert.equal(p.scenePorts.canvasHover,b.hover);assert.equal(p.scenePorts.blankCanvasGesture,p.blank);
+  assert.equal(p.scenePorts.sameArcEndpoint,f.source.sameArcEndpoint);assert.equal(p.scenePorts.instanceSourceCommand,f.source.instanceSourceCommand);
+  assert.equal(f.probe.pointer.pointer,s.pointer);assert.equal(f.probe.pointer.options.query,p.scene.press);assert.equal(f.probe.pointer.options.pointerHover,p.scene.hover);
+  assert.equal(f.probe.pointer.options.blankGesture,p.blank);assert.equal(p.nativePorts.blankCanvasGesture,p.blank);
+  assert.equal(p.nativePorts.readPngExportCommand,result.ports.readPngExportCommand);assert.equal(p.nativePorts.scheduler,result.ports.scheduler);
+  assert.equal(p.nativePorts.isBlankCommandPanelPoint,p.scene.isBlankCommandPanelPoint);
+  f.state.ready=true;result.canvasInputBinding.bind();assert.equal(f.listeners.size,8);const key=f.keyboard();key.input.dispose();traces.push(f.trace);
+ }assert.deepEqual(traces[1],traces[0]);
+});
+test('two-stage pointer assembly preserves native pending placement, panel-before-PNG priority, movement and keyboard cancellation',()=>{
+ const traces=[];for(const composed of [false,true]){
+  const f=pointerAssemblyFixture(composed),{canvasInputBinding:native}=f.assemble();f.state.ready=true;native.bind();
+  const event={button:0,offsetX:2,offsetY:3,preventDefault:()=>f.events.push('prevent')};
+  f.sessions.pending.replace({type:'annotation-text-place',annotationDraft:true});f.listeners.get('pointerdown')(event);
+  assert.equal(f.sessions.pointer.readLastPointer(),f.point);assert.equal(f.events.find(e=>Array.isArray(e)&&e[0]==='text')[1],f.point);
+  f.events.length=0;f.state.png={active:true,pick:point=>{assert.equal(point,f.point);f.events.push('png-pick');},move:()=>f.events.push('png-move')};
+  f.state.panel={active:true,canvasPress:()=>{f.events.push('panel');return true;},canvasMove:()=>f.events.push('panel-move')};
+  f.listeners.get('pointerdown')(event);assert.deepEqual(f.events,['flush','panel','prevent']);f.listeners.get('dblclick')(event);assert.deepEqual(f.events,['flush','panel','prevent','flush','prevent']);
+  f.state.panel=null;f.listeners.get('pointerdown')(event);assert.equal(f.events.at(-1),'png-pick');native.processMove({offsetX:2,offsetY:3,shiftKey:false});assert.equal(f.events.at(-1),'png-move');
+  f.state.png=null;f.sessions.pending.replace({type:'offset-value'});f.events.length=0;const keyboard=f.keyboard();
+  keyboard.keys.get('keydown')({key:'Escape',target:{},preventDefault:()=>f.events.push('prevent')});assert.equal(f.sessions.pending.current,null);
+  assert.equal(f.events.includes('constraint-cancel'),false);keyboard.input.dispose();traces.push(JSON.stringify({events:f.events,trace:f.trace}));
+ }assert.equal(traces[1],traces[0]);
+});
+test('two-stage pointer assembly preserves construction failures and publication without rolling back a connected pointer',()=>{
+ for(const stage of ['blank','query','pointer','native']){
+  const traces=[];for(const composed of [false,true]){
+   const f=pointerAssemblyFixture(composed,stage);assert.throws(()=>f.assemble(),error=>error===f.marker);assert.equal(f.listeners.size,0);
+   assert.throws(()=>f.state.readBinding(),error=>error.name==='ReferenceError');
+   if(stage==='blank')assert.throws(()=>f.state.readBlank(),error=>error.name==='ReferenceError');else assert.equal(f.state.readBlank(),f.snapshot.blank);
+   if(stage==='native'){
+    f.state.ready=true;f.sessions.pending.replace({type:'annotation-text-place',annotationDraft:true});f.sessions.pointer.down({button:0,preventDefault(){}});
+    assert.equal(f.events.some(e=>Array.isArray(e)&&e[0]==='text'),true);
+   }
+   traces.push(JSON.stringify({trace:f.trace,events:f.events}));
+  }assert.equal(traces[1],traces[0]);
+ }
+});
+test('two-stage pointer assembly leaves partial native registrations and the published component intact on bind failure',()=>{
+ for(const composed of [false,true]){
+  const f=pointerAssemblyFixture(composed,'native-bind'),{canvasInputBinding:native}=f.assemble();f.state.ready=true;
+  assert.throws(()=>native.bind(),error=>error===f.marker);assert.equal(f.listeners.size,2);assert.equal(f.state.readBinding(),native);assert.equal(f.state.readBlank(),f.snapshot.blank);
+  f.sessions.pending.replace({type:'annotation-text-place',annotationDraft:true});f.sessions.pointer.down({button:0,preventDefault(){}});
+  assert.equal(f.events.some(e=>Array.isArray(e)&&e[0]==='text'),true);
+ }
+});
+
+test('two-stage pointer assembly keeps the prior controller if a later pointer construction fails',()=>{
+ for(const composed of [false,true]){
+  const f=pointerAssemblyFixture(composed),result=f.assemble();f.state.failureStage='pointer';
+  assert.throws(()=>result.recreate(),error=>error===f.marker);assert.equal(f.state.readBinding(),result.canvasInputBinding);
+  f.state.ready=true;f.sessions.pending.replace({type:'annotation-text-place',annotationDraft:true});f.events.length=0;
+  f.sessions.pointer.down({button:0,preventDefault(){}});
+  assert.deepEqual(f.events.find(e=>Array.isArray(e)&&e[0]==='query'),['query',1]);
+  assert.equal(f.events.some(e=>Array.isArray(e)&&e[0]==='text'),true);
+ }
 });

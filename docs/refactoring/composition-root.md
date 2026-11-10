@@ -1,5 +1,16 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Canvas pointer構築の二段階所有（2026-11-10）
+
+CanvasInteractionFeatureのcreateEditingInputが返すpreparePointerForEditingは、同じauthoring・Lifecycle／Pending／Constraint target・offsetから実BlankCanvasGestureを生成して返す。後段createBindingが同じScene query／Hover・Instance sourceでpress／hoverを生成し、既存Pointer sessionへ接続した後、明示された実CanvasDisplay factoryで未bindのnative bindingを直接返す。入力機能に必要な固定componentだけを選択して保持し、設定object全体やapp contextを保持しない。
+
+rootは空白操作を公開してから後段へ進み、native bindingを公開してからbindする。dimensionInput.bind→keyboard生成／startも従来位置に残す。空白操作のreset callbackとscheduler.readInputのTDZ境界、pointer構築失敗時の以前のcontroller、接続後のnative生成失敗と部分イベント登録を維持する。新しいmodel／session／cache・公開setterは作らない。既存bindPointer／createKeyboardを維持し、raw CanvasCommandInputs／PointerInteractionController／CanvasInputBinding／BlankCanvasGestureは変更しない。
+
+app.jsは1,468→1,456行（12行減）。rootに残っていたScene query・Pointer controller・native bindingの関係を実入力featureが組み立て、rootのpress／hover／空白判定の中間別名を除いた。AST比較で対象cohort以外のroot全体と相対順、四つの引数recordの対応、既存本体とraw input／保存／index／全E2E不変、新しい未使用／未束縛参照なしを確認した。関連単体87件、構文632file・全単体2,347件・全E2E589件が成功（50file、22.1m、exit 0）。五つの追加単体で空白操作の先行公開、同じScene／Pointer session／nativeのidentity、生成中のcallbackとTDZ、panel→PNGの優先順・座標／移動・keyboard取消、各構築例外と以前のcontroller、native生成失敗後のPointer接続、bind失敗時の部分登録を新旧比較した。702製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-canvas-pointer-assembly-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のAPI key列挙の期待値には新methodを追加したが、既存機能の期待値・性能閾値・timeoutは変更していない。全体目標は未完了。
+
+基準develop ade455f、作業branch codex/canvas-pointer-assembly、開始時週枠残量33%。[構築境界の監査](feature-construction-boundaries.md)で選んだ二段階案を実装した。監査の旧行番号は基準4e80981のsnapshotとして保持する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ## 機能単位の構築境界の再監査（2026-11-10）
 
 基準develop 4e80981で、残る構築・接続を機能単位で比較した。[構築境界の再監査](feature-construction-boundaries.md)に入力／出力、生成・bind順、初期化途中のcallbackと失敗時の公開状態を記録した。Canvas pointerの範囲は非空白22行・root入力33束縛に対し、外部利用はblankCanvasGesture／canvasInputBindingの二つ。既存CanvasInteractionFeatureの入力featureへ二段階でまとめる案を次の実装候補とする。native bindとdimension bindはrootの従来位置に残す。
