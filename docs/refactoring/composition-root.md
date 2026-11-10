@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Documentブラウザテスト支援の公開セットを既存ownerへ集約（2026-11-10）
+
+DocumentTestDriver.createBrowserSupportForWorkspace（src/testing/document_test_driver.js）は、既存createForWorkspaceが受ける九つの共通ownerと、reset／Sketch削除／循環参照／保存読込／解析／参照状態／File／計時の九つの依存から、履歴観測→Sketch削除fixture→循環参照fixture→ファイルAPIを組み立てる。返す凍結recordはdocuments（documentTestApi／readTestHistory／cyclicReferenceFixtureの同じ順）とsketchDeletionFixtureで、BrowserTestApiへ既存と同じ関数参照・field順を渡す。raw createForWorkspaceと各段階factory・各fixture APIは維持する。
+
+appはtest query guard内の従来のDocument支援生成位置で完成セットを依頼する。以前は後段に分かれていた三factoryの位置は早まるが、支援内の相対順は維持する。13factoryの生成経路は関数・凍結recordと静的な型／関数の取得に限られ、モデル操作・DOM照会・Geometry生成・計時・File生成を行わない。固定Documentの名前とliveなWorkspace.current、実Geometry／履歴／Block編集session／file sessionは従来のraw APIで操作時に読む。importのawait、loadのclone、reset→作成→削除／循環参照のserialize→load→analysis→UIと例外時の部分状態は不変。完成前の失敗では公開セットを返さず、以前の支援を変更しない。製品の生成・bind・start、test guardと公開位置、通常UI・操作・保存形式v26を変更しない。新しいmodel・session・listener・汎用app contextや登録用setterは作らない。
+
+app.jsは1,353→1,349行（4行減）、非空白907→903行、条件付きtest hooks169→165非空白行。root289文・468束縛、構築・接続488行、別名・設定120行、委譲43行は不変。Document支援の三つの後段bindingと公開recordの組立てを既存ownerへ移し、生成入力は9＋2＋6＋4項目から9＋9項目へ整理した。目安200〜500行の全体目標は未完了。
+
+追加単体三件で、coldな完成セット、liveな履歴と固定Document／現在scopeの区別、実Geometryと端点参照、Sketch削除と循環参照の結果・例外・部分状態、非同期importの待機とFile session、保存snapshotのclone、最後の生成依存が失敗した時の無変更・以前の支援保持を旧段階接続と比較する。rootは対象のDocument test接続以外が全文一致し、Driverは追加入口以外が全文一致、13factoryのcoldな生成構造、自由識別子一覧不変と新しい未使用bindingなしを照合する。構文635file・全単体2,446件・関連単体12件・全E2E589件が成功（50file、22.6m、exit 0）。全E2E実行中の705入力と開始HEAD不変、全50fileの一覧589件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-document-browser-support-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop 25824db、作業branch codex/document-browser-support、開始時週枠残量11%。直前25824dbの全E2E589件成功（22.2分）と今回の検証を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Toolbar表示と状態・履歴の更新入口を生成ownerへ統合（2026-11-10）
 
 PresentationFeatureは、自身が生成に成功したToolbarをprivateに保持し、updateToolbar／updateStatusUI／updateHistoryButtonsを生成直後から安定したcallbackとして公開する。ToolbarはcreateControlsで生成した実Toolbar View／CommandStatusの凍結recordを保持し、update／updateStatusを提供する。appは従来の各位置でcreateToolbar／createControlsを実行し、返された表示部品を保持する代わりにPresentationの更新入口を接続する。外部から状態を代入するsetter、第二のView・model・session・listener、汎用app contextは追加しない。既存raw factoryと各公開部品は引き続き使用できる。

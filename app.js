@@ -1161,11 +1161,14 @@
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
-    const documentTestSupport = window.DocumentTestDriver.createForWorkspace({
+    const documentTestSupport = window.DocumentTestDriver.createBrowserSupportForWorkspace({
       documentWorkspace, geometry: geometryCreation, presentation, document, history: historyFeature, blocks: blockEditingFeature,
       constructionCommand, files: documentFileFeature, fileSession,
+    }, {
+      resetModelState, deleteSketch, markReferenceConstraint, serializeModel, loadModelData,
+      analysis: constraintAnalysis, referenceState: referenceConstraintState, performance, File,
     });
-    const readTestHistory = documentTestSupport.history.state;
+    const readTestHistory = documentTestSupport.documents.readTestHistory;
     const { readSelectedGeometry: readTestSelectedGeometry, createApiForEditing: createSelectionTestApi } = window.CanvasSelectionTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation, clearSelection,
     });
@@ -1201,7 +1204,6 @@
       cssPxPerMm: CSS_PX_PER_MM, types: window.GeometrySolver, evaluateSpline: window.SplineGeometry.evaluate,
       hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
     });
-    const sketchDeletionFixture = documentTestSupport.createSketchDeletion({ resetModelState, deleteSketch });
     const propertiesTestSupport = window.PropertiesTestDriver.createBrowserSupport({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, blockQueries: blockEditingQueries,
       selectionHighlight, presentation, display: geometryDisplay, placement: dimensionPlacement, viewport, document, canvas, fixPointBtn,
@@ -1214,9 +1216,6 @@
       sketchPresentation, overlay: interactionOverlay, viewport, canvasDriver: canvasTestDriver, drawingFit, blocks: blockEditingFeature, dimensionDisplay,
       referenceState: referenceConstraintState, document, canvas, getComputedStyle: element => getComputedStyle(element),
       serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter,
-    });
-    const cyclicReferenceFixture = documentTestSupport.createCyclicReference({
-      resetModelState, markReferenceConstraint, serializeModel, loadModelData, analysis: constraintAnalysis, referenceState: referenceConstraintState,
     });
     const blockTestSupport = window.BlockTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, blocks: blockEditingFeature,
@@ -1239,9 +1238,6 @@
       canvasDriver: canvasTestDriver, dimensionValues: dimensionValueCommand, clearSelection, presentation, fit: drawingFit, references: constraintReferences, canvas,
       solving: sketchSolving, checkpoint: editingCheckpoint, analysis: constraintAnalysis, dimensionDrag,
     }, dimensionAppearance);
-    const documentTestApi = documentTestSupport.createFileApi({
-      performance, File, serializeModel, loadModelData,
-    });
     const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
     const responsiveDragFixture = createResponsiveDragFixture({
       insertion: constraintInsertion, presentation, fit: drawingFit, modelTypes: window.GeometrySolver,
@@ -1317,9 +1313,9 @@
         trimDiameterFixture },
       constraints: constraintTestSupport,
       clipboard: clipboardTestSupport,
-      documents: { documentTestApi, readTestHistory, cyclicReferenceFixture },
+      documents: documentTestSupport.documents,
       derived: derivedInstanceTestApi,
-      sketches: { ...constraintReferenceCases, sketchProjectionTestSupport, sketchTreeTestApi, sketchDeletionFixture },
+      sketches: { ...constraintReferenceCases, sketchProjectionTestSupport, sketchTreeTestApi, sketchDeletionFixture: documentTestSupport.sketchDeletionFixture },
       images: { referenceImageTestObservation, referenceImageTestImport, referenceImageBlockFixture },
       dimensions: dimensionTestSupport,
       parameters: { parameterFixture, parameterObservation, parameterInteraction },

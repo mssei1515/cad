@@ -166,5 +166,14 @@
     }
     return Object.freeze({ history: observation, createSketchDeletion, createCyclicReference, createFileApi: createWorkspaceFileApi });
   }
-  window.DocumentTestDriver = Object.freeze({ createForWorkspace, createFileApi, createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation, createHistoryObservation });
+  function createBrowserSupportForWorkspace(options, { resetModelState, deleteSketch, markReferenceConstraint,
+    serializeModel, loadModelData, analysis, referenceState, performance, File }) {
+    const support = createForWorkspace(options);
+    const readTestHistory = support.history.state;
+    const sketchDeletionFixture = support.createSketchDeletion({ resetModelState, deleteSketch });
+    const cyclicReferenceFixture = support.createCyclicReference({ resetModelState, markReferenceConstraint, serializeModel, loadModelData, analysis, referenceState });
+    const documentTestApi = support.createFileApi({ performance, File, serializeModel, loadModelData });
+    return Object.freeze({ documents: Object.freeze({ documentTestApi, readTestHistory, cyclicReferenceFixture }), sketchDeletionFixture });
+  }
+  window.DocumentTestDriver = Object.freeze({ createBrowserSupportForWorkspace, createForWorkspace, createFileApi, createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation, createHistoryObservation });
 })();
