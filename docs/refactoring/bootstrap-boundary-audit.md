@@ -1,5 +1,14 @@
 # Composition rootの残存責務と依存監査
 
+## 機能単位の構築境界の再監査（2026-11-10）
+
+基準develop 4e80981で、残る構築・接続を機能単位で比較した。[構築境界の再監査](feature-construction-boundaries.md)に入力／出力、生成・bind順、初期化途中のcallbackと失敗時の公開状態を記録した。Canvas pointerの範囲は非空白22行・root入力33束縛に対し、外部利用はblankCanvasGesture／canvasInputBindingの二つ。既存CanvasInteractionFeatureの入力featureへ二段階でまとめる案を次の実装候補とする。native bindとdimension bindはrootの従来位置に残す。
+
+Propertiesは既に同じfeatureが段階生成を所有し、単一bag化だけでは依存が減らない。起動は言語／Canvas／file lifecycleを横断するためFileFeatureへ一括移管しない。監査は構文分類であり、callbackの同期実行や動的な生成順の証明とは区別する。製品・テスト・tool・正式仕様は変更していない。app.jsは1,468→1,468行（0行変化）。提案は未実装、全体目標は継続中。
+
+作業branch codex/feature-construction-audit、開始時週枠残量33%。次は上記のCanvas入力案を実コードと新旧比較で検証し、実装・検証・Commit／Pushを別の単位として行う。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ## Hatch authoringの共有owner接続（2026-11-10）
 
 BasicDrawingTools.createGeometry().createAuthoringForEditingが返すcreateHatchForEditingは、同じread servicesのHatch照会、interaction.lifecycle.readMode、sessions.pointer.readLastPointerとDocumentWorkspace.documentIdsを既存createHatchへ接続する。rootは後段のupdateStatusUI／hatchRegionErrorTextだけを渡す。raw createHatchと実Hatch commandを維持し、新しいcommand／session・採番・preview／Selection・cacheを作らない。
