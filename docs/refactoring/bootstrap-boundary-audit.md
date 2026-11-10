@@ -1,5 +1,16 @@
 # Composition rootの残存責務と依存監査
 
+## Toolbar／Workspace controlsの段階的な組立て（2026-11-10）
+
+toolbarPresentation.prepareWorkspaceが編集Toolbar bindingの生成と既存Workspace controlsの準備を同じPresentation owner内で行い、実close／startと後段createDrawingBindingを返す。rootはcloseAppMenusを公開してstartし、その後に実描画bindingを生成・bindする。既存のcreateEditingBinding／createDrawingBinding／prepareWorkspaceControlsは維持する。新しいUI session・model・登録用setterを作らない。
+
+rootはcenterline／cross／projection／instances／fillet／Block作成／offset／spline／Hatchの実commandを限定したdrawing recordで渡す。開始handlerをどのmethodから取得するかはPresentation側が所有する。七つの旧handler別名を削除した。開始methodは凍結APIのdata propertyで、後段で選択しても旧別名と同じ関数となる。直接登録されるDOM handlerのthis／eventと返値、型指定されるInstance開始の裸呼出し、fillet／offsetのbind時のhandler選択はraw ToolbarViewのままである。
+
+app.jsは1,456→1,451行（5行減）。編集生成→編集bind→Canvas controls bind→menu生成→close公開→navigation／layout／Parameter／appearance／settings／Block起動→描画生成／bindの順を保つ。再startで描画bindingを暗黙再生成せず、部分登録や元の例外を隠さない。AST比較で対象cohortと七別名以外のroot全体・相対順、引数recordとhandler対応、既存Presentation／raw ToolbarView／Menus／Flyouts／command／保存／index／全E2E不変、新しい未使用／未束縛参照なしを確認した。関連単体46件、構文632file・全単体2,351件・関連E2E273件が成功（15file、4.0m、exit 0）。四つの追加単体で編集準備→close公開→Workspace start→描画生成／bindの順、直接DOM handlerのidentity／this／event／返値とtyped Instance開始、delete guard、各構築・起動例外と部分登録、既存start繰返しと暗黙の描画再生成なしを新旧比較した。702製品／test／検証入力と開始HEAD不変、選択15fileのtest list273件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-toolbar-workspace-assembly-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存機能の期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、直前45cc3a7の全589件成功とは区別する。
+
+基準develop 45cc3a7、作業branch codex/toolbar-workspace-assembly、開始時週枠残量32%。直前45cc3a7の全E2E589件成功（22.1分）と今回の関連検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ## Canvas pointer構築の二段階所有（2026-11-10）
 
 CanvasInteractionFeatureのcreateEditingInputが返すpreparePointerForEditingは、同じauthoring・Lifecycle／Pending／Constraint target・offsetから実BlankCanvasGestureを生成して返す。後段createBindingが同じScene query／Hover・Instance sourceでpress／hoverを生成し、既存Pointer sessionへ接続した後、明示された実CanvasDisplay factoryで未bindのnative bindingを直接返す。入力機能に必要な固定componentだけを選択して保持し、設定object全体やapp contextを保持しない。

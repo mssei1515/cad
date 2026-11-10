@@ -522,7 +522,7 @@ test('presentation startup propagates failures at the same stage and retains the
 
 (function () {
 "use strict";
-function workspaceControlsFixture(composed, failure = null, observe = {}) {
+function workspaceControlsFixture(composed, failure = null, observe = {}, assemble) {
  const f=fixture(),events=[],counts={},marker=new Error('workspace UI'),listeners=[];
  function stage(name){events.push(name);if(name===failure)throw marker;}
  function surface(name){
@@ -564,7 +564,8 @@ function workspaceControlsFixture(composed, failure = null, observe = {}) {
  let controls;
  observe.events=events;observe.counts=counts;observe.listeners=listeners;
  function prepare(){
-  if(composed)controls=f.feature.prepareWorkspaceControls(input);
+  if(assemble)controls=assemble(f,input);
+  else if(composed)controls=f.feature.prepareWorkspaceControls(input);
   else{
    input.editingTools.bind();input.canvasViewControls.bindControls();
    const navigation=f.feature.createToolNavigation({window:browserWindow});
@@ -624,6 +625,102 @@ test('workspace controls preserve every startup failure boundary, installed list
   const observe={},f=workspaceControlsFixture(composed,null,observe),controls=f.prepare();controls.start();
   const error=new Error('close');observe.closeError=error;
   assert.throws(()=>controls.close(),value=>value===error);
+ }
+});
+function toolbarWorkspaceFixture(composed, failure) {
+ const observe={},nodes=new Map(),calls=[],probe={},state={geometry:true,failCommand:null};let drawing,editing,toolbar,f;
+ const fail=stage=>{f.events.push(stage);if(failure===stage)throw f.marker;};
+ f=workspaceControlsFixture(true,failure,observe,(base,input)=>{
+  toolbar=base.feature.createToolbar({lifecycle,pending:{current:null},constraints:{command:null},constructionCommand,
+   readSplineEditing:()=>false,readHistory:()=>({}),updateDocumentStatus(){},isGeometryMode:()=>state.geometry});
+  const options={window:input.window,canvasViewControls:input.canvasViewControls,layout:input.layout,parameters:input.parameters,appearance:input.appearance,blocks:input.blocks,
+   editing,drawing};
+  if(composed)return toolbar.prepareWorkspace(options);
+  const editingTools=toolbar.createEditingBinding(editing),controls=base.feature.prepareWorkspaceControls({...input,editingTools});
+  return Object.freeze({...controls,createDrawingBinding(){return toolbar.createDrawingBinding({
+   startCenterlineCommand:drawing.centerline.start,startCircleCenterCrossCommand:drawing.circleCenterCross.start,
+   startSketchProjectionCommand:drawing.projection.start,startGeometryInstanceCommand:drawing.instances.start,filletCommand:drawing.fillet,
+   startBlockCreation:drawing.blockCreation.startCreation,offsetCommand:drawing.offset,beginSplineCreation:drawing.spline.start,startHatchCreation:drawing.hatch.startHatchCreation});}});
+ });
+ const lifecycle={start(mode){assert.equal(this,lifecycle);calls.push(['mode',mode]);}},result={value:true};
+ const action=(name,kind='event')=>function(value){'use strict';
+  if(kind==='event'){assert.equal(this,nodes.get(value.buttonId));assert.equal(arguments.length,1);}else{assert.equal(this,undefined);assert.equal(arguments.length,kind==='type'?1:0);}
+  calls.push([name,kind==='event'?value.buttonId:value]);if(state.failCommand===name)throw f.marker;return kind==='delete'?false:result;
+ };
+ drawing={centerline:Object.freeze({start:action('centerline')}),circleCenterCross:Object.freeze({start:action('cross')}),projection:Object.freeze({start:action('projection')}),
+  instances:Object.freeze({start:action('instances','type')}),fillet:Object.freeze({begin:action('fillet')}),blockCreation:Object.freeze({startCreation:action('block')}),
+  offset:Object.freeze({begin:action('offset')}),spline:Object.freeze({start:action('spline')}),hatch:Object.freeze({startHatchCreation:action('hatch')})};
+ const annotation=Object.freeze({start:function(){'use strict';assert.equal(this,annotation);assert.equal(arguments.length,0);calls.push(['annotation']);return result;}});
+ editing={undo:action('undo'),redo:action('redo'),toggleVisibility:action('visibility'),deleteSelection:action('delete','delete'),annotation};
+ const constructionCommand={toggle:action('construction')};
+ const get=f.document.getElementById;
+ f.document.getElementById=id=>{
+  if(!id.startsWith('tool')&&!['undoBtn','redoBtn','selectionVisibilityBtn','deleteSelectionBtn','annotationTextBtn'].includes(id))return get(id);
+  if(!nodes.has(id)){
+   const handlers=new Map(),node={id,addEventListener(type,handler){assert.equal(this,node);if(failure==='drawing-partial'&&id==='toolLine')throw f.marker;
+    if(!handlers.has(type))handlers.set(type,[]);handlers.get(type).push(handler);},removeEventListener(type,handler){const list=handlers.get(type)||[];handlers.set(type,list.filter(h=>h!==handler));},
+    dispatch(){const event={buttonId:id};let value;for(const handler of handlers.get('click')||[])value=handler.call(node,event);return value;},
+    click(){return node.dispatch();},count:()=>handlers.get('click')?.length||0};nodes.set(id,node);
+  }return nodes.get(id);
+ };
+ const raw=f.w.ToolbarView;
+ f.w.ToolbarView={...raw,createEditingBinding(options){fail('editing create');probe.editing=options;const actual=raw.createEditingBinding(options);
+  const bound=Object.freeze({...actual,bind(){assert.equal(this,bound);fail('editing bind');return actual.bind();}});return probe.editingBinding=bound;},
+  createBinding(options){fail('drawing create');probe.drawing=options;const actual=raw.createBinding(options);
+   const bound=Object.freeze({...actual,bind(){assert.equal(this,bound);fail('drawing bind');return actual.bind();}});return probe.drawingBinding=bound;}};
+ f.events.length=0;return {...f,nodes,calls,probe,state,editing,drawing,lifecycle,result,get actualMenus(){return f.actualMenus;},get toolbar(){return toolbar;}};
+}
+test('Toolbar Workspace assembly keeps editing preparation, close publication, startup and late drawing construction distinct',()=>{
+ const snapshots=[];for(const composed of [false,true]){
+  const f=toolbarWorkspaceFixture(composed),controls=f.prepare();assert.equal(Object.isFrozen(controls),true);
+  assert.equal(controls.close,f.actualMenus.close);assert.equal(f.probe.drawing,undefined);
+  assert.deepEqual(f.events,['editing create','editing bind','canvas','menu create']);
+  assert.equal(f.nodes.get('undoBtn').count(),1);assert.equal(f.nodes.has('toolSelect'),false);
+  controls.start();assert.equal(f.probe.drawing,undefined);assert.equal(f.events.at(-1),'blocks');
+  const binding=controls.createDrawingBinding();assert.equal(binding,f.probe.drawingBinding);assert.equal(f.nodes.has('toolSelect'),false);
+  assert.equal(f.probe.drawing.drawOperationLifecycle,f.lifecycle);
+  for(const [field,owner,method]of [['startCenterlineCommand','centerline','start'],['startCircleCenterCrossCommand','circleCenterCross','start'],
+   ['startSketchProjectionCommand','projection','start'],['startGeometryInstanceCommand','instances','start'],['startBlockCreation','blockCreation','startCreation'],
+   ['beginSplineCreation','spline','start'],['startHatchCreation','hatch','startHatchCreation']])assert.equal(f.probe.drawing[field],f.drawing[owner][method]);
+  assert.equal(f.probe.drawing.filletCommand,f.drawing.fillet);assert.equal(f.probe.drawing.offsetCommand,f.drawing.offset);
+  assert.equal(f.probe.editing.undo,f.editing.undo);assert.equal(f.probe.editing.annotation,f.editing.annotation);
+  binding.bind();assert.equal(f.nodes.get('toolSelect').count(),1);binding.bind();assert.equal(f.nodes.get('toolSelect').count(),1);
+  snapshots.push(JSON.stringify({events:f.events,counts:f.counts,listeners:f.listeners}));
+ }assert.equal(snapshots[1],snapshots[0]);
+});
+test('Toolbar Workspace dispatch preserves direct DOM receivers and events, typed instance calls and editing guards',()=>{
+ const snapshots=[];for(const composed of [false,true]){
+  const f=toolbarWorkspaceFixture(composed),controls=f.prepare();controls.start();const binding=controls.createDrawingBinding();binding.bind();
+  for(const id of ['toolCenterline','toolCircleCenterCross','toolSketchProjection','toolCreateBlock','toolSpline','toolHatch','toolFillet','toolOffset','toolConstructionLine'])assert.equal(f.nodes.get(id).dispatch(),f.result);
+  for(const id of ['toolMirror','toolPattern','toolCircularPattern'])assert.equal(f.nodes.get(id).dispatch(),f.result);
+  for(const id of ['undoBtn','redoBtn','selectionVisibilityBtn'])assert.equal(f.nodes.get(id).dispatch(),f.result);
+  assert.equal(f.nodes.get('annotationTextBtn').dispatch(),f.result);
+  f.state.geometry=false;f.nodes.get('deleteSelectionBtn').dispatch();assert.equal(f.calls.some(c=>c[0]==='delete'),false);
+  f.state.geometry=true;f.nodes.get('deleteSelectionBtn').dispatch();assert.equal(f.calls.filter(c=>c[0]==='delete').length,1);
+  assert.deepEqual(f.calls.filter(c=>c[0]==='instances').map(c=>c[1]),['mirror','pattern','circularPattern']);
+  f.state.failCommand='hatch';assert.throws(()=>f.nodes.get('toolHatch').dispatch(),error=>error===f.marker);
+  const count=f.calls.length;binding.dispose();f.nodes.get('toolHatch').dispatch();assert.equal(f.calls.length,count);assert.equal(f.nodes.get('toolHatch').count(),0);
+  snapshots.push(JSON.stringify(f.calls));
+ }assert.equal(snapshots[1],snapshots[0]);
+});
+test('Toolbar Workspace assembly preserves construction and startup failures without constructing or binding later controls',()=>{
+ for(const stage of ['editing create','editing bind','canvas','menu create','menu start','parameters','blocks','drawing create','drawing bind','drawing-partial']){
+  const snapshots=[];for(const composed of [false,true]){
+   const f=toolbarWorkspaceFixture(composed,stage);let controls,binding;
+   assert.throws(()=>{controls=f.prepare();controls.start();binding=controls.createDrawingBinding();binding.bind();},error=>error===f.marker);
+   if(['editing create','editing bind','canvas','menu create'].includes(stage))assert.equal(controls,undefined);
+   if(!['drawing create','drawing bind','drawing-partial'].includes(stage))assert.equal(f.probe.drawing,undefined);
+   if(stage==='drawing-partial'){assert.equal(f.nodes.get('toolSelect').count(),1);assert.equal(f.nodes.get('toolPoint').count(),1);assert.equal(f.nodes.get('toolLine').count(),0);}
+   snapshots.push(JSON.stringify({events:f.events,counts:f.counts,listeners:f.listeners,nodes:[...f.nodes].map(([id,node])=>[id,node.count()])}));
+  }assert.equal(snapshots[1],snapshots[0]);
+ }
+});
+test('Toolbar Workspace startup retains the existing repeat behavior and never recreates or binds drawing controls implicitly',()=>{
+ for(const composed of [false,true]){
+  const f=toolbarWorkspaceFixture(composed),controls=f.prepare();controls.start();controls.start();assert.equal(f.probe.drawing,undefined);assert.equal(f.counts.settings,2);
+  const binding=controls.createDrawingBinding();binding.bind();assert.equal(f.events.filter(e=>e==='drawing create').length,1);
+  controls.start();assert.equal(f.events.filter(e=>e==='drawing create').length,1);assert.equal(f.nodes.get('toolHatch').count(),1);
+  assert.equal(f.events.filter(e=>e==='editing create').length,1);assert.equal(f.nodes.get('undoBtn').count(),1);
  }
 });
 })();

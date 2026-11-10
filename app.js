@@ -150,7 +150,7 @@
   });
   const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
     guardSketchProjectionShapeEdit, sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
-  const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
+  const { toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
   const operationSessions = createOperationSessions({
     snapForDrawing, linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
     readCenterline: () => centerlineCommand, projectPointToCenterlineSupport: point => projectPointToCenterlineSupport(point),
@@ -207,7 +207,6 @@
     commitDraft: (...args) => synchronizedInstanceEditing.commit(...args), updateToolbar, recordHistory,
     projectionSources: sketchProjectionSources, guardDimensionSymbolDeletion, solveState: sketchSolveResultState,
   });
-  const { start: startGeometryInstanceCommand } = geometryInstanceCommand;
   const blockPlacementCommand = blockEditingFeature.createPlacement({
     layout: { snappedBlockRotation, blockInstanceTranslationForAnchor }, isGeometryMode, clearSelection,
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
@@ -367,7 +366,6 @@
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
   const { clear: clearSnap } = drawingSnap;
   function snapForDrawing(point) { return authoringTools.snapForDrawing(point); }
-  const { start: beginSplineCreation } = splineCommand;
   const { addPointSnapConstraints } = snapConstraints;
   const { line: lineCommand, circular: circularCommands } = basicDrawingTools;
   const offsetFeature = authoringTools.createOffsetForEditing({
@@ -430,7 +428,7 @@
     commitNewConstraint,
     parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
   });
-  const { start: startCenterlineCommand, projectPointToCenterlineSupport } = centerlineCommand;
+  const { projectPointToCenterlineSupport } = centerlineCommand;
   const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreview({
     ctx, viewport, withCanvasState, traceSplinePath, readMode: drawOperationLifecycle.readMode, centerlineCommand,
     readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
@@ -535,7 +533,6 @@
   const circleCenterCrossCommand = createCircleCenterCross({
     resultIsAccepted, minOrientationLength: MIN_ORIENTATION_LENGTH,
   });
-  const { start: startCircleCenterCrossCommand } = circleCenterCrossCommand;
 
   const lineCollapseQuery = window.LineCollapseQuery.create({
     connectedComponentFromSeeds, constraintGraphNodes, localSolveLines, minLineLength: MIN_LINE_LENGTH,
@@ -561,7 +558,7 @@
     referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, choiceDialog,
     blockLocalGeometryBounds, references: constraintReferences, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
   });
-  const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
+  const { open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
 
 
@@ -896,7 +893,7 @@
   // The command is published before enabling destination-only input.
   sketchMoveInputBinding.bind();
   const hatchCommand = authoringTools.createHatchForEditing({ updateStatusUI, hatchRegionErrorText });
-  const { startHatchCreation, startHatchBoundaryRepair } = hatchCommand;
+  const { startHatchBoundaryRepair } = hatchCommand;
 
 
 
@@ -1179,9 +1176,6 @@
   keyboardInput.start();
   canvasViewControls.bindWindow();
 
-  const editingToolBinding = toolbarPresentation.createEditingBinding({
-    undo: undoHistory, redo: redoHistory, toggleVisibility: toggleSelectedVisibility, deleteSelection: deleteCurrentSelection, annotation: annotationCommand,
-  });
 
 
 
@@ -1189,17 +1183,18 @@
 
 
 
-  const workspaceControls = presentation.prepareWorkspaceControls({
-    window, editingTools: editingToolBinding, canvasViewControls, layout: canvasWorkspaceLayout,
+  const workspaceControls = toolbarPresentation.prepareWorkspace({
+    window, canvasViewControls, layout: canvasWorkspaceLayout,
     parameters: parameterEditor, appearance: appearanceUI, blocks: blockView,
+    editing: { undo: undoHistory, redo: redoHistory, toggleVisibility: toggleSelectedVisibility, deleteSelection: deleteCurrentSelection, annotation: annotationCommand },
+    drawing: { centerline: centerlineCommand, circleCenterCross: circleCenterCrossCommand,
+      projection: sketchProjectionCommand, instances: geometryInstanceCommand, fillet: filletCommand,
+      blockCreation: blockDefinitionCommand, offset: offsetCommand, spline: splineCommand, hatch: hatchCommand },
   });
   const { close: closeAppMenus } = workspaceControls;
   workspaceControls.start();
 
-  const drawingToolBinding = toolbarPresentation.createDrawingBinding({
-    startCenterlineCommand, startCircleCenterCrossCommand, startSketchProjectionCommand, startGeometryInstanceCommand,
-    filletCommand, startBlockCreation, offsetCommand, beginSplineCreation, startHatchCreation,
-  });
+  const drawingToolBinding = workspaceControls.createDrawingBinding();
   drawingToolBinding.bind();
 
   documentFileFeature.bindControls();
