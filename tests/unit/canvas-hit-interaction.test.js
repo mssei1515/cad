@@ -83,6 +83,21 @@ function commandPanelFixture() {
   return { ...f, api, calls, canvasHover, marker, p: { x: 0, y: 0 }, names: () => calls.map(call => call[0]) };
 }
 
+test('scene press defaults to disabled Block rotation handles while explicit callbacks retain priority', () => {
+  const f=sceneFixture(), canvasHover=sandbox.window.CanvasHover.create({isEndpointPoint:()=>false});
+  const ports={canvasHover,sameArcEndpoint:()=>false,hitAnnotationTarget:()=>null};
+  const reads=f.state.reads.slice();
+  const api=f.queries.createInteraction(ports);
+  assert.deepEqual(f.state.reads,reads);
+  assert.equal(api.press.read({x:500,y:500}).hitBlockHandle,null);
+  const handle={id:'handle'},calls=[];
+  const custom=f.queries.createInteraction({...ports,hitBlockRotationHandle:function(x,y){'use strict';assert.equal(this,undefined);calls.push([x,y]);return handle;}});
+  assert.equal(custom.press.read({x:7,y:9}).hitBlockHandle,handle);
+  assert.deepEqual(calls,[[7,9]]);
+  const invalid=f.queries.createInteraction({...ports,hitBlockRotationHandle:null});
+  assert.throws(()=>invalid.press.read({x:7,y:9}),/not a function/);
+});
+
 test('command panel blank query shares the press snapshot, excludes annotations and leaves hover unchanged', () => {
   const f = commandPanelFixture(), selected = f.point('hover', 5, 5);
   f.canvasHover.update({ point: selected }); const before = { ...f.canvasHover.current };

@@ -725,7 +725,7 @@ test('Workspace placement keeps constructor and painter failures at their origin
  }
 });
 
-function sceneFrameFixture(composed, probe = {}) {
+function sceneFrameFixture(composed, probe = {}, useDefaultHandles = false) {
  const f=sceneFixture(true),{state,ctx}=f,operations=[];state.ready=false;
  ctx.measureText=text=>({width:String(text).length*7});
  const stage=(name,...args)=>{assert.equal(state.ready,true,'no eager frame operation');operations.push([name,...args]);if(state.failAt===name)throw state.error;};
@@ -744,6 +744,7 @@ function sceneFrameFixture(composed, probe = {}) {
   drawHatches(items,options){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,2);assert.equal(items.length,0);assert.equal(options.includePreview,true);stage('hatches');},
   drawDrawingStack:()=>stage('stack')};
  const originalOverlay=sceneWindow.InteractionOverlayRenderer,originalSurface=sceneWindow.CanvasSurface;
+ if(useDefaultHandles)delete input.drawBlockInstanceHandles;
  probe.order=[];probe.ports={};probe.results={};
  function observe(name,original,ports){probe.order.push(name);probe.ports[name]=ports;if(probe.failAt===name)throw probe.error;return probe.results[name]=original(ports);}
  sceneWindow.InteractionOverlayRenderer={...originalOverlay,createLayer:ports=>observe('overlays',originalOverlay.createLayer,ports)};
@@ -768,6 +769,19 @@ function sceneFrameFixture(composed, probe = {}) {
 }
 
 const sceneFrameOrder=['record','images','hatches','stack','block-handles','dimensions','dimension-preview','annotations','annotation-preview','authoring','block-placement','free-instance','offset','trim','snap','image-overlays','pointer','rectangle','png-read'];
+
+test('scene frame defaults to its Geometry display handle stage before dimensions and skips it for export', () => {
+ const f=sceneFrameFixture(true,{},true);
+ assert.equal(f.probe.ports.interactive.drawBlockInstanceHandles,f.scene.geometry.drawBlockInstanceHandles);
+ const original=f.input.dimensions.draw;
+ f.input.dimensions.draw=function(){assert.equal(f.ctx.shadowBlur,0);assert.equal(f.ctx.globalAlpha,1);return original.call(this);};
+ f.ctx.shadowBlur=9;f.ctx.globalAlpha=.2;
+ f.frame.draw();
+ assert.deepEqual(f.operations.map(e=>e[0]),sceneFrameOrder.filter(name=>name!=='block-handles'));
+ f.operations.length=0;
+ f.workspace.exportRenderer.render({x:0,y:0,width:10,height:10},{x:1,y:1});
+ assert.equal(f.operations.some(e=>e[0]==='dimension-preview'),false);
+});
 
 test('scene frame assembles overlays then interactive and frame renderers cold on the actual scene owners and preserves normal paint order',()=>{
  for(const composed of [false,true]){

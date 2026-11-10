@@ -94,10 +94,11 @@
           isSidebarHighlightedElement, canvasThemeColor, applicationText, constructionAlpha, constructionExtensionScreenPx,
           sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed, editingQueries, annotationBounds,
           resolvedLoopBounds: window.HatchRegionEngine.resolvedLoopBounds, hatchAppearanceForDisplay: window.HatchData.hatchAppearanceForDisplay });
-        function createFrame({ rectangle, snap, pointer, referenceImageLayer, readPngCommand, ...options }) {
+        function createFrame({ rectangle, snap, pointer, referenceImageLayer, readPngCommand,
+          drawBlockInstanceHandles = scene.geometry.drawBlockInstanceHandles, ...options }) {
           const overlays = window.InteractionOverlayRenderer.createLayer({ renderer: scene.overlay, rectangle, snap,
             hover: interaction.hover, selection: interaction.selection, pointer });
-          const frame = createWorkspaceRendering({ ...options, geometry: scene.geometry,
+          const frame = createWorkspaceRendering({ ...options, geometry: scene.geometry, drawBlockInstanceHandles,
             drawSnapMarker: overlays.drawSnapMarker, drawSketchIdentityLabel: overlays.drawSketchIdentityLabel, drawSelectionRect: overlays.drawSelectionRect,
             drawReferenceImages: referenceImageLayer.drawImages, drawReferenceImageOverlays: referenceImageLayer.drawOverlays,
             drawExportOverlay: () => readPngCommand()?.drawOverlay(ctx, viewport.scale) });

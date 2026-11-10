@@ -18,6 +18,18 @@ function fixture() {
     isExplicitPoint: item => item.endpoint !== true });
   return { query, model: () => model, scope: value => { model = value; }, zoom: value => { scale = value; } };
 }
+
+test('disabled Block rotation handles never inspect scope or coordinates', () => {
+  const fail = () => { throw new Error('unexpected scene read'); };
+  const query = sandbox.window.GeometryHitQuery.createInstances({ currentScope: fail, viewportScale: fail,
+    hitSketchAllowed: fail, isVisibleSketchId: fail, blockProjectionBundle: fail, annotationBounds: fail,
+    resolvedHatchBoundary: fail, isVisibleValue: fail, hatchAppearanceForDisplay: fail,
+    hatchContainsSelectablePoint: fail, geometryInstanceBundles: fail });
+  const { hitBlockRotationHandle } = query;
+  const coordinate = { valueOf: fail };
+  assert.equal(hitBlockRotationHandle(coordinate, coordinate), null);
+  assert.equal(hitBlockRotationHandle(), null);
+});
 test('endpoints have priority over later explicit points, with reverse order within each class', () => {
   const f = fixture(), a = Object.assign(point('a', 0, 0), { endpoint: true }), b = Object.assign(point('b', 1, 0), { endpoint: true }), c = point('c', 0, 0);
   f.model().points.push(a, b, c);

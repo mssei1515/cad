@@ -280,7 +280,7 @@
       submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue() },
     drawCanvas, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),
   });
-  const { resetCanvasStrokeState, withCanvasState } = canvasSurface;
+  const { withCanvasState } = canvasSurface;
   const { placement: dimensionPlacement, painter: dimensionPainter } = dimensionDisplay;
   const { controller: dimensionInputController } = dimensionInput;
   const { dimensionFromAnchor, defaultDimensionForTarget } = dimensionPlacement;
@@ -298,7 +298,7 @@
       editedSpline: () => splineEditing.current?.spline },
     annotationBounds,
   });
-  const { traceSplinePath } = geometryDisplay;
+  const { traceSplinePath, drawBlockInstanceHandles } = geometryDisplay;
   const { allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { fitAllGeometryToViewport } = drawingFit;
   function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
@@ -662,7 +662,6 @@
 
 
   function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
-  function hitBlockRotationHandle(x, y) { return null; }
 
 
 
@@ -724,9 +723,6 @@
     canvas, clearSelection, presentation,
   });
 
-  function drawBlockInstanceHandles() {
-    resetCanvasStrokeState();
-  }
 
 
 
@@ -747,7 +743,7 @@
     recordDraw: () => pointerMoveScheduler.recordDraw(), referenceImageLayer: referenceImageFeature.layer, readPngCommand: pngExportLifecycle.readCommand,
     dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
     authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
-    drawBlockInstanceHandles, drawHatches, drawDrawingStack,
+    drawHatches, drawDrawingStack,
   });
 
   function drawCanvas() { return canvasFrameRenderer.draw(); }
@@ -1140,7 +1136,7 @@
     updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     hatch: hatchCommand, spline: splineCommand, blockPlacement: blockPlacementCommand, dimensions: dimensionPlacementCommand,
     expressions: expressionInputController, discardMoves: flushScheduledCanvasPointerMove, enterBlock: enterBlockDefinitionEdit,
-    closeContextMenu: closeCanvasContextMenu, hitBlockRotationHandle, hitAnnotationTarget,
+    closeContextMenu: closeCanvasContextMenu, hitAnnotationTarget,
     createCanvasInputBinding, readPngExportCommand: pngExportLifecycle.readCommand, scheduler: pointerMoveScheduler,
   });
   canvasInputBinding.bind();
