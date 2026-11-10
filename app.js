@@ -70,16 +70,15 @@
     constraintSketchId,
   } = sketchContext;
 
-  const { services: geometryReadServices, createEditingScope, createPersistence,
-    persistence: { serializeConstraint, deserializeConstraint, decorateSerializedConstraint, serializeModel } } = createReadContext({
-    currentSketches: () => editingScopeBinding.current.sketches, prepareBlocks: ensureBlockState,
+  const { services: geometryReadServices, createEditingScope, createPersistence, createRebinding,
+    persistence: { serializeConstraint, deserializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState } } = createReadContext({
+    currentSketches: () => editingScopeBinding.current.sketches,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { instances: instanceProjections, catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { hatchPrimitivesForScope } = hatchGeometryQuery;
-  const { geometryInstanceBundlesForScope } = instanceProjections;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
   const { createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, resolveGeometryRef } = geometryReads;
@@ -167,10 +166,7 @@
   const offsetSelection = window.OffsetFeature.createSelectionForEditing({
     editingScope: editingScopeBinding, sketches: sketchContext, selection: canvasSelection,
   });
-  const constraintRebinding = window.ConstraintRebinding.create({
-    catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
-    serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
-  });
+  const constraintRebinding = createRebinding();
   const blockEditingFeature = window.BlockEditingFeature.createForWorkspace({
     documentWorkspace, readServices: geometryReadServices, rebinding: constraintRebinding, editingScope: editingScopeBinding, normalizeGeometryInstance,
     readViewport: () => viewport, activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences, createHistory: createBlockEditHistory,
@@ -365,8 +361,8 @@
   function computeTrimPreview(pointer) { return trimFeature.computePreview(pointer); }
   const editingCheckpoint = createEditingCheckpoint();
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
-  const { dimensions: { serialize: serializeDimension }, preparation: documentPreparation,
-    normalizeGeometryInstance: normalizeEditingGeometryInstance, ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
+  const { dimensions: { serialize: serializeDimension }, normalizeGeometryInstance: normalizeEditingGeometryInstance,
+    ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
   });
@@ -439,9 +435,6 @@
 
 
 
-  function ensureBlockState() {
-    return documentPreparation.blocks();
-  }
 
 
   const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationFeature.createEditor({

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の保存操作所有単位ではapp.jsは1,399行、非空白953行。AST監査ではroot302文・490束縛、構築・接続501非空白行、別名・設定122行、委譲55行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のBlock読取context単位ではapp.jsは1,392行、非空白946行。AST監査ではroot300文・489束縛、構築・接続498非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Block読取contextの準備・再接続組立て（2026-11-10）
+
+DocumentWorkspace.createReadContextは、Geometry read services・保存操作の公開・Block準備と拘束再接続の組立てを同じcontextに所有する。保存操作APIのensureBlockStateは完成したpreparation.blocksをmember呼出しし、prepareBlocksがundefinedのときだけ、同じ関数をread servicesへ接続する。明示callbackとnullはそのまま保持する。privateな保存bundle参照をread services生成前に初期化するため、生成中の早期呼出しも従来のdocumentPreparationに対応するReferenceErrorとなる。read servicesは従来どおり最初の実component生成であり、Block正規化は生成時に前倒ししない。Geometry読取りはWorkspace.current、Block準備はcreatePersistenceへ渡されたbound editing scopeと現在Block editorを操作時に読む。
+
+createRebindingは保持済みcatalog／projections／Instance projection readerと保存操作の三関数・applicationTextを従来のConstraintRebinding.createへ接続し、実際の凍結APIを返す。rootは従来の位置で生成を依頼し、codec生成・公開・bind順を維持する。createPersistenceはcodec・metadata・preparation・writer・loadingの全生成成功後だけbundleを公開し、失敗時は以前の成功bundleを維持する。公開setter・新state・cache・moduleや汎用app contextは追加しない。低水準GeometryReadServices／BlockState／ConstraintRebinding／codecの本体、Object参照と例外、UI・保存形式v26を維持する。
+
+rootのBlock準備用hoisted関数と低水準preparation別名・Instance reader別名がなくなり、Block読取り→正規化→保存preparationの接続がappを往復しなくなった。app.jsは1,399→1,392行（7行減）、非空白953→946行、root302→300文・490→489束縛。構築・接続は498非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。行の圧縮や空白削除でなく、同じ実ownerからの接続へ置き換えた結果である。
+
+追加単体四件でread services生成中の早期呼出しと同じ準備関数、実Block正規化／Geometry参照とbound scope切替、明示callbackの裸receiver・零引数／null・例外、公開前に生成した実再接続APIとcodec・Block投影、factoryの実owner・receiver・返値／例外を確認する。ASTで対象接続以外のroot全体・順序、元のBlock準備本体と再接続factory引数、既存ReadContext本体・全低水準module／index／E2E不変、新しい未使用／未束縛参照なしを比較する。
+
+関連単体49件、構文635file・全単体2,404件・関連E2E398件が成功（31file、6.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択31fileのtest list398件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-block-read-context-assembly-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、9f97a7fの全589件成功と区別する。
+
+基準develop 9f97a7f、作業branch codex/block-read-context-assembly、開始時週枠残量22%。直前9f97a7fの全E2E589件成功（21.7m）と今回の関連検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Document読取contextによる保存操作の所有（2026-11-10）
 
