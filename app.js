@@ -457,9 +457,8 @@
 
 
 
-  const sceneHitInteraction = window.CanvasHitInteraction.createSceneWithAnnotationsForWorkspace({
-    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
-    viewport, dimensionScope: dimensionPresentationScope, dimensions: dimensionDisplay, dimensionLabelForConstraint,
+  const sceneHitInteraction = operationSessions.createSceneWithAnnotations({
+    documentWorkspace, viewport, dimensionScope: dimensionPresentationScope, dimensions: dimensionDisplay, dimensionLabelForConstraint,
     annotationBounds, annotationSpatial: annotationFeature.spatial, operandValues: constraintOperandValues,
   });
   const { policy: { ordinarySelectionMode }, hitAnnotationElement } = sceneHitInteraction;

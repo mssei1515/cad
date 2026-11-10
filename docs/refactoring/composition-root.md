@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：ヒット判定の生成をCanvas操作sessionの組立てへ統合（2026-11-11）
+
+CanvasInteractionFeatureの操作sessionがcreateSceneWithAnnotationsを提供し、保持済みRead Services・同じ実Canvas基盤・同じ実操作sessionを既存CanvasHitInteractionへ接続する。appはDocumentWorkspace、viewport、寸法scope・表示・label、注記bounds・空間query、operand値の八入力だけを渡す。rootでRead Services／Canvas基盤／sessionの三依存を選び直さず、入力の生成とそのscope policy／hit queryを同じ既存application ownerへ揃える。Canvas描画器・GeometryHitQuery・OperandHitQuery・注記判定の実装は従来の所有先に残す。
+
+基盤と操作sessionの凍結APIは、それぞれ従来と同じObject.freezeの結果をconstで命名して返す。二重のrecordやSelection／Pending／Target／Pointerの複製を作らず、sceneへ渡すinteractionとsessionsはappが受け取る実objectと同一である。追加の生成入口は公開後だけ呼べるため、基盤→操作session→同じ位置でのscene policy生成→後段query／入力bindの順を維持する。rootの八入力の同一参照とundefined／nullをそのまま渡し、raw factoryのmember receiver・一引数・返値・元例外を保つ。早期のscope／viewport読取り、model／session変更やlistener登録を増やさず、外部代入setter・新cache・汎用app contextを作らない。旧公開APIとヒット優先順、liveな操作mode／Pending／Target・Geometryと寸法のscope、注記activeOnlyの既存上書き規則、UI・保存形式v26は不変。
+
+app.jsは1,337→1,336行（1行減）、非空白891→890行。root281文・467束縛は不変。構築・接続486→485行、別名・設定123行・委譲30行・test hooks165行は不変。scene生成のroot入力11→8、構文依存辺1,181→1,179。これは同じ実ownerの共有依存を、そのowner内で接続する整理であり、引数を新しい汎用recordに束ねるだけの変更ではない。一方で構築文数そのものは減っておらず、200〜500行への全体目標は未完了。
+
+既存Canvas操作単体へ2件を追加し、raw factoryへ渡す全入力と実owner／sessionのObject同一性、返値・receiver・元例外と失敗時の無変更、実Scene／Queryのcold生成、操作mode／Pending／Targetのlive共有、scope置換・可視性・Geometry同一性・注記policy・scope例外とSelection無変更を確認した。rootの対象一箇所以外と、ownerの入口追加／凍結record命名以外、CanvasHitInteraction／GeometryHitQuery／OperandHitQuery本体の全文一致、未使用／未束縛／初期化前root参照の追加なしを照合した。構文635file・全単体2,466件・関連単体57件・関連E2E441件が成功（36file、7.6m、exit 0）。関連E2E実行中の705入力と開始HEAD不変、選択36fileの一覧441件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-canvas-scene-ownership-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、基準develop 9356788の全589件成功（27.2分）とは区別する。
+
+基準develop 9356788、作業branch codex/canvas-scene-ownership、開始時週枠残量6%（関連E2E開始時5%）。関連E2Eは既存36file・441件を選択する。最後の全体検証9356788の全589件成功（27.2分）とは区別し、停止条件到達時は最新コードの全体検証後にdevelop→mainを反映・同期する。
+
 ### 最新：Geometryドラッグの開始・解除・描画照会を生成ownerへ統合（2026-11-11）
 
 GeometryDragFeature.prepare（src/application/geometry_drag_feature.js）は、実ドラッグfeatureを生成しない段階で、plan構築・開始・解除の三操作と、Arc端点／Point／Centerの三つの描画照会を用意する。createForWorkspaceが同じ既存factoryを従来位置で呼び、成功した実featureだけをprivateに保持し、同じobjectを返す。実command・plan・editing・solverは従来の生成と所有を保つ。rootは注記ドラッグのbuild／begin、Canvas表示の三照会、削除とSketch切替のresetをこの入口へ接続する。Spline編集の照会は別ownerの既存callbackとして維持する。

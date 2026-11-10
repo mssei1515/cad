@@ -29,6 +29,11 @@
         clearPreviewPointer: () => preview.setPointer(null), hideInput, setHint, updateToolbar, updateConstraintButtons, draw });
       const targets = window.ConstraintTargetSession.create({ acceptTarget });
       const pointer = window.PointerInteractionController.createSession();
+      function createSceneWithAnnotations({ documentWorkspace, viewport, dimensionScope, dimensions, dimensionLabelForConstraint,
+        annotationBounds, annotationSpatial, operandValues }) {
+        return window.CanvasHitInteraction.createSceneWithAnnotationsForWorkspace({ documentWorkspace, readServices, interaction: feature, sessions,
+          viewport, dimensionScope, dimensions, dimensionLabelForConstraint, annotationBounds, annotationSpatial, operandValues });
+      }
       function createConstruction({ projection, cancelConstraintTargetCommand, synchronizeSketchProjectionMetadata, updateUI, recordHistory, clearSnap, updateToolbar }) {
         return window.ConstructionCommand.create({ cancelConstraintTargetCommand,
           selectedConstructionTogglePrimitives: selectionFeature.selection.selectedConstructionTogglePrimitives,
@@ -124,10 +129,12 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      return Object.freeze({ preview, pending, targets, pointer, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      return sessions;
     }
-    return Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
+    const feature = Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
       identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring, resetBlankCandidate });
+    return feature;
   }
   window.CanvasInteractionFeature = Object.freeze({ create });
 })();

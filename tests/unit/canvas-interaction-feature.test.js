@@ -660,3 +660,37 @@ test('Canvas blank reset retains the prior target on constructor failure and fol
  const reset=f.foundation.resetBlankCandidate;assert.deepEqual(calls,[]);assert.equal(reset('ignored',null),result);assert.deepEqual(calls,[[]]);
  fail=true;assert.throws(reset,e=>e===marker);
 });
+
+test('Canvas session owns scene construction with the actual shared foundation and session objects and preserves factory errors',()=>{
+ const f=fixture(),w=f.w,original=w.CanvasHitInteraction,marker=new Error('scene failed'),result=Object.freeze({policy:{}}),calls=[];let fail=false;
+ const options=Object.fromEntries(['documentWorkspace','viewport','dimensionScope','dimensions','dimensionLabelForConstraint','annotationBounds','annotationSpatial','operandValues'].map(name=>[name,{}]));
+ w.CanvasHitInteraction={...original,createSceneWithAnnotationsForWorkspace(input){assert.equal(this,w.CanvasHitInteraction);assert.equal(arguments.length,1);calls.push(input);if(fail)throw marker;return result;}};
+ try{
+  assert.deepEqual(calls,[]);assert.equal(f.sessions.createSceneWithAnnotations(options),result);const input=calls[0];
+  assert.equal(input.readServices,f.readServices);assert.equal(input.interaction,f.foundation);assert.equal(input.sessions,f.sessions);
+  assert.deepEqual(Object.keys(input).sort(),[...Object.keys(options),'readServices','interaction','sessions'].sort());for(const key of Object.keys(options))assert.equal(input[key],options[key]);
+  fail=true;assert.throws(()=>f.sessions.createSceneWithAnnotations(options),e=>e===marker);assert.equal(f.sessions.pending.current,null);assert.equal(f.sessions.targets.command,null);assert.equal(f.state.scope.points[0],f.point);
+ }finally{w.CanvasHitInteraction=original;}
+});
+
+test('Canvas-owned real scene stays cold and shares live mode, pending, targets, geometry scope and annotation policy without changing selection',()=>{
+ const f=fixture(),{w,foundation:b,sessions:s,state,readServices:services}=f,calls=[];let hidden=false,error=null;
+ const read=()=>{assert.equal(state.ready,true);if(error)throw error;return state.scope;};
+ Object.assign(state.scope,{annotations:[],referenceImages:[],blockInstances:[],geometryInstances:[],hatches:[]});f.point.kind='point';state.ready=false;
+ const visible={isVisibleSketchId(){read();return !hidden;},isVisibleSketchElement(item){assert.equal(this,visible);read();return !hidden&&item.visible!==false;},isVisibleValue:value=>value!==false};
+ Object.assign(services,{geometryAppearance:visible,dimensionAppearance:{effectiveDimensionAppearance:()=>({visible:true})},catalog:{blockDefinitionById:()=>null},projections:{blockProjectionBundle:item=>item.bundle},
+  hatches:{resolvedHatchBoundary:()=>({ok:true}),hatchContainsSelectablePoint:()=>false},reads:Object.fromEntries(['Points','Lines','Circles','Arcs','Splines'].map(kind=>['allGeometry'+kind,()=>read()[kind.toLowerCase()]]))});
+ Object.assign(services.reads,{allHatches:()=>read().hatches,geometryInstanceBundles:()=>[],blockProjectionBundles:()=>[]});
+ const documentWorkspace={workspace:{current:read},parameters:{dimensionUsesExpression:()=>false},sketches:{activeSketchId:()=>state.active,elementSketchId:item=>item.sketchId,
+  isEditableSketchId:id=>id===state.active,isActiveSketchConstraint:item=>item.sketchId===state.active,constraintSketchId:item=>item.sketchId,operandRelationForSketch:()=> 'active',referenceSourceSketchIds:()=>[]}};
+ const hit={element:{id:'AN1'}},spatial={hitAnnotationElement:function(x,y,options){'use strict';assert.equal(this,undefined);read();calls.push([x,y,options.activeOnly]);return hit;}};
+ const scene=s.createSceneWithAnnotations({documentWorkspace,viewport:{scale:1},dimensionScope:read,dimensions:{placement:{defaultDimensionForTarget:()=>({})},metrics:{dimensionTextDrawingMetrics:()=>({}),dimensionTextWidth:()=>0},layout:()=>null},
+  dimensionLabelForConstraint:()=>'',annotationBounds:()=>null,annotationSpatial:spatial,operandValues:{makeConstraintOperand:()=>null,operandFromReferenceTarget:()=>null}});
+ const q=scene.createQueries();assert.deepEqual(calls,[]);state.ready=true;
+ assert.equal(scene.policy.ordinarySelectionMode(),true);assert.equal(q.geometry.hitPoint(0,0),f.point);assert.equal(scene.hitAnnotationElement(4,5),hit);assert.deepEqual(calls.at(-1),[4,5,false]);
+ s.pending.replace({type:'distance-value'});assert.equal(scene.policy.ordinarySelectionMode(),false);scene.hitAnnotationElement(4,5);assert.equal(calls.at(-1)[2],true);s.pending.clear();
+ s.targets.begin('coincident',[]);assert.equal(scene.policy.ordinarySelectionMode(),false);s.targets.reset();b.lifecycle.setMode('point');assert.equal(scene.policy.ordinarySelectionMode(),false);b.lifecycle.setMode('select');
+ const next=Object.assign(new w.GeometrySolver.Point('P2',40,50),{sketchId:'S1'});state.scope={...state.scope,points:[next]};assert.equal(q.geometry.hitPoint(0,0),null);assert.equal(q.geometry.hitPoint(40,50),next);
+ hidden=true;assert.equal(q.geometry.hitPoint(40,50),null);hidden=false;error=new Error('scope failed');assert.throws(()=>q.geometry.hitPoint(40,50),e=>e===error);error=null;
+ assert.equal(b.selection.points.length,0);assert.equal(state.scope.points[0],next);assert.equal(scene.policy.ordinarySelectionMode(),true);
+});
