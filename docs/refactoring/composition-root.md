@@ -1,5 +1,21 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Propertiesテスト支援の生成・公開接続（2026-11-10）
+
+PropertiesTestDriver.createBrowserSupport（src/testing/properties_test_driver.js）は、既存createBrowserFactoriesへ限定依存を渡し、Properties／Sidebar／Themeの観測・fixture・appearance操作の11支援を凍結recordとして生成する。生成順はProperties内の従来の相対順を保つ。各raw creatorは関数の宣言と静的method recordの凍結のみを行い、生成時にmodel・Selection・DOM・theme・履歴を照会せず、Geometry／IDを生成しない。観測・編集は実行時の同じWorkspace.currentと既存ownerを使う。部分生成の失敗ではrecordもブラウザAPIも公開せず、既存model／Selection／採番を変更しない。個別creatorと段階的createBrowserFactoriesも維持する。
+
+BrowserTestApi.createWithProperties（src/testing/browser_test_api.js）は、この完成済み支援と別のSelection APIを従来のcanvas／properties入力へ割り当て、既存createへ渡す。公開methodの名前・挿入順・descriptor・関数参照・衝突時の優先順位とcapability getterの照会順はraw createが所有する。通常の書換え可能な返却object、callbackのreceiver／引数／返値・例外を維持し、fixtureやappearance操作を生成時に実行しない。guardとwindow.__jot2dTestへの完成後代入はappに残す。新しいmodel・Selection・session・cache・listener・global namespaceや汎用app contextを追加しない。
+
+appは11個の支援の展開とcanvas／propertiesへの再分類を所有しなくなる。Properties内の相対生成順は維持する一方、他TestDriverの間に分散していたcoldな支援生成を最初のProperties生成位置へまとめる。Fixed型の既定値取得もその位置になるため、すべてのテスト用constructorの呼出位置が不変とは扱わない。実起動では型namespaceはその時点で定義済みで、介在するTestDriver生成による型の差替えもなく、製品ownerの生成・bind・起動順、test query guard、API公開位置は不変。既存の段階APIは独立した生成時点が必要な呼出側向けに保持する。通常UI・操作・保存形式v26は変更しない。
+
+app.jsは1,384→1,371行（13行減）、非空白938→925行。AST監査はroot298文・480束縛を維持し、条件付きtest hooksが192→179非空白行になる。構築・接続492行、別名・設定121行、委譲50行は不変。数百行への全体目標は未完了。
+
+追加単体三件と既存三試験の比較経路追加で、cold／独立した支援生成と最終capability生成失敗時の無変更、実Workspace／Selection／Hover・外観／theme／履歴のlive読取り、fixtureのmodel・選択Object・通知順と失敗時の途中状態を旧直接接続・段階API・新支援APIで比較する。公開APIは旧接続との全key・descriptor・関数同一性・getter順・衝突優先順位と先頭／途中／末尾の同じ例外を比較する。ASTで11creatorのcoldな構造と相対順、対象test接続以外のroot全体・製品生成順、既存raw helper／BrowserTestApi.create／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体16件、構文635file・全単体2,421件・全E2E589件が成功（50file、22.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-properties-test-support-cohort-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop d551328、作業branch codex/properties-test-support-cohort、開始時週枠残量18%。直前d551328の関連449件成功と、全体E2Eの最新基準79b604c（589件成功、22.3m）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：編集scope切替・ID予約の既存owner接続（2026-11-10）
 
 BlockEditingFeature.createForWorkspaceは、activateScopeがundefinedのときだけ保持済みEditingScopeBindingへ可変長でactivateをmember呼出しする関数を選び、reserveScopeSequencesがundefinedのときだけDocumentWorkspace.reservation.scopeへdraft一引数で委譲する関数を選ぶ。DocumentEditingReset.createForWorkspaceもactivateEditingScopeがundefinedのときだけ受け取ったeditingScopeのactivateを同じ可変長で呼ぶ。明示callbackとnullはそのまま保持する。関数を生成した時点ではscope切替・ID予約・owner method読取りを行わず、操作時のreceiver・引数数／返値／例外を維持する。

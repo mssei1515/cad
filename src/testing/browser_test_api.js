@@ -91,5 +91,16 @@
       currentSidebarHoveredGeometryKeys: properties.sidebarHoverKeyObservation.keys,
     };
   }
-  window.BrowserTestApi = Object.freeze({ create });
+  function createWithProperties({ properties, selectionTestApi, canvas, ...options }) {
+    return create({ ...options,
+      canvas: { ...canvas, themeObservation: properties.themeObservation,
+        hoverDisplayObservation: properties.hoverDisplayObservation, strokeStyleCases: properties.strokeStyleCases },
+      properties: { propertyAppearanceObservation: properties.propertyAppearanceObservation,
+        propertiesFixture: properties.propertiesFixture, propertiesObservation: properties.propertiesObservation,
+        fixedObservation: properties.fixedObservation, selectionTestApi,
+        sidebarInspectionFixture: properties.sidebarInspectionFixture, sidebarHighlightObservation: properties.sidebarHighlightObservation,
+        sidebarHoverKeyObservation: properties.sidebarHoverKeyObservation },
+    });
+  }
+  window.BrowserTestApi = Object.freeze({ create, createWithProperties });
 })();
