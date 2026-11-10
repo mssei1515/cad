@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のtoolbar icon組立て単位ではapp.jsは1,409行、非空白963行。AST監査ではroot306文・497束縛、構築・接続501非空白行、別名・設定124行、委譲63行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のdrag test組立て単位ではapp.jsは1,408行、非空白962行。AST監査ではroot306文・493束縛、構築・接続501非空白行、別名・設定123行、委譲63行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：dragテスト実行・応答性fixtureのWorkspace組立て（2026-11-10）
+
+GeometryDragTestDriver.createForWorkspaceはDocumentWorkspace.workspace.current、既存Geometry／scope query／drag feature／Solverと、明示されたmodelTypes・arc endpoint計算・時計・拘束観測から従来のcreateExecutionSupportを生成する。executionは従来の三公開APIだけを持つ実APIであり、BrowserTestApiへ新たなfactoryを漏らさない。後段createResponsiveForEditingは同じGeometryのaddPoint／addLine、明示されたConstraintInsertion／Presentation／DrawingFitと、後段で明示されたmodelTypes・reset／寸法既定値／求解／履歴／serializeから従来の応答性fixtureを生成する。二段階の生成位置と公開順を変えず、型をDriverのglobalから直接取得しない。通常機能・既存Driver本体・BrowserTestApi・保存形式v26は不変で、新しいmodel／scope／session／cache・module・汎用contextを作らない。
+
+appの二つのtest構築を既存ownerへまとめ、使われなくなったvectorNorm／sketchSolveConstraints／addPoint／addLineの別名を除く。app.jsは1,409→1,408行（1行減）。実行支援の九入力はWorkspace等のownerを含む九入力へ、後段fixtureの十二入力は九入力へ整理し、行数以上に依存の供給元と生成段階を明確にする。nowの生callback、Solver receiver、現在scope／Geometry／sessionの同一性、preview→final→正規化→誤差／status観測、fixtureの求解→fit→draw→履歴reset→serializeと例外／途中状態を維持する。
+
+追加単体三件で、既存の三実行ルートの結果・観測順・現在scope・対象なし／session拒否／preview例外を新旧比較する。後段fixtureでは共有Point／Line／Constraint参照、型の生成時捕捉、再reset、型取得失敗後の既存execution保持、求解例外の後続停止を確認する。ASTで二構築と未使用別名だけのroot変更、全低水準port・時計本体の一致、既存Driver／通常機能／BrowserTestApi／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体12件、構文635file・全単体2,392件・全E2E589件が成功（50file、22.2m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-drag-test-workspace-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop e4b91d0、作業branch codex/drag-test-workspace、開始時週枠残量24%。三実行ルートを使う全九E2E fileを確認し、重いdrag回帰も含めて今回は全E2Eを実行する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：toolbarアイコン生成のPresentation所有（2026-11-10）
 
