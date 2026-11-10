@@ -76,7 +76,8 @@
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
-  const { serializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState } = documentPersistence;
+  const { serializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState,
+    loadModelData, normalizeGeometryInstance, readRepairMessage: readDocumentRepairMessage } = documentPersistence;
   const { catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
@@ -352,7 +353,7 @@
   const { submit: submitOffsetValue } = offsetCommand;
   const editingCheckpoint = createEditingCheckpoint();
   const { captureValues: snapshotModelState, restoreValues: restoreModelState } = editingCheckpoint;
-  const { dimensions: { serialize: serializeDimension }, normalizeGeometryInstance: normalizeEditingGeometryInstance,
+  const { dimensions: { serialize: serializeDimension },
     ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
@@ -415,7 +416,7 @@
   const documentFileFeature = createDocumentFileFeature({
     window, document, documentWorkspace, history: historyFeature, blockEditor, presentation, fit: drawingFit,
     serializeModel, requestChoice: options => choiceDialog.show(options), loadModelData, solveAndRefresh,
-    repairMessage: () => documentApplication.blockConstraintRepairMessage,
+    repairMessage: readDocumentRepairMessage,
   });
   const { effectiveDocumentName, refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint,
     save: saveJot2DFile, saveAs: saveJot2DFileAs } = documentFileFeature;
@@ -438,7 +439,6 @@
 
 
 
-  function normalizeGeometryInstance(raw, ...args) { return normalizeEditingGeometryInstance(raw, ...args); }
 
 
 
@@ -542,14 +542,11 @@
 
 
 
-  const documentApplication = createDocumentApplication({
+  createDocumentApplication({
     resetEditingState: resetModelState,
     sketchTreeView: { capture: () => sketchTreeView.capture(), restore: state => sketchTreeView.restore(state) },
     refreshReferenceConstraintValidity, enforceMinimumLineLengths, log,
   });
-  function loadModelData(data, options = {}) {
-    return documentApplication.load(data, options);
-  }
 
   const dxfImportFeature = documentFileFeature.createDxfForWorkspace({
     geometry: geometryCreation, interaction: canvasInteraction, sessions: operationSessions,
