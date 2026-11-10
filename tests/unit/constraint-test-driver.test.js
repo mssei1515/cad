@@ -224,10 +224,37 @@ function browserFixture(composed=true) {
   readSelectedGeometry:p.readSelectedGeometry,commitNewConstraint:p.commitNewConstraint,markReferenceConstraint:p.markReferenceConstraint,serializeModel:p.serializeModel,serializeConstraint:p.serializeConstraint,
   resolveConstraintIntent:p.resolveConstraintIntent,resetModelState:p.resetModelState,pushModelConstraint:p.pushModelConstraint,fitAllGeometryToViewport:p.fitAllGeometryToViewport,acceptError:p.acceptError};
  const names=['createModelSupport','createReferenceLineMove','createDependencyOrderFixture','createEditingCases','createInputObservation','createIntentResolution','createForcedCommit'];
- const factories=composed?w.ConstraintTestDriver.createBrowserFactories(options):Object.fromEntries(names.map(n=>[n,()=>w.ConstraintTestDriver[n](p)]));assert.deepEqual(events,[]);
- const support=Object.fromEntries(names.map(n=>[n,factories[n]()]));assert.deepEqual(events,[]);state.ready=true;
- return{w,state,p,options,events,marker,support,factories,selection,targets,model,original,originalSolve,seed(){const a=addPoint(0,0,false,'explicit'),b=addPoint(10,0,false,'endpoint'),l=addLine(a,b);return{a,b,l};}};
+ const factories=composed==='support'?null:composed?w.ConstraintTestDriver.createBrowserFactories(options):Object.fromEntries(names.map(n=>[n,()=>w.ConstraintTestDriver[n](p)]));assert.deepEqual(events,[]);
+ const browserSupport=composed==='support'?w.ConstraintTestDriver.createBrowserSupport(options):null;
+ const support=browserSupport?{
+  createModelSupport:Object.freeze({readStatuses:browserSupport.readStatuses,publicAPI:browserSupport.constraints.constraintModelTestApi}),
+  createReferenceLineMove:browserSupport.referenceCases.referenceLineMove,createDependencyOrderFixture:browserSupport.referenceCases.dependencyOrderFixture,
+  createEditingCases:browserSupport.constraints.constraintCaseTestApi,createInputObservation:browserSupport.constraints.constraintInputObservation,
+  createIntentResolution:browserSupport.constraints.constraintIntentTestDriver,createForcedCommit:browserSupport.constraints.forcedConstraintCommit,
+ }:Object.fromEntries(names.map(n=>[n,factories[n]()]));assert.deepEqual(events,[]);state.ready=true;
+ return{w,state,p,options,events,marker,support,factories,browserSupport,selection,targets,model,original,originalSolve,seed(){const a=addPoint(0,0,false,'explicit'),b=addPoint(10,0,false,'endpoint'),l=addLine(a,b);return{a,b,l};}};
 }
+
+test('constraint browser support groups cold independent capabilities and shares the exact status reader',()=>{
+ const f=browserFixture('support'),s=f.browserSupport;
+ assert.ok(Object.isFrozen(s));assert.ok(Object.isFrozen(s.constraints));assert.ok(Object.isFrozen(s.referenceCases));
+ assert.deepEqual(Object.keys(s),['readStatuses','constraints','referenceCases']);
+ assert.deepEqual(Object.keys(s.constraints),['forcedConstraintCommit','constraintInputObservation','constraintIntentTestDriver','constraintModelTestApi','constraintCaseTestApi']);
+ assert.deepEqual(Object.keys(s.referenceCases),['referenceLineMove','dependencyOrderFixture']);
+ assert.equal(s.readStatuses,s.constraints.constraintModelTestApi.constraintStatusesForTest);
+ f.state.ready=false;const next=f.w.ConstraintTestDriver.createBrowserSupport(f.options);assert.notEqual(next,s);assert.notEqual(next.readStatuses,s.readStatuses);
+ for(const group of ['constraints','referenceCases'])for(const key of Object.keys(s[group])){assert.ok(Object.isFrozen(next[group][key]));assert.notEqual(next[group][key],s[group][key]);}
+ assert.deepEqual(f.events,[]);assert.equal(f.state.sequence,0);assert.equal(f.state.model,f.original);assert.equal(f.p.solver.solveSubset,f.originalSolve);
+ assert.equal(f.selection.hasSelection(),false);assert.equal(Object.hasOwn(f.w,'__jot2dTest'),false);
+});
+
+test('constraint support failure at the final factory leaves model, Solver, selection and browser publication untouched',()=>{
+ const f=browserFixture('support'),workspace=f.options.documentWorkspace.workspace,current=workspace.current;let reads=0;
+ Object.defineProperty(workspace,'current',{get(){if(++reads===6)throw f.marker;return current;}});f.state.ready=false;
+ assert.throws(()=>f.w.ConstraintTestDriver.createBrowserSupport(f.options),error=>error===f.marker);assert.equal(reads,6);
+ assert.deepEqual(f.events,[]);assert.equal(f.state.sequence,0);assert.equal(f.state.model,f.original);assert.equal(f.p.solver.solveSubset,f.originalSolve);
+ assert.equal(f.selection.hasSelection(),false);assert.equal(Object.hasOwn(f.w,'__jot2dTest'),false);
+});
 
 test('constraint browser factories keep seven lazy creation stages and the exact status function within each model support',()=>{
  const f=browserFixture();assert.equal(Object.isFrozen(f.factories),true);assert.deepEqual(f.events,[]);
@@ -236,7 +263,7 @@ test('constraint browser factories keep seven lazy creation stages and the exact
 });
 
 test('bound model support preserves live membership, projection object identity, default refresh arguments and solver receivers',()=>{
- for(const composed of [false,true]){const f=browserFixture(composed),m=f.support.createModelSupport,{a,l}=f.seed();a.localElement={id:'local'};const instance={id:'B'};f.state.bundle={instance,points:[a],lines:[l],circles:[],arcs:[],splines:[]};instance.bundle=f.state.bundle;f.state.model.blockInstances=[instance];f.state.statuses=new Map([[a,'first']]);
+ for(const composed of [false,true,'support']){const f=browserFixture(composed),m=f.support.createModelSupport,{a,l}=f.seed();a.localElement={id:'local'};const instance={id:'B'};f.state.bundle={instance,points:[a],lines:[l],circles:[],arcs:[],splines:[]};instance.bundle=f.state.bundle;f.state.model.blockInstances=[instance];f.state.statuses=new Map([[a,'first']]);
   let result=m.readStatuses();assert.equal(result.items[0].status,'first');assert.deepEqual(f.events.slice(-2),['refresh','membership']);const first=f.state.refreshOptions;assert.equal(Object.keys(first).length,0);m.readStatuses();assert.notEqual(f.state.refreshOptions,first);
   const replacement={...a,sketchId:'S2'};f.state.model={...f.state.model,points:[replacement],activeSketchId:'S2'};f.state.statuses=new Map([[replacement,'replacement']]);f.state.bundle.points=[replacement];
   assert.equal(m.readStatuses().items[0].status,'replacement');result=m.publicAPI.blockConstraintStatusForTest('B');assert.equal(result.projections[0].status,'replacement');assert.notEqual(result.summary,f.state.summary);assert.equal(result.summary.nested,f.state.summary.nested);
@@ -246,7 +273,7 @@ test('bound model support preserves live membership, projection object identity,
 });
 
 test('bound input and intent supports observe the real target session and resolve only current scope objects',()=>{
- for(const composed of [false,true]){const f=browserFixture(composed),s=f.support,{a}=f.seed(),operands=[{kind:'point',point:a}];f.targets.begin('distance',operands);f.selection.set('geometryInstances',[{id:'I'}]);
+ for(const composed of [false,true,'support']){const f=browserFixture(composed),s=f.support,{a}=f.seed(),operands=[{kind:'point',point:a}];f.targets.begin('distance',operands);f.selection.set('geometryInstances',[{id:'I'}]);
   const observation=s.createInputObservation.state();assert.equal(observation.selected,f.state.selected);assert.equal(observation.operands[0].id,a.id);assert.equal(observation.pendingType,'distance');assert.equal(f.targets.operands,operands);
   const replacement={...a,x:99};f.state.model={...f.state.model,points:[replacement]};let result=s.createIntentResolution.resolve('distance',[{kind:'point',id:a.id}]);assert.equal(f.state.resolvedOperands[0].point,replacement);assert.equal(result.constraint.id,a.id);
   f.events.length=0;assert.throws(()=>s.createIntentResolution.resolve('distance',[{kind:'point',id:'missing'}]),/Missing test operand: missing/);assert.deepEqual(f.events,[]);assert.equal(f.targets.operands,operands);
@@ -255,16 +282,16 @@ test('bound input and intent supports observe the real target session and resolv
 });
 
 test('bound dependency and editing fixtures keep reference graph identity, reset scope and solve, capture, display order',()=>{
- const normalize=value=>JSON.parse(JSON.stringify(value));for(const scenario of ['dependencies','support-status','move']){const runs=[];for(const composed of [false,true]){
+ const normalize=value=>JSON.parse(JSON.stringify(value));for(const scenario of ['dependencies','support-status','move']){const runs=[];for(const composed of [false,true,'support']){
   const f=browserFixture(composed);let result;if(scenario==='dependencies'){result=f.support.createDependencyOrderFixture.orderCase();assert.equal(f.state.model.constraints[0].point,f.state.model.points[2]);assert.equal(f.state.model.constraints[0].line,f.state.model.lines[0]);assert.notEqual(f.state.model,f.original);assert.equal(f.original.points.length,0);}
   if(scenario==='support-status')result=f.support.createEditingCases.resetForSupportConstraintStatus();
   if(scenario==='move'){const {a,l}=f.seed();l.sketchId='S4';a.sketchId='S1';f.events.length=0;result=f.support.createReferenceLineMove.move(5);assert.equal(l.p1.y,5);assert.deepEqual(f.events,['dependents:S4','refresh','ui','draw']);}
   runs.push({result:normalize(result),events:f.events.slice(),model:normalize(f.state.model)});
- }assert.deepEqual(runs[1],runs[0],scenario);}
+ }assert.deepEqual(runs[1],runs[0],scenario);assert.deepEqual(runs[2],runs[0],scenario);}
 });
 
 test('bound forced commits restore the latest Solver method before observations and on the original commit exception',()=>{
- for(const composed of [false,true])for(const failure of [false,true]){const f=browserFixture(composed),replacement=function(){return{original:true};};f.p.solver.solveSubset=replacement;f.state.expectedSolve=replacement;if(failure)f.state.failure='commit';
+ for(const composed of [false,true,'support'])for(const failure of [false,true]){const f=browserFixture(composed),replacement=function(){return{original:true};};f.p.solver.solveSubset=replacement;f.state.expectedSolve=replacement;if(failure)f.state.failure='commit';
   if(failure){assert.throws(()=>f.support.createForcedCommit.commit({success:true,errorNorm:0}),error=>error===f.marker);assert.equal(f.events.includes('document'),false);}
   else{const result=f.support.createForcedCommit.commit({success:true,errorNorm:'0.25',iterations:'4',reason:'forced'});assert.equal(result.committed,true);assert.equal(result.constraintCount,1);assert.equal(f.state.forced.errorNorm,0.25);assert.equal(f.state.forced.iterations,4);assert.equal(f.events.at(-1),'document');}
   assert.equal(f.p.solver.solveSubset,replacement);assert.notEqual(f.state.model,f.original);assert.equal(f.original.points.length,0);

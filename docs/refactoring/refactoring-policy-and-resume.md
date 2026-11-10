@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のProperties query生成順整理単位ではapp.jsは1,368行、非空白922行。AST監査ではroot295文・476束縛、構築・接続492非空白行、別名・設定121行、委譲47行、条件付きtest hooks179行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の拘束テスト支援生成単位ではapp.jsは1,361行、非空白915行。AST監査ではroot295文・476束縛、構築・接続492非空白行、別名・設定121行、委譲47行、条件付きtest hooks172行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,22 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：拘束ブラウザテスト支援の生成と限定公開（2026-11-10）
+
+ConstraintTestDriver.createBrowserSupport（src/testing/constraint_test_driver.js）は既存createBrowserFactoriesを使い、model support→参照線移動→依存順fixture→編集case→入力観測→intent→強制commitの七つを従来の拘束支援内の相対順で生成する。返すのはreadStatuses、五つの拘束能力をまとめたconstraints、二つのSketch間参照能力をまとめたreferenceCasesの凍結recordである。readStatusesはconstraintModelTestApi.constraintStatusesForTestと同じ実関数で、GeometryDragTestDriverもこの同じ観測を共有する。model／分析／Solver／Selection／DOM・履歴を生成時に照会せず、GeometryやIDを生成せず、新しい状態の所有者を作らない。
+
+appは七つの生成時点と公開用の再分類を持たず、完成した拘束支援と参照caseだけを既存BrowserTestApiへ接続する。BrowserTestApi本体・公開キー順・関数参照・getter照会順・衝突優先順位は変更しない。Sketch子入力recordの二つの参照caseをspreadで受け取るが、既存raw APIは固定された名前で照会し、公開キーの順序はそのraw APIが決める。新recordと他のSketch支援のfield名は重複しない。旧createBrowserFactoriesと個別factoryは段階・部分生成用に保持する。
+
+他TestDriverの間に分散していたcoldな七支援を最初のConstraintTestDriver生成位置へまとめるため、全テスト用constructorの位置が不変とは扱わない。既存の七creatorとその内側の18raw creatorは関数・既存支援の生成と静的な凍結method recordだけを組み立て、モデル操作は呼出時の既存ownerが行う。生成途中で失敗した場合は支援recordもブラウザAPIも公開せず、model／Selection／Solver／採番を変えない。操作の現在scope・参照Object、解析とfixtureの通知／求解順、強制Solver差替えのfinally復元は既存実装に残す。製品の生成・bind・起動順、test query guard、完成したwindow.__jot2dTestの公開位置、通常UI・保存形式v26は不変。新module・可変context・cache・session・listenerは追加しない。
+
+app.jsは1,368→1,361行（7行減）、非空白922→915行、条件付きtest hooks179→172非空白行。root295文・476束縛、構築・接続492行、別名・設定121行、委譲47行は不変。通常機能のownerをテストへ移したのではなく、テスト支援の生成と限定公開をその既存ownerに集めた。数百行への全体目標は未完了。
+
+追加単体二件でcold・独立した凍結支援と同じstatus関数、最後のcreatorへの入力取得が失敗した場合のmodel／Selection／Solver／ID無変更・公開なしを確認する。既存四試験は旧直接接続・段階API・新支援セットの三経路へ広げ、liveなscope／解析／status／Selection／入力／intent、参照graphの同一性とfixtureのreset・求解／表示順、強制commitの元例外と最新Solver method復元を比較する。ASTで元の七生成の相対順・入力、五つの拘束能力と二参照caseの同じ割当て、対象test hooks以外のroot全体・順、18raw creatorのcoldな構造、既存Driver本体／BrowserTestApi／製品module／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体24件、構文635file・全単体2,432件・全E2E589件が成功（50file、21.8m、exit 0）。705製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-browser-support-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。今回の最新コードで全体成功を確認したが、数百行への全体目標は未完了。
+
+基準develop cc6cc73、作業branch codex/constraint-browser-support、開始時週枠残量16%。直前cc6cc73の全E2E589件成功（22.2m）と今回の最新コードの検証を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Properties選択queryをconsumerより先に生成（2026-11-10）
 
