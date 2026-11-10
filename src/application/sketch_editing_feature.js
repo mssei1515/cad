@@ -110,5 +110,27 @@
     }
     return Object.freeze({ reset, editing: Object.freeze({ ...editing, createDeletionForEditing, createTreeForEditing }) });
   }
-  window.SketchEditingFeature = Object.freeze({ create, createForInteraction });
+  // Keep navigation references with their factories; publish only successful constructions.
+  function prepareNavigation() {
+    let move = null, context = null;
+    function resetMove() { return move?.reset(); }
+    function closeContext() { return context?.close(); }
+    function readMoving() { return move.active; }
+    function createEditing(options) {
+      const feature = createForInteraction({ ...options, resetSketchMove: resetMove });
+      function createMoveWithInput(options) {
+        const result = feature.editing.createMoveWithInput(options);
+        move = result.command;
+        return result;
+      }
+      function createTreeForEditing(options) {
+        const result = feature.editing.createTreeForEditing(options);
+        context = result.menu;
+        return result;
+      }
+      return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing }) });
+    }
+    return Object.freeze({ resetMove, closeContext, readMoving, createForInteraction: createEditing });
+  }
+  window.SketchEditingFeature = Object.freeze({ create, createForInteraction, prepareNavigation });
 })();

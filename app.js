@@ -98,11 +98,10 @@
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
   });
-  let sketchMoveCommand = null;
-  let sketchContextController = null;
+  const sketchNavigation = window.SketchEditingFeature.prepareNavigation();
   const { binding: editingScopeBinding, solver, dimensionQueries: dimensionModelQueries, insertion: constraintInsertion } = createEditingScope({
     Solver: ConstraintSolver,
-    closeSketchContext: () => sketchContextController?.close(), resetSketchMove: () => sketchMoveCommand?.reset(),
+    closeSketchContext: sketchNavigation.closeContext, resetSketchMove: sketchNavigation.resetMove,
   });
   function activateEditingScope(...args) { return editingScopeBinding.activate(...args); }
 
@@ -121,7 +120,7 @@
     prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
     refreshConstraintAnalysis, updateDocumentName: () => updateDocumentNameUI(), updateToolbar,
     renderSketch: () => sketchTreeView.render(), updateBlockUI,
-    renderProperties: () => propertiesView.render(selectedPropertiesTarget()), readSketchMoving: () => sketchMoveCommand.active,
+    renderProperties: () => propertiesView.render(selectedPropertiesTarget()), readSketchMoving: sketchNavigation.readMoving,
     updateStatusUI, updateConstraintButtons, syncDimensionInput: () => syncDimensionValueInput(),
     refreshSketchSelection: () => sketchTreeView.refreshSelection(),
   });
@@ -877,10 +876,10 @@
 
   function updateConstraintButtons() { constraintControlsView.update(); }
 
-  const { reset: sketchInteractionReset, editing: sketchEditing } = window.SketchEditingFeature.createForInteraction({
+  const { reset: sketchInteractionReset, editing: sketchEditing } = sketchNavigation.createForInteraction({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
     constraintTargets: constraintTargetCommand, valueInput: dimensionInputController, presentation, constraintReferences, recordHistory,
-    clearSelection, clearSnap, updateToolbar, resetSketchMove: () => sketchMoveCommand?.reset(),
+    clearSelection, clearSnap, updateToolbar,
     resetGeometryDrag: () => geometryDrag.reset(), resetDimensionDrag: () => dimensionDrag.reset(),
     referenceImage: referenceImageInteraction, selectionRectangle, projection: sketchProjectionCommand, instances: geometryInstanceCommand, instanceSources: instanceSourceCommand,
     clearInteractionForSketchChange, promptName: (title, name) => window.prompt(title, name), clearTreeHover: () => sketchTreeController.clearHoverSketch(),
@@ -889,13 +888,12 @@
 
   const { createSketch, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
   function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
-  const { command: createdSketchMoveCommand, input: sketchMoveInputBinding } = sketchEditing.createMoveWithInput({
+  const { command: sketchMoveCommand, input: sketchMoveInputBinding } = sketchEditing.createMoveWithInput({
     document,
     readEditingScope: () => editingScopeBinding.current, hatches: hatchGeometryQuery, rebinding: constraintRebinding,
     analysis: constraintAnalysis, refreshReferenceConstraintValidity,
   });
-  // Publish the command before enabling destination-only input.
-  sketchMoveCommand = createdSketchMoveCommand;
+  // The command is published before enabling destination-only input.
   sketchMoveInputBinding.bind();
   const hatchCommand = authoringTools.createHatch({
     hatchGeometryQuery, readMode: drawOperationLifecycle.readMode, lastPointer: pointerInteractionController.readLastPointer,
@@ -923,7 +921,7 @@
     currentScope: workspace.current, sameConstraintDisplayElement, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
-  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchTreeContextMenu } = sketchEditing.createTreeForEditing({
+  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchContextController } = sketchEditing.createTreeForEditing({
     document, window, selectionHighlight,
     objectOptions: { isHidden: selectionVisibilityIsHidden, analysis: constraintAnalysis, redundancy: constraintRedundancy,
       referenceState: referenceConstraintState, projectionQueries: sketchProjectionQueries,
@@ -933,7 +931,6 @@
     deleteElements, deleteCurrentSelection, toggleSelectedVisibility, fixedOperands: fixedOperandCommand,
   });
   const { applyWidth: applySketchTreeWidth } = sketchTreeView;
-  sketchContextController = sketchTreeContextMenu;
   sketchContextController.start();
 
   function isSidebarHighlightedElement(item) { return sketchTreeController.isHighlightedElement(item); }

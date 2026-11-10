@@ -1,5 +1,16 @@
 # Composition rootの残存責務と依存監査
 
+## Sketch navigationの段階的な参照所有（2026-11-10）
+
+SketchEditingFeature.prepareNavigationが、後段で生成される実Sketch Move commandとTree context menuの参照を所有する。早期のcloseContext／resetMoveとreadMovingを公開し、createForInteractionの同じ実featureからcreateMoveWithInput／createTreeForEditingを呼ぶ。参照は各factoryの成功後にのみ公開する。外部setterは設けず、commandの操作stateやmenu sessionを複製しない。既存raw create／createForInteractionは変更しない。
+
+rootは早期のscope bindingとPresentationへ同じ意味の入口を渡し、後段では実command／menuをconstとして受け取る。初期化前のoptional close／resetは無操作、readMovingは従来どおり未生成のactive読取りで例外となる。生成失敗は以前の参照を保ち、生成後のinput.bind／menu.start失敗では新しい参照を保つ。publish→bind／startの相対順、member receiver・返値・元の例外、Workspace切替・Selectionと履歴の動作を維持する。
+
+app.jsは1,475→1,472行（3行減）。rootの可変component参照を二つ減らし、残るletはPNG export commandだけ。AST比較で対象参照・factory入口・公開位置以外のroot全体と相対順、raw factoryの全体不変、早期callbackのoptional member call／active読取り対応、新しい未束縛参照なしを確認した。関連単体21件、構文632file・全単体2,334件・関連E2E278件が成功（15file、4.4m、exit 0）。追加四単体で初期化前の境界、実Moveの公開と入力bind、command／input構築失敗とbind失敗の違い、実menuの公開とstart／closeの返値・receiver・例外、再構築失敗時の旧参照、workspaceごとの独立性を確認した。700製品／test入力と開始HEAD不変、選択15fileのtest list278件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-sketch-navigation-ownership-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、直前a6912a5の全589件成功とは区別する。
+
+基準develop a6912a5、作業branch codex/sketch-navigation-ownership、開始時週枠残量35%。直前a6912a5の全E2E589件成功（22.1分）と今回の関連検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ## Splineブラウザ支援のWorkspace組立て（2026-11-10）
 
 SplineTestDriver.createForWorkspaceが、隣接していたsetup／transferの生成を同じGeometry・Workspace・SelectionとBlock機能から組み立て、実APIをsetup／transferとして返す。既存create／createTransferはそのまま維持する。Spline拘束型と注記styleの選択、採番、Documentへの定義追加も同じ実ownerから取得し、rootの個別部品選択を減らす。Clipboardの入口は既存の関数を明示入力として保持する。
