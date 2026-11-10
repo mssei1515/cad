@@ -331,7 +331,7 @@
   });
   const { layer: annotationLayer, dimensions: annotationDimensions, command: annotationCommand,
     dimensionScope: dimensionPresentationScope } = annotationFeature;
-  const { hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = annotationFeature.spatial;
+  const { canvasContextAnnotationHit } = annotationFeature.spatial;
   const { annotationLeaderDisplayGeometry, drawAnnotationLeader } = annotationFeature.renderer;
   function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
   const referenceImageFeature = window.ReferenceImageFeature.createForWorkspace({
@@ -485,9 +485,6 @@
   }
 
 
-  function hitAnnotationElement(x, y, options = {}) {
-    return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
-  }
 
   function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
@@ -501,12 +498,12 @@
 
 
 
-  const sceneHitInteraction = window.CanvasHitInteraction.createSceneForWorkspace({
+  const sceneHitInteraction = window.CanvasHitInteraction.createSceneWithAnnotationsForWorkspace({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
     viewport, dimensionScope: dimensionPresentationScope, dimensions: dimensionDisplay, dimensionLabelForConstraint,
-    annotationBounds, hitAnnotationElement, operandValues: constraintOperandValues,
+    annotationBounds, annotationSpatial: annotationFeature.spatial, operandValues: constraintOperandValues,
   });
-  const { ordinarySelectionMode } = sceneHitInteraction.policy;
+  const { policy: { ordinarySelectionMode }, hitAnnotationElement } = sceneHitInteraction;
 
 
 

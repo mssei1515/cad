@@ -431,3 +431,73 @@ test("Workspace hit scene propagates constructor, scope and notification errors 
     }
   }
 });
+
+
+function annotationPolicyFixture(composed, { real = false, failAt = null, probe = {} } = {}) {
+ const w=sandbox.window,original=w.GeometryHitQuery;let owners,spatial,ordinarySelectionMode,captured;
+ probe.rawCalls=[];probe.error=new Error(failAt||'annotation hit');
+ w.GeometryHitQuery={...original,createScopePolicy(input){if(failAt==='policy')throw probe.error;return original.createScopePolicy(input);},
+  create(input){captured=input;if(failAt==='geometry')throw probe.error;return original.create(input);}};
+ let f;
+ try{f=sceneFixture((ports,state)=>{
+  probe.state=state;
+  const query=real?w.AnnotationSpatialQuery.create({viewportScale:()=>1,annotationTextWorldHeight:()=>10,formatDisplayNumber:String,
+   allAnnotations:()=>state.scope.annotations,isVisibleSketchId:id=>!(state.hiddenIds||[]).includes(id),activeSketchId:ports.sketchContext.activeSketchId,
+   annotationLeaderAnchor:element=>element.start,annotationTextLayout:()=>({x:0,y:0,rotation:0,left:-5,width:10,height:10,bounds:{x1:-5,y1:-5,x2:5,y2:5}})})
+   :{hitAnnotationElement:function(){'use strict';assert.equal(this,undefined);assert.equal(state.ready,true);state.reads.push('raw');probe.rawCalls.push([...arguments]);if(state.rawFailure)throw probe.error;return state.hitResult;}};
+  spatial={...query};
+  owners={documentWorkspace:{workspace:{current:ports.currentScope},sketches:ports.sketchContext,parameters:{dimensionUsesExpression:ports.dimensionUsesExpression}},
+   readServices:{reads:ports.geometryReads,catalog:ports.catalog,projections:ports.projections,hatches:ports.hatches,geometryAppearance:ports.geometryAppearance,dimensionAppearance:{effectiveDimensionAppearance:ports.effectiveDimensionAppearance}},
+   interaction:{pointUsage:ports.pointUsage,lifecycle:{readMode:ports.readMode}},sessions:{pending:{get current(){return ports.readPendingCommand();}},targets:{get command(){return ports.readConstraintCommand();}}},
+   viewport:ports.viewport,dimensionScope:ports.dimensionScope,dimensions:ports.dimensions,dimensionLabelForConstraint:ports.dimensionLabelForConstraint,
+   annotationBounds:ports.annotationBounds,operandValues:ports.operandValues};
+ },()=>{
+  if(composed)return w.CanvasHitInteraction.createSceneWithAnnotationsForWorkspace({...owners,annotationSpatial:spatial});
+  const {hitAnnotationElement:queryAnnotationElement}=spatial;
+  function hitAnnotationElement(x,y,options={}){return queryAnnotationElement(x,y,{activeOnly:!ordinarySelectionMode(),...options});}
+  const scene=w.CanvasHitInteraction.createSceneForWorkspace({...owners,hitAnnotationElement});ordinarySelectionMode=scene.policy.ordinarySelectionMode;
+  return Object.freeze({...scene,hitAnnotationElement});
+ });}finally{w.GeometryHitQuery=original;}
+ return {...f,probe,spatial,captured};
+}
+
+test('annotation scene policy preserves bare query, argument narrowing, live policy order and caller option overrides',()=>{
+ const traces=[];
+ for(const composed of [false,true]){
+  const f=annotationPolicyFixture(composed),hit=f.scene.hitAnnotationElement,marker={},symbol=Symbol('option');f.state.hitResult=marker;
+  assert.equal(Object.isFrozen(f.scene),true);assert.equal(hit(1,2,undefined,'ignored'),marker);assert.equal(f.probe.rawCalls.at(-1).length,3);assert.equal(f.probe.rawCalls.at(-1)[2].activeOnly,false);
+  assert.deepEqual(f.state.reads,['mode','pending','command','raw']);
+  f.state.mode='line';f.state.reads=[];hit(1,2);assert.equal(f.probe.rawCalls.at(-1)[2].activeOnly,true);assert.deepEqual(f.state.reads,['mode','raw']);
+  f.state.mode='select';f.state.pending={};f.state.reads=[];hit(1,2);assert.deepEqual(f.state.reads,['mode','pending','raw']);
+  f.state.pending=null;f.state.command={};hit(1,2);assert.equal(f.probe.rawCalls.at(-1)[2].activeOnly,true);f.state.command=null;
+  const options={get activeOnly(){f.state.reads.push('option');return true;},[symbol]:marker};f.state.reads=[];hit(3,4,options);
+  assert.deepEqual(f.state.reads,['mode','pending','command','option','raw']);assert.equal(f.probe.rawCalls.at(-1)[2][symbol],marker);assert.equal(f.probe.rawCalls.at(-1)[2].activeOnly,true);
+  f.state.reads=[];assert.equal(f.captured.hitAnnotationElement(3,4,{activeOnly:false}),marker);assert.deepEqual(f.state.reads,['mode','pending','command','raw']);
+  f.spatial.hitAnnotationElement=()=>assert.fail('raw query reference is captured once');assert.equal(hit(1,2,null),marker);
+  f.state.reads=[];f.state.error=f.probe.error;assert.throws(()=>hit(1,2,options),error=>error===f.probe.error);assert.deepEqual(f.state.reads,['mode']);f.state.error=null;
+  f.state.reads=[];assert.throws(()=>hit(1,2,{get activeOnly(){throw f.probe.error;}}),error=>error===f.probe.error);assert.deepEqual(f.state.reads,['mode','pending','command']);
+  f.state.rawFailure=true;assert.throws(()=>hit(1,2),error=>error===f.probe.error);
+  traces.push(JSON.stringify(f.probe.rawCalls.map(args=>[args[0],args[1],args[2].activeOnly])));
+ }
+ assert.equal(traces[1],traces[0]);
+});
+
+test('annotation scene policy retains actual annotation identities and scope across selection, commands, visibility and model replacement',()=>{
+ const traces=[];
+ for(const composed of [false,true]){
+  const f=annotationPolicyFixture(composed,{real:true}),active={id:'A1',type:'text',text:'active',sketchId:'S1'},inactive={id:'A2',type:'text',text:'inactive',sketchId:'S2'};
+  f.state.scope.annotations.push(active,inactive);const picks=[];
+  const pick=(options,expected)=>{const hit=f.scene.hitAnnotationElement(0,0,options);assert.equal(hit?.element,expected);if(hit)assert.equal(hit.part,'label');picks.push(hit?.element.id||null);};
+  pick(undefined,inactive);pick({activeOnly:true},active);pick({activeOnly:undefined},active);
+  for(const field of ['pending','command']){f.state[field]={};pick(undefined,active);pick({activeOnly:false},inactive);f.state[field]=null;}
+  f.state.mode='line';pick(undefined,active);f.state.active='S2';pick(undefined,inactive);f.state.mode='select';f.state.locked=true;pick(undefined,inactive);
+  inactive.visible=false;pick(undefined,active);inactive.visible=true;f.state.hiddenIds=['S2'];pick(undefined,active);f.state.hiddenIds=[];
+  f.state.scope=f.empty();pick(undefined,undefined);f.state.scope.annotations.push(inactive);pick(undefined,inactive);
+  traces.push(JSON.stringify(picks));
+ }
+ assert.equal(traces[1],traces[0]);
+});
+
+test('annotation scene construction fails at the original policy or geometry stage without invoking annotation or reading the model',()=>{
+ for(const composed of [false,true])for(const failAt of ['policy','geometry']){const probe={};assert.throws(()=>annotationPolicyFixture(composed,{failAt,probe}),error=>error===probe.error);assert.deepEqual(probe.rawCalls,[]);assert.deepEqual(probe.state.reads,[]);}
+});

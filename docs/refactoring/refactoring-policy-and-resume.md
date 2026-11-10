@@ -98,6 +98,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：注記hitのScene scopeポリシー（2026-11-10）
+
+CanvasHitInteraction.createSceneWithAnnotationsForWorkspaceで、raw Annotation spatial queryと同じSceneのScope Policyを接続する。通常選択時は全Sketch、mode／pending／constraint操作中はactiveOnlyを既定とし、caller optionsを後から展開する従来の関数本体をそのまま所有側へ移した。返すhitAnnotationElementをScene内部query・Parameter参照入力・Browser注記支援で共有する。
+
+raw注記queryとordinarySelectionModeの裸呼出し、三引数への制限、options既定値{}とnull／明示undefined／Symbol key、policyの毎回読取りと短絡順、返値・例外を維持する。既存raw AnnotationSpatialQueryとGeometryHitQueryは不変で、可視性・注記参照と部位判定はそのownerに残す。新しいmode／pending／selection・cache・listener・edit guardは作らない。createSceneとcreateQueriesは従来同様にモデルを読まず、raw Scene／Workspace factoryも維持する。
+
+app.jsは1,490→1,487行（3行減）、非空白1,041→1,038行。rootのhit判定本体とraw query別名を除き、ordinarySelectionModeは描画順の後段入力にも使うため同じpolicyから保持する。AST比較でscoped hit関数全体の一致、対象構築・別名以外のroot全体と相対順、既存module API・raw spatial／hit query・index・全E2E不変、新しい未使用／未束縛参照なしを確認した。
+
+関連単体21件、構文631file・全単体2,324件・関連E2E331件が成功（13file、5.2m、exit 0）。三つの新旧比較で裸query・引数制限・既定options／上書きとpolicyの短絡読取順・元の例外、実注記identityと選択／操作中／可視性／モデル差替え、policy／geometry構築失敗時の無読取りを確認した。内部queryと公開判定で同じpolicyを使い、ロックの独自filterを加えていない。699製品／test入力と開始HEAD不変、選択13fileのtest list331件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-annotation-hit-policy-{focused,check,unit,e2e,proof,smoke}.logとsource-hashes／selection／filter-environment／e2e-receipt／last-run JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、直前2d1d487の全589件成功とは区別する。全体目標は未完了。
+
+基準developは2d1d487、作業branchはcodex/annotation-hit-policy、開始時週枠残量37%。前節で未実装とした注記hitのscope境界を今回実装した。注記・式入力・引出線・Sketch権限／投影・Block／Hatch／派生・UI・保存読込の関連13fileを選択した。直前2d1d487の全E2E589件成功（21.8分）と今回変更後の関連検証を区別する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Document編集resetの所有者依存（2026-11-10）
 
 DocumentEditingReset.createForWorkspaceが、同じDocumentWorkspaceのDocument／Geometry IDs／Document IDs、read servicesのBlock投影／Hatch cache、CanvasInteractionのLifecycle、OperationSessionsのPending／Target、Block editor sessionとConstraint Commitの性能解除を、既存createへ接続する。rootは同じ関係の低水準部品を別々に選択せず、残る実componentとflush／scope切替の入口だけを明示する。
