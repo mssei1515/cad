@@ -81,7 +81,7 @@
   const { hatchPrimitivesForScope } = hatchGeometryQuery;
   const { blockDefinitionById, blockDefinitionDrawableSketchIds } = blockCatalog;
   const { createBlockProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
-  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, resolveGeometryRef } = geometryReads;
+  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, resolveGeometryRef } = geometryReads;
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
@@ -806,10 +806,9 @@
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDraggingForWorkspace: createConstraintInputWithDragging },
     controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForWorkspace({
     document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, readServices: geometryReadServices, presentation,
-    operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController,
-    isGeometryMode, findLineFixedConstraint, clearSelection, updateToolbar, updateConstraintButtons,
-    hitConstraintOperand,
-    geometryInstanceBundle, placement: dimensionPlacement,
+    operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController, fixedState: fixedStateQueries,
+    isGeometryMode, clearSelection, updateToolbar, updateConstraintButtons,
+    hitConstraintOperand, placement: dimensionPlacement,
   });
 
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
@@ -865,7 +864,7 @@
 
 
   const { operand: fixedOperandCommand, createSelectionForWorkspace: createFixedSelection } = createFixedForWorkspace({
-    projection: sketchProjectionFeature, fixedState: fixedStateQueries, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh,
+    projection: sketchProjectionFeature, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
   const { view: sketchTreeView, controller: sketchTreeController, menu: sketchContextController } = sketchEditing.createTreeForEditing({

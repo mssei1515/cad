@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：拘束編集の共有query owner接続（2026-11-10）
+
+ConstraintEditing.createForWorkspaceは、geometryInstanceBundleとfindLineFixedConstraintがundefinedのときだけ、保持するreadServices.readsの実readerと共有fixedStateの実queryを選ぶ。明示callbackとnullをそのまま保持し、その場合はfallback ownerを照会しない。後段createFixedForWorkspaceもfixedStateがundefinedのときだけ親の同じownerを選び、明示された別ownerとnullを維持する。固定照会は既存ownerが保持するbound editing scope、Instance readerは既存GeometryReadModelのWorkspaceと投影cacheを用い、scopeを取り違えたり値をsnapshot化したりしない。
+
+二つの既定照会と固定操作へのowner共有以外のconstructor・guard・Selection・command・解析・履歴の本体、相対生成・公開・bind順は不変。新しいstate・cache・listener・namespaceや汎用contextは追加しない。通常UI・保存形式v26を維持する。型判定とenabledの扱いは既存ConstraintReferences、Instance解決は既存read servicesが所有し、ConstraintEditing内で同じ照会を再実装しない。
+
+rootのConstraintEditing構築入力は20→19、後段の固定操作構築入力は6→5となり、未使用のgeometryInstanceBundle別名を除いた。app.jsは1,392→1,391行（1行減）、非空白946→945行、root300文・489→488束縛。構築・接続497非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。今回の主成果は共有query ownerへの接続と構築入力・root別名の減少であり、小さな行数差を分離済み責務の件数へ換算しない。数百行への全体目標は未完了。
+
+追加単体四件で、実LineFixedConstraintのObject照合／enabled変更とlive scope、operand／Selection間の同じquery、実Instance角度寸法開始での現在anchor・同じreaderと裸receiver／一引数・例外、明示callback／nullによるfallback無照会と後段owner override、照会取得失敗時の同じ例外と後続constructor停止を確認する。ASTでrootの対象接続と未使用別名だけの変更、二つの既定値と後段引数default以外の既存ConstraintEditing全体、低水準query／command／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体85件、構文635file・全単体2,408件・関連E2E398件が成功（31file、6.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択31fileのtest list398件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-query-owner-sharing-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、9f97a7fの全589件成功と区別する。
+
+基準develop 469104f、作業branch codex/constraint-query-owner-sharing、開始時週枠残量21%。直前469104fの関連398件成功と、全体E2Eの最新基準9f97a7f（589件成功、21.7m）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
 ### 最新：Block読取contextの準備・再接続組立て（2026-11-10）
 
 DocumentWorkspace.createReadContextは、Geometry read services・保存操作の公開・Block準備と拘束再接続の組立てを同じcontextに所有する。保存操作APIのensureBlockStateは完成したpreparation.blocksをmember呼出しし、prepareBlocksがundefinedのときだけ、同じ関数をread servicesへ接続する。明示callbackとnullはそのまま保持する。privateな保存bundle参照をread services生成前に初期化するため、生成中の早期呼出しも従来のdocumentPreparationに対応するReferenceErrorとなる。read servicesは従来どおり最初の実component生成であり、Block正規化は生成時に前倒ししない。Geometry読取りはWorkspace.current、Block準備はcreatePersistenceへ渡されたbound editing scopeと現在Block editorを操作時に読む。
