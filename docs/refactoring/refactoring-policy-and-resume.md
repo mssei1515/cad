@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のHatch／描画順テスト組立て単位ではapp.jsは1,433行、非空白987行。AST監査ではroot315文・512束縛、構築・接続507非空白行、別名・設定131行、委譲70行、条件付きtest hooks196行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のDimension操作テスト組立て単位ではapp.jsは1,428行、非空白982行。AST監査ではroot313文・506束縛、構築・接続507非空白行、別名・設定128行、委譲69行、条件付きtest hooks194行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Dimension操作テスト支援の後段組立て（2026-11-10）
+
+DimensionTestDriver.createForEditingのcreateInteractionForEditingは、保持済みのGeometry・寸法配置・scope／Selection／sessionを使い、後段のCanvas座標、寸法値編集、fit、参照graph、Solver、checkpoint、解析とdragを既存createInteractionへ接続する。型・数値関数は既存namespaceから選び、rootの未使用aliasと寸法開始delegateを除く。編集／寸法開始のmethod receiver、解析refreshの既定Objectと一引数、戻り値・例外を保つ。raw factory、生成順、凍結されたplacement／selection公開APIと参照同一性、live scope・pending／drag・入力状態を維持する。通常機能／index／E2E・保存形式v26は不変で、独自model・Selection・履歴・cacheや汎用contextを作らない。 app.jsは1,433→1,428行（5行減）。既存moduleと単体fileを拡張し、新fileやnamespaceを追加しない。
+
+追加単体2件で生成時無照会、実scope交換とSelection identity、寸法編集のreceiver／返値／例外、layout／座標、pending pointerのcopyとdrag観測、viewport→UI→drawと既存公開groupを新旧比較した。ASTでrootの対象接続・未使用alias／delegateだけの変更、全portと三callbackの引数／既定値／本体の対応、既存Driver本体・通常機能・E2E不変、新しい未使用／未束縛参照なしを照合した。関連単体13件、構文635file・全単体2,367件・関連E2E246件が成功（11file、4.4m、exit 0）。実公開APIを利用する全9fileとphase0／file-safetyを選び、性能テストは構文／単体の終了後に実行した。705製品／test／検証入力と開始HEAD不変、test list246件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-dimension-interaction-assembly-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。全E2Eはこの単位で再実行しておらず、4b33718の全589件成功と区別する。
+
+基準develop f4e4f16、作業branch codex/dimension-interaction-assembly、開始時週枠残量28%。全体目標は未完了。全体E2Eの最新基準4b33718と今回の関連検証は区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Hatch／描画順のテスト専用Workspace組立て（2026-11-10）
 

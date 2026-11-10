@@ -941,7 +941,17 @@
         displayFactor: window.Appearance.annotationDisplayFactor, formatDimensionLabel, formatMeasuredDimensionLabel,
         jisDimensionTextAngle: layouts.jisDimensionTextAngle, dimensionTextOffset: layouts.dimensionTextOffset });
     }
-    return Object.freeze({ support, fixtures, createDisplayForEditing });
+    function createInteractionForEditing({ canvasDriver, dimensionValues, clearSelection, presentation, fit, references, canvas,
+      solving, checkpoint, analysis, dimensionDrag }) {
+      return support.createInteraction({ clientPosition: canvasDriver.clientPosition, startDimensionEditInput: hit => dimensionValues.startEdit(hit),
+        clearSelection, updateUI: presentation.updateUI, draw: presentation.draw, addCircle: geometry.addCircle, addArc: geometry.addArc,
+        fitAllGeometryToViewport: fit.fitAllGeometryToViewport, startDistanceCommand: () => dimensions.startDistanceCommand(),
+        constraintGraphNodes: references.constraintGraphNodes, worldToCanvasScreen: viewport.worldToCanvasScreen, canvas, dimensionAnchor: placement.dimensionAnchor,
+        modelTypes: window.GeometrySolver, signedPointLineDistance: window.GeometryKernel.signedPointLineDistance, vectorNorm: window.GeometrySolver.vectorNorm,
+        solveSketchAndDependents: solving.solveSketchAndDependents, snapshotModelState: checkpoint.captureValues,
+        refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), dimensionDrag });
+    }
+    return Object.freeze({ support, fixtures, createDisplayForEditing, createInteractionForEditing });
   }
 
   window.DimensionTestDriver = Object.freeze({ createForEditing, createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });

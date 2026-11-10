@@ -1,5 +1,14 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Dimension操作テスト支援の後段組立て（2026-11-10）
+
+DimensionTestDriver.createForEditingのcreateInteractionForEditingは、保持済みのGeometry・寸法配置・scope／Selection／sessionを使い、後段のCanvas座標、寸法値編集、fit、参照graph、Solver、checkpoint、解析とdragを既存createInteractionへ接続する。型・数値関数は既存namespaceから選び、rootの未使用aliasと寸法開始delegateを除く。編集／寸法開始のmethod receiver、解析refreshの既定Objectと一引数、戻り値・例外を保つ。raw factory、生成順、凍結されたplacement／selection公開APIと参照同一性、live scope・pending／drag・入力状態を維持する。通常機能／index／E2E・保存形式v26は不変で、独自model・Selection・履歴・cacheや汎用contextを作らない。 app.jsは1,433→1,428行（5行減）。既存moduleと単体fileを拡張し、新fileやnamespaceを追加しない。
+
+追加単体2件で生成時無照会、実scope交換とSelection identity、寸法編集のreceiver／返値／例外、layout／座標、pending pointerのcopyとdrag観測、viewport→UI→drawと既存公開groupを新旧比較した。ASTでrootの対象接続・未使用alias／delegateだけの変更、全portと三callbackの引数／既定値／本体の対応、既存Driver本体・通常機能・E2E不変、新しい未使用／未束縛参照なしを照合した。関連単体13件、構文635file・全単体2,367件・関連E2E246件が成功（11file、4.4m、exit 0）。実公開APIを利用する全9fileとphase0／file-safetyを選び、性能テストは構文／単体の終了後に実行した。705製品／test／検証入力と開始HEAD不変、test list246件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-dimension-interaction-assembly-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。全E2Eはこの単位で再実行しておらず、4b33718の全589件成功と区別する。
+
+基準develop f4e4f16、作業branch codex/dimension-interaction-assembly、開始時週枠残量28%。全体目標は未完了。全体E2Eの最新基準4b33718と今回の関連検証は区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ### 最新：Hatch／描画順のテスト専用Workspace組立て（2026-11-10）
 
 HatchTestDriver.createForWorkspaceとDrawingOrderTestDriver.createForWorkspaceは、既存のHatch／描画順のfixture・観測APIへDocumentWorkspace、Geometry、read services、Selection／lifecycle、Presentation、fit、Block／Clipboardの実ownerを接続する。型・定数・Hatch codec・GeometryRefとDocument定義への追加を各TestDriver内で選び、rootはテスト専用の低水準aliasを持たない。固定Documentの最新blockDefinitions配列とWorkspace.currentを分け、Clipboardのcopy／paste receiver・引数／戻り値・例外を保持する。旧factoryの生成順、既存の凍結公開APIと実Geometry／Selection／投影参照、境界修復前の無効状態・通知／履歴順は変更しない。CanvasTestDriverは従来と同じPoint／Lineだけを既存Solver namespaceから読む。test query guardとhook公開位置、通常機能・index／読込方式・保存形式v26は不変。新たなmodel／cache／sessionや汎用app contextを追加しない。 app.jsは1,445→1,433行（12行減）。既存の二つのTestDriverへ集約し、新しい製品moduleやnamespaceは作らない。追加fileは対応単体一つで、標準の単体／構文一覧へ登録した。
