@@ -187,6 +187,97 @@ function editingFixture(composed=true, assemble=null) {
   return{...f,options,replaceDrag};
 }
 
+function drawingAnchorFixture() {
+  const trace = [], live = { sources: [], ready: false }, failure = new Error('snap source failure');
+  const check = stage => { assert.equal(live.ready, true); trace.push(stage); if (live.fail === stage) throw failure; };
+  function read() { assert.equal(this, undefined); check('read'); return live.sources; }
+  function visible(element) {
+    assert.equal(this, undefined); check('visible:' + element.id);
+    live.onVisible?.(element); return !element.hiddenSketch;
+  }
+  const f = editingFixture(true, (w, options) => {
+    options.readServices.reads.allAnnotations = read;
+    options.readServices.geometryAppearance.isVisibleSketchElement = visible;
+    const createDisplay = w.AnnotationDisplay.create;
+    w.AnnotationDisplay.create = options => {
+      const display = createDisplay(options);
+      display.renderer.annotationPlacementAnchor = function(element) {
+        assert.equal(this, undefined); check('anchor:' + element.id); return element.position;
+      };
+      return display;
+    };
+    return w.AnnotationFeature.createForEditing(options);
+  });
+  assert.deepEqual(trace, []);
+  assert.deepEqual(f.events, ['display', 'materialization', 'anchors', 'dimensions', 'command']);
+  live.ready = true;
+  function previous() {
+    return read().filter(element => visible(element) && element.visible !== false)
+      .map(element => ({ element, ...f.feature.placementAnchor(element) }));
+  }
+  return { ...f, trace, live, failure, visible, previous };
+}
+
+test('drawing annotation anchors read live sources, preserve identities and finish visibility before placement', () => {
+  for (const legacy of [true, false]) {
+    const f = drawingAnchorFixture(), query = legacy ? f.previous : f.feature.drawingAnchors;
+    const symbol = Symbol('anchor metadata');
+    const first = { id: 'first', sketchId: 'inactive', locked: true, position: { x: 1, y: 2, [symbol]: 'kept' } };
+    const hidden = { id: 'hidden', hiddenSketch: true, get visible() { throw new Error('must short circuit'); } };
+    const off = { id: 'off', visible: false };
+    const projected = { id: 'projected', blockProjection: true, position: { x: 3, y: 4 } };
+    f.live.sources = [first, hidden, off, projected];
+    f.live.onVisible = element => { if (element === projected) first.position.x = 9; };
+    const result = query();
+    assert.deepEqual(f.trace, ['read', 'visible:first', 'visible:hidden', 'visible:off', 'visible:projected', 'anchor:first', 'anchor:projected']);
+    assert.equal(result.length, 2); assert.equal(result[0].element, first); assert.equal(result[1].element, projected);
+    assert.equal(result[0].x, 9); assert.equal(result[0][symbol], 'kept');
+    const again = query(); assert.notEqual(again, result); assert.notEqual(again[0], result[0]);
+    first.position = { x: 20, y: 30 }; f.live.sources = [first];
+    assert.equal(query()[0].x, 20); f.live.sources = []; assert.equal(query().length, 0);
+    assert.equal(f.state.scaleReads, 0); assert.equal(f.events.includes('scope'), false);
+  }
+});
+
+test('annotation snap source and placement errors retain identity and stop at the same phase', () => {
+  for (const stage of ['read', 'visible:a', 'property', 'anchor:a']) {
+    const traces = [];
+    for (const legacy of [true, false]) {
+      const f = drawingAnchorFixture();
+      const a = { id: 'a', position: { x: 1, y: 2 }, get visible() {
+        f.trace.push('property'); if (stage === 'property') throw f.failure; return true;
+      } };
+      f.live.sources = [a, { id: 'b', position: { x: 3, y: 4 } }]; f.live.fail = stage;
+      assert.throws(legacy ? f.previous : f.feature.drawingAnchors, error => error === f.failure);
+      traces.push(f.trace); assert.equal(f.live.sources[0], a); assert.equal(a.position.x, 1);
+    }
+    assert.deepEqual(traces[1], traces[0]);
+  }
+});
+
+test('real DrawingSnap consumes annotation anchors across source replacement and visibility changes', () => {
+  const f = drawingAnchorFixture(), context = { window: {} }; vm.createContext(context);
+  for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/editing/drawing_snap.js']) {
+    vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
+  }
+  const drawing = context.window.DrawingSnap.create({
+    geometryReads: Object.fromEntries(['Points', 'Lines', 'Circles', 'Arcs', 'Splines'].map(name => ['allGeometry' + name, () => []])),
+    annotationAnchors: f.feature.drawingAnchors, isVisibleSketchElement: f.visible,
+    isActiveSketchElement: () => false, applicationText: (ja, en) => en,
+  });
+  const original = { id: 'original', sketchId: 'other', position: { x: 10, y: 20 } };
+  f.live.sources = [original]; assert.equal(drawing.resolve({ x: 11, y: 20 }, 2).x, 10);
+  assert.equal(drawing.active.data.annotation, original);
+  const projected = { id: 'projection', blockProjection: true, position: { x: 30, y: 40 } };
+  f.live.sources = [projected]; drawing.resolve({ x: 30, y: 41 }, 2);
+  assert.equal(drawing.active.data.annotation, projected);
+  projected.hiddenSketch = true;
+  const miss = { x: 30, y: 40 }; assert.equal(drawing.resolve(miss, 2), miss); assert.equal(drawing.active, null);
+  projected.hiddenSketch = false; projected.visible = false;
+  assert.equal(drawing.resolve(miss, 2), miss);
+  assert.equal(f.events.includes('scope'), false);
+});
+
 test('editing annotation composition shares actual owners at the original creation stage without reading scope, scale or late drag',()=>{
   const f=editingFixture();assert.deepEqual(f.events,['display','materialization','anchors','dimensions','command']);assert.equal(f.state.scaleReads,0);assert.equal(f.state.nextId,10);
   assert.equal(f.feature.command,f.command);assert.equal(f.feature.layer,f.layer);assert.equal(f.feature.renderer,f.renderer);assert.equal(f.feature.dimensions,f.dimensions);

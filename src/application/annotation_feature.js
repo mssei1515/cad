@@ -29,7 +29,7 @@
   }
   function create({ ctx, viewport, surface, canvasSelection, readHover, readExportFrame, canvasThemeColor,
     effectiveAnnotationStyle, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement, resizeEnabled,
-    activeSketchId, allAnnotations, isVisibleValue, isVisibleSketchId, currentScope, readEditingScope,
+    activeSketchId, allAnnotations, isVisibleSketchElement, isVisibleValue, isVisibleSketchId, currentScope, readEditingScope,
     constraintTargetSession, pendingCommandSession, lastPointer, elementSketchId, guardSketchEdit, isReferenceSourceSketchId,
     geometryRefForItem, constraintOperandsFromSelection, recordHistory, updateUI, draw, setHint,
     cancelPendingCommand, cancelConstraintTargetCommand, applicationText, startDistanceResolution,
@@ -42,6 +42,10 @@
     const spatial = display.createSpatialQueries();
     const { annotationPlacementAnchor: readAnchor, annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics } = display.renderer;
     function placementAnchor(...args) { return readAnchor(...args); }
+    function drawingAnchors() {
+      return allAnnotations().filter(element => isVisibleSketchElement(element) && element.visible !== false)
+        .map(element => ({ element, ...placementAnchor(element) }));
+    }
     const materialization = window.AnnotationAnchorConstraints.createMaterialization({ annotationPlacementAnchor: placementAnchor,
       annotationLeaderDisplayGeometry, annotationLeaderAnchor, effectiveAnnotationStyle });
     function materialize(...args) { return materialization.materialize(...args); }
@@ -105,7 +109,7 @@
       });
     }
     return Object.freeze({ renderer: display.renderer, layer: display.layer, spatial, anchors, dimensions, command,
-      placementAnchor, materialize, dimensionScope, startAnchorConstraint, createEditor, createDrag });
+      placementAnchor, drawingAnchors, materialize, dimensionScope, startAnchorConstraint, createEditor, createDrag });
   }
   // Keep Workspace reads separate from the activated editing scope and late drag callbacks.
   function createForEditing({ ctx, viewport, surface, documentWorkspace, editingScope, readServices, interaction, sessions, targets,
@@ -114,7 +118,7 @@
     const { workspace, sketches, parameters: parameterNamespace, documentIds } = documentWorkspace;
     const { activeSketchId, elementSketchId, isEditableSketchElement, isReferenceSourceSketchId } = sketches;
     const { effectiveAnnotationStyle } = readServices.annotationAppearance, { resolveGeometryRef, allAnnotations } = readServices.reads;
-    const { isVisibleValue, isVisibleSketchId } = readServices.geometryAppearance;
+    const { isVisibleValue, isVisibleSketchId, isVisibleSketchElement } = readServices.geometryAppearance;
     const { annotationLeaderAnchor, annotationLeaderTargetFromHit } = targets;
     const { guardSketchEdit, canCreateInActiveSketch, rejectRootSketchCreation } = interaction.access;
     const { defaultDimensionForTarget, normalizeDimension } = placement;
@@ -123,7 +127,7 @@
     const { geometryRefForItem } = window.GeometryObjects;
     return create({ ctx, viewport, surface, canvasSelection: interaction.selection, readHover: () => interaction.hover.current,
       readExportFrame, canvasThemeColor, effectiveAnnotationStyle, annotationLeaderAnchor, resolveGeometryRef, isEditableSketchElement, resizeEnabled,
-      activeSketchId, allAnnotations, isVisibleValue, isVisibleSketchId, currentScope: workspace.current, readEditingScope: () => editingScope.current,
+      activeSketchId, allAnnotations, isVisibleSketchElement, isVisibleValue, isVisibleSketchId, currentScope: workspace.current, readEditingScope: () => editingScope.current,
       constraintTargetSession: sessions.targets, pendingCommandSession: sessions.pending, lastPointer: sessions.pointer.readLastPointer,
       elementSketchId, guardSketchEdit, isReferenceSourceSketchId, geometryRefForItem, constraintOperandsFromSelection,
       recordHistory, updateUI, draw, setHint, cancelPendingCommand, cancelConstraintTargetCommand, applicationText, startDistanceResolution,
