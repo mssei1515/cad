@@ -132,5 +132,14 @@
 
     return Object.freeze({ press, hover });
   }
-  window.CanvasHitInteraction = Object.freeze({ create, createScene, createSceneForWorkspace });
+  function createSceneWithAnnotationsForWorkspace({ annotationSpatial, ...options }) {
+    const { hitAnnotationElement: queryAnnotationElement } = annotationSpatial;
+    const scene = createSceneForWorkspace({ ...options, hitAnnotationElement });
+    const { ordinarySelectionMode } = scene.policy;
+    function hitAnnotationElement(x, y, options = {}) {
+      return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
+    }
+    return Object.freeze({ ...scene, hitAnnotationElement });
+  }
+  window.CanvasHitInteraction = Object.freeze({ create, createScene, createSceneForWorkspace, createSceneWithAnnotationsForWorkspace });
 })();
