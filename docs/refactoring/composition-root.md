@@ -1,5 +1,16 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 編集Instance正規化のWorkspace既定値（2026-11-10）
+
+DocumentWorkspace.createReadContext().createPersistenceが、既存GeometryInstance codecと同じWorkspaceのSketchContextを接続し、normalizeGeometryInstanceを公開する。Sketch指定がfalseyなら操作時のactiveSketchIdをString化する従来の既定resolverを所有する。raw geometryInstances APIとDocumentLoadingの明示resolverは維持し、保存検査に編集時の既定値を混ぜない。.jot2d v26の形式・移行・幾何モデルは変更しない。
+
+app.jsの早期利用されるhoisted関数は(raw, ...args)の委譲として残す。元のarity 1、引数既定値、呼出しごとのresolver生成、裸activeSketchId呼出し、codecのmember receiverと三引数制限、返値・例外を保つ。現在のWorkspaceとbound preparation scopeを混同せず、create時にSketchを読まない。既存Sketch照会の不足項目補完も維持する。モデル・session・cache・listenerを追加せず、既存module内で責務を整理する。
+
+app.jsは1,487→1,485行（2行減）。AST比較でrootの対象別名と委譲関数以外の全体・相対順、所有側の既定値と関数本体の一致、既存API、raw persistence／index／全E2Eの不変、新しい未束縛参照なしを確認した。関連単体24件、構文631file・全単体2,327件・関連E2E244件が成功（9file、3.7m、exit 0）。三つの追加単体でWorkspace切替とbound scopeとの分離、旧rootとの既定値・返値・例外比較、codec receiver・三引数・fresh resolver・遅延Sketch読取りを確認した。699製品／test入力と開始HEAD不変、選択9fileのtest list244件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-editing-instance-normalization-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを実行しておらず、2d1d487の全589件成功とは区別する。
+
+基準develop b313085、作業branch codex/editing-instance-normalization、開始時週枠残量36%。全体目標は未完了。mainは停止条件到達時に最新の全体検証を行って最後に反映する。
+
+
 ## 注記hitのScene scopeポリシー（2026-11-10）
 
 CanvasHitInteraction.createSceneWithAnnotationsForWorkspaceで、raw Annotation spatial queryと同じSceneのScope Policyを接続する。通常選択時は全Sketch、mode／pending／constraint操作中はactiveOnlyを既定とし、caller optionsを後から展開する従来の関数本体をそのまま所有側へ移した。返すhitAnnotationElementをScene内部query・Parameter参照入力・Browser注記支援で共有する。

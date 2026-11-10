@@ -174,6 +174,79 @@ function addPersistedLine(scope, id, x = 0) {
   return { p1, p2, line, constraint };
 }
 
+test('editing instance normalization follows the live Workspace without changing the explicit file codec', () => {
+  const f = persistenceFixture(), api = f.persistence, host = f.model.workspace.capture();
+  assert.equal(api.normalizeGeometryInstance.length, 1);
+  for (const sketchId of [undefined, null, '', 0, false, NaN]) {
+    assert.equal(api.normalizeGeometryInstance({ sketchId }).sketchId, 'S1');
+  }
+  const local = w.DocumentState.create(); local.sketches[1].id = 'S9'; local.activeSketchId = 'S9';
+  f.model.workspace.activate(local);
+  // The bound preparation scope deliberately remains the host Document.
+  assert.equal(f.state.bound, f.model.document);
+  assert.equal(api.normalizeGeometryInstance({ type: 'pattern' }, undefined, 4).sketchId, 'S9');
+  assert.equal(api.normalizeGeometryInstance({ type: 'pattern' }, undefined, 4).id, 'PI5');
+  assert.equal(api.normalizeGeometryInstance({ sketchId: 73 }).sketchId, '73');
+  assert.equal(api.normalizeGeometryInstance({}, value => 'explicit:' + value).sketchId, 'explicit:undefined');
+  assert.equal(api.geometryInstances.normalize({}, () => 'file-sketch').sketchId, 'file-sketch');
+  assert.throws(() => api.geometryInstances.normalize({}), /normalizeSketch/);
+  f.model.workspace.restore(host);
+  assert.equal(api.normalizeGeometryInstance({}).sketchId, 'S1');
+});
+
+test('editing normalizer preserves the previous root defaults, return values and failures', () => {
+  const { model, persistence: api } = persistenceFixture();
+  const { activeSketchId } = model.sketches;
+  function previous(raw, normalizeSketch = value => String(value || activeSketchId()), index = 0) {
+    return api.geometryInstances.normalize(raw, normalizeSketch, index);
+  }
+  const inputs = [undefined, null, {}, { type: 'mirror', sketchId: 'S7', axis: 'L1' },
+    { type: 'pattern', copies: 3, spacing: 10, sources: [{ kind: 'line', path: ['L1'] }] },
+    { type: 'circularPattern', placement: { type: 'circularPattern' }, sketchId: 'S4' }];
+  for (const raw of inputs) for (const index of [undefined, 0, 4, '2', null]) {
+    assert.equal(JSON.stringify(api.normalizeGeometryInstance(raw, undefined, index)), JSON.stringify(previous(raw, undefined, index)));
+  }
+  const failure = new Error('resolver failed');
+  for (const normalize of [previous, api.normalizeGeometryInstance]) {
+    assert.throws(() => normalize({}, () => { throw failure; }), error => error === failure);
+    assert.throws(() => normalize({}, null), /normalizeSketch/);
+    let calls = 0;
+    assert.throws(() => normalize({ type: 'free' }, () => { calls++; }), /同期インスタンス/);
+    assert.equal(calls, 0);
+  }
+});
+
+test('editing normalizer keeps raw codec receiver and three arguments, with a fresh lazy default resolver', () => {
+  const original = w.DocumentLoading;
+  const calls = [], result = {}, failure = new Error('codec failed');
+  let fail = false;
+  const codec = { normalize: function(raw, resolver, index) {
+    assert.equal(this, codec); assert.equal(arguments.length, 3);
+    calls.push({ raw, resolver, index }); if (fail) throw failure; return result;
+  } };
+  w.DocumentLoading = { ...original, createWithCodecs(options) {
+    return { ...original.createWithCodecs(options), geometryInstances: codec };
+  } };
+  try {
+    const { model, persistence: api } = persistenceFixture();
+    assert.deepEqual(calls, []);
+    const raw = {};
+    assert.equal(api.normalizeGeometryInstance(raw), result);
+    assert.equal(api.normalizeGeometryInstance(raw, undefined, undefined, 'ignored'), result);
+    assert.equal(calls[0].raw, raw); assert.equal(calls[0].index, 0);
+    assert.notEqual(calls[0].resolver, calls[1].resolver);
+    const local = w.DocumentState.create(); local.sketches[1].id = 'S8'; local.activeSketchId = 'S8';
+    model.workspace.activate(local);
+    assert.equal(calls[0].resolver(''), 'S8');
+    assert.equal(calls[0].resolver('S4'), 'S4');
+    const explicit = value => value;
+    api.normalizeGeometryInstance(raw, explicit, null);
+    assert.equal(calls[2].resolver, explicit); assert.equal(calls[2].index, null);
+    fail = true;
+    assert.throws(() => api.normalizeGeometryInstance(raw), error => error === failure);
+  } finally { w.DocumentLoading = original; }
+});
+
 test('Document persistence shares actual codecs and round trips dimensions and geometry without applying a load', () => {
   const f = persistenceFixture(), source = addPersistedLine(f.model.document, 'L1'), api = f.persistence;
   f.model.document.documentName = '  Example  '; f.model.documentIds.restore({ hatchSeq: 12 });
