@@ -1,5 +1,14 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Geometry編集の準備とcheckpointの組立て（2026-11-10）
+
+GeometryMutationFeature（src/application/geometry_mutation_feature.js）は、一時作図と後段のGeometry編集checkpointを同じDocumentWorkspace・GeometryIds・Selection・History・解析／投影cache ownerへ接続する。prepareForWorkspaceは実TransientAuthoringのみを生成して返し、rootの既存位置で呼ぶcreateCheckpointが実EditingCheckpointを生成する。独自snapshot／採番／履歴・transaction stateを作らず、Workspace.currentをbound editing scopeや固定Documentで置換しない。仮作図rollbackの経路ごとのGeometry／Selection／採番とprovisional履歴の扱い、履歴復元中の短絡、checkpointの投影→解析無効化の順、返値・例外時の途中状態を維持する。既存二moduleの算法と公開API、通常UI・保存形式v26は不変。 app.jsは1,449→1,445行（4行減）。新fileはapplication内の機能組立て一つと対応単体一つ。従来のsrc/editing/transient_authoring.jsとcheckpoint.jsはそのまま状態・復元処理を所有する。rootの二つの生成位置と相対順を保ち、createCheckpointを作図準備時に暗黙実行しない。
+
+追加単体4件で実TransientAuthoring／EditingCheckpointとGeometryIds・Geometry型を使い、coldな二段階生成と実体identity、Workspace交換、仮PointのSelection／採番／履歴復元、履歴復元中の短絡、checkpointの参照同一性・membership／採番復元、一時Line状態との独立、生成／投影／解析／履歴失敗の例外と途中反映を新旧比較した。indexは遅延namespaceを一つ追加し、他script順・読込方式を維持する。ASTでrootの二生成箇所と未使用History aliasだけの変更、port／callback本体の対応、既存算法・Solver／保存不変、新しい未使用／未束縛参照なしを照合した。初回全E2Eは511成功・1失敗・77未実行（21.1分、exit 1、fail-fast停止）。file URL Helpの厳密な読込script期待一覧に新moduleの追加が漏れ、期待337に対して実338になったためで、既存対象を削除せず新moduleを一つ追加した。E2Eの他のassertion／閾値・timeoutは不変。初回ログとreceiptはTEMP cad-geometry-mutation-assembly-*に保持する。新module／単体も標準検証一覧へ追加し、修正後の関連単体16件、構文634file・全単体2,361件・修正後の全E2E589件が成功（50file、22.1m、exit 0）。新moduleと単体を標準検証一覧へ追加し、以前の検証対象は全て維持した。修正したfile URL読込一覧の単独E2Eも成功（worker終了後に残った専用serverだけを識別して終了し、同runnerのexit 0を回収）。704製品／test／検証入力と開始HEAD不変、全50fileのtest listと無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を確認した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-geometry-mutation-verified-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。初回の失敗を隠さず、修正後の結果と区別する。全体目標は未完了。
+
+基準develop 5edba2f、作業branch codex/geometry-mutation-assembly、開始時週枠残量30%。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+
 ### 最新：固定操作の段階的なWorkspace組立て（2026-11-10）
 
 ConstraintEditing.createForWorkspaceのcreateFixedForWorkspaceは、既存のOperand／Selection固定commandへDocumentWorkspace・共通operand・Sketch投影guard・固定状態query・SelectionHighlightとcheckpoint／insertion／solving／catalog／Presentationを段階的に接続する。単独対象の生成後に実operandを公開し、後段createSelectionForWorkspaceが成功した時だけ既存fixedSelectionを更新する。Workspace.currentとbound editing scopeを混同せず、元のGeometry・Selection・checkpoint・Solver／履歴を共有する。裸のcallback、引数と返値・例外、guard／snapshot／復元／通知順、失敗時の以前のcommandを維持する。旧createFixedEditing／createSelectionとFixedToggleCommand本体、通常UI・保存形式v26は不変。新state／setter／cache・汎用contextや新fileを追加しない。 app.jsは1,450→1,449行（1行減）。rootでは既存ownerを接続し、低水準の依存選択を既存ConstraintEditingへ集める。

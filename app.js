@@ -218,7 +218,7 @@
     serializeDocument: serializeModel, loadDocument: loadModelData, serializeConstraint, decorateSerializedConstraint,
     constructionCommand, clearInteractionForSketchChange, solveAndRefresh, changed: updateHistoryButtons, limit: HISTORY_LIMIT,
   });
-  const { documentHistory, controller: historyController, captureDocument: historySnapshot } = historyFeature;
+  const { controller: historyController } = historyFeature;
   const { active: activeEditHistory, resetBlock: resetBlockEditorHistory, resetDocument: resetHistory,
     undo: undoHistory, redo: redoHistory } = historyController;
   const toolbarPresentation = presentation.createToolbar({
@@ -275,10 +275,9 @@
     fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { worldToCanvasScreen, canvasPoint } = viewport;
-  const transientAuthoring = window.TransientAuthoring.create({
-    currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
-    isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
-    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
+  const { transient: transientAuthoring, createCheckpoint: createEditingCheckpoint } = window.GeometryMutationFeature.prepareForWorkspace({
+    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction,
+    history: historyFeature, analysis: constraintAnalysis, updateHistoryButtons,
   });
   const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview, createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
@@ -375,10 +374,7 @@
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, chainDraft: offsetChainDraft } = offsetFeature;
   const { submit: submitOffsetValue } = offsetCommand;
   function computeTrimPreview(pointer) { return trimFeature.computePreview(pointer); }
-  const editingCheckpoint = window.EditingCheckpoint.create({
-    currentScope: workspace.current, ids: geometryIds, invalidateProjection: invalidateBlockProjectionCache,
-    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
-  });
+  const editingCheckpoint = createEditingCheckpoint();
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
   const { dimensions: { serialize: serializeDimension }, codecs: constraintCodecs, metadata: constraintMetadata,
     preparation: documentPreparation, writer: documentWriter, normalizeGeometryInstance: normalizeEditingGeometryInstance, ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({

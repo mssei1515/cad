@@ -54,13 +54,13 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10の最新単位ではapp.jsは1,507行、非空白1,058行。全体目標はactive・未完了であり、前回停止checkpointから再開した。最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10のGeometry編集準備単位ではapp.jsは1,445行、非空白999行。AST監査ではroot318文・522束縛、構築・接続507非空白行、別名・設定136行、委譲70行、条件付きtest hooks202行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
 前回2026-10-21の再監査基準（develop caf19a0）ではapp.jsは2,924行。非空白2,433行のうち、create系構築・接続1,266行、条件付きtest hooks438行、call一文の関数237行。root構築209文・複文callback30個・root let8個を確認した。旧46dd77dを同条件で再現して比較した。現状owner、初期化順と次の実装単位は[composition root再監査](bootstrap-boundary-audit.md)とsection 8を参照する。全てを単純な移動・削除対象とは扱わない。
 
-Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続と操作固有のcallbackが残る。modeはDrawOperationLifecycle、最後の生pointerはPointerInteractionControllerのsessionへ移管した。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。現在のletは三つの後段接続参照だけ。後段接続は操作stateの重複とは区別する。
+Document／Workspace、Geometry read、solver・constraint、command／session、描画、UI、保存読込の各ownerは分離済み。appには依存の構築・接続と操作固有のcallbackが残る。modeはDrawOperationLifecycle、最後の生pointerはPointerInteractionControllerのsessionへ移管した。同期済みmodel別名とSolverの接続・scope切替手順はEditingScopeBindingへ移管した。後段で生成するconstを読むcallbackは残るため、読み取る時機と公開→bind／startの順を保つ。可変参照がゼロであることを、循環依存の解消や構築境界の完成とは扱わない。
 
 残る中心は、既存ownerを用いる機能単位の組立て、残る更新責務とownerの整合、初期化とbind／startの段階、test hooksの公開境界である。modeは複数のcommandとtestから更新されるため、既存Lifecycleの遷移APIと同じsessionで所有する。Document固定参照と現在Block scope参照、取消・reset・復元の違いを維持する。
 
@@ -97,6 +97,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：Geometry編集の準備とcheckpointの組立て（2026-11-10）
+
+GeometryMutationFeature（src/application/geometry_mutation_feature.js）は、一時作図と後段のGeometry編集checkpointを同じDocumentWorkspace・GeometryIds・Selection・History・解析／投影cache ownerへ接続する。prepareForWorkspaceは実TransientAuthoringのみを生成して返し、rootの既存位置で呼ぶcreateCheckpointが実EditingCheckpointを生成する。独自snapshot／採番／履歴・transaction stateを作らず、Workspace.currentをbound editing scopeや固定Documentで置換しない。仮作図rollbackの経路ごとのGeometry／Selection／採番とprovisional履歴の扱い、履歴復元中の短絡、checkpointの投影→解析無効化の順、返値・例外時の途中状態を維持する。既存二moduleの算法と公開API、通常UI・保存形式v26は不変。 app.jsは1,449→1,445行（4行減）。新fileはapplication内の機能組立て一つと対応単体一つ。従来のsrc/editing/transient_authoring.jsとcheckpoint.jsはそのまま状態・復元処理を所有する。rootの二つの生成位置と相対順を保ち、createCheckpointを作図準備時に暗黙実行しない。
+
+追加単体4件で実TransientAuthoring／EditingCheckpointとGeometryIds・Geometry型を使い、coldな二段階生成と実体identity、Workspace交換、仮PointのSelection／採番／履歴復元、履歴復元中の短絡、checkpointの参照同一性・membership／採番復元、一時Line状態との独立、生成／投影／解析／履歴失敗の例外と途中反映を新旧比較した。indexは遅延namespaceを一つ追加し、他script順・読込方式を維持する。ASTでrootの二生成箇所と未使用History aliasだけの変更、port／callback本体の対応、既存算法・Solver／保存不変、新しい未使用／未束縛参照なしを照合した。初回全E2Eは511成功・1失敗・77未実行（21.1分、exit 1、fail-fast停止）。file URL Helpの厳密な読込script期待一覧に新moduleの追加が漏れ、期待337に対して実338になったためで、既存対象を削除せず新moduleを一つ追加した。E2Eの他のassertion／閾値・timeoutは不変。初回ログとreceiptはTEMP cad-geometry-mutation-assembly-*に保持する。新module／単体も標準検証一覧へ追加し、修正後の関連単体16件、構文634file・全単体2,361件・修正後の全E2E589件が成功（50file、22.1m、exit 0）。新moduleと単体を標準検証一覧へ追加し、以前の検証対象は全て維持した。修正したfile URL読込一覧の単独E2Eも成功（worker終了後に残った専用serverだけを識別して終了し、同runnerのexit 0を回収）。704製品／test／検証入力と開始HEAD不変、全50fileのtest listと無filter一覧一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を確認した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-geometry-mutation-verified-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。初回の失敗を隠さず、修正後の結果と区別する。全体目標は未完了。
+
+基準develop 5edba2f、作業branch codex/geometry-mutation-assembly、開始時週枠残量30%。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：固定操作の段階的なWorkspace組立て（2026-11-10）
 
