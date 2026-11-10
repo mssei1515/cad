@@ -38,6 +38,7 @@
               rotation: Number(instance.rotation) || 0,
               fixed: Boolean(instance.fixed),
               rotationLocked: Boolean(instance.rotationLocked),
+              mirrored: instance.mirrored === true,
               enabledSketchIds: [...new Set(enabled.length > 0 ? enabled : drawableIds)],
               appearanceOverride: normalizeAppearance(instance.appearanceOverride),
             };
@@ -58,6 +59,7 @@
           rotation: Number(instance.rotation) || 0,
           fixed: Boolean(instance.fixed),
           rotationLocked: Boolean(instance.rotationLocked),
+          mirrored: instance.mirrored === true,
           enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.map(String) : null,
           appearanceOverride: normalizeAppearance(instance.appearanceOverride),
         }));

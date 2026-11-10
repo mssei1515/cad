@@ -223,3 +223,30 @@ test('point usage keeps spline edit membership live and preserves disabled-const
   assert.throws(() => usage.isSelectableEndpointPoint(fit), error => error === failure);
   assert.equal(JSON.stringify(f.state.scope), before);
 });
+
+test('Read Services creates Block layout lazily over the same live definitions, annotation reader and placement queries',()=>{
+ for(const withHatches of [false,true]){
+  const f=fixture({withHatches}),calls=[];let fail=false;const marker=new Error('annotation unavailable');
+  const annotationBounds=function(annotation){'use strict';assert.equal(this,undefined);assert.equal(f.state.ready,true);calls.push(annotation);if(fail)throw marker;return annotation.bounds;};
+  const layout=f.services.createBlockLayout({annotationBounds});assert.equal(f.state.reads+f.state.prepared+f.state.profiles+f.state.viewportReads,0);assert.deepEqual(calls,[]);f.state.ready=true;
+  const d=f.state.definitions[0],bounds=layout.blockLocalGeometryBounds(d);assert.equal(bounds.minX,1);assert.equal(bounds.maxX,4);assert.equal(bounds.center.x,2.5);
+  const instance={definitionId:'B1',sketchId:'S1',x:20,y:30,rotation:0};assert.equal(layout.blockInstanceDisplayCenter(instance).x,22.5);
+  const position=layout.blockInstanceTranslationForAnchor(d,['S1'],{x:20,y:30},0);assert.equal(position.x,17.5);assert.equal(position.y,30);
+  d.lines[0].p2.x=7;assert.equal(layout.blockLocalGeometryBounds(d).maxX,7);const annotation={id:'AN1',sketchId:'S1',bounds:{x1:-2,y1:-3,x2:10,y2:6}};d.annotations.push(annotation);
+  assert.equal(layout.blockLocalGeometryBounds(d).maxX,10);assert.equal(calls.at(-1),annotation);fail=true;assert.throws(()=>layout.blockLocalGeometryBounds(d),e=>e===marker);
+  annotation.visible=false;assert.equal(layout.blockLocalGeometryBounds(d).maxX,7);const next=definition();next.lines[0].p2.x=12;f.state.definitions=[next];
+  assert.equal(layout.blockInstanceDisplayCenter(instance).x,26.5);assert.equal(next.lines[0].p2.x,12);assert.equal(d.lines[0].p2.x,7);assert.equal(layout.snappedBlockRotation(Math.PI/2+0.01),Math.PI/2);
+ }
+});
+
+test('Read Services passes actual Block query owners and Hatch function with unchanged factory receiver, return and exception',()=>{
+ const f=fixture({withHatches:true}),old=w.BlockLayout,marker=new Error('layout failed'),result=Object.freeze({}),calls=[];let fail=false;
+ const annotationBounds=()=>{throw new Error('eager annotation read');};
+ w.BlockLayout={...old,create(input){assert.equal(this,w.BlockLayout);assert.equal(arguments.length,1);calls.push(input);if(fail)throw marker;return result;}};
+ try{
+  assert.deepEqual(calls,[]);assert.equal(f.services.createBlockLayout({annotationBounds}),result);const input=calls[0];
+  assert.equal(input.catalog,f.services.catalog);assert.equal(input.projections,f.services.projections);assert.equal(input.instanceProjections,f.services.instances);
+  assert.equal(input.annotationBounds,annotationBounds);assert.equal(input.hatchPrimitivesForScope,f.services.hatches.hatchPrimitivesForScope);assert.equal(Object.keys(input).length,5);
+  fail=true;assert.throws(()=>f.services.createBlockLayout({annotationBounds}),e=>e===marker);assert.equal(f.state.reads+f.state.prepared+f.state.profiles+f.state.viewportReads,0);
+ }finally{w.BlockLayout=old;}
+});

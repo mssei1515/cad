@@ -927,8 +927,40 @@
       angleDimensionLabelBasis: placement.angleDimensionLabelBasis, angleDimensionLayout: layouts.angleDimensionLayout,
       angleDimensionLabelOffsets: placement.angleDimensionLabelOffsets, setAngleDimensionLabelOffsets: placement.setAngleDimensionLabelOffsets,
       angleDimensionFromLabelPoint: placement.angleDimensionFromLabelPoint, serializeDimension, rootSketchId, sketchById, isVisibleSketchId: appearance.isVisibleSketchId });
-    return Object.freeze({ support, fixtures });
+    function createDisplayForEditing({ canvasHover, readDocument, appearance: dimensionAppearance }) {
+      const { Point, Arc } = window.GeometrySolver;
+      const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR } = window.DimensionMetrics;
+      const { DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR } = window.DimensionLayout;
+      const { formatDimensionLabel, formatMeasuredDimensionLabel } = window.NumberDisplay;
+      return support.createDisplay({ Point, Arc, placement, layouts, metrics: display.metrics,
+        circlePointAtAngle: window.GeometryKernel.circlePointAtAngle, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
+        outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR,
+        canvasHover, readDocument, normalizeDimensionAppearance: window.Appearance.normalizeDimensionAppearance,
+        effectiveDimensionAppearanceForSketch: dimensionAppearance.effectiveDimensionAppearanceForSketch,
+        dimensionDisplayState: dimensionAppearance.dimensionDisplayState, effectiveDimensionAppearance: dimensionAppearance.effectiveDimensionAppearance,
+        displayFactor: window.Appearance.annotationDisplayFactor, formatDimensionLabel, formatMeasuredDimensionLabel,
+        jisDimensionTextAngle: layouts.jisDimensionTextAngle, dimensionTextOffset: layouts.dimensionTextOffset });
+    }
+    function createInteractionForEditing({ canvasDriver, dimensionValues, clearSelection, presentation, fit, references, canvas,
+      solving, checkpoint, analysis, dimensionDrag }) {
+      return support.createInteraction({ clientPosition: canvasDriver.clientPosition, startDimensionEditInput: hit => dimensionValues.startEdit(hit),
+        clearSelection, updateUI: presentation.updateUI, draw: presentation.draw, addCircle: geometry.addCircle, addArc: geometry.addArc,
+        fitAllGeometryToViewport: fit.fitAllGeometryToViewport, startDistanceCommand: () => dimensions.startDistanceCommand(),
+        constraintGraphNodes: references.constraintGraphNodes, worldToCanvasScreen: viewport.worldToCanvasScreen, canvas, dimensionAnchor: placement.dimensionAnchor,
+        modelTypes: window.GeometrySolver, signedPointLineDistance: window.GeometryKernel.signedPointLineDistance, vectorNorm: window.GeometrySolver.vectorNorm,
+        solveSketchAndDependents: solving.solveSketchAndDependents, snapshotModelState: checkpoint.captureValues,
+        refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), dimensionDrag });
+    }
+    return Object.freeze({ support, fixtures, createDisplayForEditing, createInteractionForEditing });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createForEditing, createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
+  function createBrowserSupportForWorkspace({ documentWorkspace, interaction, sessions, ...fixtureOptions }, interactionOptions, dimensionAppearance) {
+    const { document: documentModel, workspace, sketches } = documentWorkspace;
+    const support = createForEditing({ ...fixtureOptions, sketches, currentScope: workspace.current, canvasSelection: interaction.selection,
+      constraintTargetSession: sessions.targets, pendingCommandSession: sessions.pending });
+    const dimensionInteractionSupport = support.createInteractionForEditing(interactionOptions);
+    const dimensionDisplaySupport = support.createDisplayForEditing({ canvasHover: interaction.hover, readDocument: () => documentModel, appearance: dimensionAppearance });
+    return Object.freeze({ dimensionDisplaySupport, dimensionFixtureSupport: support.fixtures, dimensionInteractionSupport });
+  }
+  window.DimensionTestDriver = Object.freeze({ createForEditing, createBrowserSupportForWorkspace, createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
 })();

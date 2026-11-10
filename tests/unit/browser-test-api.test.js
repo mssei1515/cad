@@ -23,6 +23,40 @@ function fixture({collisions=false}={}) {
   return{w,state,events,calls,nodes,marker,groups,create:()=>w.BrowserTestApi.create(groups)};
 }
 
+function propertiesContractFixture(collisions=false) {
+  const f=fixture({collisions}),body=source.slice(source.indexOf('function create('),source.indexOf('function createWithProperties'));
+  const keys=group=>[...new Set(Array.from(body.matchAll(new RegExp(group+'\\.([A-Za-z_$][A-Za-z0-9_$]*)','g')),match=>match[1]))];
+  const shared=['themeObservation','hoverDisplayObservation','strokeStyleCases'];
+  const canvas=Object.freeze(Object.fromEntries(keys('canvas').filter(key=>!shared.includes(key)).map(key=>[key,f.groups.canvas[key]])));
+  const selectionTestApi=f.groups.properties.selectionTestApi;
+  const propertyFields=Object.fromEntries(keys('properties').filter(key=>key!=='selectionTestApi').map(key=>[key,f.groups.properties[key]]));
+  const properties=Object.freeze({...propertyFields,...Object.fromEntries(shared.map(key=>[key,f.groups.canvas[key]])),appearanceTestAction:{set(){assert.fail('no test action during API assembly');}}});
+  const legacy=Object.freeze({...f.groups,canvas:{...canvas,...Object.fromEntries(shared.map(key=>[key,properties[key]]))},properties:{...propertyFields,selectionTestApi}});
+  const owned=Object.freeze({...f.groups,canvas,properties,selectionTestApi});f.events.length=0;
+  return{...f,legacy,owned};
+}
+
+test('Properties cohort mapping preserves every public key, descriptor, function identity, lookup order and collision precedence',()=>{
+  for(const collisions of [false,true]){
+    const f=propertiesContractFixture(collisions),before=f.w.BrowserTestApi.create(f.legacy),events=f.events.slice();f.events.length=0;
+    const after=f.w.BrowserTestApi.createWithProperties(f.owned);
+    assert.deepEqual(Object.keys(after),Object.keys(before));assert.deepEqual(Object.getOwnPropertyDescriptors(after),Object.getOwnPropertyDescriptors(before));
+    assert.deepEqual(f.events,events);assert.deepEqual(f.calls,[]);assert.equal(Object.hasOwn(f.w,'__jot2dTest'),false);
+    f.state.value={id:'live replacement'};const argument={};assert.equal(after.multiplePropertiesStateForTest(argument),f.state.value);
+    assert.equal(f.calls.at(-1).receiver,after);assert.equal(f.calls.at(-1).args[0],argument);
+    assert.equal(Object.hasOwn(after,'appearanceTestAction'),false);assert.equal(Object.isFrozen(after),false);
+  }
+});
+
+test('Properties cohort mapping propagates the original capability error at the same public lookup without publishing',()=>{
+  for(const failure of ['canvas.themeObservation.state','properties.propertiesObservation.state','properties.sidebarHighlightObservation.ids']){
+    const f=propertiesContractFixture();f.state.failure=failure;
+    assert.throws(()=>f.w.BrowserTestApi.create(f.legacy),error=>error===f.marker);const events=f.events.slice();f.events.length=0;
+    assert.throws(()=>f.w.BrowserTestApi.createWithProperties(f.owned),error=>error===f.marker);
+    assert.deepEqual(f.events,events);assert.deepEqual(f.calls,[]);assert.equal(Object.hasOwn(f.w,'__jot2dTest'),false);
+  }
+});
+
 test('browser contract creates only the public surface and keeps captured functions, live results and method receivers',()=>{
   const f=fixture();assert.equal(Object.isFrozen(f.w.BrowserTestApi),true);assert.deepEqual(f.events,[]);
   const api=f.create();assert.deepEqual(f.calls,[]);assert.equal(Object.hasOwn(f.w,'__jot2dTest'),false);

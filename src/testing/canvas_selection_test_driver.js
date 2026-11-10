@@ -195,5 +195,26 @@
     return Object.freeze({ readSelectedGeometry, createApi });
   }
 
-  window.CanvasSelectionTestDriver = Object.freeze({ createSupport, createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection, createMoveObservation, createIdObservation });
+  function createForWorkspace({ documentWorkspace, geometry, readServices, interaction, presentation, clearSelection }) {
+    const { document: documentModel, workspace, sketches, documentIds } = documentWorkspace;
+    const support = createSupport({ canvasSelection: interaction.selection, currentScope: workspace.current,
+      clearSelection, updateUI: presentation.updateUI, draw: presentation.draw });
+    function createApiForEditing({ sketchMoveCommand, blockEditor, blockSelection, blocks, drawingFit, canvasDriver,
+      canvas, viewport, canvasContextMenu, canvasContextController, canvasContextCandidatePresentation,
+      decorateSerializedConstraint, serializeConstraint, serializeModel, resetModelState, resetHistory }) {
+      const { Point, Line } = window.GeometrySolver;
+      const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
+      return support.createApi({ sketchMoveCommand, activeSketchId: sketches.activeSketchId, fields: window.SketchMove.fields,
+        decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock: () => Boolean(blockEditor.current),
+        blockSelectionGeometry: blockSelection.read, resetModelState, addLine: geometry.addLine, addPoint: geometry.addPoint, addArc: geometry.addArc,
+        ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, createEmptyBlockDefinition: blocks.editing.empty, Point, Line,
+        appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
+        invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache,
+        fitSketchToViewport: drawingFit.fitSketchToViewport, resetHistory, clientPosition: canvasDriver.clientPosition,
+        arcEndpointPoint: window.GeometryKernel.arcEndpointPoint, canvasHover: interaction.hover,
+        canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport });
+    }
+    return Object.freeze({ ...support, createApiForEditing });
+  }
+  window.CanvasSelectionTestDriver = Object.freeze({ createForWorkspace, createSupport, createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection, createMoveObservation, createIdObservation });
 })();

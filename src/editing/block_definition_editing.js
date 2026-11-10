@@ -26,6 +26,7 @@
         rotation: Number(instance.rotation) || 0,
         fixed: Boolean(instance.fixed),
         rotationLocked: Boolean(instance.rotationLocked),
+        mirrored: instance.mirrored === true,
         enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
         appearanceOverride: normalizeAppearance(instance.appearanceOverride),
       };
@@ -231,6 +232,7 @@
         instance.x = Number(source.x) || 0;
         instance.y = Number(source.y) || 0;
         instance.rotation = Number(source.rotation) || 0;
+        instance.mirrored = source.mirrored === true;
         instance.fixed = Boolean(source.fixed);
         instance.rotationLocked = Boolean(source.rotationLocked);
         instance.enabledSketchIds = Array.isArray(source.enabledSketchIds) ? source.enabledSketchIds.slice() : [];

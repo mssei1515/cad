@@ -71,7 +71,9 @@ test('finishOrCancel after anchor commits at zero rotation and rejected placemen
   assert.equal(f.command.finishOrCancel(), null); assert.equal(f.mode(), 'block-place');
   assert.equal(f.command.anchor.x, 20); assert.equal(f.collapsed(), false); assert.deepEqual(f.calls, ['hint']);
   f.command.setEnabledSketchIds(['S1']); f.calls.length = 0;
-  const placed = f.command.finishOrCancel(); assert.equal(placed.rotation, 0);
+  f.command.setMirrored(true);
+  assert.equal(f.command.preview({ x: 30, y: 40 }).instance.mirrored, true);
+  const placed = f.command.finishOrCancel(); assert.equal(placed.rotation, 0); assert.equal(placed.mirrored, true);
   assert.equal(f.model.blockInstances[0], placed); assert.equal(f.mode(), 'select'); assert.equal(f.collapsed(), true);
   assert.equal(f.calls.filter(call => call === 'history').length, 1);
 });

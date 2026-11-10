@@ -143,5 +143,37 @@
     });
   }
 
-  window.DocumentTestDriver = Object.freeze({ createFileApi, createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation, createHistoryObservation });
+  function createForWorkspace({ documentWorkspace, geometry, presentation, document, history, blocks, constructionCommand, files, fileSession }) {
+    const { document: documentModel, workspace } = documentWorkspace;
+    const observation = createHistoryObservation({ activeEditHistory: history.controller.active, blockEditor: blocks.session, document, constructionCommand });
+    function createSketchDeletion({ resetModelState, deleteSketch }) {
+      return createSketchDeletionFixture({ resetModelState, currentScope: workspace.current, rootSketchId: window.SketchHierarchy.ROOT_SKETCH_ID,
+        addPoint: geometry.addPoint, addLine: geometry.addLine, addCircle: geometry.addCircle,
+        geometryRefForItem: window.GeometryObjects.geometryRefForItem, deleteSketch });
+    }
+    function createCyclicReference({ resetModelState, markReferenceConstraint, serializeModel, loadModelData, analysis, referenceState }) {
+      return createCyclicReferenceFixture({ resetModelState, currentScope: workspace.current,
+        rootSketchId: window.SketchHierarchy.ROOT_SKETCH_ID, defaultSketchId: window.SketchHierarchy.DEFAULT_SKETCH_ID,
+        addPoint: geometry.addPoint, markReferenceConstraint, CoincidentConstraint: window.GeometrySolver.CoincidentConstraint,
+        serializeModel, loadModelData, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), updateUI: presentation.updateUI,
+        constraintIsOperational: referenceState.constraintIsOperational, readReferenceErrors: () => referenceState.errorReasons(), document });
+    }
+    function createWorkspaceFileApi({ performance, File, serializeModel, loadModelData }) {
+      return createFileApi({ performance, File, document, fileSession, readDocumentName: () => documentModel.documentName,
+        effectiveDocumentName: files.effectiveDocumentName, serializeModel, importFileData: files.importFileData, loadModelData,
+        fileNameStem: window.DocumentFiles.fileNameStem, resetHistory: history.controller.resetDocument,
+        updateUI: presentation.updateUI, draw: presentation.draw, currentScope: workspace.current });
+    }
+    return Object.freeze({ history: observation, createSketchDeletion, createCyclicReference, createFileApi: createWorkspaceFileApi });
+  }
+  function createBrowserSupportForWorkspace(options, { resetModelState, deleteSketch, markReferenceConstraint,
+    serializeModel, loadModelData, analysis, referenceState, performance, File }) {
+    const support = createForWorkspace(options);
+    const readTestHistory = support.history.state;
+    const sketchDeletionFixture = support.createSketchDeletion({ resetModelState, deleteSketch });
+    const cyclicReferenceFixture = support.createCyclicReference({ resetModelState, markReferenceConstraint, serializeModel, loadModelData, analysis, referenceState });
+    const documentTestApi = support.createFileApi({ performance, File, serializeModel, loadModelData });
+    return Object.freeze({ documents: Object.freeze({ documentTestApi, readTestHistory, cyclicReferenceFixture }), sketchDeletionFixture });
+  }
+  window.DocumentTestDriver = Object.freeze({ createBrowserSupportForWorkspace, createForWorkspace, createFileApi, createImport, createLoad, createSketchDeletionFixture, createCyclicReferenceFixture, createNameObservation, createFileObservation, createHistoryObservation });
 })();

@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict'); const fs = require('node:fs');
 const path = require('node:path'); const vm = require('node:vm'); const test = require('node:test');
-function fixture() {
+function fixture(build = (options, api) => api.PngExport.create(options)) {
   const events = [], button = new EventTarget(), canvas = { width: 80, height: 60 };
   const state = { fileBusy: false, authoring: false, pending: null, constraint: null, mode: 'select', scale: 2, snap: null, images: [], flush: null };
   let resolveFonts, fontsRead;
@@ -13,16 +13,17 @@ function fixture() {
   for (const file of ['src/geometry/export_region.js', 'src/rendering/canvas_export.js', 'src/commands/png_export_command.js', 'src/persistence/document_files.js', 'src/persistence/png_file.js', 'src/application/png_export.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
   sandbox.window.showSaveFilePicker = async options => { events.push(['picker', options.suggestedName]); return { createWritable: async () => ({ write: async value => { assert.equal(value.type, 'image/png'); events.push('write'); }, close: async () => events.push('close') }) }; };
   const pending = { get current() { events.push('pending'); return state.pending; }, replace(value) { assert.equal(this, pending); state.pending = value; events.push('replace'); }, clear() { state.pending = null; events.push('clear'); } };
-  const feature = sandbox.window.PngExport.create({ document, window: sandbox.window, canvas,
+  const options = { document, window: sandbox.window, canvas,
     rendering: { render(region, ratio) { events.push(['render', region.width, ratio.x]); }, restore() { events.push('restore'); } },
     text: (_ja, en) => en, documentName: () => 'drawing', prepareImages: async () => events.push(['images', state.images]),
     readViewScale: () => state.scale, readMode: () => { events.push('mode'); return state.mode; }, setMode: mode => { state.mode = mode; events.push(['mode', mode]); }, pendingCommandSession: pending,
     fileSession: { get busy() { events.push('file'); return state.fileBusy; } }, drawOperationLifecycle: { active() { events.push('authoring'); return state.authoring; } }, constraintTargetSession: { get command() { events.push('constraint'); return state.constraint; } },
     withGeometryReadCache: callback => { events.push('cache'); return callback(); }, findSnap: (point, tolerance) => { events.push(['snap', point.x, tolerance]); return state.snap; },
     flushPointerMove: () => { events.push('flush'); state.flush?.(); }, setHint: message => events.push(['hint', message]), draw: () => events.push('draw'),
-  });
+  };
+  const feature = build(options, sandbox.window);
   assert.deepEqual(events, []);
-  return { feature, state, events, button, canvas, resolveFonts, waitingForFonts };
+  return { feature, state, events, button, canvas, resolveFonts, waitingForFonts, options, api: sandbox.window, document };
 }
 
 test('PNG start flushes before live guards and preserves their short-circuit order', () => {
@@ -62,4 +63,58 @@ test('PNG composition keeps snapping, fonts-before-live-images, capture restorat
   assert.deepEqual(f.events.find(value => Array.isArray(value) && value[0] === 'images'), ['images', f.state.images]);
   assert.deepEqual(f.events.find(value => Array.isArray(value) && value[0] === 'render'), ['render', 10, 6.3]);
   assert.equal(f.events.some(value => Array.isArray(value) && value[0] === 'hint' && value[1] === 'PNG saved'), true);
+});
+
+function preparedFixture() {
+  let lifecycle;
+  const f = fixture((options, api) => {
+    lifecycle = api.PngExport.prepare(); assert.ok(Object.isFrozen(lifecycle));
+    assert.equal(lifecycle.readCommand(), null);
+    assert.throws(() => lifecycle.cancel(), error => error.name === 'TypeError' && /cancel/.test(error.message));
+    return lifecycle.create(options);
+  });
+  return { ...f, lifecycle };
+}
+test('prepared PNG shares the actual command and stays cold until explicit start', () => {
+  const f = preparedFixture(); assert.equal(f.lifecycle.readCommand(), f.feature.command);
+  f.button.dispatchEvent(new Event('click')); assert.deepEqual(f.events, []);
+  f.lifecycle.start(); f.lifecycle.start(); f.button.dispatchEvent(new Event('click'));
+  assert.equal(f.events.filter(value => value === 'flush').length, 1); assert.equal(f.state.mode, 'png-export');
+  f.lifecycle.cancel(); assert.equal(f.state.mode, 'select'); assert.equal(f.feature.command.active, false);
+  f.feature.dispose(); f.events.length = 0; f.button.dispatchEvent(new Event('click')); assert.deepEqual(f.events, []);
+});
+test('prepared PNG publishes only completed features and preserves the previous reference after constructor failure', () => {
+  for (const [namespace, method] of [['CanvasExport','create'], ['PngFile','create'], ['PngExportCommand','createModeSession'], ['PngExportCommand','create']]) {
+    const f = preparedFixture(), fresh = f.api.PngExport.prepare(), marker = new Error(namespace + method), original = f.api[namespace];
+    f.api[namespace] = { ...original, [method]() { throw marker; } };
+    try {
+      assert.throws(() => fresh.create(f.options), error => error === marker); assert.equal(fresh.readCommand(), null);
+      assert.throws(() => f.lifecycle.create(f.options), error => error === marker);
+    } finally { f.api[namespace] = original; }
+    assert.equal(f.lifecycle.readCommand(), f.feature.command); assert.deepEqual(f.events, []);
+    const next = f.lifecycle.create(f.options); assert.notEqual(next.command, f.feature.command);
+    assert.equal(f.lifecycle.readCommand(), next.command);
+  }
+});
+test('prepared PNG retains the new command when start fails after publication', () => {
+  const f = preparedFixture(), marker = new Error('button bind'); let next;
+  f.document.getElementById = () => ({ addEventListener() { assert.equal(f.lifecycle.readCommand(), next.command); throw marker; }, removeEventListener() {} });
+  next = f.lifecycle.create(f.options); assert.notEqual(next.command, f.feature.command);
+  assert.throws(() => f.lifecycle.start(), error => error === marker);
+  assert.equal(f.lifecycle.readCommand(), next.command); next.open(); assert.equal(next.command.active, true);
+  f.lifecycle.cancel(); assert.equal(next.command.active, false); assert.equal(f.state.mode, 'select'); next.dispose();
+});
+test('prepared PNG cancel keeps command receiver, return value and exception identity', () => {
+  const f = preparedFixture(), marker = new Error('cancel'), result = {}, original = f.api.PngExportCommand; let fail = false;
+  f.api.PngExportCommand = { ...original, create(options) {
+    const raw = original.create(options);
+    const command = Object.freeze({ ...raw, cancel: function() {
+      'use strict'; assert.equal(this, command); if (fail) throw marker; return result;
+    } });
+    return command;
+  } };
+  let next;
+  try { next = f.lifecycle.create(f.options); } finally { f.api.PngExportCommand = original; }
+  assert.equal(f.lifecycle.readCommand(), next.command); assert.equal(f.lifecycle.cancel(), result);
+  fail = true; assert.throws(() => f.lifecycle.cancel(), error => error === marker);
 });

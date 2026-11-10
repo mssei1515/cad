@@ -12,10 +12,7 @@
       if (!instance || !definition) return false;
       const localCenter = blockLocalGeometryBounds(definition, [...blockInstanceEnabledSketchSet(instance, definition)])?.center || definition.origin || { x: 0, y: 0 };
       const pivot = blockWorldPoint(instance, localCenter);
-      const cos = Math.cos(rotation);
-      const sin = Math.sin(rotation);
-      instance.x = pivot.x - localCenter.x * cos + localCenter.y * sin;
-      instance.y = pivot.y - localCenter.x * sin - localCenter.y * cos;
+      Object.assign(instance, window.BlockTransform.translationForCenter(localCenter, pivot, rotation, instance.mirrored));
       instance.rotation = rotation;
       invalidateBlockProjectionCache(instance.id);
       return true;

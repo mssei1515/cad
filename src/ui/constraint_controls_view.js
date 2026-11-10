@@ -1,6 +1,12 @@
 /* Reflect and bind constraint/Fix controls; command decisions and selection state are caller-owned. */
 (() => {
   "use strict";
+  function createFocus({ document }) {
+    function blur() {
+      if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur();
+    }
+    return Object.freeze({ blur });
+  }
   function createFeedback({ constraintButtons, applicationText, feedback, readOperands, readLanguage }) {
     function label(type) {
       if (type === "fixed") return applicationText("固定", "Fix");
@@ -96,5 +102,5 @@
     return Object.freeze({ bind, dispose });
   }
 
-  window.ConstraintControlsView = Object.freeze({ create, createBinding, createFeedback });
+  window.ConstraintControlsView = Object.freeze({ create, createBinding, createFeedback, createFocus });
 })();

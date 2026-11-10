@@ -45,7 +45,7 @@
         points: { isExplicitPoint, isPointUsedByPrimitive, isReferencePoint },
         makeConstraintOperand: operandValues.makeConstraintOperand, operandFromReferenceTarget: operandValues.operandFromReferenceTarget,
         hits: geometry });
-      function createInteraction({ canvasHover, sameArcEndpoint, hitBlockRotationHandle, hitAnnotationTarget,
+      function createInteraction({ canvasHover, sameArcEndpoint, hitBlockRotationHandle = instances.hitBlockRotationHandle, hitAnnotationTarget,
         blankCanvasGesture, instanceSourceCommand, hatchCommand }) {
         const interaction = create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint, geometry,
           scene: { hitHatchAt: (...args) => regions.hitHatchAt(...args), hitReferenceImageAt: (...args) => regions.hitReferenceImageAt(...args),
@@ -86,6 +86,39 @@
     }
     return Object.freeze({ policy, createQueries });
   }
+  function createSceneForWorkspace({ documentWorkspace, readServices, interaction, sessions, viewport, dimensionScope,
+    dimensions, dimensionLabelForConstraint, annotationBounds, hitAnnotationElement, operandValues }) {
+    const { reads: geometryReads, catalog, projections, hatches, geometryAppearance, dimensionAppearance } = readServices;
+    const { sketches: sketchContext } = documentWorkspace;
+    const { readMode } = interaction.lifecycle;
+    const { hatchAppearanceForDisplay } = window.HatchData;
+    const scene = createScene({ currentScope: documentWorkspace.workspace.current, dimensionScope, viewport, pointUsage: interaction.pointUsage,
+      sketchContext, geometryAppearance, geometryReads, catalog, projections, hatches, dimensions,
+      effectiveDimensionAppearance: dimensionAppearance.effectiveDimensionAppearance, dimensionLabelForConstraint,
+      dimensionUsesExpression: documentWorkspace.parameters.dimensionUsesExpression, annotationBounds, hitAnnotationElement, hatchAppearanceForDisplay,
+      targetFromConstraint: window.DimensionQueries.targetFromConstraint, drawingOrderOwner: window.DrawingOrder.drawingOrderOwner,
+      referenceImageWorldToLocal: window.ReferenceImageGeometry.referenceImageWorldToLocal, pointInExpandedBox: window.GeometryBounds.pointInExpandedBox,
+      readMode, readPendingCommand: () => sessions.pending.current, readConstraintCommand: () => sessions.targets.command, operandValues });
+    function createQueries() {
+      const queries = scene.createQueries();
+      const { dimensions: dimensionHitQuery, instances: instanceHitQuery,
+        operands: { hitConstraintOperand: queryConstraintOperand } } = queries;
+      const { targets: constraintTargetSession } = sessions;
+      function hitDimension(...args) { return dimensionHitQuery.hitDimension(...args); }
+      function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
+      function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
+      return Object.freeze({ ...queries, hitDimension, hitBlockInstance, hitConstraintOperand });
+    }
+    function createRectangleSelection({ dimensionBounds, instanceSourceCommand, geometryInstanceCommand, sketchProjection, canvas, clearSelection, presentation }) {
+      return window.RectangleSelectionFeature.create({ currentScope: dimensionScope, viewport,
+        canvasSelection: interaction.selection, selectionScope: interaction.scope, sketches: sketchContext, pointUsage: interaction.pointUsage,
+        appearance: geometryAppearance, geometryReads, projections, hatches, dimensionBounds, annotationBounds, hatchAppearanceForDisplay,
+        readMode, instanceSourceCommand, geometryInstanceCommand, sketchProjection,
+        releasePointer: id => { try { canvas.releasePointerCapture(id); } catch (_) {} },
+        clearSelection, setHint: presentation.setHint, updateGeometrySelectionUI: presentation.updateGeometrySelectionUI, draw: presentation.draw });
+    }
+    return Object.freeze({ ...scene, createQueries, createRectangleSelection });
+  }
   function create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint,
     geometry: { hitPoint, hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
     scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
@@ -109,5 +142,14 @@
 
     return Object.freeze({ press, hover });
   }
-  window.CanvasHitInteraction = Object.freeze({ create, createScene });
+  function createSceneWithAnnotationsForWorkspace({ annotationSpatial, ...options }) {
+    const { hitAnnotationElement: queryAnnotationElement } = annotationSpatial;
+    const scene = createSceneForWorkspace({ ...options, hitAnnotationElement });
+    const { ordinarySelectionMode } = scene.policy;
+    function hitAnnotationElement(x, y, options = {}) {
+      return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
+    }
+    return Object.freeze({ ...scene, hitAnnotationElement });
+  }
+  window.CanvasHitInteraction = Object.freeze({ create, createScene, createSceneForWorkspace, createSceneWithAnnotationsForWorkspace });
 })();

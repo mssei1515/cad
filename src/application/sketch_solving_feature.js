@@ -1,6 +1,26 @@
 /* Assemble solving, parameter feedback and application refresh around the same owners. */
 (() => {
   "use strict";
+  function prepareForWorkspace({ documentWorkspace, readServices, references, referenceState, solver, pointUsage, presentation }) {
+    const solveState = window.SketchSolving.createState();
+    let feature = null;
+    function solveAndRefresh(...args) {
+      if (!feature) throw new ReferenceError("Cannot access 'solveRefreshCommand' before initialization");
+      return feature.refresh.run(...args);
+    }
+    function createContext({ annotationDrag, minimumLength, acceptError }) {
+      const context = createContextForWorkspace({ documentWorkspace, readServices, references, referenceState, solver, pointUsage, presentation,
+        solveState, annotationDrag, minimumLength, acceptError });
+      const build = context.createSolving;
+      function createSolving(options) {
+        const completed = build(options);
+        feature = completed;
+        return completed;
+      }
+      return Object.freeze({ ...context, createSolving });
+    }
+    return Object.freeze({ solveState, solveAndRefresh, createContextForWorkspace: createContext });
+  }
   // Query/analysis precede Canvas construction; solving waits for the editing owners.
   function createContextForWorkspace({ documentWorkspace, readServices, references, referenceState, annotationDrag,
     solver, pointUsage, presentation, solveState, minimumLength, acceptError }) {
@@ -65,5 +85,5 @@
       readEditingScope: () => editingScope.current, activateEditingScope: (...args) => editingScope.activate(...args), nextHatchIndex: () => documentIds.peek("hatch"),
       drawableSketchIds, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), setSolveResultHint, updateUI, draw, historyController, recordHistory });
   }
-  window.SketchSolvingFeature = Object.freeze({ create, createForWorkspace, createContextForWorkspace });
+  window.SketchSolvingFeature = Object.freeze({ prepareForWorkspace, create, createForWorkspace, createContextForWorkspace });
 })();

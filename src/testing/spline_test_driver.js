@@ -148,5 +148,32 @@
     }
     return Object.freeze({ exercise });
   }
-  window.SplineTestDriver = Object.freeze({ create, createTransfer });
+  function createForWorkspace({ documentWorkspace, editingScope, geometry, readServices, interaction, presentation,
+    splineEditing, blockSelection, blocks, viewport, canvas, document, resizeCanvas, resetModelState, resetHistory,
+    serializeModel, pushModelConstraint, solveAndRefresh, serializeConstraint, annotationLeaderTargetFromItem,
+    clearSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard }) {
+    const { document: documentModel, workspace, documentIds, sketches } = documentWorkspace;
+    const { addPoint, addLine, addSpline } = geometry;
+    const { lifecycle, selection: canvasSelection } = interaction;
+    const { updateUI, draw } = presentation;
+    const { PointOnSplineConstraint, SplineLineTangentConstraint } = window.GeometrySolver;
+    const { blockDefinitionDrawableSketchIds } = readServices.catalog;
+    const { invalidateBlockProjectionCache, blockProjectionBundle } = readServices.projections;
+    const setup = create({ resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas,
+      worldToCanvasScreen: viewport.worldToCanvasScreen, serializeModel,
+      readOperation: () => ({ mode: lifecycle.mode, editSplineId: splineEditing.current?.spline?.id || null }),
+      canvasSelection, document, addPoint, addSpline, hatchGeometryQuery: readServices.hatches,
+      readSpline: () => editingScope.current.splines[0] || null, splineGeometry: window.SplineGeometry, addLine,
+      PointOnSplineConstraint, SplineLineTangentConstraint, pushModelConstraint, solveAndRefresh, serializeConstraint });
+    const transfer = createTransfer({ currentScope: workspace.current, splineGeometry: window.SplineGeometry, annotationLeaderTargetFromItem,
+      nextAnnotationId: () => documentIds.allocate("annotation"), activeSketchId: sketches.activeSketchId,
+      defaultAnnotationStyle: window.Appearance.DEFAULT_ANNOTATION_STYLE,
+      clearSelection, canvasSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
+      blockSelectionGeometry: blockSelection.read, createBlockDefinitionFromSelection: blocks.editing.fromSelection,
+      blockSelectionBoundsCenter: blockSelection.center,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
+      blockDefinitionDrawableSketchIds, invalidateBlockProjectionCache, blockProjectionBundle, updateUI, draw });
+    return Object.freeze({ setup, transfer });
+  }
+  window.SplineTestDriver = Object.freeze({ create, createTransfer, createForWorkspace });
 })();

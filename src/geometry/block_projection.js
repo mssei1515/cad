@@ -7,6 +7,7 @@
   const { serializeHatch } = window.HatchData;
   const { normalizeAppearance, normalizeHatchAppearance } = window.Appearance;
   const { resolveBoundary: resolveHatchBoundaryLoops } = window.HatchRegionEngine;
+  const { worldPoint: blockWorldPoint, worldAngle, compose } = window.BlockTransform;
   function create({ blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope }) {
     const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
     const blockProjectionCache = new Map();
@@ -19,15 +20,6 @@
 
     function blockProjectionLocalId(item) {
       return item?.blockLocalId || item?.localElement?.id || null;
-    }
-
-    function blockWorldPoint(instance, localPoint) {
-      const cos = Math.cos(instance.rotation);
-      const sin = Math.sin(instance.rotation);
-      return {
-        x: instance.x + localPoint.x * cos - localPoint.y * sin,
-        y: instance.y + localPoint.x * sin + localPoint.y * cos,
-      };
     }
 
     function createProjectedPoint(transform, ownerInstance, definition, localPoint, localPath) {
@@ -55,12 +47,12 @@
         ...serializeAnnotation(localAnnotation),
         id: blockProjectionAnnotationId(ownerInstance, localPath),
         sketchId: ownerInstance.sketchId,
-        x: blockWorldPoint(transform, { x: localAnnotation.x, y: localAnnotation.y }).x,
-        y: blockWorldPoint(transform, { x: localAnnotation.x, y: localAnnotation.y }).y,
-        start: transformPoint(localAnnotation.start),
-        elbow: transformPoint(localAnnotation.elbow),
-        end: transformPoint(localAnnotation.end),
-        rotation: (Number(localAnnotation.rotation) || 0) + (Number(transform.rotation) || 0),
+        get x() { return blockWorldPoint(transform, localAnnotation).x; },
+        get y() { return blockWorldPoint(transform, localAnnotation).y; },
+        get start() { return transformPoint(localAnnotation.start); },
+        get elbow() { return transformPoint(localAnnotation.elbow); },
+        get end() { return transformPoint(localAnnotation.end); },
+        get rotation() { return transform.rotation + (transform.mirrored ? -1 : 1) * (Number(localAnnotation.rotation) || 0); },
         style: { ...(localAnnotation.style || {}) },
         blockProjection: true,
         blockInstance: ownerInstance,
@@ -68,12 +60,23 @@
         localElement: localAnnotation,
         blockLocalId: localPath.join("/"),
         blockAppearanceOverrides: appearanceOverrides,
-        annotationTransformRotation: Number(transform.rotation) || 0,
-        annotationTransformOrigin: blockWorldPoint(transform, { x: 0, y: 0 }),
+        annotationMirrored: Boolean(transform.mirrored),
+        get annotationTransformRotation() { return transform.rotation; },
+        get annotationTransformOrigin() { return { x: transform.x, y: transform.y }; },
       };
+      if (transform.mirrored && projected.anchorPosition) {
+        projected.anchorPosition = projected.anchorPosition.replace(/^(left|right)/, side => side === "left" ? "right" : "left");
+      }
       if (projected.anchorConstraints) projected.anchorConstraints = projected.anchorConstraints.map(relation => ({ ...relation,
         ...(relation.geometryRef ? { geometryRef: createGeometryRef(relation.geometryRef.kind, [String(ownerInstance.id), ...localPath.slice(0, -1), ...relation.geometryRef.path]) } : {}),
         ...(relation.axisRef ? { axisRef: createGeometryRef("line", [String(ownerInstance.id), ...localPath.slice(0, -1), ...relation.axisRef.path]) } : {}) }));
+      if (transform.mirrored) {
+        for (const relation of projected.anchorConstraints || []) {
+          if (relation.type === "fixed") relation.x = -relation.x;
+          if (relation.type === "distance-x") relation.value = -relation.value;
+          if (relation.type === "distance-line") relation.sign = -relation.sign;
+        }
+      }
       if (localAnnotation.geometryRef?.kind && Array.isArray(localAnnotation.geometryRef.path)) {
         projected.geometryRef = createGeometryRef(localAnnotation.geometryRef.kind, [...localPath.slice(0, -1), ...localAnnotation.geometryRef.path]);
         if (projected.geometryRef) projected.geometryRef = createGeometryRef(projected.geometryRef.kind, [String(ownerInstance.id), ...projected.geometryRef.path]);
@@ -128,7 +131,7 @@
       Object.defineProperties(projected, {
         seed: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, localHatch.seed) },
         patternOrigin: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, localHatch.patternOrigin || { x: 0, y: 0 }) },
-        appearance: { configurable: true, enumerable: true, get: () => ({ ...appearance, angle: appearance.angle + (Number(transform.rotation) || 0) * 180 / Math.PI }) },
+        appearance: { configurable: true, enumerable: true, get: () => ({ ...appearance, angle: (transform.mirrored ? -appearance.angle : appearance.angle) + transform.rotation * 180 / Math.PI }) },
         resolvedBoundary: { configurable: true, enumerable: true, get: projectResolvedBoundary },
       });
       return projected;
@@ -165,7 +168,10 @@
         item.sketchId = ownerInstance.sketchId;
         item.blockProjection = true;
         item.blockInstance = ownerInstance;
-        Object.defineProperty(item, "blockProjectionRotation", { configurable: true, get: () => instance.rotation });
+        Object.defineProperties(item, {
+          blockProjectionRotation: { configurable: true, get: () => worldAngle(instance, 0) },
+          blockProjectionMirrored: { configurable: true, get: () => Boolean(instance.mirrored) },
+        });
         item.blockDefinition = definition;
         item.localElement = localElement;
         item.blockLocalId = geometryRefId(createGeometryRef(kind, path));
@@ -182,8 +188,8 @@
         const arc = mark(new Arc(localArc.id, pointByLocalId.get(localId("point", localArc.center.id)), localArc.radius(), localArc.startAngle, localArc.endAngle, localArc.construction), localArc, "arc");
         Object.defineProperties(arc, {
           radiusValue: { configurable: true, enumerable: true, get: () => localArc.radius() },
-          startAngle: { configurable: true, enumerable: true, get: () => localArc.startAngle + instance.rotation },
-          endAngle: { configurable: true, enumerable: true, get: () => localArc.endAngle + instance.rotation },
+          startAngle: { configurable: true, enumerable: true, get: () => worldAngle(instance, localArc.startAngle) },
+          endAngle: { configurable: true, enumerable: true, get: () => worldAngle(instance, localArc.endAngle) },
         });
         return arc;
       });
@@ -217,12 +223,7 @@
         if (!enabledSketchIds.has(String(nestedInstance.sketchId))) continue;
         const nestedDefinition = definitionResolver(nestedInstance.definitionId);
         if (!nestedDefinition) continue;
-        const nestedTransform = { ...nestedInstance, sketchId: ownerInstance.sketchId };
-        Object.defineProperties(nestedTransform, {
-          x: { configurable: true, enumerable: true, get: () => blockWorldPoint(instance, nestedInstance).x },
-          y: { configurable: true, enumerable: true, get: () => blockWorldPoint(instance, nestedInstance).y },
-          rotation: { configurable: true, enumerable: true, get: () => instance.rotation + nestedInstance.rotation },
-        });
+        const nestedTransform = compose(instance, nestedInstance, ownerInstance.sketchId);
         const nestedPath = localPath(nestedInstance.id);
         const nestedBundle = createBlockProjectionBundle(nestedTransform, nestedDefinition, null, {
           ownerInstance,
@@ -268,8 +269,8 @@
             const arc = markDerived(new Arc(localArc.id, localPointMap.get(localArc.center), localArc.radius(), localArc.startAngle, localArc.endAngle, localArc.construction), localArc, "arc");
             Object.defineProperties(arc, {
               radiusValue: { configurable: true, enumerable: true, get: () => localArc.radius() },
-              startAngle: { configurable: true, enumerable: true, get: () => localArc.startAngle + instance.rotation },
-              endAngle: { configurable: true, enumerable: true, get: () => localArc.endAngle + instance.rotation },
+              startAngle: { configurable: true, enumerable: true, get: () => worldAngle(instance, localArc.startAngle) },
+              endAngle: { configurable: true, enumerable: true, get: () => worldAngle(instance, localArc.endAngle) },
             });
             arcs.push(arc);
           }

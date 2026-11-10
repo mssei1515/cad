@@ -29,17 +29,25 @@ function fixture(composed = false) {
     now: () => ++tick,
   };
   const solver = { computeErrorVectorForConstraints(value) { assert.equal(this, solver); return ports.computeErrorVector(value); } };
-  const api = composed ? sandbox.window.GeometryDragTestDriver.createExecutionSupport({
+  const options = {
     feature: { build: ports.buildDragSession, prepare: ports.attachLocalSolveContext, preview: ports.dragResultForSession,
       finish: ports.solveFinalDragSession, targetConstraintCount: ports.targetConstraintCount }, solver,
     currentScope: ports.currentScope, normalizeArcSweeps: ports.normalizeArcSweeps, vectorNorm: ports.vectorNorm,
     sketchSolveConstraints: ports.sketchSolveConstraints, now: ports.now, readConstraintStatuses: () => { calls.push(['status']); return { stable: true }; },
-  }) : null;
+  };
+  let support = null;
+  if (composed === "workspace") {
+    support = sandbox.window.GeometryDragTestDriver.createForWorkspace({ documentWorkspace: { workspace: { current: ports.currentScope } },
+      geometry: { normalizeArcSweeps: ports.normalizeArcSweeps }, scopeQuery: { sketchSolveConstraints: ports.sketchSolveConstraints },
+      feature: options.feature, solver, modelTypes: { vectorNorm: ports.vectorNorm }, arcEndpointPoint: options.arcEndpointPoint,
+      now: ports.now, readConstraintStatuses: options.readConstraintStatuses });
+  }
+  const api = support ? support.execution : composed ? sandbox.window.GeometryDragTestDriver.createExecutionSupport(options) : null;
   const driver = composed ? { drag: api.guidedPointDragForTest, path: api.guidedPointDragPathForTest }
     : sandbox.window.GeometryDragTestDriver.createPointDriver(ports);
   const geometry = composed ? api.geometryDragPathForTest : sandbox.window.GeometryDragTestDriver.createGeometryDriver({ ...ports,
     readConstraintStatuses: () => { calls.push(['status']); return { stable: true }; } }).path;
-  return { driver, geometry, api, point, calls, setScope: value => { scope = value; }, unavailable: () => { available = false; }, fail: () => { throws = true; } };
+  return { driver, geometry, api, support, point, calls, setScope: value => { scope = value; }, unavailable: () => { available = false; }, fail: () => { throws = true; } };
 }
 
 test('execution assembly preserves all three public routes, live scope and failure short-circuiting without constructor work', () => {
@@ -134,12 +142,12 @@ test('arc endpoint unavailable session preserves endpoint wrapper and initial sn
 });
 
 
-function responsiveFixture(configureTypes = types => types) {
+function responsiveFixture(configureTypes = types => types, build = options => sandbox.window.GeometryDragTestDriver.createResponsiveFixture(options)) {
  const events=[],state={scope:null,fail:false,result:{points:'serialized'}};
  class DistanceConstraint {constructor(a,b,value){Object.assign(this,{type:'distance',a,b,value});}}
  class ParallelConstraint {constructor(a,b){Object.assign(this,{type:'parallel',a,b});}}
  class PerpendicularConstraint {constructor(a,b){Object.assign(this,{type:'perpendicular',a,b});}}
- const driver=sandbox.window.GeometryDragTestDriver.createResponsiveFixture({
+ const driver=build({
   resetModelState:()=>{events.push('reset');state.scope={points:[],lines:[],constraints:[]};},
   addPoint:(x,y,fixed,role)=>{const point={id:'P'+(state.scope.points.length+1),x,y,fixed,role};state.scope.points.push(point);return point;},
   addLine:(p1,p2)=>{const line={id:'L'+(state.scope.lines.length+1),p1,p2};state.scope.lines.push(line);return line;},
@@ -190,4 +198,45 @@ test("responsive fixture captures explicit model types once and retains individu
     f.driver.reset();
     assert.deepEqual(reads, override ? [] : ["DistanceConstraint", "ParallelConstraint", "PerpendicularConstraint"]);
   }
+});
+
+test('Workspace drag support preserves the exact three execution routes, live scope, results and solver observation order',()=>{
+ for(const run of [f=>f.driver.drag('P1',2,-1),f=>f.driver.path('P1',[[2,-1],[-3,4]]),f=>f.geometry({kind:'point',id:'P1'},[[2,-1],[-3,4]])]){
+  const legacy=fixture(true),next=fixture('workspace');assert.deepEqual(next.calls,[]);assert.ok(Object.isFrozen(next.support));
+  assert.deepEqual(Object.keys(next.api),Object.keys(legacy.api));assert.equal(next.api.createResponsiveForEditing,undefined);
+  assert.equal(JSON.stringify(run(next)),JSON.stringify(run(legacy)));assert.deepEqual(next.calls,legacy.calls);
+ }
+ const f=fixture('workspace');f.setScope({points:[]});assert.equal(f.driver.drag('P1',1,1),null);assert.deepEqual(f.calls,[]);
+ f.setScope({points:[f.point]});f.unavailable();assert.equal(f.driver.path('P1',[]),null);
+ const bad=fixture('workspace');bad.fail();assert.throws(()=>bad.geometry({kind:'point',id:'P1'},[[1,1]]),/preview failed/);assert.deepEqual(bad.calls.map(c=>c[0]),['build','attach','preview']);
+});
+
+function responsiveWorkspaceFixture(probe={}){
+ return responsiveFixture(types=>types,options=>{
+  const w=sandbox.window,fail=()=>assert.fail('no scope, solve or clock read during test assembly');
+  const modelTypes={DistanceConstraint:options.DistanceConstraint,ParallelConstraint:options.ParallelConstraint,PerpendicularConstraint:options.PerpendicularConstraint};
+  const support=w.GeometryDragTestDriver.createForWorkspace({documentWorkspace:{workspace:{current:fail}},
+   geometry:{addPoint:options.addPoint,addLine:options.addLine,normalizeArcSweeps:fail},scopeQuery:{sketchSolveConstraints:fail},feature:{},solver:{},modelTypes,now:fail,readConstraintStatuses:fail});
+  const publicAPI=support.execution;
+  const late={insertion:{push:options.pushModelConstraint},presentation:{log:options.log,draw:options.draw},fit:{fitAllGeometryToViewport:options.fitAllGeometryToViewport},modelTypes,
+   resetModelState:options.resetModelState,ensureDimensionDefaults:options.ensureDimensionDefaults,solveAndRefresh:options.solveAndRefresh,resetHistory:options.resetHistory,serializeModel:options.serializeModel};
+  if(probe.failTypes){late.modelTypes=new Proxy(modelTypes,{get(){throw probe.error;}});
+   try{assert.throws(()=>support.createResponsiveForEditing(late),error=>error===probe.error);assert.equal(support.execution,publicAPI);}
+   finally{late.modelTypes=modelTypes;}}
+  const result=support.createResponsiveForEditing(late);assert.equal(support.execution,publicAPI);probe.support=support;probe.types=modelTypes;return result;
+ });
+}
+
+test('Workspace responsive fixture reuses Geometry references and preserves reset, solve, fit and history order at its later stage',()=>{
+ const original=responsiveFixture(),probe={},next=responsiveWorkspaceFixture(probe);
+ assert.deepEqual(next.events,[]);assert.equal(next.state.scope,null);assert.equal(next.driver.reset(),next.state.result);original.driver.reset();
+ assert.deepEqual(next.events,original.events);assert.equal(JSON.stringify(next.state.scope),JSON.stringify(original.state.scope));
+ const {points,lines,constraints}=next.state.scope;assert.equal(lines[0].p1,points[0]);assert.equal(constraints[0].a,points[0]);assert.equal(constraints[2].a,lines[0]);
+ assert.ok(constraints[0] instanceof probe.types.DistanceConstraint);assert.equal(Object.keys(probe.support.execution).length,3);
+ const prior=next.state.scope;next.driver.reset();assert.notEqual(next.state.scope,prior);assert.notEqual(next.state.scope.points[0],points[0]);
+});
+
+test('Workspace responsive constructor and solve failures preserve prior execution support and stop at the original effects',()=>{
+ const marker=new Error('types unavailable'),f=responsiveWorkspaceFixture({failTypes:true,error:marker});assert.deepEqual(f.events,[]);
+ f.state.fail=marker;assert.throws(()=>f.driver.reset(),error=>error===marker);assert.deepEqual(f.events,['reset','defaults',['solve','サンプル復元']]);assert.equal(f.state.scope.constraints.length,5);
 });

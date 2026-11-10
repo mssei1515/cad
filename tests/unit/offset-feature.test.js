@@ -87,3 +87,60 @@ test('Offset preview follows the current mode and pointer and uses the same exte
   const dimension = f.events.find(event => event[0] === 'dimension'); assert.equal(dimension[3], '10'); assert.equal(dimension[4], true);
   f.sourceSelection.reset(); f.events.length = 0; f.feature.previewLayer.draw(); assert.deepEqual(f.events, []);
 });
+function selectionFixture(composed) {
+  const events = [], state = { current: scope(), active: 'S1', fail: null }, marker = new Error('offset source failure');
+  const editingScope = { get current() { events.push('scope'); if (state.fail === 'scope') throw marker; return state.current; } };
+  const sketches = { activeSketchId: () => state.active, elementSketchId: item => item.sketchId, constraintSketchId: item => item.sketchId };
+  const selection = w.CanvasSelection.create(), apply = selection.applyOffsetSelection;
+  // Keep the real selection; a narrow facade observes the callback receiver and failure boundary.
+  const selectionPort = { applyOffsetSelection(source) { assert.equal(this, selectionPort); events.push('selection'); if (state.fail === 'selection') throw marker; return apply(source); } };
+  let actual, ports;
+  const local = { window: { GeometrySolver: g, OffsetSelection: { create(options) { ports = options; return actual = w.OffsetSelection.create(options); } } } };
+  vm.runInNewContext(fs.readFileSync('src/application/offset_feature.js', 'utf8'), local);
+  const source = composed ? local.window.OffsetFeature.createSelectionForEditing({ editingScope, sketches, selection: selectionPort }) : (() => {
+    let result; result = local.window.OffsetSelection.create({ ...g, getModel: () => editingScope.current, ...sketches,
+      onSelectionChanged: () => selectionPort.applyOffsetSelection(result) }); return result;
+  })();
+  let seq = 0;
+  const point = () => new g.Point('P' + ++seq, 0, 0);
+  const line = (a = point(), b = point()) => { const value = new g.Line('L' + ++seq, a, b); value.sketchId = state.active; state.current.lines.push(value); return value; };
+  const snapshot = () => JSON.parse(JSON.stringify({ events, entries: source.entries.map(e => [e.geometry.id, e.reversed]), source: source.source?.id,
+    committed: source.committed, selected: selection.lines.map(l => l.id) }));
+  return { state, events, marker, source, actual, ports, sketches, selection, line, snapshot };
+}
+
+test('Offset selection assembly is cold, returns the actual source owner and connects exact Sketch and solver capabilities', () => {
+  const f = selectionFixture(true);
+  assert.deepEqual(f.events, []); assert.equal(f.source, f.actual);
+  for (const name of ['activeSketchId', 'elementSketchId', 'constraintSketchId']) assert.equal(f.ports[name], f.sketches[name]);
+  for (const name of ['Line', 'Arc', 'CoincidentConstraint', 'ArcEndpointCoincidentConstraint', 'ArcEndpointArcEndpointCoincidentConstraint', 'OffsetChainConstraint']) assert.equal(f.ports[name], g[name]);
+  const first = f.line(); assert.equal(f.source.add(first).ok, true);
+  assert.equal(f.source.source, first); assert.equal(f.source.entries[0].geometry, first); assert.equal(f.selection.lines[0], first);
+});
+
+test('Offset source assembly preserves connected-chain orientation, duplicate rejection, reset and live editing scope', () => {
+  const run = composed => {
+    const f = selectionFixture(composed), first = f.line(), second = f.line(first.p2);
+    assert.equal(f.source.add(first).ok, true); assert.equal(f.source.add(second).ok, true);
+    assert.equal(f.source.add(first).code, 'already-selected'); f.source.commitSelection(); assert.equal(f.source.committed, true);
+    const before = f.snapshot(), previous = f.state.current;
+    f.source.reset(); f.state.current = scope(); f.state.active = 'S2'; const next = f.line();
+    assert.equal(f.source.add(next).ok, true); const last = f.line(next.p2); assert.equal(f.source.add(last).ok, true);
+    assert.equal(previous.lines.length, 2); assert.equal(f.source.source, next); assert.equal(f.selection.lines[0], next);
+    return { before, after: f.snapshot() };
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+test('Offset selection assembly keeps callback and topology exceptions with the same already-applied source state', () => {
+  for (const failure of ['scope', 'selection']) {
+    const run = composed => {
+      const f = selectionFixture(composed), first = f.line(), second = f.line(first.p2);
+      if (failure === 'scope') f.source.add(first);
+      f.state.fail = failure;
+      assert.throws(() => f.source.add(failure === 'scope' ? second : first), error => error === f.marker);
+      return f.snapshot();
+    };
+    assert.deepEqual(run(true), run(false), failure);
+  }
+});

@@ -16,7 +16,24 @@
         showHiddenElements, viewportScale, profileRead });
     }
     function createReadContext({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead }) {
-      const services = createGeometryReadServices({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead });
+      let currentPersistence;
+      function requirePersistence(binding) {
+        if (currentPersistence === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+        return currentPersistence;
+      }
+      function ensureBlockState() { return requirePersistence("documentPreparation").preparation.blocks(); }
+      const services = createGeometryReadServices({ currentSketches,
+        prepareBlocks: prepareBlocks === undefined ? ensureBlockState : prepareBlocks, showHiddenElements, viewportScale, profileRead });
+      function serializeConstraint(c) { return requirePersistence("constraintCodecs").codecs.serialize(c); }
+      function deserializeConstraint(...args) { return requirePersistence("constraintCodecs").codecs.deserialize(...args); }
+      function decorateSerializedConstraint(data, constraint) { return requirePersistence("constraintMetadata").metadata.decorate(data, constraint); }
+      function serializeModel() { return requirePersistence("documentWriter").writer.serialize(); }
+      const persistence = Object.freeze({ serializeConstraint, deserializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState });
+      function createRebinding() {
+        return window.ConstraintRebinding.create({ catalog: services.catalog, projections: services.projections,
+          geometryInstanceBundlesForScope: services.instances.geometryInstanceBundlesForScope,
+          serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText });
+      }
       function createScopeBinding({ Solver, closeSketchContext, resetSketchMove }) {
         return window.EditingScopeBinding.create({ workspace, Solver, closeSketchContext, resetSketchMove,
           clearGeometryReads: () => services.reads.clearReadCache(),
@@ -56,6 +73,10 @@
           isPointUsedByArc: pointUsage.isPointUsedByArc, constraintReferencesPoint,
           defaultUnits: window.DocumentState.DEFAULT_DOCUMENT_UNITS, applicationText,
           invalidateProjection: services.projections.invalidateBlockProjectionCache, normalizeArcSweeps });
+        const { activeSketchId } = sketches;
+        function normalizeGeometryInstance(raw, normalizeSketch = value => String(value || activeSketchId()), index = 0) {
+          return geometryInstances.normalize(raw, normalizeSketch, index);
+        }
         const { targetFromConstraint } = window.DimensionQueries;
         function ensureDimensionDefaults() {
           return window.DocumentState.normalizeDimensionState(readEditingScope(), targetFromConstraint,
@@ -67,9 +88,11 @@
             restoreSequences: sequences => { reservation.geometry(sequences.geometry); documentIds.restore(sequences); },
             ensureAppearanceState: () => preparation.appearance(), ensureBlockState: () => preparation.blocks(), log });
         }
-        return Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, ensureDimensionDefaults, createApplication });
+        const result = Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, normalizeGeometryInstance, ensureDimensionDefaults, createApplication });
+        currentPersistence = result;
+        return result;
       }
-      return Object.freeze({ services, createScopeBinding, createEditingScope, createPersistence });
+      return Object.freeze({ services, persistence, createRebinding, createScopeBinding, createEditingScope, createPersistence });
     }
     return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, createGeometryReadServices, createReadContext });
   }

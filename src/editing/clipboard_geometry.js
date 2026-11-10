@@ -69,6 +69,7 @@
           rotation: source.rotation,
           fixed: source.fixed,
           rotationLocked: Boolean(source.rotationLocked),
+          mirrored: source.mirrored === true,
           enabledSketchIds: source.enabledSketchIds.slice(),
           appearanceOverride: normalizeAppearance(source.appearanceOverride),
         };

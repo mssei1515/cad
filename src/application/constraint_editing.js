@@ -130,7 +130,7 @@
   }
   function createForEditing({ document, controls, interaction, sessions, sketches, presentation, operands, viewport, annotationFeature, instances,
     valueInput, resolveConstraintIntent, isGeometryMode, findLineFixedConstraint, clearSelection, commitConstraintResolution,
-    updateToolbar, updateConstraintButtons, blurConstraintControl, addConstraint, hitConstraintOperand,
+    updateToolbar, updateConstraintButtons, blurConstraintControl = window.ConstraintControlsView.createFocus({ document }).blur, addConstraint, hitConstraintOperand,
     toggleGeometryFixedOperand, toggleSelectedFixed, geometryInstanceBundle, cancelPendingCommand, placement,
     readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint }) {
     const { selection, access, lifecycle, hover } = interaction;
@@ -172,7 +172,93 @@
         wouldCreateReferenceCycle: referenceState.wouldCreateReferenceCycle, sketchName, now,
       });
     }
-    return Object.freeze({ ...editing, createCommitForWorkspace });
+    function createCommitWithIntentForWorkspace(options) {
+      const commit = createCommitForWorkspace(options);
+      const { createIntentResolver } = commit;
+      const { PointOnSplineConstraint, SplineLineTangentConstraint, SplineSplineTangentConstraint } = window.GeometrySolver;
+      const intentResolver = createIntentResolver({ operands: values,
+        types: { PointOnSplineConstraint, SplineLineTangentConstraint, SplineSplineTangentConstraint },
+        isActiveSketchElement: sketches.isActiveSketchElement, isEditableSketchElement: sketches.isEditableSketchElement });
+      return Object.freeze({ ...commit, intentResolver });
+    }
+    return Object.freeze({ ...editing, createCommitForWorkspace, createCommitWithIntentForWorkspace });
+  }
+  function createForWorkspace({ documentWorkspace, sessions, readServices, fixedState: sharedFixedState, ...options }) {
+    const { operands, presentation } = options;
+    let commit, fixedOperand, fixedSelection;
+    function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
+      return commit.readOnly.forPlacement(target, value, dimension, options);
+    }
+    function addReadOnlyDimensionConstraint(...args) { return commit.command.readOnly(...args); }
+    const readOnlyDimensions = Object.freeze({ forPlacement: readOnlyDimensionConstraintForPlacement, add: addReadOnlyDimensionConstraint });
+    const editing = createForEditing({ ...options, sessions, sketches: documentWorkspace.sketches,
+      geometryInstanceBundle: options.geometryInstanceBundle === undefined ? readServices?.reads?.geometryInstanceBundle : options.geometryInstanceBundle,
+      findLineFixedConstraint: options.findLineFixedConstraint === undefined ? sharedFixedState?.findLineFixedConstraint : options.findLineFixedConstraint,
+      readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint,
+      resolveConstraintIntent: (type, operands) => commit.intentResolver.resolve(type, operands),
+      commitConstraintResolution: (...args) => commit.command.resolution(...args),
+      addConstraint: type => commit.command.fromSelection(type),
+      toggleGeometryFixedOperand: operand => fixedOperand.toggle(operand),
+      toggleSelectedFixed: () => fixedSelection.toggle(),
+      cancelPendingCommand: message => sessions.pending.cancel(message),
+    });
+    const { createCommitWithIntentForWorkspace: createCommit, createFixedEditing: createFixed } = editing;
+    function createCommitWithIntentForWorkspace(input) {
+      const result = createCommit({ ...input, workspace: documentWorkspace.workspace });
+      commit = result;
+      return result;
+    }
+    function createFixedEditing(input) {
+      const result = createFixed(input);
+      fixedOperand = result.operand;
+      const { createSelection } = result;
+      function createSelectionForWorkspace(input) {
+        const command = createSelection(input);
+        fixedSelection = command;
+        return command;
+      }
+      return Object.freeze({ ...result, createSelection: createSelectionForWorkspace });
+    }
+    function createFixedForWorkspace({ projection, fixedState = sharedFixedState, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh }) {
+      const result = createFixedEditing({ operandElement: operands.operands.operandElement,
+        guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit,
+        findArcEndpointFixedConstraint: fixedState.findArcEndpointFixedConstraint, arcEndpointPoint: window.GeometryKernel.arcEndpointPoint,
+        currentScope: documentWorkspace.workspace.current, sameConstraintDisplayElement: selectionHighlight.sameConstraintDisplayElement,
+        deleteElements, commitNewConstraint, solveAndRefresh });
+      function createSelectionForWorkspace({ checkpoint, insertion, solving, acceptError, refreshConstraintAnalysis, recordHistory }) {
+        return result.createSelection({ blockDefinitionById: readServices.catalog.blockDefinitionById,
+          updateUI: presentation.updateUI, recordHistory, snapshotModelState: checkpoint.captureValues, restoreModelState: checkpoint.restoreValues,
+          pushModelConstraint: insertion.push, solveSketchAndDependents: solving.solveSketchAndDependents, acceptError, refreshConstraintAnalysis });
+      }
+      return Object.freeze({ ...result, createSelectionForWorkspace });
+    }
+    function createWithDraggingForWorkspace({ pointer, clearSnap, recordHistory }) {
+      return editing.input.createWithDragging({ viewport: options.viewport, currentScope: documentWorkspace.workspace.current,
+        sketches: documentWorkspace.sketches, readServices, pointer, clearSnap, updateUI: presentation.updateUI, recordHistory });
+    }
+    return Object.freeze({ selectionQuery: editing.selectionQuery, targets: editing.targets, dimensions: editing.dimensions,
+      createControls: editing.createControls, createCommandInput: editing.createCommandInput,
+      constraintTargetHint: editing.constraintTargetHint, input: Object.freeze({ ...editing.input, createWithDraggingForWorkspace }), controls: editing.controls,
+      createCommitWithIntentForWorkspace, createFixedEditing, createFixedForWorkspace, readOnlyDimensions });
+  }
+  function prepareDimensionValues({ workspace, sketches, bounds, minimumLineLength }) {
+    const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
+      currentScope: workspace.current, activeSketchId: sketches.activeSketchId, constraintSketchId: sketches.constraintSketchId,
+      elementSketchId: sketches.elementSketchId, sketchGeometryBounds: bounds.sketchGeometryBounds, minLength: minimumLineLength,
+    });
+    function createForEditing({ solver, modelQueries, offsetChainDraft, minimumOrientationLength, parameters, interaction,
+      pending, valueInput, checkpoint, presentation, annotationFeature, stabilization, viewport, placement,
+      synchronizedInstanceEditing, acceptError, recordHistory, resetDimensionDrag, addDistanceConstraintFromTarget }) {
+      const solvePreparation = window.ConstraintSolvePreparation.createForSolver({
+        solver, hasDirectRadiusDimension: modelQueries.hasDirectRadiusDimension, offsetChainDraft,
+        minimumOrientationLength, minimumLineLength,
+      });
+      const command = createDimensionValues({ parameters, sketches, interaction, pending, valueInput, checkpoint, presentation,
+        annotationFeature, modelQueries, stabilization, viewport, bounds, placement, synchronizedInstanceEditing,
+        solvePreparation, scaleSketchForFirstDimension, acceptError, recordHistory, resetDimensionDrag, addDistanceConstraintFromTarget });
+      return Object.freeze({ command, solvePreparation });
+    }
+    return Object.freeze({ createForEditing });
   }
   function createDimensionValues({ parameters, sketches, interaction, pending, valueInput, checkpoint, presentation,
     annotationFeature, modelQueries, stabilization, viewport, bounds, placement, synchronizedInstanceEditing,
@@ -200,5 +286,5 @@
       restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
     });
   }
-  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing, createDimensionValues });
+  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing, createForWorkspace, prepareDimensionValues, createDimensionValues });
 })();

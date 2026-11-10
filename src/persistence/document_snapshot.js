@@ -32,6 +32,7 @@
       id: instance.id, definitionId: instance.definitionId, sketchId: instance.sketchId,
       drawingOrder: normalizedDrawingOrder(instance.drawingOrder) ?? 0,
       x: instance.x, y: instance.y, rotation: instance.rotation,
+      ...(instance.mirrored ? { mirrored: true } : {}),
       fixed: Boolean(instance.fixed), rotationLocked: Boolean(instance.rotationLocked),
       enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
       appearanceOverride: normalizeAppearance(instance.appearanceOverride),

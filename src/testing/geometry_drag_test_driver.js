@@ -1,6 +1,17 @@
 /* Browser-test drag execution delegates session state and solving to product owners. */
 (() => {
   "use strict";
+  function createForWorkspace({ documentWorkspace, geometry, scopeQuery, feature, solver, modelTypes, arcEndpointPoint, now, readConstraintStatuses }) {
+    const execution = createExecutionSupport({ feature, solver, currentScope: documentWorkspace.workspace.current,
+      normalizeArcSweeps: geometry.normalizeArcSweeps, vectorNorm: modelTypes.vectorNorm,
+      sketchSolveConstraints: scopeQuery.sketchSolveConstraints, arcEndpointPoint, now, readConstraintStatuses });
+    function createResponsiveForEditing({ insertion, presentation, fit, modelTypes, resetModelState, ensureDimensionDefaults, solveAndRefresh, resetHistory, serializeModel }) {
+      return createResponsiveFixture({ resetModelState, addPoint: geometry.addPoint, addLine: geometry.addLine,
+        pushModelConstraint: insertion.push, modelTypes, ensureDimensionDefaults, solveAndRefresh,
+        log: presentation.log, fitAllGeometryToViewport: fit.fitAllGeometryToViewport, draw: presentation.draw, resetHistory, serializeModel });
+    }
+    return Object.freeze({ execution, createResponsiveForEditing });
+  }
   function createExecutionSupport({ feature, solver, currentScope, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
     arcEndpointPoint, now, readConstraintStatuses }) {
     const shared = { currentScope, buildDragSession: feature.build, attachLocalSolveContext: feature.prepare,
@@ -250,5 +261,5 @@
     return Object.freeze({ reset });
   }
 
-  window.GeometryDragTestDriver = Object.freeze({ createExecutionSupport, createPointDriver, createGeometryDriver, createResponsiveFixture });
+  window.GeometryDragTestDriver = Object.freeze({ createForWorkspace, createExecutionSupport, createPointDriver, createGeometryDriver, createResponsiveFixture });
 })();

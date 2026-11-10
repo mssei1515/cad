@@ -209,7 +209,7 @@ test("Sketch move command remains usable when the separately enabled input bindi
   assert.equal(f.point.sketchId, "S1"); assert.equal(f.calls.some(call => call[0] === "history"), false);
 });
 
-function interactionFixture(composed){
+function interactionFixture(composed, navigation){
  let assembled,owners,controls;const listeners=[];
  const document={addEventListener:(...args)=>listeners.push(args),removeEventListener(){}};
  const f=fixture(undefined,(feature,options)=>{
@@ -232,7 +232,7 @@ function interactionFixture(composed){
    projection:{reset:step('projection')},instances:{clearSources:step('instances')},instanceSources:{reset:step('sources')},
    clearInteractionForSketchChange:()=>assembled.reset.clear(),promptName:options.promptName,clearTreeHover:options.clearTreeHover};
   owners.rawPointer=rawPointer;
-  if(composed)assembled=w.SketchEditingFeature.createForInteraction(owners);
+  if(composed)assembled=(navigation || w.SketchEditingFeature).createForInteraction(owners);
   else{
    const reset=w.SketchCommand.createInteractionReset({resetSketchMove,clearSelection:options.clearSelection,resetGeometryDrag:owners.resetGeometryDrag,resetDimensionDrag:owners.resetDimensionDrag,
     referenceImage:owners.referenceImage,selectionRectangle:owners.selectionRectangle,drawing:lifecycle,pending,constraint:targets,projection:owners.projection,instances:owners.instances,instanceSources:owners.instanceSources,hover,
@@ -274,7 +274,7 @@ test('Sketch interaction composition propagates cancellation failures before loc
  }
 });
 
-function editingTreeFixture(composed) {
+function editingTreeFixture(composed, navigation) {
   let ports, config;
   const original = w.SketchTreeController;
   w.SketchTreeController = { ...original, createWithDocumentObjects(input) { ports = input; return original.createWithDocumentObjects(input); } };
@@ -300,7 +300,7 @@ function editingTreeFixture(composed) {
         fixedOperands: { unfixPoint: p.unfixPoint } };
       delete config.objectOptions.constraintFeedback; delete config.objectOptions.pointUsage;
       return composed ? f.feature.createTreeForEditing(config) : f.feature.createTree(p);
-    }, () => interactionFixture(true));
+    }, () => interactionFixture(true, navigation));
     return { ...f, ports, config };
   } finally { w.SketchTreeController = original; }
 }
@@ -350,4 +350,163 @@ test('editing Tree visibility, locking and move completion use the same real com
     assert.equal(f.move.active, false); assert.equal(f.point.sketchId, 'S2'); assert.equal(f.state.scope.points[0], f.point);
     assert.equal(f.calls.filter(call => call[0] === 'history' && call[1] === 'スケッチ間の図形移動').length, 1);
   }
+});
+
+
+function deletionOwnersFixture(composed, failConstruction = false) {
+ const f=interactionFixture(true),{state,calls,owners}=f;
+ state.ready=false;state.references=false;state.confirm=true;state.result={};state.error=new Error('deletion owner');
+ const record=name=>function(){'use strict';assert.equal(this,undefined);assert.equal(state.ready,true);calls.push([name,...arguments]);if(state.failStage===name)throw state.error;return state.result;};
+ owners.presentation.log=record('log');
+ const deletion={rejectReferences(instances,label){assert.equal(this,deletion);assert.equal(arguments.length,2);record('references')(instances,label);return state.references;}},
+  solveState={clearSketchSolveState:record('clear-solve')},solving={solveSketchAndDependents:record('solve')},
+  analysis={invalidate(){assert.equal(this,analysis);return record('invalidate')(...arguments);},refresh(){assert.equal(this,analysis);return record('refresh')(...arguments);}};
+ const config={deletion,solveState,solving,analysis,guardDimensionSymbolDeletion:()=>state.symbols,
+  confirmDeletion:message=>{record('confirm')(message);return state.confirm;}};
+ const raw={rejectReferencedGeometryDeletion:(instances,label)=>deletion.rejectReferences(instances,label),log:owners.presentation.log,
+  geometryElementKey:w.GeometryObjects.geometryKeyForItem,guardDimensionSymbolDeletion:config.guardDimensionSymbolDeletion,
+  annotationReferencesRemovedGeometry:w.AnnotationAnchorData.referencesRemovedGeometry,clearSketchSolveState:solveState.clearSketchSolveState,
+  invalidateAnalysis:()=>{analysis.invalidate();},solveSketchAndDependents:solving.solveSketchAndDependents,
+  refreshConstraintAnalysis:(options={})=>analysis.refresh(options),confirmDeletion:config.confirmDeletion};
+ const original=w.SketchDeletionCommand;let ports,command;
+ w.SketchDeletionCommand={...original,create(input){ports=input;if(failConstruction)throw state.error;return original.create(input);}};
+ try{
+  if(failConstruction)assert.throws(()=>composed?f.feature.createDeletionForEditing(config):f.feature.createDeletion(raw),error=>error===state.error);
+  else command=composed?f.feature.createDeletionForEditing(config):f.feature.createDeletion(raw);
+ }finally{w.SketchDeletionCommand=original;}
+ assert.deepEqual(calls,[]);state.ready=true;
+ return {...f,command,ports,config,raw};
+}
+
+test('Sketch deletion owner assembly stays cold and preserves receiver, default refresh, void invalidation and exception contracts',()=>{
+ const traces=[];
+ for(const composed of [false,true]){
+  const f=deletionOwnersFixture(composed),p=f.ports,items=[],options={refreshAnalysis:false};
+  assert.equal(p.currentScope,f.owners.documentWorkspace.workspace.current);assert.equal(p.log,f.owners.presentation.log);
+  assert.equal(p.clearSketchSolveState,f.config.solveState.clearSketchSolveState);assert.equal(p.solveSketchAndDependents,f.config.solving.solveSketchAndDependents);
+  assert.equal(p.geometryElementKey,w.GeometryObjects.geometryKeyForItem);assert.equal(p.annotationReferencesRemovedGeometry,w.AnnotationAnchorData.referencesRemovedGeometry);
+  assert.equal(p.rejectReferencedGeometryDeletion(items,'Sketch','ignored'),false);assert.equal(p.invalidateAnalysis('ignored'),undefined);
+  assert.equal(p.refreshConstraintAnalysis(undefined,'ignored'),f.state.result);const defaults=f.calls.at(-1)[1];assert.deepEqual(Object.keys(defaults),[]);assert.equal(f.calls.at(-1).length,2);
+  p.refreshConstraintAnalysis();assert.notEqual(f.calls.at(-1)[1],defaults);p.refreshConstraintAnalysis(options,'ignored');assert.equal(f.calls.at(-1)[1],options);
+  p.refreshConstraintAnalysis(null);assert.equal(f.calls.at(-1)[1],null);
+  for(const [stage,action]of [['references',()=>p.rejectReferencedGeometryDeletion(items,'S')],['invalidate',()=>p.invalidateAnalysis()],['refresh',()=>p.refreshConstraintAnalysis()]]){
+   f.state.failStage=stage;assert.throws(action,error=>error===f.state.error);
+  }
+  traces.push(JSON.stringify(f.calls));
+ }
+ assert.equal(traces[1],traces[0]);
+});
+
+test('Sketch deletion owners preserve live Workspace deletion, guards, identity and one history update',()=>{
+ for(const rejection of [null,'locked','references','symbols','confirm']){
+  const results=[];
+  for(const composed of [false,true]){
+   const f=deletionOwnersFixture(composed),original=f.point,replacement=f.empty();
+   const point=Object.assign(new w.GeometrySolver.Point('new',3,4),{sketchId:'S1'});replacement.points.push(point);f.state.scope=replacement;
+   f.selection.set('points',[point]);
+   if(rejection==='locked')replacement.sketches.find(s=>s.id==='S1').locked=true;
+   if(rejection==='references')f.state.references=true;
+   if(rejection==='symbols')f.state.symbols=false;
+   if(rejection==='confirm')f.state.confirm=false;
+   f.owners.documentWorkspace.sketches.ensureSketchState();
+   const before=JSON.stringify(replacement),result=f.command.remove('S1');assert.equal(result,rejection===null);
+   if(rejection){assert.equal(JSON.stringify(f.state.scope),before);assert.equal(f.state.scope.points[0],point);assert.equal(f.calls.filter(c=>c[0]==='history').length,0);}
+   else{assert.equal(f.state.scope.points.length,0);assert.equal(f.state.scope.activeSketchId,'ROOT');assert.equal(f.selection.points.length,0);assert.equal(f.calls.filter(c=>c[0]==='history').length,1);
+    const names=f.names();assert.ok(names.indexOf('invalidate')<names.indexOf('solve'));assert.ok(names.indexOf('solve')<names.indexOf('refresh'));assert.ok(names.indexOf('refresh')<names.indexOf('history'));}
+   assert.equal(original.sketchId,'S1');results.push(JSON.stringify({scope:f.state.scope,calls:f.calls}));
+  }
+  assert.equal(results[1],results[0],String(rejection));
+ }
+});
+
+test('Sketch deletion owners retain constructor and post-mutation failure boundaries',()=>{
+ for(const composed of [false,true])deletionOwnersFixture(composed,true);
+ for(const failure of ['clear-solve','invalidate','solve','refresh']){
+  const results=[];
+  for(const composed of [false,true]){
+   const f=deletionOwnersFixture(composed);f.state.failStage=failure;
+   assert.throws(()=>f.command.remove('S1',false),error=>error===f.state.error);
+   assert.equal(f.state.scope.points.length,0);assert.equal(f.state.scope.sketches.some(s=>s.id==='S1'),false);
+   assert.equal(f.calls.filter(c=>c[0]==='history').length,0);assert.equal(f.calls.at(-1)[0],failure);
+   results.push(JSON.stringify({scope:f.state.scope,calls:f.calls}));
+  }
+  assert.equal(results[1],results[0],failure);
+ }
+});
+
+test('Sketch navigation stays cold and publishes the actual move before separately enabled input', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation();
+  assert.ok(Object.isFrozen(navigation));
+  assert.equal(navigation.closeContext(), undefined); assert.equal(navigation.resetMove(), undefined);
+  assert.throws(() => navigation.readMoving(), error => error.name === 'TypeError');
+  const original = w.SketchTreeController; let construction = 0;
+  w.SketchTreeController = { ...original, createMoveInputBinding(options) {
+    construction++;
+    assert.throws(() => navigation.readMoving(), error => error.name === 'TypeError');
+    return original.createMoveInputBinding(options);
+  } };
+  let f;
+  try { f = interactionFixture(true, navigation); } finally { w.SketchTreeController = original; }
+  assert.equal(construction, 1); assert.equal(f.controls.command, f.move); assert.equal(f.listeners.length, 0);
+  assert.equal(navigation.readMoving(), false);
+  f.selection.set('points', [f.point]); assert.equal(f.move.start(), true); assert.equal(navigation.readMoving(), true);
+  navigation.resetMove(); assert.equal(f.move.active, false); assert.equal(navigation.readMoving(), false);
+  f.controls.input.bind(); assert.equal(f.listeners.length, 6);
+});
+
+test('Sketch navigation keeps the prior move on constructor failure and keeps the new move on input bind failure', () => {
+  for (const stage of ['command', 'input']) {
+    const navigation = w.SketchEditingFeature.prepareNavigation(), f = interactionFixture(true, navigation);
+    f.selection.set('points', [f.point]); assert.equal(f.move.start(), true);
+    const marker = new Error(stage), originalCommand = w.SketchMoveCommand, originalTree = w.SketchTreeController;
+    if (stage === 'command') w.SketchMoveCommand = { ...originalCommand, create() { throw marker; } };
+    else w.SketchTreeController = { ...originalTree, createMoveInputBinding() { throw marker; } };
+    try { assert.throws(() => f.feature.createMoveWithInput({ document: {} }), error => error === marker); }
+    finally { w.SketchMoveCommand = originalCommand; w.SketchTreeController = originalTree; }
+    assert.equal(navigation.readMoving(), true); navigation.resetMove(); assert.equal(f.move.active, false);
+    const next = f.feature.createMoveWithInput({ document: { addEventListener() {
+      assert.equal(navigation.readMoving(), next.command.active); throw marker;
+    } } });
+    assert.notEqual(next.command, f.move); assert.equal(navigation.readMoving(), false);
+    assert.throws(() => next.input.bind(), error => error === marker);
+    f.selection.set('points', [f.point]); assert.equal(next.command.start(), true);
+    navigation.resetMove(); assert.equal(next.command.active, false);
+  }
+});
+
+test('Sketch navigation publishes the actual menu only after successful Tree construction and before explicit start', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation(), originalMenu = w.CanvasContextMenu;
+  const events = [], result = {}, marker = new Error('menu boundary'); let failClose = false, failStart = true;
+  w.CanvasContextMenu = { ...originalMenu, create(options) {
+    const raw = originalMenu.create(options);
+    const menu = Object.freeze({ ...raw, close: function() {
+      'use strict'; assert.equal(this, menu); events.push('close'); if (failClose) throw marker; return result;
+    }, start: function() {
+      'use strict'; assert.equal(this, menu); events.push('start'); if (failStart) throw marker; return raw.start();
+    } });
+    return menu;
+  } };
+  let f;
+  try { f = editingTreeFixture(true, navigation); } finally { w.CanvasContextMenu = originalMenu; }
+  assert.deepEqual(events, []); assert.equal(navigation.closeContext(), result);
+  assert.throws(() => f.tree.menu.start(), error => error === marker);
+  assert.equal(navigation.closeContext(), result); failClose = true;
+  assert.throws(() => navigation.closeContext(), error => error === marker); failClose = false;
+  const originalTree = w.SketchTreeController;
+  w.SketchTreeController = { ...originalTree, createWithDocumentObjects() { throw marker; } };
+  try { assert.throws(() => f.feature.createTreeForEditing(f.config), error => error === marker); }
+  finally { w.SketchTreeController = originalTree; }
+  assert.equal(navigation.closeContext(), result);
+  failStart = false; f.tree.menu.start(); f.tree.menu.dispose();
+  const next = f.feature.createTreeForEditing(f.config);
+  assert.notEqual(next.menu, f.tree.menu); assert.equal(navigation.closeContext(), false);
+});
+
+test('Sketch navigation references are independent between workspaces', () => {
+  const a = w.SketchEditingFeature.prepareNavigation(), b = w.SketchEditingFeature.prepareNavigation();
+  const fa = interactionFixture(true, a), fb = interactionFixture(true, b);
+  fa.selection.set('points', [fa.point]); assert.equal(fa.move.start(), true);
+  assert.equal(a.readMoving(), true); assert.equal(b.readMoving(), false);
+  b.resetMove(); assert.equal(fa.move.active, true); assert.equal(fb.move.active, false);
+  a.resetMove(); assert.equal(fa.move.active, false);
 });

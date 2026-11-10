@@ -188,11 +188,10 @@
             ]
           : (() => {
               const rotation = Math.atan2(pointer.y - session.rotationPivot.y, pointer.x - session.rotationPivot.x);
-              const cos = Math.cos(rotation);
-              const sin = Math.sin(rotation);
+              const translation = window.BlockTransform.translationForCenter(session.localCenter, session.rotationPivot, rotation, session.item.mirrored);
               return [
-                { object: session.item, prop: "x", value: session.rotationPivot.x - session.localCenter.x * cos + session.localCenter.y * sin },
-                { object: session.item, prop: "y", value: session.rotationPivot.y - session.localCenter.x * sin - session.localCenter.y * cos },
+                { object: session.item, prop: "x", value: translation.x },
+                { object: session.item, prop: "y", value: translation.y },
                 { object: session.item, prop: "rotation", value: rotation },
               ];
             })();

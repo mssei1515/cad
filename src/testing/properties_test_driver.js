@@ -307,5 +307,21 @@
       }),
     });
   }
-  window.PropertiesTestDriver = Object.freeze({ createBrowserFactories, createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
+  function createBrowserSupport(options) {
+    const factories = createBrowserFactories(options);
+    return Object.freeze({
+      strokeStyleCases: factories.createStrokeStyleCases(),
+      sidebarHighlightObservation: factories.createHighlightObservation(),
+      sidebarHoverKeyObservation: factories.createHoverKeyObservation(),
+      themeObservation: factories.createThemeObservation(),
+      sidebarInspectionFixture: factories.createInspectionFixture(),
+      appearanceTestAction: factories.createAppearanceAction(),
+      hoverDisplayObservation: factories.createHoverObservation(),
+      propertyAppearanceObservation: factories.createAppearanceObservation(),
+      propertiesFixture: factories.createFixture(),
+      propertiesObservation: factories.createPropertiesObservation(),
+      fixedObservation: factories.createFixedObservation(),
+    });
+  }
+  window.PropertiesTestDriver = Object.freeze({ createBrowserFactories, createBrowserSupport, createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
 })();

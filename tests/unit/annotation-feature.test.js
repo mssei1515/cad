@@ -126,6 +126,90 @@ test('existing annotation editor is generated separately and keeps real commands
   assert.deepEqual(f.events, ['elementSketchId', 'guard']);
 });
 
+test('owned editor uses the same Parameter helpers and viewport projection with real commit, live Workspace and rollback', () => {
+  const actual = { window: {} }; vm.runInNewContext(fs.readFileSync('src/commands/annotation_parameter_command.js', 'utf8'), actual);
+  const outcomes = [];
+  for (const owned of [false, true]) {
+    let parameterPorts;
+    const f = fixture((w, input) => {
+      w.AnnotationParameterCommand = { create(options) { parameterPorts = options; return actual.window.AnnotationParameterCommand.create(options); } };
+      return w.AnnotationFeature.create(input);
+    });
+    const namespace = f.input.parameterNamespace, calls = [];
+    namespace.expressionFromUserInput = function(value) { assert.equal(this, undefined); assert.equal(arguments.length, 1); calls.push('expression'); return value.slice(1); };
+    namespace.expressionInputValue = item => item.expression;
+    f.input.viewport.worldToCanvasScreen = point => ({ x: point.x * 2, y: point.y * 2 });
+    f.item.text = 'Current note'; f.state.workspace = { id: 'host', annotations: [f.item] };
+    let solved = { success: true };
+    const options = { document: {}, host: {}, capture: () => { calls.push('capture'); return structuredClone(f.item); },
+      restore(snapshot) { calls.push('restore'); for (const key of Object.keys(f.item)) delete f.item[key]; Object.assign(f.item, snapshot); },
+      guardDimensionSymbolDeletion: () => true, stabilize: () => solved, resetDrag() {} };
+    f.events.length = 0;
+    const editor = owned ? f.feature.createEditorForEditing(options) : f.feature.createEditor({ ...options,
+      readParameterNamespace: f.input.currentScope, expressionFromUserInput: namespace.expressionFromUserInput,
+      expressionInputValue: namespace.expressionInputValue, toScreen: f.input.viewport.worldToCanvasScreen });
+    assert.equal(editor.controller, f.editor); assert.equal(editor.commitParameterEdit, f.ports['text-editing'].commitParameterEdit);
+    assert.equal(parameterPorts.expressionFromUserInput, namespace.expressionFromUserInput);
+    assert.equal(f.ports.editor.expressionInputValue, namespace.expressionInputValue); assert.equal(f.ports.editor.toScreen, f.input.viewport.worldToCanvasScreen);
+    assert.deepEqual(calls, []); assert.equal(f.state.scaleReads, 0);
+    assert.equal(editor.commitParameterEdit(f.item, 'annotation-parameter-enabled', true), true);
+    assert.equal(f.item.style.prefix, 'Current note'); assert.equal(f.events.find(e => e[0] === 'ensure')[2], f.state.workspace);
+    const bound = f.state.scope; f.state.workspace = { id: 'local', annotations: [f.item] }; f.item.parameterEnabled = false; f.events.length = 0;
+    assert.equal(editor.commitParameterEdit(f.item, 'annotation-parameter-enabled', true), true);
+    assert.equal(f.events.find(e => e[0] === 'ensure')[2], f.state.workspace); assert.equal(f.state.scope, bound);
+    assert.equal(editor.commitParameterEdit(f.item, 'annotation-expression', '=n+2'), true); assert.equal(f.item.expression, 'n+2');
+    const before = JSON.stringify(f.item); solved = { success: false, result: { reason: 'rejected' } };
+    assert.equal(editor.commitParameterEdit(f.item, 'annotation-expression', '=rollback'), false); assert.equal(JSON.stringify(f.item), before);
+    assert.equal(calls.at(-1), 'restore'); outcomes.push(JSON.stringify({ item: f.item, calls }));
+  }
+  assert.equal(outcomes[1], outcomes[0]);
+});
+
+test('owned drag retains pointer functions, resize receiver and argument boundary, live appearance methods and original errors', () => {
+  const outcomes = [];
+  for (const owned of [false, true]) {
+    const calls = [], result = {}, failure = new Error('resize failed'); let ready = false, appearanceReads = 0, currentAppearance;
+    const f = fixture((w, input) => w.AnnotationFeature.create({ ...input, readAppearance: () => {
+      assert.equal(ready, true, 'appearance is initialized after the drag factory'); appearanceReads++; return currentAppearance;
+    } }));
+    const appearance = { applyAnnotationStyleValue(item, key, height) {
+      assert.equal(this, appearance); assert.equal(arguments.length, 3); calls.push([item, key, height]); return result;
+    } };
+    function begin(id) { assert.equal(this, undefined); calls.push(['begin', id]); return result; }
+    function end(id) { assert.equal(this, undefined); calls.push(['end', id]); return result; }
+    const constrained = { begin }, pointer = { captureThenMark: begin, release: end };
+    const drag = owned ? f.feature.createDragForEditing({ constrained, pointer }) : f.feature.createDrag({
+      beginConstrainedDrag: constrained.begin, resizeText: (item, height) => currentAppearance.applyAnnotationStyleValue(item, 'textHeight', height),
+      beginPointer: pointer.captureThenMark, endPointer: pointer.release });
+    assert.equal(drag, f.drag); assert.deepEqual(calls, []); assert.equal(appearanceReads, 0); currentAppearance = appearance; ready = true;
+    assert.equal(f.ports.drag.beginConstrainedDrag, constrained.begin); assert.equal(f.ports.drag.beginPointer, pointer.captureThenMark); assert.equal(f.ports.drag.endPointer, pointer.release);
+    const resize = f.ports.drag.resizeText; assert.equal(resize.length, 2); assert.equal(resize(f.item, 12, 'ignored'), result);
+    assert.equal(calls[0][0], f.item); assert.equal(calls[0][1], 'textHeight'); assert.equal(calls[0][2], 12);
+    appearance.applyAnnotationStyleValue = function() { assert.equal(this, appearance); throw failure; };
+    assert.throws(() => resize(f.item, 14), error => error === failure);
+    const replacement = { applyAnnotationStyleValue() { assert.equal(this, replacement); return result; } }; currentAppearance = replacement;
+    assert.equal(resize(f.item, 16), result); assert.equal(appearanceReads, owned ? 3 : 0);
+    const start = f.ports.drag.beginPointer, stop = f.ports.drag.endPointer; assert.equal(start(7), result); assert.equal(stop(7), result);
+    outcomes.push(JSON.stringify(calls));
+  }
+  assert.equal(outcomes[1], outcomes[0]);
+});
+
+test('owned editor and drag preserve factory failure stages and stop before creating later owners', () => {
+  for (const owned of [false, true]) for (const stage of ['parameter-editing', 'text-editing', 'editor', 'drag']) {
+    let owner;
+    const f = fixture((w, input) => { owner = w; return w.AnnotationFeature.create(input); });
+    const failure = new Error(stage), keys = { 'parameter-editing': ['AnnotationParameterCommand', 'create'],
+      'text-editing': ['AnnotationCommand', 'createTextEditing'], editor: ['AnnotationInputController', 'create'], drag: ['AnnotationDrag', 'create'] };
+    const [name, method] = keys[stage]; owner[name][method] = () => { f.events.push(stage); throw failure; }; f.events.length = 0;
+    const create = stage === 'drag' ? () => owned ? f.feature.createDragForEditing({ constrained: {}, pointer: {} }) : f.feature.createDrag({})
+      : () => owned ? f.feature.createEditorForEditing({}) : f.feature.createEditor({});
+    assert.throws(create, error => error === failure);
+    const order = stage === 'drag' ? ['drag'] : ['parameter-editing', 'text-editing', 'editor'];
+    assert.deepEqual(f.events, order.slice(0, order.indexOf(stage) + 1));
+  }
+});
+
 test('editor layout uses live scale and preserves layout-first, text and leader metric fallback without changing boxes', () => {
   const f = fixture(); f.feature.createEditor({});
   f.state.layout = { x: 3, y: 4, fontSize: 2 }; f.state.scale = 5; f.events.length = 0;
@@ -186,6 +270,97 @@ function editingFixture(composed=true, assemble=null) {
   const replaceDrag=()=>{const actor={resizeEnabled(element){assert.equal(this,actor);f.events.push(['resize',element]);return ownerState.allowed;}};lateDrag=actor;};replaceDrag();
   return{...f,options,replaceDrag};
 }
+
+function drawingAnchorFixture() {
+  const trace = [], live = { sources: [], ready: false }, failure = new Error('snap source failure');
+  const check = stage => { assert.equal(live.ready, true); trace.push(stage); if (live.fail === stage) throw failure; };
+  function read() { assert.equal(this, undefined); check('read'); return live.sources; }
+  function visible(element) {
+    assert.equal(this, undefined); check('visible:' + element.id);
+    live.onVisible?.(element); return !element.hiddenSketch;
+  }
+  const f = editingFixture(true, (w, options) => {
+    options.readServices.reads.allAnnotations = read;
+    options.readServices.geometryAppearance.isVisibleSketchElement = visible;
+    const createDisplay = w.AnnotationDisplay.create;
+    w.AnnotationDisplay.create = options => {
+      const display = createDisplay(options);
+      display.renderer.annotationPlacementAnchor = function(element) {
+        assert.equal(this, undefined); check('anchor:' + element.id); return element.position;
+      };
+      return display;
+    };
+    return w.AnnotationFeature.createForEditing(options);
+  });
+  assert.deepEqual(trace, []);
+  assert.deepEqual(f.events, ['display', 'materialization', 'anchors', 'dimensions', 'command']);
+  live.ready = true;
+  function previous() {
+    return read().filter(element => visible(element) && element.visible !== false)
+      .map(element => ({ element, ...f.feature.placementAnchor(element) }));
+  }
+  return { ...f, trace, live, failure, visible, previous };
+}
+
+test('drawing annotation anchors read live sources, preserve identities and finish visibility before placement', () => {
+  for (const legacy of [true, false]) {
+    const f = drawingAnchorFixture(), query = legacy ? f.previous : f.feature.drawingAnchors;
+    const symbol = Symbol('anchor metadata');
+    const first = { id: 'first', sketchId: 'inactive', locked: true, position: { x: 1, y: 2, [symbol]: 'kept' } };
+    const hidden = { id: 'hidden', hiddenSketch: true, get visible() { throw new Error('must short circuit'); } };
+    const off = { id: 'off', visible: false };
+    const projected = { id: 'projected', blockProjection: true, position: { x: 3, y: 4 } };
+    f.live.sources = [first, hidden, off, projected];
+    f.live.onVisible = element => { if (element === projected) first.position.x = 9; };
+    const result = query();
+    assert.deepEqual(f.trace, ['read', 'visible:first', 'visible:hidden', 'visible:off', 'visible:projected', 'anchor:first', 'anchor:projected']);
+    assert.equal(result.length, 2); assert.equal(result[0].element, first); assert.equal(result[1].element, projected);
+    assert.equal(result[0].x, 9); assert.equal(result[0][symbol], 'kept');
+    const again = query(); assert.notEqual(again, result); assert.notEqual(again[0], result[0]);
+    first.position = { x: 20, y: 30 }; f.live.sources = [first];
+    assert.equal(query()[0].x, 20); f.live.sources = []; assert.equal(query().length, 0);
+    assert.equal(f.state.scaleReads, 0); assert.equal(f.events.includes('scope'), false);
+  }
+});
+
+test('annotation snap source and placement errors retain identity and stop at the same phase', () => {
+  for (const stage of ['read', 'visible:a', 'property', 'anchor:a']) {
+    const traces = [];
+    for (const legacy of [true, false]) {
+      const f = drawingAnchorFixture();
+      const a = { id: 'a', position: { x: 1, y: 2 }, get visible() {
+        f.trace.push('property'); if (stage === 'property') throw f.failure; return true;
+      } };
+      f.live.sources = [a, { id: 'b', position: { x: 3, y: 4 } }]; f.live.fail = stage;
+      assert.throws(legacy ? f.previous : f.feature.drawingAnchors, error => error === f.failure);
+      traces.push(f.trace); assert.equal(f.live.sources[0], a); assert.equal(a.position.x, 1);
+    }
+    assert.deepEqual(traces[1], traces[0]);
+  }
+});
+
+test('real DrawingSnap consumes annotation anchors across source replacement and visibility changes', () => {
+  const f = drawingAnchorFixture(), context = { window: {} }; vm.createContext(context);
+  for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/editing/drawing_snap.js']) {
+    vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
+  }
+  const drawing = context.window.DrawingSnap.create({
+    geometryReads: Object.fromEntries(['Points', 'Lines', 'Circles', 'Arcs', 'Splines'].map(name => ['allGeometry' + name, () => []])),
+    annotationAnchors: f.feature.drawingAnchors, isVisibleSketchElement: f.visible,
+    isActiveSketchElement: () => false, applicationText: (ja, en) => en,
+  });
+  const original = { id: 'original', sketchId: 'other', position: { x: 10, y: 20 } };
+  f.live.sources = [original]; assert.equal(drawing.resolve({ x: 11, y: 20 }, 2).x, 10);
+  assert.equal(drawing.active.data.annotation, original);
+  const projected = { id: 'projection', blockProjection: true, position: { x: 30, y: 40 } };
+  f.live.sources = [projected]; drawing.resolve({ x: 30, y: 41 }, 2);
+  assert.equal(drawing.active.data.annotation, projected);
+  projected.hiddenSketch = true;
+  const miss = { x: 30, y: 40 }; assert.equal(drawing.resolve(miss, 2), miss); assert.equal(drawing.active, null);
+  projected.hiddenSketch = false; projected.visible = false;
+  assert.equal(drawing.resolve(miss, 2), miss);
+  assert.equal(f.events.includes('scope'), false);
+});
 
 test('editing annotation composition shares actual owners at the original creation stage without reading scope, scale or late drag',()=>{
   const f=editingFixture();assert.deepEqual(f.events,['display','materialization','anchors','dimensions','command']);assert.equal(f.state.scaleReads,0);assert.equal(f.state.nextId,10);
@@ -254,27 +429,43 @@ function workspaceStagesFixture(composed, probe = {}) {
     w.AnnotationAnchorQuery = { create(input) { probe.order.push('query'); probe.queryPorts = input; if (probe.failAt === 'query') throw probe.error; return probe.targets = raw.window.AnnotationAnchorQuery.create(input); } };
     w.AnnotationDrag = { ...w.AnnotationDrag, createConstrained(input) { probe.order.push('constrained'); probe.constrainedPorts = input; if (probe.failAt === 'constrained') throw probe.error; return raw.window.AnnotationDrag.createConstrained(input); } };
     const display = w.AnnotationDisplay.create;
-    w.AnnotationDisplay.create = input => { probe.order.push('feature'); if (probe.failAt === 'feature') throw probe.error; return display(input); };
+    w.AnnotationDisplay.create = input => {
+      probe.order.push('feature'); if (probe.failAt === 'feature') throw probe.error;
+      const result = display(input); probe.renderer = result.renderer;
+      result.renderer.annotationLeaderDisplayGeometry = function (item) {
+        assert.equal(this, undefined); requireReady(); assert.equal(arguments.length, 1); probe.leaderItem = item;
+        if (probe.leaderError) throw probe.leaderError; return { shelfScale: state.scale };
+      };
+      return result;
+    };
     let prepared;
     if (composed) prepared = w.AnnotationFeature.prepareForWorkspace({ documentWorkspace: options.documentWorkspace, readServices: options.readServices, interaction: options.interaction, presentation: options.presentation, viewportScale });
     else prepared = { targets: w.AnnotationFeature.createAnchorQuery({ sketches: options.documentWorkspace.sketches, readServices: options.readServices, pointUsage: options.interaction.pointUsage, selection: options.interaction.selection, viewportScale }) };
     assert.deepEqual(probe.order, ['query']); assert.equal(state.scaleReads, 0); probe.prepared = prepared;
-    const constrainedInput = { placementAnchor: item => item.position,
+    const constrainedInput = { placementAnchor: (...args) => { if (probe.readerError) throw probe.readerError; return probe.feature.placementAnchor(...args); },
       buildPlan(kind, point, pointer) { assert.equal(kind, 'point'); assert.equal(point, probe.geometry.point); assert.equal(probe.constrained.scope().points.at(-1), point); return probe.plan = { pointer }; },
-      beginGeometryDrag(_event, plan) { assert.equal(plan, probe.plan); return true; }, leaderDisplay: () => ({ shelfScale: state.scale }),
+      beginGeometryDrag(_event, plan) { assert.equal(plan, probe.plan); return true; }, leaderDisplay: item => {
+        if (probe.readerError) throw probe.readerError; const { annotationLeaderDisplayGeometry } = probe.renderer; return annotationLeaderDisplayGeometry(item);
+      },
       invalidateAnalysis() { assert.equal(probe.constrained.scope(), state.workspace); probe.invalidated = true; } };
-    probe.constrained = composed ? prepared.createConstrainedDrag(constrainedInput) : w.AnnotationDrag.createConstrained({ ...constrainedInput,
+    const readFeature = function () {
+      assert.equal(this, undefined); assert.equal(arguments.length, 0); requireReady(); probe.featureReads = (probe.featureReads || 0) + 1;
+      if (probe.readerError) throw probe.readerError; return probe.feature;
+    };
+    probe.constrained = composed === 'feature' ? prepared.createConstrainedDragForFeature({ readFeature,
+      buildPlan: constrainedInput.buildPlan, beginGeometryDrag: constrainedInput.beginGeometryDrag, invalidateAnalysis: constrainedInput.invalidateAnalysis })
+      : composed ? prepared.createConstrainedDrag(constrainedInput) : w.AnnotationDrag.createConstrained({ ...constrainedInput,
       currentScope: options.documentWorkspace.workspace.current, resolveGeometryRef: options.readServices.reads.resolveGeometryRef, leaderAnchor: prepared.targets.annotationLeaderAnchor,
       applicationText: options.presentation.settings.applicationText, setHint: options.presentation.setHint, updateUI: options.presentation.updateUI, draw: options.presentation.draw });
     assert.deepEqual(probe.order, ['query', 'constrained']); assert.equal(state.scaleReads, 0);
     const { documentWorkspace, readServices, interaction, presentation, targets, ...late } = options;
-    return composed ? prepared.createFeature(late) : w.AnnotationFeature.createForEditing({ ...options, targets: prepared.targets });
+    return probe.feature = composed ? prepared.createFeature(late) : w.AnnotationFeature.createForEditing({ ...options, targets: prepared.targets });
   });
-  probe.ready = true; f.state.workspace = { points: [probe.point], constraints: [], annotations: [f.item] }; return { ...f, probe };
+  Object.freeze(f.renderer); probe.ready = true; f.state.workspace = { points: [probe.point], constraints: [], annotations: [f.item] }; return { ...f, probe };
 }
 
 test('Annotation preparation keeps query, constrained drag and Feature stages cold and shares actual APIs with live viewport hits', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'feature']) {
     const f = workspaceStagesFixture(composed), p = f.probe;
     assert.deepEqual(p.order, ['query', 'constrained', 'feature']); assert.equal(f.state.scaleReads, 0);
     assert.equal(p.prepared.targets, p.targets); assert.equal(p.constrainedPorts.leaderAnchor, p.targets.annotationLeaderAnchor);
@@ -287,7 +478,7 @@ test('Annotation preparation keeps query, constrained drag and Feature stages co
 });
 
 test('Annotation preparation keeps virtual geometry lifecycle, distinct Workspace scope and late appearance and drag callbacks', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'feature']) {
     const f = workspaceStagesFixture(composed), p = f.probe, original = f.state.workspace;
     Object.assign(f.item, { type: 'text', anchorConstraints: [{ type: 'coincident' }] });
     assert.equal(p.constrained.begin({ pointerId: 1 }, f.item, { x: 3, y: 4 }), true);
@@ -304,8 +495,46 @@ test('Annotation preparation keeps virtual geometry lifecycle, distinct Workspac
 });
 
 test('Annotation preparation preserves constructor short circuits at each original stage', () => {
-  for (const composed of [false, true]) for (const failAt of ['query', 'constrained', 'feature']) {
+  for (const composed of [false, true, 'feature']) for (const failAt of ['query', 'constrained', 'feature']) {
     const probe = { failAt }; assert.throws(() => workspaceStagesFixture(composed, probe), error => error === probe.error);
     assert.deepEqual(probe.order, ['query', 'constrained', 'feature'].slice(0, ['query', 'constrained', 'feature'].indexOf(failAt) + 1));
+  }
+});
+
+test('late Annotation Feature readers preserve constrained leader movement, bare rendering calls and live scale without a second owner', () => {
+  const snapshots = [];
+  for (const composed of [false, true, 'feature']) {
+    const f = workspaceStagesFixture(composed), p = f.probe, original = f.state.workspace;
+    assert.equal(p.featureReads, undefined); assert.ok(Object.isFrozen(f.feature)); assert.ok(Object.isFrozen(f.renderer));
+    Object.assign(f.item, { type: 'leader', start: { x: 2, y: 3 }, anchorConstraints: [{ type: 'coincident' }] }); f.events.length = 0;
+    assert.equal(p.constrained.begin({ pointerId: 1 }, f.item, { x: 3, y: 4 }), true); const positions = [];
+    for (const [x, scale] of [[44, 2], [84, 4]]) {
+      p.geometry.point.x = x; f.state.scale = scale;
+      const anchor = p.prepared.targets.annotationLeaderAnchor(f.item) || f.item.start;
+      p.plan.syncAnnotation(); assert.equal(p.leaderItem, f.item);
+      assert.equal(f.item.x, f.item.start.x + (x - anchor.x) / scale);
+      assert.equal(f.item.y, f.item.start.y + (p.geometry.point.y - anchor.y) / scale); positions.push([f.item.x, f.item.y]);
+    }
+    if (composed === 'feature') assert.equal(p.featureReads, 3);
+    assert.equal(original.points.length, 1); assert.equal(p.constrained.scope().points[0], p.point);
+    p.plan.onEnd(); assert.equal(p.constrained.scope(), original); assert.equal(p.constrained.additionalVariables().length, 0);
+    snapshots.push(JSON.stringify({ positions, events: f.events, points: original.points.map(point => point.id) }));
+  }
+  assert.equal(snapshots[1], snapshots[0]); assert.equal(snapshots[2], snapshots[0]);
+});
+
+test('late Annotation Feature reader, anchor and leader failures retain the same exception and virtual geometry boundaries', () => {
+  for (const composed of [false, true, 'feature']) for (const failure of ['reader', 'anchor', 'leader']) {
+    const f = workspaceStagesFixture(composed), p = f.probe, original = f.state.workspace, marker = new Error(failure);
+    Object.assign(f.item, { type: 'leader', start: { x: 2, y: 3 }, anchorConstraints: [{ type: 'coincident' }] });
+    if (failure === 'reader') p.readerError = marker;
+    if (failure === 'anchor') Object.defineProperty(f.item, 'position', { get() { throw marker; } });
+    if (failure === 'leader') assert.equal(p.constrained.begin({}, f.item, { x: 3, y: 4 }), true);
+    p.leaderError = marker; f.events.length = 0; const before = [f.item.x, f.item.y];
+    assert.throws(() => failure === 'leader' ? p.plan.syncAnnotation() : p.constrained.begin({}, f.item, {}), error => error === marker);
+    assert.deepEqual([f.item.x, f.item.y], before); assert.deepEqual(f.events, []); assert.equal(original.points.length, 1);
+    assert.equal(p.constrained.additionalVariables().length, failure === 'leader' ? 1 : 0);
+    if (failure === 'leader') { assert.notEqual(p.constrained.scope(), original); p.plan.onEnd(); }
+    assert.equal(p.constrained.scope(), original); assert.equal(original.constraints.length, 0);
   }
 });

@@ -77,7 +77,8 @@
       function createSceneForEditing({ currentScope, sketches, readServices, interaction, targets, pending, solveState, analysis,
         readPanelSelection, instanceSources, projection, instances, operandElement, selectionHighlight, viewState,
         isSidebarHighlightedElement, canvasThemeColor, applicationText, constructionAlpha, constructionExtensionScreenPx,
-        sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed, editingQueries, annotationBounds }) {
+        sameArcEndpoint, arcEndpointPoint, fixedState, findArcEndpointFixedConstraint = fixedState?.findArcEndpointFixedConstraint,
+        pointLockedByLineFixed = fixedState?.pointLockedByLineFixed, editingQueries, annotationBounds }) {
         const commandTargets = window.GeometryPresentation.createCommandTargets({
           readPanelSelection, readMode: interaction.lifecycle.readMode, instanceSourceCommand: instanceSources, sketchProjectionCommand: projection,
           geometryInstanceCommand: instances, geometryRefsEqual: window.GeometryRef.equals, geometryRefForItem: window.GeometryObjects.geometryRefForItem,
@@ -94,11 +95,61 @@
           isSidebarHighlightedElement, canvasThemeColor, applicationText, constructionAlpha, constructionExtensionScreenPx,
           sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, pointLockedByLineFixed, editingQueries, annotationBounds,
           resolvedLoopBounds: window.HatchRegionEngine.resolvedLoopBounds, hatchAppearanceForDisplay: window.HatchData.hatchAppearanceForDisplay });
-        return Object.freeze({ ...scene, commandTargets, sketchStyle });
+        function createFrame({ rectangle, snap, pointer, referenceImageLayer, readPngCommand,
+          drawBlockInstanceHandles = scene.geometry.drawBlockInstanceHandles, ...options }) {
+          const overlays = window.InteractionOverlayRenderer.createLayer({ renderer: scene.overlay, rectangle, snap,
+            hover: interaction.hover, selection: interaction.selection, pointer });
+          const frame = createWorkspaceRendering({ ...options, geometry: scene.geometry, drawBlockInstanceHandles,
+            drawSnapMarker: overlays.drawSnapMarker, drawSketchIdentityLabel: overlays.drawSketchIdentityLabel, drawSelectionRect: overlays.drawSelectionRect,
+            drawReferenceImages: referenceImageLayer.drawImages, drawReferenceImageOverlays: referenceImageLayer.drawOverlays,
+            drawExportOverlay: () => readPngCommand()?.drawOverlay(ctx, viewport.scale) });
+          return Object.freeze({ frame, overlays });
+        }
+        function createHatchRendering({ readCommand }) {
+          const { Line, Circle, Arc, Spline } = window.GeometrySolver;
+          const { hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
+          const { isVisibleSketchId, isVisibleSketchElement, isVisibleValue } = readServices.geometryAppearance;
+          const { hatchBoundaryGeometryItems, resolvedHatchBoundary } = readServices.hatches;
+          const { visibleWorldBounds } = viewport;
+          const { drawLines, drawCircles, drawArcs, drawSplines } = scene.geometry;
+          const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport,
+            visibleWorldBounds: () => exportRenderer.frame?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
+          const layer = window.HatchRenderer.createLayer({ ctx, drawResolvedHatchContent, hatchBoundaryGeometryItems,
+            boundaryPainters: [{ type: Line, draw: drawLines }, { type: Circle, draw: drawCircles }, { type: Arc, draw: drawArcs }, { type: Spline, draw: drawSplines }],
+            allHatches: readServices.reads.allHatches, isVisibleSketchId, hatchAppearanceForDisplay,
+            isConstraintOperandSelected: commandTargets.isConstraintOperandSelected, canvasSelection: interaction.selection, activeSketchId: sketches.activeSketchId,
+            readHover: () => interaction.hover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(exportRenderer.frame),
+            sketchAlpha: sketchStyle.sketchAlpha, readMode: interaction.lifecycle.readMode, readCommand });
+          function drawHatches(...args) { return layer.drawHatches(...args); }
+          function createStack() {
+            return window.DrawingStack.create({ currentScope, activeSketchId: sketches.activeSketchId, geometryReads: readServices.reads,
+              isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
+              painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines } });
+          }
+          function prepareFrame() {
+            const stack = createStack();
+            function createFrameWithStack(options) {
+              return createFrame({ ...options, drawHatches, drawDrawingStack: stack.drawDrawingStack });
+            }
+            return Object.freeze({ stack, createFrame: createFrameWithStack });
+          }
+          return Object.freeze({ layer, drawHatches, createStack, prepareFrame });
+        }
+        return Object.freeze({ ...scene, commandTargets, sketchStyle, createFrame, createHatchRendering });
       }
       function createWorkspaceRendering(options) {
         return createRendering({ ...options, canvas, ctx, viewport, surface, zoomControl,
           readExportFrame: () => exportRenderer.frame });
+      }
+      function createPlacementPreview({ geometry, annotations, hatchLayer, readServices, interaction, sessions,
+        blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle }) {
+        const { hatchAppearanceForDisplay, hatchPatternOrigin } = window.HatchData;
+        const renderer = window.PlacementPreviewRenderer.create({ ctx, viewport, withCanvasState: surface.withCanvasState,
+          traceSplinePath: geometry.traceSplinePath, drawResolvedHatch: (...args) => hatchLayer.drawResolvedHatch(...args),
+          resolvedHatchBoundary: readServices.hatches.resolvedHatchBoundary, hatchAppearanceForDisplay, hatchPatternOrigin,
+          drawAnnotationLeader: annotations.drawAnnotationLeader, drawAnnotationText: annotations.drawAnnotationText });
+        return window.PlacementPreviewRenderer.createLayer({ renderer, readMode: interaction.lifecycle.readMode,
+          readPointer: () => sessions.preview.pointer, blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle });
       }
       function createInputBinding({ pointer, readCommandPanel, readPngExportCommand, blankCanvasGesture,
         isBlankCommandPanelPoint, scheduler, profileCommit }) {
@@ -111,15 +162,15 @@
           coordinateStatus: () => document.getElementById("statusCoordinates") });
       }
       function createPngExport({ documentName, prepareImages, drawOperationLifecycle, pendingCommandSession,
-        fileSession, constraintTargetSession, findSnap, flushPointerMove }) {
-        return window.PngExport.create({ document, window: browserWindow, canvas, rendering: exportRenderer,
+        fileSession, constraintTargetSession, findSnap, flushPointerMove, pngExport = window.PngExport }) {
+        return pngExport.create({ document, window: browserWindow, canvas, rendering: exportRenderer,
           text: applicationText, documentName, prepareImages, readViewScale: () => viewport.scale,
           readMode: drawOperationLifecycle.readMode, setMode: drawOperationLifecycle.setMode,
           pendingCommandSession, fileSession, drawOperationLifecycle, constraintTargetSession,
           withGeometryReadCache, findSnap, flushPointerMove, setHint, draw });
       }
       const dragPointer = window.CanvasInputBinding.createDragPointer({ canvas });
-      return Object.freeze({ surface, exportRenderer, layout, createScene, createSceneForEditing, createRendering: createWorkspaceRendering, createInputBinding, createPngExport, dragPointer });
+      return Object.freeze({ surface, exportRenderer, layout, createScene, createSceneForEditing, createRendering: createWorkspaceRendering, createPlacementPreview, createInputBinding, createPngExport, dragPointer });
     }
     // Build inline dimensions on the same surface/context before any input binding or observation starts.
     function createEditingWorkspace({ dimensionScene, dimensionInput, ...workspaceOptions }) {
@@ -153,5 +204,63 @@
       drawInteractive: interactive.draw,
     });
   }
-  window.CanvasDisplay = Object.freeze({ create, createRendering });
+  function prepareForWorkspace({ canvas, document, window: browserWindow, ctx, documentWorkspace, readServices, interaction, sessions, presentation }) {
+    const { settings, draw, setHint, updatePropertiesUI } = presentation;
+    const { applicationText } = settings, { workspace, sketches } = documentWorkspace;
+    const { pending, targets } = sessions;
+    function dimensionInputOptions(input) {
+      if (!Object.hasOwn(input, "evaluateDimensionExpressionDraft")) input.evaluateDimensionExpressionDraft = documentWorkspace.parameters?.evaluateEditingExpressionDraft;
+      if (!Object.hasOwn(input, "expressionFromUserInput")) input.expressionFromUserInput = documentWorkspace.parameters?.expressionFromUserInput;
+      if (!Object.hasOwn(input, "cancelPendingCommand")) input.cancelPendingCommand = message => pending.cancel(message);
+      return input;
+    }
+    const { phase: profilePhase } = presentation.profiler;
+    const controls = window.CanvasViewControls.create({ document, window: browserWindow, setHint, draw });
+    function canvasThemeColor(value) { return window.CanvasThemeColors.color(value, settings.theme); }
+    function createForEditing({ initialScale, minLength, fitVisibleGeometry, flushPointerMoves, syncDimensionValueInput }) {
+      const display = create({ canvas, document, initialScale, minZoom: initialScale * 0.001, maxZoom: initialScale * 10000000,
+        minLength, draw, setHint, fitVisibleGeometry, flushPointerMoves, syncDimensionValueInput });
+      function createEditingWorkspace({ dimensionScene, dimensionInput, ...options }) {
+        const displayWorkspace = display.createEditingWorkspace({ ...options,
+          dimensionScene: { ...dimensionScene, currentLines: () => workspace.current().lines, minLineLength: minLength,
+            canvasThemeColor, appearance: readServices.dimensionAppearance, sketches },
+          dimensionInput: dimensionInputOptions({ ...dimensionInput, pending }),
+          ctx, readPixelRatio: () => browserWindow.devicePixelRatio || 1, ResizeObserverClass: browserWindow.ResizeObserver,
+          withGeometryReadCache: readServices.reads.withGeometryReadCache,
+          isValueInputPending: () => pending.current && ["distance-value", "offset-value"].includes(pending.current.type),
+          window: browserWindow, updatePropertiesUI, applicationText, readLanguage: () => settings.language,
+        });
+        function createSceneForEditing(options) {
+          return displayWorkspace.createSceneForEditing({ ...options, currentScope: workspace.current, sketches, readServices, interaction,
+            targets, pending, readPanelSelection: () => presentation.selectedItem, viewState: controls.state, canvasThemeColor, applicationText });
+        }
+        function createPlacementPreview(options) { return displayWorkspace.createPlacementPreview({ ...options, readServices, interaction, sessions }); }
+        function createInputBinding(options) {
+          return displayWorkspace.createInputBinding({ ...options, pointer: sessions.pointer, readCommandPanel: presentation.readCommandPanel,
+            profileCommit: work => profilePhase("commit", work) });
+        }
+        function createPngExport(options) {
+          return displayWorkspace.createPngExport({ ...options, drawOperationLifecycle: interaction.lifecycle, pendingCommandSession: pending, constraintTargetSession: targets });
+        }
+        function createDimensionTraversal({ currentScope, readDraggedDimension, dimensionUsesExpression }) {
+          const { isActiveSketchConstraint, constraintSketchId } = sketches;
+          const { isVisibleSketchId, isVisibleValue } = readServices.geometryAppearance;
+          return displayWorkspace.dimensions.display.createTraversal({ currentScope, isActiveSketchConstraint, isVisibleSketchId,
+            constraintSketchId, isVisibleValue, canvasSelection: interaction.selection,
+            readHoverDimension: () => interaction.hover.current.dimension, readDraggedDimension,
+            readPending: () => pending.current, readExportFrame: () => displayWorkspace.exportRenderer.frame,
+            readConstraintStatus: () => controls.state.constraintStatus, inactiveColor: window.GeometryPresentation.INACTIVE_CONSTRAINT_STATUS_COLOR,
+            dimensionLabelForConstraint: displayWorkspace.dimensions.labels.label, dimensionUsesExpression });
+        }
+        function createDimensionPreview({ drawFilletPreviewArc }) {
+          return displayWorkspace.dimensions.display.createPreview({ readPending: () => pending.current, drawFilletPreviewArc,
+            evaluateDimensionExpressionDraft: documentWorkspace.parameters?.evaluateEditingExpressionDraft });
+        }
+        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview });
+      }
+      return Object.freeze({ ...display, createEditingWorkspace });
+    }
+    return Object.freeze({ controls, canvasThemeColor, createForEditing });
+  }
+  window.CanvasDisplay = Object.freeze({ prepareForWorkspace, create, createRendering });
 })();

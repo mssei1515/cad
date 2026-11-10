@@ -589,5 +589,32 @@
     });
   }
 
-  window.SketchProjectionTestDriver = Object.freeze({ createSupport, createLegacyTargetConstruction, createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload, createEligibilityFixture, createTransfer });
+  function createForWorkspace({ documentWorkspace, geometry, readServices, interaction, projection, display, sketchPresentation,
+    analysis, redundancy, presentation, canvasDriver, history, solving, blocks, blockDefinition, blockCompletion, blockSelection,
+    document, readHistory, resetModelState, serializeModel, loadModelData, markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata,
+    clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection, version, copySelectionToClipboard, pasteGeometryClipboard, clipboardSession }) {
+    const { Point, Line, Circle, Arc, Spline, SketchProjectionConstraint } = window.GeometrySolver;
+    const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
+    const { workspace, sketches, document: documentModel, documentIds } = documentWorkspace;
+    const { updateUI, draw } = presentation;
+    return createSupport({ types: { Point, Line, Circle, Arc, Spline }, currentScope: workspace.current,
+      readMode: interaction.lifecycle.readMode, readStagedCount: () => projection.command.count, readConstraints: projection.queries.sketchProjectionConstraints,
+      constraintGeometryId: window.GeometryObjects.geometryIdForItem, constraintSketchId: sketches.constraintSketchId,
+      effectiveAppearanceForElement: readServices.geometryAppearance.effectiveAppearanceForElement, geometryDisplayColor: display.geometryDisplayColor,
+      constraintStatusOf: analysis.statusOf, constraintStatusColor: sketchPresentation.constraintStatusColor, constraintIsRedundant: redundancy.constraintIsRedundant,
+      serializeModel, readHistory, document, resetModelState, DEFAULT_SKETCH_ID, ROOT_SKETCH_ID,
+      addPoint: geometry.addPoint, addLine: geometry.addLine, addCircle: geometry.addCircle, addArc: geometry.addArc, addSpline: geometry.addSpline, addPointToSketch: geometry.addPointToSketch,
+      focus: canvasDriver.focus, clientPosition: canvasDriver.clientPosition, splineGeometry: window.SplineGeometry,
+      resetHistory: history.resetDocument, updateUI, draw, SketchProjectionConstraint, markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata,
+      solveSketchAndDependents: solving.solveSketchAndDependents, loadModelData,
+      createEmptyBlockDefinition: blocks.editing.empty, openBlockDefinitionEditor: blockDefinition.open, resetBlockEditorHistory: history.resetBlock,
+      completeBlockDefinitionEdit: blockCompletion.complete, isEditingBlock: () => Boolean(blocks.session.current),
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => documentIds.allocate("blockInstance"),
+      invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache, blockProjectionBundle: readServices.projections.blockProjectionBundle,
+      clearSelection, canvasSelection: interaction.selection, deleteCurrentSelection, setAppearanceForSelection, deleteElements, deleteSketch, elementSketchId: sketches.elementSketchId,
+      sketchProjectionSourceKey: projection.sources.sketchProjectionSourceKey, CURRENT_JSON_VERSION: version,
+      sketchProjectionEntryFromOperand: projection.sources.sketchProjectionEntryFromOperand, copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
+      blockSelectionGeometry: blockSelection.read, createBlockDefinitionFromSelection: blocks.editing.fromSelection, blockSelectionBoundsCenter: blockSelection.center });
+  }
+  window.SketchProjectionTestDriver = Object.freeze({ createForWorkspace, createSupport, createLegacyTargetConstruction, createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload, createEligibilityFixture, createTransfer });
 })();

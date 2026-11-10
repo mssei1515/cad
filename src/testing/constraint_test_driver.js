@@ -464,5 +464,20 @@
       }),
     });
   }
-  window.ConstraintTestDriver = Object.freeze({ createBrowserFactories, createModelSupport, createEditingCases, createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture, createParentPointLineFixture, createSiblingPointLineFixture, createSiblingReferenceMove, createPointLineObservation });
+  function createBrowserSupport(options) {
+    const factories = createBrowserFactories(options);
+    const model = factories.createModelSupport();
+    const referenceLineMove = factories.createReferenceLineMove();
+    const dependencyOrderFixture = factories.createDependencyOrderFixture();
+    const constraintCaseTestApi = factories.createEditingCases();
+    const constraintInputObservation = factories.createInputObservation();
+    const constraintIntentTestDriver = factories.createIntentResolution();
+    const forcedConstraintCommit = factories.createForcedCommit();
+    return Object.freeze({ readStatuses: model.readStatuses,
+      constraints: Object.freeze({ forcedConstraintCommit, constraintInputObservation, constraintIntentTestDriver,
+        constraintModelTestApi: model.publicAPI, constraintCaseTestApi }),
+      referenceCases: Object.freeze({ referenceLineMove, dependencyOrderFixture }),
+    });
+  }
+  window.ConstraintTestDriver = Object.freeze({ createBrowserFactories, createBrowserSupport, createModelSupport, createEditingCases, createForcedCommit, createInputObservation, createIntentResolution, createAnalysisObservation, createBlockObservation, createBlockConstraintInsertion, createStatusObservation, createReferenceLineMove, createDependencyOrderFixture, createDimensionSelectionFixture, createDimensionSelectionObservation, createSupportStatusFixture, createParentPointLineFixture, createSiblingPointLineFixture, createSiblingReferenceMove, createPointLineObservation });
 })();

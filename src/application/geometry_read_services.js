@@ -15,6 +15,10 @@
       cacheAppearance: reads.cacheAppearance, sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements });
     const dimensionAppearance = window.GeometryAppearanceQuery.createDimension({ document, currentSketches, activeSketchId, isRootSketch });
     const annotationAppearance = window.GeometryAppearanceQuery.createAnnotation({ document, currentSketches });
+    function createBlockLayout({ annotationBounds }) {
+      return window.BlockLayout.create({ catalog, projections, instanceProjections: instances, annotationBounds,
+        hatchPrimitivesForScope: hatchGeometryQuery.hatchPrimitivesForScope });
+    }
     function createPointUsage({ constraintReferencesPoint, editedFitPoints }) {
       const { allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = reads;
       return window.PointUsage.create({ currentScope, constraintReferencesPoint, editedFitPoints,
@@ -27,7 +31,7 @@
       return item => ({ sketchId: elementSketchId(item),
         kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined });
     }
-    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance, createPointUsage, createSnapshotMetadata });
+    return Object.freeze({ instances, catalog, projections, reads, geometryAppearance, dimensionAppearance, annotationAppearance, createBlockLayout, createPointUsage, createSnapshotMetadata });
   }
   function createWithHatches({ document, currentScope, currentSketches, prepareBlocks, elementSketchId, applicationText,
     sketchById, isRootSketch, activeSketchId, showHiddenElements, profileRead, viewportScale }) {

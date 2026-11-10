@@ -731,6 +731,54 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
   expect(state.instances[5].rotationLocked).toBe(false);
 });
 
+test("Mirror placement rotates an asymmetric block around the clicked center and round-trips its endpoints", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = rotationLockFixture({ rotation: 0 });
+  const [first, second] = fixture.blockDefinitions[0].points;
+  Object.assign(first, { x: 10, y: 5 });
+  Object.assign(second, { x: 70, y: 45 });
+  await page.evaluate(data => window.__jot2dTest.importDocumentNameFixture(data, "mirror.json"), fixture);
+  await openBlockDefinitions(page);
+  await page.click(".blockPlaceBtn");
+  const mirror = page.getByRole("checkbox", { name: /^(反転|Mirror)$/ });
+  await expect(mirror).not.toBeChecked();
+  const canvas = await page.locator("#canvas").boundingBox();
+  const anchor = { x: Math.round(canvas.x + canvas.width * 0.55), y: Math.round(canvas.y + canvas.height * 0.42) };
+  await page.mouse.click(anchor.x, anchor.y);
+  await mirror.check();
+  await page.mouse.click(anchor.x, anchor.y + 80);
+
+  const state = () => page.evaluate(() => window.__jot2dTest.blockState().serialized);
+  const placed = (await state()).blockInstances[1];
+  expect(placed).toMatchObject({ definitionId: "B1", mirrored: true, rotation: Math.PI / 2 });
+  const center = await page.evaluate(id => window.__jot2dTest.blockRotationLockStateForTest(id).displayCenter, placed.id);
+  const centerClient = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), center);
+  expect(Math.hypot(centerClient.x - anchor.x, centerClient.y - anchor.y)).toBeLessThan(1.5);
+  // Local start relative to the bounds center is (-30, -20). Reflect X, then rotate 90 degrees.
+  const start = { x: center.x + 20, y: center.y + 30 };
+  const snaps = () => page.evaluate(p => window.__jot2dTest.snapLabelsAtWorldForTest(p), start);
+  expect(await snaps()).toContain("ブロック点");
+  await page.keyboard.press("Control+C");
+  await page.keyboard.press("Control+V");
+  const copied = (await state()).blockInstances[2];
+  expect(copied).toMatchObject({ definitionId: placed.definitionId, mirrored: true, rotation: placed.rotation });
+  await page.click("#undoBtn");
+  await page.click("#undoBtn");
+  expect((await state()).blockInstances).toHaveLength(1);
+  await page.click("#redoBtn");
+  await page.evaluate(() => window.__jot2dTest.reloadBlockState());
+  expect((await state()).blockInstances[1]).toEqual(placed);
+  expect(await snaps()).toContain("ブロック点");
+  const endpoint = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), start);
+  await page.click('[data-constraint="coincident"]');
+  await page.mouse.move(endpoint.x, endpoint.y);
+  await expect.poll(() => page.evaluate(() => window.__jot2dTest.blockProjectionHoverState().pointId)).toBe(placed.id + "@BP1");
+  await page.keyboard.press("Escape");
+  await openBlockDefinitions(page);
+  await page.click(".blockPlaceBtn");
+  await expect(mirror).not.toBeChecked();
+});
+
 test("selected blocks can change rotation mode and reject an unsatisfied orthogonal snap", async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "rotation-lock.json"), rotationLockFixture());

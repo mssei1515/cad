@@ -17,6 +17,66 @@ function fixture(build = sandbox.window.DimensionTestDriver.createInteractionSup
   return {support,state,ports,events,selection};
 }
 
+function editingFixture(composed) {
+  const control = { error: null };
+  const f = fixture(ports => {
+    const context = { window: {} }; vm.createContext(context);
+    vm.runInContext(fs.readFileSync('src/testing/dimension_test_driver.js', 'utf8'), context);
+    const w = context.window;
+    w.DimensionQueries = { isDimensionConstraint: ports.isDimensionConstraint, targetFromConstraint: ports.targetFromConstraint };
+    w.GeometrySolver = { hypot2: Math.hypot, vectorNorm: () => 0, LineCircleDistanceConstraint: class {}, ConcentricRadiusDifferenceConstraint: class {} };
+    w.GeometryKernel = { signedPointLineDistance: () => 0 }; w.SketchHierarchy = { ROOT_SKETCH_ID: 'ROOT' };
+    const dimensions = { startDistanceValueInput() {}, startDistanceCommand() { assert.equal(this, dimensions); return 'distance'; } };
+    const dimensionValues = { startEdit(hit) { assert.equal(this, dimensionValues); if (control.error) throw control.error; return ports.startDimensionEditInput(hit); } };
+    const display = { placement: { dimensionAnchor: ports.dimensionAnchor }, layouts: {}, layout: ports.dimensionLayout };
+    const geometry = { addCircle() {}, addArc() {} };
+    const prepared = w.DimensionTestDriver.createForEditing({ geometry, display, sketches: {}, appearance: {}, currentScope: ports.currentScope,
+      viewport: ports.viewport, canvasSelection: ports.canvasSelection, dimensions,
+      constraintTargetSession: ports.constraintTargetSession, pendingCommandSession: ports.pendingCommandSession,
+      dimensionValueInput: ports.dimensionValueInput });
+    const options = { canvasDriver: { clientPosition: ports.clientPosition }, dimensionValues, clearSelection: ports.clearSelection,
+      presentation: { updateUI: ports.updateUI, draw: ports.draw }, fit: {}, references: {}, canvas: {}, solving: {}, checkpoint: {}, analysis: {}, dimensionDrag: ports.dimensionDrag };
+    return composed ? prepared.createInteractionForEditing(options) : prepared.support.createInteraction({ ...ports,
+      startDimensionEditInput: hit => dimensionValues.startEdit(hit), startDistanceCommand: () => dimensions.startDistanceCommand(),
+      addCircle: geometry.addCircle, addArc: geometry.addArc, modelTypes: w.GeometrySolver,
+      signedPointLineDistance: w.GeometryKernel.signedPointLineDistance, vectorNorm: w.GeometrySolver.vectorNorm });
+  });
+  return { ...f, control };
+}
+
+test('editing Dimension assembly shares live scope and Selection and preserves edit receiver, return, display and failure boundaries', () => {
+  const results = [];
+  for (const composed of [false, true]) {
+    const f = editingFixture(composed), item = { dimensional: true, target: 12, dimension: { y: 4 } };
+    f.state.scope = { constraints: [item] };
+    assert.equal(f.support.selection.startDimensionExpressionEditForTest(), 'started');
+    assert.equal(f.events[0][1].constraint, item); assert.equal(f.events[0][1].dimension, item.dimension);
+    assert.equal(f.support.selection.selectDimensionForPropertiesForTest(), true); assert.equal(f.selection.dimensionConstraint, item);
+    const position = f.support.selection.dimensionClientPositionForTest(); assert.equal(position.x, 22); assert.equal(position.y, 24);
+    const marker = new Error('edit'); f.control.error = marker;
+    assert.throws(() => f.support.selection.startDimensionExpressionEditForTest(), error => error === marker);
+    f.state.scope = { constraints: [] }; assert.equal(f.support.selection.startDimensionExpressionEditForTest(), false);
+    results.push(JSON.parse(JSON.stringify(f.events)));
+  }
+  assert.deepEqual(results[1], results[0]);
+});
+
+test('editing Dimension assembly keeps actual pending, drag and viewport capabilities and the existing public groups', () => {
+  const results = [];
+  for (const composed of [false, true]) {
+    const f = editingFixture(composed), item = { dimensional: true, target: 8, dimension: { y: 3 } };
+    f.state.scope = { constraints: [item] }; f.ports.dimensionDrag.active = true;
+    f.ports.pendingCommandSession.current = { type: 'distance-place', pointer: { x: 2, y: 5 }, target: { kind: 'line-length' } };
+    const pending = f.support.placement.lineLengthClickPlacementState(), drag = f.support.placement.dimensionCommandLineDragState();
+    assert.equal(drag.dragging, true); assert.equal(drag.anchor.x, 8); assert.equal(pending.pendingCommandType, 'distance-place');
+    assert.notEqual(pending.previewPointer, f.ports.pendingCommandSession.current.pointer);
+    f.support.selection.fitForMultipleDimensionsForTest();
+    assert.deepEqual(f.events, [['viewport', { scale: 2, x: 350, y: 250 }], ['ui', null], 'draw']);
+    results.push(JSON.parse(JSON.stringify({ keys: Object.keys(f.support.placement), pending, drag, events: f.events })));
+  }
+  assert.deepEqual(results[1], results[0]);
+});
+
 test('shared dimension support defers each role and retains the live scope and selection capabilities',()=>{
   const f=fixture(ports=>{
     const shared=sandbox.window.DimensionTestDriver.createSupport(ports);

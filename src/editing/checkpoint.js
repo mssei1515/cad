@@ -13,6 +13,7 @@
           x: instance.x,
           y: instance.y,
           rotation: instance.rotation,
+          mirrored: Boolean(instance.mirrored),
           fixed: instance.fixed,
           rotationLocked: instance.rotationLocked,
         })),
@@ -93,6 +94,7 @@
         entry.instance.x = entry.x;
         entry.instance.y = entry.y;
         entry.instance.rotation = entry.rotation;
+        entry.instance.mirrored = Boolean(entry.mirrored);
         entry.instance.fixed = entry.fixed;
         entry.instance.rotationLocked = Boolean(entry.rotationLocked);
       }

@@ -80,6 +80,17 @@
       prepareLockToggle: () => { sessions.pending.cancel(""); constraintTargets.cancel(""); exitDrawMode(); },
       prepareMove: () => { constraintTargets.cancel(""); sessions.pending.cancel(""); exitDrawMode(); hover.clear(); } });
     // Reuse the interaction/presentation owners captured before the later Tree stage.
+    function createDeletionForEditing({ deletion, guardDimensionSymbolDeletion, solveState, solving, analysis, confirmDeletion }) {
+      const { geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
+      const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
+      return editing.createDeletion({
+        rejectReferencedGeometryDeletion: (instances, label) => deletion.rejectReferences(instances, label),
+        log: presentation.log, geometryElementKey, guardDimensionSymbolDeletion,
+        annotationReferencesRemovedGeometry, clearSketchSolveState: solveState.clearSketchSolveState,
+        invalidateAnalysis: () => { analysis.invalidate(); }, solveSketchAndDependents: solving.solveSketchAndDependents,
+        refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), confirmDeletion,
+      });
+    }
     function createTreeForEditing({ document, window: browserWindow, selectionHighlight, objectOptions, escapeHtml, closeCanvasContextMenu,
       moveCommand, deletion, blockEditor, editingScope, solveState, dimensionScope, deleteElements, deleteCurrentSelection,
       toggleSelectedVisibility, fixedOperands }) {
@@ -97,7 +108,29 @@
         updateSketchUI, selectionSketchId: interaction.scope.selectionSketchId, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
         updateSelectionUI: updateGeometrySelectionUI, unfixPoint: fixedOperands.unfixPoint });
     }
-    return Object.freeze({ reset, editing: Object.freeze({ ...editing, createTreeForEditing }) });
+    return Object.freeze({ reset, editing: Object.freeze({ ...editing, createDeletionForEditing, createTreeForEditing }) });
   }
-  window.SketchEditingFeature = Object.freeze({ create, createForInteraction });
+  // Keep navigation references with their factories; publish only successful constructions.
+  function prepareNavigation() {
+    let move = null, context = null;
+    function resetMove() { return move?.reset(); }
+    function closeContext() { return context?.close(); }
+    function readMoving() { return move.active; }
+    function createEditing(options) {
+      const feature = createForInteraction({ ...options, resetSketchMove: resetMove });
+      function createMoveWithInput(options) {
+        const result = feature.editing.createMoveWithInput(options);
+        move = result.command;
+        return result;
+      }
+      function createTreeForEditing(options) {
+        const result = feature.editing.createTreeForEditing(options);
+        context = result.menu;
+        return result;
+      }
+      return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing }) });
+    }
+    return Object.freeze({ resetMove, closeContext, readMoving, createForInteraction: createEditing });
+  }
+  window.SketchEditingFeature = Object.freeze({ create, createForInteraction, prepareNavigation });
 })();

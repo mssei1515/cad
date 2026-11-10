@@ -132,6 +132,7 @@
           rotation: instance.rotation,
           fixed: false,
           rotationLocked: Boolean(instance.rotationLocked),
+          mirrored: instance.mirrored === true,
           enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
           appearanceOverride: normalizeAppearance(instance.appearanceOverride),
           projection: blockProjectionData.get(instance),

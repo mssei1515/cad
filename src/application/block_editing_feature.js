@@ -99,7 +99,8 @@
     return Object.freeze({ editing, session, queries, createCommands, createCommandsForEditing, createPropagation });
   }
   function createForWorkspace({ documentWorkspace, readServices, rebinding, editingScope, normalizeGeometryInstance,
-    readViewport, activateScope, reserveScopeSequences, createHistory, interaction, sessions, presentation }) {
+    readViewport, activateScope = (...args) => editingScope.activate(...args),
+    reserveScopeSequences = draft => documentWorkspace.reservation.scope(draft), createHistory, interaction, sessions, presentation }) {
     const { workspace, document: documentModel, documentIds: ids, sketches: { activeSketchId }, parameters } = documentWorkspace;
     const { catalog, projections, instances, reads: { blockProjectionBundles } } = readServices;
     const { copyWithNormalizedAppearance: normalizedSketchCopy } = window.SketchHierarchy;
@@ -110,6 +111,19 @@
       readEditingScope: () => editingScope.current, normalizedSketchCopy, normalizeGeometryInstance,
       isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
       activeSketchId, blockProjectionBundles, geometryElementKey, readViewport, activateScope, reserveScopeSequences, createHistory });
+    function createCommandsWithView({ prepareBlocks, ...options }) {
+      let view;
+      function updateView() { prepareBlocks(); view.render(); }
+      const commands = feature.createCommandsForEditing({ ...options, interaction, presentation, sketches: documentWorkspace.sketches,
+        readView: () => view, updateBlockUI: updateView });
+      const { createView: createBlockView } = commands;
+      function createView(options) {
+        const result = createBlockView({ ...options, localizeApplicationUI: presentation.settings.localizeApplicationUI });
+        view = result;
+        return result;
+      }
+      return Object.freeze({ ...commands, createView, updateView });
+    }
     function createPlacement({ layout, isGeometryMode, clearSelection, isPropertiesCollapsed, setPropertiesPanelCollapsed, solveAndRefresh, recordHistory }) {
       const { canCreateInActiveSketch } = interaction.access, { selection: canvasSelection, lifecycle } = interaction;
       const { preview, pointer } = sessions, { setHint, updateUI, draw } = presentation;
@@ -123,7 +137,29 @@
         getPointerPreview: () => preview.pointer, setPointerPreview: value => { preview.setPointer(value); }, getLastPointerWorld: pointer.readLastPointer,
         setMode: lifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory });
     }
-    return Object.freeze({ ...feature, createPlacement });
+    function createSelectionQuery({ references, serializeConstraint, annotationBounds }) {
+      const { mergeBounds, lineBBox, primitiveBBox, splineBBox } = window.GeometryBounds;
+      const { applicationText } = presentation.settings;
+      const { localizedConstraintName } = presentation.constraintFeedback;
+      return window.BlockSelectionQuery.create({ currentScope: workspace.current, canvasSelection: interaction.selection,
+        blockProjectionBundle: projections.blockProjectionBundle, elementSketchId: documentWorkspace.sketches.elementSketchId, activeSketchId,
+        constraintGraphNodes: references.constraintGraphNodes, serializeConstraint,
+        constraintLabelForList: constraint => localizedConstraintName(constraint.name), resolveGeometryRef: readServices.reads.resolveGeometryRef,
+        applicationText, mergeBounds, lineBBox, primitiveBBox, splineBBox, annotationBounds });
+    }
+    function createConfiguration({ references, guardDimensionSymbolDeletion, updateBlockUI, recordHistory }) {
+      const { key: geometryRefKey, parseId: parseGeometryRefId } = window.GeometryRef;
+      const { referencesRemovedGeometry: annotationReferencesRemovedGeometry } = window.AnnotationAnchorData;
+      const { setHint, log, updateUI, draw } = presentation;
+      return window.BlockConfigurationCommand.create({ currentScope: workspace.current,
+        blockDefinitionById: catalog.blockDefinitionById, blockProjectionBundle: projections.blockProjectionBundle,
+        createBlockProjectionBundle: projections.createBlockProjectionBundle, blockDefinitionDrawableSketchIds: catalog.blockDefinitionDrawableSketchIds,
+        blockDefinitionGeometrySketchIds: catalog.blockDefinitionGeometrySketchIds, constraintGraphNodes: references.constraintGraphNodes,
+        geometryRefKey, parseGeometryRefId, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion, canvasSelection: interaction.selection,
+        clearRemovedHover: removed => { if (removed.has(interaction.hover.current.dimension)) interaction.hover.update({ dimension: null }); },
+        invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory });
+    }
+    return Object.freeze({ ...feature, createCommandsWithView, createPlacement, createSelectionQuery, createConfiguration });
   }
   window.BlockEditingFeature = Object.freeze({ create, createForWorkspace });
 })();

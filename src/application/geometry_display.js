@@ -6,6 +6,7 @@
     isSidebarHighlightedElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement,
     canvasThemeColor, constructionAlpha, constructionExtensionScreenPx, fixedPointLabel,
     handleQueries, pointQueries, geometryReads, isVisibleSketchElement }) {
+    const { resetCanvasStrokeState } = surface;
     const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = geometryReads;
     const presentation = window.GeometryPresentation.create({
       Point, pointUsage, commandTargets, sketchStyle, canvasSelection, canvasHover, viewState, isExporting,
@@ -24,10 +25,11 @@
     function drawPoints() { renderer.drawPoints(sketchStyle.drawOrderBySketch(allGeometryPoints())); }
     function drawArcEndpointHandles() { renderer.drawArcEndpointHandles(allGeometryArcs().filter(isVisibleSketchElement)); }
     function drawSplineEditHandles() { renderer.drawSplineEditHandles(presentation.splineHandleState()); }
+    function drawBlockInstanceHandles() { resetCanvasStrokeState(); }
     return Object.freeze({
       geometryDisplayColor: presentation.geometryDisplayColor, geometryStrokeWidth: presentation.geometryStrokeWidth,
       traceSplinePath: renderer.traceSplinePath, drawLines: layer.drawLines, drawCircles: layer.drawCircles,
-      drawArcs: layer.drawArcs, drawSplines: layer.drawSplines, drawPoints, drawArcEndpointHandles, drawSplineEditHandles,
+      drawArcs: layer.drawArcs, drawSplines: layer.drawSplines, drawPoints, drawArcEndpointHandles, drawSplineEditHandles, drawBlockInstanceHandles,
     });
   }
   window.GeometryDisplay = Object.freeze({ create });

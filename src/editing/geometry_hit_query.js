@@ -172,6 +172,7 @@
   }
   function createInstances({ currentScope, viewportScale, hitSketchAllowed, isVisibleSketchId, blockProjectionBundle,
     annotationBounds, resolvedHatchBoundary, isVisibleValue, hatchAppearanceForDisplay, hatchContainsSelectablePoint, geometryInstanceBundles }) {
+    function hitBlockRotationHandle(x, y) { return null; }
     function hitBlockInstance(x, y, editableOnly = true) {
       const threshold = 8 / viewportScale();
       const instances = currentScope().blockInstances.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
@@ -247,7 +248,7 @@
       }
       return null;
     }
-    return Object.freeze({ hitBlockInstance, hitGeometryInstance, hitDerivedGeometryForDrag });
+    return Object.freeze({ hitBlockInstance, hitGeometryInstance, hitDerivedGeometryForDrag, hitBlockRotationHandle });
   }
   function createDimensions({ currentScope, viewportScale, ordinarySelectionMode, isActiveSketchConstraint, isVisibleSketchId,
     constraintSketchId, targetFromConstraint, defaultDimensionForTarget, isVisibleValue, effectiveDimensionAppearance,

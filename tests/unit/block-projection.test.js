@@ -298,4 +298,92 @@ test("cached block hatch projections follow instance translation and rotation", 
   near(hatch.patternOrigin.x, 30);
   near(hatch.patternOrigin.y, 40);
   near(hatch.appearance.angle, 100);
+  const reflected = projection.createBlockProjectionBundle({ ...block, mirrored: true }, source).hatches[0];
+  near(reflected.appearance.angle, 80);
+  near(reflected.seed.x, 27); near(reflected.seed.y, 38);
+  near(reflected.resolvedBoundary.loops[0].points[0].x, 27);
+  near(reflected.resolvedBoundary.loops[0].points[0].y, 36);
+});
+
+test("nested reflected blocks compose rotations and preserve arc endpoint identity and signed sweep", () => {
+  const leaf = definition("leaf"), parent = definition("parent");
+  const arc = Object.assign(new sandbox.window.GeometrySolver.Arc("A1", leaf.points[0], 3, -0.3, 4.2), { sketchId: "S1" });
+  leaf.arcs.push(arc);
+  const child = instance("child", leaf.id, { x: 2, y: -4, rotation: 0.43 });
+  parent.blockInstances.push(child);
+  const outer = instance("outer", parent.id, { x: 17, y: 9, rotation: -0.71 });
+  const { projection } = services(() => [parent, leaf]);
+  const transform = (block, point) => {
+    const angle = block.rotation, x = block.mirrored ? -point.x : point.x;
+    return { x: block.x + x * Math.cos(angle) - point.y * Math.sin(angle),
+      y: block.y + x * Math.sin(angle) + point.y * Math.cos(angle) };
+  };
+  for (const parentMirror of [false, true]) for (const childMirror of [false, true]) {
+    outer.mirrored = parentMirror; child.mirrored = childMirror;
+    const bundle = projection.createBlockProjectionBundle(outer, parent);
+    const projected = bundle.arcs.find(item => item.id === "outer@child@A1");
+    near(projected.endAngle - projected.startAngle, (parentMirror === childMirror ? 1 : -1) * 4.5);
+    for (const end of ["start", "end"]) {
+      const local = sandbox.window.GeometryKernel.arcEndpointPoint(arc, end);
+      const expected = transform(outer, transform(child, local));
+      const actual = sandbox.window.GeometryKernel.arcEndpointPoint(projected, end);
+      near(actual.x, expected.x); near(actual.y, expected.y);
+    }
+  }
+});
+
+test("mirrored leaders reflect shelf, text alignment, constraint anchors and frame while keeping readable glyphs", () => {
+  const source = definition("labels");
+  const leader = { id: "AN1", type: "leader", text: "ABC", sketchId: "S1", start: { x: 0, y: 2 },
+    elbow: { x: 10, y: 8 }, end: { x: 30, y: 8 }, x: 13, y: 5, appearanceInheritance: true,
+    style: { textAlign: "left", rotation: 0.3 }, anchorPosition: "left-bottom" };
+  source.annotations = [leader];
+  const { projection } = services(() => [source]);
+  const block = instance("BI1", source.id, { x: 20, y: 4, rotation: 0.42, mirrored: true });
+  const { effectiveAnnotationStyle } = sandbox.window.GeometryAppearanceQuery.createAnnotation({ document: {}, currentSketches: () => source.sketches });
+  const calls = [];
+  const ctx = { save() {}, restore() {}, measureText: () => ({ width: 22 }), translate() {},
+    rotate: angle => calls.push(angle), fillText: text => calls.push(text) };
+  const renderer = sandbox.window.AnnotationRenderer.create({ ctx, viewport: { scale: 2 }, effectiveAnnotationStyle,
+    annotationDisplayColor: () => "black", annotationLeaderAnchor: item => item.start });
+  function checkPoint(actual, local) {
+    const expected = projection.blockWorldPoint(block, local);
+    near(actual.x, expected.x); near(actual.y, expected.y);
+  }
+  for (const placement of ["anchor", "text", "shelf"]) {
+    leader.textPlacement = placement;
+    const label = projection.createBlockProjectionBundle(block, source).annotations[0];
+    assert.equal(label.anchorPosition, "right-bottom");
+    assert.equal(effectiveAnnotationStyle(label).textAlign, "right");
+    const localShelf = renderer.annotationLeaderDisplayGeometry(leader);
+    const shelf = renderer.annotationLeaderDisplayGeometry(label);
+    checkPoint(shelf.elbow, localShelf.elbow); checkPoint(shelf.end, localShelf.end);
+    const local = renderer.annotationTextLayout(leader), layout = renderer.annotationTextLayout(label);
+    checkPoint(layout, local);
+    near(layout.rotation, block.rotation - leader.style.rotation);
+    renderer.drawAnnotationText(label);
+    near(calls.at(-2), layout.rotation); assert.equal(calls.at(-1), "ABC");
+  }
+  leader.anchorConstraints = [{ type: "fixed", x: 4, y: 7 }];
+  const fixed = projection.createBlockProjectionBundle(block, source).annotations[0];
+  checkPoint(sandbox.window.AnnotationAnchorConstraints.resolve(fixed, fixed, () => null), { x: 4, y: 7 });
+});
+
+test("circle leader attachments keep their local angle on a reflected rotating block", () => {
+  const source = definition("round");
+  const center = source.points[0];
+  source.circles.push(Object.assign(new Circle("C1", center, 5), { sketchId: "S1" }));
+  const { projection } = services(() => [source]);
+  const block = instance("BI1", source.id, { rotation: 0.4, mirrored: true });
+  const circle = projection.blockProjectionBundle(block).circles[0];
+  const query = sandbox.window.AnnotationAnchorQuery.create({
+    elementSketchId: item => item.sketchId, activeSketchId: () => "S1", resolveGeometryRef: () => circle,
+  });
+  const localAngle = 0.8;
+  const local = { x: center.x + 5 * Math.cos(localAngle), y: center.y + 5 * Math.sin(localAngle) };
+  const target = query.annotationLeaderTargetFromItem(circle, projection.blockWorldPoint(block, local));
+  near(target.attachment.angle, localAngle);
+  block.rotation += 0.9;
+  const actual = query.annotationLeaderAnchor(target), expected = projection.blockWorldPoint(block, local);
+  near(actual.x, expected.x); near(actual.y, expected.y);
 });

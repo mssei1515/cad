@@ -43,7 +43,7 @@
       }
       if (target.kind === "blockPlacement") {
         const operation = getOperation();
-        return { enabledSketchIds: [...operation.blockPlacementEnabledSketchIds], rotationLocked: operation.blockPlacementRotationLocked,
+        return { enabledSketchIds: [...operation.blockPlacementEnabledSketchIds], rotationLocked: operation.blockPlacementRotationLocked, mirrored: Boolean(operation.blockPlacementMirrored),
           sketchRows: blockDefinitionSketchRows(item) };
       }
       const parent = sketchById(item.parentSketchId), root = isRootSketch(item);

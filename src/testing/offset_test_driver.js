@@ -255,5 +255,18 @@
     });
   }
 
-  window.OffsetTestDriver = Object.freeze({ createSupport, createPrimitiveFixture, createUiFixture, createUiObservation, createDirectionFixture, createChainFixture, createChainObservation, createChainReload, createChainTargetEdit, createChainReselection });
+  function createForWorkspace({ documentWorkspace, geometry, insertion, offset, sourceSelection, solvePreparation,
+    solving, checkpoint, sessions, presentation, viewport, ...options }) {
+    const { RadiusConstraint, OffsetConstraint, OffsetChainConstraint, HorizontalConstraint, VerticalConstraint, Line } = window.GeometrySolver;
+    const { targetFromConstraint, measuredConstraintTargetValue } = window.DimensionQueries;
+    return createSupport({ ...options, addPoint: geometry.addPoint, addLine: geometry.addLine, addCircle: geometry.addCircle, addArc: geometry.addArc,
+      pushModelConstraint: insertion.push, currentScope: documentWorkspace.workspace.current,
+      RadiusConstraint, OffsetConstraint, OffsetChainConstraint, HorizontalConstraint, VerticalConstraint, Line,
+      createOffsetGeometry: offset.createGeometry, preconditionNewConstraint: solvePreparation.precondition,
+      solveSketchAndDependents: solving.solveSketchAndDependents, activeSketchId: documentWorkspace.sketches.activeSketchId, snapshotModelState: checkpoint.captureValues,
+      targetFromConstraint, measuredConstraintTargetValue, offsetSelection: sourceSelection, drawingPreview: sessions.preview,
+      offsetDistanceFromPointer: offset.plans.offsetDistanceFromPointer, pendingCommandSession: sessions.pending, addOffsetChainGeometry: sourceSelection.add,
+      draw: presentation.draw, worldToCanvasScreen: viewport.worldToCanvasScreen });
+  }
+  window.OffsetTestDriver = Object.freeze({ createForWorkspace, createSupport, createPrimitiveFixture, createUiFixture, createUiObservation, createDirectionFixture, createChainFixture, createChainObservation, createChainReload, createChainTargetEdit, createChainReselection });
 })();

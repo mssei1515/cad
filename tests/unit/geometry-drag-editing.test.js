@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} };
 vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/constraints/dimension_queries.js', 'src/editing/geometry_drag_editing.js']) {
+for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/block_transform.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/constraints/dimension_queries.js', 'src/editing/geometry_drag_editing.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
 const G = sandbox.window.GeometrySolver;
@@ -135,6 +135,9 @@ test('Block rotation preserves the displayed pivot and invalidates projection be
   assert.ok(Math.abs(item.x + 2 * Math.cos(item.rotation) - 3 * Math.sin(item.rotation) - 10) < 1e-10);
   assert.ok(Math.abs(item.y + 2 * Math.sin(item.rotation) + 3 * Math.cos(item.rotation) - 20) < 1e-10);
   assert.deepEqual(f.events, ['guided', ['invalidate', 'B1'], 'repair', 'normalize']);
+  item.mirrored = true;
+  f.editing.preview(session, { x: 10, y: 25 });
+  assert.ok(Math.abs(item.x - 13) < 1e-10); assert.ok(Math.abs(item.y - 22) < 1e-10);
 });
 
 test('derived placement targets use the initial anchor and projection-locked sessions skip all editing', () => {

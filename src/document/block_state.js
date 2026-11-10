@@ -120,6 +120,7 @@
             instance.x = Number(instance.x) || 0;
             instance.y = Number(instance.y) || 0;
             instance.rotation = Number(instance.rotation) || 0;
+            instance.mirrored = instance.mirrored === true;
             instance.fixed = Boolean(instance.fixed);
             instance.rotationLocked = Boolean(instance.rotationLocked);
             instance.drawingOrder = normalizedDrawingOrder(instance.drawingOrder);
@@ -147,6 +148,7 @@
         instance.x = Number(instance.x) || 0;
         instance.y = Number(instance.y) || 0;
         instance.rotation = Number(instance.rotation) || 0;
+        instance.mirrored = instance.mirrored === true;
         instance.fixed = Boolean(instance.fixed);
         instance.rotationLocked = Boolean(instance.rotationLocked);
         instance.drawingOrder = normalizedDrawingOrder(instance.drawingOrder);

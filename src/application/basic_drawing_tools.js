@@ -1,6 +1,60 @@
 /* Compose drawing features around shared geometry, snap and preview owners. */
 (() => {
   "use strict";
+  function prepare() {
+    let authoring = null, editing = null, centerline = null, trim = null, splineEditing = null;
+    function requireComponent(component, binding) {
+      if (!component) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return component;
+    }
+    function publishAuthoring(build, options) {
+      const completed = build(options);
+      authoring = completed;
+      return completed;
+    }
+    function createPreparedGeometry(options) {
+      const geometry = createGeometry(options);
+      const build = geometry.createAuthoring, buildForEditing = geometry.createAuthoringForEditing;
+      return Object.freeze({ ...geometry,
+        createAuthoring: options => publishAuthoring(build, options),
+        createAuthoringForEditing: options => publishAuthoring(buildForEditing, options) });
+    }
+    function createEditing(options) {
+      const completed = requireComponent(authoring, "authoringTools").createEditing(options);
+      editing = completed;
+      return completed;
+    }
+    function createCenterline(options) {
+      const { createCenterline } = requireComponent(editing, "createCenterline");
+      const completed = createCenterline(options);
+      centerline = completed;
+      return completed;
+    }
+    function createTrim(options) {
+      const { createTrim } = requireComponent(editing, "createTrim");
+      const completed = createTrim(options);
+      trim = completed;
+      return completed;
+    }
+    function createSplineEditing(options) {
+      const { createSplineEditing } = requireComponent(editing, "createSplineEditing");
+      const completed = createSplineEditing(options);
+      splineEditing = completed;
+      return completed;
+    }
+    function resetSplineEditing() { return requireComponent(splineEditing, "splineEditing").reset(); }
+    const preview = Object.freeze({
+      snapForDrawing(point) { return requireComponent(authoring, "authoringTools").snapForDrawing(point); },
+      linePreviewPoint(point, shiftKey) { return requireComponent(authoring, "lineCommand").tools.line.previewPoint(point, shiftKey); },
+      readCenterline() { return requireComponent(centerline, "centerlineCommand"); },
+      projectPointToCenterlineSupport(point) {
+        const { projectPointToCenterlineSupport } = requireComponent(centerline, "projectPointToCenterlineSupport");
+        return projectPointToCenterlineSupport(point);
+      },
+      computeTrimPreview(pointer) { return requireComponent(trim, "trimFeature").computePreview(pointer); },
+    });
+    return Object.freeze({ createGeometry: createPreparedGeometry, createEditing, createCenterline, createTrim, createSplineEditing, resetSplineEditing, preview });
+  }
   function createCanvasInput({ point, drawing }) {
     const pointCommand = window.PointCommand.create(point);
     return window.DrawingCommandInput.create({ ...drawing, pointCommand });
@@ -87,7 +141,66 @@
     function createTools(options) {
       return createAuthoring({ ...options, currentScope, ids, geometry, endpointAt, minLineLength, minArcLength });
     }
-    return Object.freeze({ geometry, createAuthoring: createTools });
+    function createToolsForEditing({ documentWorkspace, readServices, interaction, sessions, presentation, viewport, ...options }) {
+      const tools = createTools({ ...options, samePosition: window.GeometryKernel.samePosition,
+        sketchContext: documentWorkspace.sketches, pointUsage: interaction.pointUsage, geometryReads: readServices.reads,
+        isVisibleSketchElement: readServices.geometryAppearance.isVisibleSketchElement, scale: () => viewport.scale,
+        selection: interaction.selection, preview: sessions.preview, cancelPendingCommand: message => sessions.pending.cancel(message),
+        canCreateInActiveSketch: interaction.access.canCreateInActiveSketch, rejectRootSketchCreation: interaction.access.rejectRootSketchCreation,
+        setMode: interaction.lifecycle.setMode, applicationText: presentation.settings.applicationText,
+        setHint: presentation.setHint, updateUI: presentation.updateUI, draw: presentation.draw, log: presentation.log });
+      function createEditing({ checkpoint, solving, parameters, analysis, editingScope, solver, placement, valueInput,
+        projection, acceptError, updateGeometrySelectionUI }) {
+        const { activeSketchId } = documentWorkspace.sketches;
+        const { stabilize } = parameters;
+        const fillet = tools.createFillet({
+          defaultDimensionForTarget: placement.defaultDimensionForTarget, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
+          pending: sessions.pending, readPointer: sessions.pointer.readLastPointer,
+          prepareStart: () => interaction.lifecycle.prepare("fillet"), guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit,
+          valueInput, checkpoint, stabilize: () => stabilize(activeSketchId()), acceptError,
+          invalidateAnalysis: () => { analysis.invalidate(); }, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options),
+          updateGeometrySelectionUI,
+        });
+        function createCircleCenterCross({ resultIsAccepted, minOrientationLength }) {
+          return tools.createCircleCenterCross({ checkpoint, solveSketchAndDependents: solving.solveSketchAndDependents,
+            resultIsAccepted, minOrientationLength, selectedElementCount: interaction.selection.selectedElementCount,
+            invalidateAnalysis: () => analysis.invalidate() });
+        }
+        function createSplineEditing({ constraintReferences, guardDimensionSymbolDeletion }) {
+          return tools.createSplineEditing({ editingScope, checkpoint, parameters, analysis, access: interaction.access,
+            guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion });
+        }
+        function createCenterline({ commitNewConstraint, parallelTolerance }) {
+          return tools.createCenterline({ commitNewConstraint, parallelTolerance, invalidateAnalysis: () => { analysis.invalidate(); } });
+        }
+        function createTrim({ references, hitSketchIdentityElement }) {
+          return tools.createTrim({ references, checkpoint, hitSketchIdentityElement, guardSketchEdit: interaction.access.guardSketchEdit,
+            guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit,
+            stabilizeActiveParameterNamespace: stabilize, acceptError, invalidateAnalysis: () => analysis.invalidate(),
+            refreshConstraintAnalysis: (options = {}) => analysis.refresh(options) });
+        }
+        return Object.freeze({ fillet, createCircleCenterCross, createSplineEditing, createCenterline, createTrim });
+      }
+      function createOffsetForEditing({ editingScope, placement, sourceSelection, valueInput, ctx, surface, drawDimension,
+        commitNewConstraint, offsetChainErrorText, analysis }) {
+        return tools.createOffset({ currentScope: () => editingScope.current, placement, sourceSelection,
+          pending: sessions.pending, valueInput, viewport, ctx, withCanvasState: surface.withCanvasState, drawDimension,
+          readMode: interaction.lifecycle.readMode, commitNewConstraint, offsetChainErrorText,
+          prepareStart: () => interaction.lifecycle.prepare("offset"),
+          updateGeometrySelectionUI: presentation.updateGeometrySelectionUI, invalidateAnalysis: () => { analysis.invalidate(); } });
+      }
+      function createHatchForEditing({ updateStatusUI, hatchRegionErrorText }) {
+        return tools.createHatch({ hatchGeometryQuery: readServices.hatches, readMode: interaction.lifecycle.readMode,
+          lastPointer: sessions.pointer.readLastPointer, documentIds: documentWorkspace.documentIds, updateStatusUI, hatchRegionErrorText });
+      }
+      function createPreviewForEditing({ ctx, surface, geometry: display, canvas, centerlineCommand }) {
+        return tools.createPreview({ ctx, viewport, withCanvasState: surface.withCanvasState, traceSplinePath: display.traceSplinePath,
+          readMode: interaction.lifecycle.readMode, centerlineCommand,
+          readCanvasSize: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }) });
+      }
+      return Object.freeze({ ...tools, createEditing, createOffsetForEditing, createHatchForEditing, createPreviewForEditing });
+    }
+    return Object.freeze({ geometry, createAuthoring: createTools, createAuthoringForEditing: createToolsForEditing });
   }
 
   function createAuthoring({ currentScope, ids, geometry, endpointAt, samePosition, sketchContext, pointUsage, geometryReads,
@@ -225,5 +338,5 @@
     }
     return Object.freeze({ snap, spline, snapConstraints, tools, snapForDrawing, createCenterline: createCenterlineTool, createCircleCenterCross, createPreview, createLifecycle, createOffset, createFillet, createTrim, createHatch, createBlankGesture, createCanvasInput: createAuthoringInput, createSplineEditing });
   }
-  window.BasicDrawingTools = Object.freeze({ create, createSpline, createCenterline, createGeometry, createAuthoring, createCanvasInput });
+  window.BasicDrawingTools = Object.freeze({ prepare, create, createSpline, createCenterline, createGeometry, createAuthoring, createCanvasInput });
 })();

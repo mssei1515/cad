@@ -145,24 +145,207 @@ test('read context binds the same Workspace and Solver while invalidating its ac
   assert.deepEqual(f.calls.map(call => call.name), ['close', 'move']);
 });
 
-function persistenceFixture() {
+function persistenceFixture(beforeCreate = () => {}, readOptions = {}) {
   const { model } = fixture(), state = { ready: false, bound: model.document, block: null }, calls = [];
   const check = () => assert.equal(state.ready, true, 'persistence construction must defer model queries');
   const context = model.createReadContext({ currentSketches: () => { check(); return state.bound.sketches; },
-    prepareBlocks: () => { check(); }, showHiddenElements: () => false, viewportScale: () => { check(); return 2; }, profileRead: work => work() });
+    prepareBlocks: () => { check(); }, showHiddenElements: () => false, viewportScale: () => { check(); return 2; }, profileRead: work => work(), ...readOptions });
   const references = w.ConstraintReferences.create({ resolveGeometryRef: () => null });
   const pointUsage = context.services.createPointUsage({ constraintReferencesPoint: references.constraintReferencesPoint, editedFitPoints: () => [] });
   const before = JSON.stringify(model.document);
   const placement = w.DimensionPlacement.create({ viewport: { scale: 2 } });
-  const persistence = context.createPersistence({ placement, pointUsage,
+  const options = { placement, pointUsage,
     readEditingScope: () => { check(); state.boundReads = (state.boundReads || 0) + 1; return state.bound; }, readBlockEditor: () => { check(); return state.block; }, version: 26,
     constraintReferencesPoint: references.constraintReferencesPoint,
     separateSharedSketchProjectionTargetPoints: () => { check(); calls.push('separate'); },
     normalizeArcSweeps: arcs => { check(); calls.push(['arcs', arcs]); },
-  });
+  };
+  beforeCreate(context, options);
+  const persistence = context.createPersistence(options);
   assert.equal(JSON.stringify(model.document), before); assert.deepEqual(calls, []); state.ready = true;
-  return { model, state, calls, persistence, placement };
+  return { model, state, calls, persistence, placement, context, options };
 }
+
+test('read context connects the same Block preparation before services exist and normalizes only when read', () => {
+  const original = w.GeometryReadServices; let connected;
+  const unready = error => error.name === 'ReferenceError' && error.message === "Cannot access 'documentPreparation' before initialization";
+  w.GeometryReadServices = { ...original, createWithHatches(options) {
+    connected = options.prepareBlocks; assert.throws(() => connected(), unready);
+    return original.createWithHatches(options);
+  } };
+  try {
+    const f = persistenceFixture(context => {
+      assert.equal(context.persistence.ensureBlockState, connected);
+      assert.throws(() => context.services.reads.blockProjectionBundles(), unready);
+    }, { prepareBlocks: undefined });
+    const definition = Object.assign(w.DocumentState.create(), { id: 'BD1' }), line = addPersistedLine(definition, 'L1');
+    const instance = { id: 'BI1', definitionId: 'BD1', sketchId: 'missing', x: '20', y: '3' };
+    f.model.document.blockDefinitions.push(definition); f.model.document.blockInstances.push(instance);
+    assert.equal(instance.x, '20');
+    const bundle = f.context.services.reads.blockProjectionBundles()[0];
+    assert.equal(instance.x, 20); assert.equal(instance.sketchId, 'S1');
+    assert.equal(bundle.instance, instance); assert.equal(bundle.lines[0].p1.x, 20);
+    assert.equal(definition.lines[0], line.line); assert.equal(line.constraint.p1, line.p1);
+    const local = w.DocumentState.create(), host = f.model.workspace.capture(); f.model.workspace.activate(local);
+    // Reads use Workspace.current; preparation continues to use the separately bound scope.
+    const untouched = { definitionId: 'BD1', x: '7' }; local.blockInstances.push(untouched);
+    f.context.persistence.ensureBlockState(); assert.equal(untouched.x, '7');
+    f.state.bound = local; f.context.persistence.ensureBlockState(); assert.equal(untouched.x, 7);
+    assert.equal(f.model.document.blockDefinitions[0], definition); f.model.workspace.restore(host);
+  } finally { w.GeometryReadServices = original; }
+});
+
+test('read context preserves explicit preparation callbacks and null without consulting unpublished persistence', () => {
+  const { model } = fixture(); let calls = 0;
+  function explicit() { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); calls++; }
+  function create(prepareBlocks) { return model.createReadContext({ currentSketches: () => model.document.sketches,
+    prepareBlocks, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() }); }
+  const context = create(explicit); assert.equal(calls, 0);
+  assert.equal(context.services.reads.blockProjectionBundles().length, 0); assert.equal(calls, 1);
+  assert.throws(() => context.persistence.ensureBlockState(), error => error.name === 'ReferenceError');
+  assert.throws(() => create(null).services.reads.blockProjectionBundles(), error => error.name === 'TypeError');
+  assert.throws(() => create(undefined).services.reads.blockProjectionBundles(), error => error.name === 'ReferenceError');
+  const failure = new Error('explicit preparation failed');
+  assert.throws(() => create(() => { throw failure; }).services.reads.blockProjectionBundles(), error => error === failure);
+});
+
+test('context rebinding uses actual codecs and projections through publication and keeps cloned geometry references', () => {
+  let rebinding;
+  const f = persistenceFixture(context => {
+    rebinding = context.createRebinding();
+    assert.throws(() => rebinding.cloneForBlock({}), error => error.name === 'ReferenceError' && error.message === "Cannot access 'constraintCodecs' before initialization");
+  });
+  const source = addPersistedLine(f.model.document, 'L1'), api = f.context.persistence;
+  const byId = new Map(f.model.document.points.map(point => [point.id, point]));
+  const copy = rebinding.cloneForBlock(source.constraint, byId, new Map(), new Map(), { x: 2, y: 3 }, true);
+  assert.equal(copy.p1, source.p1); assert.equal(copy.p2, source.p2); assert.equal(copy.parameterName, 'd1');
+  assert.equal(copy.dimension.x, source.constraint.dimension.x - 2); assert.equal(copy.dimension.y, source.constraint.dimension.y - 3);
+  const direct = w.ConstraintRebinding.create({ catalog: f.context.services.catalog, projections: f.context.services.projections,
+    geometryInstanceBundlesForScope: f.context.services.instances.geometryInstanceBundlesForScope, ...api,
+    applicationText: (_ja, en) => en });
+  assert.equal(JSON.stringify(copy), JSON.stringify(direct.cloneForBlock(source.constraint, byId, new Map(), new Map(), { x: 2, y: 3 }, true)));
+  rebinding.rebuildDocument(f.model.document, []);
+  assert.equal(f.model.document.constraints[0].p1, source.p1); assert.equal(f.model.document.lines[0], source.line);
+  const definition = Object.assign(w.DocumentState.create(), { id: 'BD1' }); addPersistedLine(definition, 'CHILD');
+  f.model.document.blockDefinitions.push(definition);
+  const local = w.DocumentState.create(), instance = { id: 'BI1', definitionId: 'BD1', sketchId: 'S1', x: 30, y: 0, rotation: 0 };
+  local.blockInstances.push(instance);
+  const bundle = f.context.services.projections.createBlockProjectionBundle(instance, definition);
+  const projected = new w.GeometrySolver.DistanceConstraint(bundle.points[0], bundle.points[1], 10); local.constraints.push(projected);
+  assert.equal(rebinding.rebuildDefinition(local), 0);
+  assert.equal(local.constraints[0].p1.id, bundle.points[0].id);
+  assert.equal(local.constraints[0].p1.x, bundle.points[0].x);
+});
+
+test('context rebinding selects the same owners at factory time and propagates the actual API and construction errors', () => {
+  const f = persistenceFixture(), original = w.ConstraintRebinding, result = {}, failure = new Error('rebinding construction failed');
+  let fail = false, calls = 0;
+  const namespace = { ...original, create(options) {
+    assert.equal(this, namespace); assert.equal(arguments.length, 1); calls++;
+    assert.equal(options.catalog, f.context.services.catalog); assert.equal(options.projections, f.context.services.projections);
+    assert.equal(options.geometryInstanceBundlesForScope, f.context.services.instances.geometryInstanceBundlesForScope);
+    for (const name of ['serializeConstraint', 'decorateSerializedConstraint', 'deserializeConstraint']) assert.equal(options[name], f.context.persistence[name]);
+    assert.equal(options.applicationText('日本語', 'English'), 'English');
+    if (fail) throw failure; return result;
+  } };
+  w.ConstraintRebinding = namespace;
+  try {
+    assert.equal(f.context.createRebinding('ignored'), result); fail = true;
+    assert.throws(() => f.context.createRebinding(), error => error === failure); assert.equal(calls, 2);
+  } finally { w.ConstraintRebinding = original; }
+});
+
+test('persistence operations are available before construction but reject reads until the complete bundle is published', () => {
+  const original = w.DocumentLoading, seen = [], failure = new Error('loading construction failed');
+  function assertUnready(api) {
+    for (const [method, binding] of [['serializeConstraint', 'constraintCodecs'], ['deserializeConstraint', 'constraintCodecs'],
+      ['decorateSerializedConstraint', 'constraintMetadata'], ['serializeModel', 'documentWriter']]) {
+      assert.throws(() => api[method](), error => error.name === 'ReferenceError' && error.message === `Cannot access '${binding}' before initialization`);
+    }
+  }
+  let pending;
+  w.DocumentLoading = { ...original, createWithCodecs(options) {
+    assertUnready(pending); seen.push('loading'); return original.createWithCodecs(options);
+  } };
+  try {
+    const f = persistenceFixture((context, options) => {
+      pending = context.persistence; assert.ok(Object.isFrozen(pending)); assertUnready(pending);
+      assert.equal(pending.serializeConstraint.length, 1); assert.equal(pending.deserializeConstraint.length, 0);
+      assert.equal(pending.decorateSerializedConstraint.length, 2); assert.equal(pending.serializeModel.length, 0);
+      const successfulFactory = w.DocumentLoading;
+      w.DocumentLoading = { ...original, createWithCodecs() { assertUnready(pending); throw failure; } };
+      try { assert.throws(() => context.createPersistence(options), error => error === failure); assertUnready(pending); }
+      finally { w.DocumentLoading = successfulFactory; }
+    });
+    assert.deepEqual(seen, ['loading']); assert.equal(f.context.persistence, pending);
+    assert.equal(pending.serializeModel().version, 26);
+  } finally { w.DocumentLoading = original; }
+});
+
+test('persistence operations use real codecs and keep Workspace snapshots, bound preparation and geometry identities', () => {
+  const f = persistenceFixture(), api = f.context.persistence, root = f.model.document;
+  const source = addPersistedLine(root, 'ROOT');
+  const encoded = api.serializeConstraint(source.constraint);
+  assert.equal(JSON.stringify(encoded), JSON.stringify(f.persistence.codecs.serialize(source.constraint)));
+  const decorated = api.decorateSerializedConstraint(encoded, source.constraint);
+  assert.equal(decorated, encoded); assert.equal(encoded.parameterName, 'd1'); assert.equal(encoded.expression, '10');
+  const host = f.model.workspace.capture(), local = w.DocumentState.create(); addPersistedLine(local, 'LOCAL', 20);
+  f.model.workspace.activate(local); f.state.bound = local;
+  assert.equal(api.serializeModel().lines[0].id, 'LOCAL');
+  f.model.workspace.restore(host); f.state.bound = root;
+  const snapshot = api.serializeModel(), loaded = f.persistence.loading.decode(snapshot);
+  assert.equal(snapshot.version, 26); assert.equal(snapshot.lines[0].id, 'ROOT');
+  assert.equal(root.lines[0], source.line); assert.equal(source.constraint.p1, source.p1);
+  assert.equal(loaded.constraints[0].p1, loaded.points[0]); assert.equal(loaded.lines[0].p2, loaded.points[1]);
+  assert.equal(loaded.constraints[0].dimension.labelOffsetU, 7);
+  const byId = new Map(loaded.points.map(point => [point.id, point]));
+  const decoded = api.deserializeConstraint(snapshot.constraints[0], byId);
+  assert.equal(decoded.p1, loaded.points[0]); assert.equal(decoded.p2, loaded.points[1]);
+});
+
+test('persistence operation forwarding retains member receivers, argument counts, results and original errors', () => {
+  const originals = { constraint: w.ConstraintPersistence, snapshot: w.DocumentSnapshot }, calls = [], result = {}, failure = new Error('operation failed');
+  let fail = false;
+  function method(owner, name) { return function() {
+    assert.equal(this, owner); calls.push([name, Array.from(arguments)]); if (fail) throw failure; return result;
+  }; }
+  const codecs = {}, metadata = {}, writer = {};
+  codecs.serialize = method(codecs, 'serialize'); codecs.deserialize = method(codecs, 'deserialize');
+  metadata.decorate = method(metadata, 'decorate'); writer.serialize = method(writer, 'writer');
+  w.ConstraintPersistence = { ...originals.constraint,
+    createWithDimensions(options) { return { ...originals.constraint.createWithDimensions(options), codecs }; },
+    createMetadata(options) { return Object.assign(metadata, originals.constraint.createMetadata(options), { decorate: method(metadata, 'decorate') }); } };
+  w.DocumentSnapshot = { ...originals.snapshot, createWriter() { return writer; } };
+  try {
+    const api = persistenceFixture().context.persistence, a = {}, b = {}, extra = {};
+    for (const [name, args] of [['serializeConstraint', [a, extra]], ['deserializeConstraint', [a, b, extra]],
+      ['decorateSerializedConstraint', [a, b, extra]], ['serializeModel', [extra]]]) assert.equal(api[name](...args), result);
+    assert.deepEqual(calls, [['serialize', [a]], ['deserialize', [a, b, extra]], ['decorate', [a, b]], ['writer', []]]);
+    fail = true;
+    for (const name of ['serializeConstraint', 'deserializeConstraint', 'decorateSerializedConstraint', 'serializeModel']) {
+      assert.throws(() => api[name](), error => error === failure);
+    }
+  } finally { w.ConstraintPersistence = originals.constraint; w.DocumentSnapshot = originals.snapshot; }
+});
+
+test('persistence publication belongs to each read context and failed reconstruction keeps its last complete bundle', () => {
+  const f = persistenceFixture(), g = persistenceFixture(), original = w.DocumentLoading, api = f.context.persistence;
+  addPersistedLine(f.model.document, 'FIRST'); addPersistedLine(g.model.document, 'OTHER');
+  const failure = new Error('second loading failed');
+  w.DocumentLoading = { ...original, createWithCodecs() { throw failure; } };
+  try {
+    assert.throws(() => f.context.createPersistence({ ...f.options, version: 99 }), error => error === failure);
+    assert.equal(api.serializeModel().version, 26); assert.equal(api.serializeModel().lines[0].id, 'FIRST');
+    assert.equal(g.context.persistence.serializeModel().lines[0].id, 'OTHER');
+  } finally { w.DocumentLoading = original; }
+  f.context.createPersistence({ ...f.options, version: 27 });
+  assert.equal(f.context.persistence, api); assert.equal(api.serializeModel().version, 27);
+  assert.equal(g.context.persistence.serializeModel().version, 26);
+  const context = f.model.createReadContext({ currentSketches: () => f.state.bound.sketches, prepareBlocks: () => {},
+    showHiddenElements: () => false, viewportScale: () => 2, profileRead: read => read() });
+  assert.throws(() => context.persistence.serializeModel(), error => error.name === 'ReferenceError');
+  assert.equal(api.serializeModel().version, 27);
+});
 
 function addPersistedLine(scope, id, x = 0) {
   const p1 = Object.assign(new w.GeometrySolver.Point(id + 'a', x, 0), { sketchId: 'S1', kind: 'endpoint' });
@@ -173,6 +356,79 @@ function addPersistedLine(scope, id, x = 0) {
   scope.points.push(p1, p2); scope.lines.push(line); scope.constraints.push(constraint);
   return { p1, p2, line, constraint };
 }
+
+test('editing instance normalization follows the live Workspace without changing the explicit file codec', () => {
+  const f = persistenceFixture(), api = f.persistence, host = f.model.workspace.capture();
+  assert.equal(api.normalizeGeometryInstance.length, 1);
+  for (const sketchId of [undefined, null, '', 0, false, NaN]) {
+    assert.equal(api.normalizeGeometryInstance({ sketchId }).sketchId, 'S1');
+  }
+  const local = w.DocumentState.create(); local.sketches[1].id = 'S9'; local.activeSketchId = 'S9';
+  f.model.workspace.activate(local);
+  // The bound preparation scope deliberately remains the host Document.
+  assert.equal(f.state.bound, f.model.document);
+  assert.equal(api.normalizeGeometryInstance({ type: 'pattern' }, undefined, 4).sketchId, 'S9');
+  assert.equal(api.normalizeGeometryInstance({ type: 'pattern' }, undefined, 4).id, 'PI5');
+  assert.equal(api.normalizeGeometryInstance({ sketchId: 73 }).sketchId, '73');
+  assert.equal(api.normalizeGeometryInstance({}, value => 'explicit:' + value).sketchId, 'explicit:undefined');
+  assert.equal(api.geometryInstances.normalize({}, () => 'file-sketch').sketchId, 'file-sketch');
+  assert.throws(() => api.geometryInstances.normalize({}), /normalizeSketch/);
+  f.model.workspace.restore(host);
+  assert.equal(api.normalizeGeometryInstance({}).sketchId, 'S1');
+});
+
+test('editing normalizer preserves the previous root defaults, return values and failures', () => {
+  const { model, persistence: api } = persistenceFixture();
+  const { activeSketchId } = model.sketches;
+  function previous(raw, normalizeSketch = value => String(value || activeSketchId()), index = 0) {
+    return api.geometryInstances.normalize(raw, normalizeSketch, index);
+  }
+  const inputs = [undefined, null, {}, { type: 'mirror', sketchId: 'S7', axis: 'L1' },
+    { type: 'pattern', copies: 3, spacing: 10, sources: [{ kind: 'line', path: ['L1'] }] },
+    { type: 'circularPattern', placement: { type: 'circularPattern' }, sketchId: 'S4' }];
+  for (const raw of inputs) for (const index of [undefined, 0, 4, '2', null]) {
+    assert.equal(JSON.stringify(api.normalizeGeometryInstance(raw, undefined, index)), JSON.stringify(previous(raw, undefined, index)));
+  }
+  const failure = new Error('resolver failed');
+  for (const normalize of [previous, api.normalizeGeometryInstance]) {
+    assert.throws(() => normalize({}, () => { throw failure; }), error => error === failure);
+    assert.throws(() => normalize({}, null), /normalizeSketch/);
+    let calls = 0;
+    assert.throws(() => normalize({ type: 'free' }, () => { calls++; }), /同期インスタンス/);
+    assert.equal(calls, 0);
+  }
+});
+
+test('editing normalizer keeps raw codec receiver and three arguments, with a fresh lazy default resolver', () => {
+  const original = w.DocumentLoading;
+  const calls = [], result = {}, failure = new Error('codec failed');
+  let fail = false;
+  const codec = { normalize: function(raw, resolver, index) {
+    assert.equal(this, codec); assert.equal(arguments.length, 3);
+    calls.push({ raw, resolver, index }); if (fail) throw failure; return result;
+  } };
+  w.DocumentLoading = { ...original, createWithCodecs(options) {
+    return { ...original.createWithCodecs(options), geometryInstances: codec };
+  } };
+  try {
+    const { model, persistence: api } = persistenceFixture();
+    assert.deepEqual(calls, []);
+    const raw = {};
+    assert.equal(api.normalizeGeometryInstance(raw), result);
+    assert.equal(api.normalizeGeometryInstance(raw, undefined, undefined, 'ignored'), result);
+    assert.equal(calls[0].raw, raw); assert.equal(calls[0].index, 0);
+    assert.notEqual(calls[0].resolver, calls[1].resolver);
+    const local = w.DocumentState.create(); local.sketches[1].id = 'S8'; local.activeSketchId = 'S8';
+    model.workspace.activate(local);
+    assert.equal(calls[0].resolver(''), 'S8');
+    assert.equal(calls[0].resolver('S4'), 'S4');
+    const explicit = value => value;
+    api.normalizeGeometryInstance(raw, explicit, null);
+    assert.equal(calls[2].resolver, explicit); assert.equal(calls[2].index, null);
+    fail = true;
+    assert.throws(() => api.normalizeGeometryInstance(raw), error => error === failure);
+  } finally { w.DocumentLoading = original; }
+});
 
 test('Document persistence shares actual codecs and round trips dimensions and geometry without applying a load', () => {
   const f = persistenceFixture(), source = addPersistedLine(f.model.document, 'L1'), api = f.persistence;

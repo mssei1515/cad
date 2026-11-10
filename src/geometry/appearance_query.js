@@ -82,8 +82,17 @@
       return window.Appearance.resolveLeaderAppearance(document.defaultLeaderAppearance, document.defaultTerminatorAppearance, sketch?.leaderAppearance);
     }
 
+    // Keep glyphs readable while reflecting the occupied text box and its local inclination.
+    function projectedTextStyle(element, style) {
+      if (!element?.annotationMirrored) return style;
+      if (style.textAlign === "left") style.textAlign = "right";
+      else if (style.textAlign === "right") style.textAlign = "left";
+      style.rotation = -(style.rotation || 0);
+      return style;
+    }
+
     function effectiveAnnotationStyle(element) {
-      if (element?.type !== "leader" && !element?.appearanceInheritance) return normalizeAnnotationStyle(element?.style);
+      if (element?.type !== "leader" && !element?.appearanceInheritance) return projectedTextStyle(element, normalizeAnnotationStyle(element?.style));
       const source = element.localElement || element;
       const sketches = element.blockDefinition?.sketches || currentSketches();
       const sketch = sketches.find(item => item.id === source.sketchId);
@@ -97,7 +106,7 @@
         if (normalized.color) style.color = normalized.color;
         if (normalized.lineWidth != null) style.lineWidth = normalized.lineWidth;
       }
-      return style;
+      return projectedTextStyle(element, style);
     }
 
 
