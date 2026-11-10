@@ -176,7 +176,9 @@
   const { scopeId: currentBlockDefinitionScopeId } = blockEditor;
   const { blockDefinitionScopeError } = blockEditingQueries;
 
-  const sketchSolveResultState = window.SketchSolving.createState();
+  const { solveState: sketchSolveResultState, createContextForWorkspace: createSolveContext, solveAndRefresh } = window.SketchSolvingFeature.prepareForWorkspace({
+    documentWorkspace, readServices: geometryReadServices, references: constraintReferences, referenceState: referenceConstraintState, solver, pointUsage, presentation,
+  });
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
@@ -249,9 +251,8 @@
     buildPlan: (...args) => buildDragSession(...args), beginGeometryDrag: (event, plan) => geometryDrag.begin(event, plan),
     invalidateAnalysis: () => constraintAnalysis.invalidate(),
   });
-  const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving } = window.SketchSolvingFeature.createContextForWorkspace({
-    documentWorkspace, readServices: geometryReadServices, references: constraintReferences, referenceState: referenceConstraintState,
-    annotationDrag: constrainedAnnotationDrag, solver, pointUsage, presentation, solveState: sketchSolveResultState, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
+  const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving } = createSolveContext({
+    annotationDrag: constrainedAnnotationDrag, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { connectedComponentFromSeeds, localSolveLines } = solveScopeQuery;
   const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = createCanvasDisplay({
@@ -364,8 +365,7 @@
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
     version: CURRENT_JSON_VERSION, constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps,
   });
-  const { solving: sketchSolving, parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization,
-    refresh: solveRefreshCommand } = createSolving({
+  const { solving: sketchSolving, parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization } = createSolving({
     projectionEditing: sketchProjectionEditing, geometry: geometryCreation, checkpoint: editingCheckpoint, editingScope: editingScopeBinding,
     historyController, recordHistory, resultIsAccepted,
     maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
@@ -482,7 +482,6 @@
 
 
 
-  function solveAndRefresh(...args) { return solveRefreshCommand.run(...args); }
 
 
   function refreshConstraintAnalysis(options = {}) { return constraintAnalysis.refresh(options); }
