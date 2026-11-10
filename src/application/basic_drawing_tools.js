@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function prepare() {
-    let authoring = null, editing = null, centerline = null, trim = null;
+    let authoring = null, editing = null, centerline = null, trim = null, splineEditing = null;
     function requireComponent(component, binding) {
       if (!component) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
       return component;
@@ -36,6 +36,13 @@
       trim = completed;
       return completed;
     }
+    function createSplineEditing(options) {
+      const { createSplineEditing } = requireComponent(editing, "createSplineEditing");
+      const completed = createSplineEditing(options);
+      splineEditing = completed;
+      return completed;
+    }
+    function resetSplineEditing() { return requireComponent(splineEditing, "splineEditing").reset(); }
     const preview = Object.freeze({
       snapForDrawing(point) { return requireComponent(authoring, "authoringTools").snapForDrawing(point); },
       linePreviewPoint(point, shiftKey) { return requireComponent(authoring, "lineCommand").tools.line.previewPoint(point, shiftKey); },
@@ -46,7 +53,7 @@
       },
       computeTrimPreview(pointer) { return requireComponent(trim, "trimFeature").computePreview(pointer); },
     });
-    return Object.freeze({ createGeometry: createPreparedGeometry, createEditing, createCenterline, createTrim, preview });
+    return Object.freeze({ createGeometry: createPreparedGeometry, createEditing, createCenterline, createTrim, createSplineEditing, resetSplineEditing, preview });
   }
   function createCanvasInput({ point, drawing }) {
     const pointCommand = window.PointCommand.create(point);

@@ -637,3 +637,26 @@ test('authoring operation session binding retains original errors and never cons
  }finally{w.DrawingPreview=previewOriginal;w.PendingCommandSession=pendingOriginal;}
  assert.equal(pendingBuilds,0);assert.deepEqual(f.events,[]);assert.equal(f.state.scope.points[0],f.point);assert.equal(f.state.scope.points.length,1);
 });
+
+test('Canvas-owned blank reset is guarded until creation and clears only the real candidate while preserving suppression',()=>{
+ const unready=fixture();assert.throws(unready.foundation.resetBlankCandidate,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'blankCanvasGesture' before initialization");
+ const f=pointerAssemblyFixture(true),assembled=f.assemble(),blank=assembled.blankCanvasGesture,point={x:20,y:30};f.state.ready=true;
+ assert.equal(blank.isRepeated(point),false);assert.equal(blank.isRepeated(point),true);blank.suppressNext();
+ assert.equal(f.foundation.resetBlankCandidate('ignored'),undefined);assert.equal(blank.takeSuppression(),true);assert.equal(blank.isRepeated(point),false);
+ assert.equal(blank.isRepeated(point),true);assert.equal(f.state.scope.points[0],f.point);
+});
+
+test('Canvas blank reset retains the prior target on constructor failure and follows only completed components with original call contract',()=>{
+ const f=pointerAssemblyFixture(true),assembled=f.assemble(),blank=assembled.blankCanvasGesture,authoring=f.source.authoring,original=authoring.createBlankGesture,
+  marker=new Error('blank failed'),point={x:20,y:30},result={},calls=[];f.state.ready=true;
+ const options={splineEditing:{current:null},dimensionValues:{submit(){}},annotationInput:{finish(){},start(){}}};
+ assert.equal(blank.isRepeated(point),false);assert.equal(blank.isRepeated(point),true);
+ authoring.createBlankGesture=()=>{throw marker;};
+ try{assert.throws(()=>f.inputs.preparePointerForEditing(options),e=>e===marker);}finally{authoring.createBlankGesture=original;}
+ assert.equal(f.foundation.resetBlankCandidate(),undefined);assert.equal(blank.isRepeated(point),false);
+ let fail=false;const component=Object.freeze({resetCandidate(...args){assert.equal(this,component);calls.push(args);if(fail)throw marker;return result;}});
+ authoring.createBlankGesture=()=>component;
+ try{assert.equal(f.inputs.preparePointerForEditing(options).blankGesture,component);}finally{authoring.createBlankGesture=original;}
+ const reset=f.foundation.resetBlankCandidate;assert.deepEqual(calls,[]);assert.equal(reset('ignored',null),result);assert.deepEqual(calls,[[]]);
+ fail=true;assert.throws(reset,e=>e===marker);
+});

@@ -488,7 +488,7 @@ function geometryFoundationFixture({composed=false,prepared=false,probe=null,con
   pushModelConstraint:noop,addConstraintIfMissing:noop,selection,preview,
   checkpoint:{capture:(...args)=>checkpoint.capture(...args),restore:(...args)=>checkpoint.restore(...args)},
   cancelConstraintTargetCommand:noop,cancelPendingCommand:message=>pending.cancel(message),canCreateInActiveSketch:()=>{read();return state.allowed!==false;},rejectRootSketchCreation:()=>{read();events.push('reject');},
-  setMode:lifecycle.setMode,resetEditing:()=>{read();if(probe?.editingFailure)throw probe.editingFailure;},resetBlankCandidate:noop,updateToolbar:noop,projection:{reset:noop},clearSelection:noop,
+  setMode:lifecycle.setMode,resetEditing:preparation?preparation.resetSplineEditing:()=>{read();if(probe?.editingFailure)throw probe.editingFailure;},resetBlankCandidate:noop,updateToolbar:noop,projection:{reset:noop},clearSelection:noop,
   solveAndRefresh:()=>({success:true}),recordHistory:noop,applicationText:(_ja,en)=>en,setHint:noop,updateUI:noop,draw:noop,log:noop};
  const owners={documentWorkspace:{sketches:sketchContext},readServices:{reads:ports.geometryReads,geometryAppearance:{isVisibleSketchElement}},
   interaction:{pointUsage,selection,lifecycle,access:{canCreateInActiveSketch:ports.canCreateInActiveSketch,rejectRootSketchCreation:ports.rejectRootSketchCreation}},
@@ -792,7 +792,7 @@ function editingToolStagesFixture(composed, failAt = null, construction = []) {
  }});
  parent.state.ready=false;
  let fillet,createCircleCenterCross,createSplineEditing,editors;
- if(composed){editors=composed==='prepared'?parent.preparation.createEditing(common):parent.tools.createEditing(common);({fillet,createCircleCenterCross,createSplineEditing}=editors);}
+ if(composed){editors=composed==='prepared'?parent.preparation.createEditing(common):parent.tools.createEditing(common);({fillet,createCircleCenterCross,createSplineEditing}=editors);if(composed==='prepared')createSplineEditing=parent.preparation.createSplineEditing;}
  else {
   const {activeSketchId}=parent.owners.documentWorkspace.sketches,{stabilize}=parameters;
   fillet=parent.tools.createFillet({defaultDimensionForTarget:common.placement.defaultDimensionForTarget,syncLineOrientationHints:()=>solver.syncLineOrientationHints?.(),
@@ -1100,6 +1100,30 @@ test('prepared preview preserves raw member and bare receivers, exact arguments,
  assert.equal(p.preview.computeTrimPreview(pointer,'ignored'),result);
  assert.deepEqual(calls,[['snap',point,5],['line',point,true],['project',point],['trim',pointer]]);
  fail=true;assert.throws(()=>p.preview.snapForDrawing(point),e=>e===marker);assert.throws(()=>p.preview.computeTrimPreview(pointer),e=>e===marker);
+});
+
+
+test('prepared Spline reset is guarded before construction and clears the actual editing session when authoring starts',()=>{
+ const f=editingToolStagesFixture('prepared'),p=f.preparation,g=f.foundation.geometry,fresh=f.w.BasicDrawingTools.prepare();
+ assert.throws(fresh.resetSplineEditing,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'splineEditing' before initialization");
+ const spline=g.addSpline([g.addPoint(0,0),g.addPoint(20,10),g.addPoint(40,-10),g.addPoint(60,0)]);
+ f.spline.activate(spline);assert.equal(f.spline.current.spline,spline);const before=f.snapshot(),ids=f.ids.snapshot();
+ assert.equal(p.resetSplineEditing('ignored'),undefined);assert.equal(f.spline.current,null);assert.equal(f.snapshot(),before);assert.deepEqual(f.ids.snapshot(),ids);
+ f.spline.activate(spline);f.tools.spline.command.start();assert.equal(f.spline.current,null);assert.equal(f.owners.interaction.lifecycle.readMode(),'spline');
+ assert.equal(f.tools.spline.draft.points.length,0);
+});
+
+test('prepared Spline construction failure preserves the last reset target, member receiver, zero arguments, return and exception',()=>{
+ const f=editingToolStagesFixture('prepared'),p=f.preparation,w=f.w,original=w.SplineEditCommand,marker=new Error('Spline failed'),calls=[],result={};let fail=false;
+ const options={constraintReferences:{constraintReferencesPoint:()=>false},guardDimensionSymbolDeletion:()=>true};
+ w.SplineEditCommand={create(){throw marker;}};
+ try{assert.throws(()=>p.createSplineEditing(options),e=>e===marker);}finally{w.SplineEditCommand=original;}
+ assert.equal(p.resetSplineEditing(),undefined);
+ const component=Object.freeze({reset(...args){assert.equal(this,component);calls.push(args);if(fail)throw marker;return result;}});
+ w.SplineEditCommand={create:()=>component};
+ try{assert.equal(p.createSplineEditing(options),component);}finally{w.SplineEditCommand=original;}
+ assert.deepEqual(calls,[]);const reset=p.resetSplineEditing;assert.equal(reset('ignored',null),result);assert.deepEqual(calls,[[]]);
+ fail=true;assert.throws(reset,e=>e===marker);
 });
 
 })();
