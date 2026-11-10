@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のPropertiesテスト支援接続単位ではapp.jsは1,371行、非空白925行。AST監査ではroot298文・480束縛、構築・接続492非空白行、別名・設定121行、委譲50行、条件付きtest hooks179行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の派生配置再接続単位ではapp.jsは1,371行、非空白925行。AST監査ではroot298文・478束縛、構築・接続492非空白行、別名・設定121行、委譲50行、条件付きtest hooks179行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：派生配置の再接続対象組立てをFeatureへ移管（2026-11-10）
+
+DerivedInstanceFeature.createForEditingの後段createEditingWithTransforms（src/application/derived_instance_feature.js）は、rebindがundefinedかつrebinding ownerが指定された場合だけ、保持するEditingScopeBindingとGeometryReadServicesから再接続callbackを生成する。操作時にbound editing scope→Block投影一覧→派生配置投影一覧の順で読み、各一覧を展開した新しい配列を同じConstraintRebinding.rebuildDocumentへ二引数でmember呼出しする。readerは零引数の裸呼出し、返値・例外はそのまま伝播する。Geometry／投影Objectの参照、同じ再接続ownerを維持し、Workspace.currentへの置換や一覧のsnapshot化はしない。
+
+明示rebind callbackとnullを優先し、ownerが未指定なら旧undefined入力も保持する。既定callbackの生成時はscope・投影・modelを読まず、新たなmodel・cache・履歴・session・setterや汎用app contextを追加しない。Instance編集→Transformの従来の生成順と実API、既存DerivedInstanceEditing／InstanceTransformCommand／ConstraintRebindingの本体・拒否／確定／復元境界を維持する。appは実再接続ownerを渡し、対象scopeと二種の投影一覧を組み立てる詳細を持たない。通常UI・操作・保存形式v26は不変。
+
+app.jsは1,371→1,371行（行数変化なし）、非空白925行・root298文。再接続専用の二つの投影reader別名を除き、root束縛は480→478となる。構築・接続492行、別名・設定121行、委譲50行、条件付きtest hooks179行は不変。今回の成果は再接続対象の組立てとその依存を既存Featureへ移したことであり、行数減少のための整形変更はしない。数百行への全体目標は未完了。
+
+追加単体四件で、生成時の無照会とliveなbound scope／Workspaceの区別、Block→Instanceの参照・新配列・member receiver／二引数／返値、scope／Block／Instance／再接続の同じ例外と後続停止、実編集成功時の履歴と再接続失敗時のGeometry同一性・値の復元、明示callback／null優先を旧root接続と比較する。再接続対象の受渡し試験は限定ownerを使い、実ConstraintRebinding／保存読込とUIは既存単体・関連E2Eと区別して検証する。ASTで元callback本体との一致、対象一port・二alias以外のroot全体／順、fallback以外のFeature全体、低水準command・再接続／index／E2E不変と新しい未使用／未束縛参照なしを照合する。
+
+関連単体28件、構文635file・全単体2,425件・関連E2E398件が成功（31file、6.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択31fileのtest list398件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-derived-rebinding-ownership-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、38409adの全589件成功と区別する。
+
+基準develop 38409ad、作業branch codex/derived-rebinding-ownership、開始時週枠残量17%。直前38409adの全E2E589件成功（22.4m）と今回の関連検証を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Propertiesテスト支援の生成・公開接続（2026-11-10）
 
