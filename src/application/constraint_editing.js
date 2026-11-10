@@ -183,7 +183,7 @@
     }
     return Object.freeze({ ...editing, createCommitForWorkspace, createCommitWithIntentForWorkspace });
   }
-  function createForWorkspace({ documentWorkspace, sessions, readServices, ...options }) {
+  function createForWorkspace({ documentWorkspace, sessions, readServices, fixedState: sharedFixedState, ...options }) {
     const { operands, presentation } = options;
     let commit, fixedOperand, fixedSelection;
     function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
@@ -192,6 +192,8 @@
     function addReadOnlyDimensionConstraint(...args) { return commit.command.readOnly(...args); }
     const readOnlyDimensions = Object.freeze({ forPlacement: readOnlyDimensionConstraintForPlacement, add: addReadOnlyDimensionConstraint });
     const editing = createForEditing({ ...options, sessions, sketches: documentWorkspace.sketches,
+      geometryInstanceBundle: options.geometryInstanceBundle === undefined ? readServices?.reads?.geometryInstanceBundle : options.geometryInstanceBundle,
+      findLineFixedConstraint: options.findLineFixedConstraint === undefined ? sharedFixedState?.findLineFixedConstraint : options.findLineFixedConstraint,
       readOnlyDimensionConstraintForPlacement, addReadOnlyDimensionConstraint,
       resolveConstraintIntent: (type, operands) => commit.intentResolver.resolve(type, operands),
       commitConstraintResolution: (...args) => commit.command.resolution(...args),
@@ -217,7 +219,7 @@
       }
       return Object.freeze({ ...result, createSelection: createSelectionForWorkspace });
     }
-    function createFixedForWorkspace({ projection, fixedState, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh }) {
+    function createFixedForWorkspace({ projection, fixedState = sharedFixedState, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh }) {
       const result = createFixedEditing({ operandElement: operands.operands.operandElement,
         guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit,
         findArcEndpointFixedConstraint: fixedState.findArcEndpointFixedConstraint, arcEndpointPoint: window.GeometryKernel.arcEndpointPoint,

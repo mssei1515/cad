@@ -945,19 +945,21 @@ test('dimension value stages propagate constructor failures and do not build lat
   }
 });
 
-function workspaceFixedFixture(assembled) {
+function workspaceFixedFixture(assembled, queryMode = 'legacy') {
   const probe = {}, trace = [], state = { ready: false, scope: { constraints: [] }, result: true }, ports = {};
   let owners;
   const cold = () => assert.equal(state.ready, true);
   const bare = name => function(...args) { assert.equal(this, undefined); cold(); trace.push([name, ...args]); if (state.fail === name) throw state.error; return state.result; };
   const f = editingOwnersFixture(true, probe, (w, input) => {
     const current = () => { cold(); return state.scope; };
-    const fixedState = { findArcEndpointFixedConstraint: bare('find-endpoint') };
+    const fixedState = queryMode === 'legacy' ? { findArcEndpointFixedConstraint: bare('find-endpoint') }
+      : w.ConstraintReferences.createFixedState({ currentScope: current, sameConstraintDisplayElement: (a, b) => a === b });
     const projection = { guardSketchProjectionShapeEdit: bare('projection') };
     const selectionHighlight = { sameConstraintDisplayElement: (a, b) => a === b };
     input.operands.operands.operandElement = operand => operand.element;
     input.presentation.updateUI = bare('ui');
-    input.findLineFixedConstraint = line => { cold(); return state.scope.constraints.find(c => c.line === line); };
+    input.findLineFixedConstraint = queryMode === 'legacy' ? line => { cold(); return state.scope.constraints.find(c => c.line === line); }
+      : fixedState.findLineFixedConstraint;
     input.sessions.pending.cancel = () => {};
     const documentWorkspace = { sketches: input.sketches, workspace: { current } };
     const readServices = { catalog: { blockDefinitionById: id => { cold(); trace.push(['definition', id]); return state.definition; } } };
@@ -965,7 +967,8 @@ function workspaceFixedFixture(assembled) {
       checkpoint: { captureValues: bare('capture'), restoreValues: bare('restore') }, insertion: { push: bare('push') }, solving: { solveSketchAndDependents: bare('solve') },
       deleteElements: bare('delete'), commitNewConstraint: bare('commit'), solveAndRefresh: bare('refresh'),
       refreshConstraintAnalysis: bare('analysis'), recordHistory: bare('history') };
-    return w.ConstraintEditing.createForWorkspace({ ...input, documentWorkspace, readServices });
+    return w.ConstraintEditing.createForWorkspace({ ...input, documentWorkspace, readServices,
+      ...(queryMode === 'shared' ? { fixedState, findLineFixedConstraint: undefined } : {}) });
   });
   const original = f.w.FixedToggleCommand;
   f.w.FixedToggleCommand = {
@@ -973,7 +976,10 @@ function workspaceFixedFixture(assembled) {
     createSelection(options) { trace.push('selection'); if (state.fail === 'selection') throw state.error; ports.selection = options; return original.createSelection(options); },
   };
   function prepare() {
-    if (assembled) return f.feature.createFixedForWorkspace(owners);
+    if (assembled) {
+      const { fixedState, ...shared } = owners;
+      return f.feature.createFixedForWorkspace(queryMode === 'shared' ? shared : owners);
+    }
     return f.feature.createFixedEditing({ operandElement: owners.input.operands.operands.operandElement,
       guardSketchProjectionShapeEdit: owners.projection.guardSketchProjectionShapeEdit,
       findArcEndpointFixedConstraint: owners.fixedState.findArcEndpointFixedConstraint, arcEndpointPoint: f.w.GeometryKernel.arcEndpointPoint,
@@ -990,6 +996,86 @@ function workspaceFixedFixture(assembled) {
   }
   return { ...f, owners, trace, fixedState: state, ports, prepare, select, restore: () => { f.w.FixedToggleCommand = original; } };
 }
+
+test('shared fixed queries preserve real constraint identity, enabled flags and live scope in operand and selection commands', () => {
+  const outcomes = [];
+  for (const mode of ['explicit', 'shared']) {
+    const f = workspaceFixedFixture(true, mode);
+    try {
+      assert.deepEqual(f.trace, []); const stage = f.prepare(), selection = f.select(stage);
+      assert.equal(f.ports.operand.findArcEndpointFixedConstraint, f.owners.fixedState.findArcEndpointFixedConstraint);
+      assert.equal(f.ports.operand.findLineFixedConstraint, f.owners.fixedState.findLineFixedConstraint);
+      assert.equal(f.ports.selection.findLineFixedConstraint, f.owners.fixedState.findLineFixedConstraint);
+      f.fixedState.ready = true;
+      const line = new f.w.GeometrySolver.Line('L1', new f.w.GeometrySolver.Point('P1', 0, 0), new f.w.GeometrySolver.Point('P2', 10, 0));
+      const fixed = new f.w.GeometrySolver.LineFixedConstraint(line); f.fixedState.scope.constraints.push(fixed);
+      f.trace.length = 0; assert.equal(stage.operand.toggle({ kind: 'line', element: line }), true);
+      assert.equal(f.trace.at(-1)[0], 'delete'); assert.equal(f.trace.at(-1)[1].constraints[0], fixed);
+      fixed.enabled = false; f.trace.length = 0;
+      assert.equal(stage.operand.toggle({ kind: 'line', element: line }), true); assert.equal(f.trace.at(-1)[0], 'commit');
+      f.fixedState.scope = { constraints: [] }; assert.equal(f.ports.selection.findLineFixedConstraint(line), undefined);
+      const block = { id: 'BI1', definitionId: 'B1', fixed: false }; f.selection.set('blockInstances', [block]);
+      f.fixedState.definition = {}; f.trace.length = 0; assert.equal(selection.toggle(), true); assert.equal(block.fixed, true);
+      outcomes.push(f.trace.map(entry => entry[0]));
+    } finally { f.restore(); }
+  }
+  assert.deepEqual(outcomes[1], outcomes[0]);
+});
+
+test('shared instance reader supplies the current real angle-placement target and retains callback receiver and failures', () => {
+  for (const shared of [false, true]) {
+    const probe = {}, state = { calls: 0, anchor: null, failure: null }; let instance, reader;
+    const f = editingOwnersFixture(true, probe, (w, input) => {
+      instance = { id: 'GI1', sketchId: 'S1', rotation: 0, placement: { kind: 'circular', angleStep: .5 } };
+      state.anchor = Object.assign(new w.GeometrySolver.Point('GI1:anchor', 0, 0), { instanceControl: 'anchor', derivedInstance: instance });
+      reader = function(value) { assert.equal(this, undefined); assert.equal(arguments.length, 1); assert.equal(value, instance);
+        state.calls++; if (state.failure) throw state.failure; return { controlPoints: [state.anchor] }; };
+      input.sessions.pending.cancel = () => {};
+      return w.ConstraintEditing.createForWorkspace({ ...input, geometryInstanceBundle: shared ? undefined : reader,
+        documentWorkspace: { sketches: input.sketches, workspace: { current: () => ({}) } },
+        readServices: { reads: Object.freeze({ geometryInstanceBundle: reader }) } });
+    });
+    assert.equal(state.calls, 0); assert.equal(probe.ports.dimensions.geometryInstanceBundle, reader);
+    assert.equal(f.feature.dimensions.startInstanceAngleDimension(instance), true);
+    assert.equal(f.state.pending.target.instance, instance); assert.equal(f.state.pending.target.intervalCenter, state.anchor);
+    state.anchor = Object.assign(new f.w.GeometrySolver.Point('GI1:next', 12, 7), { instanceControl: 'anchor', derivedInstance: instance });
+    assert.equal(f.feature.dimensions.startInstanceAngleDimension(instance), true);
+    assert.equal(f.state.pending.target.intervalCenter, state.anchor); assert.equal(state.calls, 2);
+    state.failure = new Error('live instance read failed');
+    assert.throws(() => f.feature.dimensions.startInstanceAngleDimension(instance), error => error === state.failure);
+  }
+});
+
+test('explicit query overrides including null skip shared owner getters and fixed-stage overrides remain explicit', () => {
+  for (const value of [() => null, null]) {
+    const probe = {}, failure = new Error('must not consult owner');
+    editingOwnersFixture(true, probe, (w, input) => w.ConstraintEditing.createForWorkspace({ ...input,
+      findLineFixedConstraint: value, geometryInstanceBundle: value,
+      documentWorkspace: { sketches: input.sketches }, fixedState: { get findLineFixedConstraint() { throw failure; } },
+      readServices: { get reads() { throw failure; } } }));
+    assert.equal(probe.ports.query.findLineFixedConstraint, value); assert.equal(probe.ports.dimensions.geometryInstanceBundle, value);
+  }
+  const f = workspaceFixedFixture(true, 'shared');
+  try {
+    const alternate = { findArcEndpointFixedConstraint: () => null };
+    f.feature.createFixedForWorkspace({ ...f.owners, fixedState: alternate });
+    assert.equal(f.ports.operand.findArcEndpointFixedConstraint, alternate.findArcEndpointFixedConstraint);
+    const previous = f.ports.operand;
+    assert.throws(() => f.feature.createFixedForWorkspace({ ...f.owners, fixedState: null }), error => error.name === 'TypeError');
+    assert.equal(f.ports.operand, previous);
+  } finally { f.restore(); }
+});
+
+test('failed shared query selection stops before feature construction with the original exception', () => {
+  for (const name of ['bundle', 'fixed']) {
+    const probe = {}, failure = new Error(name);
+    assert.throws(() => editingOwnersFixture(true, probe, (w, input) => w.ConstraintEditing.createForWorkspace({ ...input,
+      findLineFixedConstraint: undefined, geometryInstanceBundle: undefined, documentWorkspace: { sketches: input.sketches },
+      fixedState: { get findLineFixedConstraint() { if (name === 'fixed') throw failure; return () => null; } },
+      readServices: { get reads() { if (name === 'bundle') throw failure; return {}; } } })), error => error === failure);
+    assert.deepEqual(probe.order, []);
+  }
+});
 
 test('Workspace fixed assembly keeps cold separate stages and actual live Workspace, model, Selection and checkpoint owners', () => {
   for (const assembled of [false, true]) {

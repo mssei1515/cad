@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-10のBlock読取context単位ではapp.jsは1,392行、非空白946行。AST監査ではroot300文・489束縛、構築・接続498非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-10の拘束query共有単位ではapp.jsは1,391行、非空白945行。AST監査ではroot300文・488束縛、構築・接続497非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,22 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-10）
+
+### 最新：拘束編集の共有query owner接続（2026-11-10）
+
+ConstraintEditing.createForWorkspaceは、geometryInstanceBundleとfindLineFixedConstraintがundefinedのときだけ、保持するreadServices.readsの実readerと共有fixedStateの実queryを選ぶ。明示callbackとnullをそのまま保持し、その場合はfallback ownerを照会しない。後段createFixedForWorkspaceもfixedStateがundefinedのときだけ親の同じownerを選び、明示された別ownerとnullを維持する。固定照会は既存ownerが保持するbound editing scope、Instance readerは既存GeometryReadModelのWorkspaceと投影cacheを用い、scopeを取り違えたり値をsnapshot化したりしない。
+
+二つの既定照会と固定操作へのowner共有以外のconstructor・guard・Selection・command・解析・履歴の本体、相対生成・公開・bind順は不変。新しいstate・cache・listener・namespaceや汎用contextは追加しない。通常UI・保存形式v26を維持する。型判定とenabledの扱いは既存ConstraintReferences、Instance解決は既存read servicesが所有し、ConstraintEditing内で同じ照会を再実装しない。
+
+rootのConstraintEditing構築入力は20→19、後段の固定操作構築入力は6→5となり、未使用のgeometryInstanceBundle別名を除いた。app.jsは1,392→1,391行（1行減）、非空白946→945行、root300文・489→488束縛。構築・接続497非空白行、別名・設定121行、委譲52行、条件付きtest hooks192行。今回の主成果は共有query ownerへの接続と構築入力・root別名の減少であり、小さな行数差を分離済み責務の件数へ換算しない。数百行への全体目標は未完了。
+
+追加単体四件で、実LineFixedConstraintのObject照合／enabled変更とlive scope、operand／Selection間の同じquery、実Instance角度寸法開始での現在anchor・同じreaderと裸receiver／一引数・例外、明示callback／nullによるfallback無照会と後段owner override、照会取得失敗時の同じ例外と後続constructor停止を確認する。ASTでrootの対象接続と未使用別名だけの変更、二つの既定値と後段引数default以外の既存ConstraintEditing全体、低水準query／command／index／E2E不変、新しい未使用／未束縛参照なしを照合する。
+
+関連単体85件、構文635file・全単体2,408件・関連E2E398件が成功（31file、6.4m、exit 0）。705製品／test／検証入力と開始HEAD不変、選択31fileのtest list398件一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-query-owner-sharing-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存のUI期待値・性能閾値・timeoutは変更していない。全E2Eはこの単位で再実行しておらず、9f97a7fの全589件成功と区別する。
+
+再点検では、取消・operand選択・寸法開始・control更新のcallbackが後段command生成より前に複数featureへ渡されることを確認した。これら五つの委譲だけを準備containerへ移す案は可変参照と公開境界が一つ増えるため、この単位では採用しない。rootの既存hoisted入口を残し、次も実owner／生成phaseの単位で依存を調べる。
+
+基準develop 469104f、作業branch codex/constraint-query-owner-sharing、開始時週枠残量21%。直前469104fの関連398件成功と、全体E2Eの最新基準9f97a7f（589件成功、21.7m）を区別する。mainは停止条件到達時の最新全体検証後に最後に反映する。
 
 ### 最新：Block読取contextの準備・再接続組立て（2026-11-10）
 
