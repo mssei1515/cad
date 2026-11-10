@@ -119,3 +119,56 @@ test('mutation construction and invalidation failures preserve original errors a
     assert.deepEqual(traces[1], traces[0]);
   }
 });
+
+test('authoring checkpoint stays cold, rejects use before completed construction and preserves the initial failure boundary', () => {
+  const f = fixture(), port = f.prepared.geometryCheckpoint;
+  assert.equal(Object.isFrozen(port), true); assert.deepEqual(f.events, ['transient']);
+  for (const [operation, binding] of [['capture','snapshotGeometryMutationState'],['restore','restoreGeometryMutationState']]) {
+    assert.throws(() => port[operation](), error => error.name === 'ReferenceError' && error.message === `Cannot access '${binding}' before initialization`);
+  }
+  const marker = new Error('checkpoint failed'), original = f.w.EditingCheckpoint;
+  f.w.EditingCheckpoint = { create() { throw marker; } };
+  try { assert.throws(() => f.prepared.createCheckpoint(), error => error === marker); }
+  finally { f.w.EditingCheckpoint = original; }
+  assert.throws(port.capture, error => error.name === 'ReferenceError'); assert.deepEqual(f.events, ['transient']);
+  const checkpoint = f.prepared.createCheckpoint(); assert.equal(checkpoint, f.results.checkpoint);
+  assert.equal(port, f.prepared.geometryCheckpoint); f.state.ready = true;
+  const snapshot = port.capture(); assert.equal(snapshot.points[0], f.state.scope.points[0]);
+});
+
+test('authoring checkpoint matches captured raw methods across live scope, geometry rollback, IDs and invalidation failures', () => {
+  function run(owned, fail = null) {
+    const f = fixture(), port = owned ? f.prepared.geometryCheckpoint : null, checkpoint = f.prepared.createCheckpoint();
+    const { captureGeometry, restoreGeometry } = checkpoint;
+    const operations = port || { capture: (...args) => captureGeometry(...args), restore: (...args) => restoreGeometry(...args) };
+    f.state.ready = true; const old = f.state.scope; f.state.scope = f.scope(); const original = f.state.scope.points[0];
+    f.prepared.transient.beginTransientLineStartRollback(); const snapshot = operations.capture();
+    assert.equal(snapshot.points[0], original); original.x = 85;
+    f.state.scope.points.push(new f.w.GeometrySolver.Point(f.ids.allocate('point'), 20, 30));
+    f.events.length = 0; f.state.fail = fail; f.state.error = new Error('rollback failed');
+    if (fail) assert.throws(() => operations.restore(snapshot), error => error === f.state.error);
+    else assert.equal(operations.restore(snapshot), undefined);
+    assert.equal(f.state.scope.points[0], original); assert.equal(original.x, 1); assert.equal(f.state.scope.points.length, 1);
+    assert.equal(old.points[0].x, 1); assert.equal(f.ids.peek('point'), 2); assert.equal(f.prepared.transient.hasLineStart, true);
+    assert.equal(f.events.includes('snapshot'), false); assert.equal(f.events.includes('discard'), false);
+    return { events: f.events, point: { x: original.x, y: original.y }, nextId: f.ids.peek('point') };
+  }
+  for (const failure of [null,'projection','analysis']) assert.deepEqual(run(true, failure), run(false, failure));
+});
+
+test('authoring checkpoint forwards bare method calls, all arguments, return values and exceptions and retains the last successful component', () => {
+  const f = fixture(), port = f.prepared.geometryCheckpoint, calls = [], result = {}, marker = new Error('failure'); let generation = 0, failBuild = false, failCapture = false;
+  f.w.EditingCheckpoint = { create() {
+    if (failBuild) throw marker; const id = ++generation;
+    return Object.freeze({
+      captureGeometry: function (...args) { assert.equal(this, undefined); calls.push(['capture',id,args]); if (failCapture) throw marker; return result; },
+      restoreGeometry: function (...args) { assert.equal(this, undefined); calls.push(['restore',id,args]); return result; },
+    });
+  } };
+  const first = f.prepared.createCheckpoint(), capture = port.capture, restore = port.restore;
+  assert.deepEqual(calls, []); assert.equal(capture(undefined, 2), result); assert.equal(restore(result, null, 3), result);
+  failBuild = true; assert.throws(() => f.prepared.createCheckpoint(), error => error === marker); assert.equal(capture(), result);
+  failBuild = false; const second = f.prepared.createCheckpoint(); assert.notEqual(second, first); assert.equal(capture('next'), result);
+  failCapture = true; assert.throws(capture, error => error === marker);
+  assert.deepEqual(calls, [['capture',1,[undefined,2]],['restore',1,[result,null,3]],['capture',1,[]],['capture',2,['next']],['capture',2,[]]]);
+});

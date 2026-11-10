@@ -9,13 +9,30 @@
       isHistoryRestoring: () => controller.restoring, updateHistoryButtons,
       invalidateAnalysis: () => { analysis.invalidate(); },
     });
+    let checkpoint = null;
+    function requireCheckpoint(binding) {
+      if (!checkpoint) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return checkpoint;
+    }
+    const geometryCheckpoint = Object.freeze({
+      capture(...args) {
+        const { captureGeometry } = requireCheckpoint("snapshotGeometryMutationState");
+        return captureGeometry(...args);
+      },
+      restore(...args) {
+        const { restoreGeometry } = requireCheckpoint("restoreGeometryMutationState");
+        return restoreGeometry(...args);
+      },
+    });
     function createCheckpoint() {
-      return window.EditingCheckpoint.create({
+      const completed = window.EditingCheckpoint.create({
         currentScope: workspace.current, ids: geometryIds, invalidateProjection: readServices.projections.invalidateBlockProjectionCache,
         invalidateAnalysis: () => { analysis.invalidate(); },
       });
+      checkpoint = completed;
+      return completed;
     }
-    return Object.freeze({ transient, createCheckpoint });
+    return Object.freeze({ transient, createCheckpoint, geometryCheckpoint });
   }
   window.GeometryMutationFeature = Object.freeze({ prepareForWorkspace });
 })();

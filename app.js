@@ -260,7 +260,7 @@
     fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { canvasPoint } = viewport;
-  const { transient: transientAuthoring, createCheckpoint: createEditingCheckpoint } = window.GeometryMutationFeature.prepareForWorkspace({
+  const { transient: transientAuthoring, createCheckpoint: createEditingCheckpoint, geometryCheckpoint: authoringCheckpoint } = window.GeometryMutationFeature.prepareForWorkspace({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction,
     history: historyFeature, analysis: constraintAnalysis, updateHistoryButtons,
   });
@@ -340,7 +340,7 @@
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions, presentation, viewport,
     annotationAnchors: annotationFeature.drawingAnchors,
     transientAuthoring, pushModelConstraint, addConstraintIfMissing,
-    checkpoint: { capture: (...args) => snapshotGeometryMutationState(...args), restore: (...args) => restoreGeometryMutationState(...args) },
+    checkpoint: authoringCheckpoint,
     cancelConstraintTargetCommand, resetEditing: () => splineEditing.reset(),
     resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar, projection: sketchProjectionCommand, clearSelection,
     solveAndRefresh, recordHistory,
@@ -359,7 +359,7 @@
   const { submit: submitOffsetValue } = offsetCommand;
   function computeTrimPreview(pointer) { return trimFeature.computePreview(pointer); }
   const editingCheckpoint = createEditingCheckpoint();
-  const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
+  const { captureValues: snapshotModelState, restoreValues: restoreModelState } = editingCheckpoint;
   const { dimensions: { serialize: serializeDimension }, normalizeGeometryInstance: normalizeEditingGeometryInstance,
     ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
