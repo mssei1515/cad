@@ -120,7 +120,7 @@
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, interaction: canvasInteraction, editingScope: editingScopeBinding, presentation,
   });
 
-  const { targets: annotationTargets, createConstrainedDrag: createConstrainedAnnotationDrag, createFeature: createAnnotationFeature } = window.AnnotationFeature.prepareForWorkspace({
+  const { targets: annotationTargets, createConstrainedDragForFeature: createConstrainedAnnotationDrag, createFeature: createAnnotationFeature } = window.AnnotationFeature.prepareForWorkspace({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation, viewportScale: () => viewport.scale,
   });
   const { hitAnnotationTarget, annotationLeaderTargetFromItem, annotationLeaderAnchor } = annotationTargets;
@@ -245,9 +245,9 @@
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const constrainedAnnotationDrag = createConstrainedAnnotationDrag({
-    placementAnchor: annotationPlacementAnchor,
+    readFeature: () => annotationFeature,
     buildPlan: (...args) => buildDragSession(...args), beginGeometryDrag: (event, plan) => geometryDrag.begin(event, plan),
-    leaderDisplay: annotation => annotationLeaderDisplayGeometry(annotation), invalidateAnalysis: () => constraintAnalysis.invalidate(),
+    invalidateAnalysis: () => constraintAnalysis.invalidate(),
   });
   const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving } = window.SketchSolvingFeature.createContextForWorkspace({
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, referenceState: referenceConstraintState,
@@ -311,8 +311,7 @@
   const { layer: annotationLayer, dimensions: annotationDimensions, command: annotationCommand,
     dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { canvasContextAnnotationHit } = annotationFeature.spatial;
-  const { annotationLeaderDisplayGeometry, drawAnnotationLeader } = annotationFeature.renderer;
-  function annotationPlacementAnchor(...args) { return annotationFeature.placementAnchor(...args); }
+  const { drawAnnotationLeader } = annotationFeature.renderer;
   const referenceImageFeature = window.ReferenceImageFeature.createForWorkspace({
     canvas, ctx, viewport, document, window, withCanvasState, createImage: () => new Image(),
     documentWorkspace, editingScope: editingScopeBinding, interaction: canvasInteraction, presentation, appearance: geometryAppearance,
