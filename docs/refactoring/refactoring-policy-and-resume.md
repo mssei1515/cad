@@ -98,6 +98,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-10）
 
+### 最新：Hatch authoringの共有owner接続（2026-11-10）
+
+BasicDrawingTools.createGeometry().createAuthoringForEditingが返すcreateHatchForEditingは、同じread servicesのHatch照会、interaction.lifecycle.readMode、sessions.pointer.readLastPointerとDocumentWorkspace.documentIdsを既存createHatchへ接続する。rootは後段のupdateStatusUI／hatchRegionErrorTextだけを渡す。raw createHatchと実Hatch commandを維持し、新しいcommand／session・採番・preview／Selection・cacheを作らない。
+
+Hatchの生成位置はSketch Move input bind後の従来位置を保つ。mode／pointer／scopeと採番値は操作時に読み、親authoringと同じPreview・Selection・Sketchを使う。Geometry IDsとDocument IDsを混同せず、scope交換後も同じDocument counterを使う。ガード拒否、照会・採番・生成例外、callback receiver、返値と履歴のまとまりは従来どおりである。
+
+app.jsは1,471→1,468行（3行減）。rootの生成引数は六つから二つへ減った。AST比較で対象Hatch生成以外のroot全体と相対順、所有側の追加factory以外の既存本体・API、raw Hatch command／保存／index／全E2E不変、新しい未束縛参照なしを確認した。関連単体51件、構文632file・全単体2,342件・全E2E589件が成功（50file、22.1m、exit 0）。三つの追加単体でraw／owned生成の実commandの比較、mode／pointer・scope交換と同じPreview／Selection、Document採番・Geometry counter不変、ガードと照会／採番・生成失敗の例外境界と実返値identityを確認した。702製品／test／検証入力と開始HEAD不変、全50fileのtest list589件と無filter一覧の一致、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-hatch-authoring-ownership-{focused,check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存テスト期待値・性能閾値・timeoutは変更していない。全体目標は未完了。
+
+基準develop a2a769f、作業branch codex/hatch-authoring-ownership、開始時週枠残量34%。Sketch navigationとPNG exportの参照所有を含む最新状態で全E2Eを実行する。全体目標は未完了。mainは停止条件到達時の最新全体検証後に最後に反映する。
+
+次の優先作業は構築依存の再監査とする。現在app.jsは非空白1,019行、root325文／536束縛で、構築・接続118文／515行、test hooks202行、delegate60文／70行を占める（TEMP cad-hatch-authoring-ownership-audit.json）。後段可変参照は解消済みであり、小さい接続を追加分離するだけでは数百行へ収束すると見積もらない。既存featureが所有すべき複数componentの生成・接続を対象に、入力／出力、共有owner、生成・bind・start順と例外境界を調べて候補を比較する。起動時のDocument reset→Presentation初期化→履歴→file checkpoint／startも調査候補だが、FileFeatureへ移すことを先に決定しない。実コードではPresentation初期化が言語／テーマ・version読取り・Canvas resize／surface.startを含み、FileFeature.startはbeforeunloadとstartup document読込を始めるため、一括移管はFileFeatureの責務を広げる。複数featureの起動順としてrootに残す案も比較する。巨大context・単なるcall列の移動・行数目的の圧縮は採用しない。
+
 ### 最新：PNG exportの段階的な参照所有（2026-11-10）
 
 PngExport.prepareが実export featureの生成・成功後の保持とreadCommand／cancel／startを所有する。CanvasDisplayのcreatePngExportは既定では従来のPngExportを使い、明示された実export componentにも同じ依存を渡せる。rootは早期のread／cancelを同じownerへ接続し、後段で実commandをconstとして受け取る。外部setterや任意factoryの登録は設けず、mode session・描画buffer・保存transactionを複製しない。
