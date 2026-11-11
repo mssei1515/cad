@@ -780,8 +780,10 @@ test('Toolbar Workspace assembly keeps editing preparation, close publication, s
  }assert.equal(snapshots[1],snapshots[0]);
 });
 test('Toolbar Workspace dispatch preserves direct DOM receivers and events, typed instance calls and editing guards',()=>{
- const snapshots=[];for(const composed of [false,true]){
-  const f=toolbarWorkspaceFixture(composed),controls=f.prepare();controls.start();const binding=controls.createDrawingBinding();binding.bind();
+ const snapshots=[];for(const composed of [false,true,'startup']){
+  const f=toolbarWorkspaceFixture(composed),controls=f.prepare();let binding;
+  if(composed==='startup'){assert.equal(controls.startWithDrawingTools(),undefined);binding=f.probe.drawingBinding;}
+  else{controls.start();binding=controls.createDrawingBinding();binding.bind();}
   for(const id of ['toolCenterline','toolCircleCenterCross','toolSketchProjection','toolCreateBlock','toolSpline','toolHatch','toolFillet','toolOffset','toolConstructionLine'])assert.equal(f.nodes.get(id).dispatch(),f.result);
   for(const id of ['toolMirror','toolPattern','toolCircularPattern'])assert.equal(f.nodes.get(id).dispatch(),f.result);
   for(const id of ['undoBtn','redoBtn','selectionVisibilityBtn'])assert.equal(f.nodes.get(id).dispatch(),f.result);
@@ -792,20 +794,36 @@ test('Toolbar Workspace dispatch preserves direct DOM receivers and events, type
   f.state.failCommand='hatch';assert.throws(()=>f.nodes.get('toolHatch').dispatch(),error=>error===f.marker);
   const count=f.calls.length;binding.dispose();f.nodes.get('toolHatch').dispatch();assert.equal(f.calls.length,count);assert.equal(f.nodes.get('toolHatch').count(),0);
   snapshots.push(JSON.stringify(f.calls));
- }assert.equal(snapshots[1],snapshots[0]);
+ }assert.equal(snapshots[1],snapshots[0]);assert.equal(snapshots[2],snapshots[0]);
 });
 test('Toolbar Workspace assembly preserves construction and startup failures without constructing or binding later controls',()=>{
  for(const stage of ['editing create','editing bind','canvas','menu create','menu start','parameters','blocks','drawing create','drawing bind','drawing-partial']){
-  const snapshots=[];for(const composed of [false,true]){
+  const snapshots=[];for(const composed of [false,true,'startup']){
    const f=toolbarWorkspaceFixture(composed,stage);let controls,binding;
-   assert.throws(()=>{controls=f.prepare();controls.start();binding=controls.createDrawingBinding();binding.bind();},error=>error===f.marker);
+   assert.throws(()=>{controls=f.prepare();if(composed==='startup')controls.startWithDrawingTools();else{controls.start();binding=controls.createDrawingBinding();binding.bind();}},error=>error===f.marker);
    if(['editing create','editing bind','canvas','menu create'].includes(stage))assert.equal(controls,undefined);
    if(!['drawing create','drawing bind','drawing-partial'].includes(stage))assert.equal(f.probe.drawing,undefined);
    if(stage==='drawing-partial'){assert.equal(f.nodes.get('toolSelect').count(),1);assert.equal(f.nodes.get('toolPoint').count(),1);assert.equal(f.nodes.get('toolLine').count(),0);}
    snapshots.push(JSON.stringify({events:f.events,counts:f.counts,listeners:f.listeners,nodes:[...f.nodes].map(([id,node])=>[id,node.count()])}));
-  }assert.equal(snapshots[1],snapshots[0]);
+  }assert.equal(snapshots[1],snapshots[0]);assert.equal(snapshots[2],snapshots[0]);
  }
 });
+test('combined Toolbar startup preserves repeated native start and fresh drawing binding behavior',()=>{
+ const snapshots=[];
+ for(const combined of [false,true]){
+  const f=toolbarWorkspaceFixture(true),controls=f.prepare();
+  assert.equal(f.probe.drawing,undefined);assert.equal(controls.close,f.actualMenus.close);
+  for(let i=0;i<2;i++){
+   if(combined)assert.equal(controls.startWithDrawingTools(),undefined);
+   else{controls.start();const drawingToolBinding=controls.createDrawingBinding();drawingToolBinding.bind();}
+  }
+  assert.equal(f.counts.settings,2);assert.equal(f.events.filter(e=>e==='drawing create').length,2);
+  assert.equal(f.nodes.get('toolHatch').count(),2);assert.equal(f.nodes.get('undoBtn').count(),1);
+  snapshots.push(JSON.stringify({events:f.events,counts:f.counts,listeners:f.listeners,nodes:[...f.nodes].map(([id,node])=>[id,node.count()])}));
+ }
+ assert.equal(snapshots[1],snapshots[0]);
+});
+
 test('Toolbar Workspace startup retains the existing repeat behavior and never recreates or binds drawing controls implicitly',()=>{
  for(const composed of [false,true]){
   const f=toolbarWorkspaceFixture(composed),controls=f.prepare();controls.start();controls.start();assert.equal(f.probe.drawing,undefined);assert.equal(f.counts.settings,2);

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のBlock更新公開単位ではapp.jsは1,228行、非空白785行。AST監査ではroot224文・376束縛、構築441非空白行とbind41行、別名・設定89行、委譲5行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のToolbar連続開始単位ではapp.jsは1,226行、非空白783行。AST監査ではroot222文・375束縛、構築440非空白行とbind40行、別名・設定89行、委譲5行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Block表示更新の完成参照とvoidコールバックを既存ownerへ集約（2026-11-11）
+### 最新：Toolbar Workspaceと作図接続の連続開始を既存Presentationへ集約（2026-11-11）
+
+開始基準developはdefa78348f81cba9a91f0ac6eec348032dccb766、作業branchはcodex/workspace-drawing-startup（develop統合・Push後に削除）。開始週枠残量71%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+PresentationFeature.createToolbarのprepareWorkspaceが返すstartWithDrawingToolsは、同じWorkspace recordのstart、createDrawingBinding、返された実drawingToolBindingのbindをこの順にmember・無引数で呼ぶ。app.jsはcloseAppMenusを従来の位置で公開した後にこの入口を呼び、作図bindingの生成・保持・bindを直接持たない。内部で生成するbindingは元のToolbarView実体で、直後のDocument file controls接続も以前と同じ位置に残す。
+
+旧start／createDrawingBindingはそのまま残し、旧startに暗黙の作図接続を追加しない。新入口はnative ownerの開始・生成・bindをそのまま調整し、独自のstarted flag・rollback・再試行を持たない。各段階の元例外、後続を実行しない境界と部分listener登録、手動の同じ三段階を繰り返したときの既存挙動、buttonのDOM receiver／event・typed instance引数・guardを維持する。完了したWorkspace recordをself参照して同じmember receiverを保ち、同じ実bindingへ接続する。UI・履歴・保存形式v26、既存Presentation／Toolbar／Menu／Flyoutのstate所有とapplication／ui配置を変えない。
+
+app.jsは1,228→1,226行（2行減）、非空白785→783行、root224→222文・376→375束縛、構文依存辺1,057→1,055。構築115→114文／441→440行、bind14→13文／41→40行。委譲5行・test hooks152行は不変。rootのdrawingToolBindingはbind一箇所にしか使われておらず、既存owner内の開始処理へ移した。全体の200〜500行目標は未完了。
+
+関連単体41件が成功。実Toolbar／Menu／Flyoutを使う既存比較へ新入口を追加し、全作図・編集buttonのreceiver／event・返値・guardと例外、10段階の生成／開始失敗・部分listener登録を比較した。繰返し開始でも旧手動三段階と同じnative start回数・新binding生成・listener数を照合し、旧startだけでは作図接続を生成しないことも維持した。browser比較ではWorkspace完了→開始→作図生成→実体完了→bind→File controlsという順、三member receiver・無引数、closeAppMenusの公開前ReferenceErrorと開始時公開済み、旧API／native optionの関数名・arity、実bindingとWorkspaceの凍結、公開204項目が一致。ja/light・en/dark・test起動も成功。宣言した開始集約を逆変換すると元のPresentation sourceと一致し、三つのnative UI actor sourceは不変、新たな未束縛参照なし。構文639file・全単体2,555件と関連E2E201件（11file、2.7m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+次は残る機能生成・接続とbind／startの境界を、状態owner・依存と公開時点から評価する。今回のWorkspace開始＋作図接続や既存Block／Document resetの公開を再実施しない。別ownerの入力接続をまとめるだけの汎用bootstrapや、新たなstarted flag・巨大contextを作らない。root変数の全参照を確認し、ただの薄いwrapperの量産やblank削除で数百行へ到達したことにせず、全体目標を維持する。
+
+### 前回：Block表示更新の完成参照とvoidコールバックを既存ownerへ集約（2026-11-11）
 
 開始基準developは1181e18ed11e022d968ba6c80202515860d124b8、作業branchはcodex/block-view-update-publication（develop統合・Push後に削除）。開始週枠残量74%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

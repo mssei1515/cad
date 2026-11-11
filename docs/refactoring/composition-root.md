@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Toolbar Workspaceと作図接続の連続開始を既存Presentationへ集約（2026-11-11）
+
+PresentationFeature.createToolbarのprepareWorkspaceが返すstartWithDrawingToolsは、同じWorkspace recordのstart、createDrawingBinding、返された実drawingToolBindingのbindをこの順にmember・無引数で呼ぶ。app.jsはcloseAppMenusを従来の位置で公開した後にこの入口を呼び、作図bindingの生成・保持・bindを直接持たない。内部で生成するbindingは元のToolbarView実体で、直後のDocument file controls接続も以前と同じ位置に残す。
+
+旧start／createDrawingBindingはそのまま残し、旧startに暗黙の作図接続を追加しない。新入口はnative ownerの開始・生成・bindをそのまま調整し、独自のstarted flag・rollback・再試行を持たない。各段階の元例外、後続を実行しない境界と部分listener登録、手動の同じ三段階を繰り返したときの既存挙動、buttonのDOM receiver／event・typed instance引数・guardを維持する。完了したWorkspace recordをself参照して同じmember receiverを保ち、同じ実bindingへ接続する。UI・履歴・保存形式v26、既存Presentation／Toolbar／Menu／Flyoutのstate所有とapplication／ui配置を変えない。
+
+app.jsは1,228→1,226行（2行減）、非空白785→783行、root224→222文・376→375束縛、構文依存辺1,057→1,055。構築115→114文／441→440行、bind14→13文／41→40行。委譲5行・test hooks152行は不変。rootのdrawingToolBindingはbind一箇所にしか使われておらず、既存owner内の開始処理へ移した。全体の200〜500行目標は未完了。
+
+関連単体41件が成功。実Toolbar／Menu／Flyoutを使う既存比較へ新入口を追加し、全作図・編集buttonのreceiver／event・返値・guardと例外、10段階の生成／開始失敗・部分listener登録を比較した。繰返し開始でも旧手動三段階と同じnative start回数・新binding生成・listener数を照合し、旧startだけでは作図接続を生成しないことも維持した。browser比較ではWorkspace完了→開始→作図生成→実体完了→bind→File controlsという順、三member receiver・無引数、closeAppMenusの公開前ReferenceErrorと開始時公開済み、旧API／native optionの関数名・arity、実bindingとWorkspaceの凍結、公開204項目が一致。ja/light・en/dark・test起動も成功。宣言した開始集約を逆変換すると元のPresentation sourceと一致し、三つのnative UI actor sourceは不変、新たな未束縛参照なし。構文639file・全単体2,555件と関連E2E201件（11file、2.7m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
 ## Block表示更新の完成参照とvoidコールバックを既存ownerへ集約（2026-11-11）
 
 BlockEditingFeature.prepareCommandsWithViewは安定したupdateBlockUIと、実Block featureを受け取るcreateForFeatureを返す。後者は既存feature.createCommandsWithViewを同じmember receiver・一引数で呼び、完成した実command recordのupdateView関数を一度選んで内部完了recordへ保持する。Block feature／definition／completion／command record／Viewは包み直さず、元の実体をそのまま返し共有する。app.jsは後段updateBlockView bindingとvoid委譲を持たず、Presentation／Block configuration／Instance editingの三箇所へ同じ安定関数を渡す。
