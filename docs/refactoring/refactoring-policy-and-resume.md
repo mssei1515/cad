@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のProperties component所有単位ではapp.jsは1,257行、非空白813行。AST監査ではroot240文・402束縛、構築・接続467非空白行、別名・設定98行、委譲7行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のContext Menu候補表示接続単位ではapp.jsは1,254行、非空白810行。AST監査ではroot238文・399束縛、構築・接続466非空白行、別名・設定96行、委譲7行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Propertiesの完成componentと三つの遅延入口を既存ownerへ集約（2026-11-11）
+### 最新：Context Menu候補表示の七関数の接続を既存ownerへ集約（2026-11-11）
+
+開始基準developは6002325e7d9d8246d7ee87759f9c3c9a629176fe、作業branchはcodex/context-candidate-presentation（develop統合・Push後に削除）。開始時の週枠残量85%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを確認し、今回のContext候補表示、Properties三port、Pending取消、Selection Clipboard、Keyboard等の完了済み分離を再実施しない。rootの七委譲はhitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／updateBlockUI。次は実生成・完成境界と必要なfield選択をowner単位で評価する。static formatterの七関数をrootで再配線する今回の責務は既存Context Menuへ統合済みとし、UIラベル・icon本体や候補queryを再抽出しない。
+
+CanvasContextInteraction.createMenuForWorkspaceが返すcreateSceneForPresentation（src/application/canvas_context_interaction.js）は、実Toolbar iconsとAuthoringFeedback record、保持済みPresentationから候補表示の七関数を選び、既存createSceneForEditingへ接続する。数値は既存NumberDisplay.formatDisplayNumber、Hatch外観は既存HatchData.hatchAppearanceForDisplayを使う。app.jsは実icons／feedbackを渡し、formatter選択と候補表示recordの対応を直接持たない。従来のcreateSceneForEditingと限定capabilityの生APIは維持する。
+
+選ぶtoolbarSvgMarkup／formatDisplayNumber／constraintToolbarIcon／localizedConstraintName／geometryInstanceTypeLabel／hatchPatternTypeLabel／hatchAppearanceForDisplayのkey順と実function参照を維持し、包み直したり生成時に実行したりしない。実Toolbar iconsの二field、実AuthoringFeedbackの二field、Presentation.constraintFeedback.localizedConstraintName、NumberDisplay／HatchDataの関数は凍結recordのown readonly data propertyである。classic loaderで先に読み込む同じ静的namespaceを使い、遅いfield選択でも同じ関数になる。localeや候補値は各関数を表示時に呼んで評価し、表示結果のsnapshotを持たない。
+
+rootは同じ実Toolbar iconsを保持し、Sketch Treeへは必要な元の関数を選択して渡す。Query→候補formatter→後段Interactionの生成と別々の成功時公開、native controllerのstart／dispose、hoverと選択、候補ranking、編集guard・取消・元例外と途中状態を維持する。UI record読取りやQuery／formatter生成の失敗時には前のmenu presentationを残す。必要fieldだけを読み、余分なfeedback fieldを列挙・評価しない。新しいmodel・scope・Selection・menu state・listenerやglobal contextは作らず、既存application／UI配置、保存形式v26とUI挙動を保つ。
+
+app.jsは1,257→1,254行（3行減）、非空白813→810行、root240→238文・402→399束縛、構文依存辺1,081→1,078。別名・設定98→96行、構築116文／467→466非空白行。委譲7行・test hooks158行は不変。rootの数値／Hatch formatter二別名とアイコン二別名を、既存表示ownerの選択と一つの実recordへ整理した。200〜500行の全体目標は未完了。
+
+関連単体62件・全単体2,531件・構文639fileが成功。追加二単体は、旧owned経路と七関数参照・実formatterの出力・数値とlive言語の一致、unused fieldの非読取り、UI／Query／formatter失敗後の表示・選択とlistener終了を検証する。既存の構築順／候補選択・hover・guard／例外比較にも新経路を加えた。単一候補をmenu open時に選ぶ既存挙動を基準とし、失敗後もその選択を保つ。browserの旧root／旧module比較では七つのreadonly field・全formatter関数参照、実icons／feedback共有、Sketch Treeの同じicon関数、Query→formatterの生成順、ja／enの候補表示と公開204項目のkey／descriptor／型／name／arityが一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに加え、製品へ残さない。
+
+関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+### Propertiesの完成componentと三つの遅延入口を既存ownerへ集約（2026-11-11）
 
 開始基準developは44a2b7e07960a4296cf7d51494b5bd165d94f4a2、作業branchはcodex/properties-preparation-owner（develop統合・Push後に削除）。開始時の週枠残量85%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを確認し、Properties三port、Pending取消、Selection Clipboard、Keyboard、Annotation等の完了済み分離を再実施しない。rootに残る七委譲はhitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／updateBlockUI。次は既存ownerが実生成・完成境界を持つcohortを評価する。Propertiesは三つの関連入口を同じ完成境界で扱う準備であり、各callback一つのためにprepareやwrapperを一律追加する方針ではない。Queryの結果や巨大なアプリcontextを保持しない。
 

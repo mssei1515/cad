@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Context Menu候補表示の七関数の接続を既存ownerへ集約（2026-11-11）
+
+CanvasContextInteraction.createMenuForWorkspaceが返すcreateSceneForPresentation（src/application/canvas_context_interaction.js）は、実Toolbar iconsとAuthoringFeedback record、保持済みPresentationから候補表示の七関数を選び、既存createSceneForEditingへ接続する。数値は既存NumberDisplay.formatDisplayNumber、Hatch外観は既存HatchData.hatchAppearanceForDisplayを使う。app.jsは実icons／feedbackを渡し、formatter選択と候補表示recordの対応を直接持たない。従来のcreateSceneForEditingと限定capabilityの生APIは維持する。
+
+選ぶtoolbarSvgMarkup／formatDisplayNumber／constraintToolbarIcon／localizedConstraintName／geometryInstanceTypeLabel／hatchPatternTypeLabel／hatchAppearanceForDisplayのkey順と実function参照を維持し、包み直したり生成時に実行したりしない。実Toolbar iconsの二field、実AuthoringFeedbackの二field、Presentation.constraintFeedback.localizedConstraintName、NumberDisplay／HatchDataの関数は凍結recordのown readonly data propertyである。classic loaderで先に読み込む同じ静的namespaceを使い、遅いfield選択でも同じ関数になる。localeや候補値は各関数を表示時に呼んで評価し、表示結果のsnapshotを持たない。
+
+rootは同じ実Toolbar iconsを保持し、Sketch Treeへは必要な元の関数を選択して渡す。Query→候補formatter→後段Interactionの生成と別々の成功時公開、native controllerのstart／dispose、hoverと選択、候補ranking、編集guard・取消・元例外と途中状態を維持する。UI record読取りやQuery／formatter生成の失敗時には前のmenu presentationを残す。必要fieldだけを読み、余分なfeedback fieldを列挙・評価しない。新しいmodel・scope・Selection・menu state・listenerやglobal contextは作らず、既存application／UI配置、保存形式v26とUI挙動を保つ。
+
+app.jsは1,257→1,254行（3行減）、非空白813→810行、root240→238文・402→399束縛、構文依存辺1,081→1,078。別名・設定98→96行、構築116文／467→466非空白行。委譲7行・test hooks158行は不変。rootの数値／Hatch formatter二別名とアイコン二別名を、既存表示ownerの選択と一つの実recordへ整理した。200〜500行の全体目標は未完了。
+
+関連単体62件・全単体2,531件・構文639fileが成功。追加二単体は、旧owned経路と七関数参照・実formatterの出力・数値とlive言語の一致、unused fieldの非読取り、UI／Query／formatter失敗後の表示・選択とlistener終了を検証する。既存の構築順／候補選択・hover・guard／例外比較にも新経路を加えた。単一候補をmenu open時に選ぶ既存挙動を基準とし、失敗後もその選択を保つ。browserの旧root／旧module比較では七つのreadonly field・全formatter関数参照、実icons／feedback共有、Sketch Treeの同じicon関数、Query→formatterの生成順、ja／enの候補表示と公開204項目のkey／descriptor／型／name／arityが一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに加え、製品へ残さない。
+
+関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
 ## Propertiesの完成componentと三つの遅延入口を既存ownerへ集約（2026-11-11）
 
 PropertiesDisplay.prepare（src/application/properties_display.js）は、Properties表示・外観編集参照・選択可視性操作を同じ完成境界で公開する。早期prepareはclosureと凍結portだけを作り、createForWorkspaceは従来位置で生の同名factoryを同じnamespace receiver・一引数で呼ぶ。準備用recordではcreateEditingWithViewForWorkspaceだけを包み、同じbare builderへ全引数を転送する。実Editor／AppearanceUI／Viewを含む同じ凍結resultをそのまま返し、すべて完成した後にだけView／AppearanceEditing／Visibility commandと、そのViewを生成したselectionのquery関数をprivateな組として保持する。

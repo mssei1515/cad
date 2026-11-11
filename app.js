@@ -1,9 +1,7 @@
 /* Application composition, editing commands, Canvas UI and event handling. */
 (function () {
   "use strict";
-  const { formatDisplayNumber } = window.NumberDisplay;
   const { escapeHtml } = window.HtmlText;
-  const { hatchAppearanceForDisplay } = window.HatchData;
 
   const {
     CSS_PX_PER_MM,
@@ -99,7 +97,7 @@
     updateStatusUI, updateConstraintButtons, syncDimensionInput: () => syncDimensionValueInput(),
     refreshSketchSelection: () => sketchTreeView.refreshSelection(),
   });
-  const { controller: canvasContextController, element: canvasContextMenu, createSceneForEditing: createCanvasContextScene } = window.CanvasContextInteraction.createMenuForWorkspace({
+  const { controller: canvasContextController, element: canvasContextMenu, createSceneForPresentation: createCanvasContextScene } = window.CanvasContextInteraction.createMenuForWorkspace({
     document, window, canvas, escapeHtml, documentWorkspace, readServices: geometryReadServices,
     interaction: canvasInteraction, presentation,
   });
@@ -772,7 +770,7 @@
   const { remove: deleteSketch } = sketchDeletionCommand;
 
 
-  const { toolbarSvgMarkup, constraintToolbarIcon } = toolbarPresentation.createIcons();
+  const toolbarIcons = toolbarPresentation.createIcons();
 
 
 
@@ -784,7 +782,7 @@
     document, window, selectionHighlight,
     objectOptions: { isHidden: selectionVisibilityIsHidden, analysis: constraintAnalysis, redundancy: constraintRedundancy,
       referenceState: referenceConstraintState, projectionQueries: sketchProjectionQueries,
-      toolbarSvgMarkup, constraintToolbarIcon, findLineFixedConstraint, geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: authoringFeedback.hatchPatternTypeLabel },
+      toolbarSvgMarkup: toolbarIcons.toolbarSvgMarkup, constraintToolbarIcon: toolbarIcons.constraintToolbarIcon, findLineFixedConstraint, geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: authoringFeedback.hatchPatternTypeLabel },
     escapeHtml, closeCanvasContextMenu, moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
     blockEditor, editingScope: editingScopeBinding, solveState: sketchSolveResultState, dimensionScope: dimensionPresentationScope,
     deleteElements, deleteCurrentSelection, toggleSelectedVisibility: propertiesPreparation.toggleSelectedVisibility, fixedOperands: fixedOperandCommand,
@@ -938,8 +936,7 @@
 
   const { presentCandidate: canvasContextCandidatePresentation, createInteraction: createCanvasContextInteraction } = createCanvasContextScene({
     sceneQueries: sceneHitQueries, splineEditing, canvasContextAnnotationHit, sessions: operationSessions,
-    candidates: { toolbarSvgMarkup, formatDisplayNumber, constraintToolbarIcon, localizedConstraintName: presentation.constraintFeedback.localizedConstraintName,
-      geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: authoringFeedback.hatchPatternTypeLabel, hatchAppearanceForDisplay },
+    icons: toolbarIcons, feedback: authoringFeedback,
   });
 
 
