@@ -1,5 +1,16 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Parameterテスト支援の関数選択を既存TestDriverへ集約（2026-11-11）
+
+ParameterTestDriver.createForWorkspace（src/testing/parameter_test_driver.js）が、DocumentWorkspace／Geometry read／Block editing／Block selection／Constraint insertion／Dimension placement／Presentationの既存ownerから、Parameter fixture・観測・操作に必要な関数を選び、従来のcreateBrowserSupportへ接続する。app.jsはownerと操作portを渡し、テスト専用のblockSelectionGeometry／blockSelectionBoundsCenter別名を持たない。通常機能をtestingへ移さず、既存createBrowserSupport／createFixture／createObservation／createInteractionは維持する。
+
+実関数をwrap・bind・実行せず、同じfixture／observation／interactionの凍結resultを返す。選択対象11fieldは実ownerのown readonly data propertyで、遅いfield選択でも同じ参照になる。現在scopeは既存workspace.currentが操作時に読み、Document定義の追記、ID採番、Block選択と寸法削除、履歴・UI順・元例外と途中状態を維持する。生成位置、test-mode判定、公開204項目、通常の初期化と保存形式v26、既存testing配置・読込順は不変。アプリ全体contextや通常機能の状態を持つ別のtesting ownerは作らない。
+
+app.jsは1,253→1,251行（2行減）、非空白809→807行、root237→236文・397→395束縛、構文依存辺1,077→1,075。別名・設定95→94行、test hooks158→157行。構築116文／466非空白行と委譲7行は不変。全体目標は未完了。
+
+構文639file・全単体2,536件・関連E2E115件（unified-ui／free-text-input-drag／parameter-dialog-controllerの3file、1.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。旧・新両経路の単体6件は現在scopeの切替、Geometry／Selection参照、ID採番・定義追記、寸法削除と各失敗時の途中状態を確認する。browser比較で実関数・owner参照21項目、選択対象11fieldのreadonly、同じ実support resultと公開204項目が一致し、通常ja/light・en/darkとtest起動も成功した。生の既存driver本体の不変と新しい未束縛参照がないことを確認した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## 注記Editorのcheckpoint field選択を既存生成ownerへ集約（2026-11-11）
 
 AnnotationFeature.prepareが返すcreateEditorForCheckpoint（src/application/annotation_feature.js）は、実EditingCheckpointのcaptureValues／restoreValuesを注記Editorのcapture／restoreへ選択し、既存createEditorForEditingへ接続する。app.jsはcheckpoint自体を渡し、この接続だけのためのsnapshotModelState／restoreModelState別名を持たない。Editorとcheckpointを保持する別のcontrollerや登録setterは作らず、従来の生成・成功時公開をそのまま用いる。
