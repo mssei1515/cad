@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 参照画像のbrowser生成factoryをReferenceImageFeatureへ集約（2026-11-12）
+
+ReferenceImageFeature.createForBrowserWorkspaceは、明示したbrowser windowのImageをnewするcreateImageを既定として既存Workspace生成へ接続する。実constructorはRendererが画像resourceを必要とした時点で取得し、app.jsはImage生成factoryを持たない。既存create／createForWorkspaceは引き続き明示factoryを受け取る。
+
+生成中や画像がないprepareImagesではImage constructorを読み出さない。同じRenderer cacheを使い、cache missごとに現在のbrowser.Imageをnew・無引数で呼ぶ。factory名createImage・arity 0、実resourceの同一性、load listener・decode・描画・cache clearと失敗後の再取得を維持する。getter／constructorの元例外はそのまま透過する。明示createImageはundefined／nullを含め既定値より優先し、表示resourceの生成ではbrowser constructorを読まない。読み込み用の画像decode・resizeと表示用Renderer、Workspace importとbound editing display、Selection・較正・visibility・入力bindを従来のownerに残す。既存application/reference_image_feature.jsに配置し、新file／global／state・cache・全体contextを追加しない。UI・操作・PNG出力・履歴・保存形式v26は不変。
+
+app.jsは1,196→1,196行（0行変化）、非空白754行。root209文・365束縛、構築431行・115文、bind35行・別名85行・test hooks152行は不変。Imageのglobal constructor直接参照がなくなり、新たな未束縛参照なし。行数減ではなくbrowser resource生成の所有を整理した単位で、200〜500行の全体目標は未完了。
+
+関連単体17件が成功。raw／Workspace／browser構成で実Renderer／Layer／Interaction／Inputを使い、scope置換・Selection・import／較正／visibility／resource準備と生成失敗を比較した。browser既定factoryではconstructorの遅延取得とnew.target／無引数、実resource／load／描画参照、cache reuse・clear後のconstructor差替え、getter／constructor失敗と再取得、明示undefined／nullの優先を確認した。ソース逆変換で既存Image featureと生成・操作本体は不変、rootはbrowser入口とfactory指定の削除だけである。
+
+構文639ファイル・全単体2,608件・関連単体17件と通常ja/light・en/dark・test起動が成功。関連E2E190件（7file、2.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## Canvas式参照の接続をParameterEditorへ集約（2026-11-12）
 
 ParameterEditorのcreateReferenceInputForCanvasは、既存editorが持つbrowser windowのHTMLTextAreaElement、操作時に現在の編集scopeを読むcurrentNamespace、同じViewportのcanvasPointを既存ExpressionInputControllerへ接続する。app.jsは入力型・scope読取りのcallback・座標関数を組み立てず、CanvasとViewport、既存入力欄・Pending・hit queryを渡す。

@@ -124,6 +124,7 @@ function ownerFixture(composed, probe = {}) {
       isGeometryMode: options.isGeometryMode, isTextEditingTarget: options.isTextEditingTarget,
     };
     probe.inputs = inputs; probe.options = options; probe.state = state; probe.calls = calls; probe.order = []; probe.ports = {}; probe.results = {};
+    probe.configure?.(inputs, options, state);
     const originals = [];
     for (const [namespace, method, name] of [['ReferenceImageRenderer','create','renderer'],['ReferenceImageRenderer','createLayer','layer'],
       ['ReferenceImageInteraction','create','interaction'],['ReferenceImageInput','create','input']]) {
@@ -131,13 +132,13 @@ function ownerFixture(composed, probe = {}) {
       w[namespace] = { ...w[namespace], [method]: ports => { probe.order.push(name); probe.ports[name] = ports;
         if (probe.failAt === name) throw probe.error; return probe.results[name] = original(ports); } };
     }
-    try { return composed ? w.ReferenceImageFeature.createForWorkspace(inputs) : w.ReferenceImageFeature.create(options); }
+    try { return composed === 'browser' ? w.ReferenceImageFeature.createForBrowserWorkspace(inputs) : composed ? w.ReferenceImageFeature.createForWorkspace(inputs) : w.ReferenceImageFeature.create(options); }
     finally { for (const [namespace, original] of originals.reverse()) w[namespace] = original; }
   });
 }
 
 test('reference-image owner assembly stays cold and retains actual layers, Selection, browser and delayed input binding', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'browser']) {
     const probe = {}, f = ownerFixture(composed, probe), p = probe.ports;
     assert.deepEqual(probe.order, ['renderer','layer','interaction','input']); assert.deepEqual(f.calls, []); assert.deepEqual(f.resources, []);
     assert.equal(f.feature.renderer, probe.results.renderer); assert.equal(f.feature.layer, probe.results.layer); assert.equal(f.feature.interaction, probe.results.interaction);
@@ -151,7 +152,7 @@ test('reference-image owner assembly stays cold and retains actual layers, Selec
 
 test('reference-image owners keep import Workspace distinct from display editing scope, live Selection, calibration and resource readiness', async () => {
   const traces = [];
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'browser']) {
     const f = ownerFixture(composed), old = f.state.editing, pending = f.feature.input.importFile({ name:'plan.png', type:'image/png' });
     f.state.editing = { referenceImages: [] }; f.state.sketch = 'S2'; f.viewport.scale = 4; f.state.finishRead();
     assert.equal(await pending, true); assert.equal(old.referenceImages.length, 0); const image = f.state.editing.referenceImages[0];
@@ -166,12 +167,12 @@ test('reference-image owners keep import Workspace distinct from display editing
     f.feature.layer.drawImages(); assert.equal(f.calls.filter(c=>c[0]==='drawImage').length, before);
     traces.push(JSON.stringify({ calls:f.calls, images:f.state.editing.referenceImages, selected:f.selection.referenceImages }));
   }
-  assert.equal(traces[1], traces[0]);
+  assert.equal(traces[1], traces[0]); assert.equal(traces[2], traces[0]);
 });
 
 test('reference-image owner assembly preserves constructor failure identity and deferred-import permission rejection', async () => {
   const order = ['renderer','layer','interaction','input'];
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'browser']) {
     for (const failAt of order) {
       const probe = { failAt, error:new Error(failAt) };
       assert.throws(()=>ownerFixture(composed, probe), error=>error===probe.error); assert.deepEqual(probe.order, order.slice(0, order.indexOf(failAt)+1));
@@ -181,5 +182,36 @@ test('reference-image owner assembly preserves constructor failure identity and 
     f.state.allowed = false; f.state.finishRead(); assert.equal(await pending, false);
     assert.equal(f.state.editing.referenceImages.length, 0); assert.equal(f.selection.referenceImages.length, 0);
     assert.deepEqual(f.calls.map(c=>c[0]), ['hint']); assert.equal(f.document.count(), 0);
+  }
+});
+
+test('browser image factory stays cold, resolves the live constructor only on cache misses and preserves native resources and failure identity', async () => {
+  let reads = 0, constructorFailure, getterFailure, current, nativeFactory; const marker = new Error('Image creation');
+  const probe = { configure(inputs, options, state) {
+    delete inputs.createImage; nativeFactory = options.createImage;
+    Object.defineProperty(inputs.window, 'Image', { get() { assert.equal(this, inputs.window); assert.equal(state.ready, true); reads++; if (getterFailure) throw getterFailure; return current; } });
+  } };
+  current = function BrowserImage() { assert.equal(new.target, current); assert.equal(arguments.length, 0); if (constructorFailure) throw constructorFailure; return nativeFactory(); };
+  const f = ownerFixture('browser', probe); assert.equal(reads, 0); assert.equal(probe.ports.renderer.createImage.name, 'createImage'); assert.equal(probe.ports.renderer.createImage.length, 0);
+  await f.feature.prepareImages(); assert.equal(reads, 0);
+  const item = { dataUrl: 'data:image/png;base64,one', visible: true, sketchId: 'S1', x: 0, y: 0, rotation: 0, scale: 1, opacity: 0.5, pixelWidth: 100, pixelHeight: 50 };
+  f.state.display.referenceImages.push(item); const images = f.state.display.referenceImages;
+  await f.feature.prepareImages(); assert.equal(reads, 1); assert.equal(f.resources.length, 1); const first = f.resources[0];
+  f.feature.layer.drawImages(); assert.equal(f.calls.find(c => c[0] === 'drawImage')[1], first);
+  await f.feature.prepareImages(); assert.equal(reads, 1); first.load(); assert.equal(f.calls.at(-1)[0], 'draw');
+  f.feature.renderer.clear(); current = function ReplacementImage() { assert.equal(new.target, current); return nativeFactory(); };
+  await f.feature.prepareImages(); assert.equal(reads, 2); assert.equal(f.resources.length, 2); assert.notEqual(f.resources[1], first);
+  f.feature.renderer.clear(); getterFailure = marker; await assert.rejects(f.feature.prepareImages(), error => error === marker); getterFailure = null;
+  current = function FailingImage() { if (constructorFailure) throw constructorFailure; return nativeFactory(); }; constructorFailure = marker;
+  await assert.rejects(f.feature.prepareImages(), error => error === marker); constructorFailure = null;
+  await f.feature.prepareImages(); assert.equal(f.resources.length, 3); assert.equal(f.state.display.referenceImages, images); assert.equal(images[0], item); assert.equal(f.document.count(), 0);
+});
+
+test('browser image feature retains explicit undefined and null factories without reading the browser constructor', async () => {
+  for (const value of [undefined, null]) {
+    const probe = { configure(inputs) { inputs.createImage = value; Object.defineProperty(inputs.window, 'Image', { get() { assert.fail('explicit factory must bypass Image lookup'); } }); } };
+    const f = ownerFixture('browser', probe); assert.equal(probe.ports.renderer.createImage, value);
+    f.state.display.referenceImages.push({ dataUrl: 'one', visible: true, sketchId: 'S1' });
+    await assert.rejects(f.feature.prepareImages(), error => error.name === 'TypeError'); assert.equal(f.resources.length, 0); assert.equal(f.document.count(), 0);
   }
 });

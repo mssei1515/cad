@@ -269,8 +269,8 @@
     dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { canvasContextAnnotationHit } = annotationFeature.spatial;
   const sceneHitPreparation = operationSessions.prepareSceneWithAnnotations();
-  const referenceImageFeature = window.ReferenceImageFeature.createForWorkspace({
-    canvas, ctx, viewport, document, window, withCanvasState: canvasSurface.withCanvasState, createImage: () => new Image(),
+  const referenceImageFeature = window.ReferenceImageFeature.createForBrowserWorkspace({
+    canvas, ctx, viewport, document, window, withCanvasState: canvasSurface.withCanvasState,
     documentWorkspace, editingScope: editingScopeBinding, interaction: canvasInteraction, presentation, appearance: geometryAppearance,
     clearSelection, clearSnap: () => clearSnap(), hitReferenceImageAt: sceneHitPreparation.hitReferenceImageAt, recordHistory,
     pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard, isGeometryMode,

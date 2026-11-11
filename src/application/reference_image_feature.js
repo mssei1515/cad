@@ -42,5 +42,8 @@
       pasteGeometry, copyGeometry, isGeometryMode, isTextEditingTarget,
     });
   }
-  window.ReferenceImageFeature = Object.freeze({ create, createForWorkspace });
+  function createForBrowserWorkspace({ window: browserWindow, ...options }) {
+    return createForWorkspace({ createImage: () => new browserWindow.Image(), window: browserWindow, ...options });
+  }
+  window.ReferenceImageFeature = Object.freeze({ create, createForWorkspace, createForBrowserWorkspace });
 })();
