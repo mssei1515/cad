@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のCanvas表示倍率単位ではapp.jsは1,191行、非空白749行。AST監査ではroot208文・364束縛、構築429非空白行とbind35行、別名・設定82行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のWorkspace Solver単位ではapp.jsは1,187行、非空白745行。AST監査ではroot207文・363束縛、構築428非空白行とbind35行、別名・設定79行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Canvas初期倍率とテスト観測のCSS単位依存を所有者へ集約（2026-11-12）
+### 最新：通常Solverの実装選択をDocumentWorkspaceへ集約（2026-11-12）
+
+開始基準developはc3a2ef37a6e8e5ed01d4a7f5507e8086ea088f11、作業branchはcodex/workspace-solver-construction。開始週枠残量58%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+DocumentWorkspaceのReadContextが返すcreateEditingScopeは、Solverプロパティの指定がない場合にGeometrySolver.ConstraintSolverを選び、既存のscope binding・model query・constraint insertionを構築する。app.jsはSolverクラスを取得・中継せず、Sketch切替のclose／resetを接続する。
+
+独自Solverと明示undefined／nullは、継承プロパティの場合も既存どおり優先し、無効なクラスは同じnative生成で失敗する。raw createScopeBinding／EditingScopeBinding.createへ既定値を追加しない。通常クラスの読取りはcreateEditingScope呼出時だけ行い、Workspace／ReadContextの準備では取得も生成もしない。Solverは初期のWorkspace実体を一引数で受け、binding→DimensionQueries→Insertionの順に一度ずつ生成する。以後のscope切替では同じSolverのmodelを更新する。束縛済み編集対象と現在WorkspaceによるSketch／Parameter割当の区別、close→move reset→activate→model→read cache→projectionの順、失敗時の既存部分状態を維持する。新file・global・可変state／cache・全体contextを追加せず、Solver計算・UI・履歴・保存形式v26は不変。
+
+app.jsは1,191→1,187行（4行減）、非空白749→745行。root208→207文・364→363束縛、別名・設定82→79行、構築429→428行（115文）。bind35行とtest hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体37件が成功。既存のscope構築・現在Workspaceとの乖離・切替／挿入失敗の比較へ通常既定の入口を加えた。実ConstraintSolverを継承したconstructorで初期モデルの同一性・一引数・生成一回・切替後の同じSolverを確認し、初期準備時のクラス非取得、constructor失敗の元例外と既存binding保持、独自／無効クラス・継承プロパティの優先、raw入口の未指定失敗を確認した。既存binding・query・insertionの処理本体はソース逆変換で不変を確認した。
+
+構文639ファイル・全単体2,618件・関連単体37件と通常ja/light・en/dark・test起動が成功。関連E2E178件（6file、2.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+test hooks152行は今回も再確認した。AnnotationTestDriverへ渡すcurrentScope・selection・draw・bounds・layout・anchor等の七portを、六つのowner指定へ置き換えるだけの新入口は、依存の集約効果よりAPIと読み手の負担が増えるため採用しなかった。機能別driverを丸ごと移すregistryも作らない。代わりに既存DocumentWorkspace自身が実際に行うSolver生成の通常実装選択を移管した。
+
+次はtest hookの有効条件とwindowへの公開を、既存BrowserTestApiの公開責務と照合する。callback生成と実行を区別し、Document編集resetの構築完了後にだけ現在URLを読む順序、通常起動でテスト部品を生成しないこと、構築失敗時に以前の公開APIを保持することを確認する。152行のdriver構築を巨大contextへ移さず、既存の公開名と返却actorを維持する。Canvas／context取得の2行は公開順判断に従い維持する。構築428行が残り、全体目標は未完了。
+
+### Canvas初期倍率とテスト観測のCSS単位依存を所有者へ集約（2026-11-12）
 
 開始基準developは77f0fdd5b04d0d8ac0fca052b878949d6b14d131、作業branchはcodex/canvas-display-scale。開始週枠残量58%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

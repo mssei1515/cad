@@ -15,9 +15,6 @@
 
 
 
-  const {
-    ConstraintSolver,
-  } = window.GeometrySolver;
 
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const { refreshConstraintAnalysis, prepareWithReferencesForWorkspace: prepareSketchSolving } = window.SketchSolvingFeature.prepare();
@@ -73,7 +70,6 @@
   const sketchNavigation = window.SketchEditingFeature.prepareNavigation();
   const { clearInteractionForSketchChange, toggleSketchVisibility, isSidebarHighlightedElement } = sketchNavigation;
   const { binding: editingScopeBinding, solver, dimensionQueries: dimensionModelQueries, insertion: constraintInsertion } = createEditingScope({
-    Solver: ConstraintSolver,
     closeSketchContext: sketchNavigation.closeContext, resetSketchMove: sketchNavigation.resetMove,
   });
 
