@@ -1,6 +1,15 @@
 /* Browser property fixtures and observations; existing owners retain appearance and edit rules. */
 (() => {
   "use strict";
+  function createBrowserSupportForWorkspace({ documentWorkspace, geometry, readServices, interaction, blockQueries, selectionHighlight,
+    presentation, display, placement, viewport, document, canvas, fixPointBtn, readHistory, resetModelState, clearSelection,
+    resetHistory, fit, insertion, recordHistory, canvasThemeColor, isSidebarHighlightedElement, propertiesSelection, fixedState, constructionAlpha }) {
+    return createBrowserSupport({ documentWorkspace, geometry, readServices, interaction, blockQueries, selectionHighlight,
+      presentation, display, placement, viewport, document, canvas, fixPointBtn, readHistory, resetModelState, clearSelection,
+      resetHistory, fitAllGeometryToViewport: fit.fitAllGeometryToViewport, pushModelConstraint: insertion.push,
+      assignConstraintSketchId: insertion.assignSketch, recordHistory, canvasThemeColor, isSidebarHighlightedElement,
+      selectedPropertiesTarget: propertiesSelection.selectedDisplayTarget, findLineFixedConstraint: fixedState.findLineFixedConstraint, constructionAlpha });
+  }
   function createAppearanceObservation({ allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle, normalizeAppearance, effectiveAppearanceForElement, isVisibleSketchElement }) {
     function appearance(kind, id) {
       let item = null;
@@ -323,5 +332,5 @@
       fixedObservation: factories.createFixedObservation(),
     });
   }
-  window.PropertiesTestDriver = Object.freeze({ createBrowserFactories, createBrowserSupport, createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
+  window.PropertiesTestDriver = Object.freeze({ createBrowserSupportForWorkspace, createBrowserFactories, createBrowserSupport, createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
 })();

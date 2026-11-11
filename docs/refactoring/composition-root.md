@@ -1,5 +1,18 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Propertiesテストの関数選択を実ownerから組み立てる（2026-11-11）
+
+PropertiesTestDriver.createBrowserSupportForWorkspace（src/testing/properties_test_driver.js）が、実Properties Selection／Drawing fit／Constraint insertion／Fixed-state queryから、selectedDisplayTarget／fitAllGeometryToViewport／push／assignSketch／findLineFixedConstraintを選び、既存createBrowserSupportへ接続する。app.jsは実ownerを渡し、テスト専用のselectedPropertiesTarget別名と五関数の対応選択を持たない。通常UIの選択可視性関数は従来どおり残す。
+
+五fieldは実ownerのreadonly data propertyで、同じ実関数をwrap・bind・実行せず、従来のkey順で渡す。選択対象値、scope、Geometry、hover、外観、倍率、履歴や設定をsnapshot化せず、既存支援が操作時に読む。十一支援は従来の生成順と完了時の凍結recordを維持し、途中失敗では未完成recordやBrowser APIを公開しない。旧createBrowserSupport／createBrowserFactoriesと個別fixture、元例外・途中状態、Geometry／Selection同一性、描画・取消・履歴・保存形式v26、通常機能のstate所有と生成・公開・bind／start、既存testing配置と読込順を変えない。Geometry外観と寸法外観の別ownerも混同しない。新しいmodel・cache・listenerや全体contextは追加しない。
+
+app.jsは1,235→1,234行（1行減）、非空白792→791行、root226文のまま・383→382束縛、構文依存辺1,063のまま。別名・設定92→91行。構築114文／449行・bind41行・委譲7行・test hooks152行は不変。test hooks内だけから使うroot bindingは16→15個だが、これは残タスク数を意味しない。行数の小さな変化を全体目標への到達とは扱わず、200〜500行の目標は未完了。
+
+関連単体8件・全単体2,545件・構文639fileが成功。既存の比較・生成失敗テストにowner入力経路を追加し、生成時のmodel／scope／DOM／履歴無照会、支援の独立性と完成前の失敗、現在Workspace／Selection／hover／style／theme／履歴の観測、複数選択fixtureと外観編集の元例外・途中状態を照合した。browser比較では十一支援の生成順、五つの実関数参照と五fieldのreadonly、同じ実支援result、optionのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体は不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、8.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## Blockの寸法ケースと公開recordの組立てを既存TestDriverへ集約（2026-11-11）
 
 BlockTestDriver.createBrowserSupportForWorkspace（src/testing/block_test_driver.js）が、既存createForWorkspaceで実支援を生成した後、同じ支援のcreateDimensionCasesを呼び、従来BrowserTestApiが受け取るblockTestSupport／blockTestActionsの二fieldを持つ凍結recordを返す。app.jsは実Dimension placement／Read-only dimension／Geometry readのownerを渡し、寸法ケース用四関数の選択と二支援の再梱包を持たない。テスト専用のblockCatalog別名も除く。
