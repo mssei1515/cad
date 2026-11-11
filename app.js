@@ -111,7 +111,7 @@
   });
   const { hitAnnotationTarget, annotationLeaderTargetFromItem, annotationLeaderAnchor } = annotationTargets;
   const { referenceState: referenceConstraintState, solveState: sketchSolveResultState,
-    createContextForWorkspace: createSolveContext, solveAndRefresh } = window.SketchSolvingFeature.prepareWithReferencesForWorkspace({
+    createContextWithAnnotationDrag: createSolveContext, solveAndRefresh } = window.SketchSolvingFeature.prepareWithReferencesForWorkspace({
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, solver, pointUsage, presentation,
   });
   const { refreshReferenceConstraintValidity } = referenceConstraintState;
@@ -218,12 +218,10 @@
   const { operandElement } = constraintOperandValues;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const geometryDragPreparation = window.GeometryDragFeature.prepare();
-  const constrainedAnnotationDrag = createConstrainedAnnotationDrag({
-    buildPlan: geometryDragPreparation.build, beginGeometryDrag: geometryDragPreparation.begin,
-    invalidateAnalysis: () => constraintAnalysis.invalidate(),
-  });
-  const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving, createLineCollapseQuery } = createSolveContext({
-    annotationDrag: constrainedAnnotationDrag, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
+  const { annotationDrag: constrainedAnnotationDrag, scopeQuery: solveScopeQuery, analysis: constraintAnalysis,
+    redundancy: constraintRedundancy, createSolving, createLineCollapseQuery } = createSolveContext({
+    createAnnotationDrag: createConstrainedAnnotationDrag, geometryDrag: geometryDragPreparation,
+    minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace, fitVisibleGeometryToViewport } = createCanvasDisplay({
     initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,

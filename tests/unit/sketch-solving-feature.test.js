@@ -307,3 +307,76 @@ test('reference-aware preparation preserves original construction failures and c
   assert.deepEqual(order,['references','references','results']);
  }finally{w.ReferenceConstraintState=referenceFactory;w.SketchSolving=solving;}
 });
+
+function annotationContextFixture(owned) {
+ const f=contextFixture('prepared'),w=f.probe.window,p=f.probe.preparation,events=[],geometryDrag={
+  build(kind,point,pointer){assert.equal(kind,'point');assert.equal(point,auxiliary);events.push('plan');return plan={pointer};},
+  begin(event,value){assert.equal(value,plan);events.push('begin');return true;}};
+ const auxiliary=new w.GeometrySolver.Point('annotation-point',20,30);auxiliary.sketchId='A';
+ const extra={object:{sketchId:'A',value:7},prop:'value'},geometry={valid:true,point:auxiliary,variables:[{}, {},extra],constraints:[]};
+ let plan,drag,ports,context;
+ w.AnnotationAnchorConstraints={...w.AnnotationAnchorConstraints,createDragGeometry(){return geometry;}};
+ function createAnnotationDrag(options){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);ports=options;
+  assert.equal(options.buildPlan,geometryDrag.build);assert.equal(options.beginGeometryDrag,geometryDrag.begin);
+  return drag=w.AnnotationDrag.createConstrained({...options,currentScope:f.owners.documentWorkspace.workspace.current,
+   placementAnchor:item=>item.anchor,resolveGeometryRef:f.owners.readServices.reads.resolveGeometryRef,
+   leaderDisplay:()=>({shelfScale:2}),leaderAnchor:()=>null,applicationText:(_ja,en)=>en,
+   setHint:()=>events.push('hint'),updateUI:()=>events.push('ui'),draw:()=>events.push('draw')});}
+ f.state.ready=false;
+ if(owned)context=p.createContextWithAnnotationDrag({createAnnotationDrag,geometryDrag,minimumLength:0.001,acceptError:f.owners.acceptError});
+ else {const annotationDrag=createAnnotationDrag({buildPlan:geometryDrag.build,beginGeometryDrag:geometryDrag.begin,invalidateAnalysis:()=>constraintAnalysis.invalidate()});
+  context=p.createContextForWorkspace({...f.probe.contextInput,annotationDrag});}
+ const constraintAnalysis=context.analysis;
+ assert.deepEqual(events,[]);assert.deepEqual(f.events,[]);f.state.ready=true;
+ return {...f,w,p,events,auxiliary,extra,geometryDrag,drag,ports,context,get plan(){return plan;}};
+}
+
+test('annotation solving context preserves the actual drag lifecycle, auxiliary variables, live Workspace and unchanged model identities',()=>{
+ const observations=[];
+ for(const owned of [false,true]){
+  const f=annotationContextFixture(owned),{context,drag,auxiliary,extra}=f,original=f.state.scope;
+  if(owned){assert.equal(context.annotationDrag,drag);assert.ok(Object.isFrozen(context));}
+  assert.equal(drag.scope(),original);assert.equal(drag.additionalVariables().length,0);
+  const annotation={type:'text',anchor:{x:1,y:2},anchorConstraints:[{type:'coincident'}]};
+  assert.equal(drag.begin({pointerId:1},annotation,{x:5,y:6}),true);
+  assert.equal(drag.scope().points.at(-1),auxiliary);assert.equal(original.points.includes(auxiliary),false);
+  const variables=context.scopeQuery.sketchSolveVariables('A');assert.ok(variables.some(v=>v.object===auxiliary));assert.ok(variables.includes(extra));
+  auxiliary.x=44;auxiliary.y=55;f.plan.syncAnnotation();assert.equal(annotation.x,44);assert.equal(annotation.y,55);
+  const next={...original,points:[],constraints:[]};f.state.scope=next;assert.equal(drag.scope().points.at(-1),auxiliary);
+  f.events.length=0;f.plan.onEnd();assert.deepEqual(f.events,['ui','draw']);
+  assert.equal(drag.scope(),next);assert.equal(drag.additionalVariables().length,0);
+  assert.equal(context.scopeQuery.sketchSolveVariables('A').some(v=>v.object===auxiliary||v===extra),false);
+  assert.equal(original.points.includes(auxiliary),false);
+  observations.push(JSON.stringify({events:f.events,annotation,scopePoints:next.points.length}));
+ }
+ assert.equal(observations[1],observations[0]);
+});
+
+test('annotation context publishes only completed analysis and preserves actor calls, construction failures and independent invalidation ports',()=>{
+ const f=contextFixture('prepared'),w=f.probe.window,p=f.probe.preparation,rawQuery=w.SolveScopeQuery,rawAnalysis=w.ConstraintAnalysis;
+ const events=[],captures=[],marker={},failure=new Error('annotation context');let failAt=null,methodFailure=false,bad=false,badValue;
+ const geometryDrag={build(){},begin(){}};
+ function unready(port){assert.throws(()=>port(),{name:'ReferenceError',message:"Cannot access 'constraintAnalysis' before initialization"});}
+ function createAnnotationDrag(options){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);events.push('annotation');
+  assert.deepEqual(Object.keys(options),['buildPlan','beginGeometryDrag','invalidateAnalysis']);
+  assert.equal(options.buildPlan,geometryDrag.build);assert.equal(options.beginGeometryDrag,geometryDrag.begin);
+  captures.push(options);unready(options.invalidateAnalysis);if(failAt==='annotation')throw failure;return f.probe.contextInput.annotationDrag;}
+ w.SolveScopeQuery={...rawQuery,create(options){events.push('query');unready(captures.at(-1).invalidateAnalysis);if(failAt==='query')throw failure;return rawQuery.create(options);}};
+ let reads=0,calls=0;
+ w.ConstraintAnalysis={...rawAnalysis,createWithRedundancy(options){events.push('analysis');unready(captures.at(-1).invalidateAnalysis);if(failAt==='analysis')throw failure;
+  const parts=rawAnalysis.createWithRedundancy(options);let analysis;
+  analysis=Object.freeze({...parts.analysis,get invalidate(){reads++;return function(){'use strict';assert.equal(this,analysis);assert.equal(arguments.length,0);calls++;if(methodFailure)throw failure;return marker;};}});
+  return Object.freeze({...parts,analysis:bad?badValue:analysis});}};
+ const build=()=>p.createContextWithAnnotationDrag({createAnnotationDrag,geometryDrag,minimumLength:0.001,acceptError:f.owners.acceptError});
+ try{
+  f.state.ready=false;const first=build(),port=captures[0].invalidateAnalysis;
+  assert.deepEqual(events,['annotation','query','analysis']);assert.equal(reads,0);assert.equal(first.annotationDrag,f.probe.contextInput.annotationDrag);
+  assert.equal(port('ignored'),marker);assert.equal(reads,1);assert.equal(calls,1);
+  for(const stage of ['annotation','query','analysis']){failAt=stage;events.length=0;assert.throws(build,error=>error===failure);
+   assert.deepEqual(events,['annotation','query','analysis'].slice(0,['annotation','query','analysis'].indexOf(stage)+1));
+   unready(captures.at(-1).invalidateAnalysis);assert.equal(port(),marker);}
+  failAt=null;methodFailure=true;assert.throws(port,error=>error===failure);methodFailure=false;
+  const second=build();assert.notEqual(second.analysis,first.analysis);assert.notEqual(captures.at(-1).invalidateAnalysis,port);assert.equal(port(),marker);
+  for(badValue of [undefined,null]){bad=true;build();assert.throws(captures.at(-1).invalidateAnalysis,error=>error.name==='TypeError');assert.equal(port(),marker);}
+ }finally{w.SolveScopeQuery=rawQuery;w.ConstraintAnalysis=rawAnalysis;}
+});
