@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のdrag入力結線単位ではapp.jsは1,181行、非空白740行。AST監査ではroot204文・363束縛、構築425非空白行とbind35行、別名・設定78行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のBlock command構築単位ではapp.jsは1,176行、非空白739行。AST監査ではroot202文・362束縛、構築424非空白行とbind35行、別名・設定78行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Geometry dragと拘束・寸法入力を同じpointerで結線（2026-11-12）
+### 最新：共有確認ダイアログの所有とBlock command構築を整理（2026-11-12）
+
+開始基準developは54e25c1a5be3e1e58fb5d9009934568d9f9a670d、作業branchはcodex/block-command-assembly。開始週枠残量56%、検証後55%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+PresentationFeatureが共有ChoiceDialogの生成と要求入口を所有する。DocumentFileはPresentationのrequestChoiceへ接続し、rootの後段dialog参照を持たない。実dialogのshowをmember・一引数で呼び、Promise・結果・元例外を返す。生成前のReferenceError、生成失敗時の以前の完成参照、明示undefined／null生成後のTypeErrorを維持する。新しい状態はUIの完成参照だけで、選択肢・pending処理は既存ChoiceDialogに残す。
+
+BlockEditingFeature.prepareCommandsWithViewのcreateWithSelectionは、実selection query→提供されたdialog factory→遅延command依存reader→既存command生成の順で接続する。factoryはbareゼロ引数、readerはbare二引数で同じqueryとdialogを受け、元のoptionsをそのまま既存createForFeatureへ渡す。完成した実queryと実commandsをimmutableなcohortで返す。root readerの仮引数が未完成のroot束縛を参照しないようにし、native dialogのlistener登録とcommand依存取得の前後関係を維持する。
+
+旧境界の早期consumerはDocumentFileの遅延dialog要求一か所で、queryはcommand optionsだけが参照していた。dialog生成失敗時の以前の完成参照、command生成／updater取得失敗時の以前のupdater、既存の部分状態と元例外を維持する。native query・ChoiceDialog・Definition／Completion・Viewの本体と生の生成API、実actor同一性、scope／ID／UI・履歴・保存形式v26は不変。新file・global・registry・全体contextは追加しない。
+
+app.jsは1,181→1,176行（5行減）、非空白740→739行。root204→202文・363→362束縛、構築425→424行・113→111文。別名78行・bind35行・test hooks151行は不変。行数差には不要になった区切りも含むが、成果はUI完成参照の所有移管とroot構築二文の統合である。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体80件が成功。実ChoiceDialogの表示・選択・取消・重複要求拒否、実Block commandとViewの共有・編集開始と取消復元を確認した。生成順、receiver／引数・返値・actor同一性、未完成時と各段階失敗時の公開状態も検証した。ソース逆変換で既存処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,638件・関連単体80件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E178件（7file、2.6m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は残る構築424行・111文の生成順と早期consumerを監査する。同じownerの結線だけをまとめ、診断のためだけの製品slotや全command／driver registryは導入しない。分離の数を固定せず、実際の依存と責務で判断する。
+
+### Geometry dragと拘束・寸法入力を同じpointerで結線（2026-11-12）
 
 開始基準developはd9b997cd896474d19e60bcdb67befc7c3057c476、作業branchはcodex/drag-input-composition。開始週枠残量56%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

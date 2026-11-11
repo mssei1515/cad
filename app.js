@@ -20,7 +20,7 @@
   const { refreshConstraintAnalysis, prepareWithReferencesForWorkspace: prepareSketchSolving } = window.SketchSolvingFeature.prepare();
   const annotationPreparation = window.AnnotationFeature.prepare();
   const propertiesPreparation = window.PropertiesDisplay.prepare();
-  const { createForFeature: createBlockCommandsWithView, update: updateBlockUI } = window.BlockEditingFeature.prepareCommandsWithView();
+  const { createWithSelection: createBlockCommandsWithSelection, update: updateBlockUI } = window.BlockEditingFeature.prepareCommandsWithView();
   const { createForDrawing: createSelectionEditing, copy: copySelectionToClipboard,
     paste: pasteGeometryClipboard } = window.SelectionEditingFeature.prepare();
   const { createForWorkspace: createHistoryFeature, createBlockHistory: createBlockEditHistory, record: recordHistory } = window.HistoryController.prepare();
@@ -356,7 +356,7 @@
 
   const documentFileFeature = createDocumentFileFeature({
     window, document, documentWorkspace, history: historyFeature, blockEditor, presentation, fit: canvasScene.fit,
-    serializeModel, requestChoice: options => choiceDialog.show(options), loadModelData, solveAndRefresh,
+    serializeModel, requestChoice: presentation.requestChoice, loadModelData, solveAndRefresh,
     repairMessage: readDocumentRepairMessage,
   });
   const { refreshStatus: updateDocumentNameUI } = documentFileFeature;
@@ -434,20 +434,15 @@
     constraintReferences, guardDimensionSymbolDeletion,
   });
 
-  const blockSelectionQuery = blockEditingFeature.createSelectionQuery({
-    references: constraintReferences, serializeConstraint, annotationBounds: annotationPreparation.annotationBounds,
-  });
-
-
-
-
-  const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
-  const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView } = createBlockCommandsWithView(blockEditingFeature, {
+  const { selectionQuery: blockSelectionQuery,
+    commands: { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView } } = createBlockCommandsWithSelection(blockEditingFeature, {
+    references: constraintReferences, serializeConstraint, annotationBounds: annotationPreparation.annotationBounds, createChoiceDialog: presentation.createChoiceDialog,
+  }, (blockSelectionQuery, choiceDialog) => ({
     isGeometryMode, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, prepareBlocks: ensureBlockState,
     resetBlockEditorHistory, clearSelection, drawingFit: canvasScene.fit, recordHistory,
     referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, choiceDialog,
     blockLocalGeometryBounds: blockLayout.blockLocalGeometryBounds, references: constraintReferences, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
-  });
+  }));
   const { enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
 
 

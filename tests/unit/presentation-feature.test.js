@@ -920,3 +920,36 @@ test('Toolbar selection assembly constructs View then Status without reading que
     assert.deepEqual(probe.steps, ['query-constraints', 'query-menu', 'fix', 'cursor', 'view', ...(stage === 'status' ? ['status'] : [])]);
   }
 });
+
+
+function choicePresentationFixture(){
+  const f=fixture(),events=[],elements={};
+  function element(){const handlers={};return{handlers,dataset:{},classList:{add(){}},addEventListener(type,handler){handlers[type]=handler;},setAttribute(name,value){this[name]=value;},focus(){events.push('focus');}};}
+  for(const key of ['title','message','actions','close'])elements[key]=element();elements.actions.children=[];elements.actions.replaceChildren=function(){this.children=[];};elements.actions.append=function(button){this.children.push(button);};Object.defineProperty(elements.actions,'firstElementChild',{get(){return this.children[0];}});
+  const dialog={...element(),open:false,querySelector(selector){return elements[selector.match(/data-choice-([^\]]+)/)[1]];},showModal(){this.open=true;events.push('show');},close(){this.open=false;events.push('close');this.handlers.close?.();}};
+  f.document.getElementById=function(id){assert.equal(this,f.document);assert.equal(id,'choiceDialog');events.push('element');return dialog;};f.document.createElement=()=>element();
+  vm.runInNewContext(fs.readFileSync('src/ui/choice_dialog.js','utf8'),{window:f.w,document:f.document});
+  const raw=f.w.ChoiceDialog;let actual;
+  f.w.ChoiceDialog={create(value){assert.equal(this,f.w.ChoiceDialog);assert.equal(arguments.length,1);assert.equal(value,dialog);events.push('create');assert.throws(()=>f.feature.requestChoice({}),error=>error.name==='ReferenceError'&&error.message==="Cannot access 'choiceDialog' before initialization");return actual=raw.create(value);}};
+  return{...f,events,elements,dialog,get actual(){return actual;}};
+}
+
+test('presentation owns the actual shared Choice dialog and keeps modal values, pending exclusion, cancel and event propagation',async()=>{
+  const f=choicePresentationFixture();assert.deepEqual(f.events,[]);assert.equal(f.feature.requestChoice.name,'requestChoice');assert.equal(f.feature.requestChoice.length,1);
+  const request=f.feature.requestChoice;assert.throws(()=>request({}),error=>error.name==='ReferenceError');const actual=f.feature.createChoiceDialog();assert.equal(actual,f.actual);assert.deepEqual(f.events,['element','create']);
+  const options={title:'Title',message:'Message',choices:[{value:true,label:'Yes'},{value:false,label:'No'}],defaultValue:true,cancelLabel:'Cancel'},promise=request(options);
+  assert.equal(f.dialog.open,true);assert.equal(f.elements.title.textContent,'Title');assert.equal(f.elements.message.textContent,'Message');assert.equal(f.elements.actions.children.length,3);
+  await assert.rejects(request(options),/already open/);let stopped=0;f.dialog.handlers.keydown({stopPropagation(){stopped++;}});f.dialog.handlers.keyup({stopPropagation(){stopped++;}});assert.equal(stopped,2);
+  f.elements.actions.children[1].handlers.click();assert.equal(await promise,false);assert.equal(f.dialog.open,false);assert.equal(f.elements.actions.children.length,0);
+  const cancelled=request(options);let prevented=false;f.dialog.handlers.cancel({preventDefault(){prevented=true;}});assert.equal(await cancelled,null);assert.equal(prevented,true);
+});
+
+test('presentation choice dispatch preserves the actual receiver, one argument, promise identity and previous completed dialog on failures',()=>{
+  const f=fixture(),a={},b={},marker=new Error('choice failed'),promise=Promise.resolve(true);let fail=false,created,showFailure=false,received;
+  const make=id=>{const dialog={show(...args){assert.equal(this,dialog);assert.equal(args.length,1);received=args[0];if(showFailure)throw marker;return promise;},id};return dialog;};
+  const first=make(a),next=make(b);f.document.getElementById=()=>({});f.w.ChoiceDialog={create(){if(fail)throw marker;return created;}};
+  created=first;assert.equal(f.feature.createChoiceDialog(),first);const options={choices:[]};assert.equal(f.feature.requestChoice(options,'ignored'),promise);assert.equal(received,options);
+  fail=true;assert.throws(f.feature.createChoiceDialog,error=>error===marker);assert.equal(f.feature.requestChoice(options),promise);fail=false;created=next;assert.equal(f.feature.createChoiceDialog(),next);
+  showFailure=true;assert.throws(()=>f.feature.requestChoice(options),error=>error===marker);
+  for(const invalid of [undefined,null]){created=invalid;assert.equal(f.feature.createChoiceDialog(),invalid);assert.throws(()=>f.feature.requestChoice(options),error=>error.name==='TypeError');}
+});
