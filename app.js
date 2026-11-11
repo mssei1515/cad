@@ -35,11 +35,11 @@
   const presentation = window.PresentationFeature.create({
     document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
   });
-  const { settings: applicationSettings, profiler: interactionProfiler, constraintFeedback,
+  const { profiler: interactionProfiler,
     log, setHint, updateUI, updateGeometrySelectionUI, draw, updateToolbar, updateStatusUI, updateHistoryButtons } = presentation;
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
-  const { applicationText } = applicationSettings;
-  const { hatchRegionErrorText, offsetChainErrorText, hatchPatternTypeLabel, geometryInstanceTypeLabel } = window.AuthoringFeedback.create({ applicationText });
+  const { applicationText } = presentation.settings;
+  const authoringFeedback = presentation.createAuthoringFeedback();
   const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
   const documentWorkspace = window.DocumentWorkspace.create({
     applicationText, constraintGraphNodes: constraintReferences.constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
@@ -312,7 +312,7 @@
   const offsetFeature = authoringTools.createOffsetForEditing({
     editingScope: editingScopeBinding, placement: dimensionPlacement, sourceSelection: offsetSelection,
     valueInput: dimensionInputController, ctx, surface: canvasSurface, drawDimension,
-    commitNewConstraint, offsetChainErrorText, analysis: constraintAnalysis,
+    commitNewConstraint, offsetChainErrorText: authoringFeedback.offsetChainErrorText, analysis: constraintAnalysis,
   });
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, chainDraft: offsetChainDraft } = offsetFeature;
   const { submit: submitOffsetValue } = offsetCommand;
@@ -371,9 +371,8 @@
   const toolbarControls = toolbarPresentation.prepareControls({ canvas });
   const { fixPointBtn, createForSelection: createToolbarControls } = toolbarControls;
 
-  applicationSettings.prepareButtonTooltips();
+  presentation.settings.prepareButtonTooltips();
 
-  const { localizedConstraintName } = constraintFeedback;
 
 
   const documentFileFeature = createDocumentFileFeature({
@@ -766,7 +765,7 @@
   });
   // The command is published before enabling destination-only input.
   sketchMoveInputBinding.bind();
-  const hatchCommand = authoringTools.createHatchForEditing({ updateStatusUI, hatchRegionErrorText });
+  const hatchCommand = authoringTools.createHatchForEditing({ updateStatusUI, hatchRegionErrorText: authoringFeedback.hatchRegionErrorText });
   const { startHatchBoundaryRepair } = hatchCommand;
 
 
@@ -790,7 +789,7 @@
     document, window, selectionHighlight,
     objectOptions: { isHidden: selectionVisibilityIsHidden, analysis: constraintAnalysis, redundancy: constraintRedundancy,
       referenceState: referenceConstraintState, projectionQueries: sketchProjectionQueries,
-      toolbarSvgMarkup, constraintToolbarIcon, findLineFixedConstraint, geometryInstanceTypeLabel, hatchPatternTypeLabel },
+      toolbarSvgMarkup, constraintToolbarIcon, findLineFixedConstraint, geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: authoringFeedback.hatchPatternTypeLabel },
     escapeHtml, closeCanvasContextMenu, moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
     blockEditor, editingScope: editingScopeBinding, solveState: sketchSolveResultState, dimensionScope: dimensionPresentationScope,
     deleteElements, deleteCurrentSelection, toggleSelectedVisibility, fixedOperands: fixedOperandCommand,
@@ -844,8 +843,8 @@
     projection: sketchProjectionFeature, projectionEditing: sketchProjectionEditing, annotationFeature,
     isGeometryMode, toggleSketchVisibility, recordHistory, escapeHtml,
   }, () => ({
-    analysis: constraintAnalysis, selectionHighlight, snappedBlockRotation, hatchRegionErrorText,
-    geometryInstanceTypeLabel, installExpressionInputHighlights,
+    analysis: constraintAnalysis, selectionHighlight, snappedBlockRotation, hatchRegionErrorText: authoringFeedback.hatchRegionErrorText,
+    geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, installExpressionInputHighlights,
     HTMLTextAreaElement, HTMLInputElement,
     changeFreeInstanceProperty, commitAnnotationParameterEdit,
     instanceTransform: instanceTransformCommand, blockConfiguration: blockConfigurationCommand,
@@ -945,8 +944,8 @@
 
   const { presentCandidate: canvasContextCandidatePresentation, createInteraction: createCanvasContextInteraction } = createCanvasContextScene({
     sceneQueries: sceneHitQueries, splineEditing, canvasContextAnnotationHit, sessions: operationSessions,
-    candidates: { toolbarSvgMarkup, formatDisplayNumber, constraintToolbarIcon, localizedConstraintName,
-      geometryInstanceTypeLabel, hatchPatternTypeLabel, hatchAppearanceForDisplay },
+    candidates: { toolbarSvgMarkup, formatDisplayNumber, constraintToolbarIcon, localizedConstraintName: presentation.constraintFeedback.localizedConstraintName,
+      geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: authoringFeedback.hatchPatternTypeLabel, hatchAppearanceForDisplay },
   });
 
 
@@ -1213,7 +1212,7 @@
     const hatchTestApi = window.HatchTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
       viewport, canvas, document, fit: canvasScene.fit, blocks: blockEditingFeature, blockSelection: blockSelectionQuery, clipboard: clipboardFeature,
-      resetModelState, resetHistory, serializeModel, hitBlockInstance, hatchCommand, hatchRegionErrorText, clearSelection,
+      resetModelState, resetHistory, serializeModel, hitBlockInstance, hatchCommand, hatchRegionErrorText: authoringFeedback.hatchRegionErrorText, clearSelection,
     });
     const splineTestSupport = window.SplineTestDriver.createForWorkspace({
       documentWorkspace, editingScope: editingScopeBinding, geometry: geometryCreation, readServices: geometryReadServices,

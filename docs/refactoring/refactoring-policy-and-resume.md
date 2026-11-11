@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のCanvas実Scene共有単位ではapp.jsは1,264行、非空白819行。AST監査ではroot243文・415束縛、構築・接続467非空白行、別名・設定100行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の作図メッセージ組立て単位ではapp.jsは1,263行、非空白818行。AST監査ではroot242文・409束縛、構築・接続467非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,24 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：作図メッセージ生成をPresentationへ接続（2026-11-11）
+
+PresentationFeature.createAuthoringFeedback（src/application/presentation_feature.js）は、同じ実ApplicationSettingsのapplicationTextを既存AuthoringFeedback.createへ接続し、実フォーマッターrecordをそのまま返す。生成は明示的な呼出し時だけで、Presentation生成時の先読み・cache・新しいstate／listenerは追加しない。app.jsは従来の段階で零引数のbuilderを呼び、Hatch／Offsetの診断とHatch／Instanceの種別labelを実recordから各機能へ渡す。表示設定を別途注入し直したり、四つの文言関数をroot別名として再管理したりしない。
+
+生AuthoringFeedback.createは同じnamespace receiver・一引数で呼び、引数applicationTextは同じ実functionである。原formatterのbodyとfallback・result読取り順、二文字列の裸callback呼出し、返値・元例外、呼出し時の言語切替を維持する。recordをfacadeで包まず、反復生成は従来の生factoryと同じ独立recordを返す。Presentation生成→作図formatter生成→Document生成の段階と、失敗時の後続初期化・test API未公開を保つ。UI・保存形式v26とloader／folder構成は変更しない。
+
+app側のApplicationSettings／Constraint feedbackとlocalizedConstraintNameの重複別名も除き、実Presentationのown readonly data propertyを通して同じowner／functionを参照する。実SettingsのapplicationText、実ConstraintFeedbackのlocalizedConstraintNameと四formatterも凍結recordのown readonly data fieldであることを確認した。getter・可変snapshotへの同じ置換を一般化しない。Tooltipのmember receiverや、consumerへ渡す裸のfunction identity・引数key・初期化順を変えない。
+
+app.jsは1,264→1,263行（1行減）、非空白819→818行。root243→242文・415→409束縛（6減）、構文依存辺1,092→1,091。構築114文／467非空白行、委譲11行、test hooks158行は不変。別名・設定100→99行。新moduleや汎用app contextを作らず、表示用依存の組立てを既存Presentationへ集める一単位であり、200〜500行の全体目標は未完了。
+
+二つの追加単体で、明示生成までのcoldなnamespace参照、同じ実設定と実record／callback、後の言語切替・独立性、constructor／formatterの元例外と再生成を確認する。対象変更を逆展開したroot ASTが基準deec69aと一致し、新methodとexport propertyを除くPresentation本体AST・free identifier集合も不変である。実browserではapp／module responseだけに診断を挿入し、生成順、raw factoryのreceiver・引数数／key／prototype・applicationTextの参照、八つのreadonly data field、既存Presentation公開項目と公開テスト204項目のkey／descriptor／型を前後照合した。強制したraw factory例外も同じ実Errorで停止し、Document初期化とtest API公開へ進まない。診断を製品sourceやE2Eへ残さない。
+
+関連単体42件・全単体2,513件・通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。終了後に空白行末の二文字だけを整形し、AST・行数不変と整形後のapp構文を確認した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+基準develop deec69a、作業branch codex/presentation-authoring-feedback、開始時週枠残量89%。証跡はTEMP cad-presentation-authoring-feedback-{before,after,before-failure,after-failure,audit,selection,source-hashes}.jsonとfocused／check／unit／smoke／e2e.logへ保持する。mainは週枠残量50%未満で新規分離を止める際の最後に反映する。
+
+今回、Canvas Frameのpreview部品を公開recordへ追加し、テストのlayer配線を減らす案は採用しなかった。root数行の配線に対して通常描画APIの内部部品公開とadapterを増やすため、現時点では境界改善に見合わない。既存Frame／CanvasRenderProbe／CanvasTestDriverのままとする。次も実ownerが既に持つ依存を使える生成・接続を優先し、新しいprivate部品公開や一律wrapper、単なる変数移動で数百行を達成しようとしない。
 
 ### 最新：Canvasの実Scene recordを共有（2026-11-11）
 

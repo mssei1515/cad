@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 作図メッセージの生成をPresentationへ接続（2026-11-11）
+
+PresentationFeature.createAuthoringFeedback（src/application/presentation_feature.js）は、同じ実ApplicationSettingsのapplicationTextを既存AuthoringFeedback.createへ接続し、実フォーマッターrecordをそのまま返す。生成は明示的な呼出し時だけで、Presentation生成時の先読み・cache・新しいstate／listenerは追加しない。app.jsは従来の段階で零引数のbuilderを呼び、Hatch／Offsetの診断とHatch／Instanceの種別labelを実recordから各機能へ渡す。表示設定を別途注入し直したり、四つの文言関数をroot別名として再管理したりしない。
+
+生AuthoringFeedback.createは同じnamespace receiver・一引数で呼び、引数applicationTextは同じ実functionである。原formatterのbodyとfallback・result読取り順、二文字列の裸callback呼出し、返値・元例外、呼出し時の言語切替を維持する。recordをfacadeで包まず、反復生成は従来の生factoryと同じ独立recordを返す。Presentation生成→作図formatter生成→Document生成の段階と、失敗時の後続初期化・test API未公開を保つ。UI・保存形式v26とloader／folder構成は変更しない。
+
+app側のApplicationSettings／Constraint feedbackとlocalizedConstraintNameの重複別名も除き、実Presentationのown readonly data propertyを通して同じowner／functionを参照する。実SettingsのapplicationText、実ConstraintFeedbackのlocalizedConstraintNameと四formatterも凍結recordのown readonly data fieldであることを確認した。getter・可変snapshotへの同じ置換を一般化しない。Tooltipのmember receiverや、consumerへ渡す裸のfunction identity・引数key・初期化順を変えない。
+
+app.jsは1,264→1,263行（1行減）、非空白819→818行。root243→242文・415→409束縛（6減）、構文依存辺1,092→1,091。構築114文／467非空白行、委譲11行、test hooks158行は不変。別名・設定100→99行。新moduleや汎用app contextを作らず、表示用依存の組立てを既存Presentationへ集める一単位であり、200〜500行の全体目標は未完了。
+
+二つの追加単体で、明示生成までのcoldなnamespace参照、同じ実設定と実record／callback、後の言語切替・独立性、constructor／formatterの元例外と再生成を確認する。対象変更を逆展開したroot ASTが基準deec69aと一致し、新methodとexport propertyを除くPresentation本体AST・free identifier集合も不変である。実browserではapp／module responseだけに診断を挿入し、生成順、raw factoryのreceiver・引数数／key／prototype・applicationTextの参照、八つのreadonly data field、既存Presentation公開項目と公開テスト204項目のkey／descriptor／型を前後照合した。強制したraw factory例外も同じ実Errorで停止し、Document初期化とtest API公開へ進まない。診断を製品sourceやE2Eへ残さない。
+
+関連単体42件・全単体2,513件・通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。終了後に空白行末の二文字だけを整形し、AST・行数不変と整形後のapp構文を確認した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
 ## Canvasの実Scene recordを共有し再梱包と別名を整理（2026-11-11）
 
 app.jsはCanvasDisplay.createSceneForEditingが返す実SceneをcanvasSceneとして保持し、そのreadonly fieldを必要な機能へ直接渡す。CanvasTestDriver.createBrowserSupportForSceneのdisplayにも同じ実Sceneを渡し、app側のbounds／fit／geometryだけを詰め直す中間objectを作らない。どの表示fieldを使用するかは既存CanvasTestDriver.createForSceneが担当する。同factoryはdisplayのbounds／fit／geometryだけを一度取出し、三field以外の列挙・identity比較・書込みや保存はしない。生のfactoryと公開テストAPIは変更しない。

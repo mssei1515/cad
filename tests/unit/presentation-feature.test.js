@@ -70,6 +70,42 @@ function fixture(){
     withGeometryReadCache(work){assert.equal(work,canvas.drawCanvas);events.push('cache');return work();},drawCanvas(){events.push('frame');return state.frame;}};
   return{feature,state,events,created,settings,profiler,feedback,storage,version,duplicates,ui,canvas,document,w:sandbox.window};
 }
+test('presentation builds authoring feedback on request from the same live settings and returns the actual formatter record',()=>{
+  const f=fixture(),calls=[];
+  assert.equal(f.w.AuthoringFeedback,undefined);
+  const text=f.settings.applicationText;
+  f.settings.applicationText=function(ja,en){'use strict';assert.equal(this,undefined);calls.push(Array.from(arguments));return text(ja,en);};
+  vm.runInNewContext(fs.readFileSync('src/ui/authoring_feedback.js','utf8'),{window:f.w});
+  const native=f.w.AuthoringFeedback;let options,actual;
+  f.w.AuthoringFeedback=Object.freeze({create:function(input){assert.equal(this,f.w.AuthoringFeedback);assert.equal(arguments.length,1);
+    options=input;actual=native.create(input);return actual;}});
+  const api=f.feature.createAuthoringFeedback();assert.equal(api,actual);
+  assert.deepEqual(Object.keys(options),['applicationText']);assert.equal(options.applicationText,f.settings.applicationText);
+  assert.equal(Object.isFrozen(api),true);assert.ok(Object.values(Object.getOwnPropertyDescriptors(api)).every(d=>Object.hasOwn(d,'value')&&!d.writable&&!d.configurable));
+  assert.deepEqual(calls,[]);assert.equal(f.state.domReads,0);assert.deepEqual(f.events,['settings','profiler','feedback']);
+  assert.equal(api.geometryInstanceTypeLabel('mirror'),'ミラー');f.settings.language='en';
+  assert.equal(api.geometryInstanceTypeLabel('mirror'),'Mirror');assert.equal(api.hatchPatternTypeLabel('solid'),'Solid fill');
+  const result=Object.freeze({code:'invalid-distance'});
+  assert.equal(api.offsetChainErrorText(result),'The offset distance is invalid');
+  assert.equal(api.hatchRegionErrorText({code:'unknown',reason:'Original reason'}),'Original reason');
+  assert.ok(calls.every(args=>args.length===2));assert.equal(result.code,'invalid-distance');
+});
+
+test('presentation authoring feedback preserves late factory lookup, independent settings and original construction or formatting failures',()=>{
+  const f=fixture(),other=fixture(),failure=new Error('authoring feedback failed');
+  assert.throws(()=>f.feature.createAuthoringFeedback(),error=>error.name==='TypeError');
+  f.w.AuthoringFeedback={create(){throw failure;}};
+  assert.throws(()=>f.feature.createAuthoringFeedback(),error=>error===failure);
+  for(const current of [f,other])vm.runInNewContext(fs.readFileSync('src/ui/authoring_feedback.js','utf8'),{window:current.w});
+  let fail=false;const text=f.settings.applicationText;
+  f.settings.applicationText=function(ja,en){'use strict';assert.equal(this,undefined);if(fail)throw failure;return text(ja,en);};
+  const first=f.feature.createAuthoringFeedback(),second=f.feature.createAuthoringFeedback(),independent=other.feature.createAuthoringFeedback();
+  assert.notEqual(first,second);f.settings.language='en';assert.equal(first.geometryInstanceTypeLabel('mirror'),'Mirror');
+  assert.equal(second.geometryInstanceTypeLabel('mirror'),'Mirror');assert.equal(independent.geometryInstanceTypeLabel('mirror'),'ミラー');
+  fail=true;assert.doesNotThrow(()=>f.feature.createAuthoringFeedback());
+  assert.throws(()=>first.hatchRegionErrorText(null),error=>error===failure);
+});
+
 test('presentation creates settings, profiler and feedback in order and exposes actual shared owners before view binding',()=>{
   const f=fixture();assert.deepEqual(f.events,['settings','profiler','feedback']);assert.equal(f.state.domReads,0);
   assert.equal(f.feature.settings,f.settings);assert.equal(f.feature.profiler,f.profiler);assert.equal(f.feature.constraintFeedback,f.feedback.constraints);
