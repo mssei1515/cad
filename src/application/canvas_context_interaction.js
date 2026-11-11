@@ -110,7 +110,15 @@
       }
       return Object.freeze({ ...scene, createInteraction });
     }
-    return Object.freeze({ controller: menu.controller, element: menu.element, createSceneForEditing });
+    function createSceneForPresentation({ icons, feedback, ...options }) {
+      return createSceneForEditing({ ...options, candidates: {
+        toolbarSvgMarkup: icons.toolbarSvgMarkup, formatDisplayNumber: window.NumberDisplay.formatDisplayNumber,
+        constraintToolbarIcon: icons.constraintToolbarIcon, localizedConstraintName: presentation.constraintFeedback.localizedConstraintName,
+        geometryInstanceTypeLabel: feedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: feedback.hatchPatternTypeLabel,
+        hatchAppearanceForDisplay: window.HatchData.hatchAppearanceForDisplay,
+      } });
+    }
+    return Object.freeze({ controller: menu.controller, element: menu.element, createSceneForEditing, createSceneForPresentation });
   }
   window.CanvasContextInteraction = Object.freeze({ create, createMenu, createMenuForWorkspace });
 })();

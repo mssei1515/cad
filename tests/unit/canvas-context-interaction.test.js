@@ -198,7 +198,7 @@ test('editing-owner menu uses original cancellation, guards, dimension group and
 function sceneFixture(composed, probe = {}) {
   probe.order = []; probe.ports = {}; probe.results = {}; let owners;
   const f = fixture({ withMenu: true, withEditingOwners: true,
-    buildMenu: composed === 'owned' ? options => {
+    buildMenu: composed === 'owned' || composed === 'presentation' ? options => {
       owners = { documentWorkspace: {}, readServices: {}, interaction: { hover: options.canvasHover },
         presentation: { settings: { applicationText: options.applicationText }, draw: options.draw } };
       return w.CanvasContextInteraction.createMenuForWorkspace({ ...options, ...owners });
@@ -225,6 +225,14 @@ function sceneFixture(composed, probe = {}) {
       interaction: { selection: editingOwners.selection, scope: editingOwners.selectionScope, access: editingOwners.access, lifecycle: { readMode: options.readMode } },
       sessions: { pointer: editingOwners.pointer, pending: options.pendingCommandSession, targets: options.constraintTargetSession }, candidates,
       presentation: { updateUI: options.updateUI, updateGeometrySelectionUI: options.updateGeometrySelectionUI, setHint: options.setHint } };
+    if (probe.nativePresentation || composed === 'presentation') {
+      candidates.formatDisplayNumber = w.NumberDisplay.formatDisplayNumber;
+      candidates.hatchAppearanceForDisplay = w.HatchData.hatchAppearanceForDisplay;
+    }
+    probe.configureCandidates?.(candidates, state, ready);
+    input.presentation.constraintFeedback = Object.freeze({ localizedConstraintName: candidates.localizedConstraintName });
+    probe.icons = Object.freeze({ toolbarSvgMarkup: candidates.toolbarSvgMarkup, constraintToolbarIcon: candidates.constraintToolbarIcon });
+    probe.feedback = Object.freeze({ geometryInstanceTypeLabel: candidates.geometryInstanceTypeLabel, hatchPatternTypeLabel: candidates.hatchPatternTypeLabel });
     probe.input = input;
     if (owners) { for (const key of ['documentWorkspace', 'readServices', 'interaction', 'presentation']) Object.assign(owners[key], input[key]); }
     const originals = new Map();
@@ -236,7 +244,8 @@ function sceneFixture(composed, probe = {}) {
     }
     try {
       let scene;
-      if (composed) scene = menuFeature.createSceneForEditing(input);
+      if (composed === 'presentation') scene = menuFeature.createSceneForPresentation({ ...input, icons: probe.icons, feedback: probe.feedback });
+      else if (composed) scene = menuFeature.createSceneForEditing(input);
       else {
         const { candidatesAt } = sceneQueries.createContextQuery({ editedFitPoints: () => options.splineEditing.current?.spline?.fitPoints, canvasContextAnnotationHit: input.canvasContextAnnotationHit });
         const presentCandidate = w.CanvasContextPresentation.create({ ...candidates, applicationText: options.applicationText, blockDefinitionById: catalog.blockDefinitionById });
@@ -256,7 +265,7 @@ function sceneFixture(composed, probe = {}) {
 }
 
 test('context scene constructs actual query and candidate formatter before later menu interaction without eager scope or presentation reads', () => {
-  for (const composed of [false, true, 'owned']) {
+  for (const composed of [false, true, 'owned', 'presentation']) {
     const f = sceneFixture(composed), { ports, results, input } = f.probe;
     assert.deepEqual(f.probe.order, ['query', 'presentation', 'between', 'entry', 'actions']); assert.deepEqual(f.calls, []);
     assert.equal(f.scene.presentCandidate, results.presentation); assert.equal(ports.entry.canvasContextCandidatesAt, results.query.candidatesAt);
@@ -271,7 +280,7 @@ test('context scene constructs actual query and candidate formatter before later
 });
 
 test('context scene keeps current spline ranking, menu hover restoration and late constraint selection with original Geometry and pointer identities', () => {
-  for (const composed of [false, true, 'owned']) {
+  for (const composed of [false, true, 'owned', 'presentation']) {
     const f = sceneFixture(composed), a = f.point('P1'), b = f.point('P2'), line = { id: 'hover-line' };
     Object.assign(a, { x: 10, y: 20 }); Object.assign(b, { x: 10.5, y: 20 }); f.state.sceneScope.points.push(a, b); f.selection.set('points', [a]);
     f.probe.input.splineEditing.current = { spline: { fitPoints: [b] } };
@@ -290,7 +299,7 @@ test('context scene keeps current spline ranking, menu hover restoration and lat
 
 test('context scene preserves query and formatter failure stages and leaves selection intact when the runtime query throws', () => {
   const sequence = ['query', 'presentation', 'between', 'entry', 'actions'];
-  for (const composed of [false, true, 'owned']) {
+  for (const composed of [false, true, 'owned', 'presentation']) {
     for (const failAt of ['query', 'presentation', 'entry', 'actions']) {
       const probe = { failAt, error: new Error(failAt) }; assert.throws(() => sceneFixture(composed, probe), error => error === probe.error);
       assert.deepEqual(probe.order, sequence.slice(0, sequence.indexOf(failAt) + 1));
@@ -301,7 +310,7 @@ test('context scene preserves query and formatter failure stages and leaves sele
 });
 
 test('context scene shares owner callbacks and keeps live spline targets after action construction', () => {
-  for (const composed of [false, true, 'owned']) {
+  for (const composed of [false, true, 'owned', 'presentation']) {
     const f = sceneFixture(composed), { input, ports } = f.probe;
     assert.equal(ports.actions.addSplineFitPointFromContext, input.splineEditing.addPoint);
     assert.equal(ports.actions.deleteSplineFitPointFromContext, input.splineEditing.deletePoint);
@@ -322,7 +331,7 @@ test('context scene shares owner callbacks and keeps live spline targets after a
 });
 
 test('context scene retains dimension update order and propagates the original failure before later effects', () => {
-  for (const composed of [false, true, 'owned']) {
+  for (const composed of [false, true, 'owned', 'presentation']) {
     const f = sceneFixture(composed), { input } = f.probe;
     input.presentation.updateGeometrySelectionUI = () => { throw new Error('must retain original bare callback'); };
     f.state.group = { reference: {} };
@@ -369,5 +378,48 @@ test('owned context menu publishes presentation and actions at their separate su
  f.calls.length=0;f.dom.menu.fire('click',{target:action});assert.ok(f.calls.some(call=>call[0]==='undo'));assert.equal(f.calls.some(call=>call[0]==='new-undo'),false);
  const next=scene.createInteraction(f.probe.later);assert.notEqual(next,f.interaction);
  f.dom.canvas.fire('contextmenu',f.event);f.calls.length=0;f.dom.menu.fire('click',{target:action});assert.ok(f.calls.some(call=>call[0]==='new-undo'));assert.equal(f.calls.some(call=>call[0]==='undo'),false);
+ controller.dispose();assert.equal(f.dom.menu.count()+f.dom.canvas.count()+f.dom.document.count()+f.dom.window.count(),0);
+});
+
+test('presentation scene shares native UI functions and preserves numeric labels, live language and actual candidate formatting',()=>{
+ const outputs=[];
+ for(const mode of ['owned','presentation']){
+  const f=sceneFixture(mode,{nativePresentation:true,configureCandidates(candidates,state,ready){
+   state.language='ja';candidates.localizedConstraintName=value=>{ready();return state.language+':'+value;};
+   candidates.geometryInstanceTypeLabel=value=>{ready();return state.language+':'+value;};
+   candidates.hatchPatternTypeLabel=value=>{ready();return state.language+':'+value;};
+  }}),{ports,input,icons,feedback,results}=f.probe;
+  assert.deepEqual(f.calls,[]);assert.equal(f.scene.presentCandidate,results.presentation);
+  assert.equal(ports.presentation.toolbarSvgMarkup,icons.toolbarSvgMarkup);assert.equal(ports.presentation.constraintToolbarIcon,icons.constraintToolbarIcon);
+  assert.equal(ports.presentation.formatDisplayNumber,w.NumberDisplay.formatDisplayNumber);
+  assert.equal(ports.presentation.localizedConstraintName,input.presentation.constraintFeedback.localizedConstraintName);
+  assert.equal(ports.presentation.geometryInstanceTypeLabel,feedback.geometryInstanceTypeLabel);assert.equal(ports.presentation.hatchPatternTypeLabel,feedback.hatchPatternTypeLabel);
+  assert.equal(ports.presentation.hatchAppearanceForDisplay,w.HatchData.hatchAppearanceForDisplay);
+  const targets=[{kind:'point',item:{id:'P1',x:12.3456789,y:-0.0000123}},{kind:'dimension',item:{name:'Distance',parameterName:'D1'}},
+   {kind:'geometry-instance',item:{id:'I1',type:'mirror'}},{kind:'hatch',item:{id:'H1',appearance:{patternType:'solid'}}}];
+  const before=targets.map(t=>f.scene.presentCandidate(t));assert.match(before[1].secondary,/^ja:/);assert.match(before[2].secondary,/^ja:/);
+  f.state.language='en';const after=targets.map(t=>f.scene.presentCandidate(t));assert.match(after[1].secondary,/^en:/);assert.match(after[2].secondary,/^en:/);
+  outputs.push(JSON.stringify({before,after}));
+ }
+ assert.equal(outputs[1],outputs[0]);
+});
+
+test('presentation configuration reads only required record fields and preserves the previous menu after UI, query or formatter failure',()=>{
+ const f=sceneFixture('presentation'),{input,icons,feedback}=f.probe,controller=f.menuFeature.controller;
+ const point=f.point('P1');Object.assign(point,f.state.pointer);f.state.sceneScope.points.push(point);
+ controller.start();f.dom.canvas.fire('contextmenu',f.event);const html=f.dom.menu.innerHTML,selected=Array.from(f.selection.points);controller.close();
+ const marker=new Error('candidate preparation failed'),originalQuery=input.sceneQueries.createContextQuery,originalPresentation=w.CanvasContextPresentation;
+ let queries=0;input.sceneQueries.createContextQuery=function(options){queries++;return originalQuery.call(this,options);};
+ const unused=Object.freeze(Object.defineProperty({...feedback},'hatchRegionErrorText',{enumerable:true,get(){throw marker;}}));
+ try{
+  const scene=f.menuFeature.createSceneForPresentation({...input,icons,feedback:unused});assert.equal(typeof scene.presentCandidate,'function');assert.equal(queries,1);
+  const badIcons=Object.freeze(Object.defineProperty({...icons},'toolbarSvgMarkup',{get(){throw marker;}}));
+  queries=0;assert.throws(()=>f.menuFeature.createSceneForPresentation({...input,icons:badIcons,feedback}),error=>error===marker);assert.equal(queries,0);
+  input.sceneQueries.createContextQuery=()=>{throw marker;};
+  assert.throws(()=>f.menuFeature.createSceneForPresentation({...input,icons,feedback}),error=>error===marker);
+  input.sceneQueries.createContextQuery=originalQuery;w.CanvasContextPresentation={create(){throw marker;}};
+  assert.throws(()=>f.menuFeature.createSceneForPresentation({...input,icons,feedback}),error=>error===marker);
+ }finally{input.sceneQueries.createContextQuery=originalQuery;w.CanvasContextPresentation=originalPresentation;}
+ f.dom.canvas.fire('contextmenu',f.event);assert.equal(f.dom.menu.innerHTML,html);assert.deepEqual(Array.from(f.selection.points),selected);assert.equal(f.state.sceneScope.points[0],point);
  controller.dispose();assert.equal(f.dom.menu.count()+f.dom.canvas.count()+f.dom.document.count()+f.dom.window.count(),0);
 });
