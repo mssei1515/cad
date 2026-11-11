@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),test=require('node:test');
-function fixture(){
+function fixture(probe = {}){
  const sandbox={window:{},structuredClone};vm.createContext(sandbox);
  const sources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
  for(const file of sources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),sandbox,{filename:file});
@@ -13,15 +13,17 @@ function fixture(){
   setHint:()=>events.push('hint'),applicationText:(_ja,en)=>en,clearSnap:()=>lateSnap(),clearPointerPreview:()=>sessions.preview.setPointer(null),
   clearSelection:()=>presentation.clearing.clear(),updateGeometrySelectionUI:()=>events.push('ui'),draw:()=>events.push('draw')});
  assert.deepEqual(events,['pointUsage:create']);assert.equal(foundation.selection,foundation.selectionFeature.selection);assert.equal(foundation.scope,foundation.selectionFeature.scope);assert.equal(foundation.access,foundation.selectionFeature.access);
- sessions=foundation.createOperationSessions({snapForDrawing:p=>latePreview(p),linePreviewPoint:p=>latePreview(p),readCenterline:()=>latePreview(),projectPointToCenterlineSupport:p=>latePreview(p),
+ const sessionOptions = {snapForDrawing:p=>latePreview(p),linePreviewPoint:p=>latePreview(p),readCenterline:()=>latePreview(),projectPointToCenterlineSupport:p=>latePreview(p),
   readOffsetSelection:()=>latePreview(),computeTrimPreview:p=>latePreview(p),hits:{hitPoint:()=>latePreview(),hitLine:()=>latePreview(),hitCircle:()=>latePreview(),hitArc:()=>latePreview()},
   clearPlacement:()=>events.push('placement'),cancelAnnotation:()=>events.push('annotation'),cancelPngExport:()=>events.push('png'),resetOffset:()=>events.push('offset'),
-  hideInput:()=>events.push('hide'),updateToolbar:()=>events.push('toolbar'),updateConstraintButtons:()=>events.push('buttons'),acceptTarget:(...args)=>lateOperand(...args)});
+  hideInput:()=>events.push('hide'),updateToolbar:()=>events.push('toolbar'),updateConstraintButtons:()=>events.push('buttons'),acceptTarget:(...args)=>lateOperand(...args)};
+ probe.beforeSessions?.(foundation, w, sessionOptions);
+ sessions=foundation.createOperationSessions(sessionOptions);
  presentation=sessions.createSelectionPresentation({projections:{blockProjectionBundle:()=>{read();return {};}},constraintReferences:{constraintGraphNodes:()=>new Set()}});
  assert.deepEqual(events,['pointUsage:create']);assert.equal(Object.isFrozen(foundation),true);assert.equal(Object.isFrozen(sessions),true);
  lateSnap=()=>{events.push('snap');if(state.snapFailure)throw state.snapFailure;};latePreview=p=>p;lateOperand=(_type,operands,candidate)=>({ok:true,operands:[...operands,candidate]});state.ready=true;events.length=0;
  const point=new w.GeometrySolver.Point('P1',0,0,false,'endpoint');point.sketchId='S1';state.scope.points.push(point);
- return {w,foundation,sessions,presentation,state,events,point,readServices};
+ return {w,foundation,sessions,presentation,state,events,point,readServices,sessionOptions};
 }
 
 test('Canvas interaction stages retain live owners, deferred ports and independent pending, constraint and pointer state',()=>{
@@ -693,4 +695,66 @@ test('Canvas-owned real scene stays cold and shares live mode, pending, targets,
  const next=Object.assign(new w.GeometrySolver.Point('P2',40,50),{sketchId:'S1'});state.scope={...state.scope,points:[next]};assert.equal(q.geometry.hitPoint(0,0),null);assert.equal(q.geometry.hitPoint(40,50),next);
  hidden=true;assert.equal(q.geometry.hitPoint(40,50),null);hidden=false;error=new Error('scope failed');assert.throws(()=>q.geometry.hitPoint(40,50),e=>e===error);error=null;
  assert.equal(b.selection.points.length,0);assert.equal(state.scope.points[0],next);assert.equal(scene.policy.ordinarySelectionMode(),true);
+});
+
+test('owned pending cancellation stays uninitialized through construction and preserves the native receiver, single message, result and error',()=>{
+ const messages=[],result={},marker=new Error('cancel failed');let pending,fail=false;
+ const f=fixture({beforeSessions(b,w){
+  assert.throws(b.cancelPendingCommand,{name:'ReferenceError',message:"Cannot access 'pendingCommandSession' before initialization"});
+  pending=Object.freeze({cancel(message){assert.equal(this,pending);assert.equal(arguments.length,1);messages.push(message);if(fail)throw marker;return result;}});
+  w.PendingCommandSession={create(){return pending;}};
+  const pointer=w.PointerInteractionController;w.PointerInteractionController={...pointer,createSession(){
+   assert.throws(b.cancelPendingCommand,{name:'ReferenceError',message:"Cannot access 'pendingCommandSession' before initialization"});
+   return pointer.createSession();
+  }};
+ }});
+ assert.equal(f.sessions.pending,pending);assert.deepEqual(messages,[]);
+ assert.equal(f.foundation.cancelPendingCommand.name,'cancelPendingCommand');assert.equal(f.foundation.cancelPendingCommand.length,1);
+ const object={message:'unchanged'};
+ for(const message of [undefined,null,'',object])assert.equal(f.foundation.cancelPendingCommand(message,'ignored'),result);
+ assert.deepEqual(messages,[undefined,null,'',object]);assert.equal(messages[3],object);
+ fail=true;assert.throws(()=>f.foundation.cancelPendingCommand('failed'),error=>error===marker);
+});
+
+test('owned pending cancellation preserves native special routing, default hints, pointer independence and the partial failure boundary',()=>{
+ const traces=[];
+ for(const owned of [false,true]){
+  const f=fixture(),all=[];
+  for(const type of ['none','annotation','png-export','offset-value','distance-value'])for(const message of [undefined,'',null,'custom']){
+   const s=f.foundation.createOperationSessions(f.sessionOptions),command={type:'horizontal'};
+   s.targets.replaceCommand(command);s.pointer.setLastPointer(f.point);s.preview.setPointer(f.point);
+   s.pending.replace(type==='none'?null:type==='annotation'?{type,annotationDraft:true}:{type});f.events.length=0;
+   const cancel=owned?f.foundation.cancelPendingCommand:function(message){return s.pending.cancel(message);};
+   assert.equal(cancel(message),undefined);assert.equal(s.targets.command,command);assert.equal(s.pointer.readLastPointer(),f.point);
+   assert.equal(s.preview.pointer,type==='offset-value'?null:f.point);
+   all.push(JSON.stringify({type,message,events:f.events,pending:s.pending.current}));
+  }
+  const marker=new Error('hide failed');const s=f.foundation.createOperationSessions({...f.sessionOptions,hideInput(){f.events.push('hide');throw marker;}});
+  s.pending.replace({type:'offset-value'});s.preview.setPointer(f.point);f.events.length=0;
+  const cancel=owned?f.foundation.cancelPendingCommand:function(message){return s.pending.cancel(message);};
+  assert.throws(()=>cancel('custom'),error=>error===marker);assert.equal(s.pending.current,null);assert.equal(s.preview.pointer,null);
+  assert.deepEqual(f.events,['placement','offset','hide']);all.push(JSON.stringify(f.events));traces.push(all);
+ }
+ assert.deepEqual(traces[1],traces[0]);
+});
+
+test('pending publication waits for complete sessions, retains the last success through constructor failures and isolates owners',()=>{
+ const marker=new Error('session construction failed');
+ const f=fixture({beforeSessions(b,w,options){const pointer=w.PointerInteractionController;
+  w.PointerInteractionController={...pointer,createSession(){throw marker;}};
+  assert.throws(()=>b.createOperationSessions(options),error=>error===marker);
+  assert.throws(b.cancelPendingCommand,{name:'ReferenceError',message:"Cannot access 'pendingCommandSession' before initialization"});
+  w.PointerInteractionController=pointer;
+ }});
+ for(const [name,method] of [['DrawingPreview','create'],['PendingCommandSession','create'],['ConstraintTargetSession','create'],['PointerInteractionController','createSession']]){
+  const original=f.w[name];f.w[name]={...original,[method](){throw marker;}};
+  f.sessions.pending.replace({type:'offset-value'});f.events.length=0;f.state.ready=false;
+  assert.throws(()=>f.foundation.createOperationSessions(f.sessionOptions),error=>error===marker);
+  f.w[name]=original;f.state.ready=true;f.foundation.cancelPendingCommand('');
+  assert.equal(f.sessions.pending.current,null);assert.deepEqual(f.events,['placement','offset','hide','toolbar','buttons','draw']);
+ }
+ const next=f.foundation.createOperationSessions({...f.sessionOptions,clearPlacement:()=>f.events.push('new-placement')});
+ const previous={type:'old'},other=fixture();f.sessions.pending.replace(previous);next.pending.replace({type:'new'});other.sessions.pending.replace({type:'other'});
+ f.events.length=0;f.foundation.cancelPendingCommand('');assert.equal(next.pending.current,null);assert.equal(f.sessions.pending.current,previous);
+ assert.equal(f.events[0],'new-placement');assert.equal(other.sessions.pending.current.type,'other');
 });

@@ -9,6 +9,11 @@
     const pointUsage = readServices.createPointUsage({ constraintReferencesPoint, editedFitPoints });
     const hover = window.CanvasHover.create({ isEndpointPoint: pointUsage.isEndpointPoint });
     let preparedBlankGesture = null;
+    let preparedPending;
+    function cancelPendingCommand(message) {
+      if (preparedPending === undefined) throw new ReferenceError("Cannot access 'pendingCommandSession' before initialization");
+      return preparedPending.cancel(message);
+    }
     function resetBlankCandidate() {
       if (!preparedBlankGesture) throw new ReferenceError("Cannot access 'blankCanvasGesture' before initialization");
       return preparedBlankGesture.resetCandidate();
@@ -130,10 +135,11 @@
         });
       }
       const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      preparedPending = pending;
       return sessions;
     }
     const feature = Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
-      identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring, resetBlankCandidate });
+      identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring, resetBlankCandidate, cancelPendingCommand });
     return feature;
   }
   window.CanvasInteractionFeature = Object.freeze({ create });
