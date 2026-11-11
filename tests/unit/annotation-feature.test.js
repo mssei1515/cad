@@ -439,7 +439,11 @@ function workspaceStagesFixture(composed, probe = {}) {
       return result;
     };
     let prepared;
-    if (composed) prepared = w.AnnotationFeature.prepareForWorkspace({ documentWorkspace: options.documentWorkspace, readServices: options.readServices, interaction: options.interaction, presentation: options.presentation, viewportScale });
+    if (composed === 'owned') {
+      probe.owner = w.AnnotationFeature.prepare(); probe.window = w;
+      probe.beforeWorkspace?.(probe.owner);
+    }
+    if (composed) prepared = (probe.owner || w.AnnotationFeature).prepareForWorkspace({ documentWorkspace: options.documentWorkspace, readServices: options.readServices, interaction: options.interaction, presentation: options.presentation, viewportScale });
     else prepared = { targets: w.AnnotationFeature.createAnchorQuery({ sketches: options.documentWorkspace.sketches, readServices: options.readServices, pointUsage: options.interaction.pointUsage, selection: options.interaction.selection, viewportScale }) };
     assert.deepEqual(probe.order, ['query']); assert.equal(state.scaleReads, 0); probe.prepared = prepared;
     const constrainedInput = { placementAnchor: (...args) => { if (probe.readerError) throw probe.readerError; return probe.feature.placementAnchor(...args); },
@@ -452,13 +456,15 @@ function workspaceStagesFixture(composed, probe = {}) {
       assert.equal(this, undefined); assert.equal(arguments.length, 0); requireReady(); probe.featureReads = (probe.featureReads || 0) + 1;
       if (probe.readerError) throw probe.readerError; return probe.feature;
     };
-    probe.constrained = composed === 'feature' ? prepared.createConstrainedDragForFeature({ readFeature,
+    probe.constrained = composed === 'feature' || composed === 'owned' ? prepared.createConstrainedDragForFeature({ ...(composed === 'feature' ? { readFeature } : {}),
       buildPlan: constrainedInput.buildPlan, beginGeometryDrag: constrainedInput.beginGeometryDrag, invalidateAnalysis: constrainedInput.invalidateAnalysis })
       : composed ? prepared.createConstrainedDrag(constrainedInput) : w.AnnotationDrag.createConstrained({ ...constrainedInput,
       currentScope: options.documentWorkspace.workspace.current, resolveGeometryRef: options.readServices.reads.resolveGeometryRef, leaderAnchor: prepared.targets.annotationLeaderAnchor,
       applicationText: options.presentation.settings.applicationText, setHint: options.presentation.setHint, updateUI: options.presentation.updateUI, draw: options.presentation.draw });
     assert.deepEqual(probe.order, ['query', 'constrained']); assert.equal(state.scaleReads, 0);
     const { documentWorkspace, readServices, interaction, presentation, targets, ...late } = options;
+    if (composed === 'owned') delete late.resizeEnabled;
+    probe.late = late; probe.beforeFeature?.(probe);
     return probe.feature = composed ? prepared.createFeature(late) : w.AnnotationFeature.createForEditing({ ...options, targets: prepared.targets });
   });
   Object.freeze(f.renderer); probe.ready = true; f.state.workspace = { points: [probe.point], constraints: [], annotations: [f.item] }; return { ...f, probe };
@@ -537,4 +543,111 @@ test('late Annotation Feature reader, anchor and leader failures retain the same
     if (failure === 'leader') { assert.notEqual(p.constrained.scope(), original); p.plan.onEnd(); }
     assert.equal(p.constrained.scope(), original); assert.equal(original.constraints.length, 0);
   }
+});
+
+test('prepared Annotation owner keeps native stages cold and returns the actual Feature, Editor and Drag records', () => {
+  const f = workspaceStagesFixture('owned', {
+    beforeWorkspace(owner) {
+      assert.ok(Object.isFrozen(owner));
+      for (const [call, binding] of [[() => owner.annotationBounds(), 'annotationFeature'], [() => owner.resetDrag(), 'annotationDrag'],
+        [() => owner.resizeEnabled({}), 'annotationDrag'], [() => owner.syncInput(), 'annotationInputController'],
+        [() => owner.createEditorForEditing({}), 'annotationFeature'], [() => owner.createDragForEditing({}), 'annotationFeature']]) {
+        assert.throws(call, new RegExp("Cannot access '" + binding + "' before initialization"));
+      }
+    },
+    beforeFeature(p) {
+      assert.throws(() => p.constrainedPorts.placementAnchor({}), /Cannot access 'annotationFeature' before initialization/);
+      assert.throws(() => p.constrainedPorts.leaderDisplay({}), /Cannot access 'annotationFeature' before initialization/);
+    },
+  });
+  const p = f.probe, owner = p.owner;
+  assert.deepEqual(p.order, ['query', 'constrained', 'feature']); assert.equal(p.feature, f.feature);
+  assert.equal(f.ports.display.resizeEnabled, owner.resizeEnabled);
+  assert.throws(() => owner.resizeEnabled(f.item), /annotationDrag/);
+  const pointer = { captureThenMark() {}, release() {} };
+  assert.equal(owner.createDragForEditing({ constrained: p.constrained, pointer }), f.drag);
+  const editor = owner.createEditorForEditing({});
+  assert.equal(editor.controller, f.editor); assert.equal(editor.commitParameterEdit, f.parameterCommand.commit);
+  assert.equal(f.ports.drag.beginConstrainedDrag, p.constrained.begin); assert.equal(f.ports.drag.beginPointer, pointer.captureThenMark);
+  assert.equal(f.state.scaleReads, 0);
+});
+
+test('owned constrained Annotation readers preserve real virtual geometry, leader movement, live scale and failure identity', () => {
+  const snapshots = [];
+  for (const mode of ['feature', 'owned']) {
+    const f = workspaceStagesFixture(mode), p = f.probe, original = f.state.workspace;
+    Object.assign(f.item, { type: 'leader', start: { x: 2, y: 3 }, anchorConstraints: [{ type: 'coincident' }] }); f.events.length = 0;
+    assert.equal(p.constrained.begin({ pointerId: 1 }, f.item, { x: 3, y: 4 }), true);
+    const positions = [];
+    for (const [x, scale] of [[44, 2], [84, 4]]) {
+      p.geometry.point.x = x; f.state.scale = scale;
+      const anchor = p.prepared.targets.annotationLeaderAnchor(f.item) || f.item.start;
+      p.plan.syncAnnotation(); assert.equal(p.leaderItem, f.item);
+      assert.equal(f.item.x, f.item.start.x + (x - anchor.x) / scale); positions.push([f.item.x, f.item.y]);
+    }
+    const marker = new Error('leader failed'); p.leaderError = marker;
+    assert.throws(() => p.plan.syncAnnotation(), error => error === marker); p.leaderError = null;
+    p.plan.onEnd(); assert.equal(p.constrained.scope(), original); assert.equal(original.points.length, 1);
+    assert.equal(original.points[0], p.point); assert.equal(p.constrained.additionalVariables().length, 0);
+    snapshots.push(JSON.stringify({ positions, events: f.events, points: original.points.map(point => point.id) }));
+  }
+  assert.equal(snapshots[1], snapshots[0]);
+});
+
+test('prepared Annotation ports preserve actual receivers, bounds arguments, resize arity, reset and sync return and original errors', () => {
+  const f = workspaceStagesFixture('owned'), owner = f.probe.owner, value = {}, marker = new Error('component failed'), calls = [];
+  let fail = false;
+  f.spatial.annotationBounds = function (...args) { assert.equal(this, f.spatial); calls.push(['bounds', ...args]); if (fail) throw marker; return value; };
+  f.drag.resizeEnabled = function (...args) { assert.equal(this, f.drag); assert.equal(args.length, 1); calls.push(['resize', ...args]); if (fail) throw marker; return value; };
+  f.drag.reset = function () { assert.equal(this, f.drag); assert.equal(arguments.length, 0); calls.push(['reset']); if (fail) throw marker; return value; };
+  f.editor.sync = function () { assert.equal(this, f.editor); assert.equal(arguments.length, 0); calls.push(['sync']); if (fail) throw marker; return value; };
+  owner.createDragForEditing({ constrained: f.probe.constrained, pointer: {} }); owner.createEditorForEditing({});
+  const extra = {}, args = [f.item, extra, 'third'];
+  assert.equal(owner.annotationBounds(...args), value); assert.deepEqual(calls.shift(), ['bounds', ...args]);
+  assert.equal(f.ports.display.resizeEnabled(f.item, extra), value); assert.deepEqual(calls.shift(), ['resize', f.item]);
+  assert.equal(owner.resetDrag(extra), value); assert.equal(owner.syncInput(extra), value);
+  f.ports.editor.prepare(); assert.deepEqual(calls.at(-1), ['reset']);
+  fail = true;
+  for (const call of [() => owner.annotationBounds(...args), () => owner.resizeEnabled(f.item), () => owner.resetDrag(), () => owner.syncInput()]) {
+    assert.throws(call, error => error === marker);
+  }
+});
+
+test('Annotation factory failures retain completed components, preserve explicit callback overrides and isolate owners', () => {
+  for (const failAt of ['query', 'constrained', 'feature']) {
+    const probe = { failAt }; assert.throws(() => workspaceStagesFixture('owned', probe), error => error === probe.error);
+    assert.deepEqual(probe.order, ['query', 'constrained', 'feature'].slice(0, ['query', 'constrained', 'feature'].indexOf(failAt) + 1));
+    assert.throws(() => probe.owner.annotationBounds(), /annotationFeature/);
+  }
+  const f = workspaceStagesFixture('owned'), p = f.probe, owner = p.owner, value = {}, marker = new Error('factory failed');
+  f.spatial.annotationBounds = () => value; f.drag.reset = () => value; f.editor.sync = () => value;
+  owner.createDragForEditing({ constrained: p.constrained, pointer: {} }); owner.createEditorForEditing({});
+  for (const [namespace, call, observe] of [
+    ['AnnotationDisplay', () => p.prepared.createFeature(p.late), () => owner.annotationBounds()],
+    ['AnnotationDrag', () => owner.createDragForEditing({ constrained: p.constrained, pointer: {} }), () => owner.resetDrag()],
+    ['AnnotationInputController', () => owner.createEditorForEditing({}), () => owner.syncInput()],
+  ]) {
+    const original = p.window[namespace].create; p.window[namespace].create = () => { throw marker; };
+    try { assert.throws(call, error => error === marker); assert.equal(observe(), value); }
+    finally { p.window[namespace].create = original; }
+  }
+  for (const supplied of [undefined, null, () => value]) {
+    const other = workspaceStagesFixture('owned', { beforeFeature(probe) { probe.late.resizeEnabled = supplied; } });
+    assert.equal(other.ports.display.resizeEnabled, supplied);
+    other.probe.owner.createEditorForEditing({ resetDrag: supplied });
+    if (typeof supplied === 'function') other.ports.editor.prepare();
+    else assert.throws(() => other.ports.editor.prepare(), /resetDrag is not a function/);
+  }
+  const constrainedOptions = { buildPlan() {}, beginGeometryDrag() {}, invalidateAnalysis() {} };
+  p.prepared.createConstrainedDragForFeature({ ...constrainedOptions, readFeature: undefined });
+  assert.throws(() => p.constrainedPorts.placementAnchor(f.item), /readFeature is not a function/);
+  let reads = 0;
+  p.prepared.createConstrainedDragForFeature({ ...constrainedOptions, readFeature() {
+    assert.equal(this, undefined); assert.equal(arguments.length, 0); reads++; return f.feature;
+  } });
+  assert.equal(p.constrainedPorts.placementAnchor(f.item), f.item.position); assert.equal(reads, 1);
+  let called = false; owner.createEditorForEditing({ resetDrag() { assert.equal(this, undefined); called = true; } });
+  f.ports.editor.prepare(); assert.equal(called, true);
+  const other = workspaceStagesFixture('owned'); assert.throws(() => other.probe.owner.resetDrag(), /annotationDrag/);
+  assert.equal(owner.resetDrag(), value);
 });

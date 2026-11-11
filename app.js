@@ -25,6 +25,7 @@
   } = window.GeometrySolver;
 
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
+  const annotationPreparation = window.AnnotationFeature.prepare();
 
 
   const canvas = document.getElementById("canvas");
@@ -68,8 +69,7 @@
   const { catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { resolveGeometryRef } = geometryReads;
-  function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
-  const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = geometryReadServices.createBlockLayout({ annotationBounds });
+  const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = geometryReadServices.createBlockLayout({ annotationBounds: annotationPreparation.annotationBounds });
   const sketchNavigation = window.SketchEditingFeature.prepareNavigation();
   const { clearInteractionForSketchChange, toggleSketchVisibility, isSidebarHighlightedElement } = sketchNavigation;
   const { binding: editingScopeBinding, solver, dimensionQueries: dimensionModelQueries, insertion: constraintInsertion } = createEditingScope({
@@ -104,7 +104,7 @@
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, interaction: canvasInteraction, editingScope: editingScopeBinding, presentation,
   });
 
-  const { targets: annotationTargets, createConstrainedDragForFeature: createConstrainedAnnotationDrag, createFeature: createAnnotationFeature } = window.AnnotationFeature.prepareForWorkspace({
+  const { targets: annotationTargets, createConstrainedDragForFeature: createConstrainedAnnotationDrag, createFeature: createAnnotationFeature } = annotationPreparation.prepareForWorkspace({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation, viewportScale: () => viewport.scale,
   });
   const { hitAnnotationTarget, annotationLeaderTargetFromItem, annotationLeaderAnchor } = annotationTargets;
@@ -163,7 +163,7 @@
   });
   presentation.bindCanvas({
     readPngCommand: pngExportLifecycle.readCommand, readPending: () => pendingCommandSession.current, readMode: drawOperationLifecycle.readMode,
-    syncAnnotationInput: () => annotationInputController.sync(),
+    syncAnnotationInput: annotationPreparation.syncInput,
     withGeometryReadCache: geometryReads.withGeometryReadCache, drawCanvas,
   });
   const { command: geometryInstanceCommand, sources: instanceSourceCommand, createEditingWithTransforms: createInstanceEditing } = createDerivedCommands({
@@ -220,7 +220,6 @@
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const geometryDragPreparation = window.GeometryDragFeature.prepare();
   const constrainedAnnotationDrag = createConstrainedAnnotationDrag({
-    readFeature: () => annotationFeature,
     buildPlan: geometryDragPreparation.build, beginGeometryDrag: geometryDragPreparation.begin,
     invalidateAnalysis: () => constraintAnalysis.invalidate(),
   });
@@ -255,7 +254,7 @@
     constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
     sameArcEndpoint, arcEndpointPoint, fixedState: fixedStateQueries,
     editingQueries: { ...geometryDragPreparation.queries, editedSpline: () => splineEditing.current?.spline },
-    annotationBounds,
+    annotationBounds: annotationPreparation.annotationBounds,
   });
   const dimensionValueEditing = window.ConstraintEditing.prepareDimensionValues({
     workspace, sketches: sketchContext, bounds: drawingBounds, minimumLineLength: MIN_LINE_LENGTH,
@@ -267,7 +266,7 @@
   const annotationFeature = createAnnotationFeature({
     ctx, viewport, surface: canvasSurface, editingScope: editingScopeBinding, sessions: operationSessions,
     placement: dimensionPlacement, readAppearance: () => appearanceEditing,
-    readExportFrame: () => pngRendering.frame, canvasThemeColor, resizeEnabled: element => annotationDrag.resizeEnabled(element),
+    readExportFrame: () => pngRendering.frame, canvasThemeColor,
     constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand,
     startDistanceResolution, clearSelection, updateToolbar,
   });
@@ -389,10 +388,9 @@
 
 
 
-  const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationFeature.createEditorForEditing({
+  const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationPreparation.createEditorForEditing({
     document, host: canvas.parentElement, capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
     stabilize: stabilizeDocumentParameters,
-    resetDrag: () => annotationDrag.reset(),
   });
 
   function isGeometryMode() {
@@ -418,7 +416,7 @@
 
   const sceneHitInteraction = operationSessions.createSceneWithAnnotations({
     documentWorkspace, viewport, dimensionScope: dimensionPresentationScope, dimensions: dimensionDisplay, dimensionLabelForConstraint,
-    annotationBounds, annotationSpatial: annotationFeature.spatial, operandValues: constraintOperandValues,
+    annotationBounds: annotationPreparation.annotationBounds, annotationSpatial: annotationFeature.spatial, operandValues: constraintOperandValues,
   });
   const { policy: { ordinarySelectionMode }, hitAnnotationElement } = sceneHitInteraction;
 
@@ -466,7 +464,7 @@
   });
 
   const blockSelectionQuery = blockEditingFeature.createSelectionQuery({
-    references: constraintReferences, serializeConstraint, annotationBounds,
+    references: constraintReferences, serializeConstraint, annotationBounds: annotationPreparation.annotationBounds,
   });
   const { read: blockSelectionGeometry, center: blockSelectionBoundsCenter } = blockSelectionQuery;
 
@@ -615,7 +613,7 @@
     splineEditing, guardDimensionSymbolDeletion, geometry: geometryCreation, sessions: operationSessions, lineCommand, circularCommands,
     solving: sketchSolving, analysis: constraintAnalysis, presentation, updateToolbar, recordHistory,
     referenceImageInteraction, clearSelection, solveAndRefresh,
-    resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
+    resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: annotationPreparation.resetDrag,
     viewport, persistence: documentPersistence, normalizeGeometryInstance, blocks: blockEditingFeature,
     imageClipboard, isGeometryMode,
   });
@@ -697,7 +695,7 @@
 
 
 
-  const annotationDrag = annotationFeature.createDragForEditing({
+  const annotationDrag = annotationPreparation.createDragForEditing({
     constrained: constrainedAnnotationDrag, pointer: dragPointer,
   });
 

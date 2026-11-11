@@ -1,6 +1,43 @@
 /* Connect annotation presentation, anchors and placement over the same operation owners. */
 (() => {
   "use strict";
+  function prepare() {
+    let feature, editor, drag;
+    function requireComponent(component, binding) {
+      if (component === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return component;
+    }
+    function readFeature() { return requireComponent(feature, "annotationFeature"); }
+    function annotationBounds(...args) { return readFeature().spatial.annotationBounds(...args); }
+    function resizeEnabled(element) { return requireComponent(drag, "annotationDrag").resizeEnabled(element); }
+    function resetDrag() { return requireComponent(drag, "annotationDrag").reset(); }
+    function syncInput() { return requireComponent(editor, "annotationInputController").controller.sync(); }
+    function prepareWorkspace(options) {
+      const prepared = prepareForWorkspace(options);
+      const { createFeature: buildFeature, createConstrainedDragForFeature: buildConstrainedDrag } = prepared;
+      function createFeature(options) {
+        const completed = buildFeature({ resizeEnabled, ...options });
+        feature = completed;
+        return completed;
+      }
+      function createConstrainedDragForFeature(options) {
+        return buildConstrainedDrag({ readFeature, ...options });
+      }
+      return Object.freeze({ ...prepared, createFeature, createConstrainedDragForFeature });
+    }
+    function createEditorForEditing(options) {
+      const completed = readFeature().createEditorForEditing({ resetDrag, ...options });
+      editor = completed;
+      return completed;
+    }
+    function createDragForEditing(options) {
+      const completed = readFeature().createDragForEditing(options);
+      drag = completed;
+      return completed;
+    }
+    return Object.freeze({ annotationBounds, resizeEnabled, resetDrag, syncInput,
+      prepareForWorkspace: prepareWorkspace, createEditorForEditing, createDragForEditing });
+  }
   function prepareForWorkspace({ documentWorkspace, readServices, interaction, presentation, viewportScale }) {
     const { workspace, sketches } = documentWorkspace;
     const targets = createAnchorQuery({ sketches, readServices, pointUsage: interaction.pointUsage, selection: interaction.selection, viewportScale });
@@ -155,5 +192,5 @@
       parameterErrorText, exitDrawMode: interaction.lifecycle.exit, nextAnnotationId: () => documentIds.allocate("annotation"),
       canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar, annotationLeaderTargetFromHit });
   }
-  window.AnnotationFeature = Object.freeze({ create, createAnchorQuery, createForEditing, prepareForWorkspace });
+  window.AnnotationFeature = Object.freeze({ prepare, create, createAnchorQuery, createForEditing, prepareForWorkspace });
 })();
