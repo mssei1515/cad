@@ -139,9 +139,20 @@
             keyboard.start();
             return binding;
           }
-          return Object.freeze({ blankGesture, createBinding, bindForEditing });
+          function bindForWorkspace(pointerOptions, readKeyboardOwners, dimensionInput) {
+            return bindForEditing(pointerOptions, () => {
+              const { deleteSelection, ...owners } = readKeyboardOwners();
+              return window.KeyboardInput.createWorkspaceOptions({ ...owners,
+                spline: pointerOptions.spline, hatch: pointerOptions.hatch, splineEditing, blockPlacement: pointerOptions.blockPlacement, deleteSelection });
+            }, dimensionInput);
+          }
+          return Object.freeze({ blankGesture, createBinding, bindForEditing, bindForWorkspace });
         }
         return Object.freeze({ bindPointer, createKeyboard, preparePointerForEditing });
+      }
+      function prepareInputForEditing(options, readGestureOptions) {
+        const input = createEditingInput(options);
+        return input.preparePointerForEditing(readGestureOptions());
       }
       function createCommandCancellation({ instances, constraints, blockPlacementCommand, restoreBlockPlacementPropertiesPanel, updateUI }) {
         return window.CanvasCommandCancellation.create({
@@ -152,7 +163,7 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, createConstruction, createMoveScheduler, createMoveSchedulerForEditing, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, createConstruction, createMoveScheduler, createMoveSchedulerForEditing, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, prepareInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
       preparedPending = pending;
       return sessions;
     }

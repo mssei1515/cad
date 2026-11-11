@@ -124,7 +124,7 @@ function editingInputsFixture(composed,probe={}){
    return probe.drawing=w.BasicDrawingTools.createCanvasInput({point:{},drawing:{getMode:options.readMode,rejectRootSketchCreation:()=>false,handleLineClick:record('line')}});}};
  const constraint=w.ConstraintCommandInput.createFeature({pending:s.pending,targets:s.targets,canvasHover:b.hover,canvasPoint:()=>f.point,
   placement:{retargetDistancePlaceWithOperand:()=>false,startDistanceValueInput:()=>{}},constraints:{operandClick:()=>false}});
- const constraintInputFeature={createInput(options){probe.order.push('ConstraintCommandInput');assert.equal(options.dragging,dimensionDragging);return constraint.createInput(options);}};
+ const constraintInputFeature={createInput(options){probe.order.push('ConstraintCommandInput');if(probe.failAt==='ConstraintCommandInput')throw probe.error;assert.equal(options.dragging,dimensionDragging);return constraint.createInput(options);}};
  const source={document:{activeElement:null},canvas:{setPointerCapture(id){assert.equal(this,source.canvas);events.push(['capture',id]);}},updateUI:()=>events.push('input-ui'),annotationFeature,annotationDrag:{},constraintInputFeature,dimensionDragging,
   constraintTargetHint:()=>{},instanceSourceCommand:{finish:()=>{}},geometryInstanceCommand:{cancel:()=>false},
   sceneQueries:{operands:{hitReferenceTarget:()=>null,hitDerivedProjectionOperand:()=>null,hitBlockProjectionOperand:()=>null},regions:{hitHatchAt:()=>null}},
@@ -759,6 +759,35 @@ test('pending publication waits for complete sessions, retains the last success 
  assert.equal(f.events[0],'new-placement');assert.equal(other.sessions.pending.current.type,'other');
 });
 
+test('Canvas input preparation retains constructor order, deferred gesture inputs and completed blank state',()=>{
+ const stages=[null,'AnnotationCommandInput','ConstraintCommandInput','InstanceCommandInput','drawingFactory','PointCommand','DrawingCommandInput','CanvasSelectionInteraction','gesture-options','blank'];
+ for(const stage of stages){const observations=[];
+  for(const owned of [false,true]){
+   const probe={},f=editingInputsFixture('owned',probe),s=f.sessions,options={splineEditing:{current:null},dimensionValues:{},annotationInput:{}};
+   const marker=probe.error;let blank;probe.order.length=0;probe.failAt=stage;f.state.ready=false;
+   function step(name){probe.order.push(name);if(stage===name)throw marker;}
+   function readGestureOptions(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);step('gesture-options');return options;}
+   f.source.authoring.createBlankGesture=function(ports){assert.equal(this,f.source.authoring);step('blank');
+    assert.equal(ports.splineEditing,options.splineEditing);assert.equal(ports.dimensionValues,options.dimensionValues);assert.equal(ports.annotationInput,options.annotationInput);
+    return blank=f.w.BlankCanvasGesture.create({getMode:ports.lifecycle.readMode,getPending:()=>ports.pending.current,
+     getPendingConstraint:()=>ports.constraintTargets.command,getSplineEditSession:()=>ports.splineEditing.current,
+     getLineCommand:()=>({}),getTransientAuthoring:()=>({}),getTime:()=>100,hypot2:Math.hypot,hasActiveDrawOperation:()=>false,
+     hasSelection:f.foundation.selection.hasSelection,updateGeometrySelectionUI:ports.updateGeometrySelectionUI});};
+   function assemble(){if(owned)return s.prepareInputForEditing(f.source,readGestureOptions);
+    const input=s.createEditingInput(f.source);return input.preparePointerForEditing(readGestureOptions());}
+   if(stage){assert.throws(assemble,error=>error===marker);assert.throws(f.foundation.resetBlankCandidate,error=>error.name==='ReferenceError');}
+   else{
+    const prepared=assemble();assert.ok(Object.isFrozen(prepared));assert.equal(prepared.blankGesture,blank);assert.equal(typeof prepared.bindForWorkspace,'function');
+    const point={x:1,y:2};assert.equal(blank.isRepeated(point),false);assert.equal(blank.isRepeated(point),true);
+    probe.failAt='drawingFactory';assert.throws(assemble,error=>error===marker);assert.equal(f.foundation.resetBlankCandidate(),undefined);
+    assert.equal(blank.isRepeated(point),false);
+   }
+   assert.deepEqual(f.events,[]);assert.equal(f.state.scope.points[0],f.point);observations.push(probe.order.slice());
+  }
+  assert.deepEqual(observations[1],observations[0],stage);
+ }
+});
+
 function inputLifecycleFixture(composed) {
  'use strict';
  const probe={stubBindings:true},f=editingInputsFixture('owned',probe),s=f.sessions,trace=[],frames=new Map(),marker=new Error('input lifecycle'),state={fail:null,generation:0};let legacyBinding;
@@ -771,15 +800,18 @@ function inputLifecycleFixture(composed) {
  f.source.authoring.createBlankGesture=()=>{step('blank');return Object.freeze({resetCandidate(){}});};
  f.source.sceneQueries.createInteraction=()=>{step('query');return {press:{},hover:{},isBlankCommandPanelPoint:()=>true};};
  const originalKeyboard=probe.boundInputs.createKeyboard;
- probe.boundInputs.createKeyboard=function(options){step('keyboard-create');return originalKeyboard.call(this,options);};
+ probe.boundInputs.createKeyboard=function(options){step('keyboard-create');assert.equal(options.splineEditing,prepare.splineEditing);assert.equal(options.blockPlacement,ports.blockPlacement);return originalKeyboard.call(this,options);};
  const keyboard=Object.freeze({start(){assert.equal(this,keyboard);step('keyboard-start');return marker;}});probe.result=keyboard;
  const dimensionInput={bind(){assert.equal(this,dimensionInput);step('dimension-bind');return marker;}};
  const prepare={splineEditing:{},dimensionValues:{},annotationInput:{}};
  const ports={hatch:{},spline:{},blockPlacement:{},dimensions:{},expressions:{},scheduler};
  ports.createCanvasInputBinding=function(){assert.equal(this,undefined);step('native');const id=++state.generation;
   const binding=Object.freeze({bind(){assert.equal(this,binding);step('native-bind');move();},processMove(pointer){assert.equal(this,binding);trace.push(['move',id,JSON.parse(JSON.stringify(pointer))]);if(state.fail==='move')throw marker;}});return binding;};
- function readKeyboardOptions(){assert.equal(this,undefined);step('keyboard-options');return {constraints:{},spline:{},hatch:{},projection:{}};}
+ function readKeyboardOwners(){assert.equal(this,undefined);step('keyboard-options');return {constraints:{},projection:{},navigation:{},files:{},history:{}};}
+ function readKeyboardOptions(){const {deleteSelection,...owners}=readKeyboardOwners();return f.w.KeyboardInput.createWorkspaceOptions({...owners,
+  spline:ports.spline,hatch:ports.hatch,splineEditing:prepare.splineEditing,blockPlacement:ports.blockPlacement,deleteSelection});}
  function assemble(){const prepared=f.inputs.preparePointerForEditing(prepare);
+  if(composed==='workspace')return prepared.bindForWorkspace(ports,readKeyboardOwners,dimensionInput);
   if(composed)return prepared.bindForEditing(ports,readKeyboardOptions,dimensionInput);
   const binding=prepared.createBinding(ports);legacyBinding={value:binding};binding.bind();dimensionInput.bind();const keyboard=f.inputs.createKeyboard(readKeyboardOptions());keyboard.start();return binding;
  }
@@ -787,27 +819,27 @@ function inputLifecycleFixture(composed) {
 }
 
 test('Canvas input lifecycle publishes the actual binding before listeners, then binds dimensions before reading and starting keyboard',()=>{
- const observations=[];for(const composed of [false,true]){const f=inputLifecycleFixture(composed);assert.deepEqual(f.trace,[]);
+ const observations=[];for(const composed of [false,true,'workspace']){const f=inputLifecycleFixture(composed);assert.deepEqual(f.trace,[]);
   assert.throws(f.move,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'canvasInputBinding' before initialization");
   const binding=f.assemble();assert.ok(Object.isFrozen(binding));assert.deepEqual(f.trace.slice(0,4),['blank','query','native','native-bind']);
   assert.deepEqual(f.trace.slice(-4),['dimension-bind','keyboard-options','keyboard-create','keyboard-start']);
   assert.equal(f.trace.indexOf('dimension-bind')>f.trace.findIndex(v=>Array.isArray(v)),true);f.trace.length=0;
   f.sessions.pending.replace({type:'distance-value'});assert.equal(f.move(),true);assert.equal(f.trace.at(-1),'sync');assert.equal(f.trace[0][1],1);
   assert.equal(f.modelScope.points[0],f.point);observations.push(JSON.stringify(f.trace));}
- assert.equal(observations[1],observations[0]);
+ assert.equal(observations[1],observations[0]);assert.equal(observations[2],observations[0]);
 });
 
 test('Canvas input lifecycle retains original failure identity and partial publication at each construction and binding boundary',()=>{
  for(const stage of ['blank','query','native','native-bind','dimension-bind','keyboard-options','keyboard-create','keyboard-start']){const observations=[];
-  for(const composed of [false,true]){const f=inputLifecycleFixture(composed);f.state.fail=stage;assert.throws(f.assemble,e=>e===f.marker);f.state.fail=null;
+  for(const composed of [false,true,'workspace']){const f=inputLifecycleFixture(composed);f.state.fail=stage;assert.throws(f.assemble,e=>e===f.marker);f.state.fail=null;
    const before=f.trace.slice();if(['blank','query','native'].includes(stage))assert.throws(f.move,e=>e.name==='ReferenceError');else {assert.equal(f.move(),true);assert.equal(f.trace.at(-1)[1],1);}
    assert.equal(f.modelScope.points[0],f.point);observations.push(JSON.stringify({before,after:f.trace}));}
-  assert.equal(observations[1],observations[0],stage);
+  assert.equal(observations[1],observations[0],stage);assert.equal(observations[2],observations[0],stage);
  }
 });
 
 test('Canvas input binding replacement follows successful native construction while constructor failure retains the previous scheduler target',()=>{
- for(const composed of [false,true]){const f=inputLifecycleFixture(composed),first=f.assemble();f.state.fail='native';assert.throws(f.assemble,e=>e===f.marker);
+ for(const composed of [false,true,'workspace']){const f=inputLifecycleFixture(composed),first=f.assemble();f.state.fail='native';assert.throws(f.assemble,e=>e===f.marker);
   f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],1);const second=f.assemble();assert.notEqual(second,first);f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
   f.state.fail='move';assert.throws(f.move,e=>e===f.marker);f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
  }

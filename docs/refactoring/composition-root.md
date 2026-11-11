@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Canvas入力の生成・gesture準備とPointer／Keyboard共有操作の接続を既存ownerへ集約（2026-11-11）
+
+CanvasInteractionFeatureのOperation sessionsが返すprepareInputForEditingは、既存createEditingInputで実入力featureを生成した後にreadGestureOptionsをbare・無引数で一度読み、同じ実featureのpreparePointerForEditingへ渡す。返すのは元のprepared recordで、app.jsは中間canvasEditingInputを保持しない。生成失敗時に後段readerやBlank gestureを作らず、gestureの公開は既存preparePointerForEditingが担当する。
+
+prepared recordのbindForWorkspaceは既存bindForEditingへ委譲し、Pointer binding→寸法入力bindの後だけreadKeyboardOwnersをbare・無引数で呼ぶ。既存KeyboardInput.createWorkspaceOptionsへメニュー／file／history等のownerと、Pointerに渡した同じSpline・Hatch・Block配置、準備時の同じSpline editingを渡す。app.jsはこの四つをKeyboardへ重複接続せず、KeyboardInputの設定生成も直接呼ばない。deleteSelectionを含む設定のkey順・native callback参照は維持する。
+
+入力・gesture・binding・Keyboardのstateは既存ownerに残し、実actorやprepared recordをcloneしない。既存createEditingInput／preparePointerForEditing／createBinding／bindForEditing等のraw API、入力生成→Blank準備→公開→Pointer／寸法／Keyboard接続の順、元例外・途中登録・再生成失敗時の前bindingとgesture保持、現在scope・Selection・Pendingを入力時に読む契約を維持する。新しい全体context／state holder／flagやfileは加えず、既存src/application/canvas_interaction_feature.jsに配置する。UI・履歴・保存形式v26は不変。
+
+app.jsは1,222→1,219行（3行減）、非空白779→777行。root220→219文・374→373束縛、構文依存辺1,053→1,048。構築440→439行、bind38→37行、別名・設定88行・委譲4行・test hooks152行は不変。中間featureの保持とKeyboardへの共有操作の再接続をrootから除いた単位であり、200〜500行の全体目標は未完了。
+
+関連単体47件が成功。実input／Blank gestureによる旧手順と新prepareの比較で、七つの入力生成段階とreader／Blank生成の失敗順・元例外、遅延readerの無引数と生成失敗後の非実行、同じ実gestureと候補reset、生成失敗時の前gesture保持を確認した。既存の入力lifecycle比較へWorkspace経路を追加し、八段階の接続失敗、部分公開・scheduler target・再生成と共有actor参照を照合した。browser比較では生成からWindow接続まで14段階、14の実参照、bare／member receiver・引数数、五つのnative設定recordのkey順・function名／arityと公開204項目が一致した。ja/light・en/dark・test起動も成功。rootの中間featureは準備一箇所にしか使われず、Blank aliasの一参照も完成後にあることをlexical dependencyで照合した。宣言した集約以外のCanvasInteractionFeature／rootと、native command input／Canvas binding／Keyboard／Blank gesture sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,564件と関連E2E153件（8file、2.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。性能を含むE2Eは他の検証終了後に実行し、矩形選択は183msで基準内だった。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
 ## Canvas描画実体の完成参照と描画入口を既存CanvasDisplayへ集約（2026-11-11）
 
 CanvasDisplay.prepareRenderingは、安定したdrawCanvasとcreateFrameを返し、既存factoryが完成したFrame bundleのframeを一度選んで内部完了recordへ保持する。factoryはbare・全引数で呼び、返されたnative bundleをそのままapp.jsとCanvasテストへ共有する。app.jsはcanvasFrameRendererの別名と描画委譲を持たず、Frame生成と既存ownerへの接続だけを行う。

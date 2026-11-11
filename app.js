@@ -137,7 +137,7 @@
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
   const { preview: drawingPreview, pending: pendingCommandSession, targets: constraintTargetSession,
-    pointer: pointerInteractionController, createSelectionPresentation, createEditingInput: createCanvasEditingInput } = operationSessions;
+    pointer: pointerInteractionController, createSelectionPresentation, prepareInputForEditing: prepareCanvasEditingInput } = operationSessions;
   const constructionCommand = operationSessions.createConstruction({
     projection: sketchProjectionFeature, cancelConstraintTargetCommand, updateUI, recordHistory,
     synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), clearSnap: () => clearSnap(), updateToolbar,
@@ -974,7 +974,7 @@
     startHatchBoundaryRepair, reorderSelectedDrawingObjects, fitVisibleGeometryToViewport,
   });
 
-  const canvasEditingInput = createCanvasEditingInput({
+  const { blankGesture: blankCanvasGesture, bindForWorkspace: bindCanvasInput } = prepareCanvasEditingInput({
     document, canvas, updateUI,
     annotationFeature, annotationDrag, constraintInputFeature, dimensionDragging: dimensionDragFeature,
     constraintTargetHint,
@@ -982,11 +982,9 @@
     selectionRectangle, viewport, transientAuthoring, authoring: authoringTools,
     drawingCommands: { centerline: centerlineCommand, circleCenterCross: circleCenterCrossCommand, fillet: filletCommand, trim: trimFeature, offset: offsetCommand },
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, geometryDragging: geometryDragFeature, blockDragging, referenceImage: referenceImageInteraction,
-  });
-
-  const { blankGesture: blankCanvasGesture, bindForEditing: bindCanvasInput } = canvasEditingInput.preparePointerForEditing({
+  }, () => ({
     splineEditing, dimensionValues: dimensionValueCommand, annotationInput: annotationInputController,
-  });
+  }));
 
   bindCanvasInput({
     canvasNavigation, recordHistory,
@@ -995,12 +993,11 @@
     expressions: expressionInputController, discardMoves: flushScheduledCanvasPointerMove, enterBlock: enterBlockDefinitionEdit,
     closeContextMenu: closeCanvasContextMenu, hitAnnotationTarget,
     createCanvasInputBinding, readPngExportCommand: pngExportLifecycle.readCommand, scheduler: pointerMoveScheduler,
-  }, () => window.KeyboardInput.createWorkspaceOptions({
+  }, () => ({
     window, navigation: sketchNavigation, canvasMenu: canvasContextMenu, closeCanvas: closeCanvasContextMenu,
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     files: documentFileFeature, history: historyController, copy: copySelectionToClipboard, paste: pasteGeometryClipboard,
-    projection: sketchProjectionCommand, constraints: constraintTargetCommand, spline: splineCommand, hatch: hatchCommand,
-    splineEditing, blockPlacement: blockPlacementCommand, deleteSelection: deleteCurrentSelection,
+    projection: sketchProjectionCommand, constraints: constraintTargetCommand, deleteSelection: deleteCurrentSelection,
   }), dimensionInput);
   canvasViewControls.bindWindow();
 
