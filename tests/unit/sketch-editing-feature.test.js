@@ -659,3 +659,65 @@ test('Sketch browser adapters preserve explicit null or undefined dialog overrid
     d.owners.documentWorkspace.sketches.ensureSketchState(); const before = JSON.stringify(d.state.scope); assert.throws(() => command.remove('S1'), error => error.name === 'TypeError'); assert.equal(JSON.stringify(d.state.scope), before);
   }
 });
+
+test('Tree fixed controls share actual icons and operand with the native Tree and leave selection initialization deferred', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation();
+  const f = editingTreeFixture('presentation', navigation, true);
+  const options = treePresentationOptions(f.config), events = [], fixedOptions = {};
+  const icons = options.icons, operand = options.fixedOperands;
+  let selectionCalls = 0;
+  function createSelection() { selectionCalls++; return operand; }
+  const toolbar = { createIcons() { assert.equal(this, toolbar); assert.equal(arguments.length, 0); events.push('icons'); return icons; } };
+  const original = w.SketchTreeController; let ports, controls;
+  w.SketchTreeController = { ...original, createWithDocumentObjects(input) { ports = input; return original.createWithDocumentObjects(input); } };
+  try { controls = f.feature.createTreeWithFixedControls({ toolbar, createFixed(input) {
+    'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 1); assert.equal(input, fixedOptions);
+    events.push('fixed'); return { operand, createSelectionForWorkspace: createSelection };
+  } }, function() {
+    'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); events.push('fixed-options'); return fixedOptions;
+  }, function(actualIcons, actualOperand) {
+    'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 2);
+    assert.equal(actualIcons, icons); assert.equal(actualOperand, operand); events.push('tree-options');
+    return { ...options, icons: actualIcons, fixedOperands: actualOperand };
+  }); } finally { w.SketchTreeController = original; }
+  assert.ok(Object.isFrozen(controls)); assert.equal(controls.icons, icons); assert.equal(controls.createFixedSelection, createSelection);
+  assert.deepEqual(events, ['icons', 'fixed-options', 'fixed', 'tree-options']); assert.equal(selectionCalls, 0);
+  assert.equal(ports.unfixPoint, operand.unfixPoint); assert.equal(f.state.keyReads, 0);
+  controls.tree.view.render(); assert.equal(f.label.textContent, 'Drawing sketch: Bound view');
+  controls.tree.controller.doubleClick(f.event('S2')); assert.equal(f.state.scope.activeSketchId, 'S2');
+  assert.equal(f.state.scope.points[0], f.point); assert.equal(controls.createFixedSelection(), operand); assert.equal(selectionCalls, 1);
+  navigation.startContext(); navigation.closeContext(); controls.tree.menu.dispose();
+});
+
+test('Tree fixed assembly preserves construction order and partial publications when factories, ports or native Tree fail', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation();
+  const f = editingTreeFixture('presentation', navigation, true), options = treePresentationOptions(f.config);
+  const original = w.SketchTreeController, marker = new Error('Tree controls failed'), events = [];
+  let failure, publishedFixed = null, generation = 0;
+  const step = name => { events.push(name); if (failure === name) throw marker; };
+  const toolbar = { createIcons() { step('icons'); return options.icons; } };
+  function createFixed() {
+    step('fixed'); publishedFixed = { generation: ++generation };
+    return { get operand() { step('operand'); return options.fixedOperands; },
+      get createSelectionForWorkspace() { step('selection'); return () => publishedFixed; } };
+  }
+  function readFixed() { step('fixed-options'); return {}; }
+  function readTree(icons, operand) { step('tree-options'); return { ...options, icons, fixedOperands: operand }; }
+  w.SketchTreeController = { ...original, createWithDocumentObjects(input) { step('tree'); return original.createWithDocumentObjects(input); } };
+  try {
+    const first = f.feature.createTreeWithFixedControls({ toolbar, createFixed }, readFixed, readTree);
+    const firstFixed = publishedFixed;
+    const sequence = ['icons', 'fixed-options', 'fixed', 'operand', 'selection', 'tree-options', 'tree'];
+    assert.deepEqual(events, sequence);
+    for (const name of sequence) {
+      events.length = 0; failure = name; const prior = publishedFixed;
+      assert.throws(() => f.feature.createTreeWithFixedControls({ toolbar, createFixed }, readFixed, readTree), error => error === marker);
+      assert.deepEqual(events, sequence.slice(0, sequence.indexOf(name) + 1));
+      if (sequence.indexOf(name) <= sequence.indexOf('fixed')) assert.equal(publishedFixed, prior);
+      else assert.notEqual(publishedFixed, firstFixed);
+      // Failed Tree replacement leaves the previous native menu usable.
+      assert.doesNotThrow(navigation.startContext); assert.doesNotThrow(navigation.closeContext);
+    }
+    first.tree.menu.dispose();
+  } finally { w.SketchTreeController = original; }
+});

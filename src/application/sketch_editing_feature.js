@@ -157,8 +157,14 @@
         context = result;
         return result;
       }
+      function createTreeWithFixedControls({ toolbar, createFixed }, readFixed, readTree) {
+        const icons = toolbar.createIcons();
+        const { operand, createSelectionForWorkspace } = createFixed(readFixed());
+        const tree = createTreeForPresentation(readTree(icons, operand));
+        return Object.freeze({ icons, createFixedSelection: createSelectionForWorkspace, tree });
+      }
       editingFeature = feature;
-      return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing, createTreeForPresentation }) });
+      return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing, createTreeForPresentation, createTreeWithFixedControls }) });
     }
     function createForBrowser({ window: browserWindow, ...options }) {
       const feature = createEditing({ promptName: (title, name) => browserWindow.prompt(title, name), ...options });

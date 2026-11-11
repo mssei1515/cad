@@ -1,6 +1,21 @@
 # app.jsを起動・接続専用にする継続作業
 
 
+## Sketch Treeの共有アイコンと固定操作の結線（2026-11-12）
+
+SketchEditingFeature.prepareNavigationが返すediting.createTreeWithFixedControlsは、既存Toolbarの実アイコン生成→提供された固定操作factory→実Tree生成をまとめる。アイコンはToolbarへのmember・ゼロ引数呼出し、固定操作factoryはbare・一引数で呼ぶ。依存readerを各段階で呼び、固定操作のoperand→選択factoryの取出し→Tree依存取得という従来順序を保つ。Treeの生成・完成公開は既存createTreeForPresentationを使い、context menuのstartはappの従来位置に残す。
+
+返すcohortは実icons・実Treeと後段の固定選択factoryそのものを保持する。固定操作／固定選択のstate・Solver・scopeは既存ConstraintEditingに残し、Treeに移さない。固定選択は同じ後段で一度生成する。rootの早期参照をASTで調べ、旧境界内のicons／operand参照はTree optionsだけで、固定選択factoryの外部consumerは後段のみと確認した。Tree optionsのreaderはroot公開前の二つの実actorを仮引数で受け、未完成root束縛を参照しない。
+
+native TreeのController／View／Menuと固定操作・アイコン生成本体は不変。固定操作の先行公開をTree生成失敗時にも巻き戻さず、以前の完成Tree contextを保持する。scope／model／ID／Selection・UI・履歴・保存形式v26、raw生成APIを変えない。新file・global・state／guard・registry・全体contextは追加しない。生成順維持のため二つの依存readerを追加する負担はあるが、全アプリを渡さず同じTree構築段階に限定する。
+
+app.jsは1,176→1,172行（4行減）、非空白739行は不変。root202→200文・362→361束縛、構築111→109文・424行。別名78行・bind35行・test hooks151行は不変。行数差は結線をまとめた際の区切り整理であり、実質の成果は三つの構築呼出しの順序を同じownerに置き、rootのoperand参照を除いたことである。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体83件が成功。実Treeへの固定解除portと同一actorの接続、bound viewと操作scopeの区別、実activation・menu起動、固定選択の後段初期化を確認した。icons→依存reader→固定操作→operand／選択factory取得→Tree依存reader→native Treeの順と各段階失敗時の先行公開・以前のTree保持も検証した。ソース逆変換で既存処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,640件・関連単体83件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E171件（8file、2.6m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
 ## 共有確認ダイアログの所有とBlock command構築を整理（2026-11-12）
 
 PresentationFeatureが共有ChoiceDialogの生成と要求入口を所有する。DocumentFileはPresentationのrequestChoiceへ接続し、rootの後段dialog参照を持たない。実dialogのshowをmember・一引数で呼び、Promise・結果・元例外を返す。生成前のReferenceError、生成失敗時の以前の完成参照、明示undefined／null生成後のTypeErrorを維持する。新しい状態はUIの完成参照だけで、選択肢・pending処理は既存ChoiceDialogに残す。
