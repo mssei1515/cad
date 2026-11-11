@@ -133,7 +133,7 @@
     pointer: pointerInteractionController, createSelectionPresentation, prepareInputForEditing: prepareCanvasEditingInput } = operationSessions;
   const constructionCommand = operationSessions.createConstruction({
     projection: sketchProjectionFeature, cancelConstraintTargetCommand, updateUI, recordHistory,
-    synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), clearSnap: () => clearSnap(), updateToolbar,
+    synchronizeSketchProjectionMetadata: sketchProjectionFeature.synchronizeConstructionMetadata, clearSnap: () => clearSnap(), updateToolbar,
   });
   const { highlight: selectionHighlight, documentReset: documentCanvasReset } = createSelectionPresentation({
     projections: blockProjections, constraintReferences,
@@ -272,15 +272,12 @@
     geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer,
     blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle: blockProjections.createBlockProjectionBundle,
   });
-  const { geometry: geometryCreation, createAuthoringForEditing: createAuthoringTools } = createDrawingGeometry({
+  const { geometry: geometryCreation, createAuthoringWithProjectionForEditing: createAuthoringTools } = createDrawingGeometry({
     currentScope: workspace.current, ids: geometryIds, assignSketchId: sketchContext.assignSketchId, currentConstruction: () => constructionCommand.enabled,
     hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
   });
-  const sketchProjectionEditing = sketchProjectionFeature.createModelEditing({
-    geometry: geometryCreation, references: constraintReferences,
-  });
-  const { separateSharedSketchProjectionTargetPoints, synchronizeSketchProjectionMetadata } = sketchProjectionEditing;
-  const authoringTools = createAuthoringTools({
+  const { authoring: authoringTools, projectionEditing: sketchProjectionEditing } = createAuthoringTools({
+    projectionFeature: sketchProjectionFeature, references: constraintReferences,
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions, presentation, viewport,
     annotationAnchors: annotationFeature.drawingAnchors,
     transientAuthoring, pushModelConstraint: constraintInsertion.push, addConstraintIfMissing,
@@ -288,6 +285,7 @@
     cancelConstraintTargetCommand, resetEditing: resetSplineEditing, resetBlankCandidate, updateToolbar, projection: sketchProjectionCommand, clearSelection,
     solveAndRefresh, recordHistory,
   });
+  const { separateSharedSketchProjectionTargetPoints, synchronizeSketchProjectionMetadata } = sketchProjectionEditing;
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
   const { clear: clearSnap } = drawingSnap;
   const { addPointSnapConstraints } = snapConstraints;

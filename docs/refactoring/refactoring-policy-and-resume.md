@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のSketchTree style観測単位ではapp.jsは1,186行、非空白744行。AST監査ではroot207文・363束縛、構築428非空白行とbind35行、別名・設定79行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12の作図・投影公開境界単位ではapp.jsは1,184行、非空白742行。AST監査ではroot206文・363束縛、構築426非空白行とbind35行、別名・設定79行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：SketchTreeのstyle観測を既存Documentのブラウザへ接続（2026-11-12）
+### 最新：投影metadataの公開を所有者へ移し、投影編集から作図構築を接続（2026-11-12）
+
+開始基準developは13651bdf774c901b78d53547164a32bf74e7d622、作業branchはcodex/authoring-projection-boundary。開始週枠残量57%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchProjectionFeature.createModelEditingForConstructionは既存の実Projection editorを生成し、完成した同期capabilityをConstruction向けに公開して同じeditorを返す。synchronizeConstructionMetadataはそのcapabilityだけを読み、未初期化時の元ReferenceErrorとbare・ゼロ引数・戻り値／元例外を保持する。同期関数は完成時に一度取得して保持し、raw createModelEditingは公開状態を変えない。計算と投影モデルの更新は既存SketchProjectionEditingが所有する。
+
+BasicDrawingTools.prepareの準備済みGeometryが返すcreateAuthoringWithProjectionForEditingは、同じ実Geometryとreferencesで投影editorを完成・公開し、その後で既存の作図機能を一度生成する。返すcohortは実authoringと実projectionEditingを保持し、actorを複製・再生成しない。Geometryのroot公開は従来の位置のままとし、app.jsはこの段階の二つのfactoryを順に呼ぶ代わりに既存ownerの入口へ接続する。
+
+AST参照を照合し、旧authoring完成前にmetadata同期を遅延参照する外部consumerはConstructionの一か所だけと確認した。rootのmetadata別名はcohort返却後に移るが、このconsumerは生成前から用意されたFeatureのguard付きportを使い、投影editor完成後・作図constructor中にも同期できる。未完成editor／同期capabilityの取得失敗では以前のcapabilityを保持し、作図の途中失敗では先行公開されたmetadataを戻さず、以前の完成済みauthoringを保持する。これは元の段階的公開であり、新しい一括rollbackを追加しない。rawの投影editor・Geometry／Authoring生成API、全native constructor本体と順序、model／ID／scope／Snap／commandの実体、UI・履歴・保存形式v26は不変。新file・global・model state・registry・全体contextは追加しない。Feature内の小さな完成capability参照を既存モデル状態と混同しない。
+
+app.jsは1,186→1,184行（2行減）、非空白744→742行。root207→206文・363束縛、構築428→426行・115→114文。別名79行、bind35行、test hooks151行は不変。rootの可変参照は追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体81件が成功。実Geometry・Projection editor・Snap・作図commandによる旧順序との比較で、全actor同一性とscope／ID／line操作を確認した。作図constructor中のmetadata利用、投影生成・Snap／Spline／Line／Slot生成失敗の公開状態、以前のauthoring保持、元guard・callback名／arity・bareゼロ引数・元例外・capability取得失敗とraw APIの無副作用を検証した。実Construction切替で投影Splineのmetadata同期とGeometry同一性・通知／描画／履歴順も確認した。ソース逆変換で既存native factory／操作本体は不変。
+
+構文639ファイル・全単体2,631件・関連単体81件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E192件（8file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は残る構築426行・114文について、今回と同じく実際の早期consumerと所有者内の完成公開を照合して境界を選ぶ。Geometry実体の生成まで一括化せず、既存BasicDrawingToolsとProjection Featureのraw API・guard・partial publicationを維持する。Canvas／Solve、全command／全driverのregistryへ広げない。200〜500行への全体目標は未完了。
+
+### SketchTreeのstyle観測を既存Documentのブラウザへ接続（2026-11-12）
 
 開始基準developはe432aea89177e0937e135bef7a0404ecb6cd975d、作業branchはcodex/sketch-tree-style-observation。開始週枠残量57%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

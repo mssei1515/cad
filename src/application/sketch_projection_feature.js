@@ -80,7 +80,20 @@
       }
       return Object.freeze({ projectionQueries: queries, projectionBlockedMessage });
     }
-    return Object.freeze({ ...feature, queries, createModelEditing, createDragInputs });
+    let constructionMetadata;
+    function createModelEditingForConstruction(options) {
+      const completed = createModelEditing(options);
+      const synchronize = completed.synchronizeSketchProjectionMetadata;
+      constructionMetadata = Object.freeze({ synchronize });
+      return completed;
+    }
+    function synchronizeSketchProjectionMetadata() {
+      if (constructionMetadata === undefined) throw new ReferenceError("Cannot access 'synchronizeSketchProjectionMetadata' before initialization");
+      const { synchronize } = constructionMetadata;
+      return synchronize();
+    }
+    return Object.freeze({ ...feature, queries, createModelEditing, createDragInputs, createModelEditingForConstruction,
+      synchronizeConstructionMetadata: synchronizeSketchProjectionMetadata });
   }
   window.SketchProjectionFeature = Object.freeze({ createForWorkspace, createForEditing, create });
 })();

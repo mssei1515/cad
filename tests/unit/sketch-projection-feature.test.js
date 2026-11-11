@@ -239,7 +239,7 @@ function projectionModelFixture(composed, failure) {
   if(failure==='normalize')w.Appearance={...appearance,normalizeAppearance(value){if(++state.normalizations===2)throw marker;return appearance.normalizeAppearance(value);}};
   w.SketchProjectionEditing={create(input){ports=input;check('constructor');return actual=original.create(input);}};
   let editing;
-  try{editing=composed?f.feature.createModelEditing({geometry,references}):w.SketchProjectionEditing.create({
+  try{editing=composed?(composed==='construction'?f.feature.createModelEditingForConstruction({geometry,references}):f.feature.createModelEditing({geometry,references})):w.SketchProjectionEditing.create({
     currentScope:f.documentWorkspace.workspace.current,queries:f.queries,resolveGeometryRef:resolve,geometryRefForItem:w.GeometryObjects.geometryRefForItem,geometryKindForItem:w.GeometryObjects.geometryKindForItem,
     constraintSketchId:f.documentWorkspace.sketches.constraintSketchId,constraintIsOperational:f.referenceState.constraintIsOperational,addPointToSketch:geometry.addPointToSketch,
     constraintReferencesPoint:references.constraintReferencesPoint,nextSeq:w.GeometryIds.nextSeq,normalizeAppearance:w.Appearance.normalizeAppearance});
@@ -303,4 +303,45 @@ test('projection drag inputs share the native query and defer both translations 
   f.workspaceState.language = 'ja'; assert.equal(projectionBlockedMessage(), 'ドラッグ: 旧形式の投影拘束を削除してから形状を編集してください');
   f.workspaceState.fail = 'text'; assert.throws(projectionBlockedMessage, error => error === f.marker);
   assert.equal(f.state.reads, 0); assert.deepEqual(f.events, []); assert.deepEqual(f.hints, []);
+});
+
+
+test('construction metadata publication keeps native editing identity, cold construction and live Workspace synchronization',()=>{
+  const f=projectionModelFixture('construction'),s=f.splineNamespace();assert.equal(f.editing,f.actual);
+  assert.equal(f.feature.synchronizeConstructionMetadata.name,'synchronizeSketchProjectionMetadata');assert.equal(f.feature.synchronizeConstructionMetadata.length,0);
+  assert.equal(f.feature.synchronizeConstructionMetadata('ignored'),true);assert.equal(s.constraint.source,s.source);assert.equal(s.target.closed,true);assert.equal(f.workspaceState.bound.points.length,0);
+  assert.equal(f.feature.synchronizeConstructionMetadata(),false);f.state.scope={...scope(),points:[],lines:[],circles:[],arcs:[],splines:[],constraints:[]};assert.equal(f.feature.synchronizeConstructionMetadata(),false);
+});
+
+test('construction metadata keeps its original guard, zero-argument bare call and only replaces a fully captured native capability',()=>{
+  const f=projectionWorkspaceFixture(true),original=w.SketchProjectionEditing,marker=new Error('metadata publication'),a={},b={};let calls=0,reads=0,method;
+  const guard=()=>assert.throws(()=>f.feature.synchronizeConstructionMetadata(),error=>error.name==='ReferenceError'&&error.message==="Cannot access 'synchronizeSketchProjectionMetadata' before initialization");guard();
+  function native(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);calls++;return method;}
+  const options={geometry:{addPointToSketch(){}},references:{constraintReferencesPoint(){}}};
+  try{
+    w.SketchProjectionEditing={create(){guard();return Object.freeze({synchronizeSketchProjectionMetadata:native});}};
+    const raw=f.feature.createModelEditing(options);assert.equal(raw.synchronizeSketchProjectionMetadata,native);guard();
+    const actual=Object.freeze({get synchronizeSketchProjectionMetadata(){reads++;return native;}});w.SketchProjectionEditing={create(){guard();return actual;}};
+    assert.equal(f.feature.createModelEditingForConstruction(options),actual);assert.equal(reads,1);method=a;assert.equal(f.feature.synchronizeConstructionMetadata('drop'),a);assert.equal(reads,1);assert.equal(calls,1);
+    for(const failGetter of [false,true]){
+      w.SketchProjectionEditing={create(){assert.equal(f.feature.synchronizeConstructionMetadata(),a);if(!failGetter)throw marker;return{get synchronizeSketchProjectionMetadata(){throw marker;}};}};
+      assert.throws(()=>f.feature.createModelEditingForConstruction(options),error=>error===marker);assert.equal(f.feature.synchronizeConstructionMetadata(),a);
+    }
+    const next=Object.freeze({synchronizeSketchProjectionMetadata(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);return b;}});w.SketchProjectionEditing={create:()=>next};
+    assert.equal(f.feature.createModelEditing(options),next);assert.equal(f.feature.synchronizeConstructionMetadata(),a);
+    assert.equal(f.feature.createModelEditingForConstruction(options),next);assert.equal(f.feature.synchronizeConstructionMetadata(),b);
+    w.SketchProjectionEditing={create:()=>Object.freeze({synchronizeSketchProjectionMetadata:undefined})};f.feature.createModelEditingForConstruction(options);assert.throws(()=>f.feature.synchronizeConstructionMetadata(),error=>error.name==='TypeError');
+  }finally{w.SketchProjectionEditing=original;}
+});
+
+
+test('native Construction toggle uses the published editor to synchronize actual projected Spline metadata without replacing geometry',()=>{
+  vm.runInContext(fs.readFileSync('src/commands/construction_command.js','utf8'),sandbox);
+  const f=projectionModelFixture('construction'),s=f.splineNamespace(),events=[];const source=s.source,target=s.target;
+  assert.equal(source.construction,true);const noop=()=>{};
+  const command=w.ConstructionCommand.create({cancelConstraintTargetCommand:noop,selectedConstructionTogglePrimitives:()=>[source],guardSketchProjectionShapeEdit:()=>true,
+    applicationText:(_ja,en)=>en,synchronizeSketchProjectionMetadata:f.feature.synchronizeConstructionMetadata,setHint:()=>events.push('hint'),clearSelection:()=>events.push('clear'),
+    updateUI:()=>events.push('ui'),draw:()=>events.push('draw'),recordHistory:()=>events.push('history')});
+  assert.equal(command.toggle(),undefined);assert.equal(s.source,source);assert.equal(s.target,target);assert.equal(source.construction,false);assert.equal(target.construction,false);
+  assert.equal(target.closed,true);assert.equal(target._curveCache,null);assert.equal(s.constraint.source,source);assert.deepEqual(events,['hint','clear','ui','draw','history']);
 });
