@@ -196,11 +196,11 @@
   const CURRENT_JSON_VERSION = 26;
 
 
-  const pointerMoveScheduler = operationSessions.createMoveScheduler({
+  const pointerMoveScheduler = operationSessions.createMoveSchedulerForEditing({
     requestFrame: (callback) => requestAnimationFrame(callback),
     cancelFrame: (frame) => cancelAnimationFrame(frame),
     profilePhase: profileInteractionPhase, withGeometryReadCache: geometryReads.withGeometryReadCache,
-    readInput: () => canvasInputBinding, syncDimensionValueInput: () => syncDimensionValueInput(),
+    syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
   const { controls: canvasViewControls, canvasThemeColor, createForEditing: createCanvasDisplay } = window.CanvasDisplay.prepareForWorkspace({
@@ -993,22 +993,18 @@
     sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner, geometryDragging: geometryDragFeature, blockDragging, referenceImage: referenceImageInteraction,
   });
 
-  const { blankGesture: blankCanvasGesture, createBinding: createCanvasPointerBinding } = canvasEditingInput.preparePointerForEditing({
+  const { blankGesture: blankCanvasGesture, bindForEditing: bindCanvasInput } = canvasEditingInput.preparePointerForEditing({
     splineEditing, dimensionValues: dimensionValueCommand, annotationInput: annotationInputController,
   });
 
-  const canvasInputBinding = createCanvasPointerBinding({
+  bindCanvasInput({
     canvasNavigation, recordHistory,
     updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     hatch: hatchCommand, spline: splineCommand, blockPlacement: blockPlacementCommand, dimensions: dimensionPlacementCommand,
     expressions: expressionInputController, discardMoves: flushScheduledCanvasPointerMove, enterBlock: enterBlockDefinitionEdit,
     closeContextMenu: closeCanvasContextMenu, hitAnnotationTarget,
     createCanvasInputBinding, readPngExportCommand: pngExportLifecycle.readCommand, scheduler: pointerMoveScheduler,
-  });
-  canvasInputBinding.bind();
-  dimensionInput.bind();
-
-  const keyboardInput = canvasEditingInput.createKeyboard({
+  }, () => ({
     window, menus: { closeSketch: sketchNavigation.closeContext,
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
@@ -1016,8 +1012,7 @@
       copy: copySelectionToClipboard, paste: pasteGeometryClipboard }),
     projection: sketchProjectionCommand, constraints: constraintTargetCommand, spline: splineCommand, hatch: hatchCommand,
     splineEditing, blockPlacement: blockPlacementCommand, deleteSelection: deleteCurrentSelection,
-  });
-  keyboardInput.start();
+  }), dimensionInput);
   canvasViewControls.bindWindow();
 
 

@@ -758,3 +758,58 @@ test('pending publication waits for complete sessions, retains the last success 
  f.events.length=0;f.foundation.cancelPendingCommand('');assert.equal(next.pending.current,null);assert.equal(f.sessions.pending.current,previous);
  assert.equal(f.events[0],'new-placement');assert.equal(other.sessions.pending.current.type,'other');
 });
+
+function inputLifecycleFixture(composed) {
+ 'use strict';
+ const probe={stubBindings:true},f=editingInputsFixture('owned',probe),s=f.sessions,trace=[],frames=new Map(),marker=new Error('input lifecycle'),state={fail:null,generation:0};let legacyBinding;
+ const step=name=>{trace.push(name);if(state.fail===name)throw marker;};
+ const readLegacy=()=>{if(legacyBinding===undefined)throw new ReferenceError("Cannot access 'canvasInputBinding' before initialization");return legacyBinding.value;};
+ const schedulerOptions={requestFrame:callback=>{const id=frames.size;frames.set(id,callback);return id;},cancelFrame:id=>frames.delete(id),
+  profilePhase:(name,work)=>{assert.equal(name,'preview');return work();},withGeometryReadCache:work=>work(),syncDimensionValueInput:()=>trace.push('sync')};
+ const scheduler=composed?s.createMoveSchedulerForEditing(schedulerOptions):s.createMoveScheduler({...schedulerOptions,readInput:readLegacy});
+ function move(){scheduler.schedule({offsetX:7,offsetY:9,shiftKey:true});return scheduler.flush();}
+ f.source.authoring.createBlankGesture=()=>{step('blank');return Object.freeze({resetCandidate(){}});};
+ f.source.sceneQueries.createInteraction=()=>{step('query');return {press:{},hover:{},isBlankCommandPanelPoint:()=>true};};
+ const originalKeyboard=probe.boundInputs.createKeyboard;
+ probe.boundInputs.createKeyboard=function(options){step('keyboard-create');return originalKeyboard.call(this,options);};
+ const keyboard=Object.freeze({start(){assert.equal(this,keyboard);step('keyboard-start');return marker;}});probe.result=keyboard;
+ const dimensionInput={bind(){assert.equal(this,dimensionInput);step('dimension-bind');return marker;}};
+ const prepare={splineEditing:{},dimensionValues:{},annotationInput:{}};
+ const ports={hatch:{},spline:{},blockPlacement:{},dimensions:{},expressions:{},scheduler};
+ ports.createCanvasInputBinding=function(){assert.equal(this,undefined);step('native');const id=++state.generation;
+  const binding=Object.freeze({bind(){assert.equal(this,binding);step('native-bind');move();},processMove(pointer){assert.equal(this,binding);trace.push(['move',id,JSON.parse(JSON.stringify(pointer))]);if(state.fail==='move')throw marker;}});return binding;};
+ function readKeyboardOptions(){assert.equal(this,undefined);step('keyboard-options');return {constraints:{},spline:{},hatch:{},projection:{}};}
+ function assemble(){const prepared=f.inputs.preparePointerForEditing(prepare);
+  if(composed)return prepared.bindForEditing(ports,readKeyboardOptions,dimensionInput);
+  const binding=prepared.createBinding(ports);legacyBinding={value:binding};binding.bind();dimensionInput.bind();const keyboard=f.inputs.createKeyboard(readKeyboardOptions());keyboard.start();return binding;
+ }
+ return {...f,modelScope:f.state.scope,trace,state,marker,scheduler,move,assemble,frames};
+}
+
+test('Canvas input lifecycle publishes the actual binding before listeners, then binds dimensions before reading and starting keyboard',()=>{
+ const observations=[];for(const composed of [false,true]){const f=inputLifecycleFixture(composed);assert.deepEqual(f.trace,[]);
+  assert.throws(f.move,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'canvasInputBinding' before initialization");
+  const binding=f.assemble();assert.ok(Object.isFrozen(binding));assert.deepEqual(f.trace.slice(0,4),['blank','query','native','native-bind']);
+  assert.deepEqual(f.trace.slice(-4),['dimension-bind','keyboard-options','keyboard-create','keyboard-start']);
+  assert.equal(f.trace.indexOf('dimension-bind')>f.trace.findIndex(v=>Array.isArray(v)),true);f.trace.length=0;
+  f.sessions.pending.replace({type:'distance-value'});assert.equal(f.move(),true);assert.equal(f.trace.at(-1),'sync');assert.equal(f.trace[0][1],1);
+  assert.equal(f.modelScope.points[0],f.point);observations.push(JSON.stringify(f.trace));}
+ assert.equal(observations[1],observations[0]);
+});
+
+test('Canvas input lifecycle retains original failure identity and partial publication at each construction and binding boundary',()=>{
+ for(const stage of ['blank','query','native','native-bind','dimension-bind','keyboard-options','keyboard-create','keyboard-start']){const observations=[];
+  for(const composed of [false,true]){const f=inputLifecycleFixture(composed);f.state.fail=stage;assert.throws(f.assemble,e=>e===f.marker);f.state.fail=null;
+   const before=f.trace.slice();if(['blank','query','native'].includes(stage))assert.throws(f.move,e=>e.name==='ReferenceError');else {assert.equal(f.move(),true);assert.equal(f.trace.at(-1)[1],1);}
+   assert.equal(f.modelScope.points[0],f.point);observations.push(JSON.stringify({before,after:f.trace}));}
+  assert.equal(observations[1],observations[0],stage);
+ }
+});
+
+test('Canvas input binding replacement follows successful native construction while constructor failure retains the previous scheduler target',()=>{
+ for(const composed of [false,true]){const f=inputLifecycleFixture(composed),first=f.assemble();f.state.fail='native';assert.throws(f.assemble,e=>e===f.marker);
+  f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],1);const second=f.assemble();assert.notEqual(second,first);f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
+  f.state.fail='move';assert.throws(f.move,e=>e===f.marker);f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
+ }
+ const a=inputLifecycleFixture(true),b=inputLifecycleFixture(true);a.assemble();assert.throws(b.move,e=>e.name==='ReferenceError');
+});

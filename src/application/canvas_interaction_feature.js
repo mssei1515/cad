@@ -54,6 +54,14 @@
           }),
         });
       }
+      let completedInputBinding;
+      function readInputBinding() {
+        if (completedInputBinding === undefined) throw new ReferenceError("Cannot access 'canvasInputBinding' before initialization");
+        return completedInputBinding.value;
+      }
+      function createMoveSchedulerForEditing(options) {
+        return createMoveScheduler({ ...options, readInput: readInputBinding });
+      }
       function createSelectionPresentation({ projections, constraintReferences }) {
         return selectionFeature.createPresentation({ hover, constraintTargets: targets, pointer, projections, constraintReferences, clearSnap });
       }
@@ -119,9 +127,19 @@
             bindPointer({ canvasNavigation, recordHistory, pointerHover, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
               hatch, spline, splineEditing, blockPlacement, annotationInput, dimensionValues, dimensions, expressions, discardMoves, enterBlock,
               query, closeContextMenu, blankGesture });
-            return createCanvasInputBinding({ readPngExportCommand, blankCanvasGesture: blankGesture, isBlankCommandPanelPoint, scheduler });
+            const binding = createCanvasInputBinding({ readPngExportCommand, blankCanvasGesture: blankGesture, isBlankCommandPanelPoint, scheduler });
+            completedInputBinding = { value: binding };
+            return binding;
           }
-          return Object.freeze({ blankGesture, createBinding });
+          function bindForEditing(pointerOptions, readKeyboardOptions, dimensionInput) {
+            const binding = createBinding(pointerOptions);
+            binding.bind();
+            dimensionInput.bind();
+            const keyboard = createKeyboard(readKeyboardOptions());
+            keyboard.start();
+            return binding;
+          }
+          return Object.freeze({ blankGesture, createBinding, bindForEditing });
         }
         return Object.freeze({ bindPointer, createKeyboard, preparePointerForEditing });
       }
@@ -134,7 +152,7 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, createConstruction, createMoveScheduler, createMoveSchedulerForEditing, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
       preparedPending = pending;
       return sessions;
     }

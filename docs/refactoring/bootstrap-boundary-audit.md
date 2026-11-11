@@ -1,5 +1,22 @@
 # Composition rootの残存責務と依存監査
 
+## Canvas入力の生成・公開・bind段階の再監査（2026-11-11）
+
+基準はdevelop 1b273fd。現物のASTではapp.js 1,250行／非空白806行、root235文・393束縛、構築116文／466行、bind15文／27行、test hooks157行だった。前の生成元別集計は別commitのsnapshotであり流用しない。
+
+CanvasDisplayのViewport→Workspace→Scene→Frameは、Dimension／Annotation／ReferenceImage／authoringの生成と相互に利用される。CanvasInteractionのPointerとKeyboardも、Scene queryと全commandの完成を待つ。単一の巨大createへ移す案、全test driverへ共通contextを渡す案は採用しない。現時点の構築466行をまとめて消せるとは見積もらない。
+
+一方、Canvas入力には具体的な所有のずれがある。operationSessions.createMoveSchedulerへroot保持canvasInputBindingのreaderを渡し、同じsessions由来のcreateBindingが実体を生成するが、appが公開とbind、寸法bind、Keyboard生成・startを調整していた。実体はスケジューラ以外のroot機能に共有されず、Keyboard実体もstartにしか使わない。blank gestureはDocumentEditingResetと既存reset portへ共有するため元の生成・公開段階に残す。
+
+採用した境界は、既存createBindingの成功時だけ実入力をsessionsへ保持し、その実入力を読むスケジューラを生成することと、同じprepared pointer APIがbindForEditingで後続の入力接続を行うこと。寸法inputは外部ownerの実体を受け取り、Keyboard optionsを遅延readerで渡す。入力生成前・生成後bind前・途中失敗の公開状態を区別し、各native actorのstateや処理を移さない。
+
+app.jsは1,250→1,245行（5行減）、非空白806→802行、root235→231文・393→391束縛、構文依存辺1,072→1,067。構築分類は116文／466行から114文／449行、bind分類は15文／27行から14文／41行、起動分類は7→6行。二つの生成とbind／startが一つの接続呼出しになったため分類も変化しており、構築分類の17行減を実削減量とは扱わない。別名・設定93行、委譲7行、test hooks157行は不変。全体の200〜500行目標は未完了。
+
+関連単体39件・全単体2,542件・構文639fileが成功。追加三単体は実PointerMoveSchedulerと既存入力fixtureを使い、旧接続との順序比較、生成前guard、八段階の元例外・途中公開状態、生成失敗時の前実体保持・成功時の切替、移動失敗後の継続とsession間の独立性を確認する。browserの旧root／旧module比較では、Pointer生成→bind→寸法bind→ショートカット→Keyboard生成→start、生成前ReferenceErrorの文言、bind時の実入力参照・member receiver／一引数、同じ実scheduler・optionのkey／function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。宣言したowner変更を逆変換すると旧sourceと一致し、四つのnative actor sourceは不変。新しい未束縛参照もない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## 再監査後の実装：Canvasの実Scene共有（2026-11-11）
 
 基準bd96aa7から、下記の実Scene record候補を検証して採用した。八fieldの実recordは凍結own data propertyで、CanvasTestDriverは三fieldのみを読み、geometryDisplayの早期callbackは旧別名の初期化前guardを保つ。新たな大きなbootstrapやテスト専用wrapperを作らず、rootの四別名とdisplay再梱包を除いた。app.jsは1,264→1,264行（0行変化）、非空白819行のまま。四別名・22参照を整理し、うち二参照を含むdisplay再梱包を実Sceneで置換した。root束縛418→415、root文242→243、構文依存辺1,090→1,092。Scene保持と残る二別名の宣言を分けるためroot文・辺は増える。構築468→467非空白行、別名・設定99→100行、委譲11行とtest hooks158行は不変。行数・辺数の減少を成果として装わず、所有者の実recordと利用側の表示契約へ接続を揃える一単位である。200〜500行の全体目標は未完了。
