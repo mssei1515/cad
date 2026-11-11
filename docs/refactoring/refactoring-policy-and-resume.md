@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の削除時作図reset単位ではapp.jsは1,199行、非空白757行。AST監査ではroot209文・365束縛、構築434非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のProperties browser型単位ではapp.jsは1,198行、非空白756行。AST監査ではroot209文・365束縛、構築433非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：削除時のprimitive作図リセットをBasicDrawingToolsへ集約（2026-11-12）
+### 最新：Properties入力のブラウザ型依存を表示先Documentへ集約（2026-11-12）
+
+開始基準developはf2f812da5e17befdcb34e9c505083e2e14c24030、作業branchはcodex/properties-browser-types。開始週枠残量62%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+PropertiesDisplay.prepareの完成Workspaceが返すcreateEditingWithViewForBrowserは、従来のPresentation用生成を通り、編集とAppearanceUIが完成した後のView依存reader内で、表示先Document.defaultViewからHTMLTextAreaElement／HTMLInputElementを取得する。app.jsはPropertiesの入力判定に使うDOM型を個別に渡さず、同じDocumentを既存Workspaceに接続する。
+
+早期prepareやWorkspace生成時に新しいdefaultViewの読取りを行わない。View依存readerは従来どおりbare・無引数で編集生成後に一度呼ぶ。その返値を変更せず、own propertyとして明示された型はundefined／nullを含めそのまま優先し、対応するbrowser getterを読まない。既定値は表示先Documentの型を共有する。通常アプリではこのDocumentはrootのdocumentと同じで、従来のglobal DOM型と同じ実参照である。Document／型getterや各constructorの例外を透過し、全生成が成功するまでPropertiesの完成参照を公開しない。失敗時には前のView／Appearance／Visibilityを保持し、未生成guardも維持する。既存raw生成とPresentation用入口・Controller／View／Appearanceの生成・操作本体は不変。既存application/properties_display.jsに配置し、新file／global／可変slot／全体contextを追加しない。UI・入力判定・Workspace／bound editing scope・履歴・保存形式v26は変更しない。
+
+app.jsは1,199→1,198行（1行減）、非空白757→756行。root209文・365束縛は不変。構築434→433行・115文、bind35行・別名85行・test hooks152行は不変。rootのHTMLInputElementへの直接参照がなくなり、新たな未束縛参照なし。HTMLTextAreaElementはParameter参照入力の別接続でまだ使う。200〜500行の全体目標は未完了。
+
+関連単体34件が成功。既存の実Properties部品を使うraw／Workspace／一括生成／Presentation／browser経路で、Selection・外観編集・入力・操作port・live scope・生成順と各失敗段階を比較した。browser型取得がPropertyEditingFeatureとAppearanceUIの後であること、実型の同一性、明示undefined／nullでのgetter非参照、取得失敗時の前完成参照保持を確認した。ソース逆変換で既存Properties生成・操作本体は不変、rootは入口変更と型指定の削除だけである。
+
+構文639ファイル・全単体2,601件・関連単体34件と通常ja/light・en/dark・test起動が成功。関連E2E197件（7file、3.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はParameter参照入力のDOM型と、Sketch名入力・削除確認のbrowser adapterを確認する。実browser参照・操作時の取得・receiver／引数／取消と例外を保ち、該当UI機能で所有できる箇所を選ぶ。構築433行とtest hooks152行は残り、単なる引数recordの包装や巨大な別rootを導入しない。
+
+### 削除時のprimitive作図リセットをBasicDrawingToolsへ集約（2026-11-12）
 
 開始基準developは51c54213dc9dfa4696535f5cd2e5a5c2608ad28a、作業branchはcodex/drawing-deletion-reset。開始週枠残量62%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
