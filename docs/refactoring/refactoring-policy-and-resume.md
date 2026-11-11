@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のCanvas読取り接続単位ではapp.jsは1,166行、非空白733行。AST監査ではroot198文・359束縛、構築421非空白行とbind35行、別名・設定75行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のCanvas読取り接続単位ではapp.jsは1,166行、非空白733行。AST監査ではroot198文・359束縛、構築421非空白行とbind35行、別名・設定75行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標は未完了で、残量条件による停止checkpointである。最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Canvas表示の読取りcapabilityを既存ownerから接続（2026-11-12）
+### 最新：停止checkpoint：週枠残量49%・最新全E2E成功（2026-11-12）
+
+週枠usedPercent 51・残量49%を確認し、合意した「残量50%未満」の停止条件を満たしたため、新しい責務分離を停止した。残量回復後にユーザーの再開指示で再開する。無料reset creditは使用していない。200〜500行の目標と責務境界を縮小せず、全体完了とはしない。
+
+最終実装commitはdfd4edd04007bb0503d962a011e3ba38f6ff76ab、検証対象developは50396d46554952e74e15cd1dc93edfa43e4c0e73。構文639ファイル・全単体2,666件・関連単体70件・関連E2E187件（7file・2.8分）と通常起動5条件が成功した。その後、同じ最新コードで全E2E589件・50fileが22.4分・exit 0ですべて成功した。710入力と開始HEAD不変、三つのfilter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。前の6b3fcc6に対する全E2Eとは別の今回の証跡である。閾値・timeout・期待値を緩和していない。
+
+今回のcheckpoint追加は三つのrefactoring文書だけで、検証後の実装・テスト・spec・loader・保存形式v26は変更しない。mainは正式リリース版のまま扱い、この記録をdevelopへ保存した後、最新検証済みコードを最後にmainへ反映する。main Push後は直ちにdevelopへff-only同期してPushし、local／tracking／実remoteのmain・develop一致、祖先関係、両worktreeのclean状態とruntime-version更新を確認する。最終release mergeのSHAは記録commitより後に決まるため、再開時はGitの実refで取得する。
+
+app.jsは1,166行、非空白733行。今回の停止処理では1,166→1,166行（0行変化）。最後の実装単位は1,167→1,166行（1行減）。root198文・359束縛、構築109文・421行、別名75行・bind35行・test hooks151行である。余白433行を除いても残る構築と機能別の依存整理が未完了であり、行数目標未達のまま全体目標を一時停止する。
+
+再開場所はmanaged worktree C:\Users\osamu\.codex\worktrees\app-refactoring-resume\cad、通常の実行場所はC:\dev\cadのdevelop。originはhttps://github.com/mssei1515/cad。再開前にusageの実残量、remote取得、mainがdevelopの祖先であること、HEADと未コミット変更の所有を確認し、最新developからcodex/*を作成する。サブエージェント・Computer Useは使わない。
+
+次はCanvas表示の寸法input生成とsync／hide後段参照を追う。DimensionInputの生成位置、PropertiesPanelの完成公開、CanvasViewControlsとPointerMoveSchedulerによる読取り時機、GeometryMutationFeatureがCanvas構築の間に入る順序を確認する。新たなslot・段階APIを増やすだけなら採用しない。構築421行とtest hooks151行を、実ownerの能力とライフサイクルに沿って整理し、巨大なapp context・全test registry・単なる別名置換や余白削除で目標達成を装わない。source／test変更後は必要な検証を実施し、古い全E2E結果を新コードの成功根拠に流用しない。
+
+### Canvas表示の読取りcapabilityを既存ownerから接続（2026-11-12）
 
 開始基準developは540177dcc315e91b34baa5dc33307b618e2555fc、作業branchはcodex/canvas-owned-read-capabilities。開始週枠残量50%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。直前の全E2E589件成功は変更前6b3fcc6の証跡であり、今回以後のコードに流用しない。
 
