@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Geometry dragと拘束・寸法入力を同じpointerで結線（2026-11-12）
+
+GeometryDragFeature.prepareが返すcreateWithConstraintInputForWorkspaceは、既存の投影対応Geometry dragを完成・公開して実commandを取り出し、その後で提供された拘束／寸法入力factoryを呼ぶ。input factoryへは同じpointer・clearSnap・recordHistoryをbare・一引数で渡し、実Geometry feature／command・input・dimension draggingをimmutableなcohortで返す。app.jsはこの生成順とpointer／履歴の二重指定を担当せず、既存ownerの入口へ接続する。
+
+GeometryのPlan／Solver／Editing／Command・Derived entry、ConstraintCommandInput→DimensionDragFeatureのnative生成順と全処理本体は不変。Geometry完成のprivate公開はinput生成前に行う。input factory／input取得／dragging取得が失敗したときも先行公開のGeometryを巻き戻さず、Geometry生成自体の失敗なら以前のprepared ownerを保持しinputを作らない。各actorと元例外・getterの読取順・実pointer・履歴callbackを維持する。rootのgeometryDragFeature／geometryDragは返却後の公開へ移るが、旧境界内のGeometry feature参照はcommandの取出しだけで、実commandを消費する外部callbackはなかった。早期のGeometry query／resetは従来から準備ownerを参照し、Dimension commandのroot公開位置は入力完成後のままである。rawの各生成API・寸法入力factory・mode／session／model／履歴／UI・保存形式v26を変えない。新file・global・可変slot／guard・registry・全体contextを追加しない。
+
+app.jsは1,184→1,181行（3行減）、非空白742→740行。root206→204文・363束縛、構築426→425行・114→113文、別名79→78行。bind35行、test hooks151行は不変。rootの可変参照は追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体81件が成功。実Geometry dragの生成・Point操作と既存のConstraint／Dimension入力単体を実行した。新しい境界ではGeometryを先に公開すること、bare一引数と三つのport／返却actor同一性、input→draggingの取得順、生成時のscope／scale／pointer非読取、Point操作の履歴一回を確認した。native Geometry生成失敗・input生成／返却getter失敗での元例外・既存sessionと段階的公開の保持も確認した。ソース逆変換で既存Geometry／入力の本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,634件・関連単体81件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E180件（7file、4.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 投影metadataの公開を所有者へ移し、投影編集から作図構築を接続（2026-11-12）
 
 SketchProjectionFeature.createModelEditingForConstructionは既存の実Projection editorを生成し、完成した同期capabilityをConstruction向けに公開して同じeditorを返す。synchronizeConstructionMetadataはそのcapabilityだけを読み、未初期化時の元ReferenceErrorとbare・ゼロ引数・戻り値／元例外を保持する。同期関数は完成時に一度取得して保持し、raw createModelEditingは公開状態を変えない。計算と投影モデルの更新は既存SketchProjectionEditingが所有する。

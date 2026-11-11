@@ -862,7 +862,8 @@
 
 
 
-  const geometryDragFeature = geometryDragPreparation.createForWorkspaceWithProjection({
+  const { geometry: geometryDragFeature, command: geometryDrag,
+    input: constraintInputFeature, dragging: dimensionDragFeature } = geometryDragPreparation.createWithConstraintInputForWorkspace({
     documentWorkspace, interaction: canvasInteraction, presentation, sourceQueries: derivedDragQueries, projection: sketchProjectionFeature,
     solver, scopeQuery: solveScopeQuery, solving: sketchSolving,
     checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
@@ -870,11 +871,7 @@
     minimumLength: MIN_ORIENTATION_LENGTH,
     blockLocalGeometryBounds: blockLayout.blockLocalGeometryBounds, fixedState: fixedStateQueries,
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
-  });
-  const { command: geometryDrag } = geometryDragFeature;
-
-  const { input: constraintInputFeature, dragging: dimensionDragFeature } = createConstraintInputWithDragging({
-    pointer: dragPointer, clearSnap, recordHistory,
+    createConstraintInput: createConstraintInputWithDragging, clearSnap,
   });
   const { command: dimensionDrag } = dimensionDragFeature;
 

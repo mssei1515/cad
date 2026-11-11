@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の作図・投影公開境界単位ではapp.jsは1,184行、非空白742行。AST監査ではroot206文・363束縛、構築426非空白行とbind35行、別名・設定79行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のdrag入力結線単位ではapp.jsは1,181行、非空白740行。AST監査ではroot204文・363束縛、構築425非空白行とbind35行、別名・設定78行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：投影metadataの公開を所有者へ移し、投影編集から作図構築を接続（2026-11-12）
+### 最新：Geometry dragと拘束・寸法入力を同じpointerで結線（2026-11-12）
+
+開始基準developはd9b997cd896474d19e60bcdb67befc7c3057c476、作業branchはcodex/drag-input-composition。開始週枠残量56%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+GeometryDragFeature.prepareが返すcreateWithConstraintInputForWorkspaceは、既存の投影対応Geometry dragを完成・公開して実commandを取り出し、その後で提供された拘束／寸法入力factoryを呼ぶ。input factoryへは同じpointer・clearSnap・recordHistoryをbare・一引数で渡し、実Geometry feature／command・input・dimension draggingをimmutableなcohortで返す。app.jsはこの生成順とpointer／履歴の二重指定を担当せず、既存ownerの入口へ接続する。
+
+GeometryのPlan／Solver／Editing／Command・Derived entry、ConstraintCommandInput→DimensionDragFeatureのnative生成順と全処理本体は不変。Geometry完成のprivate公開はinput生成前に行う。input factory／input取得／dragging取得が失敗したときも先行公開のGeometryを巻き戻さず、Geometry生成自体の失敗なら以前のprepared ownerを保持しinputを作らない。各actorと元例外・getterの読取順・実pointer・履歴callbackを維持する。rootのgeometryDragFeature／geometryDragは返却後の公開へ移るが、旧境界内のGeometry feature参照はcommandの取出しだけで、実commandを消費する外部callbackはなかった。早期のGeometry query／resetは従来から準備ownerを参照し、Dimension commandのroot公開位置は入力完成後のままである。rawの各生成API・寸法入力factory・mode／session／model／履歴／UI・保存形式v26を変えない。新file・global・可変slot／guard・registry・全体contextを追加しない。
+
+app.jsは1,184→1,181行（3行減）、非空白742→740行。root206→204文・363束縛、構築426→425行・114→113文、別名79→78行。bind35行、test hooks151行は不変。rootの可変参照は追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体81件が成功。実Geometry dragの生成・Point操作と既存のConstraint／Dimension入力単体を実行した。新しい境界ではGeometryを先に公開すること、bare一引数と三つのport／返却actor同一性、input→draggingの取得順、生成時のscope／scale／pointer非読取、Point操作の履歴一回を確認した。native Geometry生成失敗・input生成／返却getter失敗での元例外・既存sessionと段階的公開の保持も確認した。ソース逆変換で既存Geometry／入力の本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,634件・関連単体81件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E180件（7file、4.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は残る構築425行・113文について、同じownerでの生成と早期consumerを照合する。寸法描画Layerと矩形選択は現時点で分け、診断callbackのためだけのslotは追加しない。今回のdrag結線へmode遷移や数値処理を移さず、既存Geometry／Constraint／Dimension各ownerとprivate完成公開を維持する。全command／driver registryや巨大contextを導入せず、全体目標は未完了として継続する。
+
+### 投影metadataの公開を所有者へ移し、投影編集から作図構築を接続（2026-11-12）
 
 開始基準developは13651bdf774c901b78d53547164a32bf74e7d622、作業branchはcodex/authoring-projection-boundary。開始週枠残量57%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

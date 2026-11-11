@@ -15,6 +15,12 @@
     function createWorkspaceWithProjection({ projection, ...options }) {
       return createPreparedWorkspace({ ...projection.createDragInputs(), ...options });
     }
+    function createWithConstraintInputForWorkspace({ createConstraintInput, clearSnap, ...options }) {
+      const geometry = createWorkspaceWithProjection(options);
+      const { command } = geometry;
+      const { input, dragging } = createConstraintInput({ pointer: options.pointer, clearSnap, recordHistory: options.recordHistory });
+      return Object.freeze({ geometry, command, input, dragging });
+    }
     function build(...args) {
       const { build } = requireFeature("buildDragSession");
       return build(...args);
@@ -26,7 +32,8 @@
       isDraggingPoint(point) { return requireFeature("geometryDrag").command.isPoint(point); },
       isDraggingCenter(point) { return requireFeature("geometryDrag").command.isCenter(point); },
     });
-    return Object.freeze({ createForWorkspace: createPreparedWorkspace, createForWorkspaceWithProjection: createWorkspaceWithProjection, build, begin, reset, queries });
+    return Object.freeze({ createForWorkspace: createPreparedWorkspace, createForWorkspaceWithProjection: createWorkspaceWithProjection,
+      createWithConstraintInputForWorkspace, build, begin, reset, queries });
   }
   function create({ solver, currentScope, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
     viewScale, arcEndpointPoint, acceptError, previewMaxModelError,
