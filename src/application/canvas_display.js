@@ -276,7 +276,14 @@
         }
         return Object.freeze({ ...displayWorkspace, createSceneForEditing, createSceneWithAppearance, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview });
       }
-      return Object.freeze({ ...display, createEditingWorkspace, fitVisibleGeometryToViewport });
+      function createEditingWorkspaceForBrowser({ dimensionInput, ...options }) {
+        const scheduleFrame = callback => {
+          const { requestAnimationFrame } = browserWindow;
+          return requestAnimationFrame(callback);
+        };
+        return createEditingWorkspace({ ...options, dimensionInput: { scheduleFrame, ...dimensionInput } });
+      }
+      return Object.freeze({ ...display, createEditingWorkspace, createEditingWorkspaceForBrowser, fitVisibleGeometryToViewport });
     }
     return Object.freeze({ controls, canvasThemeColor, createForEditing });
   }

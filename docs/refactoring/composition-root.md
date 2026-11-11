@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 寸法入力focusのbrowserフレーム接続をCanvasDisplayへ集約（2026-11-12）
+
+CanvasDisplayの準備済みdisplayが返すcreateEditingWorkspaceForBrowserは、同じbrowser windowのrequestAnimationFrameを操作時に読むscheduleFrameを既定として、既存Editing Workspace生成へ接続する。返値は既存生成の実Workspaceであり、app.jsは寸法入力のframe callbackを組み立てない。
+
+生成中はbrowser frame API・モデル・pending・listenerを読み書きせず、予約も行わない。scheduleFrameは元と同じ名前・arity 1で、現在のnative APIをbare・一引数で呼び、戻り値・元例外を返す。明示dimensionInput.scheduleFrameはundefined／nullを含め優先する。raw createEditingWorkspace、Surface→export→Layout→DimensionDisplay→DimensionInputの順序、Workspace全体完成後のProperties用layout公開を変えない。予約後の最新pending／buffer／Viewportに対する同期とfocus／select、非表示時のfocus省略、入力のguard・履歴・UI・保存形式v26は既存View／Controllerのままである。既存application/canvas_display.jsへ配置し、新file・global・state／frame slot・全体contextを追加しない。
+
+app.jsは1,194→1,194行（0行変化）、非空白752行。root209文・365束縛、構築429行・115文、bind35行・別名85行・test hooks152行は不変。requestAnimationFrameのglobal直接参照がなくなり、新たな未束縛参照なし。行数減ではなく寸法入力表示のbrowser依存を整理した単位であり、200〜500行の全体目標は未完了。
+
+関連単体76件が成功。実Workspace／DimensionDisplay／DimensionInput／View／Controllerを使い、生成時のframe API非取得、同じ入力element、予約後に変更されたpending値・Viewportでの同期→focus→select、元例外と前入力状態の保持、callbackのmetadata・bare receiver・一引数・返却ID 0、明示undefined／nullの優先を確認した。ソース逆変換で既存Canvasと寸法入力の生成・操作本体は不変、rootはWorkspace入口とframe指定の置換だけである。
+
+構文639ファイル・全単体2,612件・関連単体76件と通常ja/light・en/dark・test起動が成功。関連E2E187件（7file、2.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## Pointerフレーム予約と取消のbrowser接続をCanvasInteractionFeatureへ集約（2026-11-12）
 
 CanvasInteractionFeatureの操作sessionが返すcreateMoveSchedulerForBrowserは、同じbrowserのrequestAnimationFrame／cancelAnimationFrameを操作時に読むrequestFrame／cancelFrameを既定として、既存createMoveSchedulerForEditingへ接続する。app.jsは予約・取消のcallbackを組み立てず、既存profile・Geometry read cache・寸法入力同期とbrowserを渡す。
