@@ -1,6 +1,21 @@
 # app.jsを起動・接続専用にする継続作業
 
 
+
+## Selection編集の既存owner capabilityを通常生成へ接続（2026-11-12）
+
+SelectionEditingFeature.prepare().createForDrawingは、既に受け取るinteractionからclearSelectionとisGeometryMode、presentationからupdateToolbar、persistenceからnormalizeGeometryInstanceを接続する。app.jsが同じ関数を別fieldで重ねて渡す責務を除く。新factory・global・可変slot・全体contextは追加せず、既存application ownerへ結線を集める。フォルダ配置は変更しない。
+
+既存のdrawing分解とoptions rest copyの後、resetDrawing取得を従来位置で行う。copy済みoptionsで個別portが省略された場合だけ対応ownerの関数を一度取得する。明示ownのundefined／nullを含む上書きは維持し、未使用のowner getterは読まない。rest copyが継承fieldを除外する規則は維持する。関数を包装せず実関数を渡し、生成中に操作・scope読取・normalizeを実行しない。raw createForEditingによる個別注入は不変。
+
+Deletion→Clipboardのnative生成順、実Selection／モデル／Commandの同一性、prepared Clipboardの完成公開と失敗時の以前のCommand保持は不変。Deletionが使うWorkspace.currentとClipboardが使うbound scopeを統合しない。UI・操作・履歴・保存形式v26とbind／start順は変更しない。SelectionEditingFeature.createForEditing以降の既存処理本体はソース照合で不変。
+
+app.jsは1,168→1,167行（1行減）、非空白735→734行。root199文・360束縛、構築109文・422→421行、別名76行・bind35行・test hooks151行。四つの重複portを除き、新たな未束縛参照なし。行数目標200〜500行は未完了。
+
+関連単体10件が成功。ownerの同じ実関数が遅延操作へ渡り、bare呼出しの引数・返値を保持すること、生成時の非実行、明示null／undefined時の未使用getter非評価、raw注入を確認した。native ClipboardSessionでcutが同じDeletionを使い、Workspaceのみの削除とbound model保持を維持することを検証した。
+
+構文639ファイル・全単体2,664件・関連単体10件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E176件（5file、2.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## Document参照グラフの準備と解決関数の完成公開（2026-11-12）
 
 DocumentWorkspace.prepareReferencesは実ConstraintReferencesを先に一度生成し、同じgraphのDocument生成入口を返す。app.jsは各既存機能の準備と表示生成を従来位置で行い、その後でprepared入口からDocumentWorkspaceを生成する。参照のgraph関数を実SketchContextへ接続し、Reference→Document→ReadContextというnative constructorの生成順を保つ。raw DocumentWorkspace.createによる個別graph関数の注入も維持する。

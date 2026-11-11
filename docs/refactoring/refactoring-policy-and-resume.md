@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のDocument参照準備単位ではapp.jsは1,168行、非空白735行。AST監査ではroot199文・360束縛、構築422非空白行とbind35行、別名・設定76行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のSelection owner接続単位ではapp.jsは1,167行、非空白734行。AST監査ではroot199文・360束縛、構築421非空白行とbind35行、別名・設定76行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Document参照グラフの準備と解決関数の完成公開（2026-11-12）
+### 最新：Selection編集の既存owner capabilityを通常生成へ接続（2026-11-12）
+
+開始基準developはb128e74277164c0fa7697b25d9d0985bdba575be、作業branchはcodex/selection-owned-capabilities。開始週枠残量51%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SelectionEditingFeature.prepare().createForDrawingは、既に受け取るinteractionからclearSelectionとisGeometryMode、presentationからupdateToolbar、persistenceからnormalizeGeometryInstanceを接続する。app.jsが同じ関数を別fieldで重ねて渡す責務を除く。新factory・global・可変slot・全体contextは追加せず、既存application ownerへ結線を集める。フォルダ配置は変更しない。
+
+既存のdrawing分解とoptions rest copyの後、resetDrawing取得を従来位置で行う。copy済みoptionsで個別portが省略された場合だけ対応ownerの関数を一度取得する。明示ownのundefined／nullを含む上書きは維持し、未使用のowner getterは読まない。rest copyが継承fieldを除外する規則は維持する。関数を包装せず実関数を渡し、生成中に操作・scope読取・normalizeを実行しない。raw createForEditingによる個別注入は不変。
+
+Deletion→Clipboardのnative生成順、実Selection／モデル／Commandの同一性、prepared Clipboardの完成公開と失敗時の以前のCommand保持は不変。Deletionが使うWorkspace.currentとClipboardが使うbound scopeを統合しない。UI・操作・履歴・保存形式v26とbind／start順は変更しない。SelectionEditingFeature.createForEditing以降の既存処理本体はソース照合で不変。
+
+app.jsは1,168→1,167行（1行減）、非空白735→734行。root199文・360束縛、構築109文・422→421行、別名76行・bind35行・test hooks151行。四つの重複portを除き、新たな未束縛参照なし。行数目標200〜500行は未完了。
+
+関連単体10件が成功。ownerの同じ実関数が遅延操作へ渡り、bare呼出しの引数・返値を保持すること、生成時の非実行、明示null／undefined時の未使用getter非評価、raw注入を確認した。native ClipboardSessionでcutが同じDeletionを使い、Workspaceのみの削除とbound model保持を維持することを検証した。
+
+構文639ファイル・全単体2,664件・関連単体10件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E176件（5file、2.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はSelectionの操作と表示が残している生成依存・初期化時機を再監査する。同じownerから取得できる能力の重複指定を除く方針を維持するが、単なるfield短縮だけの新APIは作らない。ownerの違う操作をまとめるregistry、巨大context、余白削除で目標達成を装わない。
+
+### Document参照グラフの準備と解決関数の完成公開（2026-11-12）
 
 開始基準developは629eb5d60fabdf6fabee459e5d3f6d3887b6824a、作業branchはcodex/document-reference-preparation。開始週枠残量51%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

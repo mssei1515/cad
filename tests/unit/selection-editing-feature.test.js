@@ -3,6 +3,47 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 
+test('drawing selection assembly reuses owner capabilities without invoking them and retains native cut scope rules', () => {
+  const f = fixture(), calls = [], result = {}, point = { id: 'P1' }, boundPoint = { id: 'B1' };
+  const capabilities = {
+    clearSelection() { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); calls.push('clear'); return result; },
+    isGeometryMode() { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); calls.push('mode'); return true; },
+    updateToolbar() { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); calls.push('toolbar'); return result; },
+    normalizeGeometryInstance(value) { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 1); calls.push('normalize'); return value; },
+  };
+  Object.assign(f.input.interaction, { clearSelection: capabilities.clearSelection, isGeometryMode: capabilities.isGeometryMode });
+  f.input.presentation.updateToolbar = capabilities.updateToolbar;
+  f.input.persistence = { ...f.input.persistence, normalizeGeometryInstance: capabilities.normalizeGeometryInstance };
+  for (const key of Object.keys(capabilities)) delete f.input[key];
+  const feature = f.w.SelectionEditingFeature.prepare().createForDrawing({ drawing: { resetForDeletion() { assert.fail('no eager reset'); } }, ...f.input });
+  assert.deepEqual(calls, []); assert.deepEqual(f.events, ['construct:delete', 'construct:clipboard']);
+  const c = f.captured.clipboard, d = f.captured.deletion;
+  for (const key of Object.keys(capabilities)) assert.equal(c[key], capabilities[key]);
+  assert.equal(d.clearSelection, capabilities.clearSelection); assert.equal(d.updateToolbar, capabilities.updateToolbar);
+  const { clearSelection, isGeometryMode, updateToolbar, normalizeGeometryInstance } = c;
+  assert.equal(clearSelection(), result); assert.equal(isGeometryMode(), true); assert.equal(updateToolbar(), result);
+  assert.equal(normalizeGeometryInstance(point), point); assert.deepEqual(calls, ['clear', 'mode', 'toolbar', 'normalize']);
+  f.state.ready = true; f.state.workspace.points = [point]; f.state.bound.points = [boundPoint]; f.input.interaction.selection.points = [point];
+  const payload = { points: [{ id: 'copy' }], lines: [], circles: [], arcs: [], blockInstances: [], pasteCount: 0 };
+  assert.equal(feature.clipboard.session.copy(payload, true), true);
+  assert.equal(f.state.workspace.points.length, 0); assert.equal(feature.clipboard.readModel(), f.state.bound);
+  assert.equal(f.state.bound.points[0], boundPoint);
+});
+
+test('drawing selection explicit capabilities bypass owner lookup, including null and undefined; raw assembly stays injectable', () => {
+  for (const value of [null, undefined]) {
+    const f = fixture(), marker = new Error('unused owner capability');
+    for (const key of ['clearSelection', 'isGeometryMode']) Object.defineProperty(f.input.interaction, key, { get() { throw marker; } });
+    Object.defineProperty(f.input.presentation, 'updateToolbar', { get() { throw marker; } });
+    f.input.persistence = { ...f.input.persistence, get normalizeGeometryInstance() { throw marker; } };
+    for (const key of ['clearSelection', 'isGeometryMode', 'updateToolbar', 'normalizeGeometryInstance']) f.input[key] = value;
+    f.w.SelectionEditingFeature.prepare().createForDrawing({ ...f.input, drawing: { resetForDeletion() {} } });
+    for (const key of ['clearSelection', 'isGeometryMode', 'updateToolbar', 'normalizeGeometryInstance']) assert.equal(f.captured.clipboard[key], value);
+    f.create();
+    assert.equal(f.captured.deletion.clearSelection, value); assert.equal(f.captured.deletion.updateToolbar, value);
+  }
+});
+
 function fixture(configure = () => {}) {
   const events = [], captured = {}, state = { ready: false, allowed: true, failure: null, failAt: null,
     workspace: { points: [] }, bound: { points: [] } }, marker = new Error('selection editing failed');
