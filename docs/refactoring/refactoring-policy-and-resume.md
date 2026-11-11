@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のAnnotation component owner統合単位ではapp.jsは1,269行、非空白824行。AST監査ではroot243文・417束縛、構築・接続467非空白行、別名・設定99行、委譲13行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のBrowser support record公開組立て単位ではapp.jsは1,265行、非空白820行。AST監査ではroot243文・417束縛、構築・接続467非空白行、別名・設定99行、委譲13行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：実support recordからの公開契約生成をBrowserTestApiへ集約（2026-11-11）
+
+BrowserTestApi.createFromSupportRecordsは、実driverのsupport recordから既存の公開契約を組み立てる。Canvasのdisplay／rendering／観測、Constraintのconstraints／referenceCases、Documentのdocuments／Sketch削除、Trimの三fixture、Splineのsetup／transfer、画像とParameterの各APIへの対応づけをsrc/testing/browser_test_api.jsが担当する。app.jsは実recordを渡し、別driverへの接続に必要なCanvas displayとconstraint status readerのみを引き続き明示的に受け渡す。driverの生成やtest-mode判定、window.__jot2dTestへの代入はapp.jsの元の段階に残す。
+
+対象は実起動でObject.isFrozen=true、own data property・writable=false／configurable=falseと確認した七record・二十一項目に限定する。これらの値の読取りを後段へ移しても実API／callbackの参照は同じである。getter・可変snapshotへ同じ整理を一般化しない。各groupの対応づけ後は既存createWithPropertiesを一引数で呼び、call(this, ...)により呼出し元のfactory receiverを渡す。従来のcreate／createWithPropertiesは変更しない。公開Objectのprototype・全keyの順序／属性／実function同一性、leaf lookup／spreadの順序と衝突時の優先、元例外とRHS完了後の公開を維持する。callbackを包み直したり、組立て時に実行したりしない。
+
+この境界はテストAPIの対応づけだけを担当し、model／scope／Selection／sessionやDOM、履歴、実driverの生成は所有しない。汎用app contextや新しいmodel・cache・listenerは追加しない。通常二経路では公開APIを生成せず、test queryのある既存経路でだけ同じ位置に公開する。既存UIと保存形式v26、script loader／一覧は維持する。
+
+app.jsは1,269→1,265行（4行減）、非空白824→820行。test hooks162→158行、同scopeの束縛39→28（11減）。root243文・417束縛・構文依存辺1,091、構築467行・別名／設定99行・委譲13行は不変。原driver生成は二十のwindow直接呼出しのcallee／引数／順序が同一で、二つのbareな後段creatorも変更していない。全test setupを別の大きなbootstrapへ移さず、公開に必要なprivate項目の知識を実契約ownerへ集める一単位である。200〜500行の全体目標は未完了。
+
+新規二テストで、全key／descriptor／function参照・prototype・lookup順・spread衝突の優先、liveな返値・引数・public receiver、失敗時の同じ例外／読取り順と未公開を検証する。実起動では七factoryの実戻り値をそのまま返す読取り用captureを別browserのapp responseへ挿入し、二十一data項目を前後で照合した。同じ実recordから基準e150be6の旧公開式を実行した結果と、新公開APIの全204項目のkey／属性／prototype／値参照が一致することも照合した。診断は製品sourceや通常E2Eには残さない。新methodとnamespaceへの公開を除くASTは基準と等しく、root十三編集／既存test-mode guard／公開位置／free identifier集合とload・E2E一覧も不変である。
+
+構文639file・全単体2,505件・関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、一覧504件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop e150be6、作業branch codex/browser-support-publication、開始時週枠残量92%。構文639file・公開関連10件・全単体2,505件・起動3経路が成功。関連40file・504件の成功と、709入力・開始HEAD不変を確認した。今回の公開204項目の実参照同一性と生成不変の証明を伴う関連検証を、直前e150be6の関連504件成功（8.9分）および最後の全体589件成功（develop f0a7954、30.0分）と区別する。証跡はTEMP cad-browser-support-publication-{focused,check,unit,smoke,e2e}.logとbefore／after／audit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
 
 ### 最新：Annotationの生成とbounds・resize・reset・syncを実component ownerへ集約（2026-11-11）
 

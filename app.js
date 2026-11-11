@@ -1095,8 +1095,7 @@
     const { readSelectedGeometry: readTestSelectedGeometry, createApiForEditing: createSelectionTestApi } = window.CanvasSelectionTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation, clearSelection,
     });
-    const { readStatuses: readTestConstraintStatuses, constraints: constraintTestSupport,
-      referenceCases: constraintReferenceCases } = window.ConstraintTestDriver.createBrowserSupport({
+    const constraintBrowserSupport = window.ConstraintTestDriver.createBrowserSupport({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, scopeQuery: solveScopeQuery,
       solving: sketchSolving, analysis: constraintAnalysis, solver, referenceState: referenceConstraintState, blockQueries: blockEditingQueries,
       operandValues: constraintOperandValues, interaction: canvasInteraction, sessions: operationSessions, placement: dimensionPlacement,
@@ -1104,6 +1103,7 @@
       commitNewConstraint, markReferenceConstraint, serializeModel, serializeConstraint, resolveConstraintIntent, resetModelState,
       pushModelConstraint: constraintInsertion.push, fitAllGeometryToViewport: drawingFit.fitAllGeometryToViewport, acceptError: CONSTRAINT_ACCEPT_ERROR,
     });
+    const { readStatuses: readTestConstraintStatuses } = constraintBrowserSupport;
     const { execution: dragExecutionSupport, createResponsiveForEditing: createResponsiveDragFixture } = window.GeometryDragTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, scopeQuery: solveScopeQuery, feature: geometryDragFeature, solver,
       modelTypes: window.GeometrySolver, arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
@@ -1113,11 +1113,10 @@
       currentScope: workspace.current, viewport, canvas, selection: canvasSelection, drag: annotationDrag, annotationLeaderAnchor,
       annotationLeaderTargetFromItem, draw, allGeometryBounds: drawingBounds.allGeometryBounds, resetModelState, resizeCanvas: canvasWorkspaceLayout.resizeCanvas, hitAnnotationElement,
     });
-    const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
+    const trimTestSupport = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint: constraintInsertion.push, currentScope: workspace.current,
     });
-    const { display: canvasTestDriver, rendering: canvasRenderingTestSupport, viewObservation,
-      authoringObservation, interactionProfilingTestApi } = window.CanvasTestDriver.createBrowserSupportForScene({
+    const canvasTestSupport = window.CanvasTestDriver.createBrowserSupportForScene({
       document, canvas, viewport, documentWorkspace, readServices: geometryReadServices, geometry: geometryCreation,
       interaction: canvasInteraction, sessions: operationSessions, presentation,
       authoring: { tools: basicDrawingTools, snap: drawingSnap, offsetSelection },
@@ -1130,6 +1129,7 @@
       observations: { viewControls: canvasViewControls, centerlineCommand, commit: constraintCommitCommand,
         persistence: documentPersistence, readSelectedGeometry: readTestSelectedGeometry, scheduler: pointerMoveScheduler },
     });
+    const { display: canvasTestDriver } = canvasTestSupport;
     const propertiesTestSupport = window.PropertiesTestDriver.createBrowserSupport({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, blockQueries: blockEditingQueries,
       selectionHighlight, presentation, display: geometryDisplay, placement: dimensionPlacement, viewport, document, canvas, fixPointBtn,
@@ -1186,15 +1186,13 @@
       decorateSerializedConstraint, serializeConstraint, serializeModel, resetModelState, resetHistory,
       canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport,
     });
-    const { fixture: parameterFixture, observation: parameterObservation,
-      interaction: parameterInteraction } = window.ParameterTestDriver.createBrowserSupport({
+    const parameterTestSupport = window.ParameterTestDriver.createBrowserSupport({
       resetModelState, documentWorkspace, geometry: geometryCreation,
       pushModelConstraint: constraintInsertion.push, dimensionFromAnchor: dimensionPlacement.dimensionFromAnchor, createEmptyBlockDefinition: blockDefinitionEditing.empty, invalidateBlockProjectionCache: blockProjections.invalidateBlockProjectionCache,
       stabilizeActiveParameterNamespace, activeSketchId: sketchContext.activeSketchId, resetHistory, updateUI, draw, blockProjectionBundle: blockProjections.blockProjectionBundle, serializeModel,
       clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection: blockDefinitionEditing.fromSelection, blockSelectionBoundsCenter, deleteElements, document,
     });
-    const { observation: referenceImageTestObservation, dataImport: referenceImageTestImport,
-      blockFixture: referenceImageBlockFixture } = window.ReferenceImageTestDriver.createBrowserSupport({
+    const referenceImageTestSupport = window.ReferenceImageTestDriver.createBrowserSupport({
       feature: referenceImageFeature, blocks: blockEditingFeature, canvasSelection, currentScope: workspace.current, readHistory: readTestHistory, viewport,
       fetch, File, resetModelState, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel,
     });
@@ -1218,27 +1216,25 @@
       viewport, canvas, document, fit: drawingFit, blocks: blockEditingFeature, blockSelection: blockSelectionQuery, clipboard: clipboardFeature,
       resetModelState, resetHistory, serializeModel, hitBlockInstance, hatchCommand, hatchRegionErrorText, clearSelection,
     });
-    const { setup: splineTestDriver, transfer: splineTransferDriver } = window.SplineTestDriver.createForWorkspace({
+    const splineTestSupport = window.SplineTestDriver.createForWorkspace({
       documentWorkspace, editingScope: editingScopeBinding, geometry: geometryCreation, readServices: geometryReadServices,
       interaction: canvasInteraction, presentation, splineEditing, blockSelection: blockSelectionQuery, blocks: blockEditingFeature,
       viewport, canvas, document, resizeCanvas: canvasWorkspaceLayout.resizeCanvas, resetModelState, resetHistory, serializeModel,
       pushModelConstraint: constraintInsertion.push, solveAndRefresh, serializeConstraint, annotationLeaderTargetFromItem,
       clearSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
     });
-    window.__jot2dTest = window.BrowserTestApi.createWithProperties({
-      canvas: { interactionProfilingTestApi, responsiveDragFixture, canvasTestDriver, viewObservation,
-        authoringObservation, dragExecutionSupport, canvasRenderingTestSupport, canvasRenderProbe },
-      splines: { splineTestDriver, splineTransferDriver },
-      authoring: { hatchTestApi, drawingOrderTestApi, offsetTestSupport, trimLineTransferFixture, trimConstructionFixture,
-        trimDiameterFixture },
-      constraints: constraintTestSupport,
+    window.__jot2dTest = window.BrowserTestApi.createFromSupportRecords({
+      canvas: { support: canvasTestSupport, responsiveDragFixture, dragExecutionSupport, canvasRenderProbe },
+      splines: splineTestSupport,
+      authoring: { hatchTestApi, drawingOrderTestApi, offsetTestSupport, trim: trimTestSupport },
+      constraints: constraintBrowserSupport,
       clipboard: clipboardTestSupport,
-      documents: documentTestSupport.documents,
+      documents: documentTestSupport,
       derived: derivedInstanceTestApi,
-      sketches: { ...constraintReferenceCases, sketchProjectionTestSupport, sketchTreeTestApi, sketchDeletionFixture: documentTestSupport.sketchDeletionFixture },
-      images: { referenceImageTestObservation, referenceImageTestImport, referenceImageBlockFixture },
+      sketches: { sketchProjectionTestSupport, sketchTreeTestApi },
+      images: referenceImageTestSupport,
       dimensions: dimensionTestSupport,
-      parameters: { parameterFixture, parameterObservation, parameterInteraction },
+      parameters: parameterTestSupport,
       properties: propertiesTestSupport, selectionTestApi,
       annotations: annotationTestSupport,
       blocks: { blockTestSupport, blockTestActions },

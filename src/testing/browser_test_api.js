@@ -102,5 +102,31 @@
         sidebarHoverKeyObservation: properties.sidebarHoverKeyObservation },
     });
   }
-  window.BrowserTestApi = Object.freeze({ create, createWithProperties });
+  function createFromSupportRecords({ canvas, splines, authoring, constraints, clipboard, documents, derived, sketches,
+    images, dimensions, parameters, properties, selectionTestApi, annotations, blocks }) {
+    return createWithProperties.call(this, {
+      canvas: { interactionProfilingTestApi: canvas.support.interactionProfilingTestApi, responsiveDragFixture: canvas.responsiveDragFixture,
+        canvasTestDriver: canvas.support.display, viewObservation: canvas.support.viewObservation,
+        authoringObservation: canvas.support.authoringObservation, dragExecutionSupport: canvas.dragExecutionSupport,
+        canvasRenderingTestSupport: canvas.support.rendering, canvasRenderProbe: canvas.canvasRenderProbe },
+      splines: { splineTestDriver: splines.setup, splineTransferDriver: splines.transfer },
+      authoring: { hatchTestApi: authoring.hatchTestApi, drawingOrderTestApi: authoring.drawingOrderTestApi,
+        offsetTestSupport: authoring.offsetTestSupport, trimLineTransferFixture: authoring.trim.lineTransfer,
+        trimConstructionFixture: authoring.trim.constructionBoundary, trimDiameterFixture: authoring.trim.diameterTransfer },
+      constraints: constraints.constraints,
+      clipboard,
+      documents: documents.documents,
+      derived,
+      sketches: { ...constraints.referenceCases, sketchProjectionTestSupport: sketches.sketchProjectionTestSupport,
+        sketchTreeTestApi: sketches.sketchTreeTestApi, sketchDeletionFixture: documents.sketchDeletionFixture },
+      images: { referenceImageTestObservation: images.observation, referenceImageTestImport: images.dataImport,
+        referenceImageBlockFixture: images.blockFixture },
+      dimensions,
+      parameters: { parameterFixture: parameters.fixture, parameterObservation: parameters.observation, parameterInteraction: parameters.interaction },
+      properties, selectionTestApi,
+      annotations,
+      blocks,
+    });
+  }
+  window.BrowserTestApi = Object.freeze({ create, createWithProperties, createFromSupportRecords });
 })();
