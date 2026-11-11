@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のCanvas入力準備単位ではapp.jsは1,219行、非空白777行。AST監査ではroot219文・373束縛、構築439非空白行とbind37行、別名・設定88行、委譲4行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の保存形式設定単位ではapp.jsは1,218行、非空白776行。AST監査ではroot218文・372束縛、構築439非空白行とbind37行、別名・設定88行、委譲4行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Canvas入力の生成・gesture準備とPointer／Keyboard共有操作の接続を既存ownerへ集約（2026-11-11）
+### 最新：保存形式の定義とwriter設定の共有を保存ownerへ集約（2026-11-11）
+
+開始基準developは328b53209d4cb31c5d5a020de3f3d4c1174a4de1、作業branchはcodex/document-format-policy（develop統合・Push後に削除）。開始週枠残量69%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+現行の保存形式番号26はDocumentSnapshot.CURRENT_VERSIONで定義する。DocumentWorkspaceのRead contextが返すcreatePersistenceForWorkspaceは、この既定値と明示optionから既存createPersistenceを呼び、同じnative保存componentsを返す。components.versionは対応するwriterへ渡した生成時の値をreadonlyで公開する。app.jsは保存形式番号を定義せず、投影のテスト支援にも生成済みcomponents.versionを渡す。
+
+旧createPersistence／DocumentSnapshot.createWriter／codec APIのversion指定は変更せず、rawで未指定ならundefinedを維持する。Workspace用の新入口でも、明示したversionはundefined／nullを含め既定値より優先する。新入口の未指定時だけ現行26を採用する。writer／codec／loading／preparationをcloneせず、完成後の公開順、現在Document／Workspaceの読取り、元例外・参照同一性を維持する。保存JSONのfield・version・読込移行・UI・履歴は不変で、既存src/persistence/document_snapshot.jsとsrc/application/document_workspace.jsへ配置し、新しいglobalやfileを加えない。
+
+app.jsは1,219→1,218行（1行減）、非空白777→776行。root219→218文・373→372束縛、構文依存辺1,048→1,046。policy values3→2行、構築439行・bind37行・別名88行・委譲4行・test hooks152行は不変。形式の知識を保存ownerへ移し、native writer設定との一致を保つ単位であり、200〜500行の全体目標は未完了。
+
+関連単体44件が成功。実codec／writer／loaderで従来の明示26と新入口の既定26のJSON、Geometry／Constraintの参照を保つ読込、model非変更と生成中のscope無照会を比較した。明示undefined／null／27とraw未指定、writerへの実値・同じnative writer返却、readonly metadata、現行定義の不変とraw writerの明示0等も確認した。browser比較では生成前・writer生成中・components公開前の三つのReferenceError、同じ実writerとnative optionのkey順／function名／arity、通常reloadの26と明示25、保存時刻以外の三つの実JSONと公開204項目が一致した。ja/light・en/dark・test起動も成功。宣言した集約以外のroot／Workspaceと、raw Snapshot／writer・loader・投影支援本体のsourceは不変、新たな未束縛参照やapp.jsのglobal依存なし。保存仕様の冒頭だけ25と残っていた誤記を、同じ仕様の構造表・共通配置項目・互換性仕様と実装に一致する26へ訂正した。
+
+構文639file・全単体2,566件と関連E2E198件（7file、2.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+### Canvas入力の生成・gesture準備とPointer／Keyboard共有操作の接続を既存ownerへ集約（2026-11-11）
 
 開始基準developは8ce2a2a3336789486b9e173e4c60aef37de7dfc0、作業branchはcodex/canvas-input-preparation（develop統合・Push後に削除）。開始週枠残量69%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

@@ -145,7 +145,7 @@ test('read context binds the same Workspace and Solver while invalidating its ac
   assert.deepEqual(f.calls.map(call => call.name), ['close', 'move']);
 });
 
-function persistenceFixture(beforeCreate = () => {}, readOptions = {}) {
+function persistenceFixture(beforeCreate = () => {}, readOptions = {}, build = (context, options) => context.createPersistence(options)) {
   const { model } = fixture(), state = { ready: false, bound: model.document, block: null }, calls = [];
   const check = () => assert.equal(state.ready, true, 'persistence construction must defer model queries');
   const context = model.createReadContext({ currentSketches: () => { check(); return state.bound.sketches; },
@@ -161,10 +161,45 @@ function persistenceFixture(beforeCreate = () => {}, readOptions = {}) {
     normalizeArcSweeps: arcs => { check(); calls.push(['arcs', arcs]); },
   };
   beforeCreate(context, options);
-  const persistence = context.createPersistence(options);
+  const persistence = build(context, options);
   assert.equal(JSON.stringify(model.document), before); assert.deepEqual(calls, []); state.ready = true;
   return { model, state, calls, persistence, placement, context, options };
 }
+
+test('Workspace persistence selects the current format without changing explicit versions or native writer results', () => {
+  const omitted = Symbol('omitted');
+  for (const version of [omitted, undefined, null, 27]) {
+    const results = [];
+    for (const owned of [false, true]) {
+      const original = w.DocumentSnapshot, expected = version === omitted ? 26 : version;
+      let writer, ports;
+      w.DocumentSnapshot = { ...original, createWriter(options) {
+        assert.equal(this, w.DocumentSnapshot); assert.equal(arguments.length, 1); ports = options;
+        return writer = original.createWriter(options);
+      } };
+      let f;
+      try {
+        f = persistenceFixture((_context, options) => {
+          if (version === omitted) delete options.version; else options.version = version;
+        }, {}, (context, options) => owned ? context.createPersistenceForWorkspace(options)
+          : context.createPersistence({ ...options, version: expected }));
+      } finally { w.DocumentSnapshot = original; }
+      assert.equal(f.persistence.writer, writer); assert.equal(ports.version, expected); assert.equal(f.persistence.version, expected);
+      assert.equal(Object.getOwnPropertyDescriptor(f.persistence, 'version').writable, false);
+      const source = addPersistedLine(f.model.document, 'FORMAT', 10);
+      const saved = f.context.persistence.serializeModel(); assert.equal(saved.version, expected); assert.ok(Object.hasOwn(saved, 'version'));
+      assert.equal(f.model.document.lines[0], source.line);
+      if (version === omitted) {
+        const loaded = f.persistence.loading.decode(saved);
+        assert.equal(loaded.lines[0].p1, loaded.points[0]); assert.equal(loaded.constraints[0].p1, loaded.points[0]);
+      }
+      saved.savedAt = 'TIME'; results.push(JSON.stringify(saved));
+    }
+    assert.equal(results[1], results[0]);
+  }
+  const raw = persistenceFixture((_context, options) => { delete options.version; });
+  assert.equal(raw.persistence.version, undefined); assert.equal(raw.context.persistence.serializeModel().version, undefined);
+});
 
 test('read context connects the same Block preparation before services exist and normalizes only when read', () => {
   const original = w.GeometryReadServices; let connected;

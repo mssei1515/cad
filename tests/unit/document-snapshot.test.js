@@ -27,6 +27,17 @@ function writerFixture() {
   return { writer: snapshot.createWriter(ports), state, events, ports };
 }
 
+test('current format metadata is immutable while raw writers retain every explicitly supplied version', () => {
+  assert.equal(snapshot.CURRENT_VERSION, 26);
+  const descriptor = Object.getOwnPropertyDescriptor(snapshot, 'CURRENT_VERSION');
+  assert.equal(descriptor.writable, false); assert.equal(descriptor.configurable, false);
+  for (const version of [undefined, null, 0, 27]) {
+    const f = writerFixture(), writer = snapshot.createWriter({ ...f.ports, version });
+    assert.deepEqual(f.events, []);
+    const data = writer.serialize(); assert.ok(Object.hasOwn(data, 'version')); assert.equal(data.version, version);
+  }
+});
+
 test('document writer prepares before reading the live snapshot and metadata and preserves the existing codec result', () => {
   const f = writerFixture(); assert.deepEqual(f.events, []);
   const replacement = scope(); replacement.points[0].x = 42; f.state.nextSource = replacement;
