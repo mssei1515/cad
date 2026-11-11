@@ -73,7 +73,7 @@ test('cross-command callbacks retain actual receivers, argument boundaries, resu
 const controlsContext = { window: {} }; vm.createContext(controlsContext);
 const controlSources = vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of controlSources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file,'utf8'), controlsContext, { filename: file });
-function controlsFixture(build = (w, input) => w.ConstraintEditing.create(input)) {
+function controlsFixture(build = (w, input) => w.ConstraintEditing.create(input), combined = false) {
   const w = controlsContext.window, events = [], state = { ready: false, geometry: true, canApply: false, target: null, queryError: null, pending: null };
   const ready = () => assert.equal(state.ready, true), note = name => (...args) => { ready(); events.push([name,...args]); };
   function button(dataset) {
@@ -110,13 +110,21 @@ function controlsFixture(build = (w, input) => w.ConstraintEditing.create(input)
   const feature = build(w, input, { buttons, state, events, controls: { document, constraintMenuButtons: menu, fixPointBtn: fix, translatedExactText: value => value } });
   controls = feature.controls || feature.createControls({ document, constraintButtons: buttons, constraintMenuButtons: menu, fixPointBtn: fix,
     hasSelection: () => selection.selectedElementCount() > 0, translatedExactText: value => value });
-  const binding = controls.createBinding(); buttons[0].click(); assert.equal(session.command,null); assert.deepEqual(events, []);
-  binding.bind(); binding.bind(); assert.deepEqual(events, []); state.ready = true;
+  let binding;
+  buttons[0].click(); assert.equal(session.command,null); assert.deepEqual(events, []);
+  if (combined) {
+    const original = w.ConstraintControlsView;
+    w.ConstraintControlsView = { ...original, createBinding(options) { binding = original.createBinding(options); return binding; } };
+    try { assert.equal(controls.bindForEditing(), undefined); } finally { w.ConstraintControlsView = original; }
+  } else {
+    binding = controls.createBinding(); binding.bind(); binding.bind();
+  }
+  assert.deepEqual(events, []); state.ready = true;
   return { feature, controls, binding, state, session, selection, events, buttons, menu, fix, hint, w, input };
 }
 
-test('constraint feature controls share actual target, dimension and Selection state through late binding and menu delegation', () => {
-  const f = controlsFixture(); f.menu[0].click(); assert.equal(f.session.command.type,'horizontal'); assert.equal(f.buttons[0].attrs['aria-pressed'],'true');
+for (const combined of [false, true]) test(`constraint feature controls share actual target, dimension and Selection state through late binding and menu delegation (${combined ? 'owned' : 'manual'})`, () => {
+  const f = controlsFixture(undefined, combined); f.menu[0].click(); assert.equal(f.session.command.type,'horizontal'); assert.equal(f.buttons[0].attrs['aria-pressed'],'true');
   f.menu[0].click(); assert.equal(f.session.command,null); assert.equal(f.buttons[0].attrs['aria-pressed'],'false');
   f.menu[2].click(); assert.equal(f.session.command.type,'fixed'); assert.equal(f.fix.attrs['aria-pressed'],'true'); f.fix.click(); assert.equal(f.session.command,null);
   f.state.canApply = true; f.state.target = { kind: 'line-length', value: 10 }; f.buttons[1].click();
@@ -126,6 +134,54 @@ test('constraint feature controls share actual target, dimension and Selection s
   assert.equal(f.events.filter(event => event[0] === 'add').length,1);
   const point = new f.w.GeometrySolver.Point('P1',0,0); point.sketchId = 'S1'; f.selection.set('points',[point]);
   f.events.length = 0; f.fix.click(); assert.deepEqual(f.events,[['selected-fixed']]); assert.equal(f.session.command.type,'horizontal');
+});
+
+test('owned constraint binding retains failure boundaries and partially registered listeners', () => {
+  for (const stage of ['command', 'binding', 'listener']) {
+    const failure = new Error(stage);
+    function run(combined) {
+      const f = controlsFixture(); f.binding.dispose();
+      const command = f.w.ConstraintControlCommand, view = f.w.ConstraintControlsView;
+      const add = f.buttons[1].addEventListener, calls = [];
+      f.w.ConstraintControlCommand = { ...command, create(options) {
+        assert.equal(this, f.w.ConstraintControlCommand); assert.equal(arguments.length, 1); calls.push('command');
+        if (stage === 'command') throw failure;
+        return command.create(options);
+      } };
+      f.w.ConstraintControlsView = { ...view, createBinding(options) {
+        assert.equal(this, f.w.ConstraintControlsView); assert.equal(arguments.length, 1); calls.push('binding');
+        if (stage === 'binding') throw failure;
+        return view.createBinding(options);
+      } };
+      f.buttons[1].addEventListener = function () { calls.push('listener'); throw failure; };
+      try {
+        assert.throws(() => {
+          if (combined) f.controls.bindForEditing();
+          else { const binding = f.controls.createBinding(); binding.bind(); }
+        }, error => error === failure);
+      } finally {
+        f.w.ConstraintControlCommand = command; f.w.ConstraintControlsView = view; f.buttons[1].addEventListener = add;
+      }
+      f.buttons[0].click();
+      assert.equal(f.session.command?.type ?? null, stage === 'listener' ? 'horizontal' : null);
+      return { calls, events: f.events };
+    }
+    assert.deepEqual(run(true), run(false));
+  }
+});
+
+test('owned constraint binding creates fresh native bindings on repeated starts', () => {
+  function run(combined) {
+    const f = controlsFixture(); f.binding.dispose();
+    for (let i = 0; i < 2; i++) {
+      if (combined) f.controls.bindForEditing();
+      else { const binding = f.controls.createBinding(); binding.bind(); }
+    }
+    f.buttons[0].click();
+    assert.equal(f.session.command, null); // Two independent listeners start, then cancel the command.
+    return f.events;
+  }
+  assert.deepEqual(run(true), run(false));
 });
 
 test('constraint control preparation retains distance exceptions, cancellation and short circuit before DOM updates', () => {

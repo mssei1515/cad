@@ -127,7 +127,11 @@
         return window.ConstraintControlsView.createBinding({ constraintButtons, constraintMenuButtons, fixPointBtn,
           onConstraint: control.activate, onFixed: control.activateFixed });
       }
-      return Object.freeze({ view, createBinding });
+      function bindForEditing() {
+        const constraintControlBinding = createBinding();
+        constraintControlBinding.bind();
+      }
+      return Object.freeze({ view, createBinding, bindForEditing });
     }
     return Object.freeze({ selectionQuery, targets, dimensions, createControls, createCommit, createCommandInput, createFixedEditing });
   }
