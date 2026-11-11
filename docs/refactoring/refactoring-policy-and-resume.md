@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のDocument reset公開単位ではapp.jsは1,228行、非空白785行。AST監査ではroot224文・376束縛、構築440非空白行とbind41行、別名・設定89行、委譲6行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のBlock更新公開単位ではapp.jsは1,228行、非空白785行。AST監査ではroot224文・376束縛、構築441非空白行とbind41行、別名・設定89行、委譲5行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Document resetの完成参照と安定コールバックを既存ownerへ集約（2026-11-11）
+### 最新：Block表示更新の完成参照とvoidコールバックを既存ownerへ集約（2026-11-11）
+
+開始基準developは1181e18ed11e022d968ba6c80202515860d124b8、作業branchはcodex/block-view-update-publication（develop統合・Push後に削除）。開始週枠残量74%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+BlockEditingFeature.prepareCommandsWithViewは安定したupdateBlockUIと、実Block featureを受け取るcreateForFeatureを返す。後者は既存feature.createCommandsWithViewを同じmember receiver・一引数で呼び、完成した実command recordのupdateView関数を一度選んで内部完了recordへ保持する。Block feature／definition／completion／command record／Viewは包み直さず、元の実体をそのまま返し共有する。app.jsは後段updateBlockView bindingとvoid委譲を持たず、Presentation／Block configuration／Instance editingの三箇所へ同じ安定関数を渡す。
+
+公開前は元のupdateBlockViewのReferenceErrorを保ち、完成後のundefined／null updaterはTypeErrorとして未生成と区別する。updateBlockUIは保持した実関数をbare・無引数で呼び、返値を返さない従来のvoid契約と元例外を維持する。生成やfield取得の失敗は前updaterを保持し、prepareごとの参照は独立する。View生成前のprepareBlocks→render失敗、View生成・再生成と失敗時の前View保持は既存createCommandsWithViewが担当したままである。actorの生成位置、初期化前guard、live scope／Session／Documentの所有、操作・履歴・UI・保存形式v26、旧create／createForWorkspace／createCommandsWithView APIと既存application／ui配置を維持する。新しいmodelやlistener、全体contextを作らない。
+
+app.jsは1,228→1,228行（変化なし）、非空白785行、root224文・376束縛、構文依存辺1,057のまま。委譲6→5行、準備呼出しの追加により構築114→115文／440→441行となる。bind41行・test hooks152行は不変。分類・総行数を削減成果として装わず、Blockの実updaterの保持と公開を同じownerへ寄せる単位である。全体の200〜500行目標は未完了。
+
+関連単体34件が成功。既存の実Block session／command／View比較にprepared経路を追加し、最新Viewへの編集・取消・refresh、View再生成失敗、生成前guard、View前の準備とTypeError、void返値と元例外を確認した。新単体ではmember factory・一引数、実record返却、fieldの一度取得、bare無引数更新、生成／field取得失敗時の前updater保持、独立性、undefined／null updaterのTypeErrorを照合した。browser比較では三箇所での同じ関数、五時点のReferenceError、同じnative factory receiver・一引数、bare無引数更新と実View render receiver、五つの実参照と五fieldのreadonly、関数名／arity／prototype、native optionと公開204項目が一致。ja/light・en/dark・test起動も成功。元のBlock組立て本体と三つのnative actor sourceは不変、新たな未束縛参照なし。構文639file・全単体2,554件と関連E2E504件（40file、8.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+次は残る機能生成・接続とtest hooksを、状態owner・依存と公開時点から評価する。具体的にはworkspaceControls.start→createDrawingBinding→drawingToolBinding.bindの連続した開始段階を既存Presentation ownerへ集約できるか確認する。drawingToolBindingのlexical referenceはbindの一箇所だけだった。新しいstate flagを作らず、同じmember receiver・実binding・例外と部分listener登録、closeAppMenus公開後という順序を保てる場合に限って採用する。今回のBlock更新公開やDocument reset公開、既存Properties／Tree／Contextの接続は再実施しない。既存のView／command recordを包み直す統合や、作図command集合の監査で見送ったregistry化・後段同時生成を避ける。行数だけの薄いwrapperや巨大context、別の巨大bootstrap、blank削除で数百行の達成を装わず、全体目標を維持する。
+
+### 前回：Document resetの完成参照と安定コールバックを既存ownerへ集約（2026-11-11）
 
 開始基準developは360efc73fbd096f78baacdab03ab9a8d9c55580c、作業branchはcodex/document-reset-publication（develop統合・Push後に削除）。開始週枠残量75%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
