@@ -66,7 +66,7 @@ function createFromOwners(w,p,inspect=()=>{}) {
     guardDimensionSymbolDeletion:p.guardDimensionSymbolDeletion,lineCommand:p.lineCommand,circularCommands:p.circularCommands,
     updateToolbar:p.updateToolbar,recordHistory:p.recordHistory,referenceImageInteraction:p.referenceImageInteraction,
     clearSelection:p.clearSelection,solveAndRefresh:p.solveAndRefresh,
-    resetGeometryDrag:p.resetGeometryDrag,resetDimensionDrag:p.resetDimensionDrag,resetAnnotationDrag:p.resetAnnotationDrag});
+    resetGeometryDrag:p.resetGeometryDrag,resetDimensionDrag:p.resetDimensionDrag,resetAnnotationDrag:p.resetAnnotationDrag,resetDrawing:p.resetDrawing});
 }
 
 test('editing deletion shares capabilities without reading scope, analysis or late drag actors during construction',()=>{
@@ -108,6 +108,12 @@ function operationFixture(composed) {
     referenceImageInteraction:{forget(items){assert.equal(this,p.referenceImageInteraction);events.push('forget:'+items.length);}},guardSelectionEdit:()=>{events.push('selectionGuard');return state.editable;},
     selectionSketchId:()=>null,activeSketchId:()=>state.scope.sketchId||'S1',geometryRefForItem:item=>item,invalidateBlockProjectionCache:record('cache'),effectiveSelectedConstraint:selection.effectiveSelectedConstraint,
     clearSelection:()=>{selection.clear();events.push('clear');},solveAndRefresh:(...args)=>events.push(['solveRefresh',...args])};
+  if(composed==='drawing') {
+    vm.runInContext(fs.readFileSync('src/application/basic_drawing_tools.js','utf8'),sandbox);
+    for(const name of ['LineCommand','RectangleCommand','CircularConstruction','CircularCommands','SlotConstruction','SlotCommand'])w[name]={create:()=>name==='LineCommand'?p.lineCommand:name==='CircularCommands'?p.circularCommands:{}};
+    p.resetDrawing=w.BasicDrawingTools.create({geometry:{},snapConstraints:{},snap:{},checkpoint:{}}).resetForDeletion;
+    p.lineCommand=null;p.circularCommands=null;
+  }
   const feature=composed?createFromOwners(w,p):w.DeletionFeature.create(p);assert.deepEqual(events,[]);
   // The drag actors do not exist until after composition, as in app.js.
   for(const name of ['geometry','dimension','annotation'])drags[name]=reset(name);
@@ -117,7 +123,7 @@ function operationFixture(composed) {
 }
 
 test('editing deletion preserves real planning, same shared sessions and late resets, including unsuccessful solves',()=>{
-  for(const composed of [false,true])for(const solved of [false,true]) {
+  for(const composed of [false,true,'drawing'])for(const solved of [false,true]) {
     const f=operationFixture(composed);f.state.solved=solved;assert.equal(f.feature.remove({points:[f.point]}),true);
     assert.equal(f.target.points.length,0);assert.equal(f.target.constraints.length,0);assert.equal(f.selection.points.length,0);assert.equal(f.selection.dimensionConstraints.length,0);
     assert.equal(f.hover.current.dimension,null);assert.equal(f.hover.current.point,f.point);assert.equal(f.hover.current.annotation.id,'hover');
@@ -130,7 +136,7 @@ test('editing deletion preserves real planning, same shared sessions and late re
 });
 
 test('editing deletion preserves guard rejection, reset exceptions and partial mutation on solve exceptions',()=>{
-  for(const composed of [false,true])for(const reason of ['permission','symbol','dimension','solve']) {
+  for(const composed of [false,true,'drawing'])for(const reason of ['permission','symbol','dimension','solve']) {
     const f=operationFixture(composed);if(reason==='permission')f.state.editable=false;if(reason==='symbol')f.state.symbols=false;
     if(['dimension','solve'].includes(reason))f.state.fail=reason;
     if(f.state.fail)assert.throws(()=>f.feature.remove({points:[f.point]}),error=>error===f.marker);else assert.equal(f.feature.remove({points:[f.point]}),false);
@@ -143,7 +149,7 @@ test('editing deletion preserves guard rejection, reset exceptions and partial m
 });
 
 test('editing mixed selection keeps image feedback order and earlier annotation removal when a later Block dependency rejects',()=>{
-  for(const composed of [false,true])for(const dependent of [false,true]) {
+  for(const composed of [false,true,'drawing'])for(const dependent of [false,true]) {
     const f=operationFixture(composed);f.selection.clear();f.target.points=[];f.target.constraints=[];
     const annotation={id:'A'},image={id:'image'},block={id:'B'};f.target.annotations=[annotation];f.selection.set('annotations',[annotation]);
     if(dependent){f.target.blockInstances=[block];f.selection.set('blockInstances',[block]);f.target.geometryInstances=[{id:'I',refs:[{id:'other',path:['B']}]}];}

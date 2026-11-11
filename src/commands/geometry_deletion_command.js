@@ -6,16 +6,15 @@
     rejectReferencedGeometryDeletion, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion,
     applicationText, solveSketchAndDependents, normalizeArcSweeps, refreshView,
     analysisStable, setHint, log, recordHistory, resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag,
-    pendingCommandSession, constraintTargetSession, lineCommand, circularCommands, drawingPreview, selectMode }) {
+    pendingCommandSession, constraintTargetSession, lineCommand, circularCommands, drawingPreview, selectMode,
+    resetDrawing = () => { lineCommand.reset(); circularCommands.resetCircle(); circularCommands.resetArcs(); } }) {
     function endInteraction() {
       resetGeometryDrag();
       resetDimensionDrag();
       resetAnnotationDrag();
       pendingCommandSession.clear();
       constraintTargetSession.clearCommand();
-      lineCommand.reset();
-      circularCommands.resetCircle();
-      circularCommands.resetArcs();
+      resetDrawing();
       drawingPreview.setPointer(null);
       selectMode();
     }

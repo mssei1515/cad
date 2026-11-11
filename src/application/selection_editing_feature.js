@@ -12,20 +12,23 @@
       clipboardCommand = completed.clipboard.command;
       return completed;
     }
+    function createForDrawing({ drawing, ...options }) {
+      return createPreparedFeature({ resetDrawing: drawing.resetForDeletion, ...options });
+    }
     function copySelectionToClipboard(options = {}) { return readCommand().copy(options); }
     function pasteGeometryClipboard() { return readCommand().paste(); }
-    return Object.freeze({ createForEditing: createPreparedFeature, copy: copySelectionToClipboard, paste: pasteGeometryClipboard });
+    return Object.freeze({ createForEditing: createPreparedFeature, createForDrawing, copy: copySelectionToClipboard, paste: pasteGeometryClipboard });
   }
   function createForEditing({ documentWorkspace, editingScope, readServices, interaction, references, geometry,
     annotationFeature, annotationLeaderAnchor, splineEditing, guardDimensionSymbolDeletion, sessions, lineCommand, circularCommands,
     solving, analysis, presentation, updateToolbar, recordHistory, referenceImageInteraction, clearSelection, solveAndRefresh,
     resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag, viewport, persistence, normalizeGeometryInstance, blocks,
-    pasteOffsetScreenPx = 24, imageClipboard, isGeometryMode }) {
+    pasteOffsetScreenPx = 24, imageClipboard, isGeometryMode, resetDrawing }) {
     const deletion = window.DeletionFeature.createForEditing({
       documentWorkspace, readServices, interaction, references, annotationDimensions: annotationFeature.dimensions,
       splineEditing, guardDimensionSymbolDeletion, geometry, sessions, lineCommand, circularCommands,
       solving, analysis, presentation, updateToolbar, recordHistory, referenceImageInteraction, clearSelection, solveAndRefresh,
-      resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag,
+      resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag, resetDrawing,
     });
     const clipboard = window.ClipboardFeature.createForEditing({
       documentWorkspace, editingScope, readServices, interaction, geometry, annotationRenderer: annotationFeature.renderer,

@@ -100,7 +100,7 @@ test('selection assembly forwards explicit null callbacks and supplied owner val
   assert.equal(f.captured.deletion.resetDimensionDrag, undefined); assert.equal(f.captured.deletion.resetAnnotationDrag, null);
 });
 
-function attachPreparedCommand(f, build) {
+function attachPreparedCommand(f, build, inspectOptions = options => assert.equal(options, f.input)) {
   const raw = f.w.ClipboardFeature.createForEditing;
   f.w.ClipboardFeature = { createForEditing(ports) {
     const feature = raw.call(this, ports);
@@ -108,7 +108,7 @@ function attachPreparedCommand(f, build) {
   } };
   const selection = f.w.SelectionEditingFeature;
   f.w.SelectionEditingFeature = Object.freeze({ ...selection, createForEditing(options) {
-    assert.equal(this, f.w.SelectionEditingFeature); assert.equal(arguments.length, 1); assert.equal(options, f.input);
+    assert.equal(this, f.w.SelectionEditingFeature); assert.equal(arguments.length, 1); inspectOptions(options);
     return f.captured.actual = selection.createForEditing.call(this, options);
   } });
   return f.w.SelectionEditingFeature.prepare();
@@ -189,4 +189,22 @@ test('prepared Clipboard operations preserve native cut retention, distinct scop
     traces.push(JSON.stringify({ events: f.events, workspace: f.state.workspace, bound: f.state.bound, payload: failedCut }));
   }
   assert.equal(traces[1], traces[0]);
+});
+
+test('prepared Selection passes the drawing-owned reset without command aliases and retains explicit overrides or construction failure guards', () => {
+  for (const explicit of [false, true]) {
+    const f = fixture(), command = { copy() {}, paste() {} }, reset = () => assert.fail('no eager reset');
+    const owner = attachPreparedCommand(f, () => command, options => { assert.equal(options.resetDrawing, explicit ? null : reset); assert.equal(options.documentWorkspace, f.input.documentWorkspace); });
+    delete f.input.lineCommand; delete f.input.circularCommands;
+    const drawing = Object.freeze({ resetForDeletion: reset });
+    const feature = owner.createForDrawing({ drawing, ...f.input, ...(explicit ? { resetDrawing: null } : {}) });
+    assert.equal(feature, f.captured.actual); assert.equal(f.captured.deletion.resetDrawing, explicit ? null : reset);
+    assert.equal(f.captured.deletion.lineCommand, undefined); assert.equal(f.captured.deletion.circularCommands, undefined);
+    assert.deepEqual(f.events, ['construct:delete', 'construct:clipboard']);
+    const marker = new Error('drawing port'); const bad = { get resetForDeletion() { throw marker; } };
+    assert.throws(() => owner.createForDrawing({ ...f.input, drawing: bad }), error => error === marker);
+    assert.equal(owner.copy(), undefined); const fresh = f.w.SelectionEditingFeature.prepare();
+    assert.throws(() => fresh.createForDrawing({ ...f.input, drawing: bad }), error => error === marker);
+    assert.throws(fresh.paste, error => error.name === 'ReferenceError');
+  }
 });

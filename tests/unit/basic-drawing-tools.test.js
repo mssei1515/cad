@@ -1290,3 +1290,18 @@ test('authoring preview retains constructor and Canvas getter exceptions with th
   assert.throws(()=>f.preview.layer.drawSplinePreview(),value=>value===error);assert.deepEqual(f.calls.at(-1),['exit']);assert.deepEqual(f.reads,[]);
  }
 });
+
+test('drawing deletion reset shares actual command owners and preserves live methods, order and partial failures', () => {
+  for (const failure of [null, 'line', 'circle', 'arcs']) {
+    const f = fixture(), marker = new Error('drawing reset'), calls = [];
+    for (const [owner, method, label] of [[f.tools.line, 'reset', 'line'], [f.tools.circular, 'resetCircle', 'circle'], [f.tools.circular, 'resetArcs', 'arcs']]) {
+      owner[method] = function() { assert.equal(this, owner); assert.equal(arguments.length, 0); calls.push(label); if (label === failure) throw marker; return 'ignored'; };
+    }
+    assert.deepEqual(f.events, []); const { resetForDeletion } = f.tools;
+    if (failure) assert.throws(resetForDeletion, error => error === marker); else assert.equal(resetForDeletion(), undefined);
+    assert.deepEqual(calls, failure ? ['line', 'circle', 'arcs'].slice(0, ['line', 'circle', 'arcs'].indexOf(failure) + 1) : ['line', 'circle', 'arcs']);
+    assert.deepEqual(f.events, []);
+    const getterError = new Error('live method'); Object.defineProperty(f.tools.line, 'reset', { get() { throw getterError; } });
+    assert.throws(resetForDeletion, error => error === getterError);
+  }
+});
