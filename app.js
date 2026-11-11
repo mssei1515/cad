@@ -372,7 +372,7 @@
     serializeModel, requestChoice: options => choiceDialog.show(options), loadModelData, solveAndRefresh,
     repairMessage: readDocumentRepairMessage,
   });
-  const { effectiveDocumentName, refreshStatus: updateDocumentNameUI } = documentFileFeature;
+  const { refreshStatus: updateDocumentNameUI } = documentFileFeature;
 
 
 
@@ -1006,14 +1006,11 @@
   workspaceControls.startWithDrawingTools();
 
 
-  documentFileFeature.bindControls();
-  const { command: pngExportCommand } = createPngExport({
-    documentName: effectiveDocumentName, prepareImages: referenceImageFeature.prepareImages,
-    fileSession, pngExport: pngExportLifecycle,
-    findSnap: (point, tolerance) => drawingSnap.find(point, tolerance), flushPointerMove: flushScheduledCanvasPointerMove,
+  const { png: { command: pngExportCommand }, start: startFileExportControls } = documentFileFeature.prepareExportControls({
+    createPngExport, referenceImage: referenceImageFeature, drawingSnap, pngExport: pngExportLifecycle,
+    dxfImport: dxfImportFeature, flushPointerMove: flushScheduledCanvasPointerMove,
   });
-  pngExportLifecycle.start();
-  dxfImportFeature.bindControls({ flushScheduledCanvasPointerMove });
+  startFileExportControls();
   referenceImageInput.bindControls();
   sketchTreeView.bindCreation(createSketch);
 

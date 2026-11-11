@@ -24,7 +24,20 @@
         markCheckpoint("new");
         completed.start();
       }
-      const completed = Object.freeze({ ...feature, createDxfForWorkspace, startForEmptyDocument });
+      function prepareExportControls({ createPngExport, referenceImage, drawingSnap, pngExport, dxfImport, flushPointerMove }) {
+        completed.bindControls();
+        const png = createPngExport({
+          documentName: feature.effectiveDocumentName, prepareImages: referenceImage.prepareImages,
+          fileSession: session, pngExport,
+          findSnap: (point, tolerance) => drawingSnap.find(point, tolerance), flushPointerMove,
+        });
+        function start() {
+          pngExport.start();
+          dxfImport.bindControls({ flushScheduledCanvasPointerMove: flushPointerMove });
+        }
+        return Object.freeze({ png, start });
+      }
+      const completed = Object.freeze({ ...feature, createDxfForWorkspace, startForEmptyDocument, prepareExportControls });
       return completed;
     }
     return Object.freeze({ session, createForWorkspace });

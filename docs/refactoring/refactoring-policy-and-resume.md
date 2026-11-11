@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の作図長さpolicy単位ではapp.jsは1,205行、非空白763行。AST監査ではroot212文・369束縛、構築436非空白行とbind37行、別名・設定87行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のファイルControls接続単位ではapp.jsは1,202行、非空白760行。AST監査ではroot210文・369束縛、構築435非空白行とbind35行、別名・設定87行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：作図最小長さの導出と線・円弧への既定値共有をGeometry作成側へ集約（2026-11-12）
+### 最新：ファイル操作のControls接続とPNG公開後の開始をDocumentFileFeatureへ集約（2026-11-12）
+
+開始基準developは2efecaf2f9e3e64d5b5806f7aad0334625a71047、作業branchはcodex/file-export-controls。開始週枠残量63%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+DocumentFileFeature.prepareのcreateForWorkspaceが返すprepareExportControlsは、同じ完成File featureのDocument controlsをbindし、共有File session・文書名・参照画像準備・Canvas snap・pointer flushを既存PNG factoryへ接続する。返すpngはfactoryが返した実recordで、startを別に返す。app.jsはpng.commandを従来の位置で公開した後にstartを呼び、同じPNG lifecycleのstart、同じDXF featureのcontrols bindを順に実行する。
+
+Document controlsのbindより前に参照画像のprepareImagesを読まず、PNG factoryはbare・一引数、既存optionsの順序と実関数・sessionを維持する。snapは操作時に同じdrawingSnap.findをmember receiver・二引数で呼び、結果・元例外を透過する。PNG commandの公開をstart前に残し、各段階の例外や途中まで登録されたlistenerを巻き戻さない。繰返し呼出しは各native ownerの既存規則に従い、新しい開始済みflagを追加しない。PNG描画／mode・画像入力・DXF変換／権限・Document command／File sessionの状態は各ownerに残す。無関係な参照画像入力やSketch Treeのbindを取り込まず、CanvasDisplay／PngExport／DocumentFileControls／DXF commandの生成・操作本体は不変。保存形式v26・UI・操作・履歴を変えず、既存src/application/document_file.jsに配置し、新file／global／全体contextを追加しない。
+
+app.jsは1,205→1,202行（3行減）、非空白763→760行、root212→210文。束縛369は不変。構築436→435行・115文は不変、bind37→35行・13→11文、別名87行・test hooks152行は不変。新たな未束縛参照なし。関連するファイル操作の接続を既存ownerへ集約した単位であり、200〜500行の全体目標は未完了。
+
+関連単体55件が成功。新旧の接続を実Document controls・PNG lifecycle／command・DXF controlsへ接続して比較し、同じsession・実PNG record・live文書名・snapのreceiver／引数／戻り値／例外、command公開前の無起動と公開後の開始、busy時の拒否、実ボタンの動作、native再開始規則を確認した。Document bind／listener登録／画像port取得／PNG生成／PNG start／DXF bindの各失敗で、例外同一性・公開状態・登録済みlistenerの挙動が従来と一致する。ソース逆変換で既存File生成本体は不変、rootは宣言した接続置換だけである。
+
+構文639ファイル・全単体2,594件・関連単体55件と通常ja/light・en/dark・test起動が成功。関連E2E150件（7file、2.2m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はDocument／WorkspaceとCanvasの構築境界を再監査する。残る構築435行とtest hooks152行が主要部分で、単一callbackの移動を繰り返すだけでは数百行へ到達しない。既存feature内の生成を同じ状態ownerごとにまとめられる範囲を探し、巨大な別rootや全体contextを作らない。PNGのCanvas側factoryとFile側接続の分担は維持し、必要のない相互依存を増やさない。
+
+### 作図最小長さの導出と線・円弧への既定値共有をGeometry作成側へ集約（2026-11-12）
 
 開始基準developはba84b41be75428680fc01e304bcdff4b5ed8dcac、作業branchはcodex/geometry-length-policy。開始週枠残量64%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
