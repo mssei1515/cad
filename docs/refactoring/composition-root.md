@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Canvas Contextの取消準備と操作公開・開始を既存ownerへ集約（2026-11-11）
+
+CanvasContextInteraction.createMenuForWorkspaceのSceneはprepareInteractionを持つ。既存operationSessions.createCommandCancellationを同じ段階で呼び、Context専用の取消機能をclosureへ保持してstartInteractionを返す。取消は同じCanvasCommandCancellationが担当し、Context側でmodeやpending、drawing stateを複製しない。Block placementのreadonly restorePropertiesPanelとPresentationの同じupdateUIを選び、app.jsはその関数別名と取消recordを保持しない。
+
+startInteractionは既存createInteractionの成功後に同じ実Controller.startをmember・引数なしで呼び、実操作recordを返す。取消準備→外部の描画順操作生成→操作生成・成功時公開→listener開始の順を維持する。取消生成失敗では後続を始めず、操作生成失敗では以前の公開操作を保持し、listener登録失敗では新操作と既存の部分登録を残す。独自のstarted flagやrollbackを追加せず、native Controllerの重複開始・disposeを利用する。旧createInteraction／Scene API、通常取消・Keyboardの別ポリシー、例外、receiver／引数、live Selection／scope／pointer、UI・保存形式v26は不変。既存src/application／commands／uiの配置で責務が一致し、新しいbootstrapやフォルダは作らない。
+
+app.jsは1,233→1,231行（2行減）、非空白790→788行、root226→225文・378→377束縛、構文依存辺1,062→1,058。別名・設定91→90行。構築448行・bind41行・委譲7行・test hooks152行は不変。呼出し名がstartへ変わったためASTのotherCallsは35→23行、startupCallsは5→16行へ分類が移るが、実際の削減は2行である。全体の200〜500行目標は未完了。
+
+関連単体23件が成功。実Menu／Context Actions／Cancellationを使い、旧接続との操作順、取消全段階、操作の成功時公開、生成失敗と部分listener登録失敗、重複startとdisposeを照合した。browser比較では取消→描画順→Interaction→Actions→公開→startの六段階、六つの実参照とrestore fieldのreadonly、同じController receiver・引数なし・公開済み操作、closeAppMenus生成前ReferenceError、native option key順・function名／arityと公開204項目が一致。ja/light・en/dark・test起動も成功。既存Context関数本体と五つのnative owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,548件と関連E2E193件（8file、3.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
 ## Clipboardを使うテスト支援の入力を実ownerから共有（2026-11-11）
 
 SketchProjectionTestDriverとSplineTestDriverのcreateBrowserSupportForWorkspaceが、既存ClipboardFeatureから同じsessionを選び、Splineでは同じcopyableSelectionPayload関数も選んで既存createForWorkspaceへ渡す。app.jsは実ClipboardFeatureを共有し、テスト専用の二別名を持たない。コピー・貼付けの既存callback、選択した関数の参照・receiver・引数と順、現在Workspaceとbound editing scopeの区別、例外と途中状態を維持する。session.payloadは操作時に読む既存getterのままで、payload・貼付け回数の複製や新たな状態ownerを作らない。通常ClipboardFeature／ClipboardSession、旧driver本体・旧API、生成・公開・bind／start順、UI・保存形式v26とclassic script読込順は不変。既存src/testingとsrc/application／editingの配置を使い、新規フォルダは不要と判断した。

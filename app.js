@@ -177,8 +177,7 @@
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
     setPropertiesPanelCollapsed, solveAndRefresh, recordHistory,
   });
-  const { start: startBlockPlacement,
-    restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;
+  const { start: startBlockPlacement } = blockPlacementCommand;
   const historyFeature = createHistoryFeature({
     documentWorkspace, blocks: blockEditingFeature, readServices: geometryReadServices, presentation,
     serializeDocument: serializeModel, loadDocument: loadModelData, serializeConstraint, decorateSerializedConstraint,
@@ -928,7 +927,7 @@
     references: constraintReferences, hitSketchIdentityElement,
   });
 
-  const { presentCandidate: canvasContextCandidatePresentation, createInteraction: createCanvasContextInteraction } = createCanvasContextScene({
+  const { presentCandidate: canvasContextCandidatePresentation, prepareInteraction: prepareCanvasContextInteraction } = createCanvasContextScene({
     sceneQueries: sceneHitQueries, splineEditing, canvasContextAnnotationHit, sessions: operationSessions,
     icons: toolbarIcons, feedback: authoringFeedback,
   });
@@ -944,8 +943,8 @@
 
 
 
-  const canvasCommandCancellation = operationSessions.createCommandCancellation({
-    instances: geometryInstanceCommand, constraints: constraintTargetCommand, blockPlacementCommand, restoreBlockPlacementPropertiesPanel, updateUI,
+  const startCanvasContextInteraction = prepareCanvasContextInteraction({
+    instances: geometryInstanceCommand, constraints: constraintTargetCommand, blockPlacement: blockPlacementCommand,
   });
 
 
@@ -966,9 +965,9 @@
 
 
 
-  createCanvasContextInteraction({
+  startCanvasContextInteraction({
     constraintSelection: constraintSelectionQuery, blockQueries: blockEditingQueries, dimensions: dimensionDragFeature,
-    cancellation: canvasCommandCancellation, clipboard: clipboardFeature, history: historyController,
+    clipboard: clipboardFeature, history: historyController,
     viewport, projection: sketchProjectionCommand,
     sameArcEndpoint, clearSelection, findLineFixedConstraint, findArcEndpointFixedConstraint,
     visibleGeometryBounds: canvasScene.bounds.visibleGeometryBounds, drawingOrderCommandState, handleConstraintOperandClick, isGeometryMode,
@@ -978,7 +977,6 @@
     setBlockInstanceRotationLocked, startDimensionEditInput, recordHistory, sketchMoveCommand,
     startHatchBoundaryRepair, reorderSelectedDrawingObjects, fitVisibleGeometryToViewport,
   });
-  canvasContextController.start();
 
   const canvasEditingInput = createCanvasEditingInput({
     document, canvas, updateUI,
