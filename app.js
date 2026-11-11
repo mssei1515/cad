@@ -568,11 +568,10 @@
     documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices, interaction: canvasInteraction,
     references: constraintReferences, annotationFeature, annotationLeaderAnchor,
     splineEditing, guardDimensionSymbolDeletion, geometry: geometryCreation, sessions: operationSessions, drawing: basicDrawingTools,
-    solving: sketchSolving, analysis: constraintAnalysis, presentation, updateToolbar, recordHistory,
-    referenceImageInteraction, clearSelection, solveAndRefresh,
+    solving: sketchSolving, analysis: constraintAnalysis, presentation, recordHistory,
+    referenceImageInteraction, solveAndRefresh,
     resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: annotationPreparation.resetDrag,
-    viewport, persistence: documentPersistence, normalizeGeometryInstance, blocks: blockEditingFeature,
-    imageClipboard, isGeometryMode,
+    viewport, persistence: documentPersistence, blocks: blockEditingFeature, imageClipboard,
   });
   const { remove: deleteElements, removeSelection: deleteCurrentSelection } = deletionFeature;
 

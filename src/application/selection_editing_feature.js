@@ -13,7 +13,12 @@
       return completed;
     }
     function createForDrawing({ drawing, ...options }) {
-      return createPreparedFeature({ resetDrawing: drawing.resetForDeletion, ...options });
+      const defaults = { resetDrawing: drawing.resetForDeletion };
+      if (!("clearSelection" in options)) defaults.clearSelection = options.interaction.clearSelection;
+      if (!("isGeometryMode" in options)) defaults.isGeometryMode = options.interaction.isGeometryMode;
+      if (!("updateToolbar" in options)) defaults.updateToolbar = options.presentation.updateToolbar;
+      if (!("normalizeGeometryInstance" in options)) defaults.normalizeGeometryInstance = options.persistence.normalizeGeometryInstance;
+      return createPreparedFeature({ ...defaults, ...options });
     }
     function copySelectionToClipboard(options = {}) { return readCommand().copy(options); }
     function pasteGeometryClipboard() { return readCommand().paste(); }
