@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Canvas式参照の接続をParameterEditorへ集約（2026-11-12）
+
+ParameterEditorのcreateReferenceInputForCanvasは、既存editorが持つbrowser windowのHTMLTextAreaElement、操作時に現在の編集scopeを読むcurrentNamespace、同じViewportのcanvasPointを既存ExpressionInputControllerへ接続する。app.jsは入力型・scope読取りのcallback・座標関数を組み立てず、CanvasとViewport、既存入力欄・Pending・hit queryを渡す。
+
+入力型と座標関数は従来の参照入力生成段階で取得し、scope・モデル・dialog draft・Canvas座標・listenerを生成中に読み書きしない。currentNamespaceは同名・arity 0で、editorへ渡されたcurrentScopeを操作時にbare・無引数で呼び、同じ値と元例外を返す。Workspace.currentへ置き換えず、最後にactivateされた編集scopeとParameter dialog draftの名前空間を区別する。TextAreaElement／canvasPointのown propertyがある場合はundefined／nullを含めその値を使い、対応するbrowser／Viewport getterを読まない。currentNamespaceの明示値も優先する。raw createReferenceInputとEditor／ExpressionInputControllerの本体、実draft・挿入・hit／feedback・入力Eventの順は不変。新しいstate・file・global／全体contextを作らず、既存application/parameter_editor.jsへ配置する。UI・操作・履歴・保存形式v26は変更しない。
+
+app.jsは1,197→1,196行（1行減）、非空白755→754行。root209文・365束縛は不変。構築432→431行・115文、bind35行・別名85行・test hooks152行は不変。rootからHTMLTextAreaElementの直接参照がなくなり、DOM入力要素のconstructorをrootが渡す接続はなくなった。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体18件が成功。rawとCanvas構成の実ExpressionInputControllerで、dialog draftとCanvas namespaceの区別、同じ寸法・注記への挿入、live scope置換・日英feedback・エラー時のevent未消費と順序を比較した。browser型／Viewport関数と実controllerの参照同一性、生成中のscope非読取り、callbackの名前・arity・bare呼出し／戻り値／例外、明示undefined／nullの優先とgetter非参照も確認した。ソース逆変換で既存Parameter UI／式入力生成と操作本体は不変、rootは参照入力入口と接続の置換だけである。
+
+構文639ファイル・全単体2,606件・関連単体18件と通常ja/light・en/dark・test起動が成功。関連E2E196件（7file、3.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## Sketch名入力と削除確認のbrowser接続をSketchEditingFeatureへ集約（2026-11-12）
 
 SketchEditingFeature.prepareNavigationのcreateForBrowserは、明示したbrowser windowに対するpromptNameとconfirmDeletionを既定として既存の生成経路へ接続する。名前入力は従来のInteraction生成時、削除確認は従来の後段Deletion生成時に準備し、実際のprompt／confirmは操作時に呼ぶ。app.jsはSketchのbrowser dialog callbackを組み立てない。

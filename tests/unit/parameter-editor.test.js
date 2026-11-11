@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs'); const path = require('node:path'); const vm = require('node:vm');
 const test = require('node:test');
-function fixture(fromWorkspace = false) {
+function fixture(fromWorkspace = false, configure = () => {}) {
   class InputElement {}
   const events = [], applyButton = new EventTarget(), openButton = new EventTarget();
   const state = { model: { parameters: [{ name: 'width' }], symbols: [{ parameterName: 'd1' }] }, definitions: [], editing: null, language: 'ja', ready: false, outcome: { success: true } };
@@ -24,7 +24,8 @@ function fixture(fromWorkspace = false) {
     localizeApplicationUI() {}, applyDraft(session, committed) { events.push('apply'); assert.equal(session, draft.current); if (state.outcome.success) committed(); return state.outcome; },
     recordHistory: label => events.push(['history', label]), setHint: (...args) => events.push(['hint', ...args]), updateUI: () => events.push('ui'), draw: () => events.push('draw'), pickDimension() {},
   };
-  let editor, EditorInputElement = InputElement;
+  configure(options, state);
+  let editor, EditorInputElement = InputElement, browserWindow = options.window;
   if (fromWorkspace) {
     class BrowserInputElement extends EventTarget {}
     class BrowserEvent extends Event { constructor(...args) { super(...args); this.fromWorkspace = true; } }
@@ -37,13 +38,14 @@ function fixture(fromWorkspace = false) {
     const createView = sandbox.window.ExpressionInputView.create;
     vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui/expression_input_view.js'), 'utf8'), sandbox);
     sandbox.window.ExpressionInputView = { ...sandbox.window.ExpressionInputView, create: createView };
-    editor = sandbox.window.ParameterEditor.createForWorkspace({ document, window: { ...options.window, HTMLInputElement: BrowserInputElement, Event: BrowserEvent },
+    browserWindow = { ...options.window, HTMLInputElement: BrowserInputElement, Event: BrowserEvent };
+    editor = sandbox.window.ParameterEditor.createForWorkspace({ document, window: browserWindow,
       documentWorkspace, currentScope: options.currentScope, readBlockEditor: options.readBlockEditor, settings,
       applyDraft: options.applyDraft, recordHistory: options.recordHistory, setHint: options.setHint, updateUI: options.updateUI, draw: options.draw, pickDimension: options.pickDimension });
     EditorInputElement = BrowserInputElement;
   } else editor = sandbox.window.ParameterEditor.create(options);
   assert.deepEqual(events, []); state.ready = true;
-  return { editor, state, draft, events, document, namespace, InputElement: EditorInputElement, openButton, applyButton, names: input => Array.from(namesForInput(input)), rendered: () => rendered };
+  return { editor, state, draft, events, document, namespace, browserWindow, api: sandbox.window, InputElement: EditorInputElement, openButton, applyButton, names: input => Array.from(namesForInput(input)), rendered: () => rendered };
 }
 
 test('parameter editor binds once, reads live scopes and language, and disposes its dialog listeners', () => {
@@ -81,24 +83,32 @@ test('dialog application retains success and failure feedback order through the 
   assert.deepEqual(f.events, ['apply', 'render', ['error', 'rejected'], ['hint', 'rejected', 'error'], 'ui', 'draw']);
 });
 
-function referenceInputFixture() {
+function referenceInputFixture(composed = false) {
  const f=fixture(),state={namespace:{annotations:[]},reads:0,ready:false,name:'d2',failure:null};
  class TextAreaElement extends f.InputElement {}
  const input=new f.InputElement();input.matches=selector=>selector==='[data-parameter-field="expression"], [data-dimension-field="expression"]';
  input.closest=selector=>selector==='#parametersDialog'?input:null;input.dataset={};f.document.activeElement=input;
  f.namespace.ensureDimensionParameter=(constraint,scope)=>{assert.equal(scope,state.namespace);f.events.push('ensure');if(state.failure)throw state.failure;constraint.parameterName=state.name;};
  const pending={current:null},dimensionValueInput=new f.InputElement();dimensionValueInput.matches=()=>false;dimensionValueInput.closest=()=>null;
- const command=f.editor.createReferenceInput({TextAreaElement,currentNamespace:()=>{assert.equal(state.ready,true,'no eager Canvas scope read');state.reads++;return state.namespace;},
+ const ports={TextAreaElement,currentNamespace:()=>{assert.equal(state.ready,true,'no eager Canvas scope read');state.reads++;return state.namespace;},
   dimensionValueInput,pendingCommandSession:pending,canvas:{getBoundingClientRect:()=>({left:10,top:20,right:110,bottom:120})},canvasPoint:()=>({x:3,y:4}),
   hitDimension:(x,y,options)=>{assert.deepEqual([x,y],[3,4]);assert.equal(options.activeOnly,false);return state.dimensionHit;},
-  hitAnnotationElement:()=>state.annotationHit});
+  hitAnnotationElement:()=>state.annotationHit};
+ let command;
+ if(composed){
+  f.browserWindow.HTMLTextAreaElement=TextAreaElement;
+  Object.defineProperty(f.state,'model',{get(){assert.equal(state.ready,true,'no eager Canvas scope read');state.reads++;return state.namespace;}});
+  const {TextAreaElement:unusedType,currentNamespace:unusedScope,canvasPoint,...options}=ports;
+  command=f.editor.createReferenceInputForCanvas({viewport:{canvasPoint},...options});
+ }else command=f.editor.createReferenceInput(ports);
  assert.equal(state.reads,0);assert.deepEqual(f.events,[]);state.ready=true;
  const event={clientX:30,clientY:40,preventDefault(){f.events.push('prevent');},stopPropagation(){f.events.push('stop');}};
  return {...f,referenceState:state,input,command,event,TextAreaElement,pending,dimensionValueInput};
 }
 
 test('parameter reference input shares its dialog draft, insertion and feedback while reading the current Canvas namespace lazily',()=>{
- const f=referenceInputFixture();assert.equal(Object.isFrozen(f.command),true);assert.equal(f.command.context(),null);
+ for(const composed of [false,true]){
+ const f=referenceInputFixture(composed);assert.equal(Object.isFrozen(f.command),true);assert.equal(f.command.context(),null);
  f.draft.current={namespace:f.referenceState.namespace};assert.equal(f.command.context().namespace,f.referenceState.namespace);
  const constraint={};f.referenceState.dimensionHit={constraint};f.command.pickCanvas(f.event);
  assert.equal(constraint.parameterName,'d2');assert.deepEqual(f.events,['ensure','prevent','stop',['insert',f.input,'d2'],['error',''],['hint','d2 を挿入しました']]);
@@ -110,16 +120,19 @@ test('parameter reference input shares its dialog draft, insertion and feedback 
  f.dimensionValueInput.matches=()=>false;f.pending.current={type:'distance-value'};assert.equal(f.command.context().namespace,f.referenceState.namespace);
  f.document.activeElement=new f.TextAreaElement();f.document.activeElement.dataset={expression:'true'};f.document.activeElement.id='annotationValueInput';f.document.activeElement.matches=()=>false;
  assert.equal(f.command.context().namespace,f.referenceState.namespace);
+ }
 });
 
 test('parameter reference input keeps mismatch feedback order and propagates naming failures without consuming the event',()=>{
- const f=referenceInputFixture();f.draft.current={namespace:{annotations:[]}};
+ for(const composed of [false,true]){
+ const f=referenceInputFixture(composed);f.draft.current={namespace:{annotations:[]}};
  assert.equal(f.command.insertDimension(f.event,{constraint:{}}),true);
  assert.equal(f.events[0][0],'error');assert.equal(f.events[1][0],'hint');assert.deepEqual(f.events.slice(2),['prevent','stop']);
  f.events.length=0;const note={parameterEnabled:true,parameterName:'n1'};f.referenceState.namespace.annotations.push(note);
  assert.equal(f.command.insertAnnotation(f.event,{element:note}),true);assert.deepEqual(f.events.slice(0,2),['prevent','stop']);assert.equal(f.events[2][0],'error');
  f.events.length=0;f.draft.current.namespace=f.referenceState.namespace;const marker=new Error('name allocation failed');f.referenceState.failure=marker;
  assert.throws(()=>f.command.insertDimension(f.event,{constraint:{}}),error=>error===marker);assert.deepEqual(f.events,['ensure']);
+ }
 });
 
 test('workspace parameter editor reads live definitions and language while retaining its explicit editing scope',()=>{
@@ -141,4 +154,33 @@ test('workspace parameter editor uses browser input and Event types with the sha
  for(const name of ['input','change'])input.addEventListener(name,event=>{assert.equal(event.fromWorkspace,true);assert.equal(event.bubbles,true);observed.push(name);});
  f.editor.insertIdentifierIntoExpressionInput(input,'width');assert.equal(input.value,'="width"');assert.equal(input.selectionStart,input.value.length);assert.equal(input.selectionEnd,input.value.length);
  input.dispatchEvent(new Event('blur'));assert.deepEqual(observed,['input','focus','change']);
+});
+
+test('Canvas reference composition selects browser and viewport types late, shares native input and reads its editing scope with the original call contract', () => {
+  let reads = 0, failure; const scope = {}, marker = new Error('reference scope');
+  const f = fixture(false, options => { options.currentScope = function() { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); reads++; if (failure) throw failure; return scope; }; });
+  class TextArea extends f.InputElement {} let typeReads = 0, pointReads = 0, ports, actual;
+  Object.defineProperty(f.browserWindow, 'HTMLTextAreaElement', { get() { typeReads++; return TextArea; } });
+  function canvasPoint() {} const viewport = { get canvasPoint() { pointReads++; return canvasPoint; } };
+  const original = f.api.ExpressionInputController; f.api.ExpressionInputController = { create(options) { assert.equal(this, f.api.ExpressionInputController); ports = options; return actual = original.create(options); } };
+  const canvas = {}, pending = {}, input = {}, hit = () => null;
+  const command = f.editor.createReferenceInputForCanvas({ viewport, canvas, dimensionValueInput: input, pendingCommandSession: pending, hitDimension: hit, hitAnnotationElement: hit });
+  assert.equal(command, actual); assert.equal(reads, 0); assert.equal(typeReads, 1); assert.equal(pointReads, 1); assert.deepEqual(f.events, []);
+  assert.equal(ports.types.InputElement, f.InputElement); assert.equal(ports.types.TextAreaElement, TextArea); assert.equal(ports.canvasPoint, canvasPoint);
+  assert.equal(ports.canvas, canvas); assert.equal(ports.dimensionValueInput, input); assert.equal(ports.pendingCommandSession, pending);
+  const { currentNamespace } = ports; assert.equal(currentNamespace.name, 'currentNamespace'); assert.equal(currentNamespace.length, 0); assert.equal(currentNamespace(), scope);
+  failure = marker; assert.throws(currentNamespace, error => error === marker);
+  f.api.ExpressionInputController = { create() { throw marker; } };
+  assert.throws(() => f.editor.createReferenceInputForCanvas({ viewport }), error => error === marker); assert.deepEqual(f.events, []);
+});
+
+test('Canvas reference composition retains explicit undefined or null overrides without reading browser or viewport defaults', () => {
+  const f = fixture(), marker = new Error('unexpected default'); let ports;
+  Object.defineProperty(f.browserWindow, 'HTMLTextAreaElement', { get() { throw marker; } });
+  const viewport = new Proxy({}, { get() { throw marker; } }), original = f.api.ExpressionInputController;
+  f.api.ExpressionInputController = { create(options) { ports = options; return original.create(options); } };
+  for (const value of [undefined, null]) {
+    f.editor.createReferenceInputForCanvas({ viewport, TextAreaElement: value, canvasPoint: value, currentNamespace: value });
+    assert.equal(ports.types.TextAreaElement, value); assert.equal(ports.canvasPoint, value); assert.equal(ports.currentNamespace, value); assert.deepEqual(f.events, []);
+  }
 });
