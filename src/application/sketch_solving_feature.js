@@ -1,6 +1,27 @@
 /* Assemble solving, parameter feedback and application refresh around the same owners. */
 (() => {
   "use strict";
+  function prepare() {
+    let completedAnalysis;
+    function refreshConstraintAnalysis(options = {}) {
+      if (completedAnalysis === undefined) throw new ReferenceError("Cannot access 'constraintAnalysis' before initialization");
+      return completedAnalysis.value.refresh(options);
+    }
+    function publishContext(build, options) {
+      const context = build(options);
+      completedAnalysis = { value: context.analysis };
+      return context;
+    }
+    function prepareWithReferences(options) {
+      const prepared = window.SketchSolvingFeature.prepareWithReferencesForWorkspace(options);
+      const { createContextForWorkspace: buildContext, createContextWithAnnotationDrag: buildWithAnnotationDrag } = prepared;
+      return Object.freeze({ ...prepared,
+        createContextForWorkspace(options) { return publishContext(buildContext, options); },
+        createContextWithAnnotationDrag(options) { return publishContext(buildWithAnnotationDrag, options); },
+      });
+    }
+    return Object.freeze({ refreshConstraintAnalysis, prepareWithReferencesForWorkspace: prepareWithReferences });
+  }
   function prepareWithReferencesForWorkspace({ documentWorkspace, readServices, references, solver, pointUsage, presentation }) {
     const referenceState = window.ReferenceConstraintState.create({
       currentScope: documentWorkspace.workspace.current,
@@ -112,5 +133,5 @@
       readEditingScope: () => editingScope.current, activateEditingScope: (...args) => editingScope.activate(...args), nextHatchIndex: () => documentIds.peek("hatch"),
       drawableSketchIds, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), setSolveResultHint, updateUI, draw, historyController, recordHistory });
   }
-  window.SketchSolvingFeature = Object.freeze({ prepareWithReferencesForWorkspace, prepareForWorkspace, create, createForWorkspace, createContextForWorkspace });
+  window.SketchSolvingFeature = Object.freeze({ prepareWithReferencesForWorkspace, prepareForWorkspace, create, createForWorkspace, createContextForWorkspace, prepare });
 })();

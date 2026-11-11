@@ -23,6 +23,7 @@
   } = window.GeometrySolver;
 
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
+  const { refreshConstraintAnalysis, prepareWithReferencesForWorkspace: prepareSketchSolving } = window.SketchSolvingFeature.prepare();
   const annotationPreparation = window.AnnotationFeature.prepare();
   const propertiesPreparation = window.PropertiesDisplay.prepare();
   const { createForFeature: createBlockCommandsWithView, update: updateBlockUI } = window.BlockEditingFeature.prepareCommandsWithView();
@@ -111,7 +112,7 @@
   });
   const { hitAnnotationTarget, annotationLeaderTargetFromItem, annotationLeaderAnchor } = annotationTargets;
   const { referenceState: referenceConstraintState, solveState: sketchSolveResultState,
-    createContextWithAnnotationDrag: createSolveContext, solveAndRefresh } = window.SketchSolvingFeature.prepareWithReferencesForWorkspace({
+    createContextWithAnnotationDrag: createSolveContext, solveAndRefresh } = prepareSketchSolving({
     documentWorkspace, readServices: geometryReadServices, references: constraintReferences, solver, pointUsage, presentation,
   });
   const { refreshReferenceConstraintValidity } = referenceConstraintState;
@@ -427,7 +428,6 @@
 
 
 
-  function refreshConstraintAnalysis(options = {}) { return constraintAnalysis.refresh(options); }
 
 
 
