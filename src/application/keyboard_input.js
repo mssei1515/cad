@@ -1,6 +1,9 @@
 /* Compose application keyboard routing, cancellation adapters and listener lifetime. */
 (() => {
   "use strict";
+  function createWorkspaceShortcuts({ files, history, copy, paste }) {
+    return { save: files.save, saveAs: files.saveAs, copy, paste, nativePaste: true, nativeCopy: true, undo: history.undo, redo: history.redo };
+  }
   function create({ window: browserWindow, menus, sketchMove, constraintStatusView, dimensionInput, shortcuts,
     readMode, isGeometryMode, instances, projection, referenceImage, splineEditing, blockPlacement, annotationDrag,
     pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand,
@@ -36,5 +39,5 @@
     }
     return Object.freeze({ start, dispose });
   }
-  window.KeyboardInput = Object.freeze({ create });
+  window.KeyboardInput = Object.freeze({ create, createWorkspaceShortcuts });
 })();

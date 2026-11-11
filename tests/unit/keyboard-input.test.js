@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-function fixture() {
+function fixture(buildShortcuts) {
   const events = [], browser = new EventTarget();
   const state = { ready: false, mode: 'select', pending: null, constraint: null, selection: false, handles: false, resizing: false,
     dimension: false, pointer: { x: 1, y: 2 }, instance: false };
@@ -18,7 +18,7 @@ function fixture() {
   const feature = sandbox.window.KeyboardInput.create({ window: browser,
     menus: { closeSketch: () => false, canvasVisible: () => false, closeCanvas() {} }, sketchMove: { active: false },
     constraintStatusView: { hold: () => false }, dimensionInput: { handleKey: () => state.dimension },
-    shortcuts: { save: record('save'), saveAs: record('saveAs'), undo: record('undo'), redo: record('redo'), nativeCopy: true, nativePaste: true },
+    shortcuts: buildShortcuts ? buildShortcuts(sandbox.window, record) : { save: record('save'), saveAs: record('saveAs'), undo: record('undo'), redo: record('redo'), nativeCopy: true, nativePaste: true },
     readMode: () => read(state.mode), isGeometryMode: () => true, instances,
     projection: { cancel: record('projection') }, referenceImage: { calibrating: false }, splineEditing: { current: null },
     blockPlacement: { finishOrCancel: record('block') }, annotationDrag: {
@@ -73,4 +73,38 @@ test('completion uses current mode and pointer while dimension input and native 
   f.state.dimension = false; f.state.mode = 'spline'; f.key('Backspace'); assert.deepEqual(f.events, [['removeSpline']]);
   f.events.length = 0; assert.equal(f.key('v', { ctrlKey: true }).defaultPrevented, false); assert.deepEqual(f.events, []);
   f.feature.dispose();
+});
+
+
+test('workspace shortcuts retain live file/history actions, native clipboard precedence and keyboard listener lifetime', () => {
+  const traces = [];
+  for (const composed of [false, true]) {
+    let actions, files, history;
+    const f = fixture((w, record) => {
+      files = Object.freeze({ save: record('save'), saveAs: record('saveAs') });
+      history = Object.freeze({ undo: record('undo'), redo: record('redo') });
+      const copy = record('copy'), paste = record('paste');
+      actions = composed ? w.KeyboardInput.createWorkspaceShortcuts({ files, history, copy, paste })
+        : { save: files.save, saveAs: files.saveAs, copy, paste, nativePaste: true, nativeCopy: true, undo: history.undo, redo: history.redo };
+      return actions;
+    });
+    assert.deepEqual(f.events, []);
+    for (const key of ['save', 'saveAs']) assert.equal(actions[key], files[key]);
+    for (const key of ['undo', 'redo']) assert.equal(actions[key], history[key]);
+    assert.equal(Object.getPrototypeOf(actions).constructor.name, 'Object');
+    assert.deepEqual(Object.keys(actions), ['save', 'saveAs', 'copy', 'paste', 'nativePaste', 'nativeCopy', 'undo', 'redo']);
+    assert.ok(Object.values(Object.getOwnPropertyDescriptors(actions)).every(d => d.writable && d.enumerable && d.configurable));
+    f.feature.start(); f.feature.start(); f.state.ready = true;
+    for (const [key, options] of [['s', { ctrlKey: true }], ['S', { metaKey: true, shiftKey: true }],
+      ['s', { ctrlKey: true, repeat: true }], ['z', { ctrlKey: true }], ['z', { metaKey: true, shiftKey: true }], ['y', { ctrlKey: true }]]) {
+      assert.equal(f.key(key, options).defaultPrevented, true);
+    }
+    assert.deepEqual(f.events, [['save'], ['saveAs'], ['undo'], ['redo'], ['redo']]);
+    for (const key of ['c', 'x', 'v']) assert.equal(f.key(key, { ctrlKey: true }).defaultPrevented, false);
+    assert.equal(f.events.length, 5);
+    f.feature.dispose(); f.key('s', { ctrlKey: true }); assert.equal(f.events.length, 5);
+    f.feature.start(); f.key('s', { metaKey: true }); assert.equal(f.events.length, 6);
+    f.feature.dispose(); traces.push(JSON.stringify(f.events));
+  }
+  assert.equal(traces[1], traces[0]);
 });

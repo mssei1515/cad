@@ -380,8 +380,7 @@
     serializeModel, requestChoice: options => choiceDialog.show(options), loadModelData, solveAndRefresh,
     repairMessage: readDocumentRepairMessage,
   });
-  const { effectiveDocumentName, refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint,
-    save: saveJot2DFile, saveAs: saveJot2DFileAs } = documentFileFeature;
+  const { effectiveDocumentName, refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint } = documentFileFeature;
 
 
 
@@ -1022,8 +1021,8 @@
     window, menus: { closeSketch: sketchNavigation.closeContext,
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
-    shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
-      paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
+    shortcuts: window.KeyboardInput.createWorkspaceShortcuts({ files: documentFileFeature, history: historyController,
+      copy: copySelectionToClipboard, paste: pasteGeometryClipboard }),
     projection: sketchProjectionCommand, constraints: constraintTargetCommand, spline: splineCommand, hatch: hatchCommand,
     splineEditing, blockPlacement: blockPlacementCommand, deleteSelection: deleteCurrentSelection,
   });

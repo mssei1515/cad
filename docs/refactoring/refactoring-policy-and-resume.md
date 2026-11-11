@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の注記リサイズ判定分離単位ではapp.jsは1,261行、非空白816行。AST監査ではroot242文・407束縛、構築・接続465非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のキーボード設定分離単位ではapp.jsは1,260行、非空白815行。AST監査ではroot242文・405束縛、構築・接続465非空白行、別名・設定98行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：注記リサイズ可否の同期を既存AnnotationFeatureへ集約（2026-11-11）
+### 最新：保存・履歴・Clipboardショートカット設定を入力側へ集約（2026-11-11）
+
+開始基準developは87c366cc47a345ddcf0dc80a2c92ac5fae2991b7、作業branchはcodex/keyboard-shortcut-assembly（develop統合・Push後に削除）。週枠残量87%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時は最新Git・usageを確認し、今回のKeyboard設定と直前のAnnotation／BlockLayoutの分離を再実施しない。次は残る構築・接続cohortを監査し、同じownerの入力再配線と初期化段階を整理する。単なるdriver用上位wrapperや巨大全体contextは作らない。
+
+KeyboardInput.createWorkspaceShortcuts（src/application/keyboard_input.js）が、実DocumentFileFeatureのsave／saveAs、実HistoryControllerのundo／redo、明示copy／paste callbackとnative clipboard方針を既存の八field recordへまとめる。app.jsは実files／historyとコピー・貼付けの入口を渡し、八fieldの対応とnativePaste／nativeCopy=trueを直接管理しない。rootの保存専用二別名を除く。既存createとKeyboardInteractionControllerのroutingは変更せず、元の関数を包まずに同じ順序で選ぶ。返却は従来どおりObject prototypeの通常の可変own data propertyで、凍結やgetter化を追加しない。
+
+DocumentFileFeature.save／saveAsとHistoryController.undo／redoは凍結recordのown readonly data fieldであり、早期root別名からKeyboard生成時の同じ実record読取りへ移しても値は変わらない。save／saveAs／copy／paste／nativePaste／nativeCopy／undo／redoのkey順、callbackのObject同一性、receiver・引数・返値・元例外、現在Document／Block履歴の選択は維持する。作成時に保存や履歴操作を実行せず、Clipboardのネイティブイベント処理も移さない。生成→明示start／disposeのlistener管理と入力優先順、UI、保存形式v26は不変。新しいfile・global・state・wrapper controllerは不要である。
+
+app.jsは1,261→1,260行（1行減）、非空白816→815行。root242文・構築114文／465非空白行は不変、束縛407→405、別名・設定99→98行。構文依存辺1,087、委譲11行・test hooks158行は不変。行数だけのための新しい上位wrapperを作らず、既存application／UI配置を維持する。200〜500行の全体目標は未完了。
+
+関連単体46件・全単体2,520件・構文639fileが成功。追加した一単体は実KeyboardInput／KeyboardInteractionControllerで旧設定と生成recordを比較し、保存・別名保存・repeat抑制・Ctrl／MetaのUndo／Redo、ネイティブcopy／cut／pasteの非介入、重複start防止・dispose後の非実行と再startを検証する。実ブラウザでも四つのreadonly field・選択する同じ実関数・recordのkey／descriptor／型、生成順、実Keyboard APIと公開204項目を旧root／旧moduleと比較して一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに加え、製品sourceへ残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+### 注記リサイズ可否の同期を既存AnnotationFeatureへ集約（2026-11-11）
 
 開始基準developは5ed081975c1e09eb676ef84b8d6932f9df6c58ef、作業branchはcodex/annotation-resize-policy（develop統合・Push後に削除）。週枠残量87%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。次回は最新Git・usage・本sectionを照合し、完了済み分離を再実施しない。現在のAnnotation UI判定は既存ownerへ統合済みとして扱い、残る機能ごとの組立て・状態所有と初期化境界を監査する。
 
