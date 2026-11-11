@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のSketch browser dialog単位ではapp.jsは1,197行、非空白755行。AST監査ではroot209文・365束縛、構築432非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のCanvas式参照単位ではapp.jsは1,196行、非空白754行。AST監査ではroot209文・365束縛、構築431非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Sketch名入力と削除確認のbrowser接続をSketchEditingFeatureへ集約（2026-11-12）
+### 最新：Canvas式参照の接続をParameterEditorへ集約（2026-11-12）
+
+開始基準developは1e55d0e92a1d258549304f1a70f391c3e66354da、作業branchはcodex/parameter-canvas-reference。開始週枠残量61%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+ParameterEditorのcreateReferenceInputForCanvasは、既存editorが持つbrowser windowのHTMLTextAreaElement、操作時に現在の編集scopeを読むcurrentNamespace、同じViewportのcanvasPointを既存ExpressionInputControllerへ接続する。app.jsは入力型・scope読取りのcallback・座標関数を組み立てず、CanvasとViewport、既存入力欄・Pending・hit queryを渡す。
+
+入力型と座標関数は従来の参照入力生成段階で取得し、scope・モデル・dialog draft・Canvas座標・listenerを生成中に読み書きしない。currentNamespaceは同名・arity 0で、editorへ渡されたcurrentScopeを操作時にbare・無引数で呼び、同じ値と元例外を返す。Workspace.currentへ置き換えず、最後にactivateされた編集scopeとParameter dialog draftの名前空間を区別する。TextAreaElement／canvasPointのown propertyがある場合はundefined／nullを含めその値を使い、対応するbrowser／Viewport getterを読まない。currentNamespaceの明示値も優先する。raw createReferenceInputとEditor／ExpressionInputControllerの本体、実draft・挿入・hit／feedback・入力Eventの順は不変。新しいstate・file・global／全体contextを作らず、既存application/parameter_editor.jsへ配置する。UI・操作・履歴・保存形式v26は変更しない。
+
+app.jsは1,197→1,196行（1行減）、非空白755→754行。root209文・365束縛は不変。構築432→431行・115文、bind35行・別名85行・test hooks152行は不変。rootからHTMLTextAreaElementの直接参照がなくなり、DOM入力要素のconstructorをrootが渡す接続はなくなった。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体18件が成功。rawとCanvas構成の実ExpressionInputControllerで、dialog draftとCanvas namespaceの区別、同じ寸法・注記への挿入、live scope置換・日英feedback・エラー時のevent未消費と順序を比較した。browser型／Viewport関数と実controllerの参照同一性、生成中のscope非読取り、callbackの名前・arity・bare呼出し／戻り値／例外、明示undefined／nullの優先とgetter非参照も確認した。ソース逆変換で既存Parameter UI／式入力生成と操作本体は不変、rootは参照入力入口と接続の置換だけである。
+
+構文639ファイル・全単体2,606件・関連単体18件と通常ja/light・en/dark・test起動が成功。関連E2E196件（7file、3.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はReferenceImageのbrowser生成portなど、rootに残るbrowser／描画機能の接続を確認する。Image生成の取得時機と実owner、明示factoryの差替えを維持できる場合に限り機能側へ集約する。構築431行とtest hooks152行は残り、小さな接続の除去だけで全体完了と扱わない。
+
+### Sketch名入力と削除確認のbrowser接続をSketchEditingFeatureへ集約（2026-11-12）
 
 開始基準developは884b423b2a83c65eceddb11425b6c4b5ef1dfe33、作業branchはcodex/sketch-browser-dialogs。開始週枠残量61%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

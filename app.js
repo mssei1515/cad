@@ -788,9 +788,8 @@
   const blockView = createBlockView({ document, escapeHtml, startBlockPlacement });
 
 
-  const expressionInputController = parameterEditor.createReferenceInput({
-    TextAreaElement: HTMLTextAreaElement, currentNamespace: () => editingScopeBinding.current, dimensionValueInput, pendingCommandSession,
-    canvas, canvasPoint: viewport.canvasPoint, hitDimension, hitAnnotationElement,
+  const expressionInputController = parameterEditor.createReferenceInputForCanvas({
+    canvas, viewport, dimensionValueInput, pendingCommandSession, hitDimension, hitAnnotationElement,
   });
 
 
