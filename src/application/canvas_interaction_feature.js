@@ -68,6 +68,17 @@
       function createMoveSchedulerForEditing(options) {
         return createMoveScheduler({ ...options, readInput: readInputBinding });
       }
+      function createMoveSchedulerForBrowser({ window: browserWindow, ...options }) {
+        const requestFrame = callback => {
+          const { requestAnimationFrame } = browserWindow;
+          return requestAnimationFrame(callback);
+        };
+        const cancelFrame = frame => {
+          const { cancelAnimationFrame } = browserWindow;
+          return cancelAnimationFrame(frame);
+        };
+        return createMoveSchedulerForEditing({ requestFrame, cancelFrame, ...options });
+      }
       function createSelectionPresentation({ projections, constraintReferences }) {
         return selectionFeature.createPresentation({ hover, constraintTargets: targets, pointer, projections, constraintReferences, clearSnap });
       }
@@ -169,7 +180,7 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, prepareSceneWithAnnotations, createConstruction, createMoveScheduler, createMoveSchedulerForEditing, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, prepareInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, prepareSceneWithAnnotations, createConstruction, createMoveScheduler, createMoveSchedulerForEditing, createMoveSchedulerForBrowser, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, prepareInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
       preparedPending = pending;
       return sessions;
     }

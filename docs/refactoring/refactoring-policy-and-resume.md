@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のReferenceImage browser生成単位ではapp.jsは1,196行、非空白754行。AST監査ではroot209文・365束縛、構築431非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のPointer browser frame単位ではapp.jsは1,194行、非空白752行。AST監査ではroot209文・365束縛、構築429非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：参照画像のbrowser生成factoryをReferenceImageFeatureへ集約（2026-11-12）
+### 最新：Pointerフレーム予約と取消のbrowser接続をCanvasInteractionFeatureへ集約（2026-11-12）
+
+開始基準developは00b6dd3be0587747ba655eeb4e66e2fcff0813c1、作業branchはcodex/pointer-browser-frames。開始週枠残量60%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+CanvasInteractionFeatureの操作sessionが返すcreateMoveSchedulerForBrowserは、同じbrowserのrequestAnimationFrame／cancelAnimationFrameを操作時に読むrequestFrame／cancelFrameを既定として、既存createMoveSchedulerForEditingへ接続する。app.jsは予約・取消のcallbackを組み立てず、既存profile・Geometry read cache・寸法入力同期とbrowserを渡す。
+
+生成中はbrowserのframe API・input binding・モデル・scopeを読み書きせず、listenerも登録しない。callbackは元と同じ名前・arity 1で、毎回取得したnative APIをbare・一引数で呼び、戻り値と元例外を返す。Frame ID 0、coalescing、queued pointer copy、flush／discard、reentrant move、profile／cache／入力処理／寸法同期の順序と入力完成前guardは既存PointerMoveSchedulerとInput lifecycleが所有する。明示requestFrame／cancelFrameはundefined／nullを含め優先し、raw APIは変更しない。実scheduler／入力bindingを作り直さず、新しいstate／queue／frame slot・file・global／全体contextを追加しない。既存application/canvas_interaction_feature.jsへ配置し、UI・Pointer操作・履歴・保存形式v26は不変。
+
+app.jsは1,196→1,194行（2行減）、非空白754→752行。root209文・365束縛は不変。構築431→429行・115文、bind35行・別名85行・test hooks152行は不変。cancelAnimationFrameのglobal直接参照がなくなり、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体50件が成功。実PointerMoveSchedulerと既存Input lifecycleを、raw／Editing／Workspace／browser経路で比較し、初期化前guard・binding公開とlistener順・各失敗時の部分公開・再生成失敗後の前binding保持を確認した。browserのAPI取得時機、bare receiver・一引数、ID 0、入力coalescingとdiscard、getter／関数例外時のqueued／scheduled状態、明示undefined／nullの優先も検証した。ソース逆変換で既存scheduler生成・入力生成／bind・guard／公開・操作本体は不変、rootは宣言したbrowser接続置換だけである。
+
+構文639ファイル・全単体2,610件・関連単体50件と通常ja/light・en/dark・test起動が成功。関連E2E194件（7file、4.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+Canvas DOM取得とcontext取得の2行は今回そのまま残した。rootのcanvas公開がgetContextより先であり、単一の完成pairを返すfactoryへまとめると公開時機が変わる。段階APIや保持層を増やして1行を減らす案は採らず、既存の構築・接続として維持する。次はCanvasの寸法入力scheduleFrameなどに残るbrowser callbackと、既に各表示ownerが持つviewport／surfaceの結線を確認する。構築429行とtest hooks152行は残り、全体目標は未完了。
+
+### 参照画像のbrowser生成factoryをReferenceImageFeatureへ集約（2026-11-12）
 
 開始基準developはa41d23d5e77a4f105d49f868913c0556a828b1b0、作業branchはcodex/reference-image-browser-factory。開始週枠残量60%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

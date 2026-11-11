@@ -194,10 +194,8 @@
   });
 
 
-  const pointerMoveScheduler = operationSessions.createMoveSchedulerForEditing({
-    requestFrame: (callback) => requestAnimationFrame(callback),
-    cancelFrame: (frame) => cancelAnimationFrame(frame),
-    profilePhase: profileInteractionPhase, withGeometryReadCache: geometryReads.withGeometryReadCache,
+  const pointerMoveScheduler = operationSessions.createMoveSchedulerForBrowser({
+    window, profilePhase: profileInteractionPhase, withGeometryReadCache: geometryReads.withGeometryReadCache,
     syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
