@@ -1,5 +1,16 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 履歴の早期操作portと後段生成を同じownerへ集約（2026-11-11）
+
+HistoryController.prepare（src/editing/history_controller.js）は、早期に渡すrecord／createBlockHistoryと後段の実履歴生成を同じownerで接続する。prepareはclosureと凍結portだけを生成し、model／scope／DOMを読まず、履歴stackを作らない。createForWorkspaceは従来位置で同名の生factoryを同じnamespace receiver・一引数で呼び、成功した実featureをそのまま返す。外部生成物をsetterで登録する方式や、別の履歴stack／session／app contextは追加しない。
+
+recordは既定label「変更」と一引数、createBlockHistoryは零引数を維持し、実featureをmember receiverとして呼ぶ。返値・元例外・余剰引数の破棄、生成前の旧historyFeature初期化前ReferenceErrorを維持する。生成失敗では完成済みfeatureを置き換えず、準備単位は独立する。Document／Blockの履歴選択、復元中の記録抑止、profiling、上限80・同一snapshot／Undo／Redo・通知順と保存形式v26は既存の実APIに残す。app.jsは早期portを接続して後段に実featureを生成し、実controllerを従来どおり共有する。新fileやloader／test一覧変更はない。
+
+app.jsは1,265→1,264行（1行減）、非空白820→819行。root243→242文、417→418束縛、依存辺1,091→1,090。二つのhoisted委譲を一つのcold準備に置換したため、委譲13→11行、構築467→468行となる。別名・設定99行とtest hooks158行は不変。束縛数の増加を隠さず、行数削減より初期化と操作の所有を優先する。200〜500行の全体目標は未完了。
+
+履歴関連21件・構文639file・全単体2,508件・通常二経路とtest経路の起動が成功。新規三テストは実Document／Block stackとlive scope・復元抑止・profiling・元例外、coldな生成と成功時のみの公開・独立性、receiver／引数数／既定値／返値を確認する。既存の期待値は変更しない。準備生成・旧二関数とnative factory呼出しを逆展開したroot ASTが基準と同じこと、生history APIのASTとfree identifier集合が不変なことも照合した。関連E2E504件（40file、9.0m、exit 0）も成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。全体589件の直近成功はdevelop f0a7954（30.0分）であり、この単位の関連検証とは区別する。
+
+
 ### 最新：実support recordからの公開契約生成をBrowserTestApiへ集約（2026-11-11）
 
 BrowserTestApi.createFromSupportRecordsは、実driverのsupport recordから既存の公開契約を組み立てる。Canvasのdisplay／rendering／観測、Constraintのconstraints／referenceCases、Documentのdocuments／Sketch削除、Trimの三fixture、Splineのsetup／transfer、画像とParameterの各APIへの対応づけをsrc/testing/browser_test_api.jsが担当する。app.jsは実recordを渡し、別driverへの接続に必要なCanvas displayとconstraint status readerのみを引き続き明示的に受け渡す。driverの生成やtest-mode判定、window.__jot2dTestへの代入はapp.jsの元の段階に残す。

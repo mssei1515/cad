@@ -26,6 +26,7 @@
 
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const annotationPreparation = window.AnnotationFeature.prepare();
+  const { createForWorkspace: createHistoryFeature, createBlockHistory: createBlockEditHistory, record: recordHistory } = window.HistoryController.prepare();
 
 
   const canvas = document.getElementById("canvas");
@@ -178,7 +179,7 @@
   });
   const { start: startBlockPlacement,
     restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;
-  const historyFeature = window.HistoryController.createForWorkspace({
+  const historyFeature = createHistoryFeature({
     documentWorkspace, blocks: blockEditingFeature, readServices: geometryReadServices, presentation,
     serializeDocument: serializeModel, loadDocument: loadModelData, serializeConstraint, decorateSerializedConstraint,
     constructionCommand, clearInteractionForSketchChange, solveAndRefresh, changed: updateHistoryButtons,
@@ -492,12 +493,10 @@
 
 
 
-  function createBlockEditHistory() { return historyFeature.createBlockHistory(); }
 
 
 
 
-  function recordHistory(label = "変更") { return historyFeature.record(label); }
 
 
 
