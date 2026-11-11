@@ -1,4 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
+
+### 最新：拘束操作の安定した入口を実command／Viewの生成ownerへ統合（2026-11-11）
+
+ConstraintEditing.prepare（src/application/constraint_editing.js）は、実createForWorkspaceを従来の位置で生成するcreatorと、取消／距離入力開始／距離解決開始／Controls更新／通常確定／重複除外確定／距離拘束確定の七つの安定した入口を提供する。prepare自体は関数と凍結APIを確保するだけで、Workspace／command／Viewやlistenerを生成せず、model・scope・UI・callbackを読まない。後段creatorは既存の実Workspace featureの生成が成功した後だけ同じ完成実体をprivateに保持し、実体そのものを返す。外部生成物を登録するsetterや汎用app contextを追加しない。
+
+createForWorkspaceが従来から所有する成功済みCommit／Intentはその既存private変数に残す。追加のcommitCommand getterは同じ実commandを操作時に返し、未完成なら旧constraintCommitCommandの初期化前ReferenceErrorを送出する。prepared側にCommit stateを複製しない。七入口は旧rootと同じparameter／引数数を保ち、取消とvalue inputは一引数、distance resolutionは二引数、Controls更新は零引数で返値を捨て、三つの確定は全引数を渡す。各実command／Viewをmember receiverとして呼び、戻り値と元例外を維持する。feature生成前は旧constraintTargetCommand／dimensionPlacementCommand／constraintControlsView／constraintCommitCommandのbinding名を含むReferenceErrorを保つ。
+
+実Target／Dimension placement／Controlsと後段Commitの生成位置・順序、完成後だけのCommit公開、拒否／部分更新／UI・履歴の手順は既存ownerに残す。初回feature構築失敗では未初期化のまま、再構築失敗では以前の完成featureを保持する。各prepareは独立し、model／Selection／session／solver・cacheを追加しない。pending取消は既存OperationSessions、固定操作は既存Fixed ownerに残す。Document reset／性能照会等に必要な実Commitのroot参照は残る。UI・操作・保存形式v26は不変。
+
+app.jsは1,320→1,316行（4行減）、非空白875→871行。root275→269文、束縛460は不変（Controls View別名を除きcreator別名を追加）。委譲26→19行、構築471→474行（早期prepareの三行を追加）、別名・設定121行・条件付きtest hooks165行は不変。構文依存辺1,153→1,143。実componentの生成位置を保って七つのroot委譲を所有元へ揃えた段階であり、200〜500行の全体目標は未完了。
+
+既存ConstraintEditing単体へ4件を追加。featureとCommitの二段階の初期化guard、独立したprepare、実所有commandの同一性、三つの確定の可変長引数／receiver／返値／元例外、TargetとViewの引数数・更新のvoid、初回／再構築失敗時の公開境界と成功済みCommit保持を確認する。root九編集以外、既存feature／子constructor・raw command／View本体の不変、七入口のparameter／引数／void、新しい未使用／未束縛／初期化前root参照の追加なしを照合した。構文637file・全単体2,483件・focused49件・関連E2E447件が成功（38file、7.8m、exit 0）。E2E実行中の707入力と開始HEAD不変、選択38fileの一覧447件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-operation-ownership-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直前の基準develop 7557059の全589件成功（27.2分）とは区別する。
+
+基準develop 7557059、作業branch codex/constraint-operation-ownership、開始時週枠残量97%。構文637file・全単体2,483件・focused49件・起動3経路は成功済み。関連は既存37fileにhead-symmetryを加えた38file・447件が成功（7.8m）。707入力と開始HEADを固定し、TEMP cad-constraint-operation-ownership-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。runnerはcad-constraint-operation-ownership-run.ps1。全runner終了を回収済み。直前の基準develop 7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
 ### 最新：参照拘束の妥当性と求解準備の組立てを求解機能へ集約（2026-11-11）
 
 SketchSolvingFeature.prepareWithReferencesForWorkspace（src/application/sketch_solving_feature.js）は、DocumentWorkspace／Geometry read／Constraint references／solver／PointUsage／Presentationの六つの既存ownerから、実ReferenceConstraintStateと既存prepareForWorkspaceによる実求解準備をこの順に生成し、同じreferenceStateとsolveState／createContextForWorkspace／solveAndRefreshを凍結recordで返す。appは参照妥当性を別途構築せず、返された同じ実体をSketch投影・求解・Tree・Block・Document resetとtestへ共有する。参照診断のMapと求解結果のMapは別々の既存ownerに残り、第二のmodel／solver／session／解析cacheや登録setter、汎用app contextを追加しない。

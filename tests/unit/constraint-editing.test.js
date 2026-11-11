@@ -1146,6 +1146,11 @@ function ownedConstraintFixture(composed) {
  const f=editingOwnersFixture(true,probe,(w,input)=>{
   const pending=input.sessions.pending;
   pending.cancel=function(...args){assert.equal(this,pending);calls.push(['cancel',...args]);if(state.actionError)throw state.actionError;return state.result;};
+  if(composed==='prepared'){
+   probe.preparation=w.ConstraintEditing.prepare();
+   probe.preparedOptions={...input,documentWorkspace:{sketches:input.sketches,workspace:{current:()=>({})}}};
+   return probe.preparation.createForWorkspace(probe.preparedOptions);
+  }
   return composed?w.ConstraintEditing.createForWorkspace({...input,documentWorkspace:{sketches:input.sketches,workspace:{current:()=>({})}}})
    :w.ConstraintEditing.createForEditing({...input,
     resolveConstraintIntent:(type,operands)=>support.intentResolver.resolve(type,operands),
@@ -1160,7 +1165,7 @@ function ownedConstraintFixture(composed) {
   assert.equal(this,object);calls.push([tag,object.generation,name,...args]);if(state.actionError)throw state.actionError;return state.result;
  };return object;};
  const fail=name=>{if(state.failAt===name)throw state.error;};
- w.ConstraintCommitCommand={...originals.ConstraintCommitCommand,createWithDimensions(){fail('commit');return {command:make('commit',['resolution','fromSelection','readOnly']),readOnly:make('read-only',['forPlacement'])};}};
+ w.ConstraintCommitCommand={...originals.ConstraintCommitCommand,createWithDimensions(){fail('commit');return {command:make('commit',['resolution','fromSelection','readOnly','ordinary','ifMissing','dimension']),readOnly:make('read-only',['forPlacement'])};}};
  w.ConstraintIntentResolver={...originals.ConstraintIntentResolver,create(){fail('intent');return make('intent',['resolve']);}};
  w.FixedToggleCommand={...originals.FixedToggleCommand,createOperand(){fail('operand');return make('operand',['toggle']);},createSelection(){fail('selection');return make('selection',['toggle']);}};
  const commitOptions={workspace:{current:()=>({})},checkpoint:{},insertion:{},redundancy:{},solving:{},stabilization:{},referenceState:{}};
@@ -1343,4 +1348,60 @@ test('Workspace dimension input propagates each constructor failure at the origi
    assert.deepEqual(q.f.events,[]);assert.deepEqual(q.state.scope.constraints,[]);
   }
  }
+});
+
+test('prepared constraint operations retain initialization guards before Workspace and before Commit completion',()=>{
+ const f=ownedConstraintFixture('prepared');
+ try{
+  const fresh=f.w.ConstraintEditing.prepare();assert.ok(Object.isFrozen(fresh));
+  const guards={cancelConstraintTargetCommand:'constraintTargetCommand',startDistanceValueInput:'dimensionPlacementCommand',
+   startDistanceResolution:'dimensionPlacementCommand',updateConstraintButtons:'constraintControlsView',
+   commitNewConstraint:'constraintCommitCommand',addConstraintIfMissing:'constraintCommitCommand',addDistanceConstraintFromTarget:'constraintCommitCommand'};
+  for(const [name,binding]of Object.entries(guards))assert.throws(()=>fresh[name](),e=>e.name==='ReferenceError'&&e.message==="Cannot access '"+binding+"' before initialization");
+  for(const name of ['commitNewConstraint','addConstraintIfMissing','addDistanceConstraintFromTarget']){
+   assert.throws(()=>f.probe.preparation[name](),e=>e.name==='ReferenceError'&&e.message==="Cannot access 'constraintCommitCommand' before initialization");
+  }
+  assert.throws(()=>f.feature.commitCommand,e=>e.name==='ReferenceError');assert.deepEqual(f.calls,[]);
+ }finally{f.restore();}
+});
+
+test('prepared constraint commits use the actual owned command and preserve variadic arguments, return, receiver and original failure',()=>{
+ const f=ownedConstraintFixture('prepared'),p=f.probe.preparation,marker=new Error('commit failed');
+ try{
+  const complete=f.publishCommit();assert.equal(f.feature.commitCommand,complete.command);
+  const calls=[['commitNewConstraint','ordinary'],['addConstraintIfMissing','ifMissing'],['addDistanceConstraintFromTarget','dimension']];
+  for(const [name,method]of calls){const run=p[name],args=[undefined,null,{},'extra'];assert.equal(run(...args),f.state.result);assert.equal(f.calls.at(-1)[2],method);assert.deepEqual(f.calls.at(-1).slice(3),args);}
+  f.state.actionError=marker;assert.throws(()=>p.commitNewConstraint('horizontal'),e=>e===marker);f.state.actionError=null;
+  f.state.failAt='intent';f.state.error=marker;assert.throws(f.publishCommit,e=>e===marker);
+  assert.equal(f.feature.commitCommand,complete.command);assert.equal(p.addConstraintIfMissing('retained'),f.state.result);
+  const separate=f.w.ConstraintEditing.prepare();separate.createForWorkspace(f.probe.preparedOptions);
+  assert.throws(()=>separate.commitNewConstraint(),e=>e.name==='ReferenceError');assert.equal(p.addDistanceConstraintFromTarget('same owner'),f.state.result);
+ }finally{f.restore();}
+});
+
+test('prepared constraint targets and View retain argument counts, actual receivers, void update and action exceptions',()=>{
+ const f=ownedConstraintFixture('prepared'),w=f.w,p=f.probe.preparation,calls=[],created={},result={},marker=new Error('target failed');let fail=false;
+ const originals=Object.fromEntries(['ConstraintTargetCommand','DimensionPlacementCommand','ConstraintControlsView'].map(n=>[n,w[n]]));
+ const wrap=(namespace,methods)=>{const original=originals[namespace];w[namespace]={...original,create(options){const component={...original.create(options)};
+  for(const name of methods)component[name]=function(...args){assert.equal(this,component);calls.push([name,args]);if(fail)throw marker;return result;};created[namespace]=component;return Object.freeze(component);}};};
+ try{
+  wrap('ConstraintTargetCommand',['cancel']);wrap('DimensionPlacementCommand',['startDistanceValueInput','startDistanceResolution']);wrap('ConstraintControlsView',['update']);
+  const complete=p.createForWorkspace(f.probe.preparedOptions);assert.equal(complete.targets,created.ConstraintTargetCommand);
+  assert.equal(complete.dimensions,created.DimensionPlacementCommand);assert.equal(complete.controls.view,created.ConstraintControlsView);assert.deepEqual(calls,[]);
+  assert.equal(p.cancelConstraintTargetCommand(undefined,'ignored'),result);assert.equal(p.startDistanceValueInput(null,'ignored'),result);
+  const resolution={},pointer={};assert.equal(p.startDistanceResolution(resolution,pointer,'ignored'),result);assert.equal(p.updateConstraintButtons('ignored'),undefined);
+  assert.deepEqual(calls,[['cancel',[undefined]],['startDistanceValueInput',[null]],['startDistanceResolution',[resolution,pointer]],['update',[]]]);
+  fail=true;assert.throws(()=>p.startDistanceResolution(resolution,pointer),e=>e===marker);assert.throws(p.updateConstraintButtons,e=>e===marker);
+ }finally{for(const [n,v]of Object.entries(originals))w[n]=v;f.restore();}
+});
+
+test('prepared constraint construction publishes only complete Workspaces and retains a prior complete Workspace after failure',()=>{
+ const f=ownedConstraintFixture('prepared'),w=f.w,p=f.probe.preparation,original=w.ConstraintControlsView,marker=new Error('view construction failed');
+ try{
+  const command=f.publishCommit().command;w.ConstraintControlsView={...original,create(){throw marker;}};
+  assert.throws(()=>p.createForWorkspace(f.probe.preparedOptions),e=>e===marker);
+  assert.equal(f.feature.commitCommand,command);assert.equal(p.commitNewConstraint('retained'),f.state.result);
+  const fresh=w.ConstraintEditing.prepare();assert.throws(()=>fresh.createForWorkspace(f.probe.preparedOptions),e=>e===marker);
+  assert.throws(fresh.updateConstraintButtons,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'constraintControlsView' before initialization");
+ }finally{w.ConstraintControlsView=original;f.restore();}
 });

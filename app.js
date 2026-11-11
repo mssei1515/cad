@@ -49,6 +49,9 @@
   const { workspace, parameters: parameterNamespace, sketches: sketchContext,
     geometryIds, createReadContext } = documentWorkspace;
   const currentParameterNamespace = workspace.current;
+  const { createForWorkspace: createConstraintEditing, cancelConstraintTargetCommand, startDistanceValueInput,
+    startDistanceResolution, updateConstraintButtons, commitNewConstraint, addConstraintIfMissing,
+    addDistanceConstraintFromTarget } = window.ConstraintEditing.prepare();
   const { guard: guardDimensionSymbolDeletion } = window.ParameterApplication.createDeletionGuard({
     currentNamespace: currentParameterNamespace, symbolDeletionDependents: parameterNamespace.symbolDeletionDependents,
     readLanguage: () => applicationSettings.language, setHint, log,
@@ -613,7 +616,6 @@
 
 
 
-  function addConstraintIfMissing(...args) { return constraintCommitCommand.ifMissing(...args); }
 
 
 
@@ -769,14 +771,13 @@
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
     createCommitWithIntentForWorkspace: createConstraintCommit, createFixedForWorkspace, constraintTargetHint, readOnlyDimensions,
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDraggingForWorkspace: createConstraintInputWithDragging },
-    controls: { view: constraintControlsView, createBinding: createConstraintControlBinding } } = window.ConstraintEditing.createForWorkspace({
+    controls: { createBinding: createConstraintControlBinding } } = createConstraintEditing({
     document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, readServices: geometryReadServices, presentation,
     operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController, fixedState: fixedStateQueries,
     isGeometryMode, clearSelection, updateToolbar, updateConstraintButtons,
     hitConstraintOperand, placement: dimensionPlacement,
   });
 
-  function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
 
 
   const { operandClick: handleConstraintOperandClick } = constraintTargetCommand;
@@ -785,12 +786,10 @@
 
   function cancelPendingCommand(message) { return pendingCommandSession.cancel(message); }
 
-  function startDistanceValueInput(pointer) { return dimensionPlacementCommand.startDistanceValueInput(pointer); }
 
 
 
 
-  function updateConstraintButtons() { constraintControlsView.update(); }
 
   const { reset: sketchInteractionReset, editing: sketchEditing } = sketchNavigation.createForInteraction({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
@@ -949,16 +948,13 @@
     solvePreparation: constraintSolvePreparation, lineCollapseQuery, acceptError: CONSTRAINT_ACCEPT_ERROR,
     refreshConstraintAnalysis, recordHistory, now: () => performance.now(),
   });
-  function commitNewConstraint(...args) { return constraintCommitCommand.ordinary(...args); }
   const { markReference: markReferenceConstraint } = constraintCommitCommand;
 
 
 
-  function startDistanceResolution(resolution, pointer) { return dimensionPlacementCommand.startDistanceResolution(resolution, pointer); }
 
 
 
-  function addDistanceConstraintFromTarget(...args) { return constraintCommitCommand.dimension(...args); }
 
 
   const geometryDragFeature = geometryDragPreparation.createForWorkspace({
