@@ -507,6 +507,38 @@ function geometryFoundationFixture({composed=false,prepared=false,probe=null,con
  return {foundation,preparation,geometryOptions,tools,state,ids,events,empty,owners,ports,w};
 }
 
+test('solver-derived geometry lengths are read once, shared by native creation and retained independently of later solver changes',()=>{
+ const f=geometryFoundationFixture({prepared:true}),w=f.w,raw=w.GeometryCreation;let reads=0,value=4,ports,actual;
+ const solver={get minLineLength(){reads++;return value;}},options={...f.geometryOptions};delete options.minLineLength;delete options.minArcLength;
+ f.state.ready=false;const prepared=f.preparation.prepareGeometryForSolver(solver,1e-9);
+ assert.ok(Object.isFrozen(prepared));assert.equal(prepared.minimumLength,4);assert.equal(reads,1);assert.deepEqual(f.events,[]);value=9;
+ w.GeometryCreation={...raw,create(input){ports=input;return actual=raw.create(input);}};
+ try{
+  const foundation=prepared.createGeometry(options);assert.equal(foundation.geometry,actual);assert.equal(ports.minLineLength,4);assert.equal(ports.minArcLength,4);assert.equal(reads,1);
+  for(const key of ['currentScope','ids','assignSketchId','currentConstruction'])assert.equal(ports[key],options[key]);
+  f.state.ready=true;const a=foundation.geometry.addPoint(0,0),b=foundation.geometry.addPoint(1,0),line=foundation.geometry.addLine(a,b);
+  assert.equal(line.p1,a);assert.equal(line.p2,b);assert.equal(line.length(),4);
+  assert.equal(foundation.geometry.addArc(a,5,0,1).endAngle,1);assert.equal(foundation.geometry.addArc(a,3,0,1).endAngle,0);
+  assert.equal(f.foundation.geometry.addArc(a,5,0,1).endAngle,0,'raw geometry retains its distinct explicit arc minimum of 6');
+  for(const override of [0,null,undefined]){prepared.createGeometry({...options,minLineLength:override,minArcLength:override});assert.equal(ports.minLineLength,override);assert.equal(ports.minArcLength,override);}
+  f.state.scope=f.empty();f.state.sketch='S2';const point=foundation.geometry.addPoint(8,9);assert.equal(f.state.scope.points[0],point);assert.equal(point.sketchId,'S2');assert.equal(reads,1);
+ }finally{w.GeometryCreation=raw;}
+});
+
+test('geometry length preparation and deferred construction propagate failures without allocating model objects or publishing authoring',()=>{
+ const f=geometryFoundationFixture(),w=f.w,raw=w.GeometryCreation,preparation=w.BasicDrawingTools.prepare(),marker=new Error('length preparation'),options={...f.geometryOptions};let calls=0,failPolicy=false;
+ delete options.minLineLength;delete options.minArcLength;f.state.ready=false;
+ w.GeometryCreation={...raw,createLengthPolicy(value,lower){assert.equal(this,w.GeometryCreation);assert.equal(arguments.length,2);calls++;if(failPolicy)throw marker;return raw.createLengthPolicy(value,lower);}};
+ try{
+  assert.throws(()=>preparation.prepareGeometryForSolver({get minLineLength(){throw marker;}},1e-9),error=>error===marker);assert.equal(calls,0);
+  failPolicy=true;assert.throws(()=>preparation.prepareGeometryForSolver({minLineLength:4},1e-9),error=>error===marker);failPolicy=false;
+  const prepared=preparation.prepareGeometryForSolver({minLineLength:4},1e-9);
+  for(const method of ['create','createEndpointResolver']){w.GeometryCreation[method]=()=>{throw marker;};assert.throws(()=>prepared.createGeometry(options),error=>error===marker);w.GeometryCreation[method]=raw[method];}
+  assert.equal(f.ids.peek('point'),1);assert.equal(f.state.scope.points.length,0);assert.deepEqual(f.events,[]);
+  assert.throws(()=>preparation.preview.snapForDrawing({}),error=>error.name==='ReferenceError');
+ }finally{w.GeometryCreation=raw;}
+});
+
 test('geometry foundation shares IDs, scope and construction with real drawing tools and retains endpoint versus explicit Point identity',()=>{
  const f=geometryFoundationFixture(),{foundation:b,tools,state,ids}=f,first=state.scope;
  const endpoint=b.geometry.addPoint(0,0,false,'endpoint'),explicit=b.geometry.addPoint(10,0);state.endpoint=endpoint;

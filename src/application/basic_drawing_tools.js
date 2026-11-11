@@ -19,6 +19,11 @@
         createAuthoring: options => publishAuthoring(build, options),
         createAuthoringForEditing: options => publishAuthoring(buildForEditing, options) });
     }
+    function prepareGeometryForSolver(solver, minimumOrientationLength) {
+      const lengths = window.GeometryCreation.createLengthPolicy(solver.minLineLength, minimumOrientationLength);
+      function createGeometry(options) { return createPreparedGeometry({ ...lengths, ...options }); }
+      return Object.freeze({ minimumLength: lengths.minLineLength, createGeometry });
+    }
     function createEditing(options) {
       const completed = requireComponent(authoring, "authoringTools").createEditing(options);
       editing = completed;
@@ -53,7 +58,7 @@
       },
       computeTrimPreview(pointer) { return requireComponent(trim, "trimFeature").computePreview(pointer); },
     });
-    return Object.freeze({ createGeometry: createPreparedGeometry, createEditing, createCenterline, createTrim, createSplineEditing, resetSplineEditing, preview });
+    return Object.freeze({ createGeometry: createPreparedGeometry, createEditing, createCenterline, createTrim, createSplineEditing, resetSplineEditing, preview, prepareGeometryForSolver });
   }
   function createCanvasInput({ point, drawing }) {
     const pointCommand = window.PointCommand.create(point);

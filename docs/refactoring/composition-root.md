@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 作図最小長さの導出と線・円弧への既定値共有をGeometry作成側へ集約（2026-11-12）
+
+GeometryCreation.createLengthPolicyは、従来app.jsが持っていたMath.max(minimumOrientationLength, solver値 || 12)の導出を担当し、通常作図で共有するminLineLength／minArcLengthを凍結recordで返す。BasicDrawingTools.prepareのprepareGeometryForSolverは、従来の導出位置でsolver.minLineLengthを一度だけ読み、同じ既定値を保持するGeometry factoryとminimumLengthを返す。後段Geometry生成は既存createPreparedGeometryを通り、実Geometry／Endpoint resolverとauthoring公開を従来の位置で作る。app.jsは導出式・円弧用の別名・作図factoryへの二重設定を持たない。
+
+solver値の読取りと純粋なpolicy生成だけを前段で行い、モデル・scope・hit・ID・Selection・UIを生成・照会しない。solverの後続変更を再読取りせず、実Geometry生成は既存の後段で行う。|| 12によるfalsy値のfallback、Math.maxの下限・型変換・非有限値・元例外を維持し、新しい数値検証や閾値変更を加えない。後段factoryの明示minLineLength／minArcLengthは0／null／undefinedを含め既定値より優先し、raw createGeometry等の独立した線・円弧設定と未指定値も維持する。既存GeometryCreationとBasicDrawingToolsの生成・修復・求解・履歴本体、現在Workspace／bound editing scope・Point identity・constructorの順は不変。方向判定のMIN_ORIENTATION_LENGTH、求解条件、Viewport側の処理を統合せず、既存箇所へ同じ値を渡す。保存形式v26は不変。既存editing／geometry_creation.jsとapplication／basic_drawing_tools.jsに配置し、新file／global／全体contextを追加しない。
+
+app.jsは1,207→1,205行（2行減）、非空白765→763行、root213→212文。束縛369は不変。構築437→436行・115文は不変、別名88→87行・69→68文。bind37行・test hooks152行は不変。rootのMath直接参照がなくなり、新たな未束縛参照なし。数値policyと通常作図の既定値共有を既存ownerへ集約した単位であり、200〜500行の全体目標は未完了。
+
+関連単体72件が成功。通常値1e-6、微小・負値、0／NaN／null／undefined／false／空文字、Infinityと文字列の従来の結果、下限・型変換例外を検証した。実GeometryのLine補正、短いArcの正規化、rawで円弧6・通常既定値4という独立設定の維持、solver getterの一度だけの読取りと後続変更の非反映、明示override、scope置換とPoint identityも確認した。getter・policy・Geometry・Endpoint resolver生成例外を透過し、失敗時にID・modelを変更せず、未生成のauthoringへのguardを維持する。ソース逆変換では宣言したpolicy準備以外のGeometry／authoring生成本体は不変で、rootのGeometry factory参照は新しい導出宣言以後である。
+
+構文639ファイル・全単体2,592件・関連単体72件と通常ja/light・en/dark・test起動が成功。関連E2E190件（8file、3.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 通常Geometry Workspaceの判定をCanvasInteractionFeatureへ集約（2026-11-12）
 
 CanvasInteractionFeature.createGeometryWorkspaceは、通常Geometry Workspace用のisGeometryModeを内部で生成し、既存のSelection edit accessへ渡す。同じ実判定関数を同じInteraction featureの凍結APIへ公開し、app.jsは各機能へそれを共有する。通常判定は従来どおり常にtrueで、Lifecycleのselect／line／block-placeなどのツールmodeとは別のWorkspace種別判定である。Selection解除も既存所有経路を使い、外側のfeature cloneや第二のInteractionを作らない。

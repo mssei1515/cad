@@ -126,7 +126,7 @@
   const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
     sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
   const { toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
-  const { createGeometry: createDrawingGeometry, createEditing: createDrawingEditing, createCenterline, createTrim, createSplineEditing,
+  const { prepareGeometryForSolver: prepareDrawingGeometry, createEditing: createDrawingEditing, createCenterline, createTrim, createSplineEditing,
     resetSplineEditing, preview: authoringPreview } = window.BasicDrawingTools.prepare();
   const operationSessions = createOperationSessions({
     authoringPreview, readOffsetSelection: () => offsetSelection,
@@ -216,7 +216,7 @@
     fromSelection: constraintOperandsFromSelection } = constraintOperandFeature;
   const { sameArcEndpoint } = constraintCandidates;
   const { operandElement } = constraintOperandValues;
-  const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
+  const { minimumLength: MIN_LINE_LENGTH, createGeometry: createDrawingGeometry } = prepareDrawingGeometry(solver, MIN_ORIENTATION_LENGTH);
   const geometryDragPreparation = window.GeometryDragFeature.prepare();
   const { annotationDrag: constrainedAnnotationDrag, scopeQuery: solveScopeQuery, analysis: constraintAnalysis,
     redundancy: constraintRedundancy, createSolving, createLineCollapseQuery } = createSolveContext({
@@ -278,14 +278,12 @@
   });
   const { renderer: referenceImageRenderer, interaction: referenceImageInteraction, input: referenceImageInput } = referenceImageFeature;
   const { createFrame: createCanvasFrame } = prepareCanvasFrame();
-  const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const placementPreviewLayer = createPlacementPreview({
     geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer,
     blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle: blockProjections.createBlockProjectionBundle,
   });
   const { geometry: geometryCreation, createAuthoringForEditing: createAuthoringTools } = createDrawingGeometry({
     currentScope: workspace.current, ids: geometryIds, assignSketchId: sketchContext.assignSketchId, currentConstruction: () => constructionCommand.enabled,
-    minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
     hitEndpointPoint: (x, y) => hitEndpointPoint(x, y), hitExplicitPoint: (x, y) => hitExplicitPoint(x, y),
   });
   const sketchProjectionEditing = sketchProjectionFeature.createModelEditing({
