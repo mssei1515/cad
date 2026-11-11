@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の固定拘束scope接続単位ではapp.jsは1,168行、非空白735行。AST監査ではroot199文・359束縛、構築422非空白行とbind35行、別名・設定76行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のDocument参照準備単位ではapp.jsは1,168行、非空白735行。AST監査ではroot199文・360束縛、構築422非空白行とbind35行、別名・設定76行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：固定拘束queryを既存の結線済みscope照会へ接続（2026-11-12）
+### 最新：Document参照グラフの準備と解決関数の完成公開（2026-11-12）
+
+開始基準developは629eb5d60fabdf6fabee459e5d3f6d3887b6824a、作業branchはcodex/document-reference-preparation。開始週枠残量51%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+DocumentWorkspace.prepareReferencesは実ConstraintReferencesを先に一度生成し、同じgraphのDocument生成入口を返す。app.jsは各既存機能の準備と表示生成を従来位置で行い、その後でprepared入口からDocumentWorkspaceを生成する。参照のgraph関数を実SketchContextへ接続し、Reference→Document→ReadContextというnative constructorの生成順を保つ。raw DocumentWorkspace.createによる個別graph関数の注入も維持する。
+
+prepared DocumentのcreateReadContextは既存の実contextを生成し、完成したservices.reads.resolveGeometryRefを一度取得してから、参照graph向けにその実関数の完成参照だけを公開する。contextとそのcomponentは同じ実体を返し、model／配列／幾何を複製しない。公開前は元のresolveGeometryRef初期化前ReferenceError、Document／ReadContext生成やresolver取得失敗時は以前の完成参照を保つ。正常に取得したundefined／nullと未初期化を区別し、元のTypeErrorも維持する。
+
+graph向けresolveGeometryRefは同じ名前・arity 1で、取得済みの実resolverをbare・一引数で呼び、refと返値・元例外をそのまま渡す。refや幾何結果をcacheしない。geometry readerは従来どおりWorkspace.currentを読み、最後のbound scopeへ置換しない。prepared graphは独立した参照ownerを持ち、そのgraphで最後に完成したread contextのresolverを使う。API containerを準備入口で結線し、各Document／Workspace／ID／query／serviceの実ownerは既存moduleに残す。
+
+app.jsは1,168→1,168行（0行変化）、非空白735行。root199文・359→360束縛、構築422行・109文、別名76行・bind35行・test hooks151行は不変。preparedな生成入口の関数値が一つ増えるが、後段のresolveGeometryRefをroot callbackが読む依存は1→0となった。新file・global・汎用setter・registry・全体contextは追加せず、rootに可変参照・代入を追加しない。既存UI・操作・履歴・保存形式v26とbind／start順は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体50件が成功。実派生参照の拘束graphとgeometry readerを使い、Workspace切替時に同じIDの新しい実Pointを解決し、bound scopeと混ざらないこと、独立した準備graphの分離とContext生成失敗時の保持を確認した。native constructor順と同じgraph関数の接続、coldなresolver取得と一度のcapture、receiver／引数・返値・元例外、constructor／reader getter失敗、invalid resolverのTypeErrorも検証した。ソース逆変換で既存Document・読取り・拘束本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,662件・関連単体50件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E193件（7file、4.3m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はpreparedなDocument参照とReadContextの周辺で、同じownerがすでに持つ依存・normalとtestの生成段階を照合する。CanvasTestDriver／GeometryDragTestDriverの一括統合は、executionが注記・Trim／Canvasより早く、responsive fixtureがDimensionより遅い現行順を動かすか、少数の共通fieldのために段階APIを増やすため、このままでは採用しない。全test driver registry・巨大contextは作らず、数百行の目標を縮小しない。
+
+### 固定拘束queryを既存の結線済みscope照会へ接続（2026-11-12）
 
 開始基準developは522d33c7a0e1424c3016d48afec9c93b0791ac8f、作業branchはcodex/fixed-query-scope-port。開始週枠残量52%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
