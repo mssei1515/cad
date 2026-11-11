@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のContext Menu候補表示接続単位ではapp.jsは1,254行、非空白810行。AST監査ではroot238文・399束縛、構築・接続466非空白行、別名・設定96行、委譲7行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の注記Editor checkpoint接続単位ではapp.jsは1,253行、非空白809行。AST監査ではroot237文・397束縛、構築・接続466非空白行、別名・設定95行、委譲7行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Context Menu候補表示の七関数の接続を既存ownerへ集約（2026-11-11）
+### 最新：注記Editorのcheckpoint field選択を既存生成ownerへ集約（2026-11-11）
+
+開始基準developは3d5d212ce37a3401ba489d5a209350ed6a33b547、作業branchはcodex/annotation-editor-checkpoint（develop統合・Push後に削除）。開始時の週枠残量84%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを確認し、今回のEditor checkpoint、Context候補表示、Properties三port、Pending取消、Selection Clipboard等の完了済み分離を再実施しない。rootの七委譲はhitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／updateBlockUI。次は必要なfield選択と実生成・完成境界をowner単位で評価し、単なる別名・小関数移動や巨大全体contextにしない。value checkpoint本体とGeometry membership／ID rollbackを再抽出・統合しない。
+
+AnnotationFeature.prepareが返すcreateEditorForCheckpoint（src/application/annotation_feature.js）は、実EditingCheckpointのcaptureValues／restoreValuesを注記Editorのcapture／restoreへ選択し、既存createEditorForEditingへ接続する。app.jsはcheckpoint自体を渡し、この接続だけのためのsnapshotModelState／restoreModelState別名を持たない。Editorとcheckpointを保持する別のcontrollerや登録setterは作らず、従来の生成・成功時公開をそのまま用いる。
+
+document／host／capture／restoreと後続optionsの順を維持し、選択する実関数を包み直し・bind・実行せずに渡す。checkpointの二fieldは凍結recordのown readonly data propertyで、早いroot別名から生成時の選択へ移しても同じ関数になる。後にoptionsを展開するため、明示されたcapture／restore／resetDrag等の値（null／undefinedを含む）による上書きも維持する。既存createEditorForEditingと生のcreate／createForEditing／createEditorは変更しない。未生成Featureのguard、入力のfield読取り・Parameter／Controller生成の例外、前の完成済みEditor保持と実Editor resultの返却を維持する。
+
+実checkpoint、AnnotationParameterCommandとAnnotationInputControllerの処理は変更しない。captureはbare零引数、restoreはbare一引数で呼ばれる同じ関数のままで、操作時のcurrent scope、値のrollbackとGeometry／AnnotationのObject同一性、Parameter値・採番index、projection→analysis無効化を保持する。value checkpointをgeometry membership／ID allocation checkpointへ置き換えず、履歴・UI・保存形式v26と既存application／editing配置・読込順も維持する。
+
+app.jsは1,254→1,253行（1行減）、非空白810→809行、root238→237文・399→397束縛、構文依存辺1,078→1,077。別名・設定96→95行。構築116文／466非空白行、委譲7行・test hooks158行は不変。rootの二つの部分function別名を、実checkpointの引渡しとEditor側の選択へ整理した。200〜500行の全体目標は未完了。
+
+関連単体41件・全単体2,533件・構文639fileが成功。追加二単体は、実GeometrySolver.Point／EditingCheckpoint／AnnotationParameterCommandを使う旧接続との比較、生成時のscope無照会、Parameter変更失敗後のPoint・Annotation参照と値・index復元、projection／analysis順、明示callback上書きと入力／Controller生成失敗後のEditor保持を確認する。browserの旧root／旧module比較では、実checkpoint二fieldのreadonly、実関数参照と組立て・Parameter・Controllerの生成順、optionのkey／descriptor／name／arity、同じ実Editor result、capture／restoreのbare receiverと引数数、公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに加え、製品へ残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+### Context Menu候補表示の七関数の接続を既存ownerへ集約（2026-11-11）
 
 開始基準developは6002325e7d9d8246d7ee87759f9c3c9a629176fe、作業branchはcodex/context-candidate-presentation（develop統合・Push後に削除）。開始時の週枠残量85%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを確認し、今回のContext候補表示、Properties三port、Pending取消、Selection Clipboard、Keyboard等の完了済み分離を再実施しない。rootの七委譲はhitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／updateBlockUI。次は実生成・完成境界と必要なfield選択をowner単位で評価する。static formatterの七関数をrootで再配線する今回の責務は既存Context Menuへ統合済みとし、UIラベル・icon本体や候補queryを再抽出しない。
 
