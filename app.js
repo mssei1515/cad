@@ -220,7 +220,7 @@
     createAnnotationDrag: createConstrainedAnnotationDrag, geometryDrag: geometryDragPreparation,
     minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
-  const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace, fitVisibleGeometryToViewport } = createCanvasDisplay({
+  const { viewport, navigation: canvasNavigation, createEditingWorkspaceForBrowser: createCanvasWorkspace, fitVisibleGeometryToViewport } = createCanvasDisplay({
     initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,
     flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
@@ -232,7 +232,7 @@
     createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = propertiesPanel.createWorkspace(createCanvasWorkspace, {
     dimensionScene: { onExpressionMark: canvasRenderProbe.captureExpressionMark },
-    dimensionInput: { syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
+    dimensionInput: { syncHighlight: syncExpressionInputHighlight,
       startDistanceValueInput,
       submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue() },
     drawCanvas, closeContextMenu: closeCanvasContextMenu, applySketchTreeWidth: () => applySketchTreeWidth(),

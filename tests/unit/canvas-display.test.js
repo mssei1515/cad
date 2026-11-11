@@ -1084,7 +1084,7 @@ function preparedWorkspaceFixture(composed, probe) {
       cancelPendingCommand() {}, startDistanceValueInput() {}, submitOffsetValue() {}, submitDistanceValue() {} };
     if (probe.configureInput) probe.configureInput(dimensionInput);
     const workspaceOptions = { dimensionScene: { onExpressionMark() {} }, dimensionInput, drawCanvas: () => f.calls.push('content'), closeContextMenu: () => f.calls.push('close'), applySketchTreeWidth: () => f.calls.push('tree') };
-    const createWorkspace = options => display.createEditingWorkspace(options);
+    const createWorkspace = options => composed === 'browser' ? display.createEditingWorkspaceForBrowser(options) : display.createEditingWorkspace(options);
     const buildWorkspace = probe.wrapWorkspace ? options => probe.wrapWorkspace(createWorkspace, options, f.document) : createWorkspace;
     workspace = buildWorkspace(composed ? workspaceOptions : { ...workspaceOptions,
       dimensionScene: { ...workspaceOptions.dimensionScene, currentLines: () => documentWorkspace.workspace.current().lines, minLineLength: 1e-6, canvasThemeColor: color, appearance: readServices.dimensionAppearance, sketches: seed.sketches },
@@ -1424,4 +1424,34 @@ test('dimension preview publication retains the actual receiver, zero arguments,
     fail = false; assert.equal(f.workspace.drawDimensionPreview(), value);
     assert.throws(() => other.workspace.drawDimensionPreview(), /before initialization/);
   } finally { sceneWindow.DimensionPreview = raw; }
+});
+
+test('browser Workspace dimension focus uses the live frame API after construction and retains deferred sync, input identity and failures', () => {
+  const frames=[],events=[],classes=new Set(),marker=new Error('dimension frame');let reads=0,failure;
+  const input={hidden:true,value:'',style:{setProperty(){}},classList:{contains:name=>classes.has(name),remove:name=>classes.delete(name),toggle:(name,on)=>on?classes.add(name):classes.delete(name)},addEventListener(){},focus(){events.push('focus');},select(){events.push('select');}};
+  const shell={hidden:true,style:{setProperty(){}}};
+  const f=preparedWorkspaceFixture('browser',{
+    configureOwners({f}){
+      const get=f.document.getElementById;f.document.getElementById=function(id){if(id==='dimensionValueInput')return input;if(id==='dimensionValueInputShell')return shell;return get.call(this,id);};
+      Object.defineProperty(f.browser,'requestAnimationFrame',{get(){assert.equal(f.state.ready,true);reads++;if(failure)throw failure;return function(callback){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);frames.push(callback);return 0;};}});
+    },configureInput(options){delete options.scheduleFrame;}
+  });
+  assert.equal(reads,0);assert.deepEqual(events,[]);assert.equal(f.workspace.dimensions.element,input);
+  const schedule=f.probe.ports.input.scheduleFrame;assert.equal(schedule.name,'scheduleFrame');assert.equal(schedule.length,1);
+  const g=sceneWindow.GeometrySolver,target={kind:'point-point',p1:new g.Point('A',0,0),p2:new g.Point('B',100,0),value:100};
+  const dimension=f.workspace.dimensions.display.placement.dimensionFromAnchor(target,{x:50,y:20}),pending={type:'distance-value',target,dimension,buffer:'11'};
+  f.pending.replace(pending);assert.equal(f.workspace.dimensions.input.controller.focus(),undefined);assert.equal(reads,1);assert.equal(frames.length,1);assert.equal(input.hidden,true);
+  pending.buffer='12';f.display.viewport.update({scale:4,x:25,y:30});frames.shift()();assert.equal(input.value,'12');assert.equal(input.hidden,false);assert.deepEqual(events,['focus','select']);
+  const before=input.value;failure=marker;assert.throws(()=>f.workspace.dimensions.input.controller.focus(),error=>error===marker);assert.equal(input.value,before);assert.equal(f.pending.current,pending);
+  failure=null;const callback=()=>{};assert.equal(schedule(callback),0);assert.equal(frames.shift(),callback);assert.equal(reads,3);
+});
+
+test('browser Workspace dimension frame defaults preserve explicit undefined or null callbacks without reading browser APIs', () => {
+  for(const supplied of [undefined,null]){
+    const f=preparedWorkspaceFixture('browser',{
+      configureOwners({f}){Object.defineProperty(f.browser,'requestAnimationFrame',{get(){assert.fail('explicit callback bypasses browser API');}});},
+      configureInput(input){input.scheduleFrame=supplied;}
+    });
+    assert.equal(f.probe.ports.input.scheduleFrame,supplied);assert.throws(()=>f.workspace.dimensions.input.controller.focus(),error=>error.name==='TypeError');
+  }
 });
