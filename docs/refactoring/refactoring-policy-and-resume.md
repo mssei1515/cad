@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のファイルControls接続単位ではapp.jsは1,202行、非空白760行。AST監査ではroot210文・369束縛、構築435非空白行とbind35行、別名・設定87行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12の投影drag入力単位ではapp.jsは1,200行、非空白758行。AST監査ではroot210文・367束縛、構築434非空白行とbind35行、別名・設定86行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：構築・公開段階の再監査（2026-11-12）
+### 最新：投影のdrag入力と操作時の拒否文をSketchProjectionFeatureへ集約（2026-11-12）
+
+開始基準developは35e6564f8b96dcc0cd590278eb945eb2dd609fde、作業branchはcodex/projection-drag-inputs。開始週枠残量63%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchProjectionFeature.createForWorkspaceのcreateDragInputsは、同じ実projectionQueriesとprojectionBlockedMessageを凍結recordで返す。拒否文は操作時に既存applicationTextでドラッグ名を翻訳し、既存の投影形状編集拒否文を生成する。GeometryDragFeature.prepareのcreateForWorkspaceWithProjectionがこれを既存Workspace生成へ接続し、完成した同じfeatureを既存経路で公開する。app.jsは投影queryと拒否文関数を個別に抜き出したり、翻訳と拒否文を組み立てたりしない。
+
+入力準備ではモデル・scope・言語・描画・listenerを読み書きしない。queryは実参照を共有し、native Plan／Solver／Editing／Commandの生成と投影lock判定・preview／finish・rollback・履歴は従来のownerに残す。拒否文callbackは元と同じ名前・arity 0、翻訳と文生成はbare呼出しで同じ順序・引数・戻り値・元例外を維持する。翻訳関数の実参照はWorkspace生成時に既存と共有し、言語は操作時に読む。新routeの明示projectionQueries／projectionBlockedMessageはundefined／nullを含め既定値より優先する。provider／生成失敗では完成featureの公開を更新せず、前の実drag sessionと初期化前guardを維持する。raw APIと既存生成本体は不変。既存application/sketch_projection_feature.jsとgeometry_drag_feature.jsに配置し、新file／global／全体contextや可変保持slotを追加しない。UI・操作・保存形式v26は変更しない。
+
+app.jsは1,202→1,200行（2行減）、非空白760→758行。root210文は不変、束縛369→367。構築435→434行・115文、別名87→86行・68文、bind35行・test hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体30件が成功。投影の実queryと準備時の無読取り、実際の日英拒否文・言語変更・元例外、native dragの投影lock拒否時のPoint identity／座標・履歴無変更、provider失敗時の前session保持と未生成guard、明示callbackとundefined／null overrideを確認した。ソース逆変換で投影の既存生成／操作本体とdragの既存生成／公開／操作本体は不変で、rootは宣言した接続置換だけである。
+
+構文639ファイル・全単体2,597件・関連単体30件と通常ja/light・en/dark・test起動が成功。関連E2E193件（8file、4.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はSelection編集とPropertiesの接続に残るowner由来portを確認する。構築434行とtest hooks152行は残り、大きなfactoryを単に別rootへ移さない。bootstrap-boundary-audit.mdの公開段階と、実Workspace／bound editing scopeの区別を維持する。
+
+### 構築・公開段階の再監査（2026-11-12）
 
 開始基準developはc4ef8442003d2fe5a1f9447054b92cf0014dd524、作業branchはcodex/composition-boundaries-review。開始週枠残量63%。製品・テスト・仕様を変更しない監査単位で、app.jsは1,202→1,202行（0行変化）。全体目標は未完了。
 

@@ -222,8 +222,9 @@ function workspaceFixture(composed, probe = {}) {
     };
     probe.input = input;
     if (probe.configure) probe.configure(input, options);
-    if (composed === 'prepared') {
+    if (composed === 'prepared' || composed === 'prepared-projection') {
       probe.preparation = w.GeometryDragFeature.prepare();
+      if (composed === 'prepared-projection') return probe.preparation.createForWorkspaceWithProjection(input);
       return probe.preparation.createForWorkspace(input);
     }
     return composed ? w.GeometryDragFeature.createForWorkspace(input) : w.GeometryDragFeature.createForEditing(options);
@@ -331,4 +332,42 @@ test('prepared drag publishes only completed features and preserves the prior se
  assert.equal(p.queries.isDraggingPoint(f.point),true);assert.throws(unready.reset,e=>e.name==='ReferenceError');p.reset();assert.equal(f.feature.command.active,false);
  const next=p.createForWorkspace(probe.input);assert.notEqual(next,f.feature);assert.equal(next.command.active,false);
  const nextPlan=p.build('point',f.point,{x:0,y:0});p.begin({pointerId:43},nextPlan);assert.equal(next.command.active,true);assert.equal(f.feature.command.active,false);p.reset();assert.equal(next.command.active,false);
+});
+
+function projectionDragProbe(overrides) {
+  'use strict';
+  const trace = [], marker = new Error('projection inputs'), state = { fail: false, message: 'projection blocked' };
+  const probe = { configure(input) {
+    const queries = input.projectionQueries;
+    function projectionBlockedMessage() { assert.equal(this, undefined); assert.equal(arguments.length, 0); trace.push('message'); return state.message; }
+    const projection = { createDragInputs() { assert.equal(this, projection); assert.equal(arguments.length, 0); trace.push('inputs'); if (state.fail) throw marker; return Object.freeze({ projectionQueries: queries, projectionBlockedMessage }); } };
+    delete input.projectionQueries; delete input.projectionBlockedMessage; input.projection = projection; if (overrides) Object.assign(input, overrides);
+  } };
+  return { probe, trace, marker, state };
+}
+
+test('prepared projection drag connects native editing and command, refuses legacy locks without mutation and publishes only completed features', () => {
+  const p = projectionDragProbe(), f = workspaceFixture('prepared-projection', p.probe), ready = p.probe.preparation;
+  assert.deepEqual(p.trace, ['inputs']); assert.equal(f.state.reads, 0); assert.equal(f.scaleReads(), 0); assert.deepEqual(f.events, []);
+  f.state.ready = true; f.state.lockedProjection = true; p.state.message = 'live reason';
+  const plan = ready.build('point', f.point, { x: 0, y: 0 }); assert.equal(plan.points[0].point, f.point);
+  ready.begin({ pointerId: 61 }, plan); f.feature.command.update({ x: 12, y: 9 });
+  assert.equal(f.point.x, 0); assert.equal(f.point.y, 0); assert.equal(f.hints.at(-1)[0], 'live reason'); assert.equal(f.events.includes('history'), false);
+  p.state.fail = true; assert.throws(() => ready.createForWorkspaceWithProjection(p.probe.input), error => error === p.marker);
+  assert.equal(ready.queries.isDraggingPoint(f.point), true); ready.reset(); assert.equal(f.feature.command.active, false);
+  const unready = w.GeometryDragFeature.prepare(); assert.throws(() => unready.createForWorkspaceWithProjection(p.probe.input), error => error === p.marker);
+  assert.throws(unready.reset, error => error.name === 'ReferenceError');
+});
+
+test('projection drag defaults retain explicit message overrides and undefined or null query overrides rather than replacing them', () => {
+  for (const value of [undefined, null]) {
+    const p = projectionDragProbe({ projectionBlockedMessage: value }), f = workspaceFixture('prepared-projection', p.probe);
+    f.state.ready = true; f.state.lockedProjection = true; const plan = f.feature.build('point', f.point, { x: 0, y: 0 }); f.feature.prepare(plan);
+    assert.throws(() => f.feature.preview(plan, { x: 5, y: 0 }), error => error.name === 'TypeError'); assert.deepEqual(p.trace, ['inputs']); assert.equal(f.point.x, 0);
+    const q = projectionDragProbe({ projectionQueries: value }); assert.throws(() => workspaceFixture('prepared-projection', q.probe), error => error.name === 'TypeError');
+    assert.throws(q.probe.preparation.reset, error => error.name === 'ReferenceError');
+  }
+  const custom = () => 'custom reason', p = projectionDragProbe({ projectionBlockedMessage: custom }), f = workspaceFixture('prepared-projection', p.probe);
+  f.state.ready = true; f.state.lockedProjection = true; const plan = f.feature.build('point', f.point, { x: 0, y: 0 }); f.feature.prepare(plan);
+  assert.equal(f.feature.preview(plan, { x: 2, y: 0 }).reason, 'custom reason'); assert.deepEqual(p.trace, ['inputs']); assert.equal(f.point.x, 0);
 });
