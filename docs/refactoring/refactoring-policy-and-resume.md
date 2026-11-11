@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のBlock command構築単位ではapp.jsは1,176行、非空白739行。AST監査ではroot202文・362束縛、構築424非空白行とbind35行、別名・設定78行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のSketch Tree結線単位ではapp.jsは1,172行、非空白739行。AST監査ではroot200文・361束縛、構築424非空白行とbind35行、別名・設定78行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：共有確認ダイアログの所有とBlock command構築を整理（2026-11-12）
+### 最新：Sketch Treeの共有アイコンと固定操作の結線（2026-11-12）
+
+開始基準developは1f79a36027a5c6fe06c1418d245ec546a6759b54、作業branchはcodex/sketch-tree-fixed-assembly。開始週枠残量55%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchEditingFeature.prepareNavigationが返すediting.createTreeWithFixedControlsは、既存Toolbarの実アイコン生成→提供された固定操作factory→実Tree生成をまとめる。アイコンはToolbarへのmember・ゼロ引数呼出し、固定操作factoryはbare・一引数で呼ぶ。依存readerを各段階で呼び、固定操作のoperand→選択factoryの取出し→Tree依存取得という従来順序を保つ。Treeの生成・完成公開は既存createTreeForPresentationを使い、context menuのstartはappの従来位置に残す。
+
+返すcohortは実icons・実Treeと後段の固定選択factoryそのものを保持する。固定操作／固定選択のstate・Solver・scopeは既存ConstraintEditingに残し、Treeに移さない。固定選択は同じ後段で一度生成する。rootの早期参照をASTで調べ、旧境界内のicons／operand参照はTree optionsだけで、固定選択factoryの外部consumerは後段のみと確認した。Tree optionsのreaderはroot公開前の二つの実actorを仮引数で受け、未完成root束縛を参照しない。
+
+native TreeのController／View／Menuと固定操作・アイコン生成本体は不変。固定操作の先行公開をTree生成失敗時にも巻き戻さず、以前の完成Tree contextを保持する。scope／model／ID／Selection・UI・履歴・保存形式v26、raw生成APIを変えない。新file・global・state／guard・registry・全体contextは追加しない。生成順維持のため二つの依存readerを追加する負担はあるが、全アプリを渡さず同じTree構築段階に限定する。
+
+app.jsは1,176→1,172行（4行減）、非空白739行は不変。root202→200文・362→361束縛、構築111→109文・424行。別名78行・bind35行・test hooks151行は不変。行数差は結線をまとめた際の区切り整理であり、実質の成果は三つの構築呼出しの順序を同じownerに置き、rootのoperand参照を除いたことである。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体83件が成功。実Treeへの固定解除portと同一actorの接続、bound viewと操作scopeの区別、実activation・menu起動、固定選択の後段初期化を確認した。icons→依存reader→固定操作→operand／選択factory取得→Tree依存reader→native Treeの順と各段階失敗時の先行公開・以前のTree保持も検証した。ソース逆変換で既存処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,640件・関連単体83件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E171件（8file、2.6m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は残る構築424行・109文について、既存ownerの共有依存と生成・公開・bind段階を再監査する。単に依存objectをまとめたり巨大contextへ渡して行数を達成しない。今回も設定行は減っていないため、数百行に到達したと扱わない。
+
+### 共有確認ダイアログの所有とBlock command構築を整理（2026-11-12）
 
 開始基準developは54e25c1a5be3e1e58fb5d9009934568d9f9a670d、作業branchはcodex/block-command-assembly。開始週枠残量56%、検証後55%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

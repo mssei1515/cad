@@ -729,22 +729,18 @@
   const { remove: deleteSketch } = sketchDeletionCommand;
 
 
-  const toolbarIcons = toolbarPresentation.createIcons();
-
-
-
-  const { operand: fixedOperandCommand, createSelectionForWorkspace: createFixedSelection } = createFixedForWorkspace({
+  const { icons: toolbarIcons, createFixedSelection, tree: { view: sketchTreeView } } = sketchEditing.createTreeWithFixedControls({
+    toolbar: toolbarPresentation, createFixed: createFixedForWorkspace,
+  }, () => ({
     projection: sketchProjectionFeature, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh,
-  });
-
-  const { view: sketchTreeView } = sketchEditing.createTreeForPresentation({
+  }), (toolbarIcons, fixedOperandCommand) => ({
     document, window, selectionHighlight,
     selection: propertiesSelection, analysis: constraintAnalysis, redundancy: constraintRedundancy, referenceState: referenceConstraintState,
     projection: sketchProjectionFeature, icons: toolbarIcons, feedback: authoringFeedback, fixedState: fixedStateQueries,
     escapeHtml, closeCanvasContextMenu, moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
     blockEditor, editingScope: editingScopeBinding, solveState: sketchSolveResultState, dimensionScope: dimensionPresentationScope,
     deleteElements, deleteCurrentSelection, toggleSelectedVisibility: propertiesPreparation.toggleSelectedVisibility, fixedOperands: fixedOperandCommand,
-  });
+  }));
   const { applyWidth: applySketchTreeWidth } = sketchTreeView;
   sketchNavigation.startContext();
 
