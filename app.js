@@ -1023,10 +1023,8 @@
       blockCreation: blockDefinitionCommand, offset: offsetCommand, spline: splineCommand, hatch: hatchCommand },
   });
   const { close: closeAppMenus } = workspaceControls;
-  workspaceControls.start();
+  workspaceControls.startWithDrawingTools();
 
-  const drawingToolBinding = workspaceControls.createDrawingBinding();
-  drawingToolBinding.bind();
 
   documentFileFeature.bindControls();
   const { command: pngExportCommand } = createPngExport({

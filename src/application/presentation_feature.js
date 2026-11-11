@@ -126,7 +126,13 @@
             startSketchProjectionCommand: projection.start, startGeometryInstanceCommand: instances.start, filletCommand: fillet,
             startBlockCreation: blockCreation.startCreation, offsetCommand: offset, beginSplineCreation: spline.start, startHatchCreation: hatch.startHatchCreation });
         }
-        return Object.freeze({ ...controls, createDrawingBinding: createWorkspaceDrawingBinding });
+        function startWithDrawingTools() {
+          workspace.start();
+          const drawingToolBinding = workspace.createDrawingBinding();
+          drawingToolBinding.bind();
+        }
+        const workspace = Object.freeze({ ...controls, createDrawingBinding: createWorkspaceDrawingBinding, startWithDrawingTools });
+        return workspace;
       }
       toolbar = Object.freeze({ updateHistory: history.update, createIcons, createControls, prepareControls, createEditingBinding, createDrawingBinding, prepareWorkspace, update, updateStatus });
       return toolbar;
