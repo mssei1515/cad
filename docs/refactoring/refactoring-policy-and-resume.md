@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の履歴準備単位ではapp.jsは1,264行、非空白819行。AST監査ではroot242文・418束縛、構築・接続468非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のCanvas実Scene共有単位ではapp.jsは1,264行、非空白819行。AST監査ではroot243文・415束縛、構築・接続467非空白行、別名・設定100行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,22 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：Canvasの実Scene recordを共有（2026-11-11）
+
+app.jsはCanvasDisplay.createSceneForEditingが返す実SceneをcanvasSceneとして保持し、そのreadonly fieldを必要な機能へ直接渡す。CanvasTestDriver.createBrowserSupportForSceneのdisplayにも同じ実Sceneを渡し、app側のbounds／fit／geometryだけを詰め直す中間objectを作らない。どの表示fieldを使用するかは既存CanvasTestDriver.createForSceneが担当する。同factoryはdisplayのbounds／fit／geometryだけを一度取出し、三field以外の列挙・identity比較・書込みや保存はしない。生のfactoryと公開テストAPIは変更しない。
+
+共有するSceneはGeometry／Overlay／Bounds／Fit／commandTargets／Sketch style／Frame／Hatch生成の八つのown readonly data propertyを持つ凍結recordである。getter・可変snapshotへの置換を同じ読取り移動として扱わない。sketchPresentation／interactionOverlay／drawingBounds／drawingFitのroot別名を除き、同じ実ownerのfieldを参照する。早期CanvasRenderProbeから参照されるgeometryDisplayの別名は従来と同じ段階へ残し、未生成時の同名ReferenceErrorを維持する。createHatchRenderingも裸のfactory呼出しを保つため別名を残す。新しいfacade・中継module・mutable app context・model／cache／listenerは追加しない。
+
+実Sceneの生成位置・引数・生成順と他機能への実APIの同一性、現在scopeの遅延参照、裸関数／member receiver・引数の個数・返値と元例外、公開→bind／startの順、UIと保存形式v26を維持する。folder／loader／test一覧の変更は不要で、既存CanvasDisplayとCanvasTestDriverの責務を使う。
+
+app.jsは1,264→1,264行（0行変化）、非空白819行のまま。四別名・22参照を整理し、うち二参照を含むdisplay再梱包を実Sceneで置換した。root束縛418→415、root文242→243、構文依存辺1,090→1,092。Scene保持と残る二別名の宣言を分けるためroot文・辺は増える。構築468→467非空白行、別名・設定99→100行、委譲11行とtest hooks158行は不変。行数・辺数の減少を成果として装わず、所有者の実recordと利用側の表示契約へ接続を揃える一単位である。200〜500行の全体目標は未完了。
+
+変更を逆展開したroot全体のASTが基準bd96aa7と一致し、native factoryの位置・引数・順、他module／test／loader・free identifier集合が不変なことを照合した。CanvasTestDriverのdisplay読取りは三fieldの一箇所だけである。実browserのapp／driver responseにだけ読取り用診断を挿入し、実Scene八fieldのfreeze／own data descriptor、三fieldが同じ実体であること、変更後のdisplayが実Sceneそのものであること、geometryDisplay初期化前ReferenceError、公開204項目のkey／descriptor／型が前後で一致することを確認した。診断は製品sourceや通常E2Eへ残さない。
+
+全単体2,511件、通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、一覧504件とfilter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+基準develop bd96aa7、作業branch codex/canvas-scene-record、開始時週枠残量90%。証跡はTEMP cad-canvas-scene-record-{before,after,audit,selection,source-hashes}.jsonとcheck／unit／smoke／e2e.logへ保持する。200〜500行への全体目標は未完了で、新規分離は週枠残量50%未満で停止し、developの後、mainを最後に反映する。次も一律wrapperや同じprivate schemaの二重管理を避け、機能単位の生成・接続と、実ownerの完成recordを共有できる境界を優先して確認する。
 
 ### 最新：生成元の系譜による構築・接続の再監査（2026-11-11）
 
