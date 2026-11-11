@@ -829,7 +829,8 @@ function inputLifecycleFixture(composed) {
  const readLegacy=()=>{if(legacyBinding===undefined)throw new ReferenceError("Cannot access 'canvasInputBinding' before initialization");return legacyBinding.value;};
  const schedulerOptions={requestFrame:callback=>{const id=frames.size;frames.set(id,callback);return id;},cancelFrame:id=>frames.delete(id),
   profilePhase:(name,work)=>{assert.equal(name,'preview');return work();},withGeometryReadCache:work=>work(),syncDimensionValueInput:()=>trace.push('sync')};
- const scheduler=composed?s.createMoveSchedulerForEditing(schedulerOptions):s.createMoveScheduler({...schedulerOptions,readInput:readLegacy});
+ const {requestFrame,cancelFrame,...editingSchedulerOptions}=schedulerOptions;
+ const scheduler=composed==='browser'?s.createMoveSchedulerForBrowser({window:{requestAnimationFrame:requestFrame,cancelAnimationFrame:cancelFrame},...editingSchedulerOptions}):composed?s.createMoveSchedulerForEditing(schedulerOptions):s.createMoveScheduler({...schedulerOptions,readInput:readLegacy});
  function move(){scheduler.schedule({offsetX:7,offsetY:9,shiftKey:true});return scheduler.flush();}
  f.source.authoring.createBlankGesture=()=>{step('blank');return Object.freeze({resetCandidate(){}});};
  f.source.sceneQueries.createInteraction=()=>{step('query');return {press:{},hover:{},isBlankCommandPanelPoint:()=>true};};
@@ -845,7 +846,7 @@ function inputLifecycleFixture(composed) {
  function readKeyboardOptions(){const {deleteSelection,...owners}=readKeyboardOwners();return f.w.KeyboardInput.createWorkspaceOptions({...owners,
   spline:ports.spline,hatch:ports.hatch,splineEditing:prepare.splineEditing,blockPlacement:ports.blockPlacement,deleteSelection});}
  function assemble(){const prepared=f.inputs.preparePointerForEditing(prepare);
-  if(composed==='workspace')return prepared.bindForWorkspace(ports,readKeyboardOwners,dimensionInput);
+  if(composed==='workspace'||composed==='browser')return prepared.bindForWorkspace(ports,readKeyboardOwners,dimensionInput);
   if(composed)return prepared.bindForEditing(ports,readKeyboardOptions,dimensionInput);
   const binding=prepared.createBinding(ports);legacyBinding={value:binding};binding.bind();dimensionInput.bind();const keyboard=f.inputs.createKeyboard(readKeyboardOptions());keyboard.start();return binding;
  }
@@ -853,27 +854,27 @@ function inputLifecycleFixture(composed) {
 }
 
 test('Canvas input lifecycle publishes the actual binding before listeners, then binds dimensions before reading and starting keyboard',()=>{
- const observations=[];for(const composed of [false,true,'workspace']){const f=inputLifecycleFixture(composed);assert.deepEqual(f.trace,[]);
+ const observations=[];for(const composed of [false,true,'workspace','browser']){const f=inputLifecycleFixture(composed);assert.deepEqual(f.trace,[]);
   assert.throws(f.move,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'canvasInputBinding' before initialization");
   const binding=f.assemble();assert.ok(Object.isFrozen(binding));assert.deepEqual(f.trace.slice(0,4),['blank','query','native','native-bind']);
   assert.deepEqual(f.trace.slice(-4),['dimension-bind','keyboard-options','keyboard-create','keyboard-start']);
   assert.equal(f.trace.indexOf('dimension-bind')>f.trace.findIndex(v=>Array.isArray(v)),true);f.trace.length=0;
   f.sessions.pending.replace({type:'distance-value'});assert.equal(f.move(),true);assert.equal(f.trace.at(-1),'sync');assert.equal(f.trace[0][1],1);
   assert.equal(f.modelScope.points[0],f.point);observations.push(JSON.stringify(f.trace));}
- assert.equal(observations[1],observations[0]);assert.equal(observations[2],observations[0]);
+ assert.equal(observations[1],observations[0]);assert.equal(observations[2],observations[0]);assert.equal(observations[3],observations[0]);
 });
 
 test('Canvas input lifecycle retains original failure identity and partial publication at each construction and binding boundary',()=>{
  for(const stage of ['blank','query','native','native-bind','dimension-bind','keyboard-options','keyboard-create','keyboard-start']){const observations=[];
-  for(const composed of [false,true,'workspace']){const f=inputLifecycleFixture(composed);f.state.fail=stage;assert.throws(f.assemble,e=>e===f.marker);f.state.fail=null;
+  for(const composed of [false,true,'workspace','browser']){const f=inputLifecycleFixture(composed);f.state.fail=stage;assert.throws(f.assemble,e=>e===f.marker);f.state.fail=null;
    const before=f.trace.slice();if(['blank','query','native'].includes(stage))assert.throws(f.move,e=>e.name==='ReferenceError');else {assert.equal(f.move(),true);assert.equal(f.trace.at(-1)[1],1);}
    assert.equal(f.modelScope.points[0],f.point);observations.push(JSON.stringify({before,after:f.trace}));}
-  assert.equal(observations[1],observations[0],stage);assert.equal(observations[2],observations[0],stage);
+  assert.equal(observations[1],observations[0],stage);assert.equal(observations[2],observations[0],stage);assert.equal(observations[3],observations[0],stage);
  }
 });
 
 test('Canvas input binding replacement follows successful native construction while constructor failure retains the previous scheduler target',()=>{
- for(const composed of [false,true,'workspace']){const f=inputLifecycleFixture(composed),first=f.assemble();f.state.fail='native';assert.throws(f.assemble,e=>e===f.marker);
+ for(const composed of [false,true,'workspace','browser']){const f=inputLifecycleFixture(composed),first=f.assemble();f.state.fail='native';assert.throws(f.assemble,e=>e===f.marker);
   f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],1);const second=f.assemble();assert.notEqual(second,first);f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
   f.state.fail='move';assert.throws(f.move,e=>e===f.marker);f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
  }
@@ -913,4 +914,28 @@ test('Geometry Workspace preserves explicit predicate identity, short-circuiting
   for(const ownsClearing of [false,true]){const raw=fixture({ownsClearing,mode});assert.equal(Object.hasOwn(raw.foundation,'isGeometryMode'),false);assert.throws(raw.foundation.access.canCreateInActiveSketch,error=>error.name==='TypeError');}
  }
  assert.throws(()=>fixture({geometryWorkspace:true,beforeFoundation(_options,w){w.SketchCommand={...w.SketchCommand,createEditAccess(){throw marker;}};}}),error=>error===marker);
+});
+
+test('browser pointer frames stay cold and retain live bare API calls, zero frame IDs, coalescing and failure state', () => {
+  'use strict';
+  const f=fixture(),trace=[],frames=new Map(),marker=new Error('frame API');let failGet,failCall,requestId=0,ports,actual;
+  const browser={get requestAnimationFrame(){trace.push('get-request');if(failGet==='request')throw marker;return function(callback){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);trace.push('request');if(failCall==='request')throw marker;frames.set(requestId,callback);return requestId;};},
+    get cancelAnimationFrame(){trace.push('get-cancel');if(failGet==='cancel')throw marker;return function(id){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);trace.push(['cancel',id]);frames.delete(id);};}};
+  const original=f.w.PointerMoveScheduler;f.w.PointerMoveScheduler={create(options){ports=options;return actual=original.create(options);}};
+  const scheduler=f.sessions.createMoveSchedulerForBrowser({window:browser,profilePhase:(_name,work)=>work(),withGeometryReadCache:work=>work(),syncDimensionValueInput(){}});
+  assert.equal(scheduler,actual);assert.deepEqual(trace,[]);assert.equal(ports.requestFrame.name,'requestFrame');assert.equal(ports.requestFrame.length,1);assert.equal(ports.cancelFrame.name,'cancelFrame');assert.equal(ports.cancelFrame.length,1);
+  scheduler.resetStats();scheduler.schedule({offsetX:1});scheduler.schedule({offsetX:2});assert.equal(frames.size,1);assert.equal(scheduler.stats().coalescedMoves,1);
+  assert.equal(scheduler.flush({discard:true}),false);assert.deepEqual(trace,['get-request','request','get-cancel',['cancel',0]]);assert.equal(frames.size,0);
+  requestId=7;trace.length=0;scheduler.schedule({offsetX:3});assert.equal(frames.has(7),true);failGet='cancel';assert.throws(()=>scheduler.flush({discard:true}),error=>error===marker);
+  assert.equal(scheduler.stats().frameScheduled,true);assert.equal(scheduler.stats().pendingMove,true);failGet=null;scheduler.flush({discard:true});assert.equal(frames.size,0);
+  for(const mode of ['getter','call']){failGet=mode==='getter'?'request':null;failCall=mode==='call'?'request':null;assert.throws(()=>scheduler.schedule({offsetX:5}),error=>error===marker);
+    assert.equal(scheduler.stats().pendingMove,true);assert.equal(scheduler.stats().frameScheduled,false);scheduler.flush({discard:true});}
+  assert.equal(f.state.scope.points[0],f.point);
+});
+
+test('browser pointer frame setup retains explicit undefined or null callbacks without reading browser API defaults', () => {
+  const f=fixture(),browser=new Proxy({},{get(){assert.fail('browser APIs must stay unread');}}),original=f.w.PointerMoveScheduler;let ports;
+  f.w.PointerMoveScheduler={create(options){ports=options;return original.create(options);}};
+  for(const value of [undefined,null]){const scheduler=f.sessions.createMoveSchedulerForBrowser({window:browser,requestFrame:value,cancelFrame:value});
+    assert.equal(ports.requestFrame,value);assert.equal(ports.cancelFrame,value);assert.throws(()=>scheduler.schedule({offsetX:1}),error=>error.name==='TypeError');scheduler.flush({discard:true});}
 });
