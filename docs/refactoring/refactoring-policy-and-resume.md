@@ -98,7 +98,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Sketch Treeの表示依存選択を既存Sketch機能へ集約（2026-11-11）
+### 最新：作図コマンド集合の境界再監査（2026-11-11）
+
+基準developは94b065322e57db90b8d5cbbf71ce6649c405fcd1、記録branchはcodex/drawing-command-boundary-audit（develop統合・Push後に削除）。開始週枠残量77%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
+
+基準はdevelop 94b065322e57db90b8d5cbbf71ce6649c405fcd1、app.jsのGit blobはe1649b02cc3839cfa8c3a40a973d52c5b3adabf2。現物のBabel lexical bindingとObjectExpressionを照合した。app.jsは1,229行／非空白786行、root224文・376束縛、構築114文／447非空白行、条件付きtest hooks152行。この監査では製品・テストを変更せず、app.jsは1,229→1,229行（変化なし）。実装の分離単位として数えない。
+
+Canvas入力のdrawingCommandsはcenterline／circleCenterCross／fillet／trim／offsetの5項目、Toolbarのdrawingはcenterline／circleCenterCross／projection／instances／fillet／blockCreation／offset／spline／hatchの9項目。共通はcenterline／circleCenterCross／fillet／offsetの4項目であり、同じ集合の二重構築ではない。生のactor参照を渡し、各消費側が既存click／start等を選ぶ現在の契約を確認した。
+
+詳細な利用表・三案の比較・却下理由は[境界監査](bootstrap-boundary-audit.md)の先頭を参照する。製品とテストの差分がなく、app blob不変とAST計数・集合の共通4項目を確認した。今回はテストを再実行しておらず、直前の構文639file／全単体2,549件／関連E2E218件成功（94b0653）を新しい実行結果とは扱わない。正式仕様の変更はない。
+
+次はPropertiesDisplay.createEditingWithViewForWorkspaceのediting生成→readViewOptions→view生成→成功時公開の境界を現物で確認する。表示callbackに残るfeedback／layout／parameter editor由来のfield選択と、操作owner・DOM型入力、既に捕捉したownerの重複を区別する。callbackを早期評価せず、旧viewを保持する失敗境界を維持する。新しいwrapperやcontextの追加は未決定で、実質的な依存整理の利益がない場合は採用しない。今回見送った単純なcommand集合化・registry化・後段同時生成を再提案だけで繰り返さず、全体の200〜500行目標を縮小しない。
+
+### 前回：Sketch Treeの表示依存選択を既存Sketch機能へ集約（2026-11-11）
 
 開始基準developは09708b9e5bd5cdce0f0276b5d86a78ce5a6df40a、作業branchはcodex/sketch-tree-presentation-owners（develop統合・Push後に削除）。開始週枠残量77%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
