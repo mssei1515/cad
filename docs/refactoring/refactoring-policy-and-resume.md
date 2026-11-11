@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の保存／Sketch移動scope照会単位ではapp.jsは1,168行、非空白735行。AST監査ではroot199文・359束縛、構築422非空白行とbind35行、別名・設定76行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12の固定拘束scope接続単位ではapp.jsは1,168行、非空白735行。AST監査ではroot199文・359束縛、構築422非空白行とbind35行、別名・設定76行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：保存準備とSketch移動の結線済みscope readerを共有（2026-11-12）
+### 最新：固定拘束queryを既存の結線済みscope照会へ接続（2026-11-12）
+
+開始基準developは522d33c7a0e1424c3016d48afec9c93b0791ac8f、作業branchはcodex/fixed-query-scope-port。開始週枠残量52%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+app.jsはConstraintReferences.createFixedStateのcurrentScopeへ既存DocumentWorkspace.readEditingScopeを直接渡す。editingScopeBinding.currentを読むroot callbackを除き、新しいfactoryや包装関数は追加しない。ConstraintReferencesは従来の関数portだけを受け、DocumentWorkspace／UIの新しい依存を持たない。比較には同じSelectionHighlight.sameConstraintDisplayElementを使う。
+
+scope取得はquery操作時のまま、実bindingが指すmodelそのものを返す。Workspaceの直接activate／restoreとbinding切替の区別、未完成guard・元例外、裸のゼロ引数呼出しと返値を維持する。固定拘束の三query本体、enabledの厳密判定・最初の元拘束の返却・投影表示比較・endpointのraw Object同一性は変えない。readerの実体は既存の公開照会となり、root固有の別名関数を作らない。
+
+新file・API・global・slot／model cache・registry・全体contextは追加しない。既存のDocument／Constraint／Selection owner、UI・操作・履歴・保存形式v26、初期化・bind／startの順は不変。フォルダ配置も既存ownerに合致しているため維持する。
+
+app.jsは1,168→1,168行（0行変化）、非空白735行。root199文・359束縛、構築422行・109文、別名76行・bind35行・test hooks151行は不変。ASTでrootのeditingScopeBinding.current直接読取りは1→0か所となった。これはbound scopeの読取りの所有整理であり、他の後段依存や構築責務がすべてなくなったという意味ではない。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体52件が成功。実Document binding・固定拘束・SelectionHighlightを使い、旧callback経由と既存照会の直接接続で、Workspace切替／復元後の投影線・円弧端点の同一性判定・実拘束の返却・無効化・endpoint lock・getterの元例外が一致することを確認した。ソース照合で変更はrootの接続一か所のみ、ConstraintReferences／DocumentWorkspace／SelectionHighlightの本体は不変。
+
+構文639ファイル・全単体2,660件・関連単体52件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E166件（5file、2.5m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は残る構築422行・109文とtest hooks151行について、実owner・共通依存・生成時機を再監査する。bound scope読取りがrootからなくなったことを全体完成と扱わない。固定queryのための新factoryは不要と判断し、既存照会を直接接続した。同様に包装だけのAPIを増やさず、全test driver registry・巨大context・余白削除で目標に達したと扱わない。
+
+### 保存準備とSketch移動の結線済みscope readerを共有（2026-11-12）
 
 開始基準developは5c78e9a3c8d4fa629d4af4a635c80b44a1fdfb00、作業branchはcodex/persistence-move-scope-readers。開始週枠残量52%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

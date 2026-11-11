@@ -1,6 +1,21 @@
 # Composition rootの残存責務と依存監査
 
 
+## 固定拘束queryを既存の結線済みscope照会へ接続（2026-11-12）
+
+app.jsはConstraintReferences.createFixedStateのcurrentScopeへ既存DocumentWorkspace.readEditingScopeを直接渡す。editingScopeBinding.currentを読むroot callbackを除き、新しいfactoryや包装関数は追加しない。ConstraintReferencesは従来の関数portだけを受け、DocumentWorkspace／UIの新しい依存を持たない。比較には同じSelectionHighlight.sameConstraintDisplayElementを使う。
+
+scope取得はquery操作時のまま、実bindingが指すmodelそのものを返す。Workspaceの直接activate／restoreとbinding切替の区別、未完成guard・元例外、裸のゼロ引数呼出しと返値を維持する。固定拘束の三query本体、enabledの厳密判定・最初の元拘束の返却・投影表示比較・endpointのraw Object同一性は変えない。readerの実体は既存の公開照会となり、root固有の別名関数を作らない。
+
+新file・API・global・slot／model cache・registry・全体contextは追加しない。既存のDocument／Constraint／Selection owner、UI・操作・履歴・保存形式v26、初期化・bind／startの順は不変。フォルダ配置も既存ownerに合致しているため維持する。
+
+app.jsは1,168→1,168行（0行変化）、非空白735行。root199文・359束縛、構築422行・109文、別名76行・bind35行・test hooks151行は不変。ASTでrootのeditingScopeBinding.current直接読取りは1→0か所となった。これはbound scopeの読取りの所有整理であり、他の後段依存や構築責務がすべてなくなったという意味ではない。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体52件が成功。実Document binding・固定拘束・SelectionHighlightを使い、旧callback経由と既存照会の直接接続で、Workspace切替／復元後の投影線・円弧端点の同一性判定・実拘束の返却・無効化・endpoint lock・getterの元例外が一致することを確認した。ソース照合で変更はrootの接続一か所のみ、ConstraintReferences／DocumentWorkspace／SelectionHighlightの本体は不変。
+
+構文639ファイル・全単体2,660件・関連単体52件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E166件（5file、2.5m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
 ## 保存準備とSketch移動の結線済みscope readerを共有（2026-11-12）
 
 DocumentWorkspace.createPersistenceForWorkspaceはreadEditingScopeを省略した場合、同じDocument ownerの既存照会をcreatePersistenceへ渡す。現在形式の既定値取得→options展開→native persistence生成の順を保つ。明示own readerはundefined／nullを含めそのまま渡し、継承プロパティをoptions展開がコピーしない従来の規則も維持する。raw createPersistenceの直接注入は変更しない。

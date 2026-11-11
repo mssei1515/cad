@@ -136,7 +136,7 @@
     projections: blockProjections, constraintReferences,
   });
   const fixedStateQueries = window.ConstraintReferences.createFixedState({
-    currentScope: () => editingScopeBinding.current, sameConstraintDisplayElement: selectionHighlight.sameConstraintDisplayElement,
+    currentScope: documentWorkspace.readEditingScope, sameConstraintDisplayElement: selectionHighlight.sameConstraintDisplayElement,
   });
   const { findArcEndpointFixedConstraint, findLineFixedConstraint } = fixedStateQueries;
   const offsetSelection = window.OffsetFeature.createSelectionForEditing({
