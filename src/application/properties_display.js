@@ -1,6 +1,32 @@
 /* Assemble Properties queries, editing commands, shared appearance UI and display around existing owners. */
 (() => {
   "use strict";
+  function prepare() {
+    let completed;
+    function readCompleted(binding) {
+      if (completed === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return completed;
+    }
+    const renderProperties = () => {
+      const { view, selectedPropertiesTarget } = readCompleted("propertiesView");
+      return view.render(selectedPropertiesTarget());
+    };
+    const readAppearance = () => readCompleted("appearanceEditing").appearanceEditing;
+    function toggleSelectedVisibility() { return readCompleted("selectionVisibilityCommand").visibility.toggle(); }
+    function createWorkspace(options) {
+      const feature = window.PropertiesDisplay.createForWorkspace(options);
+      const build = feature.createEditingWithViewForWorkspace;
+      function createEditingWithViewForWorkspace(editingOptions, readViewOptions) {
+        const result = build(...arguments);
+        const { editing: { appearanceEditing, visibility }, view } = result;
+        const binding = Object.freeze({ appearanceEditing, visibility, view, selectedPropertiesTarget: feature.selection.selectedDisplayTarget });
+        completed = binding;
+        return result;
+      }
+      return Object.freeze({ ...feature, createEditingWithViewForWorkspace });
+    }
+    return Object.freeze({ createForWorkspace: createWorkspace, render: renderProperties, readAppearance, toggleSelectedVisibility });
+  }
   function createForWorkspace({ document, documentWorkspace, readServices, interaction, presentation, operations }) {
     const { document: documentModel, workspace, sketches: sketchContext, parameters: parameterNamespace } = documentWorkspace;
     const { hatchAppearanceForDisplay } = window.HatchData;
@@ -180,5 +206,5 @@
       localizeApplicationUI, installExpressionInputHighlights,
     });
   }
-  window.PropertiesDisplay = Object.freeze({ create, createFeature, createForWorkspace, createSelection, createEditing, createWithController });
+  window.PropertiesDisplay = Object.freeze({ prepare, create, createFeature, createForWorkspace, createSelection, createEditing, createWithController });
 })();

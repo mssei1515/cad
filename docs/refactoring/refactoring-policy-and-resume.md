@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のPending取消所有単位ではapp.jsは1,258行、非空白814行。AST監査ではroot240文・405束縛、構築・接続467非空白行、別名・設定98行、委譲8行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のProperties component所有単位ではapp.jsは1,257行、非空白813行。AST監査ではroot240文・402束縛、構築・接続467非空白行、別名・設定98行、委譲7行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Pending取消入口を実session生成ownerへ集約（2026-11-11）
+### 最新：Propertiesの完成componentと三つの遅延入口を既存ownerへ集約（2026-11-11）
+
+開始基準developは44a2b7e07960a4296cf7d51494b5bd165d94f4a2、作業branchはcodex/properties-preparation-owner（develop統合・Push後に削除）。開始時の週枠残量85%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを確認し、Properties三port、Pending取消、Selection Clipboard、Keyboard、Annotation等の完了済み分離を再実施しない。rootに残る七委譲はhitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／updateBlockUI。次は既存ownerが実生成・完成境界を持つcohortを評価する。Propertiesは三つの関連入口を同じ完成境界で扱う準備であり、各callback一つのためにprepareやwrapperを一律追加する方針ではない。Queryの結果や巨大なアプリcontextを保持しない。
+
+PropertiesDisplay.prepare（src/application/properties_display.js）は、Properties表示・外観編集参照・選択可視性操作を同じ完成境界で公開する。早期prepareはclosureと凍結portだけを作り、createForWorkspaceは従来位置で生の同名factoryを同じnamespace receiver・一引数で呼ぶ。準備用recordではcreateEditingWithViewForWorkspaceだけを包み、同じbare builderへ全引数を転送する。実Editor／AppearanceUI／Viewを含む同じ凍結resultをそのまま返し、すべて完成した後にだけView／AppearanceEditing／Visibility commandと、そのViewを生成したselectionのquery関数をprivateな組として保持する。
+
+render portは旧renderPropertiesと同じarrow・零引数で、実View.renderのmethod読取り→同じselectedDisplayTargetのbare零引数呼出し→実Viewをreceiverとする一引数renderを維持する。readAppearanceも同名のarrow・零引数で同じ実AppearanceEditingを返し、toggleSelectedVisibilityは同名の通常関数で実Visibility.toggleをmember receiver・零引数で呼ぶ。余剰引数の破棄、返値・元例外と、未完成時の旧propertiesView／appearanceEditing／selectionVisibilityCommandの初期化前ReferenceErrorを保つ。Editorだけ完成した時点やView生成直後のraw result返却前にも公開せず、途中失敗で前の完成済みcomponentを置き換えない。
+
+作り直したworkspaceを準備しただけでは現在Viewを切り替えず、成功した各builderに対応するselection queryとcomponentの組を保持する。別prepareの状態も独立する。Queryの結果・model・Selection・scope・Viewの複製や新しいlistener／setterは作らず、裸のcreateForWorkspace／各factoryと実component APIは維持する。凍結resultのediting／view／appearanceUI、編集recordのappearanceEditing／visibility、workspaceのselectionとqueryはown readonly data fieldであり、root取出しの直前または後段へ移しても同じ参照になる。rootのselectedPropertiesTargetは既存test driverへ渡す実queryとして残す。共有Appearance UI、操作時のscope・選択／表示の別policy、UI・保存形式v26と生成→公開→bind／start順を維持する。
+
+app.jsは1,258→1,257行（1行減）、非空白814→813行、root240文は不変。束縛405→402、構文依存辺1,082→1,081、委譲8→7行。構築115→116文／467非空白行、別名・設定98行・test hooks158行は不変。早期準備と一つのbuilder wrapperは増えるが、三つの関連する入口と一つの完成境界に限定する。実View／編集actorのfacadeや巨大contextは作らず、既存application／UI／editing配置を維持する。200〜500行の全体目標は未完了。
+
+関連単体32件・全単体2,529件・構文639fileが成功。追加三単体は、method→target→renderの順・receiver／引数／返値／例外、実Viewと外観・可視性・ロック入力の旧rootとのsnapshot一致、workspace再準備と失敗後の対応component保持・独立ownerを検証する。既存の七constructorとview-optionsの各失敗比較にもprepared経路を追加し、途中で三portが未公開なことを確認した。browserの旧root／旧module比較では九つのguard、七つのreadonly field、実result自体の返却、query・外観の同一参照、portのname／arity／arrow種別、生成順・呼出し／同じ例外、公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに挿入し、製品sourceへ残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+### Pending取消入口を実session生成ownerへ集約（2026-11-11）
 
 開始基準developは37e106be8550e4fe7f1e5d915587f27335ca5117、作業branchはcodex/pending-cancellation-owner（develop統合・Push後に削除）。開始時の週枠残量86%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを照合し、今回のPending取消と直前のSelection Clipboard／Keyboard／Annotation／BlockLayoutの分離を再実施しない。rootに残る八委譲はhitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／toggleSelectedVisibility／updateBlockUI。refreshConstraintAnalysisはUI bindがSketchSolvingFeatureの準備より早く、単独移管のためだけに新しい早期prepareやwrapperを重ねる案は今回は見送った。次は所有先と生成段階をcohort全体で評価し、巨大contextや単純な別file移動にしない。
 
