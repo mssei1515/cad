@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の参照画像テスト支援組立て単位ではapp.jsは1,250行、非空白806行。AST監査ではroot235文・393束縛、構築・接続466非空白行、別名・設定93行、委譲7行、条件付きtest hooks157行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のCanvas入力ライフサイクル単位ではapp.jsは1,245行、非空白802行。AST監査ではroot231文・391束縛、構築449非空白行とbind41行、別名・設定93行、委譲7行、条件付きtest hooks157行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,27 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：参照画像テスト支援のWorkspace／Block command接続を既存TestDriverへ集約（2026-11-11）
+### 最新：Canvas入力の実体保持と接続ライフサイクルを生成ownerへ集約（2026-11-11）
+
+開始基準developは1b273fd056c69f9309066f0dc544fb715eaf43d6、作業branchはcodex/canvas-input-lifecycle（develop統合・Push後に削除）。開始週枠残量82%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
+
+CanvasInteractionFeature（src/application/canvas_interaction_feature.js）のoperation sessionsが、既存preparePointerForEditing.createBindingで成功して返された実CanvasInputBindingをprivateに保持する。新しいcreateMoveSchedulerForEditingは、その実体を遅延して読む既存createMoveSchedulerを生成する。app.jsからreadInput callbackと入力実体のroot保持を外し、生成ownerとスケジューラの参照先を揃える。生のcreateMoveSchedulerは明示readerを受ける従来APIとして維持する。
+
+bindForEditing(pointerOptions, readKeyboardOptions, dimensionInput)は、同じcreateBinding→実binding.bind→寸法input.bind→readKeyboardOptionsのbare零引数呼出し→既存createKeyboard→実keyboard.startの順で接続し、同じ実bindingを返す。Keyboard optionsとショートカットは寸法bindの後に初めて作る。blank gestureの既存成功時公開、query／pointer接続→実入力生成、入力公開→最初のlistener登録という順を維持する。早期readerは旧canvasInputBindingのReferenceErrorを保ち、実入力生成失敗では前の成功を保持する。入力生成後のbind／寸法bind／Keyboard生成・start失敗では、公開済み入力・登録済みlistenerを巻き戻したり自動disposeしたりしない。
+
+実PointerMoveScheduler／CanvasInputBinding／DimensionInput／KeyboardInputのmodel・listener・stateや処理は複製しない。member receiver、引数、返値・元例外、移動後にpendingを読む順・同期flush／discard、現在scope・Geometry参照、UI・取消・履歴・保存形式v26を維持する。新しいglobal contextやsetter登録口を作らず、同じsessionごとの実factoryと完成境界で所有する。既存application／UI配置と読込順は不変。
+
+app.jsは1,250→1,245行（5行減）、非空白806→802行、root235→231文・393→391束縛、構文依存辺1,072→1,067。構築分類は116文／466行から114文／449行、bind分類は15文／27行から14文／41行、起動分類は7→6行。二つの生成とbind／startが一つの接続呼出しになったため分類も変化しており、構築分類の17行減を実削減量とは扱わない。別名・設定93行、委譲7行、test hooks157行は不変。全体の200〜500行目標は未完了。
+
+関連単体39件・全単体2,542件・構文639fileが成功。追加三単体は実PointerMoveSchedulerと既存入力fixtureを使い、旧接続との順序比較、生成前guard、八段階の元例外・途中公開状態、生成失敗時の前実体保持・成功時の切替、移動失敗後の継続とsession間の独立性を確認する。browserの旧root／旧module比較では、Pointer生成→bind→寸法bind→ショートカット→Keyboard生成→start、生成前ReferenceErrorの文言、bind時の実入力参照・member receiver／一引数、同じ実scheduler・optionのkey／function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。宣言したowner変更を逆変換すると旧sourceと一致し、四つのnative actor sourceは不変。新しい未束縛参照もない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+次はこの再監査を基に、Canvas／Workspace等の残る生成・公開・bind段階をowner単位で評価する。今回のPointer／Keyboard接続やReferenceImage／Parameterテスト組立てを再実施しない。単純な別名整理だけで数百行へ届くとは見積もらず、巨大bootstrap／全体contextやblank削除へ置き換えない。
+
+
+
+### 前回：参照画像テスト支援のWorkspace／Block command接続を既存TestDriverへ集約（2026-11-11）
 
 開始基準developはf22f42c796876406665be78c2bb9e14d5abd41da、作業branchはcodex/reference-image-test-assembly（develop統合・Push後に削除）。開始週枠残量83%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
 
