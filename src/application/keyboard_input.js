@@ -4,6 +4,14 @@
   function createWorkspaceShortcuts({ files, history, copy, paste }) {
     return { save: files.save, saveAs: files.saveAs, copy, paste, nativePaste: true, nativeCopy: true, undo: history.undo, redo: history.redo };
   }
+  function createWorkspaceOptions({ window: browserWindow, navigation, canvasMenu, closeCanvas, sketchMove, constraintStatusView, dimensionInput,
+    files, history, copy, paste, ...commands }) {
+    return { window: browserWindow,
+      menus: { closeSketch: navigation.closeContext, canvasVisible: () => canvasMenu && !canvasMenu.hidden, closeCanvas },
+      sketchMove, constraintStatusView, dimensionInput,
+      shortcuts: window.KeyboardInput.createWorkspaceShortcuts({ files, history, copy, paste }),
+      ...commands };
+  }
   function create({ window: browserWindow, menus, sketchMove, constraintStatusView, dimensionInput, shortcuts,
     readMode, isGeometryMode, instances, projection, referenceImage, splineEditing, blockPlacement, annotationDrag,
     pendingCommandSession, cancelPendingCommand, constraintTargetSession, cancelConstraintTargetCommand,
@@ -39,5 +47,5 @@
     }
     return Object.freeze({ start, dispose });
   }
-  window.KeyboardInput = Object.freeze({ create, createWorkspaceShortcuts });
+  window.KeyboardInput = Object.freeze({ create, createWorkspaceShortcuts, createWorkspaceOptions });
 })();

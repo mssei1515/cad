@@ -996,12 +996,10 @@
     expressions: expressionInputController, discardMoves: flushScheduledCanvasPointerMove, enterBlock: enterBlockDefinitionEdit,
     closeContextMenu: closeCanvasContextMenu, hitAnnotationTarget,
     createCanvasInputBinding, readPngExportCommand: pngExportLifecycle.readCommand, scheduler: pointerMoveScheduler,
-  }, () => ({
-    window, menus: { closeSketch: sketchNavigation.closeContext,
-      canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
+  }, () => window.KeyboardInput.createWorkspaceOptions({
+    window, navigation: sketchNavigation, canvasMenu: canvasContextMenu, closeCanvas: closeCanvasContextMenu,
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
-    shortcuts: window.KeyboardInput.createWorkspaceShortcuts({ files: documentFileFeature, history: historyController,
-      copy: copySelectionToClipboard, paste: pasteGeometryClipboard }),
+    files: documentFileFeature, history: historyController, copy: copySelectionToClipboard, paste: pasteGeometryClipboard,
     projection: sketchProjectionCommand, constraints: constraintTargetCommand, spline: splineCommand, hatch: hatchCommand,
     splineEditing, blockPlacement: blockPlacementCommand, deleteSelection: deleteCurrentSelection,
   }), dimensionInput);
