@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のHatch／Frame構築単位ではapp.jsは1,217行、非空白775行。AST監査ではroot217文・369束縛、構築440非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の受理policy単位ではapp.jsは1,216行、非空白774行。AST監査ではroot216文・369束縛、構築440非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Hatch・Stack・Frameの段階的な準備と公開をCanvasDisplayへ集約（2026-11-11）
+### 最新：編集の許容誤差と受理判定をSketchSolvingで対にして生成（2026-11-11）
+
+開始基準developはbd51e907056392d871d274a21773276b04f1e285、作業branchはcodex/solve-acceptance-policy。開始週枠残量66%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchSolving.createEditingPolicyは、現在の編集受入れ許容誤差1e-4と、その値を使う既存createResultAcceptanceの実判定関数を一組の凍結recordとして返す。app.jsは許容誤差を定義せず、同じpolicyから得た値と関数を既存の求解・拘束・寸法・Block編集へ接続する。policyの所有先は既存src/solver/sketch_solving.jsとし、描画透明度や最小線長など別責務の設定を混ぜない。
+
+判定関数の生成位置は従来のまま。既存createResultAcceptanceを同じnamespace receiver・一引数で一度だけ呼び、生成された実関数をそのまま共有し、生成時に結果を評価しない。Boolean(result)かつ有限のerrorNormが許容誤差以下というinclusive判定、result.successを条件にしない契約、元のgetter例外を維持する。既存raw createResultAcceptanceの明示した任意の許容誤差・undefined／nullも変更しない。求解アルゴリズム・反復条件・状態・復元・履歴・UI・保存形式v26は不変。新file／global／sessionを増やさない。
+
+app.jsは1,217→1,216行（1行減）、非空白775→774行、root217→216文。束縛369、構築440行・bind37行・別名88行・委譲2行・test hooks152行は不変。root独自のpolicy値は2→1行となった。行数よりも許容誤差と判定関数の不一致を防ぐ所有関係を優先した単位であり、200〜500行の全体目標は未完了。
+
+関連単体29件が成功。閾値ちょうど／直上、0・負値・NaN・Infinity・型違い・結果なし、successと残差が一致しない結果、getter例外を旧判定と比較した。native factoryのreceiver・引数・呼出回数・実関数参照・元例外、生成時の未評価、旧APIのundefined／nullの違いも検証した。ソースの逆変換では既存求解・受理判定本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,575件、通常ja/light・en/dark・test起動が成功。関連E2E190件（8file、3.3m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+今回、描画透明度・最小線長は受理policyへ混ぜず維持した。引き続き構築440行と条件付きtest hooks152行が残る。次は描画の既定値と実描画ownerが保持する設定を照合し、テスト支援にもapp独自の値を重複注入せず実設定を共有できるか検討する。単なる定数の移動や巨大な別bootstrapを目標達成とは扱わない。
+
+### Hatch・Stack・Frameの段階的な準備と公開をCanvasDisplayへ集約（2026-11-11）
 
 開始基準developは74605420cb198553a14d3a5aa163f5dc10967dfd、作業branchはcodex/canvas-hatch-frame-assembly。開始週枠残量67%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

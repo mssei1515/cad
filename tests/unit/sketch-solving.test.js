@@ -5,6 +5,39 @@ const test = require('node:test');
 const sandbox = { window: { GeometrySolver: { vectorNorm: values => Math.hypot(...values) } } };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync('src/solver/sketch_solving.js', 'utf8'), sandbox);
+test('editing policy pairs the current tolerance with unchanged finite inclusive result acceptance', () => {
+  const policy = sandbox.window.SketchSolving.createEditingPolicy();
+  const legacy = sandbox.window.SketchSolving.createResultAcceptance(1e-4);
+  assert.ok(Object.isFrozen(policy));
+  assert.equal(policy.acceptError, 1e-4);
+  for (const result of [undefined, null, false, {}, ...[-Infinity, NaN, Infinity, -1, 0, 1e-4, 1e-4 + Number.EPSILON, '0', null].map(errorNorm => ({ success: false, errorNorm }))]) {
+    assert.equal(policy.resultIsAccepted(result), legacy(result));
+  }
+  assert.equal(policy.resultIsAccepted({ success: false, errorNorm: policy.acceptError }), true);
+  assert.equal(policy.resultIsAccepted({ success: true, errorNorm: policy.acceptError * 2 }), false);
+  const marker = new Error('residual read');
+  assert.throws(() => policy.resultIsAccepted({ get errorNorm() { throw marker; } }), error => error === marker);
+  assert.equal(sandbox.window.SketchSolving.createResultAcceptance(undefined)({ errorNorm: 0 }), false);
+  assert.equal(sandbox.window.SketchSolving.createResultAcceptance(null)({ errorNorm: 0 }), true);
+});
+
+test('editing policy uses the native acceptance factory once without invoking its result and preserves its exception', () => {
+  const original = sandbox.window.SketchSolving, marker = new Error('acceptance factory');
+  let calls = 0;
+  const predicate = () => assert.fail('policy construction must not evaluate a solve result');
+  const namespace = { ...original, createResultAcceptance(value) {
+    assert.equal(this, namespace); assert.equal(arguments.length, 1); assert.equal(value, 1e-4); calls++;
+    return predicate;
+  } };
+  sandbox.window.SketchSolving = namespace;
+  try {
+    const policy = original.createEditingPolicy();
+    assert.equal(policy.resultIsAccepted, predicate); assert.equal(calls, 1);
+    namespace.createResultAcceptance = () => { throw marker; };
+    assert.throws(original.createEditingPolicy, error => error === marker);
+  } finally { sandbox.window.SketchSolving = original; }
+});
+
 function fixture(sharedState) {
   const events = [], state = { scope: { constraints: [] }, active: 'A', order: ['A', 'B', 'C', 'D'], bundles: [],
     results: [], residual: 0, variables: [{ prop: 'x' }, { prop: 'y' }], local: { local: true } };
