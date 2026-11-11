@@ -48,7 +48,9 @@ function fixture(composed) {
     pasteGeometryClipboard() { assert.equal(this, undefined); record('paste'); currentScope().splines.push({ ...state.payload.spline, id: 'pasted' });
       for (const a of selection.annotations) currentScope().annotations.push({ ...a, id: a.id + '-copy' }); return true; } };
   let api;
-  if (composed) api = w.SplineTestDriver.createForWorkspace(options);
+  if (composed === 'clipboard') api = w.SplineTestDriver.createBrowserSupportForWorkspace({ ...options,
+    clipboard: Object.freeze({ session: clipboardSession, copyableSelectionPayload: options.copyableSelectionPayload }) });
+  else if (composed) api = w.SplineTestDriver.createForWorkspace(options);
   else {
     const { addPoint, addLine, addSpline } = geometry, { updateUI, draw } = presentation;
     const setup = w.SplineTestDriver.create({ ...options, updateUI, draw, canvasSelection: selection, addPoint, addLine, addSpline,
@@ -77,12 +79,13 @@ function run(composed) {
   return plain({ reset, observation, constraints, transfer, events: f.events, annotations: f.root.annotations, definitions: f.root.blockDefinitions.map(d => d.id), instances: f.root.blockInstances });
 }
 test('Spline Workspace support preserves setup, observation, constraint and transfer behavior through actual Geometry owners', () => {
-  const actual = run(true); assert.deepEqual(actual, run(false));
+  const actual = run(true); assert.deepEqual(actual, run(false)); assert.deepEqual(run('clipboard'), actual);
   assert.equal(actual.observation.mode, 'spline'); assert.equal(actual.transfer.copied, true);
   assert.equal(actual.transfer.definition.splineCount, 1); assert.equal(actual.transfer.projection.ownerId, 'BI1');
 });
 test('Spline support keeps bound editing observations separate from Workspace transfer and reads current operation each time', () => {
-  const f = fixture(true), local = w.DocumentState.create();
+  for (const mode of [true, 'clipboard']) {
+  const f = fixture(mode), local = w.DocumentState.create();
   f.state.bound = local;
   assert.equal(f.api.setup.exerciseConstraints(), null); assert.equal(f.api.transfer.exercise(), null);
   f.state.mode = 'select'; assert.equal(f.api.setup.state().mode, 'select');
@@ -92,11 +95,12 @@ test('Spline support keeps bound editing observations separate from Workspace tr
   const preview = f.api.setup.hatchPreviewCache(); assert.equal(local.splines[0].id, preview.splineId); assert.equal(f.root.splines.length, 0);
   assert.equal(preview.beforeMaxX, 100); assert.equal(preview.afterMaxX, 180);
   f.options.documentWorkspace.workspace.restore(host);
+  }
 });
 test('Spline support preserves exception identity and callback order without constructor queries', () => {
   for (const failure of ['reset', 'viewport', 'resize', 'history', 'ui', 'draw', 'rect', 'screen', 'serialize']) {
-    const old = fixture(false), next = fixture(true); old.state.failure = next.state.failure = failure;
-    for (const f of [old, next]) assert.throws(() => f.api.setup.reset(), error => error === f.marker);
-    assert.deepEqual(next.events, old.events);
+    const old = fixture(false), next = fixture(true), owned = fixture('clipboard'); old.state.failure = next.state.failure = owned.state.failure = failure;
+    for (const f of [old, next, owned]) assert.throws(() => f.api.setup.reset(), error => error === f.marker);
+    assert.deepEqual(next.events, old.events); assert.deepEqual(owned.events, old.events);
   }
 });

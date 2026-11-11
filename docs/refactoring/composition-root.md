@@ -1,5 +1,13 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Clipboardを使うテスト支援の入力を実ownerから共有（2026-11-11）
+
+SketchProjectionTestDriverとSplineTestDriverのcreateBrowserSupportForWorkspaceが、既存ClipboardFeatureから同じsessionを選び、Splineでは同じcopyableSelectionPayload関数も選んで既存createForWorkspaceへ渡す。app.jsは実ClipboardFeatureを共有し、テスト専用の二別名を持たない。コピー・貼付けの既存callback、選択した関数の参照・receiver・引数と順、現在Workspaceとbound editing scopeの区別、例外と途中状態を維持する。session.payloadは操作時に読む既存getterのままで、payload・貼付け回数の複製や新たな状態ownerを作らない。通常ClipboardFeature／ClipboardSession、旧driver本体・旧API、生成・公開・bind／start順、UI・保存形式v26とclassic script読込順は不変。既存src/testingとsrc/application／editingの配置を使い、新規フォルダは不要と判断した。
+
+app.jsは1,234→1,233行（1行減）、非空白791→790行、root227→226文・380→378束縛、構文依存辺1,064→1,062。別名・設定92→91行。構築448行・bind41行・委譲7行・条件付きtest hooks152行は不変。全体の200〜500行目標は未完了。
+
+関連単体9件が成功。既存の実Geometry／Selectionと操作・生成失敗比較を新経路へ拡張し、native ClipboardSessionの差替え・貼付け計数・失敗copy時の保持・clearを追加検証した。browser前後比較で二支援の生成順、五つの実参照、二fieldのreadonly、同じlive session／payload getter、option key順・function名／arity、公開204項目が一致。ja/light・en/dark・test起動も成功。旧driver本体と通常Clipboard ownerは不変、新たな未束縛参照なし。構文639file・全単体2,546件と関連E2E504件（40file、9.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
 ## 寸法テストの保存・外観入力を実ownerから共有（2026-11-11）
 
 DimensionTestDriver.createBrowserSupportFromOwners（src/testing/dimension_test_driver.js）が、実Geometry read servicesからGeometry外観と寸法外観を別々に選び、実Persistence componentsのdimensions.serializeを既存createBrowserSupportForWorkspaceへ接続する。Geometry外観はfixtureの可視性照会へ、寸法外観は第三引数として表示支援へ渡す。固定Documentを返すreaderと、操作時に読むWorkspace.currentを混同せず、従来のfixture→interaction→displayの順・実recordを保つ。旧三引数APIはそのまま残す。

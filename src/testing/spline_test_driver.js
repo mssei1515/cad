@@ -1,6 +1,10 @@
 /* Spline browser-test setup and observations through explicit application ports. */
 (() => {
   "use strict";
+  function createBrowserSupportForWorkspace({ clipboard, pasteGeometryClipboard, ...options }) {
+    return createForWorkspace({ ...options, copyableSelectionPayload: clipboard.copyableSelectionPayload,
+      clipboardSession: clipboard.session, pasteGeometryClipboard });
+  }
   function create({ resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas,
     worldToCanvasScreen, serializeModel, readOperation, canvasSelection, document, addPoint, addSpline, hatchGeometryQuery, readSpline, splineGeometry, addLine,
     PointOnSplineConstraint, SplineLineTangentConstraint, pushModelConstraint, solveAndRefresh, serializeConstraint }) {
@@ -175,5 +179,5 @@
       blockDefinitionDrawableSketchIds, invalidateBlockProjectionCache, blockProjectionBundle, updateUI, draw });
     return Object.freeze({ setup, transfer });
   }
-  window.SplineTestDriver = Object.freeze({ create, createTransfer, createForWorkspace });
+  window.SplineTestDriver = Object.freeze({ createBrowserSupportForWorkspace, create, createTransfer, createForWorkspace });
 })();

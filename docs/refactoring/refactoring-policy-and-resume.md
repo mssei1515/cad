@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の寸法テスト用Persistence入力単位ではapp.jsは1,234行、非空白791行。AST監査ではroot227文・380束縛、構築448非空白行とbind41行、別名・設定92行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のClipboardテスト入力単位ではapp.jsは1,233行、非空白790行。AST監査ではroot226文・378束縛、構築448非空白行とbind41行、別名・設定91行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,19 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：寸法テストの保存・外観入力を実ownerから共有（2026-11-11）
+### 最新：Clipboardを使うテスト支援の入力を実ownerから共有（2026-11-11）
+
+開始基準developはc22ab5022d0949e6746efd4c2dba75d25c271c78、作業branchはcodex/clipboard-test-owner-inputs（develop統合・Push後に削除）。開始週枠残量78%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchProjectionTestDriverとSplineTestDriverのcreateBrowserSupportForWorkspaceが、既存ClipboardFeatureから同じsessionを選び、Splineでは同じcopyableSelectionPayload関数も選んで既存createForWorkspaceへ渡す。app.jsは実ClipboardFeatureを共有し、テスト専用の二別名を持たない。コピー・貼付けの既存callback、選択した関数の参照・receiver・引数と順、現在Workspaceとbound editing scopeの区別、例外と途中状態を維持する。session.payloadは操作時に読む既存getterのままで、payload・貼付け回数の複製や新たな状態ownerを作らない。通常ClipboardFeature／ClipboardSession、旧driver本体・旧API、生成・公開・bind／start順、UI・保存形式v26とclassic script読込順は不変。既存src/testingとsrc/application／editingの配置を使い、新規フォルダは不要と判断した。
+
+app.jsは1,234→1,233行（1行減）、非空白791→790行、root227→226文・380→378束縛、構文依存辺1,064→1,062。別名・設定92→91行。構築448行・bind41行・委譲7行・条件付きtest hooks152行は不変。全体の200〜500行目標は未完了。
+
+関連単体9件が成功。既存の実Geometry／Selectionと操作・生成失敗比較を新経路へ拡張し、native ClipboardSessionの差替え・貼付け計数・失敗copy時の保持・clearを追加検証した。browser前後比較で二支援の生成順、五つの実参照、二fieldのreadonly、同じlive session／payload getter、option key順・function名／arity、公開204項目が一致。ja/light・en/dark・test起動も成功。旧driver本体と通常Clipboard ownerは不変、新たな未束縛参照なし。構文639file・全単体2,546件と関連E2E504件（40file、9.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+次は通常機能の構築・接続448行を中心に、既存ownerの完成・公開時点と依存を再評価する。テスト専用の別名数を残タスク数と見なさず、今回の二Clipboard接続や既存の寸法・Properties・Block・Canvas支援を再分離しない。巨大context、別の巨大bootstrap、blank削除や薄いdelegateの量産で目標達成としない。
+
+### 前回：寸法テストの保存・外観入力を実ownerから共有（2026-11-11）
 
 開始基準developは7837bd6eafc4f4733aa3d299cea95cef765620c8、作業branchはcodex/dimension-test-persistence-inputs（develop統合・Push後に削除）。開始週枠残量79%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
 
