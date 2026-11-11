@@ -120,7 +120,9 @@
         return result;
       }
       function createPersistenceForWorkspace(options) {
-        return createPersistence({ version: window.DocumentSnapshot.CURRENT_VERSION, ...options });
+        const defaults = { version: window.DocumentSnapshot.CURRENT_VERSION };
+        if (!("readEditingScope" in options)) defaults.readEditingScope = readEditingScope;
+        return createPersistence({ ...defaults, ...options });
       }
       return Object.freeze({ services, persistence, createRebinding, createScopeBinding, createEditingScope, createPersistence, createPersistenceForWorkspace });
     }

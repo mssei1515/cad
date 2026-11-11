@@ -817,3 +817,41 @@ test('Document editing-scope query returns the actual bound model independently 
   assert.throws(() => context.createEditingScope({ Solver: FailingSolver, closeSketchContext() {}, resetSketchMove() {} }), error => error === marker);
   assert.equal(read(), draft); assert.equal(model.workspace.current(), model.document);
 });
+
+test('Workspace persistence defaults to the actual bound reader while the native writer still snapshots the live Workspace', () => {
+  const original = w.DocumentApplication, results = []; let reader;
+  w.DocumentApplication = { ...original, createPreparation(input) { reader = input.currentScope; return original.createPreparation(input); } };
+  try {
+    for (const omitted of [false, true]) {
+      let binding;
+      const f = persistenceFixture((context, options) => {
+        binding = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} }).binding;
+        if (omitted) delete options.readEditingScope;
+      }, {}, (context, options) => context.createPersistenceForWorkspace(options));
+      assert.equal(reader, omitted ? f.model.readEditingScope : f.options.readEditingScope);
+      const draft = w.DocumentState.create(); addPersistedLine(draft, 'BOUND', 20); binding.activate(draft); f.state.bound = draft;
+      const unbound = w.DocumentState.create(); addPersistedLine(unbound, 'WORKSPACE', 30); f.model.workspace.activate(unbound);
+      assert.equal(reader(), draft); assert.equal(binding.current, draft); assert.equal(f.model.workspace.current(), unbound);
+      const saved = f.context.persistence.serializeModel(); saved.savedAt = 'TIME';
+      assert.equal(saved.version, 26); assert.equal(saved.lines[0].id, 'WORKSPACE'); assert.equal(reader(), draft);
+      results.push(JSON.stringify(saved));
+    }
+    assert.equal(results[1], results[0]);
+  } finally { w.DocumentApplication = original; }
+});
+
+test('Workspace persistence keeps explicit invalid readers and its existing spread policy for inherited options while raw persistence remains injectable', () => {
+  const original = w.DocumentApplication; let reader;
+  w.DocumentApplication = { ...original, createPreparation(input) { reader = input.currentScope; return original.createPreparation(input); } };
+  try {
+    for (const raw of [false, true]) for (const inherited of [false, true]) for (const value of [undefined, null, () => ({})]) {
+      const f = persistenceFixture((_context, options) => {
+        delete options.readEditingScope;
+        if (inherited) Object.setPrototypeOf(options, { readEditingScope: value }); else options.readEditingScope = value;
+      }, {}, (context, options) => raw ? context.createPersistence(options) : context.createPersistenceForWorkspace(options));
+      const expected = !raw && inherited ? undefined : value;
+      assert.equal(reader, expected);
+      if (typeof expected !== 'function') assert.throws(f.persistence.ensureDimensionDefaults, error => error.name === 'TypeError');
+    }
+  } finally { w.DocumentApplication = original; }
+});
