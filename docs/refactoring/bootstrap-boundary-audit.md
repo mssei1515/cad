@@ -1,5 +1,11 @@
 # Composition rootの残存責務と依存監査
 
+## 再監査後の実装：Canvasの実Scene共有（2026-11-11）
+
+基準bd96aa7から、下記の実Scene record候補を検証して採用した。八fieldの実recordは凍結own data propertyで、CanvasTestDriverは三fieldのみを読み、geometryDisplayの早期callbackは旧別名の初期化前guardを保つ。新たな大きなbootstrapやテスト専用wrapperを作らず、rootの四別名とdisplay再梱包を除いた。app.jsは1,264→1,264行（0行変化）、非空白819行のまま。四別名・22参照を整理し、うち二参照を含むdisplay再梱包を実Sceneで置換した。root束縛418→415、root文242→243、構文依存辺1,090→1,092。Scene保持と残る二別名の宣言を分けるためroot文・辺は増える。構築468→467非空白行、別名・設定99→100行、委譲11行とtest hooks158行は不変。行数・辺数の減少を成果として装わず、所有者の実recordと利用側の表示契約へ接続を揃える一単位である。200〜500行の全体目標は未完了。
+
+詳細と検証はcomposition-root.mdの最新単位を参照する。以降の監査表・先頭行・候補はbd96aa7より前の6eed90dのsnapshotであり、最新sourceの計測として転用しない。新しい変更ではaudit toolを現物に再実行する。
+
 ## 段階的factoryの生成元を含む再監査（2026-11-11）
 
 基準はdevelop 6eed90d、app.jsのGit blobはf3fad1acb1e07c46a304fb4e6a02c883a7f3fc93。app.jsは1,264行・非空白819行、root242文・418束縛、構築・接続114文／468非空白行、別名・設定99行、委譲11行、test hooks158行。今回のapp.jsは1,264→1,264行（0行変化）で、製品の分離実装を進めた件数には数えない。
