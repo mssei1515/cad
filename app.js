@@ -1014,8 +1014,7 @@
 
   canvasWorkspaceLayout.bindWindow();
 
-  function installTestHooks() {
-    if (!new URLSearchParams(window.location.search).has("test")) return;
+  function createTestApi() {
     const documentTestSupport = window.DocumentTestDriver.createBrowserSupportForWorkspace({
       documentWorkspace, geometry: geometryCreation, presentation, document, history: historyFeature, blocks: blockEditingFeature,
       constructionCommand, files: documentFileFeature, fileSession,
@@ -1149,7 +1148,7 @@
       pushModelConstraint: constraintInsertion.push, solveAndRefresh, serializeConstraint, annotationLeaderTargetFromItem,
       clearSelection, clipboard: clipboardFeature, pasteGeometryClipboard,
     });
-    window.__jot2dTest = window.BrowserTestApi.createFromSupportRecords({
+    return window.BrowserTestApi.createFromSupportRecords({
       canvas: { support: canvasTestSupport, responsiveDragFixture, dragExecutionSupport, canvasRenderProbe },
       splines: splineTestSupport,
       authoring: { hatchTestApi, drawingOrderTestApi, offsetTestSupport, trim: trimTestSupport },
@@ -1181,7 +1180,7 @@
     blockPlacementCommand, hatchCommand, sketchTreeView, annotationDrag,
   });
 
-  installTestHooks();
+  window.BrowserTestApi.installForBrowser(window, createTestApi);
   installExpressionInputHighlights(document);
   documentFileFeature.startForEmptyDocument({ resetModelState, initializePresentation });
 })();

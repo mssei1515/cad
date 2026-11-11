@@ -96,7 +96,7 @@ function auditSource(input) {
   const callName = node => node?.type === 'CallExpression' ? text(node.callee) : null;
   function category(node) {
     if (node.type === 'FunctionDeclaration') {
-      if (node.id.name === 'installTestHooks') return 'testHooks';
+      if (['installTestHooks', 'createTestApi'].includes(node.id.name)) return 'testHooks';
       const body = node.body.body;
       return body.length === 1 && (body[0].type === 'ReturnStatement' && body[0].argument?.type === 'CallExpression'
         || body[0].type === 'ExpressionStatement' && body[0].expression.type === 'CallExpression') ? 'delegates' : 'otherFunctions';

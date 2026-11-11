@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## テストAPIの有効条件と公開をBrowserTestApiへ集約（2026-11-12）
+
+BrowserTestApi.installForBrowser(window, createApi)が、現在URLのtestパラメータの存在を確認し、必要な場合だけfactoryを呼んで完成APIをwindow.__jot2dTestへ公開する。app.jsのcreateTestApiは機能別driverの構築と既存createFromSupportRecordsへの接続だけを担当する。公開呼出しは従来どおりDocument編集resetの構築後、式入力highlight導入と空Document開始の前に置く。
+
+factoryはbare・ゼロ引数で呼び、完成した実APIを包み直さず代入する。test／test=0／test=falseを含め、値でなくnative URLSearchParams.hasによる存在判定を維持する。判定は呼出しごとに現在URLを読み、未指定ではfactoryを呼ばず、以前の公開値も削除しない。構築中と構築失敗時には以前の公開APIを保持し、公開setter失敗も元例外のまま伝える。返却値は以前のinstallerと同じundefined。通常起動では既存BrowserTestApiによる条件確認だけを行い、テストdriverを生成しない。raw create／createWithProperties／createFromSupportRecordsは純粋な組立てのままである。生成するdriver・順序・公開名・descriptor・関数identity・receiver／引数／結果・collision優先順は不変。新file・global・state／cache・registry・全体contextを追加せず、製品featureにtesting依存を導入しない。UI・履歴・保存形式v26は不変。
+
+app.jsは1,187→1,186行（1行減）、非空白745→744行。root207文・363束縛、構築428行・115文、別名79行、bind35行は不変。条件付きtest hooksは152→151行。URLSearchParamsのroot直接参照がなくなり、新たな未束縛参照なし。監査toolは生成だけを行うcreateTestApiも従来のinstallTestHooksと同じtestHooks分類として計測する。200〜500行の全体目標は未完了。
+
+関連単体20件が成功。実公開契約の全groupを使い、通常起動の生成省略、parser→location→search→factory→公開の順序、最新URLの再読取り、native query解釈、実APIの同一性と可変性、callbackのbare／ゼロ引数と実公開後のreceiver・結果、各段階の元例外と以前の公開値保持を確認した。既存公開組立てとapp内の全driver構築本体はソース逆変換で不変を確認した。
+
+構文639ファイル・全単体2,622件・関連単体20件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E173件（6file、2.6m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 通常Solverの実装選択をDocumentWorkspaceへ集約（2026-11-12）
 
 DocumentWorkspaceのReadContextが返すcreateEditingScopeは、Solverプロパティの指定がない場合にGeometrySolver.ConstraintSolverを選び、既存のscope binding・model query・constraint insertionを構築する。app.jsはSolverクラスを取得・中継せず、Sketch切替のclose／resetを接続する。

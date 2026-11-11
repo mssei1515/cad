@@ -232,3 +232,38 @@ test('support-record publication preserves original capability failures at the s
     assert.deepEqual(f.events, events); assert.deepEqual(f.calls, []); assert.equal(Object.hasOwn(f.w, '__jot2dTest'), false);
   }
 });
+
+
+test('browser installation reads the current URL only when invoked, skips ordinary startup, and publishes the actual completed API', () => {
+  const f=supportRecordContractFixture(),events=[],state={search:'?contest=1',published:{prior:true}},old=state.published;
+  const browser={get URLSearchParams(){events.push('parser');return URLSearchParams;},get location(){events.push('location');return{get search(){events.push('search');return state.search;}};},
+    get __jot2dTest(){return state.published;},set __jot2dTest(api){events.push('publish');state.published=api;}};
+  let created,calls=0;
+  function createApi(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);calls++;events.push('create');assert.equal(browser.__jot2dTest,old);return created=f.w.BrowserTestApi.createFromSupportRecords(f.records);}
+  assert.deepEqual(events,[]);assert.deepEqual(f.calls,[]);
+  assert.equal(f.w.BrowserTestApi.installForBrowser(browser,createApi),undefined);assert.equal(calls,0);assert.equal(state.published,old);assert.deepEqual(events,['parser','location','search']);
+  state.search='?test=0';events.length=0;assert.equal(f.w.BrowserTestApi.installForBrowser(browser,createApi),undefined);
+  assert.equal(calls,1);assert.equal(state.published,created);assert.equal(Object.isFrozen(created),false);assert.deepEqual(events,['parser','location','search','create','publish']);
+  assert.deepEqual(f.calls,[]);f.state.value={replacement:true};const args=[{},'extra'];assert.equal(created.historyState(...args),f.state.value);assert.equal(f.calls.at(-1).receiver,created);assert.deepEqual(f.calls.at(-1).args,args);
+});
+
+test('browser installation retains native query presence rules and rechecks the URL without caching or deleting an earlier API', () => {
+  const f=fixture(),browser={URLSearchParams,location:{search:''},__jot2dTest:{prior:true}};let count=0,expected=0;
+  const create=()=>({generation:++count});
+  for(const search of ['', '?contest=1','?TEST=1','?x=test']){browser.location.search=search;const before=browser.__jot2dTest;f.w.BrowserTestApi.installForBrowser(browser,create);assert.equal(browser.__jot2dTest,before);assert.equal(count,0);}
+  for(const search of ['?test','?test=','?test=false','?%74est=1','?test=0&test=1']){browser.location.search=search;assert.equal(f.w.BrowserTestApi.installForBrowser(browser,create),undefined);assert.equal(browser.__jot2dTest.generation,++expected);}
+  const previous=browser.__jot2dTest;browser.location.search='';f.w.BrowserTestApi.installForBrowser(browser,create);assert.equal(browser.__jot2dTest,previous);assert.equal(count,expected);
+});
+
+test('browser installation propagates gate, construction and publication failures while retaining existing partial effects', () => {
+  const f=supportRecordContractFixture(),marker=new Error('installation failed'),old={prior:true};let calls=0;
+  const build=()=>{calls++;return f.w.BrowserTestApi.createFromSupportRecords(f.records);};
+  for(const stage of ['parser','location','search']){
+    const browser={get URLSearchParams(){if(stage==='parser')throw marker;return URLSearchParams;},get location(){if(stage==='location')throw marker;return{get search(){throw marker;}};},__jot2dTest:old};
+    assert.throws(()=>f.w.BrowserTestApi.installForBrowser(browser,build),error=>error===marker);assert.equal(calls,0);assert.equal(browser.__jot2dTest,old);
+  }
+  const browser={URLSearchParams,location:{search:'?test=1'},__jot2dTest:old};f.state.failure='parameters.parameterObservation.state';
+  assert.throws(()=>f.w.BrowserTestApi.installForBrowser(browser,build),error=>error===f.marker);assert.equal(calls,1);assert.equal(browser.__jot2dTest,old);assert.deepEqual(f.calls,[]);
+  f.state.failure=null;Object.defineProperty(browser,'__jot2dTest',{get:()=>old,set(){throw marker;}});
+  assert.throws(()=>f.w.BrowserTestApi.installForBrowser(browser,build),error=>error===marker);assert.equal(calls,2);assert.equal(browser.__jot2dTest,old);assert.deepEqual(f.calls,[]);
+});
