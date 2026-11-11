@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Canvas初期倍率とテスト観測のCSS単位依存を所有者へ集約（2026-11-12）
+
+CanvasDisplay.prepareForWorkspaceが返すcreateForBrowserは、initialScaleの指定がない場合に既存Appearance.CSS_PX_PER_MMを使い、既存createForEditingへ接続する。CanvasTestDriver.createBrowserSupportForWorkspaceもcssPxPerMm未指定の場合だけ同じ実定数を使う。app.jsは表示単位定数を所有・中継せず、通常のCanvas構築とテスト支援の入口を接続する。
+
+明示された倍率は0・undefined・nullを含め優先する。raw createForEditing／CanvasDisplay.createとCanvasTestDriverのScene／DisplaySupport／ZoomObservationには既定値を追加しない。既存定数96/25.4を複製せず、通常の初期倍率、初期倍率に比例するズーム上下限、100%表示、空図面のfit、DPR・PNG一時viewportと復元の計算は既存Viewport／Surface／Exportが所有する。Canvasの段階的生成・公開順、操作・履歴・UI・保存形式v26は不変。新file・global・可変state・全体contextを追加しない。
+
+app.jsは1,194→1,191行（3行減）、非空白752→749行。root209→208文・365→364束縛、別名・設定85→82行。構築429行・115文、bind35行、test hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体83件が成功。実Canvas WorkspaceとViewport／Navigation／Surface／Exportによる既存入口と通常入口の比較で、初期値・上下限・百分率・空図面fit・DPR bitmap・PNG後のviewportとbitmap復元、同じ実Viewport、生成失敗の元例外と部分生成順を確認した。テスト支援は未指定時だけAppearanceを一度読み、既存ZoomObservationへ接続すること、明示値とraw未指定を保持することを確認した。
+
+構文639ファイル・全単体2,616件・関連単体83件と通常ja/light・en/dark・test起動が成功。関連E2E139件（7file、2.1m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 寸法入力focusのbrowserフレーム接続をCanvasDisplayへ集約（2026-11-12）
 
 CanvasDisplayの準備済みdisplayが返すcreateEditingWorkspaceForBrowserは、同じbrowser windowのrequestAnimationFrameを操作時に読むscheduleFrameを既定として、既存Editing Workspace生成へ接続する。返値は既存生成の実Workspaceであり、app.jsは寸法入力のframe callbackを組み立てない。

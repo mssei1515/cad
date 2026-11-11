@@ -285,7 +285,11 @@
       }
       return Object.freeze({ ...display, createEditingWorkspace, createEditingWorkspaceForBrowser, fitVisibleGeometryToViewport });
     }
-    return Object.freeze({ controls, canvasThemeColor, createForEditing });
+    function createForBrowser(options) {
+      const defaults = Object.hasOwn(options, "initialScale") ? {} : { initialScale: window.Appearance.CSS_PX_PER_MM };
+      return createForEditing({ ...defaults, ...options });
+    }
+    return Object.freeze({ controls, canvasThemeColor, createForEditing, createForBrowser });
   }
   function prepareRendering() {
     let completed;

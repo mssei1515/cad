@@ -1078,7 +1078,7 @@ function preparedWorkspaceFixture(composed, probe) {
     assert.deepEqual(probe.order, ['controls']); assert.deepEqual(f.reads, []);
     const displayOptions = { initialScale: 2, minLength: 1e-6, fitVisibleGeometry: () => true, flushPointerMoves: () => f.calls.push('flush'), syncDimensionValueInput: () => f.calls.push('sync') };
     if (probe.configureDisplay) probe.configureDisplay(displayOptions);
-    display = composed ? prepared.createForEditing(displayOptions) : w.CanvasDisplay.create({ ...displayOptions, canvas: f.canvas, document: f.document, minZoom: .002, maxZoom: 20000000, draw: presentation.draw, setHint: presentation.setHint });
+    display = composed ? (composed === 'scale' ? prepared.createForBrowser(displayOptions) : prepared.createForEditing(displayOptions)) : w.CanvasDisplay.create({ ...displayOptions, canvas: f.canvas, document: f.document, minZoom: .002, maxZoom: 20000000, draw: presentation.draw, setHint: presentation.setHint });
     if (probe.afterDisplay) probe.afterDisplay(display);
     const dimensionInput = { syncHighlight() {}, scheduleFrame() {}, evaluateDimensionExpressionDraft: (_c,text) => Number(text), expressionFromUserInput: text => text,
       cancelPendingCommand() {}, startDistanceValueInput() {}, submitOffsetValue() {}, submitDistanceValue() {} };
@@ -1453,5 +1453,42 @@ test('browser Workspace dimension frame defaults preserve explicit undefined or 
       configureInput(input){input.scheduleFrame=supplied;}
     });
     assert.equal(f.probe.ports.input.scheduleFrame,supplied);assert.throws(()=>f.workspace.dimensions.input.controller.focus(),error=>error.name==='TypeError');
+  }
+});
+
+
+test('browser display scale uses the canonical CSS millimeter baseline with native zoom, empty fit, DPR and export restoration', () => {
+  const scale = sceneWindow.Appearance.CSS_PX_PER_MM, results = [];
+  for (const browser of [false,true]) {
+    const f=preparedWorkspaceFixture(browser?'scale':true,{configureDisplay(options){if(browser)delete options.initialScale;else options.initialScale=scale;}});
+    assert.equal(f.display.viewport,f.probe.results.viewport);assert.equal(f.display.viewport.scale,scale);
+    assert.equal(f.probe.ports.viewport.minZoom,scale*.001);assert.equal(f.probe.ports.viewport.maxZoom,scale*10000000);
+    assert.equal(f.display.viewport.formatZoom(scale),'100%');assert.equal(f.display.viewport.clampZoom(0),scale*.001);
+    assert.equal(f.display.viewport.clampZoom(Infinity),scale*10000000);
+    assert.equal(f.display.navigation.setScale(scale*2),true);assert.equal(f.display.viewport.formatZoom(f.display.viewport.scale),'200%');
+    f.scene.fit.resetEmptyViewport();assert.equal(f.display.viewport.scale,scale);
+    f.workspace.surface.syncCanvasBitmapSize();const bitmap=[f.canvas.width,f.canvas.height];assert.ok(bitmap[0]>0);
+    const before=f.display.viewport.snapshot();f.workspace.exportRenderer.render({x:2,y:3,width:10,height:20},{x:8,y:12});
+    assert.notEqual(f.workspace.exportRenderer.frame,null);f.workspace.exportRenderer.restore();assert.deepEqual(f.display.viewport.snapshot(),before);
+    assert.deepEqual([f.canvas.width,f.canvas.height],bitmap);assert.equal(f.display.viewport.scale,scale);
+    results.push(JSON.stringify({snapshot:before,bitmap,order:f.probe.order,reads:f.reads,calls:f.calls}));
+  }
+  assert.equal(results[1],results[0]);
+});
+
+test('browser display scale preserves explicit values including undefined and null and leaves raw missing scale unchanged', () => {
+  for(const scale of [0,1,7.5,null,undefined]){
+    const f=preparedWorkspaceFixture('scale',{configureDisplay(options){options.initialScale=scale;}});
+    assert.equal(f.display.viewport.scale,scale);assert.equal(f.probe.ports.viewport.initialScale,scale);
+    assert.equal(f.probe.ports.viewport.minZoom,scale*.001);assert.equal(f.probe.ports.viewport.maxZoom,scale*10000000);
+  }
+  const f=preparedWorkspaceFixture(true,{configureDisplay(options){delete options.initialScale;}});assert.equal(f.display.viewport.scale,undefined);
+});
+
+test('browser display construction preserves native failure identity and partial publication order', () => {
+  for(const failAt of ['viewport','navigation','zoom','surface','layout','dimensions','input']){
+    const marker=new Error(failAt),raw={failAt,marker},browser={failAt,marker};
+    for(const [mode,probe]of [[true,raw],['scale',browser]])assert.throws(()=>preparedWorkspaceFixture(mode,probe),error=>error===marker);
+    assert.deepEqual(browser.order,raw.order);assert.deepEqual(browser.calls,raw.calls);
   }
 });

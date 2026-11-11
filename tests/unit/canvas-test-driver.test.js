@@ -267,7 +267,7 @@ test('a failed pointer flush preserves the previous profile and never starts a r
   assert.equal(profile.preview, undefined); assert.equal(f.api.interactionFrameStatsForTest(), null);
 });
 
-function sceneObservationFixture(composed, failRendering = false) {
+function sceneObservationFixture(composed, failRendering = false, configureInput) {
   const f = displayFixture(), profiling = interactionProfilingFixture(), calls = [], marker = new Error('scene failed');
   const model = { units: { length: 'mm' } }, state = { mode: 'line', scope: { points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [] } };
   const read = name => { assert.equal(f.state.ready, true); calls.push(name); };
@@ -298,6 +298,7 @@ function sceneObservationFixture(composed, failRendering = false) {
       sandbox.window.SketchHierarchy=Object.freeze({ROOT_SKETCH_ID:input.rootSketchId,DEFAULT_SKETCH_ID:input.defaultSketchId});
       sandbox.window.GeometrySolver=input.types;sandbox.window.SplineGeometry=Object.freeze({evaluate:input.evaluateSpline});
     }
+    configureInput?.(input);
     api = composed==='workspace' ? driver.createBrowserSupportForWorkspace({...input,
       blocks:Object.freeze({editing:Object.freeze({empty:input.blocks.createEmptyBlockDefinition})}),blockPlacement:input.blocks.blockPlacementCommand,
       annotations:Object.freeze({drawAnnotationLeader:input.drawAnnotationLeader}),frame:Object.freeze({overlays:Object.freeze({drawSelectionRect:input.drawSelectionRect})}),
@@ -342,4 +343,20 @@ test('Canvas browser support retains actual scheduler profiling and original sce
     assert.equal(api.interactionFrameStatsForTest(), p.scheduler.stats());
     const marker = new Error('scene construction failed'); assert.throws(() => sceneObservationFixture(composed, marker), error => error === marker);
   }
+});
+
+
+test('browser Workspace zoom observation derives CSS units only when absent and preserves raw and explicit scales', () => {
+  const original=sandbox.window.Appearance,scale=96/25.4;let reads=0;
+  sandbox.window.Appearance=Object.freeze({get CSS_PX_PER_MM(){reads++;return scale;}});
+  try{
+    const f=sceneObservationFixture('workspace',false,input=>{delete input.cssPxPerMm;});assert.equal(reads,1);
+    const initial=f.api.display.publicAPI.displayZoomStateForTest();assert.equal(initial.cssPixelsPerMillimeter,scale);assert.equal(initial.zoomRatio,1/scale);
+    const changed=f.api.display.publicAPI.displayZoomStateForTest(2);assert.equal(changed.viewportScale,2*scale);assert.equal(changed.zoomRatio,2);assert.equal(reads,1);
+    for(const supplied of [0,7.5,null,undefined]){
+      const f=sceneObservationFixture('workspace',false,input=>{input.cssPxPerMm=supplied;});
+      assert.equal(f.api.display.publicAPI.displayZoomStateForTest().cssPixelsPerMillimeter,supplied);assert.equal(reads,1);
+    }
+    const raw=sceneObservationFixture(true,false,input=>{delete input.cssPxPerMm;});assert.equal(raw.api.display.publicAPI.displayZoomStateForTest().cssPixelsPerMillimeter,undefined);assert.equal(reads,1);
+  }finally{if(original===undefined)delete sandbox.window.Appearance;else sandbox.window.Appearance=original;}
 });

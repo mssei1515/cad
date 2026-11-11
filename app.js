@@ -4,9 +4,6 @@
   const { escapeHtml } = window.HtmlText;
 
   const {
-    CSS_PX_PER_MM,
-  } = window.Appearance;
-  const {
     drawingOrderOwner,
   } = window.DrawingOrder;
 
@@ -199,7 +196,7 @@
     syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
-  const { controls: canvasViewControls, canvasThemeColor, createForEditing: createCanvasDisplay } = window.CanvasDisplay.prepareForWorkspace({
+  const { controls: canvasViewControls, canvasThemeColor, createForBrowser: createCanvasDisplay } = window.CanvasDisplay.prepareForWorkspace({
     canvas, document, window, ctx, documentWorkspace, readServices: geometryReadServices,
     interaction: canvasInteraction, sessions: operationSessions, presentation,
   });
@@ -221,7 +218,7 @@
     minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { viewport, navigation: canvasNavigation, createEditingWorkspaceForBrowser: createCanvasWorkspace, fitVisibleGeometryToViewport } = createCanvasDisplay({
-    initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,
+    minLength: MIN_LINE_LENGTH,
     flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { transient: transientAuthoring, createCheckpoint: createEditingCheckpoint, geometryCheckpoint: authoringCheckpoint } = window.GeometryMutationFeature.prepareForWorkspace({
@@ -1062,7 +1059,7 @@
       display: canvasScene, ctx, selectionRectangle,
       layers: { authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer },
       blocks: blockEditingFeature, blockPlacement: blockPlacementCommand, annotations: annotationFeature.renderer, frame: canvasFrame,
-      resizeCanvas: canvasWorkspaceLayout.resizeCanvas, resetModelState, cssPxPerMm: CSS_PX_PER_MM, sceneQueries: sceneHitQueries,
+      resizeCanvas: canvasWorkspaceLayout.resizeCanvas, resetModelState, sceneQueries: sceneHitQueries,
       observations: { viewControls: canvasViewControls, centerlineCommand, commit: constraintCommitCommand,
         persistence: documentPersistence, readSelectedGeometry: readTestSelectedGeometry, scheduler: pointerMoveScheduler },
     });
