@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Sketch切替reset／表示切替／TreeとMenuの接続をnavigation生成ownerへ統合（2026-11-11）
+
+SketchEditingFeature.prepareNavigation（src/application/sketch_editing_feature.js）は、従来のMoveとMenuに加え、実createForInteractionが返した完成editing／resetと、実createTreeForEditingが返した完成Tree recordを所有する。clearInteractionForSketchChange／toggleSketchVisibility／isSidebarHighlightedElement／startContextを安定した操作入口として提供し、closeContextは同じTreeの実menuへ接続する。rootのreset・Tree Controller・Menu・表示切替関数の四別名と三つの委譲、Tree hoverとKeyboardの局所bridgeを外す。実Tree viewは表示更新・幅・creation bindに必要なためrootに残す。
+
+resetは同じreset.clearをmember receiverで零引数、表示切替は実commandのtoggleVisibilityを裸関数として一引数、強調照会は同じControllerのisHighlightedElementを一引数、hover clear・Menu start／closeは同じ実体をmember receiverで零引数呼出しする。返値・元例外・余剰引数の破棄と、未完成時の旧sketchInteractionReset／toggleSketchVisibilityCommand／sketchTreeController／sketchContextControllerの初期化前ReferenceErrorを維持する。従来からoptionalなclose／Move resetと、未生成moving照会のTypeErrorは維持する。
+
+prepared creatorのclearInteractionForSketchChange／clearTreeHover省略時だけ所有元の入口を接続し、明示した関数・undefinedを含むoptionsはspreadで従来どおり優先する。raw createForInteraction等のAPIは不変。編集・Treeの実factoryが成功した後だけ完成実体を保持し、初回失敗では未完成のまま、後続の生成失敗では以前の実体を保持する。Move生成・input bind、Tree生成・Menu startは同じroot位置で行い、完成後のstart例外でも実体を消さない。新しいreset／Controller／Menu／Selection／model・scope・listener／cacheや登録setter、汎用app contextを作らず、Workspace／bound scope・状態変更／履歴／UIと保存形式v26は各既存ownerに残す。
+
+app.jsは1,310→1,308行（2行減）、非空白865→863行。root270→268文・457→453束縛。委譲19→16行、別名／設定121→122行、構築474行・その他call37行・条件付きtest hooks162行は不変。構文依存辺1,142→1,138。実componentの生成と操作入口の所有元を揃えた段階であり、200〜500行の全体目標は未完了。
+
+SketchEditingFeature単体へ4件を追加。初期化guardと明示callback／undefined優先、実activateによる同じSelection／pointerとreset順・途中失敗、実commandの裸呼出し、Tree Controller／Menuのmember receiver・引数数／返値と元例外、独立したprepare、編集／Treeの初回と再構築失敗時に完成実体だけを保持する境界を確認する。root十編集以外とraw SketchCommand／Tree／View／Menu本体の不変、元のparameter／引数と裸toggle、callback優先のspread順、新しい未使用／未束縛／初期化前root参照なしを照合した。構文637file・全単体2,492件・focused25件・関連E2E447件が成功（38file、7.7m、exit 0）。E2E実行中の707入力と開始HEAD不変、選択38fileの一覧447件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-sketch-navigation-ownership-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直近の全体検証7557059の全589件成功（27.2分）とは区別する。
+
+基準develop 44ac8f1、作業branch codex/sketch-navigation-ownership、開始時週枠残量96%。構文637file・全単体2,492件・focused25件・起動3経路は成功済み。関連38file・447件が成功（7.7m）。707入力と開始HEADを固定し、TEMP cad-sketch-navigation-ownership-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。runnerはcad-sketch-navigation-ownership-run.ps1。全runner終了を回収済み。直近の全体検証7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
 ### 最新：Toolbarの選択照会と編集可否の組立てをPresentationへ集約（2026-11-11）
 
 PresentationFeature.createToolbar().prepareControls().createForSelection（src/application/presentation_feature.js）は、PropertiesDisplayが返す実selection照会と実SketchContextを受け、visibilityTargets／visibilityIsHiddenとcanEditSketch／constraintSketchId／elementSketchIdを既存Toolbar Viewへ接続する。対象のkindがconstraintの場合だけconstraintSketchId、それ以外はelementSketchIdを一度選び、その結果だけをcanEditSketchへ裸呼出しで渡す。旧rootの同じarrow本体・一引数・条件分岐と返値／元例外を維持し、新しい編集可否の規則やfallbackを追加しない。
