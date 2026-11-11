@@ -325,6 +325,12 @@ test('Properties editing view retains Block changes and dimension property callb
   f.panel.onchange({target:new Input({property:'constraint-expression'},'=2+8')});assert.equal(f.calls[0][0],'dimension-property');assert.equal(f.calls[0][1],constraint);assert.deepEqual(f.calls[0].slice(2),['constraint-expression','=2+8']);assert.deepEqual(f.calls.slice(1),['ui','draw']);
 });
 
+function viewOwners(options) {
+  const { snappedBlockRotation, hatchRegionErrorText, geometryInstanceTypeLabel, installExpressionInputHighlights, ...rest } = options;
+  return { ...rest, layout: Object.freeze({ snappedBlockRotation }), feedback: Object.freeze({ hatchRegionErrorText, geometryInstanceTypeLabel }),
+    parameterEditor: Object.freeze({ installExpressionInputHighlights }) };
+}
+
 function workspaceFixture(composed, onSelectionReady, probe) {
   const f = operationsFixture(), { viewOptions: v, editingOptions: e, operations } = f;
   const readServices = { ...f.services, hatches: { resolvedHatchBoundary: v.resolvedHatchBoundary } };
@@ -340,7 +346,7 @@ function workspaceFixture(composed, onSelectionReady, probe) {
   const annotationFeature = { materialize: e.materializeAnchor, command: { addLeader: item => { f.calls.push(['leader', item]); return 'leader-result'; } } };
   const inputs = { document: f.document, documentWorkspace, readServices, interaction, presentation,
     operations: { sources: operations.sources, placement: operations.placement, blocks: operations.blocks } };
-  const owner = composed === 'owned' ? w.PropertiesDisplay.prepare() : null;
+  const owner = (composed === 'owned' || composed === 'presentation') ? w.PropertiesDisplay.prepare() : null;
   if (owner && probe) probe.owner = owner;
   if (owner) probe?.beforeWorkspace?.(owner, f);
   const composition = owner ? owner.createForWorkspace(inputs) : composed ? w.PropertiesDisplay.createForWorkspace(inputs) : w.PropertiesDisplay.createFeature({
@@ -372,7 +378,8 @@ function workspaceFixture(composed, onSelectionReady, probe) {
     return viewInputs;
   }
   try {
-    if (composed === 'combined' || composed === 'owned') { editor = composition.createEditingWithViewForWorkspace(editingInputs, readViewOptions); view = editor.view; }
+    if (composed === 'presentation') { editor = composition.createEditingWithViewForPresentation(editingInputs, () => viewOwners(readViewOptions())); view = editor.view; }
+    else if (composed === 'combined' || composed === 'owned') { editor = composition.createEditingWithViewForWorkspace(editingInputs, readViewOptions); view = editor.view; }
     else {
       editor = composed ? composition.createEditingForWorkspace(editingInputs) : composition.createEditing(e);
       view = composed ? editor.createViewForWorkspace(readViewOptions()) : editor.createViewForEditing({ ...v, ...f.editingActors,
@@ -400,7 +407,7 @@ test('Properties workspace stages stay cold and preserve distinct selection and 
     const point = f.point('replacement'); f.selection.set('points', [point]); f.view.render(f.propertySelection.selectedDisplayTarget());
     assert.equal(f.propertySelection.selectedDisplayTarget().item, point); return f.snapshot();
   };
-  const legacy = run(false); assert.deepEqual(run(true), legacy); assert.deepEqual(run('combined'), legacy);
+  const legacy = run(false); assert.deepEqual(run(true), legacy); assert.deepEqual(run('combined'), legacy); assert.deepEqual(run('presentation'), legacy);
 });
 
 test('Properties workspace stages preserve actual appearance edits, locks and selection identity', () => {
@@ -415,7 +422,7 @@ test('Properties workspace stages preserve actual appearance edits, locks and se
     f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#abcdef') });
     assert.equal(point.appearance.color, '#123456'); assert.equal(f.calls.length, before); return f.snapshot();
   };
-  const legacy = run(false); assert.deepEqual(run(true), legacy); assert.deepEqual(run('combined'), legacy);
+  const legacy = run(false); assert.deepEqual(run(true), legacy); assert.deepEqual(run('combined'), legacy); assert.deepEqual(run('presentation'), legacy);
 });
 
 test('Properties workspace connection keeps guarded actions, member receivers, returns and partially rendered failures', () => {
@@ -442,7 +449,7 @@ test('Properties workspace connection keeps guarded actions, member receivers, r
     assert.equal(f.calls.at(-3)[0], 'dimension-property'); assert.equal(f.calls.at(-3)[1], dimension);
     return f.snapshot();
   };
-  const legacy = run(false); assert.deepEqual(run(true), legacy); assert.deepEqual(run('combined'), legacy);
+  const legacy = run(false); assert.deepEqual(run(true), legacy); assert.deepEqual(run('combined'), legacy); assert.deepEqual(run('presentation'), legacy);
 });
 
 test('Properties selection capabilities feed a real Toolbar before later workspace editing and View creation', () => {
@@ -497,14 +504,14 @@ test('direct Properties query functions retain live operations and original fail
 
 test('combined Properties construction returns the real editing, Appearance UI and View in the same constructor order', () => {
   const expected = ['PropertyEditingFeature', 'AppearanceUI', 'PropertiesController', 'PropertyRows', 'PropertyPresentation', 'PropertiesContent', 'PropertiesView'];
-  for (const composed of [true, 'combined', 'owned']) {
+  for (const composed of [true, 'combined', 'owned', 'presentation']) {
     const probe = {}, f = workspaceFixture(composed, undefined, probe);
     assert.deepEqual(probe.order, expected); assert.deepEqual(f.calls, []); assert.equal(f.state.ready, false);
     assert.equal(probe.viewOptionsReads, 1); assert.deepEqual(probe.viewOptionsOrder, expected.slice(0, 2));
     assert.equal(f.editor.editing, probe.results.PropertyEditingFeature); assert.equal(f.editor.appearanceUI, probe.results.AppearanceUI);
     assert.equal(f.view, probe.results.PropertiesView); assert.equal(probe.inputs.AppearanceUI.appearanceEditing, f.editor.editing.appearanceEditing);
     assert.equal(probe.inputs.PropertiesController.selectedPropertiesTarget, f.composition.selection.selectedDisplayTarget);
-    if (composed === 'combined' || composed === 'owned') { assert.ok(Object.isFrozen(f.editor)); assert.deepEqual(Object.keys(f.editor), ['editing', 'appearanceUI', 'view']); }
+    if (composed === 'combined' || composed === 'owned' || composed === 'presentation') { assert.ok(Object.isFrozen(f.editor)); assert.deepEqual(Object.keys(f.editor), ['editing', 'appearanceUI', 'view']); }
     f.state.ready = true; const point = f.point('P1'); f.selection.set('points', [point]);
     assert.equal(f.composition.selection.selectedDisplayTarget().item, point); f.view.render(f.composition.selection.selectedDisplayTarget());
     assert.ok(f.panel.innerHTML.length > 0); assert.equal(f.selection.points[0], point);
@@ -513,7 +520,7 @@ test('combined Properties construction returns the real editing, Appearance UI a
 
 test('combined Properties construction stops at the same failing stage without model, DOM or operation reads', () => {
   const expected = ['PropertyEditingFeature', 'AppearanceUI', 'PropertiesController', 'PropertyRows', 'PropertyPresentation', 'PropertiesContent', 'PropertiesView'];
-  for (const composed of [true, 'combined', 'owned']) for (const [index, failure] of [...expected, 'viewOptions'].entries()) {
+  for (const composed of [true, 'combined', 'owned', 'presentation']) for (const [index, failure] of [...expected, 'viewOptions'].entries()) {
     const error = new Error(failure), probe = { failure, error };
     assert.throws(() => workspaceFixture(composed, undefined, probe), value => value === error);
     assert.deepEqual(probe.order, expected.slice(0, failure === 'viewOptions' ? 2 : index + 1)); assert.deepEqual(probe.scene.calls, []);
@@ -521,7 +528,7 @@ test('combined Properties construction stops at the same failing stage without m
     assert.equal(probe.scene.state.ready, false); assert.equal(probe.scene.state.operationReads, undefined); assert.equal(probe.scene.state.scopeReads, undefined);
     assert.equal(probe.scene.model.points.length, 0); assert.equal(probe.scene.panel.innerHTML, ''); assert.equal(probe.scene.selection.hasSelection(), false);
     assert.equal(Object.hasOwn(w, '__jot2dTest'), false);
-    if (composed === 'owned') assertPropertiesPortsUninitialized(probe.owner);
+    if (composed === 'owned' || composed === 'presentation') assertPropertiesPortsUninitialized(probe.owner);
   }
 });
 
@@ -569,9 +576,9 @@ test('prepared Properties keeps native components and the original method, targe
 
 test('prepared Properties stays cold until the full View is ready and preserves real rendering, appearance, visibility and locked input', () => {
   const snapshots = [];
-  for (const owned of [false, true]) {
+  for (const owned of [false, true, 'presentation']) {
     const probe = { beforeWorkspace: assertPropertiesPortsUninitialized, beforeEditing: assertPropertiesPortsUninitialized, readViewOptions: assertPropertiesPortsUninitialized };
-    const f = workspaceFixture(owned ? 'owned' : 'combined', undefined, probe);
+    const f = workspaceFixture(owned === 'presentation' ? 'presentation' : owned ? 'owned' : 'combined', undefined, probe);
     const selectedPropertiesTarget = f.propertySelection.selectedDisplayTarget;
     const render = owned ? f.owner.render : () => f.view.render(selectedPropertiesTarget());
     const appearance = owned ? f.owner.readAppearance : () => f.editor.editing.appearanceEditing;
@@ -585,7 +592,7 @@ test('prepared Properties stays cold until the full View is ready and preserves 
     f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#abcdef') }); assert.equal(point.appearance.color, '#123456');
     assert.equal(f.selection.points[0], point); snapshots.push(f.snapshot());
   }
-  assert.deepEqual(snapshots[1], snapshots[0]);
+  assert.deepEqual(snapshots[1], snapshots[0]); assert.deepEqual(snapshots[2], snapshots[0]);
 });
 
 test('prepared Properties retains the View and its producing selection through workspace replacement and failed View generation', () => {
@@ -609,4 +616,29 @@ test('prepared Properties retains the View and its producing selection through w
     const other = w.PropertiesDisplay.prepare(); assertPropertiesPortsUninitialized(other); current = a;
     other.createForWorkspace({}).createEditingWithViewForWorkspace({}, () => ({})); assert.equal(other.render(), 'view-A'); assert.equal(owner.render(), 'view-B');
   } finally { w.PropertiesDisplay = original; }
+});
+
+
+test('Properties presentation input retains the producing View and Appearance after owner-field and View construction failures', () => {
+  for (const failure of ['layout', 'view']) {
+    const runs = [];
+    for (const mode of ['owned', 'presentation']) {
+      const f = workspaceFixture(mode), original = w.PropertiesView, marker = new Error('view input failed');
+      const appearance = f.owner.readAppearance(); f.state.ready = true;
+      const point = f.point('P1'); f.selection.set('points', [point]); f.owner.render(); f.calls.length = 0;
+      try {
+        if (failure === 'view') w.PropertiesView = { ...original, create() { throw marker; } };
+        if (mode === 'presentation') {
+          const options = viewOwners(f.viewInputs);
+          if (failure === 'layout') options.layout = Object.freeze(Object.defineProperty({}, 'snappedBlockRotation', { get() { throw marker; } }));
+          assert.throws(() => f.composition.createEditingWithViewForPresentation(f.editingInputs, () => options), error => error === marker);
+        } else assert.throws(() => f.composition.createEditingWithViewForWorkspace(f.editingInputs, () => {
+          if (failure === 'layout') throw marker; return f.viewInputs;
+        }), error => error === marker);
+      } finally { w.PropertiesView = original; }
+      assert.equal(f.owner.readAppearance(), appearance); assert.equal(f.propertySelection.selectedDisplayTarget().item, point);
+      f.owner.render(); assert.equal(f.selection.points[0], point); runs.push(f.snapshot());
+    }
+    assert.deepEqual(runs[1], runs[0], failure);
+  }
 });

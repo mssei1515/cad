@@ -704,7 +704,7 @@
 
 
   const { selection: propertiesSelection,
-    createEditingWithViewForWorkspace: createPropertiesForEditing } = propertiesPreparation.createForWorkspace({
+    createEditingWithViewForPresentation: createPropertiesForEditing } = propertiesPreparation.createForWorkspace({
     document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
     operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
@@ -826,8 +826,7 @@
     projection: sketchProjectionFeature, projectionEditing: sketchProjectionEditing, annotationFeature,
     isGeometryMode, toggleSketchVisibility, recordHistory, escapeHtml,
   }, () => ({
-    analysis: constraintAnalysis, selectionHighlight, snappedBlockRotation: blockLayout.snappedBlockRotation, hatchRegionErrorText: authoringFeedback.hatchRegionErrorText,
-    geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, installExpressionInputHighlights,
+    analysis: constraintAnalysis, selectionHighlight, layout: blockLayout, feedback: authoringFeedback, parameterEditor,
     HTMLTextAreaElement, HTMLInputElement,
     changeFreeInstanceProperty, commitAnnotationParameterEdit,
     instanceTransform: instanceTransformCommand, blockConfiguration: blockConfigurationCommand,

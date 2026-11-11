@@ -16,14 +16,20 @@
     function createWorkspace(options) {
       const feature = window.PropertiesDisplay.createForWorkspace(options);
       const build = feature.createEditingWithViewForWorkspace;
-      function createEditingWithViewForWorkspace(editingOptions, readViewOptions) {
-        const result = build(...arguments);
+      const buildForPresentation = feature.createEditingWithViewForPresentation;
+      function publish(result) {
         const { editing: { appearanceEditing, visibility }, view } = result;
         const binding = Object.freeze({ appearanceEditing, visibility, view, selectedPropertiesTarget: feature.selection.selectedDisplayTarget });
         completed = binding;
         return result;
       }
-      return Object.freeze({ ...feature, createEditingWithViewForWorkspace });
+      function createEditingWithViewForWorkspace(editingOptions, readViewOptions) {
+        return publish(build(...arguments));
+      }
+      function createEditingWithViewForPresentation(editingOptions, readViewOwners) {
+        return publish(buildForPresentation(...arguments));
+      }
+      return Object.freeze({ ...feature, createEditingWithViewForWorkspace, createEditingWithViewForPresentation });
     }
     return Object.freeze({ createForWorkspace: createWorkspace, render: renderProperties, readAppearance, toggleSelectedVisibility });
   }
@@ -60,7 +66,15 @@
       const view = createViewForWorkspace(readViewOptions());
       return Object.freeze({ editing, appearanceUI, view });
     }
-    return Object.freeze({ ...feature, createEditingForWorkspace, createEditingWithViewForWorkspace });
+    function createEditingWithViewForPresentation(editingOptions, readViewOwners) {
+      return createEditingWithViewForWorkspace(editingOptions, () => {
+        const { analysis, selectionHighlight, layout, feedback, parameterEditor, ...options } = readViewOwners();
+        return { analysis, selectionHighlight, snappedBlockRotation: layout.snappedBlockRotation,
+          hatchRegionErrorText: feedback.hatchRegionErrorText, geometryInstanceTypeLabel: feedback.geometryInstanceTypeLabel,
+          installExpressionInputHighlights: parameterEditor.installExpressionInputHighlights, ...options };
+      });
+    }
+    return Object.freeze({ ...feature, createEditingForWorkspace, createEditingWithViewForWorkspace, createEditingWithViewForPresentation });
   }
   function createFeature({ document, documentModel, currentScope, canvasSelection, readServices, sketchContext,
     hatchAppearanceForDisplay, operations, selectionOperation = operations ? () => ({ mode: operations.lifecycle.mode,
