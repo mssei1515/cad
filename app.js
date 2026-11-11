@@ -717,13 +717,12 @@
 
 
 
-  const { editing: sketchEditing } = sketchNavigation.createForInteraction({
-    documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
+  const { editing: sketchEditing } = sketchNavigation.createForBrowser({
+    window, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
     constraintTargets: constraintTargetCommand, valueInput: dimensionInputController, presentation, constraintReferences, recordHistory,
     clearSelection, clearSnap, updateToolbar,
     resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(),
     referenceImage: referenceImageInteraction, selectionRectangle, projection: sketchProjectionCommand, instances: geometryInstanceCommand, instanceSources: instanceSourceCommand,
-    promptName: (title, name) => window.prompt(title, name),
   });
 
   const { createSketch } = sketchEditing.command;
@@ -741,7 +740,7 @@
 
   const sketchDeletionCommand = sketchEditing.createDeletionForEditing({
     deletion: deletionFeature, guardDimensionSymbolDeletion, solveState: sketchSolveResultState,
-    solving: sketchSolving, analysis: constraintAnalysis, confirmDeletion: message => window.confirm(message),
+    solving: sketchSolving, analysis: constraintAnalysis,
   });
   const { remove: deleteSketch } = sketchDeletionCommand;
 

@@ -160,8 +160,16 @@
       editingFeature = feature;
       return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing, createTreeForPresentation }) });
     }
+    function createForBrowser({ window: browserWindow, ...options }) {
+      const feature = createEditing({ promptName: (title, name) => browserWindow.prompt(title, name), ...options });
+      const { editing } = feature;
+      function createDeletionForEditing(options) {
+        return editing.createDeletionForEditing({ confirmDeletion: message => browserWindow.confirm(message), ...options });
+      }
+      return Object.freeze({ ...feature, editing: Object.freeze({ ...editing, createDeletionForEditing }) });
+    }
     return Object.freeze({ resetMove, closeContext, readMoving, clearInteractionForSketchChange, toggleSketchVisibility,
-      isSidebarHighlightedElement, startContext, createForInteraction: createEditing });
+      isSidebarHighlightedElement, startContext, createForInteraction: createEditing, createForBrowser });
   }
   window.SketchEditingFeature = Object.freeze({ create, createForInteraction, prepareNavigation });
 })();
