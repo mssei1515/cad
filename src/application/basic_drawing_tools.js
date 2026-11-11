@@ -15,9 +15,14 @@
     function createPreparedGeometry(options) {
       const geometry = createGeometry(options);
       const build = geometry.createAuthoring, buildForEditing = geometry.createAuthoringForEditing;
+      function createAuthoringWithProjectionForEditing({ projectionFeature, references, ...options }) {
+        const projectionEditing = projectionFeature.createModelEditingForConstruction({ geometry: geometry.geometry, references });
+        const authoring = publishAuthoring(buildForEditing, options);
+        return Object.freeze({ authoring, projectionEditing });
+      }
       return Object.freeze({ ...geometry,
         createAuthoring: options => publishAuthoring(build, options),
-        createAuthoringForEditing: options => publishAuthoring(buildForEditing, options) });
+        createAuthoringForEditing: options => publishAuthoring(buildForEditing, options), createAuthoringWithProjectionForEditing });
     }
     function prepareGeometryForSolver(solver, minimumOrientationLength) {
       const lengths = window.GeometryCreation.createLengthPolicy(solver.minLineLength, minimumOrientationLength);
