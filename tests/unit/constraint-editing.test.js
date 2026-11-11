@@ -1461,3 +1461,31 @@ test('prepared constraint construction publishes only complete Workspaces and re
   assert.throws(fresh.updateConstraintButtons,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'constraintControlsView' before initialization");
  }finally{w.ConstraintControlsView=original;f.restore();}
 });
+
+test('dimension editing uses the Kernel orientation default, preserves explicit values and keeps native scaling and live scopes', () => {
+  const results = [];
+  for (const omitted of [false, true]) {
+    const f = dimensionStagesFixture(true), raw = f.w.GeometryKernel, value = raw.MIN_ORIENTATION_LENGTH;
+    let reads = 0;
+    f.w.GeometryKernel = { ...raw, get MIN_ORIENTATION_LENGTH() { reads++; return value; } };
+    const support = f.w.ConstraintEditing.prepareDimensionValues(f.early);
+    assert.equal(reads, 0);
+    const options = { ...f.input, ...f.preparationInput };
+    if (omitted) delete options.minimumOrientationLength; else options.minimumOrientationLength = value;
+    const { command, solvePreparation } = support.createForEditing(options);
+    assert.equal(f.ports.ConstraintSolvePreparation.minimumOrientationLength, value);
+    assert.equal(f.ports.DimensionValueCommand.solvePreparation, solvePreparation);
+    assert.equal(reads, omitted ? 1 : 0);
+    f.state.workspace = f.geometry('current');
+    f.state.pending = { type: 'distance-value', target: { kind: 'line-length', line: f.state.workspace.line }, buffer: '25', dimension: { offsetU: 3 }, sketchId: 'S1' };
+    command.submit(); results.push(f.snapshot());
+    for (const inherited of [false, true]) for (const explicit of [undefined, null, 0, 0.25]) {
+      const input = { ...options }; delete input.minimumOrientationLength;
+      if (inherited) Object.setPrototypeOf(input, { minimumOrientationLength: explicit }); else input.minimumOrientationLength = explicit;
+      support.createForEditing(input);
+      assert.equal(f.ports.ConstraintSolvePreparation.minimumOrientationLength, explicit);
+    }
+    assert.equal(reads, omitted ? 1 : 0);
+  }
+  assert.deepEqual(results[1], results[0]);
+});

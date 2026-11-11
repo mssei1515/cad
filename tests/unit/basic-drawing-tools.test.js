@@ -1158,6 +1158,25 @@ test('prepared Spline construction failure preserves the last reset target, memb
  fail=true;assert.throws(reset,e=>e===marker);
 });
 
+test('prepared circle center cross defaults to Kernel without changing actual command ports or explicit inherited values', () => {
+  const f = editingToolStagesFixture('prepared'), raw = f.w.GeometryKernel, value = raw.MIN_ORIENTATION_LENGTH;
+  let reads = 0;
+  f.w.GeometryKernel = { ...raw, get MIN_ORIENTATION_LENGTH() { reads++; return value; } };
+  const resultIsAccepted = () => true;
+  f.state.ready = false; f.state.parent.ready = false;
+  const command = f.editors.createCircleCenterCross({ resultIsAccepted });
+  assert.equal(command, f.actual.CircleCenterCrossCommand);
+  assert.equal(f.captured.CircleCenterCrossCommand.minOrientationLength, value);
+  assert.equal(f.captured.CircleCenterCrossCommand.resultIsAccepted, resultIsAccepted);
+  for (const inherited of [false, true]) for (const explicit of [undefined, null, 0, 0.25]) {
+    const options = inherited ? Object.create({ minOrientationLength: explicit }) : { minOrientationLength: explicit };
+    options.resultIsAccepted = resultIsAccepted;
+    f.editors.createCircleCenterCross(options);
+    assert.equal(f.captured.CircleCenterCrossCommand.minOrientationLength, explicit);
+  }
+  assert.equal(reads, 1);
+});
+
 })();
 
 function hatchOwnersFixture(composed, probe = {}) {
@@ -1359,4 +1378,24 @@ test('projection-aware reconstruction retains previous authoring when a later na
   assert.throws(()=>f.foundation.createAuthoringWithProjectionForEditing({...f.ports,...f.owners}),error=>error===marker);
   assert.equal(f.probe.feature.synchronizeConstructionMetadata(),false);assert.equal(JSON.stringify(f.state.scope),before);assert.deepEqual(f.ids.snapshot(),ids);
   const point={x:7,y:8};assert.notEqual(f.preparation.preview.snapForDrawing(point),replacement);assert.deepEqual(f.preparation.preview.snapForDrawing(point),f.tools.snapForDrawing(point));
+});
+
+test('solver geometry uses the Kernel orientation default only for an omitted argument and retains explicit invalid and custom lengths', () => {
+  const f = geometryFoundationFixture({ prepared: true }), raw = f.w.GeometryKernel, value = raw.MIN_ORIENTATION_LENGTH;
+  let reads = 0;
+  f.w.GeometryKernel = { ...raw, get MIN_ORIENTATION_LENGTH() { reads++; return value; } };
+  for (const minLineLength of [-1, 0, 1e-12, 4]) {
+    const solver = { minLineLength };
+    assert.equal(f.preparation.prepareGeometryForSolver(solver).minimumLength,
+      f.preparation.prepareGeometryForSolver(solver, value).minimumLength);
+  }
+  assert.equal(reads, 4);
+  for (const explicit of [undefined, null, 0, 0.25]) {
+    assert.equal(f.preparation.prepareGeometryForSolver({ minLineLength: -1 }, explicit).minimumLength,
+      f.w.GeometryCreation.createLengthPolicy(-1, explicit).minLineLength);
+  }
+  assert.equal(reads, 4);
+  const marker = new Error('minimum length getter');
+  assert.throws(() => f.preparation.prepareGeometryForSolver({ get minLineLength() { throw marker; } }), error => error === marker);
+  assert.equal(reads, 4);
 });
