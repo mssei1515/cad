@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のParameterテスト支援組立て単位ではapp.jsは1,251行、非空白807行。AST監査ではroot236文・395束縛、構築・接続466非空白行、別名・設定94行、委譲7行、条件付きtest hooks157行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の参照画像テスト支援組立て単位ではapp.jsは1,250行、非空白806行。AST監査ではroot235文・393束縛、構築・接続466非空白行、別名・設定93行、委譲7行、条件付きtest hooks157行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Parameterテスト支援の関数選択を既存TestDriverへ集約（2026-11-11）
+### 最新：参照画像テスト支援のWorkspace／Block command接続を既存TestDriverへ集約（2026-11-11）
+
+開始基準developはf22f42c796876406665be78c2bb9e14d5abd41da、作業branchはcodex/reference-image-test-assembly（develop統合・Push後に削除）。開始週枠残量83%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
+
+ReferenceImageTestDriver.createForWorkspace（src/testing/reference_image_test_driver.js）が、実DocumentWorkspaceのworkspace.currentと、既存BlockDefinitionCommand.open／BlockCompletionCommand.completeを選び、従来のcreateBrowserSupportへ接続する。app.jsは実ownerを渡し、テスト専用のopenBlockDefinitionEditor／completeBlockDefinitionEdit別名を持たない。通常入力にも使うenterBlockDefinitionEditは維持する。
+
+選択対象三fieldは実ownerのown readonly data propertyで、同じ実関数をwrap・bind・実行せず渡す。fixture／観測／画像importと完成済み凍結supportは従来のfactoryが生成する。現在scopeとlive Block画像は操作時に読み、reset抑止、Geometry参照、fetch→Blob→File→bare importerの非同期順、Block完了→serialize→structuredCloneの順と元例外・途中状態を保つ。生のcreateBrowserSupport／createObservation／createImport／createBlockFixture、test-mode判定と公開204項目、生成位置、通常機能の状態所有、UI・保存形式v26と既存testing配置・読込順は不変。
+
+app.jsは1,251→1,250行（1行減）、root235文・393束縛、依存辺1,072。全体目標は未完了。次は生成・接続466非空白行と条件付きtest hooks157行の依存を再監査し、既存ownerの生成・公開・bind／startの段階を維持できる機能単位を選ぶ。小さな別名整理の反復だけで数百行へ届くとは見積もらない。巨大bootstrap／全体contextへの移動や単なるblank行削除は行わない。完了済みReferenceImage／Parameter組立て等を再実施しない。
+
+構文639file・全単体2,539件・関連E2E147件（reference-images／blocks／unified-uiの3file、2.3m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。旧・新両経路の単体6件はscope／live Block切替、SelectionとGeometry参照、reset抑止、fetch／Blob／File／import各失敗と元例外、完了失敗時の未serializeと成功時のcloneを検証する。browser比較で実参照12項目、選択対象三fieldのreadonly、同じ実support resultと公開204項目が一致し、通常ja/light・en/darkとtest起動も成功した。既存driver本体の不変と新しい未束縛参照がないことも照合済み。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+
+### 前回：Parameterテスト支援の関数選択を既存TestDriverへ集約（2026-11-11）
 
 開始基準developは0eadc4877280ee1fe65b6b60c1998d79d83639c9、作業branchはcodex/parameter-test-assembly（develop統合・Push後に削除）。開始週枠残量83%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
 

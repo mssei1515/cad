@@ -1,6 +1,12 @@
 /* Reference-image browser observation, data import and Block fixtures through existing owners. */
 (() => {
   "use strict";
+  function createForWorkspace({ feature, blocks, canvasSelection, documentWorkspace, readHistory, viewport,
+    fetch, File, resetModelState, blockDefinition, blockCompletion, serializeModel }) {
+    return createBrowserSupport({ feature, blocks, canvasSelection, currentScope: documentWorkspace.workspace.current, readHistory, viewport,
+      fetch, File, resetModelState, openBlockDefinitionEditor: blockDefinition.open,
+      completeBlockDefinitionEdit: blockCompletion.complete, serializeModel });
+  }
   function createBrowserSupport({ feature, blocks, canvasSelection, currentScope, readHistory, viewport,
     fetch, File, resetModelState, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel }) {
     const { Point, Line } = window.GeometrySolver;
@@ -57,5 +63,5 @@
     }
     return Object.freeze({ open, complete });
   }
-  window.ReferenceImageTestDriver = Object.freeze({ createBrowserSupport, createObservation, createImport, createBlockFixture });
+  window.ReferenceImageTestDriver = Object.freeze({ createForWorkspace, createBrowserSupport, createObservation, createImport, createBlockFixture });
 })();
