@@ -295,7 +295,7 @@
   const { submit: submitOffsetValue } = offsetCommand;
   const editingCheckpoint = createEditingCheckpoint();
   const persistenceComponents = createPersistenceForWorkspace({
-    placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
+    placement: dimensionPlacement, pointUsage, readBlockEditor: () => blockEditor.current,
     constraintReferencesPoint: constraintReferences.constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps: geometryCreation.normalizeArcSweeps,
   });
   const { createApplication: createDocumentApplication } = persistenceComponents;
@@ -709,7 +709,7 @@
   const { createSketch } = sketchEditing.command;
   const { command: sketchMoveCommand, input: sketchMoveInputBinding } = sketchEditing.createMoveWithInput({
     document,
-    readEditingScope: () => editingScopeBinding.current, hatches: hatchGeometryQuery, rebinding: constraintRebinding,
+    hatches: hatchGeometryQuery, rebinding: constraintRebinding,
     analysis: constraintAnalysis, refreshReferenceConstraintValidity,
   });
   // The command is published before enabling destination-only input.

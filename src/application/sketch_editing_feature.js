@@ -3,7 +3,7 @@
   "use strict";
   function create({ currentScope, sketches, ids, selection, geometryReads, projections, constraintReferences,
     clearInteractionForSketchChange, clearSelection, applicationText, setHint, updateUI, draw, recordHistory,
-    promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, prepareLockToggle, prepareMove }) {
+    promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, prepareLockToggle, prepareMove, readEditingScope: defaultReadEditingScope }) {
     const { ensureSketchState, activeSketch, activeSketchId, sketchById, childSketchesOf, sketchName,
       descendantSketchIds, constraintSketchId, elementSketchId, isReferenceSourceSketchId } = sketches;
     const { resolveGeometryRef } = geometryReads;
@@ -13,7 +13,9 @@
       nextSketchId: () => ids.allocate("sketch"), clearInteractionForSketchChange, setHint, updateUI, draw, recordHistory,
       promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, applicationText, prepareLockToggle,
     });
-    function createMove({ prepare = prepareMove, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity }) {
+    function createMove(options) {
+      const { prepare = prepareMove, refresh, readEditingScope: suppliedScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity } = options;
+      const readEditingScope = "readEditingScope" in options ? suppliedScope : defaultReadEditingScope;
       function refreshGeometry() {
         const { invalidateBlockProjectionCache } = projections;
         invalidateBlockProjectionCache();
@@ -30,7 +32,9 @@
         clearSelection, updateUI, draw, setHint, recordHistory, applicationText });
     }
     // Keep destination-only input tied to the same command; the application chooses when to bind it.
-    function createMoveWithInput({ document, prepare, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity }) {
+    function createMoveWithInput(options) {
+      const { document, prepare, refresh, readEditingScope: suppliedScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity } = options;
+      const readEditingScope = "readEditingScope" in options ? suppliedScope : defaultReadEditingScope;
       const command = createMove({ prepare, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity });
       const input = window.SketchTreeController.createMoveInputBinding({ document, isMoving: () => command.active });
       return Object.freeze({ command, input });
@@ -78,7 +82,8 @@
       clearInteractionForSketchChange, clearSelection, applicationText, setHint, updateUI, draw, recordHistory, promptName,
       effectiveAppearanceForElement: readServices.geometryAppearance.effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit,
       prepareLockToggle: () => { sessions.pending.cancel(""); constraintTargets.cancel(""); exitDrawMode(); },
-      prepareMove: () => { constraintTargets.cancel(""); sessions.pending.cancel(""); exitDrawMode(); hover.clear(); } });
+      prepareMove: () => { constraintTargets.cancel(""); sessions.pending.cancel(""); exitDrawMode(); hover.clear(); },
+      readEditingScope: () => documentWorkspace.readEditingScope() });
     // Reuse the interaction/presentation owners captured before the later Tree stage.
     function createDeletionForEditing({ deletion, guardDimensionSymbolDeletion, solveState, solving, analysis, confirmDeletion }) {
       const { geometryKeyForItem: geometryElementKey } = window.GeometryObjects;

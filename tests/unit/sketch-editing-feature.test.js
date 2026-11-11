@@ -721,3 +721,58 @@ test('Tree fixed assembly preserves construction order and partial publications 
     first.tree.menu.dispose();
   } finally { w.SketchTreeController = original; }
 });
+
+function boundMoveOptions(f, steps, readEditingScope) {
+  const reads = f.owners.readServices.reads, projections = f.owners.readServices.projections;
+  projections.invalidateBlockProjectionCache = () => steps.push('block-cache');
+  reads.clearReadCache = () => steps.push('geometry-cache');
+  reads.blockProjectionBundles = () => { steps.push('blocks'); return []; };
+  reads.geometryInstanceBundles = () => { steps.push('instances'); return []; };
+  const options = { document: { addEventListener() {}, removeEventListener() {} },
+    hatches: { clear() { steps.push('hatch-cache'); } },
+    rebinding: { rebuildDocument(scope, bundles) { steps.push('rebind'); f.state.rebound = scope; assert.equal(bundles.length, 0); } },
+    analysis: { invalidate() { steps.push('analysis'); } }, refreshReferenceConstraintValidity: () => steps.push('references') };
+  if (arguments.length > 2) options.readEditingScope = readEditingScope;
+  Object.defineProperty(options, 'unused', { enumerable: true, get() { assert.fail('Move assembly must not inspect unused options'); } });
+  return options;
+}
+
+test('Sketch Move defaults use the captured Document owner only during native commit and retain both command routes, order and one history step', () => {
+  for (const withInput of [false, true]) {
+    const traces = [];
+    for (const omitted of [false, true]) {
+      const navigation = w.SketchEditingFeature.prepareNavigation(), f = interactionFixture(true, navigation), steps = [], owner = f.owners.documentWorkspace;
+      const bound = {}; let lookups = 0;
+      Object.defineProperty(owner, 'readEditingScope', { get() {
+        assert.equal(f.state.ready, true); lookups++;
+        return function() { assert.equal(this, owner); assert.equal(arguments.length, 0); steps.push('bound-scope'); return bound; };
+      } });
+      const options = omitted ? boundMoveOptions(f, steps) : boundMoveOptions(f, steps, () => owner.readEditingScope());
+      f.state.ready = false;
+      const result = withInput ? f.feature.createMoveWithInput(options) : { command: f.feature.createMove(options) };
+      assert.equal(lookups, 0); assert.deepEqual(steps, []); f.state.ready = true;
+      f.selection.set('points', [f.point]); assert.equal(result.command.start(), true); assert.equal(result.command.choose('S2'), true);
+      assert.equal(lookups, 0); assert.equal(result.command.commit(), true);
+      assert.equal(f.state.rebound, bound); assert.equal(f.state.scope.points[0], f.point); assert.equal(f.point.sketchId, 'S2');
+      assert.equal(f.calls.filter(call => call[0] === 'history').length, 1); assert.equal(lookups, 1);
+      assert.deepEqual(steps, refreshOrder);
+      traces.push(JSON.stringify({ calls: f.calls, steps, point: [f.point.x, f.point.y, f.point.sketchId] }));
+    }
+    assert.equal(traces[1], traces[0]);
+  }
+});
+
+test('Sketch Move keeps explicit own and inherited readers including invalid values without fallback reads or unused getter evaluation', () => {
+  for (const withInput of [false, true]) for (const inherited of [false, true]) for (const value of [undefined, null, () => ({ id: 'explicit-bound' })]) {
+    const navigation = w.SketchEditingFeature.prepareNavigation(), f = interactionFixture(true, navigation), steps = [], marker = new Error('unexpected default scope');
+    Object.defineProperty(f.owners.documentWorkspace, 'readEditingScope', { get() { throw marker; } });
+    const options = boundMoveOptions(f, steps);
+    if (inherited) Object.setPrototypeOf(options, { readEditingScope: value }); else options.readEditingScope = value;
+    const result = withInput ? f.feature.createMoveWithInput(options) : { command: f.feature.createMove(options) };
+    f.selection.set('points', [f.point]); result.command.start(); result.command.choose('S2');
+    const accepted = typeof value === 'function'; assert.equal(result.command.commit(), accepted);
+    assert.equal(f.point.sketchId, accepted ? 'S2' : 'S1'); assert.equal(f.state.scope.points[0], f.point);
+    assert.equal(f.calls.filter(call => call[0] === 'history').length, accepted ? 1 : 0);
+    if (accepted) assert.equal(f.state.rebound.id, 'explicit-bound');
+  }
+});

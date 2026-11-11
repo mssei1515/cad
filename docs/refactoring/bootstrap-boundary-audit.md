@@ -1,6 +1,21 @@
 # Composition rootの残存責務と依存監査
 
 
+## 保存準備とSketch移動の結線済みscope readerを共有（2026-11-12）
+
+DocumentWorkspace.createPersistenceForWorkspaceはreadEditingScopeを省略した場合、同じDocument ownerの既存照会をcreatePersistenceへ渡す。現在形式の既定値取得→options展開→native persistence生成の順を保つ。明示own readerはundefined／nullを含めそのまま渡し、継承プロパティをoptions展開がコピーしない従来の規則も維持する。raw createPersistenceの直接注入は変更しない。
+
+SketchEditingFeature.createForInteractionは保持済みDocumentWorkspaceから操作時に結線済みscopeを読む既定capabilityを、既存createへ接続する。createMove／createMoveWithInputはreader未指定の場合だけそのcapabilityを使い、明示own／継承readerとundefined／nullを優先する。reader名readEditingScope・arity 0、Docへのmember・ゼロ引数呼出し、返値と元例外、lookupをcommit時まで遅延することを保つ。raw createへの既定capabilityは任意であり、従来の個別reader注入と低水準生成APIを維持する。新しいwrapper層・input全体copy・未使用getterの評価は追加しない。
+
+保存準備が使うbound scopeとwriterがsnapshotを取るWorkspace.current、移動queryが使うWorkspaceと再結線が使うbound scopeを混同しない。geometry／hatch cache無効化→bound scope読取→bundle生成→再結線→解析無効化→参照更新の順、Point／Selection／履歴一回、失敗時の復元、Command→Input生成→完成公開と明示bindは不変。native persistence／Move処理本体と公開owner、UI・保存形式v26は変えない。新file・global・可変slot／model cache・registry・全体contextを追加せず、フォルダ配置も維持する。
+
+app.jsは1,168→1,168行（0行変化）、非空白735行。root199文・359束縛、構築422行・109文、別名76行・bind35行・test hooks151行は不変。二つのreadEditingScope中継を除き、rootがeditingScopeBinding.currentを直接読む箇所は3→1となった。残る一か所は固定拘束queryのcurrentScopeであり、全直接参照がなくなったとは扱わない。rootの後段可変参照・代入を追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体72件が成功。実保存writerの出力でWorkspaceとbound scopeの区別・v26を確認し、明示／継承／invalid readerの既存コピー規則も検証した。実Move CommandとInputの両入口で、省略と明示readerのPoint同一性・移動結果・refresh順・履歴一回が一致することを確認した。constructor中のscope非読取、Doc lookupのreceiver・ゼロ引数、未使用getter非評価とinvalid reader時の元の復元／履歴なしも確認した。ソース逆変換で既存保存・移動処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,659件・関連単体72件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E194件（7file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
 ## Parameter編集のWorkspaceと結線済みscope依存を整理（2026-11-12）
 
 DocumentWorkspace.readEditingScopeは、既存の完成binding参照から現在の結線済みmodelそのものを返す。Hatch番号／Sketch配列の既定readerも同じ照会を使い、既存の初期化前ReferenceError・完成公開・失敗時の前回参照保持・raw binding生成の無公開を維持する。追加のslot・model copy・cacheは作らない。Workspaceを直接activate／restoreした場合とbinding.activateした場合の区別、実model／Solverの同一性も変えない。
