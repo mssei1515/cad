@@ -1,6 +1,7 @@
 /* Document snapshot fields. UI ownership and constraint placement enter through two read adapters. */
 (function () {
   "use strict";
+  const CURRENT_VERSION = 26;
   const { normalizeAppearance, normalizeConstructionAppearance, normalizeDimensionAppearance } = window.Appearance;
   const { normalizedDrawingOrder } = window.DrawingOrder;
   const { normalizeAnnotations, serializeAnnotation } = window.AnnotationData;
@@ -135,5 +136,5 @@
     }
     return Object.freeze({ serialize });
   }
-  window.DocumentSnapshot = Object.freeze({ create, createWriter, serializeGeometryInstance });
+  window.DocumentSnapshot = Object.freeze({ create, createWriter, serializeGeometryInstance, CURRENT_VERSION });
 })();

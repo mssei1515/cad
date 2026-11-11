@@ -60,7 +60,7 @@
   const { dimensionUsesExpression } = parameterNamespace;
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
 
-  const { services: geometryReadServices, createEditingScope, createPersistence, createRebinding,
+  const { services: geometryReadServices, createEditingScope, createPersistenceForWorkspace, createRebinding,
     persistence: documentPersistence } = createReadContext({
     currentSketches: () => editingScopeBinding.current.sketches,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
@@ -193,7 +193,6 @@
     readSplineEditing: () => Boolean(splineEditing.current), readHistory: activeEditHistory,
     updateDocumentStatus: () => updateDocumentNameUI(), isGeometryMode,
   });
-  const CURRENT_JSON_VERSION = 26;
 
 
   const pointerMoveScheduler = operationSessions.createMoveSchedulerForEditing({
@@ -317,9 +316,9 @@
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, chainDraft: offsetChainDraft } = offsetFeature;
   const { submit: submitOffsetValue } = offsetCommand;
   const editingCheckpoint = createEditingCheckpoint();
-  const persistenceComponents = createPersistence({
+  const persistenceComponents = createPersistenceForWorkspace({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
-    version: CURRENT_JSON_VERSION, constraintReferencesPoint: constraintReferences.constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps: geometryCreation.normalizeArcSweeps,
+    constraintReferencesPoint: constraintReferences.constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps: geometryCreation.normalizeArcSweeps,
   });
   const { createApplication: createDocumentApplication } = persistenceComponents;
   const { solving: sketchSolving, parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization } = createSolving({
@@ -1137,7 +1136,7 @@
       display: geometryDisplay, sketchPresentation: canvasScene.sketchStyle, analysis: constraintAnalysis, redundancy: constraintRedundancy, presentation, canvasDriver: canvasTestDriver,
       history: historyController, solving: sketchSolving, blocks: blockEditingFeature, blockDefinition: blockDefinitionCommand, blockCompletion: blockCompletionCommand, blockSelection: blockSelectionQuery,
       document, readHistory: readTestHistory, resetModelState, serializeModel, loadModelData, markReferenceConstraint, pushModelConstraint: constraintInsertion.push, synchronizeSketchProjectionMetadata,
-      clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection: propertiesTestSupport.appearanceTestAction.set, version: CURRENT_JSON_VERSION,
+      clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection: propertiesTestSupport.appearanceTestAction.set, version: persistenceComponents.version,
       copySelectionToClipboard, pasteGeometryClipboard, clipboard: clipboardFeature,
     });
     const selectionTestApi = createSelectionTestApi({

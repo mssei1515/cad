@@ -101,11 +101,14 @@
           currentApplication = application;
           return application;
         }
-        const result = Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, normalizeGeometryInstance, ensureDimensionDefaults, createApplication });
+        const result = Object.freeze({ dimensions, codecs, metadata, preparation, writer, loading, geometryInstances, normalizeGeometryInstance, ensureDimensionDefaults, createApplication, version });
         currentPersistence = result;
         return result;
       }
-      return Object.freeze({ services, persistence, createRebinding, createScopeBinding, createEditingScope, createPersistence });
+      function createPersistenceForWorkspace(options) {
+        return createPersistence({ version: window.DocumentSnapshot.CURRENT_VERSION, ...options });
+      }
+      return Object.freeze({ services, persistence, createRebinding, createScopeBinding, createEditingScope, createPersistence, createPersistenceForWorkspace });
     }
     return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, createGeometryReadServices, createReadContext });
   }
