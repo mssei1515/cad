@@ -1,12 +1,17 @@
 /* Connect application feedback and view refreshes without taking over views or models. */
 (() => {
   "use strict";
-  function create({ document, storage, refreshVersion, readDuplicateCount }) {
+  function create(options) {
+    const { document, storage, refreshVersion: suppliedVersionRefresh, readDuplicateCount } = options;
     let ui, canvas;
     let toolFlyouts = null;
     let commandPanels = null;
     let toolbar = null;
-    let choice;
+    let choice, runtimeVersion;
+    const refreshVersion = () => {
+      if (runtimeVersion === undefined) throw new ReferenceError("Cannot access 'runtimeVersionView' before initialization");
+      return runtimeVersion.value.render();
+    };
     function createChoiceDialog() {
       const dialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
       choice = Object.freeze({ dialog });
@@ -29,7 +34,8 @@
     function updateSketchUI() { return ui.sketch(); }
     function draw() { return canvas.draw(); }
     const settings = window.ApplicationSettings.create({ document, storage,
-      refreshViews: options => updateUI(options), redrawCanvas: () => draw(), refreshVersion });
+      refreshViews: options => updateUI(options), redrawCanvas: () => draw(),
+      refreshVersion: "refreshVersion" in options ? suppliedVersionRefresh : refreshVersion });
     const profiler = window.InteractionProfiler.create();
     const feedback = window.ApplicationFeedback.create({ document, settings, interactionProfiler: profiler, readDuplicateCount });
     function createAuthoringFeedback() {
@@ -52,7 +58,9 @@
         resizeCanvas();
         canvasSurface.start();
       }
-      return Object.freeze({ versionView, initialize });
+      const startup = Object.freeze({ versionView, initialize });
+      runtimeVersion = Object.freeze({ value: versionView });
+      return startup;
     }
     function createToolNavigation({ window: browserWindow }) {
       const menus = window.ApplicationMenus.create({ document, window: browserWindow,
