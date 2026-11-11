@@ -37,7 +37,7 @@
   const { applicationText } = presentation.settings;
   const authoringFeedback = presentation.createAuthoringFeedback();
   const documentWorkspace = window.DocumentWorkspace.create({
-    applicationText, constraintGraphNodes: constraintReferences.constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
+    applicationText, constraintGraphNodes: constraintReferences.constraintGraphNodes,
   });
   const { workspace, parameters: parameterNamespace, sketches: sketchContext,
     geometryIds, createReadContext } = documentWorkspace;
@@ -56,7 +56,6 @@
 
   const { services: geometryReadServices, createEditingScope, createPersistenceForWorkspace, createRebinding,
     persistence: documentPersistence } = createReadContext({
-    currentSketches: () => editingScopeBinding.current.sketches,
     showHiddenElements: () => viewState.showHiddenElements, viewportScale: () => viewport.scale,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });

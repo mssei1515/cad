@@ -708,3 +708,97 @@ test('Document editing scope preserves custom Solver identity, explicit invalid 
     assert.equal(f.model.workspace.current(),f.model.document);assert.equal(editing.solver.constructor,CustomSolver);
   }finally{w.GeometrySolver=original;}
 });
+
+function ownedBoundWorkspace() {
+  const model = w.DocumentWorkspace.create({ applicationText: (_ja, en) => en, constraintGraphNodes: () => [] });
+  const context = model.createReadContext({ prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() });
+  const display = () => context.services.dimensionAppearance.dimensionDisplayState({}).prefix;
+  return { model, context, display };
+}
+
+test('Document-owned Hatch and Sketch reads follow the native bound scope through direct Workspace changes, raw binding creation and restoration', () => {
+  const { model, context, display } = ownedBoundWorkspace();
+  const source = { points: [{ id: 'P20' }], hatches: [{ id: 'H8' }], sketches: [{ id: 'S7' }], annotations: [{ id: 'AN4' }] };
+  const unready = error => error.name === 'ReferenceError' && error.message === "Cannot access 'editingScopeBinding' before initialization";
+  assert.throws(display, unready); assert.throws(() => model.reservation.scope(source), unready);
+  assert.equal(model.geometryIds.peek('point'), 21); assert.equal(model.documentIds.peek('hatch'), 9);
+  assert.equal(model.documentIds.peek('sketch'), 2); assert.equal(model.documentIds.peek('annotation'), 1);
+  model.document.nextHatchIndex = 12; model.document.sketches[1].dimensionAppearance = { prefix: 'document-bound' };
+  const { binding } = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} });
+  assert.equal(display(), 'document-bound'); model.reservation.scope(source); assert.equal(model.documentIds.peek('hatch'), 12);
+  const host = model.workspace.capture(), unbound = w.DocumentState.create();
+  unbound.nextHatchIndex = 90; unbound.sketches[1].dimensionAppearance = { prefix: 'unbound' }; model.workspace.activate(unbound);
+  const raw = context.createScopeBinding({ Solver: w.GeometrySolver.ConstraintSolver, closeSketchContext() {}, resetSketchMove() {} });
+  assert.equal(raw.current, unbound); assert.equal(binding.current, model.document);
+  assert.equal(display(), 'document-bound'); model.reservation.scope({}); assert.equal(model.documentIds.peek('hatch'), 12);
+  const draft = w.DocumentState.create(); draft.nextHatchIndex = 22; draft.sketches[1].dimensionAppearance = { prefix: 'draft-bound' };
+  binding.activate(draft); assert.equal(display(), 'draft-bound'); assert.equal(binding.current, draft); assert.equal(binding.solver.model, draft);
+  model.reservation.scope({}); assert.equal(model.documentIds.peek('hatch'), 22);
+  model.workspace.restore(host); assert.equal(model.workspace.current(), model.document); assert.equal(binding.current, draft);
+  assert.equal(display(), 'draft-bound'); model.reservation.scope({}); assert.equal(model.documentIds.peek('hatch'), 22);
+  model.document.nextHatchIndex = 30; binding.activate(model.document);
+  assert.equal(display(), 'document-bound'); model.reservation.scope({}); assert.equal(model.documentIds.peek('hatch'), 30);
+});
+
+test('Document-owned bound readers publish after native binding, queries and insertion and preserve prior completion on every construction failure', () => {
+  const originals = { ids: w.DocumentIds, reads: w.GeometryReadServices, binding: w.EditingScopeBinding, dimensions: w.DimensionQueries, insertion: w.ConstraintCommitCommand };
+  const ports = {}, stages = [], marker = new Error('bound scope construction'); let expected, failure;
+  function observe(name) {
+    stages.push(name);
+    if (expected) { assert.equal(ports.sketches(), expected.sketches); assert.equal(ports.hatch(), expected.nextHatchIndex); }
+    else for (const read of [ports.sketches, ports.hatch]) assert.throws(read, error => error.name === 'ReferenceError');
+    if (failure === name) throw marker;
+  }
+  w.DocumentIds = { ...originals.ids, createReservation(input) { ports.hatch = input.nextHatchIndex; return originals.ids.createReservation(input); } };
+  w.GeometryReadServices = { ...originals.reads, createWithHatches(input) { ports.sketches = input.currentSketches; return originals.reads.createWithHatches(input); } };
+  w.EditingScopeBinding = { ...originals.binding, create(input) { observe('binding'); return originals.binding.create(input); } };
+  w.DimensionQueries = { ...originals.dimensions, createModelQueries(input) { observe('queries'); return originals.dimensions.createModelQueries(input); } };
+  w.ConstraintCommitCommand = { ...originals.insertion, createInsertion(input) { observe('insertion'); return originals.insertion.createInsertion(input); } };
+  try {
+    const { model, context } = ownedBoundWorkspace(), input = { closeSketchContext() {}, resetSketchMove() {} };
+    assert.equal(ports.sketches.name, 'currentSketches'); assert.equal(ports.sketches.length, 0);
+    assert.equal(ports.hatch.name, 'nextHatchIndex'); assert.equal(ports.hatch.length, 0);
+    for (const stage of ['binding', 'queries', 'insertion']) {
+      failure = stage; stages.length = 0; assert.throws(() => context.createEditingScope(input), error => error === marker);
+      assert.deepEqual(stages, ['binding', 'queries', 'insertion'].slice(0, ['binding', 'queries', 'insertion'].indexOf(stage) + 1));
+      assert.throws(ports.sketches, error => error.name === 'ReferenceError'); assert.throws(ports.hatch, error => error.name === 'ReferenceError');
+    }
+    failure = null; model.document.nextHatchIndex = 13;
+    const first = context.createEditingScope(input); expected = first.binding.current;
+    assert.equal(ports.sketches('ignored'), expected.sketches); assert.equal(ports.hatch('ignored'), 13);
+    const draft = w.DocumentState.create(); draft.nextHatchIndex = 31; model.workspace.activate(draft);
+    for (const stage of ['binding', 'queries', 'insertion']) {
+      failure = stage; assert.throws(() => context.createEditingScope(input), error => error === marker);
+      assert.equal(ports.sketches(), expected.sketches); assert.equal(ports.hatch(), 13);
+    }
+    failure = null; const second = context.createEditingScope(input); expected = second.binding.current;
+    assert.equal(expected, draft); assert.notEqual(second.binding, first.binding); assert.equal(ports.sketches(), draft.sketches); assert.equal(ports.hatch(), 31);
+    Object.defineProperty(draft, 'nextHatchIndex', { configurable: true, get() { assert.equal(this, draft); throw marker; } });
+    assert.throws(ports.hatch, error => error === marker);
+    Object.defineProperty(draft, 'sketches', { configurable: true, get() { assert.equal(this, draft); throw marker; } });
+    assert.throws(ports.sketches, error => error === marker);
+  } finally {
+    w.DocumentIds = originals.ids; w.GeometryReadServices = originals.reads; w.EditingScopeBinding = originals.binding;
+    w.DimensionQueries = originals.dimensions; w.ConstraintCommitCommand = originals.insertion;
+  }
+});
+
+test('Document-owned scope defaults preserve explicit own and inherited readers and leave the raw geometry-read API unchanged', () => {
+  const originalIds = w.DocumentIds, originalReads = w.GeometryReadServices; let hatch, sketches;
+  w.DocumentIds = { ...originalIds, createReservation(input) { hatch = input.nextHatchIndex; return originalIds.createReservation(input); } };
+  w.GeometryReadServices = { ...originalReads, createWithHatches(input) { sketches = input.currentSketches; return originalReads.createWithHatches(input); } };
+  try {
+    for (const inherited of [false, true]) for (const value of [undefined, null, () => []]) {
+      const options = { applicationText: (_ja, en) => en, constraintGraphNodes: () => [] };
+      if (inherited) Object.setPrototypeOf(options, { nextHatchIndex: value }); else options.nextHatchIndex = value;
+      const model = w.DocumentWorkspace.create(options); assert.equal(hatch, value);
+      const input = { prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() };
+      if (inherited) Object.setPrototypeOf(input, { currentSketches: value }); else input.currentSketches = value;
+      model.createReadContext(input); assert.equal(sketches, value);
+      model.createGeometryReadServices(input); assert.equal(sketches, value);
+    }
+    const { model } = ownedBoundWorkspace();
+    model.createGeometryReadServices({ prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() });
+    assert.equal(sketches, undefined);
+  } finally { w.DocumentIds = originalIds; w.GeometryReadServices = originalReads; }
+});
