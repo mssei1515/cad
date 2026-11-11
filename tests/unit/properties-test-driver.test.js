@@ -91,6 +91,20 @@ function browserFixture(composed=true) {
  return{w,p,options,ownedOptions,state,events,support,factories,browserSupport,fields,selection,hover,marker,original,model,LineFixedConstraint,seedLine(){const a=addPoint(0,0,false,'explicit'),b=addPoint(10,0,false,'endpoint');return addLine(a,b);}};
 }
 
+test('Properties support takes construction alpha from the display without changing raw defaults or explicit overrides',()=>{
+ for(const constructionAlpha of [.72,.34,0,null,undefined]){
+  const f=browserFixture('workspace'),options={...f.ownedOptions,display:{...f.ownedOptions.display,constructionAlpha}};
+  delete options.constructionAlpha;f.state.ready=false;
+  const support=f.w.PropertiesTestDriver.createBrowserSupportForDisplay(options);
+  assert.deepEqual(f.events,[]);f.state.ready=true;
+  assert.equal(support.strokeStyleCases.cases().constructionAlpha,constructionAlpha);
+  assert.equal(f.w.PropertiesTestDriver.createBrowserSupportForWorkspace(options).strokeStyleCases.cases().constructionAlpha,undefined);
+  Object.defineProperty(options.display,'constructionAlpha',{get(){throw f.marker;}});
+  assert.throws(()=>f.w.PropertiesTestDriver.createBrowserSupportForDisplay(options),error=>error===f.marker);
+  for(const override of [0,null,undefined])assert.equal(f.w.PropertiesTestDriver.createBrowserSupportForDisplay({...options,constructionAlpha:override}).strokeStyleCases.cases().constructionAlpha,override);
+ }
+});
+
 test('Properties support cohort is cold, independent and atomic when the final capability cannot be constructed',()=>{
  for(const mode of ['cohort','workspace']) {
  const f=browserFixture(mode),build=()=>mode==='workspace'?f.w.PropertiesTestDriver.createBrowserSupportForWorkspace(f.ownedOptions):f.w.PropertiesTestDriver.createBrowserSupport(f.options);assert.ok(Object.isFrozen(f.browserSupport));assert.deepEqual(Object.keys(f.browserSupport),f.fields);

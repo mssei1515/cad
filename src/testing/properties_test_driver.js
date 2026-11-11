@@ -1,6 +1,10 @@
 /* Browser property fixtures and observations; existing owners retain appearance and edit rules. */
 (() => {
   "use strict";
+  function createBrowserSupportForDisplay(options) {
+    return createBrowserSupportForWorkspace(Object.hasOwn(options, "constructionAlpha") ? options
+      : { ...options, constructionAlpha: options.display.constructionAlpha });
+  }
   function createBrowserSupportForWorkspace({ documentWorkspace, geometry, readServices, interaction, blockQueries, selectionHighlight,
     presentation, display, placement, viewport, document, canvas, fixPointBtn, readHistory, resetModelState, clearSelection,
     resetHistory, fit, insertion, recordHistory, canvasThemeColor, isSidebarHighlightedElement, propertiesSelection, fixedState, constructionAlpha }) {
@@ -332,5 +336,5 @@
       fixedObservation: factories.createFixedObservation(),
     });
   }
-  window.PropertiesTestDriver = Object.freeze({ createBrowserSupportForWorkspace, createBrowserFactories, createBrowserSupport, createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
+  window.PropertiesTestDriver = Object.freeze({ createBrowserSupportForDisplay, createBrowserSupportForWorkspace, createBrowserFactories, createBrowserSupport, createAppearanceAction, createAppearanceObservation, createFixture, createPropertiesObservation, createFixedObservation, createHoverObservation, createInspectionFixture, createStrokeStyleCases, createHighlightObservation, createHoverKeyObservation, createThemeObservation });
 })();

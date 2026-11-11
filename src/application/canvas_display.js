@@ -242,6 +242,9 @@
           completedScene = scene;
           return scene;
         }
+        function createSceneWithAppearance(options) {
+          return createSceneForEditing({ constructionAlpha: 0.72, ...options });
+        }
         function createPlacementPreview(options) { return displayWorkspace.createPlacementPreview({ ...options, readServices, interaction, sessions }); }
         function createInputBinding(options) {
           return displayWorkspace.createInputBinding({ ...options, pointer: sessions.pointer, readCommandPanel: presentation.readCommandPanel,
@@ -271,7 +274,7 @@
           dimensionPreview = preview;
           return preview;
         }
-        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview });
+        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createSceneWithAppearance, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview });
       }
       return Object.freeze({ ...display, createEditingWorkspace, fitVisibleGeometryToViewport });
     }

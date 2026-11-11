@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の受理policy単位ではapp.jsは1,216行、非空白774行。AST監査ではroot216文・369束縛、構築440非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の補助Geometry描画設定単位ではapp.jsは1,214行、非空白772行。AST監査ではroot215文・368束縛、構築439非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：編集の許容誤差と受理判定をSketchSolvingで対にして生成（2026-11-11）
+### 最新：補助Geometryの描画設定を描画ownerと観測で共有（2026-11-11）
+
+開始基準developはda9a781b091ee14d2a1060cdc343fb7debfaa896、作業branchはcodex/construction-paint-configuration。開始週枠残量66%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+CanvasDisplayのWorkspaceが返すcreateSceneWithAppearanceは、既定の補助Geometry透明度0.72を既存Scene生成へ渡す。GeometryDisplayは実GeometryPresentationへ渡したconstructionAlphaを凍結APIのreadonly値として公開する。PropertiesTestDriver.createBrowserSupportForDisplayはその実設定を既存Workspace用支援へ共有する。app.jsは透明度の定義と、通常描画・テスト支援への二重注入を持たない。
+
+新しいScene生成入口でも明示したconstructionAlphaは0・null・undefinedを含め既定値より優先する。既存createSceneForEditingとGeometryDisplay.createの未指定値はundefinedのままで、raw APIへ既定値を追加しない。テスト支援の新入口も明示overrideを優先し、その場合はdisplayの設定を読まない。旧createBrowserSupportForWorkspace等は変更せず、既存の実Scene／GeometryPresentation／renderer／支援recordと生成本体を維持する。設定の参照以外に生成時のmodel・DOM照会を追加せず、現在scope・可視性・選択・Hover・通常／PNG描画順・元例外を維持する。UI・履歴・保存形式v26は不変。既存application内のCanvasDisplay／GeometryDisplayとtesting内のPropertiesTestDriverに配置し、新file／global／全体contextを追加しない。
+
+app.jsは1,216→1,214行（2行減）、非空白774→772行、root216→215文・369→368束縛。構築440→439行、ASTの固定policy値分類1→0行（最小線長の式などは残る）。bind37行・別名88行・委譲2行・test hooks152行は不変。実描画の設定を通常描画と観測へ共有する所有関係を優先し、200〜500行の全体目標は未完了とする。
+
+関連単体77件が成功。新しい既定Scene入口が実GeometryDisplayを共有すること、既定0.72と明示値0／0.34／null／undefined、raw APIの未指定値を照合した。実描画APIのreadonly設定と通常／exportのCanvas stroke alphaを比較し、通常Geometryには係数を掛けないことを確認した。Properties支援では同じ設定を観測し、旧APIの未指定値、設定getter例外、明示override時のgetter無照会を検証した。ソース逆変換では既存の描画・Scene・支援生成本体は不変、ASTで新たな未束縛参照なし。正式な外観仕様の補助Geometry不透明度72%と一致する。
+
+構文639ファイル・全単体2,578件、通常ja/light・en/dark・test起動が成功。関連E2E207件（9file、3.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は拘束されたAnnotation dragと求解contextの結線を監査する。現在appはdrag用のGeometryDrag preparation・analysis.invalidate callbackを接続し、生成したdragのscope／追加variablesをSketchSolvingFeatureへ渡す。求解contextがこの追加scopeと自身のanalysis無効化を組み立てられるか、native factoryのbare call・初期化前guard・構築順を確認する。異なる機能を隣接しているだけでまとめず、構築439行とtest hooks152行が残ることを引き続き明記する。
+
+### 編集の許容誤差と受理判定をSketchSolvingで対にして生成（2026-11-11）
 
 開始基準developはbd51e907056392d871d274a21773276b04f1e285、作業branchはcodex/solve-acceptance-policy。開始週枠残量66%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

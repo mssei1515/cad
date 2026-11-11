@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 補助Geometryの描画設定を描画ownerと観測で共有（2026-11-11）
+
+CanvasDisplayのWorkspaceが返すcreateSceneWithAppearanceは、既定の補助Geometry透明度0.72を既存Scene生成へ渡す。GeometryDisplayは実GeometryPresentationへ渡したconstructionAlphaを凍結APIのreadonly値として公開する。PropertiesTestDriver.createBrowserSupportForDisplayはその実設定を既存Workspace用支援へ共有する。app.jsは透明度の定義と、通常描画・テスト支援への二重注入を持たない。
+
+新しいScene生成入口でも明示したconstructionAlphaは0・null・undefinedを含め既定値より優先する。既存createSceneForEditingとGeometryDisplay.createの未指定値はundefinedのままで、raw APIへ既定値を追加しない。テスト支援の新入口も明示overrideを優先し、その場合はdisplayの設定を読まない。旧createBrowserSupportForWorkspace等は変更せず、既存の実Scene／GeometryPresentation／renderer／支援recordと生成本体を維持する。設定の参照以外に生成時のmodel・DOM照会を追加せず、現在scope・可視性・選択・Hover・通常／PNG描画順・元例外を維持する。UI・履歴・保存形式v26は不変。既存application内のCanvasDisplay／GeometryDisplayとtesting内のPropertiesTestDriverに配置し、新file／global／全体contextを追加しない。
+
+app.jsは1,216→1,214行（2行減）、非空白774→772行、root216→215文・369→368束縛。構築440→439行、ASTの固定policy値分類1→0行（最小線長の式などは残る）。bind37行・別名88行・委譲2行・test hooks152行は不変。実描画の設定を通常描画と観測へ共有する所有関係を優先し、200〜500行の全体目標は未完了とする。
+
+関連単体77件が成功。新しい既定Scene入口が実GeometryDisplayを共有すること、既定0.72と明示値0／0.34／null／undefined、raw APIの未指定値を照合した。実描画APIのreadonly設定と通常／exportのCanvas stroke alphaを比較し、通常Geometryには係数を掛けないことを確認した。Properties支援では同じ設定を観測し、旧APIの未指定値、設定getter例外、明示override時のgetter無照会を検証した。ソース逆変換では既存の描画・Scene・支援生成本体は不変、ASTで新たな未束縛参照なし。正式な外観仕様の補助Geometry不透明度72%と一致する。
+
+構文639ファイル・全単体2,578件、通常ja/light・en/dark・test起動が成功。関連E2E207件（9file、3.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 編集の許容誤差と受理判定をSketchSolvingで対にして生成（2026-11-11）
 
 SketchSolving.createEditingPolicyは、現在の編集受入れ許容誤差1e-4と、その値を使う既存createResultAcceptanceの実判定関数を一組の凍結recordとして返す。app.jsは許容誤差を定義せず、同じpolicyから得た値と関数を既存の求解・拘束・寸法・Block編集へ接続する。policyの所有先は既存src/solver/sketch_solving.jsとし、描画透明度や最小線長など別責務の設定を混ぜない。
