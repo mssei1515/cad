@@ -883,8 +883,10 @@ function hatchStackSceneFixture(composed, probe = {}) {
   const painters=Object.fromEntries(Object.entries(ports.painters).map(([name,paint])=>[name,(...args)=>{paints.push([name,...args]);return paint.apply(ports.painters,args);}]));
   return probe.stack=originalStack.create({...ports,painters});}};
  let rendering,stack,framePreparation;
+ const publication=composed==='published'?sceneWindow.CanvasDisplay.prepareRendering():null;
  try{
-  if(composed)rendering=f.scene.createHatchRendering({readCommand});
+  if(publication)rendering=publication.prepareHatchFrame(f.scene,{readCommand});
+  else if(composed)rendering=f.scene.createHatchRendering({readCommand});
   else{
    const {Line,Circle,Arc,Spline}=sceneWindow.GeometrySolver,{hatchAppearanceForDisplay,hatchPatternOrigin}=sceneWindow.HatchData;
    const {drawLines,drawCircles,drawArcs,drawSplines}=f.scene.geometry,{isVisibleSketchId,isVisibleSketchElement,isVisibleValue}=options.readServices.geometryAppearance;
@@ -900,17 +902,17 @@ function hatchStackSceneFixture(composed, probe = {}) {
     isVisibleSketchId,isVisibleSketchElement,hatchAppearanceForDisplay,isVisibleValue,painters:{hatch:items=>drawHatches(items,{includePreview:false}),line:drawLines,circle:drawCircles,arc:drawArcs,spline:drawSplines}})};
   }
   assert.deepEqual(probe.order,['content','layer']);assert.deepEqual(f.reads,[]);probe.order.push('between');
-  if(composed==='frame'){framePreparation=rendering.prepareFrame();stack=framePreparation.stack;}else stack=rendering.createStack();
+  if(composed==='frame'||publication){framePreparation=rendering.prepareFrame();stack=framePreparation.stack;}else stack=rendering.createStack();
  }finally{sceneWindow.HatchRenderer=originalHatch;sceneWindow.DrawingStack=originalStack;}
  assert.deepEqual(f.reads,[]);assert.deepEqual(f.calls,[]);assert.equal(state.commandReads,0);f.state.ready=true;
  const hatch=(id,sketchId='S1',drawingOrder=1)=>({id,sketchId,drawingOrder,appearance:{patternType:'solid',color:'#556677',opacity:0.5},
   resolved:{ok:true,loops:[{points:[{x:0,y:0},{x:20,y:0},{x:20,y:20},{x:0,y:20}]}]}});
  const line=(id,sketchId='S1',drawingOrder=2)=>Object.assign(new sceneWindow.GeometrySolver.Line(id,new sceneWindow.GeometrySolver.Point(id+'A',0,0),new sceneWindow.GeometrySolver.Point(id+'B',20,0)),{sketchId,drawingOrder});
- return {...f,selection,hover,rendering,drawingStack:stack,framePreparation,probe,options,paints,fills,hatch,line};
+ return {...f,selection,hover,rendering,drawingStack:stack,framePreparation,publication,probe,options,paints,fills,hatch,line};
 }
 
 function hatchFrameFixture(prepared) {
- const f=hatchStackSceneFixture(prepared?'frame':true),original=sceneWindow.CanvasSurface;
+ const f=hatchStackSceneFixture(prepared==='published'?'published':prepared?'frame':true),original=sceneWindow.CanvasSurface;
  const frame={},events=[];let ports;
  const input={rectangle:{preview:()=>null},snap:{active:null},pointer:{lastWorld:null},readPngCommand:()=>null,
   referenceImageLayer:{drawImages(){'use strict';assert.equal(this,undefined);events.push('images');},drawOverlays(){}},
@@ -965,6 +967,34 @@ test('Hatch frame preparation propagates stack and later frame failures without 
  }finally{sceneWindow.CanvasSurface=original;}
  assert.equal(f.framePreparation.stack,f.drawingStack);assert.equal(f.probe.order.filter(s=>s==='stack').length,1);
  f.ports.drawContent();assert.deepEqual(f.events,['images']);
+});
+
+test('Hatch pipeline shares its native layer, stack and frame with the published Canvas draw port',()=>{
+ const f=hatchFrameFixture('published'),value={};let calls=0;
+ assert.equal(f.rendering.layer,f.probe.layer);assert.equal(f.framePreparation.stack,f.probe.stack);
+ assert.deepEqual(f.probe.order,['content','layer','between','stack']);assert.equal(f.result.frame,f.frame);
+ f.frame.draw=function(){assert.equal(this,f.frame);assert.equal(arguments.length,0);calls++;return value;};
+ assert.equal(f.publication.drawCanvas('ignored'),value);assert.equal(calls,1);
+});
+
+test('Hatch pipeline keeps construction stages cold, preserves native calls and retains the previous frame on failure',()=>{
+ const publication=sandbox.window.CanvasDisplay.prepareRendering(),independent=sandbox.window.CanvasDisplay.prepareRendering();
+ const events=[],layer={},stack={},options={},input={},value={},failure=new Error('pipeline');let failAt=null;
+ const unready=()=>assert.throws(()=>publication.drawCanvas(),error=>error.name==='ReferenceError');
+ const renderer={draw(){assert.equal(this,renderer);assert.equal(arguments.length,0);return value;}};
+ const frame=Object.freeze({get frame(){events.push('renderer');if(failAt==='renderer')throw failure;return renderer;}});
+ function build(actual){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(actual,input);events.push('frame');if(failAt==='frame')throw failure;return frame;}
+ const scene={createHatchRendering(actual){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(actual,options);events.push('hatch');if(failAt==='hatch')throw failure;
+  return {layer,prepareFrame(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);events.push('stack');if(failAt==='stack')throw failure;return {stack,createFrame:build};}};}};
+ const prepared=publication.prepareHatchFrame(scene,options);assert.ok(Object.isFrozen(prepared));assert.equal(prepared.layer,layer);assert.deepEqual(events,['hatch']);unready();
+ const ready=prepared.prepareFrame();assert.equal(ready.stack,stack);assert.deepEqual(events,['hatch','stack']);unready();
+ assert.equal(ready.createFrame(input),frame);assert.deepEqual(events,['hatch','stack','frame','renderer']);assert.equal(publication.drawCanvas(),value);
+ for(const stage of ['hatch','stack','frame','renderer']){failAt=stage;
+  assert.throws(()=>stage==='hatch'?publication.prepareHatchFrame(scene,options):stage==='stack'?prepared.prepareFrame():ready.createFrame(input),error=>error===failure);
+  assert.equal(publication.drawCanvas(),value);
+ }
+ assert.throws(()=>independent.drawCanvas(),error=>error.name==='ReferenceError');
+ failAt=null;const other=independent.prepareHatchFrame(scene,options).prepareFrame();assert.equal(other.createFrame(input),frame);assert.equal(independent.drawCanvas(),value);
 });
 
 test('scene Hatch and stack assembly shares real content, painter and query owners at separate cold construction stages',()=>{

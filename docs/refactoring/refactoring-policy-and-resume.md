@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の選択解除所有単位ではapp.jsは1,217行、非空白775行。AST監査ではroot217文・370束縛、構築440非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のHatch／Frame構築単位ではapp.jsは1,217行、非空白775行。AST監査ではroot217文・369束縛、構築440非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：選択解除の完成参照をSelection自身へ集約（2026-11-11）
+### 最新：Hatch・Stack・Frameの段階的な準備と公開をCanvasDisplayへ集約（2026-11-11）
+
+開始基準developは74605420cb198553a14d3a5aa163f5dc10967dfd、作業branchはcodex/canvas-hatch-frame-assembly。開始週枠残量67%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+CanvasDisplay.prepareRenderingが返すprepareHatchFrameは、同じSceneのcreateHatchRenderingを呼んで実Hatch layerを返し、後段のprepareFrameで実DrawingStackを生成する。さらに完成したStackを使うFrame factoryと、同じprepareRenderingの描画用完成参照への公開を接続する。app.jsはHatch生成factoryとFrame公開factoryを別々に保持・中継せず、この描画準備の入口を使用する。
+
+Hatch content／layerの生成、DrawingStackの準備、Frameの生成と完成後の公開は従来の別々の位置で行い、生成中にモデルや描画状態を照会しない。各native factoryは従来と同じbare call・引数で呼び、実layer／Stack／Frame bundleを複製しない。通常描画とPNG出力、Hatch previewとDrawingStackのpreview除外、現在scope・可視性・描画順・model identityは既存実装が所有する。生成失敗は前の完成Frameを保持し、未公開guardと実renderer.drawのmember receiver・無引数・戻り値・元例外を維持する。旧createHatchRendering／prepareFrame／createFrameなどのAPIと既存生成本体は変更せず、新file／global／全体contextを追加しない。UI・履歴・保存形式v26は不変。
+
+app.jsは1,217→1,217行（変化なし）、非空白775行・root217文も不変。root束縛370→369。構築440行・bind37行・別名88行・委譲2行・test hooks152行は不変。行数削減とは扱わず、Hatch→Stack→Frame→公開の接続を既存描画ownerへ集めた単位とする。200〜500行の全体目標は未完了。
+
+関連単体61件が成功。明示的な従来経路と既存prepared経路で、実Hatch preview・描画順paint・置換された現在図形の描画結果が一致した。新しい公開接続経路では同じnative layer／Stack／Frameの共有と描画portへの公開を確認した。native layer／Stack／Frame参照、三段階の生成順、bare receiverと引数数、Hatch／Stack／Frame／renderer選択での例外と前Frame保持、独立した準備の未公開guardも確認した。構文639ファイル・全単体2,573件、通常ja/light・en/dark・test起動が成功。ソースの逆変換では既存描画生成本体は不変、ASTで新たな未束縛参照なし。
+
+関連E2E207件（9file、3.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は、rootに残る描画ポリシー・拘束許容誤差などの判断と、単に機能を接続する処理を区別して再監査する。構築440行と条件付きtest hooks152行が残るため、委譲の移動だけで数百行へ到達するとは見積もらない。初期化順を維持できる機能単位を検討し、巨大な別bootstrapや全体contextへ移す案は採用しない。
+
+### 選択解除の完成参照をSelection自身へ集約（2026-11-11）
 
 開始基準developは12426b4027a8df65a64cc13e689e0938a5c65a8c、作業branchはcodex/selection-clearing-ownership。開始週枠残量67%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

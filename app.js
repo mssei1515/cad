@@ -163,7 +163,7 @@
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
-  const { drawCanvas, createFrame: createCanvasFrameForDisplay } = window.CanvasDisplay.prepareRendering();
+  const { drawCanvas, prepareHatchFrame } = window.CanvasDisplay.prepareRendering();
   presentation.bindCanvas({
     readPngCommand: pngExportLifecycle.readCommand, readPending: () => pendingCommandSession.current, readMode: drawOperationLifecycle.readMode,
     syncAnnotationInput: annotationPreparation.syncInput,
@@ -256,12 +256,12 @@
     editingQueries: { ...geometryDragPreparation.queries, editedSpline: () => splineEditing.current?.spline },
     annotationBounds: annotationPreparation.annotationBounds,
   });
-  const { geometry: geometryDisplay, createHatchRendering } = canvasScene;
+  const { geometry: geometryDisplay } = canvasScene;
   const dimensionValueEditing = window.ConstraintEditing.prepareDimensionValues({
     workspace, sketches: sketchContext, bounds: canvasScene.bounds, minimumLineLength: MIN_LINE_LENGTH,
   });
 
-  const { layer: hatchLayer, prepareFrame: prepareCanvasFrame } = createHatchRendering({
+  const { layer: hatchLayer, prepareFrame: prepareCanvasFrame } = prepareHatchFrame(canvasScene, {
     readCommand: () => hatchCommand,
   });
   const annotationFeature = createAnnotationFeature({
@@ -634,7 +634,7 @@
 
 
 
-  const canvasFrame = createCanvasFrameForDisplay(createCanvasFrame, {
+  const canvasFrame = createCanvasFrame({
     rectangle: selectionRectangle, snap: drawingSnap, pointer: pointerInteractionController,
     recordDraw: () => pointerMoveScheduler.recordDraw(), referenceImageLayer: referenceImageFeature.layer, readPngCommand: pngExportLifecycle.readCommand,
     dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
