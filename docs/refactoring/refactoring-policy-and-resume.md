@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の拘束接続開始単位ではapp.jsは1,225行、非空白782行。AST監査ではroot221文・374束縛、構築439非空白行とbind40行、別名・設定89行、委譲5行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のキーボードWorkspace設定単位ではapp.jsは1,223行、非空白780行。AST監査ではroot221文・374束縛、構築439非空白行とbind38行、別名・設定89行、委譲5行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：拘束操作の接続開始を既存ConstraintEditingへ集約（2026-11-11）
+### 最新：キーボードのメニュー判定とWorkspace設定を既存KeyboardInputへ集約（2026-11-11）
+
+開始基準developはdec1e41754b8bc5bc497ca786fd68a68d7f8ff5e、作業branchはcodex/keyboard-workspace-routing（develop統合・Push後に削除）。開始週枠残量70%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+KeyboardInput.createWorkspaceOptionsは、既存Sketch navigationのcloseContext、Canvas menuのDOM参照とclose関数、file／historyの実操作からキーボード用menus／shortcutsを組み立てる。Canvas表示判定は入力時にhiddenを読み、null／undefined menuの短絡結果も従来どおり返す。copy／pasteは既存のnative clipboard優先を維持する。app.jsはUI判定やshortcut対応表を直接持たず、既存ownerとcommandを渡す。
+
+設定生成は従来のreadKeyboardOptions callback内で行い、Pointer bindingと寸法入力のbindが終わる前には実行しない。生成中に操作状態やmenu.hiddenを照会せず、同じ実関数をmutableな設定recordへ渡す。既存createWorkspaceShortcutsを同じnamespace receiver・一引数で呼び、元例外を透過する。raw KeyboardInput.create／shortcuts、Canvas入力の接続・公開順、keydown controllerとlistener lifetimeは不変。UI・履歴・保存形式v26を変えず、既存src/application/keyboard_input.jsへ配置する。
+
+app.jsは1,225→1,223行（2行減）、非空白782→780行。root221文・374束縛・構文依存辺1,054は不変で、bind区分40→38行。rootの依存数が減ったとは扱わず、キーボード固有のUI設定を所有者へ集約した単位とする。全体の200〜500行目標は未完了。
+
+関連単体46件が成功。実KeyboardInput／keydown controllerで旧手動設定と新入口を比較し、Sketch menu→Canvas menu→pending取消の優先、入力時のhidden照会、保存／履歴操作、native clipboard、listener解除、hidden照会とshortcut生成の元例外、欠落menuの短絡値を確認した。browser比較ではPointer接続→寸法入力接続→shortcuts→keyboard生成→開始の順、11の実参照、namespace／member receiver・引数数、全設定key順・function名／arity、入力時の表示判定と公開204項目が一致した。ja/light・en/dark・test起動も成功。旧rootへ逆変換でき、追加した設定生成以外のKeyboardInput本体／shortcut生成、Canvas入力とkeydown controller sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,560件と関連E2E125件（6file、2.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+### 拘束操作の接続開始を既存ConstraintEditingへ集約（2026-11-11）
 
 開始基準developは87ef156fef6c54b3cc9cb2c097a43729fb4b95b7、作業branchはcodex/constraint-controls-binding（develop統合・Push後に削除）。開始週枠残量70%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

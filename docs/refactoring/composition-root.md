@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## キーボードのメニュー判定とWorkspace設定を既存KeyboardInputへ集約（2026-11-11）
+
+KeyboardInput.createWorkspaceOptionsは、既存Sketch navigationのcloseContext、Canvas menuのDOM参照とclose関数、file／historyの実操作からキーボード用menus／shortcutsを組み立てる。Canvas表示判定は入力時にhiddenを読み、null／undefined menuの短絡結果も従来どおり返す。copy／pasteは既存のnative clipboard優先を維持する。app.jsはUI判定やshortcut対応表を直接持たず、既存ownerとcommandを渡す。
+
+設定生成は従来のreadKeyboardOptions callback内で行い、Pointer bindingと寸法入力のbindが終わる前には実行しない。生成中に操作状態やmenu.hiddenを照会せず、同じ実関数をmutableな設定recordへ渡す。既存createWorkspaceShortcutsを同じnamespace receiver・一引数で呼び、元例外を透過する。raw KeyboardInput.create／shortcuts、Canvas入力の接続・公開順、keydown controllerとlistener lifetimeは不変。UI・履歴・保存形式v26を変えず、既存src/application/keyboard_input.jsへ配置する。
+
+app.jsは1,225→1,223行（2行減）、非空白782→780行。root221文・374束縛・構文依存辺1,054は不変で、bind区分40→38行。rootの依存数が減ったとは扱わず、キーボード固有のUI設定を所有者へ集約した単位とする。全体の200〜500行目標は未完了。
+
+関連単体46件が成功。実KeyboardInput／keydown controllerで旧手動設定と新入口を比較し、Sketch menu→Canvas menu→pending取消の優先、入力時のhidden照会、保存／履歴操作、native clipboard、listener解除、hidden照会とshortcut生成の元例外、欠落menuの短絡値を確認した。browser比較ではPointer接続→寸法入力接続→shortcuts→keyboard生成→開始の順、11の実参照、namespace／member receiver・引数数、全設定key順・function名／arity、入力時の表示判定と公開204項目が一致した。ja/light・en/dark・test起動も成功。旧rootへ逆変換でき、追加した設定生成以外のKeyboardInput本体／shortcut生成、Canvas入力とkeydown controller sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,560件と関連E2E125件（6file、2.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
 ## 拘束操作の接続開始を既存ConstraintEditingへ集約（2026-11-11）
 
 ConstraintEditing.createControlsが返すbindForEditingは、既存createBindingをbare・無引数で呼び、返された実ConstraintControlsView bindingのbindをmember・無引数で呼ぶ。app.jsは固定選択commandの準備後・Canvas window接続前という従来の位置で開始だけを依頼する。操作command・UI listenerの生成と接続手順は既存ConstraintEditingに集約し、新しいファイルや全体contextを追加しない。
