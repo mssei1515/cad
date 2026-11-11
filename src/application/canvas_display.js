@@ -245,7 +245,11 @@
         function createSceneWithAppearance(options) {
           return createSceneForEditing({ constructionAlpha: 0.72, ...options });
         }
-        function createPlacementPreview(options) { return displayWorkspace.createPlacementPreview({ ...options, readServices, interaction, sessions }); }
+        function createPlacementPreview(options) {
+          const defaults = {};
+          if (!("createBlockProjectionBundle" in options)) defaults.createBlockProjectionBundle = readServices.projections.createBlockProjectionBundle;
+          return displayWorkspace.createPlacementPreview({ ...defaults, ...options, readServices, interaction, sessions });
+        }
         function createInputBinding(options) {
           return displayWorkspace.createInputBinding({ ...options, pointer: sessions.pointer, readCommandPanel: presentation.readCommandPanel,
             profileCommit: work => profilePhase("commit", work) });
@@ -253,7 +257,9 @@
         function createPngExport(options) {
           return displayWorkspace.createPngExport({ ...options, drawOperationLifecycle: interaction.lifecycle, pendingCommandSession: pending, constraintTargetSession: targets });
         }
-        function createDimensionTraversal({ currentScope, readDraggedDimension, dimensionUsesExpression }) {
+        function createDimensionTraversal(options) {
+          const { currentScope, readDraggedDimension, dimensionUsesExpression: suppliedUsesExpression } = options;
+          const dimensionUsesExpression = "dimensionUsesExpression" in options ? suppliedUsesExpression : documentWorkspace.parameters.dimensionUsesExpression;
           const { isActiveSketchConstraint, constraintSketchId } = sketches;
           const { isVisibleSketchId, isVisibleValue } = readServices.geometryAppearance;
           return displayWorkspace.dimensions.display.createTraversal({ currentScope, isActiveSketchConstraint, isVisibleSketchId,

@@ -2397,3 +2397,8 @@ graph向けresolveGeometryRefは同じ名前・arity 1で、取得済みの実re
 ### Selectionの通常編集生成
 
 SelectionEditingFeature.prepare().createForDrawingは、受取済みinteractionのclearSelection／isGeometryMode、presentationのupdateToolbar、persistenceのnormalizeGeometryInstanceを、個別port省略時だけ接続する。関数を包装せず同じ実体をDeletion／Clipboardへ渡す。明示own undefined／nullを含むport上書きとraw createForEditingの個別注入は維持する。既存rest copyは継承fieldをコピーしない。追加の状態owner・global・fileは設けない。
+
+
+### Canvasの共有読取り能力
+
+CanvasDisplay.prepareForWorkspaceのcreateDimensionTraversalは、個別port省略時だけ保持済みDocumentWorkspace.parameters.dimensionUsesExpressionを使う。明示own／継承portを優先する。createPlacementPreviewは省略時だけreadServices.projections.createBlockProjectionBundleを使い、明示own値と既存spreadの継承field除外を維持する。実関数をそのままnative dimension traversal／preview layerへ接続し、生成中にscope照会・投影・描画を行わない。

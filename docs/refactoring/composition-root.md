@@ -3,6 +3,23 @@
 
 
 
+
+## Canvas表示の読取りcapabilityを既存ownerから接続（2026-11-12）
+
+CanvasDisplay.prepareForWorkspaceが保持済みのDocumentWorkspace.parametersとreadServices.projectionsから、寸法式判定とBlock配置の投影bundle生成を既存の通常factoryへ接続する。app.jsのdimensionUsesExpression別名と、二つの個別port指定を除く。新しいwrapper API・module・global・可変slot・model cacheは設けず、フォルダ配置は既存application／rendering／parametersの責務に合っているため維持する。
+
+createDimensionTraversalはdimensionUsesExpression省略時だけParameter namespaceの実関数を取得する。明示own／継承の関数・undefined／nullはそのまま優先する。元のnamespaceは不変な実関数値を公開するため、rootの早期別名から通常生成時の取得へ変えても参照する関数は同じである。拘束のexpressionは従来どおり描画操作時に評価し、判定結果やscopeをcacheしない。注記を含むdimensionPresentationScopeを受け取る入口をWorkspace.currentへ置換しない。
+
+createPlacementPreviewはcreateBlockProjectionBundleを省略したときだけ、同じreadServices.projectionsの実関数を一度取得する。個別ownのundefined／nullを含む上書きを優先し、未使用のowner getterは読まない。既存のoptions spreadが継承fieldをコピーしない規則も維持する。関数は包装せずnative PlacementPreviewRendererへ渡し、プレビュー描画時のbare・二引数呼出し、実instance／definitionとbundle・元例外を保つ。生成中に投影や描画を実行しない。
+
+Canvas各native constructorの生成→公開→bind／start順、低水準CanvasDisplay.createの個別注入、実actor同一性とUI・操作・保存形式v26は不変。逆変換照合で変更は上記二つの既存normal factoryとroot接続だけで、Parameter／DimensionDisplay／PlacementPreviewRenderer本体は不変。新たな未束縛参照なし。
+
+app.jsは1,167→1,166行（1行減）、非空白734→733行。root199→198文・360→359束縛、構築109文・421行、別名76→75行・bind35行・test hooks151行。200〜500行の全体目標は未完了。
+
+関連単体70件が成功。native Parameter namespaceによる数値／式の判定が、明示注入と通常生成の両方で同じ寸法描画へ届き、expression変更とscope切替を追うことを確認した。native PlacementPreviewRendererの同じ描画層で投影の遅延・引数／receiver／返値・元例外を確認した。明示null／undefined／継承port、owner getterの未使用時非評価と取得後の実関数保持も検証した。
+
+構文639ファイル・全単体2,666件・関連単体70件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E187件（7file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 全E2Eの再検証checkpoint（2026-11-12）
 
 develop 6b3fcc6b342e8ebc6c3c18dbe548a0a9a9090381を対象に全E2E589件・50fileを実行し、22.5分・exit 0ですべて成功した。対象suite指定なし、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHはすべて未設定。710入力のraw SHA256と開始HEAD不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。テスト中にソース・テスト・閾値・timeoutを変更していない。
