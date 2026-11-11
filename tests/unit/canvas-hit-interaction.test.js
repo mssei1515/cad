@@ -469,6 +469,11 @@ function annotationPolicyFixture(composed, { real = false, failAt = null, probe 
    viewport:ports.viewport,dimensionScope:ports.dimensionScope,dimensions:ports.dimensions,dimensionLabelForConstraint:ports.dimensionLabelForConstraint,
    annotationBounds:ports.annotationBounds,operandValues:ports.operandValues};
  },()=>{
+  if(composed==='prepared'){
+   const preparation=w.CanvasHitInteraction.prepareSceneWithAnnotationsForWorkspace();probe.preparation=preparation;
+   const unready=()=>assert.throws(()=>preparation.hitReferenceImageAt(),{name:'ReferenceError',message:"Cannot access 'regionHitQuery' before initialization"});
+   unready();const scene=preparation.createScene({...owners,annotationSpatial:spatial});unready();return scene;
+  }
   if(composed)return w.CanvasHitInteraction.createSceneWithAnnotationsForWorkspace({...owners,annotationSpatial:spatial});
   const {hitAnnotationElement:queryAnnotationElement}=spatial;
   function hitAnnotationElement(x,y,options={}){return queryAnnotationElement(x,y,{activeOnly:!ordinarySelectionMode(),...options});}
@@ -480,7 +485,7 @@ function annotationPolicyFixture(composed, { real = false, failAt = null, probe 
 
 test('annotation scene policy preserves bare query, argument narrowing, live policy order and caller option overrides',()=>{
  const traces=[];
- for(const composed of [false,true]){
+ for(const composed of [false,true,'prepared']){
   const f=annotationPolicyFixture(composed),hit=f.scene.hitAnnotationElement,marker={},symbol=Symbol('option');f.state.hitResult=marker;
   assert.equal(Object.isFrozen(f.scene),true);assert.equal(hit(1,2,undefined,'ignored'),marker);assert.equal(f.probe.rawCalls.at(-1).length,3);assert.equal(f.probe.rawCalls.at(-1)[2].activeOnly,false);
   assert.deepEqual(f.state.reads,['mode','pending','command','raw']);
@@ -496,12 +501,12 @@ test('annotation scene policy preserves bare query, argument narrowing, live pol
   f.state.rawFailure=true;assert.throws(()=>hit(1,2),error=>error===f.probe.error);
   traces.push(JSON.stringify(f.probe.rawCalls.map(args=>[args[0],args[1],args[2].activeOnly])));
  }
- assert.equal(traces[1],traces[0]);
+ assert.equal(traces[1],traces[0]);assert.equal(traces[2],traces[0]);
 });
 
 test('annotation scene policy retains actual annotation identities and scope across selection, commands, visibility and model replacement',()=>{
  const traces=[];
- for(const composed of [false,true]){
+ for(const composed of [false,true,'prepared']){
   const f=annotationPolicyFixture(composed,{real:true}),active={id:'A1',type:'text',text:'active',sketchId:'S1'},inactive={id:'A2',type:'text',text:'inactive',sketchId:'S2'};
   f.state.scope.annotations.push(active,inactive);const picks=[];
   const pick=(options,expected)=>{const hit=f.scene.hitAnnotationElement(0,0,options);assert.equal(hit?.element,expected);if(hit)assert.equal(hit.part,'label');picks.push(hit?.element.id||null);};
@@ -512,11 +517,51 @@ test('annotation scene policy retains actual annotation identities and scope acr
   f.state.scope=f.empty();pick(undefined,undefined);f.state.scope.annotations.push(inactive);pick(undefined,inactive);
   traces.push(JSON.stringify(picks));
  }
- assert.equal(traces[1],traces[0]);
+ assert.equal(traces[1],traces[0]);assert.equal(traces[2],traces[0]);
 });
 
 test('annotation scene construction fails at the original policy or geometry stage without invoking annotation or reading the model',()=>{
- for(const composed of [false,true])for(const failAt of ['policy','geometry']){const probe={};assert.throws(()=>annotationPolicyFixture(composed,{failAt,probe}),error=>error===probe.error);assert.deepEqual(probe.rawCalls,[]);assert.deepEqual(probe.state.reads,[]);}
+ for(const composed of [false,true,'prepared'])for(const failAt of ['policy','geometry']){const probe={};assert.throws(()=>annotationPolicyFixture(composed,{failAt,probe}),error=>error===probe.error);assert.deepEqual(probe.rawCalls,[]);assert.deepEqual(probe.state.reads,[]);}
+});
+
+test('prepared image hit uses the same live regions, order, bounds and scope policy as Canvas picking',()=>{
+ const f=annotationPolicyFixture('prepared'),hit=f.probe.preparation.hitReferenceImageAt;
+ const first={id:'I1',sketchId:'S1',x:0,y:0,rotation:Math.PI/2,scale:2,pixelWidth:20,pixelHeight:10};
+ const last={...first,id:'I2',sketchId:'S2',locked:true};f.state.scope.referenceImages=[first,last];
+ function pick(x,y,options,expected){assert.equal(hit(x,y,options),expected);assert.equal(f.queries.regions.hitReferenceImageAt(x,y,options),expected);}
+ pick(0,20,undefined,last);pick(0,20.1,undefined,null);f.state.mode='line';pick(0,0,undefined,first);
+ pick(0,0,{activeOnly:false},last);f.state.mode='select';f.state.pending={};pick(0,0,undefined,first);
+ f.state.pending=null;f.state.command={};pick(0,0,undefined,first);f.state.command=null;
+ last.visible=false;pick(0,0,undefined,first);last.visible=true;f.state.hidden=true;pick(0,0,undefined,null);f.state.hidden=false;
+ f.state.scope=f.empty();pick(0,0,undefined,null);f.state.scope.referenceImages.push(last);pick(0,0,undefined,last);
+ assert.throws(()=>hit(0,0,null),error=>error.name==='TypeError');
+ const failure=new Error('live query');f.state.error=failure;assert.throws(()=>hit(0,0),error=>error===failure);
+ assert.equal(f.state.scope.referenceImages[0],last);
+});
+
+test('prepared regions publish only after all queries finish and retain the actual receiver, arguments and prior completed generation',()=>{
+ const w=sandbox.window,original=w.GeometryHitQuery,failure=new Error('region query'),calls=[];
+ let fail=null,generation=0,fieldReads=0,methodFailure=false,malformed=false,value;
+ const wrapper={...original};
+ for(const name of ['createRegions','createDimensions','createInstances','create'])wrapper[name]=function(options){
+  if(fail===name)throw failure;const result=original[name](options);if(name!=='createRegions')return result;
+  if(malformed)return value;
+  const marker={generation:++generation};const region={...result,get hitReferenceImageAt(){fieldReads++;return function(){'use strict';assert.equal(this,region);calls.push(Array.from(arguments));if(methodFailure)throw failure;return marker;};}};
+  return Object.freeze(region);
+ };
+ w.GeometryHitQuery=wrapper;
+ try{
+  const f=annotationPolicyFixture('prepared'),preparation=f.probe.preparation,hit=preparation.hitReferenceImageAt;
+  assert.equal(fieldReads,0);const options={activeOnly:false},extra={};const first=hit(1,2,options,extra);
+  assert.deepEqual(calls.at(-1),[1,2,options,extra]);assert.equal(first.generation,1);assert.equal(fieldReads,1);
+  for(const name of ['createRegions','createDimensions','createInstances','create']){
+   fail=name;assert.throws(()=>f.scene.createQueries(),error=>error===failure);assert.equal(hit(),first);
+  }
+  fail=null;methodFailure=true;assert.throws(()=>hit(),error=>error===failure);methodFailure=false;
+  const queries=f.scene.createQueries();const next=hit();assert.notEqual(next,first);assert.equal(queries.regions.hitReferenceImageAt(),next);
+  const independent=w.CanvasHitInteraction.prepareSceneWithAnnotationsForWorkspace();assert.throws(()=>independent.hitReferenceImageAt(),error=>error.name==='ReferenceError');
+  for(value of [undefined,null]){malformed=true;f.scene.createQueries();assert.throws(()=>hit(),error=>error.name==='TypeError');}
+ }finally{w.GeometryHitQuery=original;}
 });
 
 test('Workspace hit entry points preserve query receivers, argument limits, fresh defaults and live operand read order',()=>{

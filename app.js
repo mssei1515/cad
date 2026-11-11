@@ -274,10 +274,11 @@
   const { layer: annotationLayer, command: annotationCommand,
     dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { canvasContextAnnotationHit } = annotationFeature.spatial;
+  const sceneHitPreparation = operationSessions.prepareSceneWithAnnotations();
   const referenceImageFeature = window.ReferenceImageFeature.createForWorkspace({
     canvas, ctx, viewport, document, window, withCanvasState: canvasSurface.withCanvasState, createImage: () => new Image(),
     documentWorkspace, editingScope: editingScopeBinding, interaction: canvasInteraction, presentation, appearance: geometryAppearance,
-    clearSelection, clearSnap: () => clearSnap(), hitReferenceImageAt, recordHistory,
+    clearSelection, clearSnap: () => clearSnap(), hitReferenceImageAt: sceneHitPreparation.hitReferenceImageAt, recordHistory,
     pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard, isGeometryMode,
   });
   const { renderer: referenceImageRenderer, interaction: referenceImageInteraction, input: referenceImageInput } = referenceImageFeature;
@@ -400,7 +401,6 @@
 
 
 
-  function hitReferenceImageAt(...args) { return regionHitQuery.hitReferenceImageAt(...args); }
 
 
 
@@ -411,7 +411,7 @@
 
 
 
-  const sceneHitInteraction = operationSessions.createSceneWithAnnotations({
+  const sceneHitInteraction = sceneHitPreparation.createScene({
     documentWorkspace, viewport, dimensionScope: dimensionPresentationScope, dimensions: dimensionDisplay, dimensionLabelForConstraint,
     annotationBounds: annotationPreparation.annotationBounds, annotationSpatial: annotationFeature.spatial, operandValues: constraintOperandValues,
   });
@@ -551,7 +551,7 @@
 
 
   const sceneHitQueries = sceneHitInteraction.createQueries();
-  const { regions: regionHitQuery, hitDimension, hitBlockInstance, hitConstraintOperand } = sceneHitQueries;
+  const { hitDimension, hitBlockInstance, hitConstraintOperand } = sceneHitQueries;
   const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitPoint, hitLine, hitCircle, hitArc } = sceneHitQueries.geometry;
 
 

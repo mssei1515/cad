@@ -86,8 +86,8 @@
     }
     return Object.freeze({ policy, createQueries });
   }
-  function createSceneForWorkspace({ documentWorkspace, readServices, interaction, sessions, viewport, dimensionScope,
-    dimensions, dimensionLabelForConstraint, annotationBounds, hitAnnotationElement, operandValues }) {
+  function createWorkspaceScene({ documentWorkspace, readServices, interaction, sessions, viewport, dimensionScope,
+    dimensions, dimensionLabelForConstraint, annotationBounds, hitAnnotationElement, operandValues }, publishRegions) {
     const { reads: geometryReads, catalog, projections, hatches, geometryAppearance, dimensionAppearance } = readServices;
     const { sketches: sketchContext } = documentWorkspace;
     const { readMode } = interaction.lifecycle;
@@ -107,7 +107,9 @@
       function hitDimension(...args) { return dimensionHitQuery.hitDimension(...args); }
       function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
       function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
-      return Object.freeze({ ...queries, hitDimension, hitBlockInstance, hitConstraintOperand });
+      const result = Object.freeze({ ...queries, hitDimension, hitBlockInstance, hitConstraintOperand });
+      if (publishRegions) publishRegions(result.regions);
+      return result;
     }
     function createRectangleSelection({ dimensionBounds, instanceSourceCommand, geometryInstanceCommand, sketchProjection, canvas, clearSelection, presentation }) {
       return window.RectangleSelectionFeature.create({ currentScope: dimensionScope, viewport,
@@ -119,6 +121,7 @@
     }
     return Object.freeze({ ...scene, createQueries, createRectangleSelection });
   }
+  function createSceneForWorkspace(options) { return createWorkspaceScene(options); }
   function create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint,
     geometry: { hitPoint, hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
     scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
@@ -142,14 +145,25 @@
 
     return Object.freeze({ press, hover });
   }
-  function createSceneWithAnnotationsForWorkspace({ annotationSpatial, ...options }) {
+  function createAnnotatedWorkspaceScene({ annotationSpatial, ...options }, publishRegions) {
     const { hitAnnotationElement: queryAnnotationElement } = annotationSpatial;
-    const scene = createSceneForWorkspace({ ...options, hitAnnotationElement });
+    const scene = createWorkspaceScene({ ...options, hitAnnotationElement }, publishRegions);
     const { ordinarySelectionMode } = scene.policy;
     function hitAnnotationElement(x, y, options = {}) {
       return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
     }
     return Object.freeze({ ...scene, hitAnnotationElement });
   }
-  window.CanvasHitInteraction = Object.freeze({ create, createScene, createSceneForWorkspace, createSceneWithAnnotationsForWorkspace });
+  function createSceneWithAnnotationsForWorkspace(options) { return createAnnotatedWorkspaceScene(options); }
+  function prepareSceneWithAnnotationsForWorkspace(shared = {}) {
+    let completedRegions;
+    function hitReferenceImageAt(...args) {
+      if (completedRegions === undefined) throw new ReferenceError("Cannot access 'regionHitQuery' before initialization");
+      return completedRegions.value.hitReferenceImageAt(...args);
+    }
+    function publishRegions(regions) { completedRegions = { value: regions }; }
+    function createScene(options) { return createAnnotatedWorkspaceScene({ ...options, ...shared }, publishRegions); }
+    return Object.freeze({ hitReferenceImageAt, createScene });
+  }
+  window.CanvasHitInteraction = Object.freeze({ create, createScene, createSceneForWorkspace, createSceneWithAnnotationsForWorkspace, prepareSceneWithAnnotationsForWorkspace });
 })();
