@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Properties表示入力を既存ownerから遅延選択（2026-11-11）
+
+PropertiesDisplay.createEditingWithViewForPresentationは、編集機能とAppearance UIの生成後にreadViewOwnersをbare・引数なしで一度呼び、実Block layoutのsnappedBlockRotation、Authoring feedbackのhatchRegionErrorText／geometryInstanceTypeLabel、Parameter editorのinstallExpressionInputHighlightsを選ぶ。同じ関数と残る明示入力を従来のcreateViewForWorkspaceへ渡し、生成時の表示値・scope・Selectionをsnapshot化しない。app.jsはlayout／feedback／parameterEditorを渡し、表示用四関数の選択を持たない。通常の数式highlight開始にも使う既存aliasは残し、起動時のbare呼出しを変えない。
+
+prepareの新入口と旧createEditingWithViewForWorkspaceは同じpublish処理を使い、実editing／Appearance UI／Viewの完成後に、生成元Selectionとともに既存completed bindingへ公開する。編集生成→入力reader→View生成→公開の順と、各段階の例外・部分状態、失敗時の以前のView／外観編集の保持を維持する。新しいstateや別のcontrollerは作らず、旧APIのreceiver・引数（追加引数を含む）・返値も維持する。通常のPropertyEditing／Appearance UI／Controller／View本体、live操作対象と複数scope、UI・履歴・保存形式v26と既存application／editing／ui配置を変えない。
+
+app.jsは1,229→1,228行（1行減）、非空白786→785行。root224文・376束縛、構文依存辺1,057は不変。構築447→446行、別名・設定89行・bind41行・委譲7行・test hooks152行は不変。行数・依存辺の大幅削減を装わず、表示入力の選択と完成時公開をPropertiesの責務へ揃える単位である。全体の200〜500行目標は未完了。
+
+関連単体25件が成功。既存の実Properties／Selection／操作比較に新入口を加え、現在scopeと選択／表示operationの区別、外観・lock・guard付き操作、七つの生成段階とreaderの失敗、owner field取得失敗とView生成失敗後の旧View保持を照合した。browser比較では七constructorとreaderの順、bare・引数なし・一度のreader、公開前appearanceEditingのReferenceError、四fieldのreadonlyと六つの実参照、native option key順・function名／arityと公開204項目が一致。ja/light・en/dark・test起動も成功。宣言した変更を逆変換すると旧Properties組立てsourceと一致し、四つのnative UI／編集owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,550件と関連E2E218件（8file、3.5m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
 ## 作図コマンド集合の境界再監査（2026-11-11）
 
 Canvas入力5項目とToolbar9項目の共通は4項目であり、Preview／Lifecycle／寸法submit等の先行利用も残ることを、基準94b0653のASTと各ownerで確認した。単純なcommand集合化は対応表を増やし、registry化や後段同時生成は保持・guard・公開段階を広げるため採用しない。詳細・7bindingの利用表・再現方法と次の調査対象は[境界監査](bootstrap-boundary-audit.md)の先頭を参照する。
