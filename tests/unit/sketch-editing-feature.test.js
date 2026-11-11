@@ -275,6 +275,15 @@ test('Sketch interaction composition propagates cancellation failures before loc
  }
 });
 
+function treePresentationOptions(config) {
+  const { objectOptions, ...options } = config;
+  return { ...options, selection: Object.freeze({ visibilityIsHidden: objectOptions.isHidden }), analysis: objectOptions.analysis,
+    redundancy: objectOptions.redundancy, referenceState: objectOptions.referenceState, projection: Object.freeze({ queries: objectOptions.projectionQueries }),
+    icons: Object.freeze({ toolbarSvgMarkup: objectOptions.toolbarSvgMarkup, constraintToolbarIcon: objectOptions.constraintToolbarIcon }),
+    feedback: Object.freeze({ geometryInstanceTypeLabel: objectOptions.geometryInstanceTypeLabel, hatchPatternTypeLabel: objectOptions.hatchPatternTypeLabel }),
+    fixedState: Object.freeze({ findLineFixedConstraint: objectOptions.findLineFixedConstraint }) };
+}
+
 function editingTreeFixture(composed, navigation, useNavigationDefaults = false) {
   let ports, config;
   const original = w.SketchTreeController;
@@ -300,14 +309,15 @@ function editingTreeFixture(composed, navigation, useNavigationDefaults = false)
         deleteElements: p.deleteElements, deleteCurrentSelection: p.deleteCurrentSelection, toggleSelectedVisibility: p.toggleSelectedVisibility,
         fixedOperands: { unfixPoint: p.unfixPoint } };
       delete config.objectOptions.constraintFeedback; delete config.objectOptions.pointUsage;
-      return composed ? f.feature.createTreeForEditing(config) : f.feature.createTree(p);
+      return composed === 'presentation' ? f.feature.createTreeForPresentation(treePresentationOptions(config))
+        : composed ? f.feature.createTreeForEditing(config) : f.feature.createTree(p);
     }, () => interactionFixture(true, navigation, useNavigationDefaults));
     return { ...f, ports, config };
   } finally { w.SketchTreeController = original; }
 }
 
 test('editing Tree stage reuses captured interaction, presentation and command identities without early scope reads or menu start', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'presentation']) {
     const f = editingTreeFixture(composed), p = f.ports;
     assert.equal(Object.isFrozen(f.feature), true); assert.equal(f.feature, f.editing); assert.deepEqual(f.calls, []); assert.equal(f.state.keyReads, 0);
     assert.equal(p.canvasSelection, f.selection); assert.equal(p.canvasHover, f.owners.interaction.hover); assert.equal(p.readServices, f.owners.readServices);
@@ -327,7 +337,7 @@ test('editing Tree stage reuses captured interaction, presentation and command i
 });
 
 test('editing Tree keeps live dimension objects and Hover separate from the command model and shares Block selection', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'presentation']) {
     const f = editingTreeFixture(composed), replacement = { ...f.point, id: 'P-new' };
     f.state.dimensionScope = { ...f.empty(), points: [replacement] };
     assert.equal(f.tree.objects.index().get('S1').point[0], replacement); assert.equal(f.state.scope.points[0], f.point);
@@ -340,7 +350,7 @@ test('editing Tree keeps live dimension objects and Hover separate from the comm
 });
 
 test('editing Tree visibility, locking and move completion use the same real commands and retain one history commit', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'presentation']) {
     const f = editingTreeFixture(composed), destination = f.state.scope.sketches.find(sketch => sketch.id === 'S2'); destination.appearance = { visible: false };
     f.tree.controller.click(f.event('S2', 'sketchVisibilityBtn')); assert.equal(destination.appearance.visible, true);
     f.tree.controller.click(f.event('S2', 'sketchLockBtn')); assert.equal(destination.locked, true);
@@ -578,4 +588,31 @@ test('owned Sketch navigation publishes reset only after complete editing constr
     const fresh = w.SketchEditingFeature.prepareNavigation(); assert.throws(() => fresh.createForInteraction(f.owners), error => error === marker);
     assert.throws(fresh.clearInteractionForSketchChange, error => error.name === 'ReferenceError');
   } finally { w.SketchCommand = original; }
+});
+
+
+test('presentation-owned Tree retains the published native Controller after field and Tree construction failure', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation(), original = w.SketchTreeController;
+  const marker = new Error('Tree presentation failed'); let fail = false, generation = 0;
+  w.SketchTreeController = { ...original, createWithDocumentObjects(options) {
+    if (fail) throw marker;
+    const tree = original.createWithDocumentObjects(options), result = { generation: ++generation };
+    const controller = Object.freeze({ ...tree.controller, isHighlightedElement(item) {
+      assert.equal(this, controller); assert.equal(arguments.length, 1); assert.ok(item); return result;
+    } });
+    return Object.freeze({ ...tree, controller });
+  } };
+  try {
+    const f = editingTreeFixture('presentation', navigation, true), first = navigation.isSidebarHighlightedElement(f.point);
+    assert.equal(first.generation, 1); const options = treePresentationOptions(f.config);
+    const badIcons = Object.freeze(Object.defineProperty({ ...options.icons }, 'toolbarSvgMarkup', { get() { throw marker; } }));
+    assert.throws(() => f.feature.createTreeForPresentation({ ...options, icons: badIcons }), error => error === marker);
+    assert.equal(generation, 1); assert.equal(navigation.isSidebarHighlightedElement(f.point), first);
+    fail = true; assert.throws(() => f.feature.createTreeForPresentation(options), error => error === marker);
+    assert.equal(navigation.isSidebarHighlightedElement(f.point), first);
+    fail = false; const tree = f.feature.createTreeForPresentation(options);
+    assert.equal(Object.isFrozen(tree), true); const next = navigation.isSidebarHighlightedElement(f.point);
+    assert.equal(next.generation, 2); assert.notEqual(next, first);
+    assert.equal(f.state.scope.points[0], f.point); assert.equal(f.state.keyReads, 0);
+  } finally { w.SketchTreeController = original; }
 });

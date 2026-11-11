@@ -708,7 +708,6 @@
     document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
     operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
-  const { visibilityIsHidden: selectionVisibilityIsHidden } = propertiesSelection;
 
   createToolbarControls({ selection: propertiesSelection, sketches: sketchContext });
 
@@ -771,11 +770,10 @@
     projection: sketchProjectionFeature, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
-  const { view: sketchTreeView } = sketchEditing.createTreeForEditing({
+  const { view: sketchTreeView } = sketchEditing.createTreeForPresentation({
     document, window, selectionHighlight,
-    objectOptions: { isHidden: selectionVisibilityIsHidden, analysis: constraintAnalysis, redundancy: constraintRedundancy,
-      referenceState: referenceConstraintState, projectionQueries: sketchProjectionQueries,
-      toolbarSvgMarkup: toolbarIcons.toolbarSvgMarkup, constraintToolbarIcon: toolbarIcons.constraintToolbarIcon, findLineFixedConstraint, geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: authoringFeedback.hatchPatternTypeLabel },
+    selection: propertiesSelection, analysis: constraintAnalysis, redundancy: constraintRedundancy, referenceState: referenceConstraintState,
+    projection: sketchProjectionFeature, icons: toolbarIcons, feedback: authoringFeedback, fixedState: fixedStateQueries,
     escapeHtml, closeCanvasContextMenu, moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
     blockEditor, editingScope: editingScopeBinding, solveState: sketchSolveResultState, dimensionScope: dimensionPresentationScope,
     deleteElements, deleteCurrentSelection, toggleSelectedVisibility: propertiesPreparation.toggleSelectedVisibility, fixedOperands: fixedOperandCommand,

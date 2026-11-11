@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のContextライフサイクル単位ではapp.jsは1,231行、非空白788行。AST監査ではroot225文・377束縛、構築448非空白行とbind41行、別名・設定90行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のSketch Tree表示依存単位ではapp.jsは1,229行、非空白786行。AST監査ではroot224文・376束縛、構築447非空白行とbind41行、別名・設定89行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Canvas Contextの取消準備と操作公開・開始を既存ownerへ集約（2026-11-11）
+### 最新：Sketch Treeの表示依存選択を既存Sketch機能へ集約（2026-11-11）
+
+開始基準developは09708b9e5bd5cdce0f0276b5d86a78ce5a6df40a、作業branchはcodex/sketch-tree-presentation-owners（develop統合・Push後に削除）。開始週枠残量77%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchEditingFeature.createForInteractionが返すcreateTreeForPresentationは、既存Properties Selection・Constraint analysis／redundancy／reference state・Sketch Projection・Toolbar icons・Authoring feedback・Fixed-state queryから、Tree用objectOptionsの10項目を選ぶ。app.jsは実ownerを渡し、isHidden／投影照会／アイコン／ラベル／固定照会のfield選択とテスト専用ではないvisibility別名を持たない。個々のmodel／constraint／表示値は読まず、同じ実関数・recordを既存createTreeForEditingへ渡す。
+
+prepareNavigation経由でも新入口の成功した実Treeだけを既存contextへ公開する。field選択やTree生成の失敗は以前のController／Menuを保持し、完成前のものを公開しない。旧createTreeForEditing／createTree、実Tree／Objects／View本体、別々のDocument・bound view・dimension scope、live Selection／Hover／Block state、元例外・receiver／引数、生成→公開→明示startの段階、UI・履歴・保存形式v26を維持する。新たなview state・cache・listenerや全体contextを作らず、既存application／ui配置を使う。
+
+app.jsは1,231→1,229行（2行減）、非空白788→786行、root225→224文・377→376束縛、構文依存辺1,058→1,057。構築448→447行、別名・設定90→89行。bind41行・委譲7行・条件付きtest hooks152行は不変。表示10項目の組立てがSketch側へ移り、appに新しいまとめ用contextは追加しない。全体の200〜500行目標は未完了。
+
+関連単体26件が成功。既存の実Tree／Geometry／Selection／Hover比較に新入口を加え、live scopeの区別、可視性・lock・moveの実操作と一履歴、field選択失敗とTree生成失敗後の旧Controller保持・次の成功時の切替を確認した。browser比較では10項目の実参照、七つのreadonly field、Tree生成→完了→Menu開始、同じ実View／Menu receiver・引数なし、sketchTreeView生成前ReferenceError、native option key順・function名／arityと公開204項目が一致。ja/light・en/dark・test起動も成功。旧Sketch関数本体と三つのnative Tree owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,549件と関連E2E218件（9file、4.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+次は通常機能の構築447行と条件付きtest hooks152行を、状態owner・依存・生成時点から再評価する。具体的な次候補はBasicDrawingTools由来のコマンドをCanvas入力・Toolbar等へ繰り返し再梱包している箇所である。同じ実actorを共有する既存ownerの契約へ揃えられるか確認し、初期化前guardを失う早期評価や全体context化を避ける。今回のTree表示10項目やContext取消／start、Clipboard等の既存接続を再分離しない。readonlyの関数を別のaliasへ移すだけの単位を量産せず、共有関数の通常用途とtest用途を区別する。既存の途中公開を消す一括factory、巨大contextや別の巨大bootstrap、blank削除で数百行の達成を装わない。
+
+### 前回：Canvas Contextの取消準備と操作公開・開始を既存ownerへ集約（2026-11-11）
 
 開始基準developは4fb50e1cf8b31bb94c251f330f6689a83c275a47、作業branchはcodex/context-interaction-lifecycle（develop統合・Push後に削除）。開始週枠残量78%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
