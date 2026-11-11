@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のCanvasテスト用owner入力単位ではapp.jsは1,238行、非空白795行。AST監査ではroot226文・384束縛、構築449非空白行とbind41行、別名・設定92行、委譲7行、条件付きtest hooks155行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のBlockブラウザ支援単位ではapp.jsは1,235行、非空白792行。AST監査ではroot226文・383束縛、構築449非空白行とbind41行、別名・設定92行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Canvasテスト専用の関数選択を実ownerから組み立てる（2026-11-11）
+### 最新：Blockの寸法ケースと公開recordの組立てを既存TestDriverへ集約（2026-11-11）
+
+開始基準developはddb9c0683a2c4678e7de2a04fadf1627f20170ff、作業branchはcodex/block-browser-support（develop統合・Push後に削除）。開始週枠残量81%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
+
+BlockTestDriver.createBrowserSupportForWorkspace（src/testing/block_test_driver.js）が、既存createForWorkspaceで実支援を生成した後、同じ支援のcreateDimensionCasesを呼び、従来BrowserTestApiが受け取るblockTestSupport／blockTestActionsの二fieldを持つ凍結recordを返す。app.jsは実Dimension placement／Read-only dimension／Geometry readのownerを渡し、寸法ケース用四関数の選択と二支援の再梱包を持たない。テスト専用のblockCatalog別名も除く。
+
+実defaultDimensionForTarget／forPlacement／add／blockDefinitionByIdを、従来の四key順・同じ参照で選ぶ。選択対象とcatalogは実ownerのreadonly data propertyで、生成時のscope読取りやsnapshotを追加しない。createDimensionCasesのmember receiverは同じ実支援で、返す二つの支援も同じnative recordのまま。支援→寸法ケース→後続Dimension TestDriver→Browser API公開の順、未完成時に公開しない境界、操作時のcurrent scope・Geometry／投影参照、元例外と途中状態、採番・求解・履歴・UI・保存形式v26を維持する。生のcreateForWorkspace／createBrowserSupport／createDimensionCasesと個別fixture、通常機能のstate所有と生成・bind／start、既存testing配置・読込順を変えない。Completion commandは三つのTestDriverで使うため今回の別名除去対象とせず、全体contextや新たなmodel・cache・listenerは追加しない。
+
+app.jsは1,238→1,235行（3行減）、非空白795→792行、root226文のまま・384→383束縛、構文依存辺1,063のまま。test hooks155→152行。別名・設定92行、構築114文／449行・bind41行・委譲7行は不変。test hooks内だけから使うroot bindingは17→16個だが、これは残タスク数を意味しない。全体の200〜500行目標は未完了。
+
+関連単体11件・全単体2,545件・構文639fileが成功。既存三比較テストへbrowser組立て経路を加え、生成時のscope無照会と二支援の凍結record、実Geometry／投影参照・scope／solver／hoverの観測、寸法作成と配置の引数、取消／求解／読込の元例外・途中状態を確認した。browser比較では支援→寸法ケースの生成順、実参照六項目、五fieldのreadonly、同じ実支援をreceiverにしたケース生成、既存支援／actionとoptionのkey順・function名／arity、公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体は不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、7.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+次は残るテスト専用の入力選択と、通常機能の生成・接続を既存ownerの完成境界から評価する。今回のBlock支援、前回のCanvasテスト支援、Document起動／Canvas入力ライフサイクルを再実施しない。test専用という理由だけで可変readerや共有commandを機械的に置換せず、公開時点・guard・現在scopeを維持する。巨大context、別の巨大bootstrap、単純な別名移動やblank削除で数百行へ到達したことにしない。
+
+
+
+### 前回：Canvasテスト専用の関数選択を実ownerから組み立てる（2026-11-11）
 
 開始基準developはeb17cf523214ea102de0c6f8848b96d4f718a48a、作業branchはcodex/canvas-test-owner-inputs（develop統合・Push後に削除）。開始週枠残量81%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
 

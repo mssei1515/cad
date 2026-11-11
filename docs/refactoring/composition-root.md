@@ -1,5 +1,18 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Blockの寸法ケースと公開recordの組立てを既存TestDriverへ集約（2026-11-11）
+
+BlockTestDriver.createBrowserSupportForWorkspace（src/testing/block_test_driver.js）が、既存createForWorkspaceで実支援を生成した後、同じ支援のcreateDimensionCasesを呼び、従来BrowserTestApiが受け取るblockTestSupport／blockTestActionsの二fieldを持つ凍結recordを返す。app.jsは実Dimension placement／Read-only dimension／Geometry readのownerを渡し、寸法ケース用四関数の選択と二支援の再梱包を持たない。テスト専用のblockCatalog別名も除く。
+
+実defaultDimensionForTarget／forPlacement／add／blockDefinitionByIdを、従来の四key順・同じ参照で選ぶ。選択対象とcatalogは実ownerのreadonly data propertyで、生成時のscope読取りやsnapshotを追加しない。createDimensionCasesのmember receiverは同じ実支援で、返す二つの支援も同じnative recordのまま。支援→寸法ケース→後続Dimension TestDriver→Browser API公開の順、未完成時に公開しない境界、操作時のcurrent scope・Geometry／投影参照、元例外と途中状態、採番・求解・履歴・UI・保存形式v26を維持する。生のcreateForWorkspace／createBrowserSupport／createDimensionCasesと個別fixture、通常機能のstate所有と生成・bind／start、既存testing配置・読込順を変えない。Completion commandは三つのTestDriverで使うため今回の別名除去対象とせず、全体contextや新たなmodel・cache・listenerは追加しない。
+
+app.jsは1,238→1,235行（3行減）、非空白795→792行、root226文のまま・384→383束縛、構文依存辺1,063のまま。test hooks155→152行。別名・設定92行、構築114文／449行・bind41行・委譲7行は不変。test hooks内だけから使うroot bindingは17→16個だが、これは残タスク数を意味しない。全体の200〜500行目標は未完了。
+
+関連単体11件・全単体2,545件・構文639fileが成功。既存三比較テストへbrowser組立て経路を加え、生成時のscope無照会と二支援の凍結record、実Geometry／投影参照・scope／solver／hoverの観測、寸法作成と配置の引数、取消／求解／読込の元例外・途中状態を確認した。browser比較では支援→寸法ケースの生成順、実参照六項目、五fieldのreadonly、同じ実支援をreceiverにしたケース生成、既存支援／actionとoptionのkey順・function名／arity、公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体は不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、7.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## Canvasテスト専用の関数選択を実ownerから組み立てる（2026-11-11）
 
 CanvasTestDriver.createBrowserSupportForWorkspace（src/testing/canvas_test_driver.js）は、実Block editing／placement、注記renderer、Frame bundle、Scene queriesからCanvasテスト支援の関数を選び、既存createBrowserSupportForSceneへ渡す。Sketch定数、型、Spline評価も同じ既存namespaceから選ぶ。app.jsはテスト専用のROOT_SKETCH_ID／DEFAULT_SKETCH_ID／blockDefinitionEditing／drawAnnotationLeader／hitArcEndpoint／hitSpline／drawSelectionRect別名を持たない。通常機能のstateや操作をtestingへ移さず、旧createBrowserSupportForScene／createForScene／個別fixtureは維持する。

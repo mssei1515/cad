@@ -67,7 +67,7 @@
   });
   const { serializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState,
     loadModelData, normalizeGeometryInstance, readRepairMessage: readDocumentRepairMessage } = documentPersistence;
-  const { catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
+  const { projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { resolveGeometryRef } = geometryReads;
   const blockLayout = geometryReadServices.createBlockLayout({ annotationBounds: annotationPreparation.annotationBounds });
@@ -1121,16 +1121,13 @@
       referenceState: referenceConstraintState, document, canvas, getComputedStyle: element => getComputedStyle(element),
       serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter: blockLayout.blockInstanceDisplayCenter,
     });
-    const blockTestSupport = window.BlockTestDriver.createForWorkspace({
+    const blockBrowserSupport = window.BlockTestDriver.createBrowserSupportForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, blocks: blockEditingFeature,
       interaction: canvasInteraction, sessions: operationSessions, presentation, placement: blockPlacementCommand, solver, canvas, viewport,
       solving: sketchSolving, definition: blockDefinitionCommand, completion: blockCompletionCommand, configuration: blockConfigurationCommand,
       sketchEditing, dragging: geometryDragFeature, selectionQuery: blockSelectionQuery,
       resetModelState, pushModelConstraint: constraintInsertion.push, fitAllGeometryToViewport: canvasScene.fit.fitAllGeometryToViewport, recordHistory, serializeConstraint, serializeModel, loadModelData, blockInstanceDisplayCenter: blockLayout.blockInstanceDisplayCenter,
-    });
-    const blockTestActions = blockTestSupport.createDimensionCases({
-      defaultDimensionForTarget: dimensionPlacement.defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement: readOnlyDimensions.forPlacement,
-      addReadOnlyDimensionConstraint: readOnlyDimensions.add, blockDefinitionById: blockCatalog.blockDefinitionById,
+      dimensionPlacement, readOnlyDimensions,
     });
     const dimensionTestSupport = window.DimensionTestDriver.createBrowserSupportForWorkspace({
       documentWorkspace, interaction: canvasInteraction, sessions: operationSessions,
@@ -1214,7 +1211,7 @@
       parameters: parameterTestSupport,
       properties: propertiesTestSupport, selectionTestApi,
       annotations: annotationTestSupport,
-      blocks: { blockTestSupport, blockTestActions },
+      blocks: blockBrowserSupport,
     });
   }
 
