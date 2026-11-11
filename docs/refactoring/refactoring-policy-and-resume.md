@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の実BlockLayout共有単位ではapp.jsは1,261行、非空白816行。AST監査ではroot242文・407束縛、構築・接続465非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の注記リサイズ判定分離単位ではapp.jsは1,261行、非空白816行。AST監査ではroot242文・407束縛、構築・接続465非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：実BlockLayoutを共有し再梱包を整理（2026-11-11）
+### 最新：注記リサイズ可否の同期を既存AnnotationFeatureへ集約（2026-11-11）
+
+開始基準developは5ed081975c1e09eb676ef84b8d6932f9df6c58ef、作業branchはcodex/annotation-resize-policy（develop統合・Push後に削除）。週枠残量87%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。次回は最新Git・usage・本sectionを照合し、完了済み分離を再実施しない。現在のAnnotation UI判定は既存ownerへ統合済みとして扱い、残る機能ごとの組立て・状態所有と初期化境界を監査する。
+
+AnnotationFeature.prepareのsyncResizeSelectionが、実Dragに対応するInteractionのLifecycleとOperationSessionsのPending／拘束targetを使ってリサイズ可否を同期する。app.jsは既存UIへこの遅延portを渡し、条件式を直接持たない。Dragのmethod読取り後、select mode→Pending不在→拘束target不在の順に短絡評価し、実Dragをreceiverとしてboolean一引数で呼ぶ。返値・元例外を維持し、Drag未生成時は状態を読む前に旧annotationDragの初期化前ReferenceErrorを出す。
+
+成功した実Featureと、その生成時のsession／判定関数の組をowner内部に保持し、実Dragを生成した組と対応づける。Featureの再生成後や新Drag生成失敗時も、既存Dragは自分の生成時のcontextで同期する。既存の生Feature／Editor／Drag API自体は置き換えず、そのまま返す。mode／Pending／targetの値をsnapshotとして複製しない。早期prepareやFeature／Drag生成時に条件を読まない。新しいmodel・listener・globalやsetter登録APIは追加しない。
+
+app.jsは1,261→1,261行（0行変化）、非空白816行、root242文・407束縛のまま。構文依存辺は1,089→1,087。行数圧縮ではなく、UIと注記操作状態の判定をowner側へ移した。既存application／commands／editing配置を維持し、新fileやloader変更は不要。200〜500行の全体目標は未完了。
+
+追加単体4件は、初期化guard・truthiness・短絡順序・method receiver／一引数／返値／同じ例外、実Dragのhandle解除と非再有効化、Feature再生成と失敗時のcontext対応を検証する。関連単体44件・全単体2,519件・構文639fileが成功。実browserの一時response診断では旧root／旧AnnotationFeatureと変更後を比較し、実native recordの生成順、初期化前guard、可否5条件、receiverと引数数、Feature／Drag／公開204項目のkey・descriptor・型が一致した。共有するInteraction.lifecycleとsessions.pending／targetsは凍結recordのown readonly data fieldで、root別名と同じ実体である。通常ja/light・en/darkとtest起動も成功。診断は製品sourceに残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+### 実BlockLayoutを共有し再梱包を整理（2026-11-11）
 
 GeometryReadServices.createBlockLayoutが返す同じ実APIを、Block配置とDerived Instance編集へ共有する。rootのblockLocalGeometryBounds／blockInstanceDisplayCenter／blockInstanceTranslationForAnchor／snappedBlockRotationの四別名と、二つの二項目recordへの再梱包を除いた。生成位置・factory・model／scope・注記readerは変えず、BlockLayoutの現在定義・enabled Sketch・鏡像・中心・境界と各既存consumerの計算に手を加えない。新しいprepare／holder／adapterやmutable app contextを作らず、元のapplication／geometry配置を維持する。
 

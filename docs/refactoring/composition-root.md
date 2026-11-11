@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 注記リサイズ可否の同期を既存AnnotationFeatureへ集約（2026-11-11）
+
+AnnotationFeature.prepareのsyncResizeSelectionが、実Dragに対応するInteractionのLifecycleとOperationSessionsのPending／拘束targetを使ってリサイズ可否を同期する。app.jsは既存UIへこの遅延portを渡し、条件式を直接持たない。Dragのmethod読取り後、select mode→Pending不在→拘束target不在の順に短絡評価し、実Dragをreceiverとしてboolean一引数で呼ぶ。返値・元例外を維持し、Drag未生成時は状態を読む前に旧annotationDragの初期化前ReferenceErrorを出す。
+
+成功した実Featureと、その生成時のsession／判定関数の組をowner内部に保持し、実Dragを生成した組と対応づける。Featureの再生成後や新Drag生成失敗時も、既存Dragは自分の生成時のcontextで同期する。既存の生Feature／Editor／Drag API自体は置き換えず、そのまま返す。mode／Pending／targetの値をsnapshotとして複製しない。早期prepareやFeature／Drag生成時に条件を読まない。新しいmodel・listener・globalやsetter登録APIは追加しない。
+
+app.jsは1,261→1,261行（0行変化）、非空白816行、root242文・407束縛のまま。構文依存辺は1,089→1,087。行数圧縮ではなく、UIと注記操作状態の判定をowner側へ移した。既存application／commands／editing配置を維持し、新fileやloader変更は不要。200〜500行の全体目標は未完了。
+
+追加単体4件は、初期化guard・truthiness・短絡順序・method receiver／一引数／返値／同じ例外、実Dragのhandle解除と非再有効化、Feature再生成と失敗時のcontext対応を検証する。関連単体44件・全単体2,519件・構文639fileが成功。実browserの一時response診断では旧root／旧AnnotationFeatureと変更後を比較し、実native recordの生成順、初期化前guard、可否5条件、receiverと引数数、Feature／Drag／公開204項目のkey・descriptor・型が一致した。共有するInteraction.lifecycleとsessions.pending／targetsは凍結recordのown readonly data fieldで、root別名と同じ実体である。通常ja/light・en/darkとtest起動も成功。診断は製品sourceに残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を最後の全体589件成功（f0a7954、30.0分）と区別する。
+
 ## 実BlockLayoutを共有し部分recordへの再梱包を整理（2026-11-11）
 
 GeometryReadServices.createBlockLayoutが返す同じ実APIを、Block配置とDerived Instance編集へ共有する。rootのblockLocalGeometryBounds／blockInstanceDisplayCenter／blockInstanceTranslationForAnchor／snappedBlockRotationの四別名と、二つの二項目recordへの再梱包を除いた。生成位置・factory・model／scope・注記readerは変えず、BlockLayoutの現在定義・enabled Sketch・鏡像・中心・境界と各既存consumerの計算に手を加えない。新しいprepare／holder／adapterやmutable app contextを作らず、元のapplication／geometry配置を維持する。
