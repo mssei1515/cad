@@ -651,3 +651,83 @@ test('Annotation factory failures retain completed components, preserve explicit
   const other = workspaceStagesFixture('owned'); assert.throws(() => other.probe.owner.resetDrag(), /annotationDrag/);
   assert.equal(owner.resetDrag(), value);
 });
+
+function resizePolicyFixture() {
+  const f = workspaceStagesFixture('owned'), owner = f.probe.owner;
+  const control = { mode: 'select', pending: null, target: null, reads: [], calls: [], result: {}, error: new Error('resize synchronization failed'), fail: null };
+  const read = (name, value) => { control.reads.push(name); if (control.fail === name) throw control.error; return value; };
+  Object.defineProperty(f.options.interaction.lifecycle, 'mode', { configurable: true, get: () => read('mode', control.mode) });
+  Object.defineProperty(f.options.sessions.pending, 'current', { configurable: true, get: () => read('pending', control.pending) });
+  Object.defineProperty(f.options.sessions.targets, 'command', { configurable: true, get: () => read('target', control.target) });
+  Object.defineProperty(f.drag, 'syncResizeSelection', { configurable: true, get() {
+    read('method'); return function (enabled) { 'use strict'; assert.equal(this, f.drag); assert.equal(arguments.length, 1);
+      control.reads.push('sync'); control.calls.push(enabled); if (control.fail === 'sync') throw control.error; return control.result; };
+  } });
+  return { f, owner, control, create: () => owner.createDragForEditing({ constrained: f.probe.constrained, pointer: {} }) };
+}
+
+test('Annotation resize synchronization retains the early Drag guard, live conditions, short circuits, receiver and return boundary', () => {
+  const { f, owner, control: c, create } = resizePolicyFixture();
+  assert.throws(() => owner.syncResizeSelection(), error => error.name === 'ReferenceError' && error.message === "Cannot access 'annotationDrag' before initialization");
+  assert.deepEqual(c.reads, []); assert.equal(create(), f.drag); assert.deepEqual(c.reads, []);
+  for (const [mode, pending, target, enabled, reads] of [
+    ['select', null, null, true, ['method', 'mode', 'pending', 'target', 'sync']],
+    ['line', null, null, false, ['method', 'mode', 'sync']],
+    ['select', {}, null, false, ['method', 'mode', 'pending', 'sync']],
+    ['select', null, {}, false, ['method', 'mode', 'pending', 'target', 'sync']],
+    ['select', 0, '', true, ['method', 'mode', 'pending', 'target', 'sync']],
+  ]) {
+    Object.assign(c, { mode, pending, target }); c.reads.length = 0; c.calls.length = 0;
+    assert.equal(owner.syncResizeSelection('ignored'), c.result); assert.deepEqual(c.calls, [enabled]); assert.deepEqual(c.reads, reads);
+  }
+});
+
+test('Annotation resize synchronization propagates method, condition and Drag errors at the original read boundary', () => {
+  const { owner, control: c, create } = resizePolicyFixture(); create();
+  const order = ['method', 'mode', 'pending', 'target', 'sync'];
+  for (const failure of order) {
+    c.fail = failure; c.reads.length = 0; c.calls.length = 0;
+    assert.throws(() => owner.syncResizeSelection(), error => error === c.error);
+    assert.deepEqual(c.reads, order.slice(0, order.indexOf(failure) + 1));
+    assert.deepEqual(c.calls, failure === 'sync' ? [true] : []);
+  }
+  c.fail = 'pending'; c.mode = 'line'; assert.equal(owner.syncResizeSelection(), c.result);
+});
+
+test('Annotation resize eligibility drives the real Drag handles without re-enabling cancelled or unselected handles', () => {
+  const f = workspaceStagesFixture('owned'), owner = f.probe.owner;
+  vm.runInNewContext(fs.readFileSync('src/commands/annotation_drag.js', 'utf8'), { window: f.probe.window });
+  f.options.interaction.lifecycle.mode = 'select'; f.options.sessions.pending.current = null; f.state.command = null; f.item.type = 'text';
+  const drag = owner.createDragForEditing({ constrained: f.probe.constrained, pointer: {} });
+  const enable = () => { drag.begin({ pointerId: 1 }, { element: f.item, type: 'text', part: 'frame-enable' }, {}); assert.equal(drag.handlesActive, true); };
+  enable(); owner.syncResizeSelection(); assert.equal(drag.handlesActive, true);
+  f.options.sessions.pending.current = { type: 'offset-value' }; owner.syncResizeSelection(); assert.equal(drag.handlesActive, false);
+  f.options.sessions.pending.current = null; owner.syncResizeSelection(); assert.equal(drag.handlesActive, false);
+  enable(); f.state.command = { type: 'horizontal' }; owner.syncResizeSelection(); assert.equal(drag.handlesActive, false);
+  f.state.command = null; enable(); f.options.interaction.lifecycle.mode = 'line'; owner.syncResizeSelection(); assert.equal(drag.handlesActive, false);
+  f.options.interaction.lifecycle.mode = 'select'; enable(); f.options.interaction.selection.annotations = [];
+  owner.syncResizeSelection(); assert.equal(owner.resizeEnabled(f.item), false); assert.equal(drag.handlesActive, false);
+});
+
+test('Annotation resize synchronization stays with the Drag producing context through Feature replacement and failed Drag construction', () => {
+  const f = workspaceStagesFixture('owned'), owner = f.probe.owner, w = f.probe.window, calls = [], failure = new Error('new drag failed');
+  f.options.interaction.lifecycle.mode = 'select'; f.options.sessions.pending.current = null; f.state.command = null;
+  f.drag.syncResizeSelection = function (enabled) { assert.equal(this, f.drag); calls.push(['first', enabled]); };
+  owner.createDragForEditing({ constrained: f.probe.constrained, pointer: {} });
+  const interaction = { ...f.options.interaction, lifecycle: { ...f.options.interaction.lifecycle, mode: 'select' } };
+  const sessions = { ...f.options.sessions, pending: { ...f.options.sessions.pending, current: { type: 'distance-value' } } };
+  const second = owner.prepareForWorkspace({ documentWorkspace: f.options.documentWorkspace, readServices: f.options.readServices,
+    interaction, presentation: f.options.presentation, viewportScale: () => f.state.scale });
+  const renderer = Object.freeze({ ...f.renderer });
+  w.AnnotationDisplay.create = () => Object.freeze({ renderer, layer: f.layer, createSpatialQueries: () => f.spatial });
+  second.createFeature({ ...f.probe.late, sessions });
+  owner.syncResizeSelection(); assert.deepEqual(calls.pop(), ['first', true]);
+  w.AnnotationDrag.create = () => { throw failure; };
+  assert.throws(() => owner.createDragForEditing({ constrained: f.probe.constrained, pointer: {} }), error => error === failure);
+  owner.syncResizeSelection(); assert.deepEqual(calls.pop(), ['first', true]);
+  const next = Object.freeze({ syncResizeSelection(enabled) { assert.equal(this, next); assert.equal(arguments.length, 1); calls.push(['second', enabled]); } });
+  w.AnnotationDrag.create = () => next; assert.equal(owner.createDragForEditing({ constrained: f.probe.constrained, pointer: {} }), next);
+  owner.syncResizeSelection(); assert.deepEqual(calls.pop(), ['second', false]);
+  sessions.pending.current = null; f.options.interaction.lifecycle.mode = 'line';
+  owner.syncResizeSelection(); assert.deepEqual(calls.pop(), ['second', true]);
+});

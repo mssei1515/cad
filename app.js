@@ -88,7 +88,7 @@
   const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, resetBlankCandidate,
     pointUsage, createOperationSessionsForAuthoring: createOperationSessions } = canvasInteraction;
   presentation.bindUI({
-    syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
+    syncAnnotationResize: annotationPreparation.syncResizeSelection,
     prepareParameterNamespace,
     refreshConstraintAnalysis, updateDocumentName: () => updateDocumentNameUI(), updateToolbar,
     renderSketch: () => sketchTreeView.render(), updateBlockUI,
