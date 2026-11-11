@@ -1,5 +1,11 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 作図コマンド集合の境界再監査（2026-11-11）
+
+Canvas入力5項目とToolbar9項目の共通は4項目であり、Preview／Lifecycle／寸法submit等の先行利用も残ることを、基準94b0653のASTと各ownerで確認した。単純なcommand集合化は対応表を増やし、registry化や後段同時生成は保持・guard・公開段階を広げるため採用しない。詳細・7bindingの利用表・再現方法と次の調査対象は[境界監査](bootstrap-boundary-audit.md)の先頭を参照する。
+
+製品・テスト・正式仕様は変更していない。app.jsは1,229→1,229行（変化なし）、非空白786行、root224文・376束縛のまま。今回の作業は設計判断の記録であり、実装の分離件数に加えない。AST再監査・差分／app blob不変を検証する。コード変更を伴わないため自動テストは再実行しない。直前の構文639file／単体2,549件／関連E2E218件成功は94b0653と同じ製品sourceに対する以前の結果であり、今回の新しいテスト実行結果とは扱わない。全体の200〜500行目標は未完了。
+
 ## Sketch Treeの表示依存選択を既存Sketch機能へ集約（2026-11-11）
 
 SketchEditingFeature.createForInteractionが返すcreateTreeForPresentationは、既存Properties Selection・Constraint analysis／redundancy／reference state・Sketch Projection・Toolbar icons・Authoring feedback・Fixed-state queryから、Tree用objectOptionsの10項目を選ぶ。app.jsは実ownerを渡し、isHidden／投影照会／アイコン／ラベル／固定照会のfield選択とテスト専用ではないvisibility別名を持たない。個々のmodel／constraint／表示値は読まず、同じ実関数・recordを既存createTreeForEditingへ渡す。

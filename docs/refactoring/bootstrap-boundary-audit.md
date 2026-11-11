@@ -1,5 +1,37 @@
 # Composition rootの残存責務と依存監査
 
+## 作図コマンド集合の境界再監査（2026-11-11）
+
+基準はdevelop 94b065322e57db90b8d5cbbf71ce6649c405fcd1、app.jsのGit blobはe1649b02cc3839cfa8c3a40a973d52c5b3adabf2。現物のBabel lexical bindingとObjectExpressionを照合した。app.jsは1,229行／非空白786行、root224文・376束縛、構築114文／447非空白行、条件付きtest hooks152行。この監査では製品・テストを変更せず、app.jsは1,229→1,229行（変化なし）。実装の分離単位として数えない。
+
+Canvas入力のdrawingCommandsはcenterline／circleCenterCross／fillet／trim／offsetの5項目、Toolbarのdrawingはcenterline／circleCenterCross／projection／instances／fillet／blockCreation／offset／spline／hatchの9項目。共通はcenterline／circleCenterCross／fillet／offsetの4項目であり、同じ集合の二重構築ではない。生のactor参照を渡し、各消費側が既存click／start等を選ぶ現在の契約を確認した。
+
+| root binding | 宣言行（基準版） | 通常参照／test参照 | 接続上の意味 |
+| --- | ---: | ---: | --- |
+| centerlineCommand | 358 | 4／1 | Preview、Lifecycle、Canvas入力、Toolbar、Canvasテストで同じactorを共有 |
+| circleCenterCrossCommand | 450 | 2／0 | Canvas入力とToolbarだけから参照 |
+| filletCommand | 328 | 3／0 | Lifecycle、Canvas入力、Toolbarで共有 |
+| trimFeature | 924 | 1／1 | Canvas入力とTrimテストで共有。Toolbar項目には含まれない |
+| offsetCommand | 315 | 3／0 | 寸法入力submit、Canvas入力、Toolbarで共有 |
+| splineCommand | 306 | 3／0 | PointerとKeyboardの二経路、Toolbarで共有 |
+| hatchCommand | 753 | 9／1 | 描画、Lifecycle、Properties、Pointer／Keyboard、Toolbar、Command panel、Document reset、Hatchテスト等で共有 |
+
+参照数はlexical referencePathsの数であり、利用機能数や残タスク数ではない。例えば同じbindCanvasInput文のPointer optionsとKeyboard optionsを二参照と数える。installTestHooksの祖先functionを照合し、単純な名前検索でtest専用と判定していない。
+
+### 比較した案と判断
+
+- 後段で凍結command recordを一つ作る案：操作stateの複製は不要だが、集合を作る宣言とToolbar固有の追加項目が残る。Preview／Lifecycle／寸法submit等の先行利用も置き換えられず、主に対応表の場所が増える。この効果だけを根拠に新しいfactoryを作らない。
+- BasicDrawingTools.prepareからcommand registryを公開する案：既に保持するauthoring／editing／centerline／trim／splineEditingと、現在保持しないcircle cross／offset／hatchを区別する必要がある。保持slot、生成成功時の切替、失敗時の前actor保持、各初期化前guardを新たに増やし得る。呼出し側の数行のためにactorの保持境界を広げる案は採用しない。
+- 全command生成を一つの後段factoryへ寄せる案：Offsetのsubmit、CenterlineのPreview、Filletを使うLifecycle等がTrim生成以前に接続される。Hatchも描画側とLifecycle側では生成前にreaderを渡している。これらを同時生成へ変えると既存の準備・公開段階が変わるため採用しない。
+
+巨大contextや新しい保持層へ置き換えることを、責務分離の進捗として扱わない。現在の二つの明示的な集合は消費側の異なる契約として残す。既存のBasicDrawingTools／CanvasInteractionFeature／PresentationFeatureと各commandの配置・通常動作は変更しない。
+
+### 次の調査で確認するもの
+
+単なるactor集合化を繰り返さず、PropertiesDisplay.createEditingWithViewForWorkspaceのediting生成→readViewOptions→view生成→成功時公開の境界を確認する。app.jsのProperties表示callbackには、既存feedback・layout・parameter editor等からのfield選択と、操作owner・DOM型の入力が混在する。既に捕捉したownerとの重複、callbackを読む正確な時点、生成失敗で以前のviewを保持する範囲を先に追う。新しいwrapperや共有contextを作ることは未決定であり、実質的な依存整理がない場合は採用しない。
+
+再現には基準版のapp.jsを用い、tools/audit-composition-root.jsのauditSourceでroot計数を取り、Playwright同梱Babel parser／traverseのIIFE scope.getBinding(name).referencePathsで表の7bindingを照合する。drawingCommands／drawingのObjectExpression key列も照合する。line番号は基準版のものとし、将来のsourceの行番号へ流用しない。実行したread-only scriptとJSONは一時ディレクトリのcad-drawing-command-boundary-audit.{cjs,json}。未使用bindingや新たな未束縛参照を増やす変更は行っていない。
+
 ## テスト専用のroot別名とCanvas所有境界の再監査（2026-11-11）
 
 基準はdevelop eb17cf5。app.js 1,241行、非空白798行、root227文・390束縛。Babel lexical bindingの全referenceがinstallTestHooks内にあるものを抽出すると24個あった。単なる名前検索ではなく参照先bindingと祖先functionを照合した。未使用・通常callbackとの混用とは区別する。
