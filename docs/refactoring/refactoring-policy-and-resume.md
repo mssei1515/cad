@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の線つぶれQuery組立て単位ではapp.jsは1,261行、非空白816行。AST監査ではroot242文・410束縛、構築・接続465非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の実BlockLayout共有単位ではapp.jsは1,261行、非空白816行。AST監査ではroot242文・407束縛、構築・接続465非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：実BlockLayoutを共有し再梱包を整理（2026-11-11）
+
+GeometryReadServices.createBlockLayoutが返す同じ実APIを、Block配置とDerived Instance編集へ共有する。rootのblockLocalGeometryBounds／blockInstanceDisplayCenter／blockInstanceTranslationForAnchor／snappedBlockRotationの四別名と、二つの二項目recordへの再梱包を除いた。生成位置・factory・model／scope・注記readerは変えず、BlockLayoutの現在定義・enabled Sketch・鏡像・中心・境界と各既存consumerの計算に手を加えない。新しいprepare／holder／adapterやmutable app contextを作らず、元のapplication／geometry配置を維持する。
+
+BlockLayoutのblockLocalGeometryBounds／blockInstanceDisplayCenter／blockInstanceTranslationForAnchor／snappedBlockRotationは、凍結recordのown readonly data fieldである。appは四つの重複別名と二つの部分recordへの再梱包を持たず、BlockEditingFeature.createPlacementへlayout、DerivedInstanceFeatureのcreateEditingWithTransformsへblockLayoutとして実APIを共有する。前者は回転とanchor平行移動、後者はlocal boundsと回転の各二fieldだけを読み、recordの列挙・identity比較・書込み・保存や別の転送をしない。他の単機能callback先には、同じ実recordから選択した元の関数だけを渡す。getterや可変snapshotへの同じ置換を一般化しない。
+
+app.jsは1,261→1,261行（0行変化）、非空白816行のまま。root242文・構築114文／465非空白行は不変、束縛410→407（3減）。構文依存辺1,089、別名・設定99行、委譲11行、test hooks158行も不変。九つの旧参照のうち四つを二つの実record引渡しへ揃え、残る五つは同じownerのfield参照へ替えた。行数の圧縮を成果として扱わず、200〜500行の全体目標は未完了。
+
+対象を逆展開したroot全体のASTが基準d43ab4cと一致し、src／tests／loader／toolsとfree identifier集合も不変である。二consumerのlayout参照は二fieldを取り出す一箇所だけで、arguments／evalによる別観測もないことを確認した。実browserのapp responseにだけ読取り用診断を挿入し、四fieldが凍結own data propertyであること、両consumerへ実BlockLayout自体が渡ること、選択する元のfunction参照・Object prototype・生成順、公開テスト204項目のkey／descriptor／型が前後一致することを照合した。未使用の二fieldの存在・freezeをconsumerは観測しない。診断は製品sourceやE2Eへ残さない。既存テストは実BlockLayoutを受ける経路を既に検証しており、forwardingだけを固定する新規テストは追加しない。
+
+関連単体40件・全単体2,515件・通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+基準develop d43ab4c、作業branch codex/block-layout-record、開始時週枠残量88%。証跡はTEMP cad-block-layout-record-{before,after,audit,selection,source-hashes}.jsonとfocused／check／unit／smoke／e2e.logへ保持する。実APIを受ける既存consumerを使えば新たなBlock準備factoryやlayout保持setterは不要である。次も小さな再梱包を減らすだけで全体目標を達成したと扱わず、既存ownerによる機能単位の生成・接続を確認する。週枠残量50%未満で新規分離を止め、develop先行・main最後で反映する方針を維持する。
 
 ### 最新：線つぶれ検出Queryの組立てを求解contextへ集約（2026-11-11）
 

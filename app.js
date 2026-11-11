@@ -70,7 +70,7 @@
   const { catalog: blockCatalog, projections: blockProjections, reads: geometryReads,
     geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { resolveGeometryRef } = geometryReads;
-  const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = geometryReadServices.createBlockLayout({ annotationBounds: annotationPreparation.annotationBounds });
+  const blockLayout = geometryReadServices.createBlockLayout({ annotationBounds: annotationPreparation.annotationBounds });
   const sketchNavigation = window.SketchEditingFeature.prepareNavigation();
   const { clearInteractionForSketchChange, toggleSketchVisibility, isSidebarHighlightedElement } = sketchNavigation;
   const { binding: editingScopeBinding, solver, dimensionQueries: dimensionModelQueries, insertion: constraintInsertion } = createEditingScope({
@@ -173,7 +173,7 @@
     projectionSources: sketchProjectionSources, guardDimensionSymbolDeletion, solveState: sketchSolveResultState,
   });
   const blockPlacementCommand = blockEditingFeature.createPlacement({
-    layout: { snappedBlockRotation, blockInstanceTranslationForAnchor }, isGeometryMode, clearSelection,
+    layout: blockLayout, isGeometryMode, clearSelection,
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
     setPropertiesPanelCollapsed, solveAndRefresh, recordHistory,
   });
@@ -341,7 +341,7 @@
     checkpoint: editingCheckpoint, serializeModel, addPointSnapConstraints,
     rebinding: constraintRebinding,
     parameters: parameterStabilization, acceptError: CONSTRAINT_ACCEPT_ERROR, scopeQuery: solveScopeQuery, solver, solveState: sketchSolveResultState,
-    blockLayout: { blockLocalGeometryBounds, snappedBlockRotation }, solving: sketchSolving, updateBlockUI, refreshConstraintAnalysis,
+    blockLayout, solving: sketchSolving, updateBlockUI, refreshConstraintAnalysis,
   });
   const { setBlockInstanceRotationLocked } = instanceTransformCommand;
   const { command: dimensionValueCommand, solvePreparation: constraintSolvePreparation } = dimensionValueEditing.createForEditing({
@@ -474,7 +474,7 @@
     isGeometryMode, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, prepareBlocks: ensureBlockState,
     resetBlockEditorHistory, clearSelection, drawingFit: canvasScene.fit, recordHistory,
     referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, choiceDialog,
-    blockLocalGeometryBounds, references: constraintReferences, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
+    blockLocalGeometryBounds: blockLayout.blockLocalGeometryBounds, references: constraintReferences, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
   });
   const { open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
@@ -841,7 +841,7 @@
     projection: sketchProjectionFeature, projectionEditing: sketchProjectionEditing, annotationFeature,
     isGeometryMode, toggleSketchVisibility, recordHistory, escapeHtml,
   }, () => ({
-    analysis: constraintAnalysis, selectionHighlight, snappedBlockRotation, hatchRegionErrorText: authoringFeedback.hatchRegionErrorText,
+    analysis: constraintAnalysis, selectionHighlight, snappedBlockRotation: blockLayout.snappedBlockRotation, hatchRegionErrorText: authoringFeedback.hatchRegionErrorText,
     geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, installExpressionInputHighlights,
     HTMLTextAreaElement, HTMLInputElement,
     changeFreeInstanceProperty, commitAnnotationParameterEdit,
@@ -915,7 +915,7 @@
     checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
     viewport, pointer: dragPointer, acceptError: CONSTRAINT_ACCEPT_ERROR,
     minimumLength: MIN_ORIENTATION_LENGTH,
-    blockLocalGeometryBounds, fixedState: fixedStateQueries,
+    blockLocalGeometryBounds: blockLayout.blockLocalGeometryBounds, fixedState: fixedStateQueries,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
   });
@@ -1137,14 +1137,14 @@
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
       sketchPresentation: canvasScene.sketchStyle, overlay: canvasScene.overlay, viewport, canvasDriver: canvasTestDriver, drawingFit: canvasScene.fit, blocks: blockEditingFeature, dimensionDisplay,
       referenceState: referenceConstraintState, document, canvas, getComputedStyle: element => getComputedStyle(element),
-      serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter,
+      serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter: blockLayout.blockInstanceDisplayCenter,
     });
     const blockTestSupport = window.BlockTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, blocks: blockEditingFeature,
       interaction: canvasInteraction, sessions: operationSessions, presentation, placement: blockPlacementCommand, solver, canvas, viewport,
       solving: sketchSolving, definition: blockDefinitionCommand, completion: blockCompletionCommand, configuration: blockConfigurationCommand,
       sketchEditing, dragging: geometryDragFeature, selectionQuery: blockSelectionQuery,
-      resetModelState, pushModelConstraint: constraintInsertion.push, fitAllGeometryToViewport: canvasScene.fit.fitAllGeometryToViewport, recordHistory, serializeConstraint, serializeModel, loadModelData, blockInstanceDisplayCenter,
+      resetModelState, pushModelConstraint: constraintInsertion.push, fitAllGeometryToViewport: canvasScene.fit.fitAllGeometryToViewport, recordHistory, serializeConstraint, serializeModel, loadModelData, blockInstanceDisplayCenter: blockLayout.blockInstanceDisplayCenter,
     });
     const blockTestActions = blockTestSupport.createDimensionCases({
       defaultDimensionForTarget: dimensionPlacement.defaultDimensionForTarget, readOnlyDimensionConstraintForPlacement: readOnlyDimensions.forPlacement,
