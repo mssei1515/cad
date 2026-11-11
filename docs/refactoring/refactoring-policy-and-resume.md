@@ -98,6 +98,14 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
+### 最新：生成元の系譜による構築・接続の再監査（2026-11-11）
+
+基準develop 6eed90d、作業branch codex/composition-construction-audit。app.jsは1,264→1,264行（0行変化）、非空白819行。製品分離の一単位として数えない。監査toolへconstructionOriginsを追加し、段階的なfactory／別名を実行せずに追えるようにした。詳細・生成元別の計測・次のCanvas実Scene recordの候補と検証条件は[構築依存の再監査](bootstrap-boundary-audit.md)の先頭を参照する。
+
+構築114文／468非空白行が中心であり、CanvasInteraction由来15生成・74行・21束縛、CanvasDisplay由来10生成・49行・37束縛は複数段階に分かれる。同じnamespaceという理由だけで一つの巨大factoryへ集めない。一律中継moduleや微小delegateだけの分離を繰り返すのではなく、実ownerの完成recordと限定した利用契約の共有を次に検討する。候補の実装はまだ行っていない。
+
+監査関連6件・全単体2,511件成功。構文639fileは成功（exit 0）。旧監査field全体の同値と製品／E2E不変を照合した。この単位ではE2Eを再実行せず、直前6eed90dの関連504件と最後の全体589件成功を今回の再実行として扱わない。週枠残量50%未満で新規分離を停止し、検証・Commit／Push・developの後、mainを最後に反映する方針を維持する。
+
 ### 最新：履歴の段階的生成と早期操作port（2026-11-11）
 
 HistoryController.prepare（src/editing/history_controller.js）は、早期に渡すrecord／createBlockHistoryと後段の実履歴生成を同じownerで接続する。prepareはclosureと凍結portだけを生成し、model／scope／DOMを読まず、履歴stackを作らない。createForWorkspaceは従来位置で同名の生factoryを同じnamespace receiver・一引数で呼び、成功した実featureをそのまま返す。外部生成物をsetterで登録する方式や、別の履歴stack／session／app contextは追加しない。

@@ -1,5 +1,9 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 生成元の系譜による構築依存の再監査（2026-11-11）
+
+開発用audit toolのconstructionOriginsでconst factory別名／入れ子の取得経路を追跡し、変更・default／rest／computed／循環とshadowingでは推定しない。アプリは実行しない。旧field全体の現物比較、114initializerとroot対応を確認した。大きな生成群を単に移す案の問題と、Canvasの実Scene recordを共有する次の候補をbootstrap-boundary-audit.mdへ記録した。製品の分離実装はこの単位では行わず、app.jsは1,264→1,264行（0行変化）。監査6件・全単体2,511件成功、構文639fileは成功（exit 0）。製品／E2E不変のため今回E2Eは再実行していない。
+
 ## 履歴の早期操作portと後段生成を同じownerへ集約（2026-11-11）
 
 HistoryController.prepare（src/editing/history_controller.js）は、早期に渡すrecord／createBlockHistoryと後段の実履歴生成を同じownerで接続する。prepareはclosureと凍結portだけを生成し、model／scope／DOMを読まず、履歴stackを作らない。createForWorkspaceは従来位置で同名の生factoryを同じnamespace receiver・一引数で呼び、成功した実featureをそのまま返す。外部生成物をsetterで登録する方式や、別の履歴stack／session／app contextは追加しない。
