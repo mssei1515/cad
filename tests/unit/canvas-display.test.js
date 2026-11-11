@@ -135,7 +135,7 @@ test('export uses the shared viewport and restores its frame before interactive 
 
 const interactiveOrder = ['block-handles', 'dimensions', 'dimension-preview', 'annotations', 'annotation-preview', 'authoring',
   'block-placement', 'free-instance', 'offset', 'trim', 'snap', 'arc-handles', 'spline-handles', 'points', 'image-overlays', 'identity', 'selection-rect', 'export-overlay'];
-function workspaceRenderingFixture() {
+function workspaceRenderingFixture(owned = false) {
   const f = fixture(), stages = [];
   f.state.ready = false;
   function stage(name) {
@@ -150,7 +150,7 @@ function workspaceRenderingFixture() {
     for (const [method, name] of Object.entries(methods)) api[method] = function () { assert.equal(this, api); stage(name); };
     return api;
   }
-  const rendering = f.workspace.createRendering({ recordDraw: () => stage('record'),
+  const options = { recordDraw: () => stage('record'),
     geometry: owner({ drawArcEndpointHandles: 'arc-handles', drawSplineEditHandles: 'spline-handles', drawPoints: 'points' }),
     dimensions: owner({ draw: 'dimensions' }), annotations: owner({ draw: 'annotations', drawPreview: 'annotation-preview' }),
     drawDimensionPreview: () => stage('dimension-preview'), authoringPreview: owner({ draw: 'authoring', drawTrimPreview: 'trim' }),
@@ -158,16 +158,20 @@ function workspaceRenderingFixture() {
     offsetPreview: owner({ draw: 'offset' }), drawBlockInstanceHandles: () => stage('block-handles'), drawSnapMarker: () => stage('snap'),
     drawReferenceImages: () => stage('images'), drawHatches: () => stage('hatches'), drawDrawingStack: () => stage('stack'),
     drawReferenceImageOverlays: () => stage('image-overlays'), drawSketchIdentityLabel: () => stage('identity'),
-    drawSelectionRect: () => stage('selection-rect'), drawExportOverlay: () => stage('export-overlay') });
+    drawSelectionRect: () => stage('selection-rect'), drawExportOverlay: () => stage('export-overlay') };
+  const prepared = sandbox.window.CanvasDisplay.prepareRendering();
+  const build = options => Object.freeze({ frame: f.workspace.createRendering(options) });
+  const bundle = owned ? prepared.createFrame(build, options) : build(options);
+  const rendering = bundle.frame, drawFrame = owned ? prepared.drawCanvas : () => rendering.draw();
   assert.deepEqual(f.calls, []); assert.deepEqual(stages, []); assert.ok(Object.isFrozen(rendering));
-  f.state.onContent = rendering.draw; f.state.onDraw = rendering.draw; f.state.ready = true;
-  return { ...f, rendering, stages };
+  f.state.onContent = drawFrame; f.state.onDraw = drawFrame; f.state.ready = true;
+  return { ...f, rendering, drawFrame, stages };
 }
 
-test('Workspace rendering shares the live viewport, bitmap, zoom display and PNG frame without repeated infrastructure ports', () => {
-  const f = workspaceRenderingFixture(), other = workspaceRenderingFixture();
+for (const owned of [false, true]) test(`Workspace rendering shares the live viewport, bitmap, zoom display and PNG frame without repeated infrastructure ports (${owned ? 'owned' : 'direct'})`, () => {
+  const f = workspaceRenderingFixture(owned), other = workspaceRenderingFixture(owned);
   f.display.viewport.update({ x: 10, y: 20, scale: 4 });
-  f.rendering.draw(); assert.equal(f.button.textContent, '200%');
+  f.drawFrame(); assert.equal(f.button.textContent, '200%');
   assert.equal(f.canvas.width, 400); assert.equal(f.workspace.surface.dpr, 2);
   assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
   assert.equal(other.canvas.width, 0); assert.deepEqual(other.stages, []);
@@ -181,8 +185,8 @@ test('Workspace rendering shares the live viewport, bitmap, zoom display and PNG
   assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
 });
 
-test('Workspace rendering retains export failure and restore boundaries on the same renderer', () => {
-  const f = workspaceRenderingFixture(), error = new Error('annotations failed');
+for (const owned of [false, true]) test(`Workspace rendering retains export failure and restore boundaries on the same renderer (${owned ? 'owned' : 'direct'})`, () => {
+  const f = workspaceRenderingFixture(owned), error = new Error('annotations failed');
   f.state.failure = 'annotations'; f.state.error = error;
   assert.throws(() => f.workspace.exportRenderer.render({ x: 0, y: 0, width: 10, height: 10 }, { x: 1, y: 1 }), value => value === error);
   assert.ok(f.workspace.exportRenderer.frame); assert.deepEqual(f.stages, ['images', 'hatches', 'stack', 'dimensions', 'annotations']);
@@ -190,6 +194,28 @@ test('Workspace rendering retains export failure and restore boundaries on the s
   f.state.failure = null; f.stages.length = 0; f.workspace.exportRenderer.restore();
   assert.equal(f.workspace.exportRenderer.frame, null);
   assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+});
+
+test('prepared Canvas rendering publishes only completed native renderers and preserves draw calls and failures', () => {
+  const prepared = sandbox.window.CanvasDisplay.prepareRendering(), independent = sandbox.window.CanvasDisplay.prepareRendering();
+  const unready = () => assert.throws(() => prepared.drawCanvas(), error => error.name === 'ReferenceError' && error.message === "Cannot access 'canvasFrameRenderer' before initialization");
+  unready(); const marker = {}, input = {}, extra = {}, failure = new Error('frame'), drawFailure = new Error('draw');
+  let reads = 0, drawReads = 0;
+  const renderer = { get draw() { drawReads++; return function () { assert.equal(this, renderer); assert.equal(arguments.length, 0); return marker; }; } };
+  const bundle = Object.freeze({ get frame() { reads++; unready(); return renderer; } });
+  function factory() { 'use strict'; assert.equal(this, undefined); assert.deepEqual(Array.from(arguments), [input, extra]); unready(); return bundle; }
+  assert.equal(prepared.createFrame(factory, input, extra), bundle); assert.equal(reads, 1); assert.equal(drawReads, 0);
+  assert.equal(prepared.drawCanvas(input), marker); assert.equal(prepared.drawCanvas(), marker); assert.equal(drawReads, 2);
+  assert.throws(() => independent.drawCanvas(), error => error.name === 'ReferenceError');
+  assert.throws(() => prepared.createFrame(() => { throw failure; }), error => error === failure);
+  assert.throws(() => prepared.createFrame(() => ({ get frame() { throw failure; } })), error => error === failure);
+  assert.equal(prepared.drawCanvas(), marker); assert.equal(reads, 1);
+  const failing = { draw() { assert.equal(this, failing); throw drawFailure; } };
+  prepared.createFrame(() => ({ frame: failing })); assert.throws(() => prepared.drawCanvas(), error => error === drawFailure);
+  for (const value of [undefined, null]) {
+    prepared.createFrame(() => ({ frame: value }));
+    assert.throws(() => prepared.drawCanvas(), error => error.name === 'TypeError');
+  }
 });
 
 function renderingFixture() {
