@@ -291,23 +291,32 @@ function sceneObservationFixture(composed, failRendering = false) {
   f.state.ready = false;
   sandbox.window.CanvasRenderTestDriver = { createRenderingSupport(options) { assert.equal(options.currentScope, currentScope); if (failRendering) throw failRendering; return rendering; } };
   let api;
+  const staticNames=['SketchHierarchy','GeometrySolver','SplineGeometry'],previousStatics=Object.fromEntries(staticNames.map(name=>[name,sandbox.window[name]]));
   try {
     const driver = sandbox.window.CanvasTestDriver;
-    api = composed ? driver.createBrowserSupportForScene(input) : { ...driver.createForScene(input),
+    if(composed==='workspace') {
+      sandbox.window.SketchHierarchy=Object.freeze({ROOT_SKETCH_ID:input.rootSketchId,DEFAULT_SKETCH_ID:input.defaultSketchId});
+      sandbox.window.GeometrySolver=input.types;sandbox.window.SplineGeometry=Object.freeze({evaluate:input.evaluateSpline});
+    }
+    api = composed==='workspace' ? driver.createBrowserSupportForWorkspace({...input,
+      blocks:Object.freeze({editing:Object.freeze({empty:input.blocks.createEmptyBlockDefinition})}),blockPlacement:input.blocks.blockPlacementCommand,
+      annotations:Object.freeze({drawAnnotationLeader:input.drawAnnotationLeader}),frame:Object.freeze({overlays:Object.freeze({drawSelectionRect:input.drawSelectionRect})}),
+      sceneQueries:Object.freeze({geometry:Object.freeze(input.hits),hitDimension:input.hits.hitDimension})}) : composed ? driver.createBrowserSupportForScene(input) : { ...driver.createForScene(input),
       viewObservation: driver.createViewObservation({ viewState: viewControls.state, constraintStatusView: viewControls.constraintStatus }),
       authoringObservation: driver.createAuthoringObservation({ readMode: input.interaction.lifecycle.readMode, constraintTargetSession: sessions.targets,
         pendingCommandSession: sessions.pending, drawingSnap: snap, centerlineCommand: centerline, currentScope,
         decorateSerializedConstraint: persistence.decorateSerializedConstraint, serializeConstraint: persistence.serializeConstraint,
         readPerformance: observations.commit.readPerformance, readSelectedGeometry: observations.readSelectedGeometry }),
       interactionProfilingTestApi: driver.createInteractionProfiling({ profiler: profiling.profiler, scheduler: profiling.scheduler }) };
-  } finally { if (original === undefined) delete sandbox.window.CanvasRenderTestDriver; else sandbox.window.CanvasRenderTestDriver = original; }
+  } finally { for(const name of staticNames){if(previousStatics[name]===undefined)delete sandbox.window[name];else sandbox.window[name]=previousStatics[name];}
+    if (original === undefined) delete sandbox.window.CanvasRenderTestDriver; else sandbox.window.CanvasRenderTestDriver = original; }
   assert.deepEqual(calls, []); f.state.ready = true;
   return { api, state, sessions, snap, centerline, selection, viewControls, model, calls, marker, rendering, profiling };
 }
 
 test('Canvas browser support keeps construction cold and raw observation results, live scope and shared owners identical', () => {
   const results = [];
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, "workspace"]) {
     const f = sceneObservationFixture(composed); if (composed) assert.ok(Object.isFrozen(f.api));
     assert.equal(f.api.rendering, f.rendering); assert.equal(typeof f.api.display.clientPosition, 'function');
     const empty = f.api.authoringObservation.state(); assert.equal(empty.pointCount, 0);
@@ -321,11 +330,11 @@ test('Canvas browser support keeps construction cold and raw observation results
     authoring.pendingPlacementPoint.x = 99; assert.equal(f.sessions.pending.current.pointer.x, 7); assert.equal(f.model.units.length, 'mm');
     results.push(JSON.stringify({ empty, authoring, view, calls: f.calls }));
   }
-  assert.equal(results[1], results[0]);
+  assert.equal(results[1], results[0]); assert.equal(results[2], results[0]);
 });
 
 test('Canvas browser support retains actual scheduler profiling and original scene or pending flush failures', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, "workspace"]) {
     const f = sceneObservationFixture(composed), api = f.api.interactionProfilingTestApi, p = f.profiling;
     p.profiler.start(); p.profiler.phase('prior', () => { p.state.time += 2; }); p.scheduler.schedule({ offsetX: 1, offsetY: 2 }); p.state.fail = true;
     assert.throws(api.startInteractionProfileForTest, error => error === p.marker);

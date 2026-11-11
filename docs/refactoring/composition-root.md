@@ -1,5 +1,18 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Canvasテスト専用の関数選択を実ownerから組み立てる（2026-11-11）
+
+CanvasTestDriver.createBrowserSupportForWorkspace（src/testing/canvas_test_driver.js）は、実Block editing／placement、注記renderer、Frame bundle、Scene queriesからCanvasテスト支援の関数を選び、既存createBrowserSupportForSceneへ渡す。Sketch定数、型、Spline評価も同じ既存namespaceから選ぶ。app.jsはテスト専用のROOT_SKETCH_ID／DEFAULT_SKETCH_ID／blockDefinitionEditing／drawAnnotationLeader／hitArcEndpoint／hitSpline／drawSelectionRect別名を持たない。通常機能のstateや操作をtestingへ移さず、旧createBrowserSupportForScene／createForScene／個別fixtureは維持する。
+
+Frameは既存createCanvasFrameが返す同じ凍結bundleを保持し、通常のcanvasFrameRendererは同じframe fieldから取得する。描画時には従来の同名bindingを読み、生成前のReferenceErrorも変えない。実関数をwrap・bind・実行せず、従来のblocks三fieldとhits七fieldを同じkey順・参照で接続する。必要fieldは実ownerのreadonly data propertyで、テスト生成時の選択でも同じ値になる。scope／倍率／Selection／hover／pending／Documentは既存支援が操作時に読む。生成・公開・bind／start段階、通常起動でtest支援を生成しない条件、公開204項目、描画・履歴・取消・保存形式v26と既存testing／application／rendering配置・読込順を保つ。全体contextや追加のmodel・cache・listenerは作らない。
+
+app.jsは1,241→1,238行（3行減）、非空白798→795行、root227→226文・390→384束縛、構文依存辺1,065→1,063。テスト専用の七別名を除き、実Frame bundle一つの保持を加えたためroot束縛は差引六つ減る。別名・設定93→92行、test hooks157→155行。構築114文／449行、bind41行・委譲7行は不変。全体の200〜500行目標は未完了。
+
+関連単体21件・全単体2,545件・構文639fileが成功。既存の二つのScene比較テストへowner入力経路を加え、生成時のscope無照会、同じ描画支援・現在scope／pending／Selection／表示状態の観測、実profiler／PointerMoveSchedulerの計測とflush／生成失敗の同一性を確認した。新しい期待値や性能基準には変更していない。browser比較では実参照16項目、14fieldのreadonly、同じ実Frameと支援result、旧frame bindingの生成前ReferenceError、option／blocks／hitsのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体とCanvasDisplay／CanvasSurface sourceは不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## 空Documentの保存基準と起動時読込の開始を既存File Featureへ集約（2026-11-11）
 
 DocumentFileFeature.prepareが返すcreateForWorkspace（src/application/document_file.js）は、startForEmptyDocumentを公開する。app.jsのtest hooks公開・式入力装飾後の同じ段階から、既存resetModelStateとinitializePresentationだけを明示portとして渡す。入口はリセット→表示初期化（従来の新規Documentメッセージ）→実履歴のresetDocument("起動")→実markCheckpoint("new")→同じ完成Feature.start()の順で実行する。空Documentの保存基準を作ってから起動時のリンク読込を始め、別のbootstrapや全体contextは作らない。

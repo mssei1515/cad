@@ -1,6 +1,20 @@
 /* Browser-test viewport focus and world-to-client positions through existing display owners. */
 (() => {
   "use strict";
+  function createBrowserSupportForWorkspace({ document, canvas, viewport, documentWorkspace, readServices, geometry, interaction, sessions, authoring, presentation,
+    display, ctx, selectionRectangle, layers, blocks, blockPlacement, annotations, frame, sceneQueries,
+    resizeCanvas, resetModelState, cssPxPerMm, observations }) {
+    const { ROOT_SKETCH_ID: rootSketchId, DEFAULT_SKETCH_ID: defaultSketchId } = window.SketchHierarchy;
+    const { geometry: hits } = sceneQueries;
+    return createBrowserSupportForScene({ document, canvas, viewport, documentWorkspace, readServices, geometry, interaction, sessions, presentation, authoring,
+      display, ctx, selectionRectangle, layers,
+      blocks: { createEmptyBlockDefinition: blocks.editing.empty, blockPlacementCommand: blockPlacement, drawBlockInstanceHandles: display.geometry.drawBlockInstanceHandles },
+      drawSelectionRect: frame.overlays.drawSelectionRect, drawAnnotationLeader: annotations.drawAnnotationLeader,
+      resizeCanvas, resetModelState, rootSketchId, defaultSketchId, cssPxPerMm, types: window.GeometrySolver,
+      evaluateSpline: window.SplineGeometry.evaluate,
+      hits: { hitArcEndpoint: hits.hitArcEndpoint, hitPoint: hits.hitPoint, hitLine: hits.hitLine, hitCircle: hits.hitCircle,
+        hitArc: hits.hitArc, hitSpline: hits.hitSpline, hitDimension: sceneQueries.hitDimension }, observations });
+  }
   function createBrowserSupportForScene({ observations, ...options }) {
     const scene = createForScene(options);
     const { documentWorkspace, interaction, sessions, authoring, presentation } = options;
@@ -323,5 +337,5 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasTestDriver = Object.freeze({ createBrowserSupportForScene, create, createDisplaySupport, createForScene, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation, createInteractionProfiling });
+  window.CanvasTestDriver = Object.freeze({ createBrowserSupportForWorkspace, createBrowserSupportForScene, create, createDisplaySupport, createForScene, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation, createInteractionProfiling });
 })();

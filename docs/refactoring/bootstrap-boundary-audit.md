@@ -1,5 +1,22 @@
 # Composition rootの残存責務と依存監査
 
+## テスト専用のroot別名とCanvas所有境界の再監査（2026-11-11）
+
+基準はdevelop eb17cf5。app.js 1,241行、非空白798行、root227文・390束縛。Babel lexical bindingの全referenceがinstallTestHooks内にあるものを抽出すると24個あった。単なる名前検索ではなく参照先bindingと祖先functionを照合した。未使用・通常callbackとの混用とは区別する。
+
+Canvas Workspace→寸法入力のfield取得→Scene生成は隣接するが、一括factoryから両recordを返すと、Scene生成中に使えるrootのsurface／寸法input等の参照が変わる。巨大な戻り値も必要であり、この一括移動は採用しない。初期化順を維持し、既存の実recordを適切な消費側へ渡す境界を優先する。
+
+今回採用する七別名はSketch定数二つ、Block editing、注記leader描画、arc endpoint／spline hit、矩形選択描画。CanvasTestDriverが既にfixtureと観測を生成しているため、同じ実ownerから選ぶ。通常Frameの実actorは従来のbindingに残し、既存Frame bundleを新たに保持してテストへ渡す。実actorやpreview layerのAPIをテストのために拡張せず、readonlyの既存fieldだけを消費する。
+
+app.jsは1,241→1,238行（3行減）、非空白798→795行、root227→226文・390→384束縛、構文依存辺1,065→1,063。テスト専用の七別名を除き、実Frame bundle一つの保持を加えたためroot束縛は差引六つ減る。別名・設定93→92行、test hooks157→155行。構築114文／449行、bind41行・委譲7行は不変。全体の200〜500行目標は未完了。
+
+変更後に同じ抽出を再実行すると17個となる。これらには別TestDriver間で共有するhistory／clipboardや、通常factoryの一部であるCompletion等も含まれ、全てを単純削除可能とは扱わない。次の単位は実生成順・guard・現在scopeを維持できるowner入力から選ぶ。
+
+関連単体21件・全単体2,545件・構文639fileが成功。既存の二つのScene比較テストへowner入力経路を加え、生成時のscope無照会、同じ描画支援・現在scope／pending／Selection／表示状態の観測、実profiler／PointerMoveSchedulerの計測とflush／生成失敗の同一性を確認した。新しい期待値や性能基準には変更していない。browser比較では実参照16項目、14fieldのreadonly、同じ実Frameと支援result、旧frame bindingの生成前ReferenceError、option／blocks／hitsのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体とCanvasDisplay／CanvasSurface sourceは不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## Canvas入力の生成・公開・bind段階の再監査（2026-11-11）
 
 基準はdevelop 1b273fd。現物のASTではapp.js 1,250行／非空白806行、root235文・393束縛、構築116文／466行、bind15文／27行、test hooks157行だった。前の生成元別集計は別commitのsnapshotであり流用しない。

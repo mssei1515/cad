@@ -41,7 +41,6 @@
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const { applicationText } = presentation.settings;
   const authoringFeedback = presentation.createAuthoringFeedback();
-  const { ROOT_SKETCH_ID, DEFAULT_SKETCH_ID } = window.SketchHierarchy;
   const documentWorkspace = window.DocumentWorkspace.create({
     applicationText, constraintGraphNodes: constraintReferences.constraintGraphNodes, nextHatchIndex: () => editingScopeBinding.current.nextHatchIndex,
   });
@@ -158,7 +157,7 @@
     readViewport: () => viewport, createHistory: createBlockEditHistory,
     interaction: canvasInteraction, sessions: operationSessions, presentation,
   });
-  const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
+  const { session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
 
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
@@ -275,7 +274,6 @@
   const { layer: annotationLayer, command: annotationCommand,
     dimensionScope: dimensionPresentationScope } = annotationFeature;
   const { canvasContextAnnotationHit } = annotationFeature.spatial;
-  const { drawAnnotationLeader } = annotationFeature.renderer;
   const referenceImageFeature = window.ReferenceImageFeature.createForWorkspace({
     canvas, ctx, viewport, document, window, withCanvasState: canvasSurface.withCanvasState, createImage: () => new Image(),
     documentWorkspace, editingScope: editingScopeBinding, interaction: canvasInteraction, presentation, appearance: geometryAppearance,
@@ -554,7 +552,7 @@
 
   const sceneHitQueries = sceneHitInteraction.createQueries();
   const { regions: regionHitQuery, hitDimension, hitBlockInstance, hitConstraintOperand } = sceneHitQueries;
-  const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = sceneHitQueries.geometry;
+  const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitPoint, hitLine, hitCircle, hitArc } = sceneHitQueries.geometry;
 
 
 
@@ -638,12 +636,13 @@
 
 
 
-  const { frame: canvasFrameRenderer, overlays: { drawSelectionRect } } = createCanvasFrame({
+  const canvasFrame = createCanvasFrame({
     rectangle: selectionRectangle, snap: drawingSnap, pointer: pointerInteractionController,
     recordDraw: () => pointerMoveScheduler.recordDraw(), referenceImageLayer: referenceImageFeature.layer, readPngCommand: pngExportLifecycle.readCommand,
     dimensions: dimensionLayer, drawDimensionPreview, annotations: annotationLayer,
     authoringPreview: authoringPreviewLayer, placements: placementPreviewLayer, offsetPreview: offsetPreviewLayer,
   });
+  const { frame: canvasFrameRenderer } = canvasFrame;
 
   function drawCanvas() { return canvasFrameRenderer.draw(); }
 
@@ -1097,16 +1096,14 @@
     const trimTestSupport = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint: constraintInsertion.push, currentScope: workspace.current,
     });
-    const canvasTestSupport = window.CanvasTestDriver.createBrowserSupportForScene({
+    const canvasTestSupport = window.CanvasTestDriver.createBrowserSupportForWorkspace({
       document, canvas, viewport, documentWorkspace, readServices: geometryReadServices, geometry: geometryCreation,
       interaction: canvasInteraction, sessions: operationSessions, presentation,
       authoring: { tools: basicDrawingTools, snap: drawingSnap, offsetSelection },
       display: canvasScene, ctx, selectionRectangle,
       layers: { authoringPreviewLayer, offsetPreviewLayer, placementPreviewLayer },
-      blocks: { createEmptyBlockDefinition: blockDefinitionEditing.empty, blockPlacementCommand, drawBlockInstanceHandles: geometryDisplay.drawBlockInstanceHandles },
-      drawSelectionRect, drawAnnotationLeader, resizeCanvas: canvasWorkspaceLayout.resizeCanvas, resetModelState, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID,
-      cssPxPerMm: CSS_PX_PER_MM, types: window.GeometrySolver, evaluateSpline: window.SplineGeometry.evaluate,
-      hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
+      blocks: blockEditingFeature, blockPlacement: blockPlacementCommand, annotations: annotationFeature.renderer, frame: canvasFrame,
+      resizeCanvas: canvasWorkspaceLayout.resizeCanvas, resetModelState, cssPxPerMm: CSS_PX_PER_MM, sceneQueries: sceneHitQueries,
       observations: { viewControls: canvasViewControls, centerlineCommand, commit: constraintCommitCommand,
         persistence: documentPersistence, readSelectedGeometry: readTestSelectedGeometry, scheduler: pointerMoveScheduler },
     });
