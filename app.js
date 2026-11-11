@@ -1069,7 +1069,7 @@
     const sketchTreeTestApi = window.SketchTreeTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
       sketchPresentation: canvasScene.sketchStyle, overlay: canvasScene.overlay, viewport, canvasDriver: canvasTestDriver, drawingFit: canvasScene.fit, blocks: blockEditingFeature, dimensionDisplay,
-      referenceState: referenceConstraintState, document, canvas, getComputedStyle: element => getComputedStyle(element),
+      referenceState: referenceConstraintState, document, canvas,
       serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter: blockLayout.blockInstanceDisplayCenter,
     });
     const blockBrowserSupport = window.BlockTestDriver.createBrowserSupportForWorkspace({

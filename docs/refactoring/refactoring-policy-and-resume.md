@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のテストAPI公開単位ではapp.jsは1,186行、非空白744行。AST監査ではroot207文・363束縛、構築428非空白行とbind35行、別名・設定79行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のSketchTree style観測単位ではapp.jsは1,186行、非空白744行。AST監査ではroot207文・363束縛、構築428非空白行とbind35行、別名・設定79行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：テストAPIの有効条件と公開をBrowserTestApiへ集約（2026-11-12）
+### 最新：SketchTreeのstyle観測を既存Documentのブラウザへ接続（2026-11-12）
+
+開始基準developはe432aea89177e0937e135bef7a0404ecb6cd975d、作業branchはcodex/sketch-tree-style-observation。開始週枠残量57%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchTreeTestDriver.createForWorkspaceはgetComputedStyle未指定の場合、既存documentのdefaultViewから操作時に現在のnative関数を取り出して使う。app.jsはブラウザstyle取得callbackを組み立てず、既存のDocumentと機能ownerを渡す。新しいfactory入口やbrowser contextを追加しない。
+
+通常callbackは元と同じ名前getComputedStyle・arity 1で、native関数をbare・一引数で呼び、戻り値と元例外を返す。生成中はdefaultView／getComputedStyleを取得しない。明示callbackはundefined／nullと継承プロパティを含め優先し、その場合はDocumentのbrowserを読まない。raw createBrowserApiと各fixture／observationへ既定値を追加しない。行がない場合の空色文字列・row class false、実DOM行の選択、subtree生成→参照更新→fit→UI→描画→観測の順、モデル・Viewport・root Document定義とlive Workspaceの区別、失敗時の部分状態、公開する八APIの順・実関数を維持する。新file・global・state／cache・registry・全体contextを追加せず、製品feature・UI・履歴・保存形式v26は不変。
+
+app.jsは1,186→1,186行（0行変化）、非空白744行。root207文・363束縛、構築428行・115文、別名79行、bind35行、test hooks151行は不変。getComputedStyleのroot直接参照がなくなり、新たな未束縛参照なし。行数減ではなく、既存Documentが持つbrowser依存の中継を省いた単位である。200〜500行の全体目標は未完了。
+
+関連単体6件が成功。raw／明示Workspace／既定Workspaceの実Geometry・Sketch・Viewportを比較し、全八API・全fixtureとscope／reset／references／fit／draw／DOM／CSSの失敗時の部分モデルを照合した。実subtree fixtureで生成時のbrowser非取得、最新native関数・bare一引数・同じDOM行・返却style、browser／関数getter／呼出失敗の元例外、明示callbackの優先、行なし時のbrowser非取得を確認した。ソース逆変換で既存fixture／observationとappの他の接続は不変を確認した。
+
+構文639ファイル・全単体2,625件・関連単体6件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E129件（3file、1.9m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は構築428行・115文とtest driver構築151行について、同じEditing ownerに属する生成の境界と途中のactor消費を再確認する。既定値や一callbackの移管だけを反復せず、実際の状態所有と公開段階を保ちながら接続を減らせる機能単位を選ぶ。すでに見送った全command registry・全driver context・Canvas／context取得の一括化を根拠なく再導入しない。browser I/Oを候補にする場合もFile／fetch／performanceの取得時点・同じ実型・bare呼出し／constructor引数・明示overrideを先に確認する。全体目標は未完了。
+
+### テストAPIの有効条件と公開をBrowserTestApiへ集約（2026-11-12）
 
 開始基準developはbd70b901915f8e3ff1f1e1385c8c92f9fd3f4706、作業branchはcodex/browser-test-publication。開始週枠残量58%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

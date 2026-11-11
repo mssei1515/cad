@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## SketchTreeのstyle観測を既存Documentのブラウザへ接続（2026-11-12）
+
+SketchTreeTestDriver.createForWorkspaceはgetComputedStyle未指定の場合、既存documentのdefaultViewから操作時に現在のnative関数を取り出して使う。app.jsはブラウザstyle取得callbackを組み立てず、既存のDocumentと機能ownerを渡す。新しいfactory入口やbrowser contextを追加しない。
+
+通常callbackは元と同じ名前getComputedStyle・arity 1で、native関数をbare・一引数で呼び、戻り値と元例外を返す。生成中はdefaultView／getComputedStyleを取得しない。明示callbackはundefined／nullと継承プロパティを含め優先し、その場合はDocumentのbrowserを読まない。raw createBrowserApiと各fixture／observationへ既定値を追加しない。行がない場合の空色文字列・row class false、実DOM行の選択、subtree生成→参照更新→fit→UI→描画→観測の順、モデル・Viewport・root Document定義とlive Workspaceの区別、失敗時の部分状態、公開する八APIの順・実関数を維持する。新file・global・state／cache・registry・全体contextを追加せず、製品feature・UI・履歴・保存形式v26は不変。
+
+app.jsは1,186→1,186行（0行変化）、非空白744行。root207文・363束縛、構築428行・115文、別名79行、bind35行、test hooks151行は不変。getComputedStyleのroot直接参照がなくなり、新たな未束縛参照なし。行数減ではなく、既存Documentが持つbrowser依存の中継を省いた単位である。200〜500行の全体目標は未完了。
+
+関連単体6件が成功。raw／明示Workspace／既定Workspaceの実Geometry・Sketch・Viewportを比較し、全八API・全fixtureとscope／reset／references／fit／draw／DOM／CSSの失敗時の部分モデルを照合した。実subtree fixtureで生成時のbrowser非取得、最新native関数・bare一引数・同じDOM行・返却style、browser／関数getter／呼出失敗の元例外、明示callbackの優先、行なし時のbrowser非取得を確認した。ソース逆変換で既存fixture／observationとappの他の接続は不変を確認した。
+
+構文639ファイル・全単体2,625件・関連単体6件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E129件（3file、1.9m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## テストAPIの有効条件と公開をBrowserTestApiへ集約（2026-11-12）
 
 BrowserTestApi.installForBrowser(window, createApi)が、現在URLのtestパラメータの存在を確認し、必要な場合だけfactoryを呼んで完成APIをwindow.__jot2dTestへ公開する。app.jsのcreateTestApiは機能別driverの構築と既存createFromSupportRecordsへの接続だけを担当する。公開呼出しは従来どおりDocument編集resetの構築後、式入力highlight導入と空Document開始の前に置く。
