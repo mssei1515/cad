@@ -48,19 +48,13 @@
   const { createForWorkspace: createConstraintEditing, cancelConstraintTargetCommand, startDistanceValueInput,
     startDistanceResolution, updateConstraintButtons, commitNewConstraint, addConstraintIfMissing,
     addDistanceConstraintFromTarget } = window.ConstraintEditing.prepare();
-  const { guard: guardDimensionSymbolDeletion } = window.ParameterApplication.createDeletionGuard({
-    currentNamespace: currentParameterNamespace, symbolDeletionDependents: parameterNamespace.symbolDeletionDependents,
-    readLanguage: () => applicationSettings.language, setHint, log,
+  const { guard: guardDimensionSymbolDeletion, editor: parameterEditor, prepareNamespace: prepareParameterNamespace,
+    createApplication: createParameterApplication } = window.ParameterEditingFeature.prepareForWorkspace({
+    document, window, documentWorkspace, presentation, currentNamespace: currentParameterNamespace,
+    currentScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
+    recordHistory, pickDimension: event => expressionInputController.pickCanvas(event),
   });
-  const {
-    dimensionUsesExpression,
-    ensureParameterNamespace,
-  } = parameterNamespace;
-  const parameterEditor = window.ParameterEditor.createForWorkspace({
-    document, window, documentWorkspace, currentScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
-    settings: applicationSettings, applyDraft: (...args) => parameterApplication.apply(...args),
-    recordHistory, setHint, updateUI, draw, pickDimension: event => expressionInputController.pickCanvas(event),
-  });
+  const { dimensionUsesExpression } = parameterNamespace;
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
 
   const { services: geometryReadServices, createEditingScope, createPersistence, createRebinding,
@@ -94,7 +88,7 @@
     pointUsage, createOperationSessionsForAuthoring: createOperationSessions } = canvasInteraction;
   presentation.bindUI({
     syncAnnotationResize: () => annotationDrag.syncResizeSelection(drawOperationLifecycle.mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command),
-    prepareParameterNamespace: () => ensureParameterNamespace(currentParameterNamespace()),
+    prepareParameterNamespace,
     refreshConstraintAnalysis, updateDocumentName: () => updateDocumentNameUI(), updateToolbar,
     renderSketch: () => sketchTreeView.render(), updateBlockUI,
     renderProperties: () => propertiesView.render(selectedPropertiesTarget()), readSketchMoving: sketchNavigation.readMoving,
@@ -368,9 +362,9 @@
     acceptError: CONSTRAINT_ACCEPT_ERROR, recordHistory, resetDimensionDrag: () => dimensionDrag.reset(), addDistanceConstraintFromTarget,
   });
   const { submit: submitDistanceValue, startEdit: startDimensionEditInput } = dimensionValueCommand;
-  const { stabilizeDocument: stabilizeDocumentParameters, application: parameterApplication } = window.ParameterApplication.createForWorkspace({
-    documentWorkspace, editingScope: editingScopeBinding, blocks: blockEditingFeature, history: historyFeature, checkpoint: editingCheckpoint,
-    parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization, presentation,
+  const { stabilizeDocument: stabilizeDocumentParameters } = createParameterApplication({
+    editingScope: editingScopeBinding, blocks: blockEditingFeature, history: historyFeature, checkpoint: editingCheckpoint,
+    parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization,
     acceptError: CONSTRAINT_ACCEPT_ERROR, loadDocument: loadModelData, clearSelection,
   });
   const centerlineCommand = createCenterline({
