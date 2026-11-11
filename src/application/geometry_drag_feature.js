@@ -115,12 +115,14 @@
       geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
     });
   }
-  function createForWorkspace({ documentWorkspace, interaction, presentation, sourceQueries, projectionQueries,
-    solver, scopeQuery, solving, checkpoint, geometry, readServices, viewport, pointer, acceptError, previewMaxModelError = 0.125, minimumLength,
+  function createForWorkspace(options) {
+    const { documentWorkspace, interaction, presentation, sourceQueries, projectionQueries,
+    solver, scopeQuery, solving, checkpoint, geometry, readServices, viewport, pointer, acceptError, previewMaxModelError = 0.125, minimumLength: suppliedLength,
     fixedState, blockLocalGeometryBounds, blockWorldPoint = readServices.projections.blockWorldPoint,
     pointLockedByLineFixed = fixedState?.pointLockedByLineFixed, findLineFixedConstraint = fixedState?.findLineFixedConstraint,
     findArcEndpointFixedConstraint = fixedState?.findArcEndpointFixedConstraint,
-    projectionBlockedMessage, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection }) {
+    projectionBlockedMessage, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection } = options;
+    const minimumLength = "minimumLength" in options ? suppliedLength : window.GeometryKernel.MIN_ORIENTATION_LENGTH;
     const { workspace, sketches } = documentWorkspace;
     const { access: { guardSketchEdit: canEdit }, selection: canvasSelection } = interaction;
     const { profiler, settings: { applicationText }, setHint, updateUI, updateGeometrySelectionUI, draw } = presentation;

@@ -401,3 +401,31 @@ test('drag input composition does not construct input after a native Geometry co
   try{assert.throws(()=>ready.createWithConstraintInputForWorkspace({...p.probe.input,createConstraintInput(){calls++;}}),error=>error===marker);}finally{w.GeometryDragPlan=original;}
   assert.equal(calls,0);assert.equal(ready.queries.isDraggingPoint(f.point),true);ready.reset();assert.equal(f.feature.command.active,false);
 });
+
+test('Workspace drag takes Kernel orientation only when missing and preserves native point drag and explicit inherited thresholds', () => {
+  const kernel = w.GeometryKernel, planFactory = w.GeometryDragPlan, value = kernel.MIN_ORIENTATION_LENGTH;
+  const results = []; let captured, reads = 0;
+  w.GeometryKernel = { ...kernel, get MIN_ORIENTATION_LENGTH() { reads++; return value; } };
+  w.GeometryDragPlan = { ...planFactory, create(input) { captured = input; return planFactory.create(input); } };
+  try {
+    for (const omitted of [false, true]) {
+      const f = workspaceFixture(true, { configure(input) { if (omitted) delete input.minimumLength; else input.minimumLength = value; } });
+      assert.equal(captured.minimumLength, value); assert.equal(f.state.reads, 0); assert.equal(f.scaleReads(), 0);
+      f.state.ready = true;
+      const plan = f.feature.build('point', f.point, { x: 0, y: 0 });
+      f.feature.command.begin({ pointerId: 71 }, plan); f.feature.command.update({ x: 6, y: 4 });
+      f.feature.command.finish({ pointerId: 71, type: 'pointerup' });
+      assert.equal(f.state.scope.points[0], f.point);
+      results.push(JSON.stringify({ x: f.point.x, y: f.point.y, events: f.events, pointer: f.pointerEvents }));
+    }
+    assert.equal(reads, 1); assert.equal(results[1], results[0]);
+    for (const inherited of [false, true]) for (const explicit of [undefined, null, 0, 0.25]) {
+      workspaceFixture(true, { configure(input) {
+        delete input.minimumLength;
+        if (inherited) Object.setPrototypeOf(input, { minimumLength: explicit }); else input.minimumLength = explicit;
+      } });
+      assert.equal(captured.minimumLength, explicit);
+    }
+    assert.equal(reads, 1);
+  } finally { w.GeometryKernel = kernel; w.GeometryDragPlan = planFactory; }
+});

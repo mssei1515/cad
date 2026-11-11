@@ -25,7 +25,8 @@
         createAuthoringForEditing: options => publishAuthoring(buildForEditing, options), createAuthoringWithProjectionForEditing });
     }
     function prepareGeometryForSolver(solver, minimumOrientationLength) {
-      const lengths = window.GeometryCreation.createLengthPolicy(solver.minLineLength, minimumOrientationLength);
+      const lengths = window.GeometryCreation.createLengthPolicy(solver.minLineLength,
+        arguments.length < 2 ? window.GeometryKernel.MIN_ORIENTATION_LENGTH : minimumOrientationLength);
       function createGeometry(options) { return createPreparedGeometry({ ...lengths, ...options }); }
       return Object.freeze({ minimumLength: lengths.minLineLength, createGeometry });
     }
@@ -176,7 +177,9 @@
           invalidateAnalysis: () => { analysis.invalidate(); }, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options),
           updateGeometrySelectionUI,
         });
-        function createCircleCenterCross({ resultIsAccepted, minOrientationLength }) {
+        function createCircleCenterCross(options) {
+          const { resultIsAccepted, minOrientationLength: suppliedLength } = options;
+          const minOrientationLength = "minOrientationLength" in options ? suppliedLength : window.GeometryKernel.MIN_ORIENTATION_LENGTH;
           return tools.createCircleCenterCross({ checkpoint, solveSketchAndDependents: solving.solveSketchAndDependents,
             resultIsAccepted, minOrientationLength, selectedElementCount: interaction.selection.selectedElementCount,
             invalidateAnalysis: () => analysis.invalidate() });

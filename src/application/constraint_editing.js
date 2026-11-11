@@ -275,9 +275,11 @@
       currentScope: workspace.current, activeSketchId: sketches.activeSketchId, constraintSketchId: sketches.constraintSketchId,
       elementSketchId: sketches.elementSketchId, sketchGeometryBounds: bounds.sketchGeometryBounds, minLength: minimumLineLength,
     });
-    function createForEditing({ solver, modelQueries, offsetChainDraft, minimumOrientationLength, parameters, interaction,
-      pending, valueInput, checkpoint, presentation, annotationFeature, stabilization, viewport, placement,
-      synchronizedInstanceEditing, acceptError, recordHistory, resetDimensionDrag, addDistanceConstraintFromTarget }) {
+    function createForEditing(options) {
+      const { solver, modelQueries, offsetChainDraft, minimumOrientationLength: suppliedLength, parameters, interaction,
+        pending, valueInput, checkpoint, presentation, annotationFeature, stabilization, viewport, placement,
+        synchronizedInstanceEditing, acceptError, recordHistory, resetDimensionDrag, addDistanceConstraintFromTarget } = options;
+      const minimumOrientationLength = "minimumOrientationLength" in options ? suppliedLength : window.GeometryKernel.MIN_ORIENTATION_LENGTH;
       const solvePreparation = window.ConstraintSolvePreparation.createForSolver({
         solver, hasDirectRadiusDimension: modelQueries.hasDirectRadiusDimension, offsetChainDraft,
         minimumOrientationLength, minimumLineLength,

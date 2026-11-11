@@ -8,7 +8,6 @@
   } = window.DrawingOrder;
 
   const {
-    MIN_ORIENTATION_LENGTH,
     arcEndpointPoint,
   } = window.GeometryKernel;
 
@@ -206,7 +205,7 @@
     fromSelection: constraintOperandsFromSelection } = constraintOperandFeature;
   const { sameArcEndpoint } = constraintCandidates;
   const { operandElement } = constraintOperandValues;
-  const { minimumLength: MIN_LINE_LENGTH, createGeometry: createDrawingGeometry } = prepareDrawingGeometry(solver, MIN_ORIENTATION_LENGTH);
+  const { minimumLength: MIN_LINE_LENGTH, createGeometry: createDrawingGeometry } = prepareDrawingGeometry(solver);
   const geometryDragPreparation = window.GeometryDragFeature.prepare();
   const { annotationDrag: constrainedAnnotationDrag, scopeQuery: solveScopeQuery, analysis: constraintAnalysis,
     redundancy: constraintRedundancy, createSolving, createLineCollapseQuery } = createSolveContext({
@@ -324,7 +323,7 @@
   });
   const { setBlockInstanceRotationLocked } = instanceTransformCommand;
   const { command: dimensionValueCommand, solvePreparation: constraintSolvePreparation } = dimensionValueEditing.createForEditing({
-    solver, offsetChainDraft, minimumOrientationLength: MIN_ORIENTATION_LENGTH,
+    solver, offsetChainDraft,
     parameters: parameterNamespace, interaction: canvasInteraction, pending: pendingCommandSession,
     valueInput: dimensionInputController, checkpoint: editingCheckpoint, presentation, annotationFeature,
     modelQueries: dimensionModelQueries, stabilization: parameterStabilization, viewport, placement: dimensionPlacement,
@@ -425,7 +424,7 @@
 
 
   const circleCenterCrossCommand = createCircleCenterCross({
-    resultIsAccepted, minOrientationLength: MIN_ORIENTATION_LENGTH,
+    resultIsAccepted,
   });
 
   const lineCollapseQuery = createLineCollapseQuery();
@@ -859,7 +858,6 @@
     solver, scopeQuery: solveScopeQuery, solving: sketchSolving,
     checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
     viewport, pointer: dragPointer, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    minimumLength: MIN_ORIENTATION_LENGTH,
     blockLocalGeometryBounds: blockLayout.blockLocalGeometryBounds, fixedState: fixedStateQueries,
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
     createConstraintInput: createConstraintInputWithDragging, clearSnap,

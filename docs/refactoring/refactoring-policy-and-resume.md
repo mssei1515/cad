@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のSketch Tree結線単位ではapp.jsは1,172行、非空白739行。AST監査ではroot200文・361束縛、構築424非空白行とbind35行、別名・設定78行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12の幾何既定値単位ではapp.jsは1,170行、非空白737行。AST監査ではroot200文・360束縛、構築423非空白行とbind35行、別名・設定77行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,27 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Sketch Treeの共有アイコンと固定操作の結線（2026-11-12）
+### 最新：幾何計算のorientation既定値を各機能へ接続（2026-11-12）
+
+開始基準developは4e87d70d81b11c42550106f4f918b3263d137fa0、作業branchはcodex/geometry-tolerance-defaults。開始週枠残量55%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+app.jsによるMIN_ORIENTATION_LENGTHの取出しと四つの生成先への指定をやめ、既存GeometryKernelの同じ定数を各機能の既定値にする。BasicDrawingTools.prepareGeometryForSolver・準備済みeditingのcreateCircleCenterCross、ConstraintEditing.prepareDimensionValuesのcreateForEditing、GeometryDragFeature.createForWorkspaceが対象。定数の値1e-9と、Solverから別途得る線分最小長の計算・許容誤差・求解の数値方針は変更しない。
+
+位置引数の作図長は第二引数を省略した場合だけ既定にし、明示undefined／null／0／個別値を元のcreateLengthPolicyへそのまま渡す。Solver.minLineLengthを先に一度読み、次に省略時のKernel定数を取得して元のMath.max／fallbackを使う。object入力の三入口ではキーの存在で判定し、own／継承を問わず明示undefined／null／0／個別値を保持する。明示値があればKernel既定値を読まない。親Feature生成時に数値を先読み・cacheせず、従来の各生成段階で接続する。
+
+個別GeometryCreation／CircleCenterCrossCommand／ConstraintSolvePreparation／GeometryDragPlan等の低水準生成APIと全計算・操作本体、native actor・scope／ID／Selection／履歴・部分失敗・UI・保存形式v26は不変。新file・global・state／guard・registry・全体contextや別の数値定数は追加しない。静的な幾何定義への依存を既存namespaceに明示し、個別検証の値注入を維持する。フォルダ配置は既存ownerに合致しているため変更しない。
+
+app.jsは1,172→1,170行（2行減）、非空白739→737行。root200文・361→360束縛、構築424→423行・109文、別名78→77行。bind35行・test hooks151行は不変。新たな未束縛参照なし。行数差より、四つの数値既定値の中継をappから除く責務整理を成果とする。200〜500行の全体目標は未完了。
+
+関連単体141件が成功。省略と元の定数注入が同じnative長さ・寸法編集・point dragを生むこと、live scopeと幾何同一性・履歴を維持すること、明示／継承値を保持し既定値を読まないことを検証した。Solver getter失敗時にKernelを読まない順序も確認した。ソース逆変換で既定値解決以外の計算・command本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,644件・関連単体141件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E152件（7file、14.3m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+検証終了後、差分確認で検出したBasicDrawingTools単体file末尾の余分な改行一つだけを除去した。直前hashがE2E開始snapshotと一致し、trimEnd前後の実行ソースが同一であることを照合した。
+
+次は残る構築423行・109文について既存ownerへの依存指定の重複と段階的公開を調べる。四つの通常生成入口へ既定値を置いた今回の変更を、独立した数値方針変更やSolver修正として扱わない。残る機能の生成順・遅延readerを監査し、巨大contextやwrapper追加だけで目標に近づけない。
+
+### Sketch Treeの共有アイコンと固定操作の結線（2026-11-12）
 
 開始基準developは1f79a36027a5c6fe06c1418d245ec546a6759b54、作業branchはcodex/sketch-tree-fixed-assembly。開始週枠残量55%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
