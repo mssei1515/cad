@@ -1,6 +1,22 @@
 /* Canvas size and Properties panel presentation; no model editing or history. */
 (() => {
   "use strict";
+  function prepare({ document }) {
+    let completedLayout;
+    function isPropertiesCollapsed() {
+      return Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed"));
+    }
+    function setPropertiesPanelCollapsed(...args) {
+      if (completedLayout === undefined) throw new ReferenceError("Cannot access 'canvasWorkspaceLayout' before initialization");
+      return completedLayout.value.setPropertiesPanelCollapsed(...args);
+    }
+    function createWorkspace(factory, ...options) {
+      const workspace = factory(...options);
+      completedLayout = { value: workspace.layout };
+      return workspace;
+    }
+    return Object.freeze({ isPropertiesCollapsed, setPropertiesPanelCollapsed, createWorkspace });
+  }
   function create({ canvas, document, viewport, syncCanvasBitmapSize, applySketchTreeWidth, draw,
     isValueInputPending, syncDimensionValueInput, currentCanvasCenterWorld, applicationText, readLanguage,
     window: browserWindow, updatePropertiesUI, setHint, closeContextMenu }) {
@@ -65,5 +81,5 @@
     }
     return Object.freeze({ resizeCanvas, setPropertiesPanelCollapsed, showSelectedObjectProperties, bindControls, bindWindow, dispose });
   }
-  window.CanvasWorkspaceLayout = Object.freeze({ create });
+  window.CanvasWorkspaceLayout = Object.freeze({ create, prepare });
 })();

@@ -1069,7 +1069,7 @@ function preparedWorkspaceFixture(composed, probe) {
   for (const [namespace, method, name] of factories) {
     if (!originals.has(namespace)) { originals.set(namespace, w[namespace]); w[namespace] = { ...w[namespace] }; }
     const original = originals.get(namespace)[method];
-    w[namespace][method] = ports => { probe.order.push(name); probe.ports[name] = ports; if (probe.failAt === name) throw probe.marker; return probe.results[name] = original(ports); };
+    w[namespace][method] = ports => { probe.beforeCreate?.(name); probe.order.push(name); probe.ports[name] = ports; if (probe.failAt === name) throw probe.marker; return probe.results[name] = original(ports); };
   }
   let prepared, controls, color, display, workspace, scene, placement, binding, png;
   try {
@@ -1084,7 +1084,9 @@ function preparedWorkspaceFixture(composed, probe) {
       cancelPendingCommand() {}, startDistanceValueInput() {}, submitOffsetValue() {}, submitDistanceValue() {} };
     if (probe.configureInput) probe.configureInput(dimensionInput);
     const workspaceOptions = { dimensionScene: { onExpressionMark() {} }, dimensionInput, drawCanvas: () => f.calls.push('content'), closeContextMenu: () => f.calls.push('close'), applySketchTreeWidth: () => f.calls.push('tree') };
-    workspace = display.createEditingWorkspace(composed ? workspaceOptions : { ...workspaceOptions,
+    const createWorkspace = options => display.createEditingWorkspace(options);
+    const buildWorkspace = probe.wrapWorkspace ? options => probe.wrapWorkspace(createWorkspace, options, f.document) : createWorkspace;
+    workspace = buildWorkspace(composed ? workspaceOptions : { ...workspaceOptions,
       dimensionScene: { ...workspaceOptions.dimensionScene, currentLines: () => documentWorkspace.workspace.current().lines, minLineLength: 1e-6, canvasThemeColor: color, appearance: readServices.dimensionAppearance, sketches: seed.sketches },
       dimensionInput: { ...dimensionInput, pending }, ctx: f.ctx, readPixelRatio: () => f.browser.devicePixelRatio || 1, ResizeObserverClass: f.browser.ResizeObserver,
       withGeometryReadCache: readServices.reads.withGeometryReadCache, isValueInputPending: () => pending.current && ['distance-value','offset-value'].includes(pending.current.type),
@@ -1117,6 +1119,19 @@ test('Canvas workspace preparation preserves staged construction and shares actu
   assert.equal(p.geometry.ctx, f.ctx); assert.equal(p.geometry.viewState, f.controls.state); assert.equal(p.targets.readMode, f.interaction.lifecycle.readMode);
   assert.equal(p.input.pending, f.pending); assert.equal(p.routing.canvasPoint, f.display.viewport.canvasPoint); assert.equal(p.routing.pointer, f.sessions.pointer); assert.equal(p.png.pendingCommandSession, f.pending); assert.equal(p.png.constraintTargetSession, f.targets);
   assert.equal(p.dimensions.appearance, f.readServices.dimensionAppearance); assert.equal(p.dimensions.canvasThemeColor, f.color);
+});
+
+test('Properties layout ports stay unpublished through native layout, dimensions and input construction', () => {
+  for (const failAt of [undefined, 'layout', 'dimensions', 'input']) {
+    let panel, workspace; const marker = new Error('workspace phase'), phases = [];
+    const unready = () => assert.throws(panel.setPropertiesPanelCollapsed, { name: 'ReferenceError', message: "Cannot access 'canvasWorkspaceLayout' before initialization" });
+    const build = () => preparedWorkspaceFixture(true, { failAt, marker,
+      wrapWorkspace(factory, options, document) { panel = sceneWindow.CanvasWorkspaceLayout.prepare({ document }); return workspace = panel.createWorkspace(factory, options); },
+      beforeCreate(name) { if (panel && ['layout', 'dimensions', 'input'].includes(name)) { phases.push(name); unready(); } },
+    });
+    if (failAt) { assert.throws(build, error => error === marker); unready(); }
+    else { const f = build(); assert.equal(workspace.layout, f.workspace.layout); assert.deepEqual(phases, ['layout', 'dimensions', 'input']); assert.equal(panel.setPropertiesPanelCollapsed(true), undefined); }
+  }
 });
 
 test('Canvas scene appearance defaults share the actual display configuration while explicit values and the raw API remain distinct', () => {

@@ -152,6 +152,10 @@
         getPointerPreview: () => preview.pointer, setPointerPreview: value => { preview.setPointer(value); }, getLastPointerWorld: pointer.readLastPointer,
         setMode: lifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory });
     }
+    function createPlacementWithProperties({ propertiesPanel, ...options }) {
+      return createPlacement({ isPropertiesCollapsed: propertiesPanel.isPropertiesCollapsed,
+        setPropertiesPanelCollapsed: propertiesPanel.setPropertiesPanelCollapsed, ...options });
+    }
     function createSelectionQuery({ references, serializeConstraint, annotationBounds }) {
       const { mergeBounds, lineBBox, primitiveBBox, splineBBox } = window.GeometryBounds;
       const { applicationText } = presentation.settings;
@@ -174,7 +178,7 @@
         clearRemovedHover: removed => { if (removed.has(interaction.hover.current.dimension)) interaction.hover.update({ dimension: null }); },
         invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory });
     }
-    return Object.freeze({ ...feature, createCommandsWithView, createPlacement, createSelectionQuery, createConfiguration });
+    return Object.freeze({ ...feature, createCommandsWithView, createPlacement, createSelectionQuery, createConfiguration, createPlacementWithProperties });
   }
   window.BlockEditingFeature = Object.freeze({ prepareCommandsWithView, create, createForWorkspace });
 })();

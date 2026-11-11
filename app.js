@@ -175,10 +175,9 @@
     commitDraft: (...args) => synchronizedInstanceEditing.commit(...args), updateToolbar, recordHistory,
     projectionSources: sketchProjectionSources, guardDimensionSymbolDeletion, solveState: sketchSolveResultState,
   });
-  const blockPlacementCommand = blockEditingFeature.createPlacement({
-    layout: blockLayout, isGeometryMode, clearSelection,
-    isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
-    setPropertiesPanelCollapsed, solveAndRefresh, recordHistory,
+  const propertiesPanel = window.CanvasWorkspaceLayout.prepare({ document });
+  const blockPlacementCommand = blockEditingFeature.createPlacementWithProperties({
+    layout: blockLayout, propertiesPanel, isGeometryMode, clearSelection, solveAndRefresh, recordHistory,
   });
   const { start: startBlockPlacement } = blockPlacementCommand;
   const historyFeature = createHistoryFeature({
@@ -234,7 +233,7 @@
   });
   const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneWithAppearance: createCanvasScene, createPlacementPreview,
     createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview, dragPointer,
-    dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
+    dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = propertiesPanel.createWorkspace(createCanvasWorkspace, {
     dimensionScene: { onExpressionMark: canvasRenderProbe.captureExpressionMark },
     dimensionInput: { syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
       startDistanceValueInput,
@@ -513,7 +512,6 @@
 
 
 
-  function setPropertiesPanelCollapsed(...args) { return canvasWorkspaceLayout.setPropertiesPanelCollapsed(...args); }
 
 
 

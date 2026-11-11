@@ -478,7 +478,9 @@ function workspacePlacementFixture(composed, probe = {}) {
     isPropertiesCollapsed: () => { assert.equal(f.state.ready, true); return f.state.collapsed; },
     setPropertiesPanelCollapsed: value => { assert.equal(f.state.ready, true); f.state.collapsed = value; f.events.push(['panel', value]); },
     solveAndRefresh: label => { f.events.push(['solve', label]); if (f.state.solveError) throw f.state.solveError; }, recordHistory: label => f.events.push(['placement-history', label]) };
-  const placement = constructing([['BlockPlacementCommand', 'placement']], () => composed ? f.feature.createPlacement(input)
+  const { isPropertiesCollapsed, setPropertiesPanelCollapsed, ...placementInput } = input;
+  const propertiesPanel = Object.freeze({ isPropertiesCollapsed, setPropertiesPanelCollapsed });
+  const placement = constructing([['BlockPlacementCommand', 'placement']], () => composed === 'properties' ? f.feature.createPlacementWithProperties({ ...placementInput, propertiesPanel }) : composed ? f.feature.createPlacement(input)
     : w.BlockPlacementCommand.create({ ...input, ...layout, canCreateInActiveSketch: owners.interaction.access.canCreateInActiveSketch,
       blockDefinitionById: f.options.catalog.blockDefinitionById, blockDefinitionScopeError: f.feature.queries.blockDefinitionScopeError,
       blockDefinitionDrawableSketchIds: f.options.catalog.blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds: f.options.catalog.blockDefinitionGeometrySketchIds,
@@ -487,11 +489,11 @@ function workspacePlacementFixture(composed, probe = {}) {
       getPointerPreview: () => owners.sessions.preview.pointer, setPointerPreview: value => { owners.sessions.preview.setPointer(value); }, getLastPointerWorld: owners.sessions.pointer.readLastPointer,
       setMode: owners.interaction.lifecycle.setMode, ...owners.presentation }));
   assert.deepEqual(f.events, []); assert.equal(f.state.definitionSeq, 1); assert.equal(f.state.history, 0);
-  return { ...f, placement, owners, input, probe };
+  return { ...f, placement, owners, input, probe, propertiesPanel };
 }
 
 test('Block workspace composition preserves actual owners and construction stages and reads the late viewport only during session operations', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'properties']) {
     const f = workspacePlacementFixture(composed), { ports, results } = f.probe;
     assert.deepEqual(f.probe.order, ['definition', 'session', 'queries', 'placement']);
     assert.equal(f.feature.editing, results.definition); assert.equal(f.feature.session, results.session); assert.equal(f.feature.queries, results.queries); assert.equal(f.placement, results.placement);
@@ -507,7 +509,7 @@ test('Block workspace composition preserves actual owners and construction stage
 });
 
 test('Block workspace placement shares preview, pointer, selection and IDs while preserving anchor, orthogonal rotation and panel restoration', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'properties']) {
     const f = workspacePlacementFixture(composed); f.state.ready = true; const definition = scope('D1'); f.geometry(definition); f.document.blockDefinitions.push(definition);
     const source = JSON.stringify(definition), pointer = { x: 20, y: 30 }; f.owners.sessions.pointer.setLastPointer(pointer);
     f.placement.start('D1'); assert.equal(f.owners.interaction.lifecycle.mode, 'block-place'); assert.equal(f.state.collapsed, false); assert.equal(f.owners.sessions.preview.pointer, pointer);
@@ -520,8 +522,22 @@ test('Block workspace placement shares preview, pointer, selection and IDs while
   }
 });
 
+test('Properties placement shares panel ports and preserves explicit callback overrides including undefined and null', () => {
+  const f = workspacePlacementFixture(true), original = w.BlockPlacementCommand, marker = {}; let ports;
+  w.BlockPlacementCommand = { ...original, create(options) { ports = options; return marker; } };
+  try {
+    const { isPropertiesCollapsed, setPropertiesPanelCollapsed, ...options } = f.input;
+    assert.equal(f.feature.createPlacementWithProperties({ ...options, propertiesPanel: f.propertiesPanel }), marker);
+    assert.equal(ports.isPropertiesCollapsed, isPropertiesCollapsed); assert.equal(ports.setPropertiesPanelCollapsed, setPropertiesPanelCollapsed);
+    for (const value of [undefined, null, () => false]) {
+      f.feature.createPlacementWithProperties({ ...options, propertiesPanel: f.propertiesPanel, isPropertiesCollapsed: value, setPropertiesPanelCollapsed: value });
+      assert.equal(ports.isPropertiesCollapsed, value); assert.equal(ports.setPropertiesPanelCollapsed, value);
+    }
+  } finally { w.BlockPlacementCommand = original; }
+});
+
 test('Block workspace placement preserves scope rejection, cancellation, partial state on solver exceptions and factory failure order', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'properties']) {
     const f = workspacePlacementFixture(composed); f.state.ready = true; const definition = scope('D1'); f.geometry(definition); f.document.blockDefinitions.push(definition);
     f.state.allowed = false; f.placement.start('D1'); assert.equal(f.owners.interaction.lifecycle.mode, 'select'); assert.equal(f.state.collapsed, true);
     f.state.allowed = true; definition.parentDefinitionId = 'OTHER'; f.placement.start('D1'); assert.equal(f.owners.interaction.lifecycle.mode, 'select');
