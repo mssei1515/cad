@@ -51,7 +51,9 @@
           invalidateProjection: services.projections.invalidateBlockProjectionCache });
       }
       // Bind model reads and insertion together while keeping Parameter writes on Workspace.current.
-      function createEditingScope({ Solver, closeSketchContext, resetSketchMove }) {
+      function createEditingScope(options) {
+        const { Solver: suppliedSolver, closeSketchContext, resetSketchMove } = options;
+        const Solver = "Solver" in options ? suppliedSolver : window.GeometrySolver.ConstraintSolver;
         const binding = createScopeBinding({ Solver, closeSketchContext, resetSketchMove });
         const { solver } = binding;
         const { activeSketchId, constraintSketchId, isDrawableSketch, firstDrawableSketchId } = sketches;

@@ -559,6 +559,7 @@ test('persistence application retains geometry and attachment reservation before
 function editingScopeFixture(composed) {
   let editing;
   const f = readContextFixture((context, options, model) => {
+    if (composed === 'default') delete options.Solver;
     if (composed) editing = context.createEditingScope(options);
     else {
       const binding = context.createScopeBinding(options), { solver } = binding;
@@ -579,7 +580,7 @@ function radiusDimension(id) {
 
 test('Document editing scope constructs binding, model queries and insertion once in order and preserves their actual owners', () => {
   const original = { binding: w.EditingScopeBinding, dimensions: w.DimensionQueries, insertion: w.ConstraintCommitCommand };
-  try { for (const composed of [false, true]) for (const failure of [null, 'dimensions']) {
+  try { for (const composed of [false, true, 'default']) for (const failure of [null, 'dimensions']) {
     const events = [], ports = {}, marker = new Error('model query construction');
     w.EditingScopeBinding = { ...original.binding, create(input) { events.push('binding'); ports.binding = input; return original.binding.create(input); } };
     w.DimensionQueries = { ...original.dimensions, createModelQueries(input) { events.push('dimensions'); ports.dimensions = input; if (failure) throw marker; return original.dimensions.createModelQueries(input); } };
@@ -596,7 +597,7 @@ test('Document editing scope constructs binding, model queries and insertion onc
 });
 
 test('Document editing queries and insertion follow bound scope while sketch choice and Parameter allocation follow current Workspace', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'default']) {
     const f = editingScopeFixture(composed), { model, binding, editing } = f, draft = w.DocumentState.create(), solver = editing.solver;
     binding.activate(draft); assert.equal(editing.solver, solver); assert.equal(solver.model, draft);
     const first = radiusDimension('C1'); draft.circles.push(first.circle); assert.equal(editing.insertion.push(first.constraint, 'ROOT'), first.constraint);
@@ -615,7 +616,7 @@ test('Document editing queries and insertion follow bound scope while sketch cho
 });
 
 test('Document editing scope keeps failed activation and insertion partial effects at their original boundaries', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'default']) {
     const f = editingScopeFixture(composed), { model, binding, editing } = f, draft = w.DocumentState.create(), marker = new Error('boundary');
     binding.activate(draft); model.workspace.activate(model.document); f.state.failure = 'move'; f.state.error = marker;
     assert.throws(() => binding.activate(model.document), error => error === marker); assert.equal(binding.current, draft); assert.equal(editing.solver.model, draft);
@@ -672,4 +673,38 @@ test('each read context publishes only completed Document applications and persi
   fail=false;next=replacement;assert.equal(fresh.createApplication(ports),replacement);f.context.persistence.loadModelData(data);g.context.persistence.loadModelData(data);
   assert.equal(seen[0][1],first);assert.equal(seen[1][1],replacement);assert.equal(seen[2][1],other);assert.equal(g.context.persistence.readRepairMessage(),'other');
  }finally{w.DocumentApplication=original;}
+});
+
+
+test('Document editing scope owns the default Solver construction at the existing bound-scope stage without eager model operations', () => {
+  const original=w.GeometrySolver,events=[],marker=new Error('solver ctor');let reads=0,created,fail=false;
+  const DefaultSolver=class extends original.ConstraintSolver {constructor(model){assert.equal(arguments.length,1);events.push(['solver',model]);if(fail)throw marker;super(model);created=this;}};
+  w.GeometrySolver={...original,get ConstraintSolver(){reads++;return DefaultSolver;}};
+  try{
+    const f=fixture(),context=f.model.createReadContext({currentSketches:()=>f.model.workspace.current().sketches,prepareBlocks(){},showHiddenElements:()=>false,viewportScale:()=>1,profileRead:read=>read()});
+    assert.equal(reads,0);assert.deepEqual(events,[]);
+    const editing=context.createEditingScope({closeSketchContext(){events.push(['close']);},resetSketchMove(){events.push(['move']);}});
+    assert.equal(reads,1);assert.equal(editing.solver,created);assert.equal(editing.binding.solver,created);assert.equal(created.model,f.model.document);assert.deepEqual(events,[['solver',f.model.document]]);
+    const draft=w.DocumentState.create();editing.binding.activate(draft);assert.equal(reads,1);assert.equal(editing.solver,created);assert.equal(created.model,draft);assert.equal(editing.binding.current,draft);
+    assert.deepEqual(events.slice(1),[['close'],['move']]);
+    const before=JSON.stringify(draft),old=created;fail=true;assert.throws(()=>context.createEditingScope({closeSketchContext(){},resetSketchMove(){}}),error=>error===marker);
+    assert.equal(reads,2);assert.equal(created,old);assert.equal(editing.binding.current,draft);assert.equal(JSON.stringify(draft),before);
+  }finally{w.GeometrySolver=original;}
+});
+
+test('Document editing scope preserves custom Solver identity, explicit invalid classes and the raw binding constructor requirement', () => {
+  const original=w.GeometrySolver,marker=new Error('unexpected default');let created;
+  const f=fixture(),context=f.model.createReadContext({currentSketches:()=>f.model.workspace.current().sketches,prepareBlocks(){},showHiddenElements:()=>false,viewportScale:()=>1,profileRead:read=>read()});
+  class CustomSolver {constructor(model){assert.equal(arguments.length,1);this.model=model;created=this;}}
+  w.GeometrySolver={...original,get ConstraintSolver(){throw marker;}};
+  try{
+    const options={Solver:CustomSolver,closeSketchContext(){},resetSketchMove(){}},editing=context.createEditingScope(options);
+    assert.equal(editing.solver,created);assert.equal(editing.solver.constructor,CustomSolver);assert.equal(editing.binding.current,f.model.document);
+    for(const Solver of [undefined,null])assert.throws(()=>context.createEditingScope({...options,Solver}),error=>error.name==='TypeError');
+    const inherited=context.createEditingScope(Object.assign(Object.create({Solver:CustomSolver}),{closeSketchContext(){},resetSketchMove(){}}));
+    assert.equal(inherited.solver,created);assert.equal(inherited.solver.constructor,CustomSolver);
+    for(const Solver of [undefined,null])assert.throws(()=>context.createEditingScope(Object.create({...options,Solver})),error=>error.name==='TypeError');
+    assert.throws(()=>context.createScopeBinding({closeSketchContext(){},resetSketchMove(){}}),error=>error.name==='TypeError');
+    assert.equal(f.model.workspace.current(),f.model.document);assert.equal(editing.solver.constructor,CustomSolver);
+  }finally{w.GeometrySolver=original;}
 });

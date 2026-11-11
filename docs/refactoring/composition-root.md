@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 通常Solverの実装選択をDocumentWorkspaceへ集約（2026-11-12）
+
+DocumentWorkspaceのReadContextが返すcreateEditingScopeは、Solverプロパティの指定がない場合にGeometrySolver.ConstraintSolverを選び、既存のscope binding・model query・constraint insertionを構築する。app.jsはSolverクラスを取得・中継せず、Sketch切替のclose／resetを接続する。
+
+独自Solverと明示undefined／nullは、継承プロパティの場合も既存どおり優先し、無効なクラスは同じnative生成で失敗する。raw createScopeBinding／EditingScopeBinding.createへ既定値を追加しない。通常クラスの読取りはcreateEditingScope呼出時だけ行い、Workspace／ReadContextの準備では取得も生成もしない。Solverは初期のWorkspace実体を一引数で受け、binding→DimensionQueries→Insertionの順に一度ずつ生成する。以後のscope切替では同じSolverのmodelを更新する。束縛済み編集対象と現在WorkspaceによるSketch／Parameter割当の区別、close→move reset→activate→model→read cache→projectionの順、失敗時の既存部分状態を維持する。新file・global・可変state／cache・全体contextを追加せず、Solver計算・UI・履歴・保存形式v26は不変。
+
+app.jsは1,191→1,187行（4行減）、非空白749→745行。root208→207文・364→363束縛、別名・設定82→79行、構築429→428行（115文）。bind35行とtest hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体37件が成功。既存のscope構築・現在Workspaceとの乖離・切替／挿入失敗の比較へ通常既定の入口を加えた。実ConstraintSolverを継承したconstructorで初期モデルの同一性・一引数・生成一回・切替後の同じSolverを確認し、初期準備時のクラス非取得、constructor失敗の元例外と既存binding保持、独自／無効クラス・継承プロパティの優先、raw入口の未指定失敗を確認した。既存binding・query・insertionの処理本体はソース逆変換で不変を確認した。
+
+構文639ファイル・全単体2,618件・関連単体37件と通常ja/light・en/dark・test起動が成功。関連E2E178件（6file、2.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## Canvas初期倍率とテスト観測のCSS単位依存を所有者へ集約（2026-11-12）
 
 CanvasDisplay.prepareForWorkspaceが返すcreateForBrowserは、initialScaleの指定がない場合に既存Appearance.CSS_PX_PER_MMを使い、既存createForEditingへ接続する。CanvasTestDriver.createBrowserSupportForWorkspaceもcssPxPerMm未指定の場合だけ同じ実定数を使う。app.jsは表示単位定数を所有・中継せず、通常のCanvas構築とテスト支援の入口を接続する。
