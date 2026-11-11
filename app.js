@@ -224,7 +224,7 @@
     buildPlan: geometryDragPreparation.build, beginGeometryDrag: geometryDragPreparation.begin,
     invalidateAnalysis: () => constraintAnalysis.invalidate(),
   });
-  const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving } = createSolveContext({
+  const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving, createLineCollapseQuery } = createSolveContext({
     annotationDrag: constrainedAnnotationDrag, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace, fitVisibleGeometryToViewport } = createCanvasDisplay({
@@ -455,9 +455,7 @@
     resultIsAccepted, minOrientationLength: MIN_ORIENTATION_LENGTH,
   });
 
-  const lineCollapseQuery = window.LineCollapseQuery.create({
-    connectedComponentFromSeeds: solveScopeQuery.connectedComponentFromSeeds, constraintGraphNodes: constraintReferences.constraintGraphNodes, localSolveLines: solveScopeQuery.localSolveLines, minLineLength: MIN_LINE_LENGTH,
-  });
+  const lineCollapseQuery = createLineCollapseQuery();
 
   const splineEditing = createSplineEditing({
     constraintReferences, guardDimensionSymbolDeletion,

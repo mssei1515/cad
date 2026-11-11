@@ -50,7 +50,7 @@ test('solving feature shares actual solve state through parameters and refresh, 
  assert.deepEqual(events.filter(e=>e[0]==='profile').map(e=>e[1]),['parameters','dependencies']);
 });
 
-function contextFixture(composed, failureAt=null) {
+function contextFixture(composed, failureAt=null, configure=null) {
  const probe={order:[],error:new Error(failureAt || 'failure')};
  const f=fixture(true,true,({w,owners,input,state,events,read,solver})=>{
   const empty=()=>({activeSketchId:'A',sketches:[{id:'A'}],points:[],lines:[],circles:[],arcs:[],splines:[],constraints:[],blockInstances:[],geometryInstances:[]});
@@ -72,6 +72,7 @@ function contextFixture(composed, failureAt=null) {
    const contextInput={documentWorkspace:owners.documentWorkspace,readServices:owners.readServices,references:owners.references,referenceState:owners.referenceState,
     annotationDrag,solver,pointUsage:{isExplicitPoint:()=>true},presentation:owners.presentation,solveState:owners.solveState,minimumLength:0.001,acceptError:owners.acceptError};
    probe.contextInput=contextInput;
+   configure?.({w,owners,input,state,read,probe,contextInput});
    if(composed==='prepared'||composed==='reference-prepared') {
     const prepared=composed==='reference-prepared'
      ?w.SketchSolvingFeature.prepareWithReferencesForWorkspace(contextInput)
@@ -113,6 +114,48 @@ test('solving context keeps actual query and analysis owners cold, with virtual 
   assert.equal(f.solveState.sketchSolveState('A').result,f.state.result);assert.equal(f.events.at(-1)[0],'history');
   if(composed)assert.equal(Object.isFrozen(context),true);
  }
+});
+
+function collapseContextFixture(){
+ const f=contextFixture('prepared',null,({w,owners,state,probe})=>{
+  const a=new w.GeometrySolver.Point('collapse-start',0,0),b=new w.GeometrySolver.Point('collapse-end',0.001,0),line=new w.GeometrySolver.Line('collapse-line',a,b);
+  for(const item of [a,b,line])item.sketchId='A';
+  const constraint=Object.assign(Object.create(w.GeometrySolver.HorizontalConstraint.prototype),{sketchId:'A',nodes:[a,b],annotationGeometryNodes:[state.virtual.points[0]]});
+  state.virtual.points.push(a,b);state.virtual.lines.push(line);state.virtual.constraints.push(constraint);
+  probe.graphCalls=[];probe.collapseInputs=[];probe.collapseResults=[];probe.collapseFailure=new Error('collapse failure');
+  const rawGraph=function(item){'use strict';assert.equal(this,undefined);probe.graphCalls.push(item);if(probe.failGraph)throw probe.collapseFailure;return item.nodes;};
+  owners.references.constraintGraphNodes=rawGraph;
+  Object.assign(probe,{a,b,line,constraint,rawGraph,nativeCollapse:w.LineCollapseQuery});w.LineCollapseQuery=undefined;
+ });
+ const {probe}=f,w=probe.window;
+ w.LineCollapseQuery={create:function(options){assert.equal(this,w.LineCollapseQuery);assert.equal(arguments.length,1);probe.collapseInputs.push(options);
+  if(probe.failBuild)throw probe.collapseFailure;const actual=Reflect.apply(probe.nativeCollapse.create,this,[options]);probe.collapseResults.push(actual);return actual;}};
+ return f;
+}
+
+test('solving context creates a cold native collapse query using raw seeds, the shared virtual scope and the existing minimum length',()=>{
+ const f=collapseContextFixture(),p=f.probe;assert.deepEqual(p.collapseInputs,[]);assert.deepEqual(p.graphCalls,[]);
+ const query=p.context.createLineCollapseQuery();assert.equal(query,p.collapseResults[0]);assert.equal(Object.isFrozen(query),true);
+ const options=p.collapseInputs[0];assert.deepEqual(Object.keys(options),['connectedComponentFromSeeds','constraintGraphNodes','localSolveLines','minLineLength']);
+ assert.equal(options.connectedComponentFromSeeds,p.context.scopeQuery.connectedComponentFromSeeds);assert.equal(options.localSolveLines,p.context.scopeQuery.localSolveLines);
+ assert.equal(options.constraintGraphNodes,p.rawGraph);assert.notEqual(options.constraintGraphNodes,p.queryPorts.constraintGraphNodes);assert.equal(options.minLineLength,0.001);
+ const snapshot=Object.freeze({points:Object.freeze([Object.freeze({point:p.a,x:0,y:0}),Object.freeze({point:p.b,x:10,y:0})])});
+ const found=query.find(p.constraint,snapshot,'A');assert.equal(found.line,p.line);assert.equal(found.before,10);assert.equal(found.after,0.001);
+ assert.equal(p.b.x,0.001);assert.equal(snapshot.points[1].x,10);assert.equal(f.state.scope.lines.length,0);
+ assert.equal(query.find(p.constraint,snapshot,'B'),null);
+ const current=f.state.virtual;f.state.virtual={...current,lines:[]};assert.equal(query.find(p.constraint,snapshot,'A'),null);f.state.virtual=current;
+ const longSnapshot={points:[{point:p.a,x:0,y:0},{point:p.b,x:1000,y:0}]};p.b.x=0.006;assert.equal(query.find(p.constraint,longSnapshot,'A'),null);
+ p.b.x=0.005;assert.equal(query.find(p.constraint,longSnapshot,'A').line,p.line);
+});
+
+test('collapse query construction and later graph failures retain original errors without replacing existing queries or reading unrelated constraints',()=>{
+ const f=collapseContextFixture(),p=f.probe,first=p.context.createLineCollapseQuery();
+ p.failBuild=true;assert.throws(()=>p.context.createLineCollapseQuery(),error=>error===p.collapseFailure);
+ p.failBuild=false;const second=p.context.createLineCollapseQuery();assert.notEqual(first,second);assert.equal(second,p.collapseResults.at(-1));
+ const snapshot={points:[{point:p.a,x:0,y:0},{point:p.b,x:10,y:0}]};assert.equal(first.find(p.constraint,snapshot,'A').line,p.line);
+ const before=p.graphCalls.length;p.failGraph=true;assert.equal(second.find({},snapshot,'A'),null);assert.equal(p.graphCalls.length,before);
+ assert.throws(()=>second.find(p.constraint,snapshot,'A'),error=>error===p.collapseFailure);
+ assert.equal(p.b.x,0.001);assert.equal(snapshot.points[1].x,10);assert.deepEqual(f.events,[]);
 });
 
 test('solving context preserves live profiling, failed result diagnostics and exception boundaries',()=>{

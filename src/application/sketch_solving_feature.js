@@ -52,7 +52,13 @@
       return createForWorkspace({ documentWorkspace, scopeQuery, references, referenceState, readServices, analysis, presentation, solveState, acceptError,
         projectionEditing, geometry, checkpoint, editingScope, historyController, recordHistory, resultIsAccepted, maxPasses, relativeTolerance });
     }
-    return Object.freeze({ scopeQuery, analysis, redundancy, createSolving });
+    function createLineCollapseQuery() {
+      return window.LineCollapseQuery.create({
+        connectedComponentFromSeeds: scopeQuery.connectedComponentFromSeeds, constraintGraphNodes,
+        localSolveLines: scopeQuery.localSolveLines, minLineLength: minimumLength,
+      });
+    }
+    return Object.freeze({ scopeQuery, analysis, redundancy, createSolving, createLineCollapseQuery });
   }
   function create({ currentScope, solver, scopeQuery, activeSketchId, elementSketchId, constraintSketchId,
     constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,

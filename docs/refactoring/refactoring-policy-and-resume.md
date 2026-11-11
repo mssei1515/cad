@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の作図メッセージ組立て単位ではapp.jsは1,263行、非空白818行。AST監査ではroot242文・409束縛、構築・接続467非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の線つぶれQuery組立て単位ではapp.jsは1,261行、非空白816行。AST監査ではroot242文・410束縛、構築・接続465非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,24 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：線つぶれ検出Queryの組立てを求解contextへ集約（2026-11-11）
+
+SketchSolvingFeature.createContextForWorkspaceは、共有するScope query・元のConstraintReferences.constraintGraphNodes・minimumLengthから、createLineCollapseQueryで既存LineCollapseQueryを生成する。生成は明示的な零引数呼出し時だけで、context生成時にはLineCollapseQueryのnamespaceを先読みせず、Queryのためのmodel／scope読取りも行わない。prepareForWorkspaceからのcontextも同じbuilderを公開し、app.jsは従来の段階で実Queryを受け取り、拘束確定へそのまま渡す。実Queryを保持するsetter／cacheや新しいsolver・model・mutable app contextは追加しない。
+
+LineCollapseQuery.createは同じnamespace receiver・一引数で呼び、connectedComponentFromSeeds／constraintGraphNodes／localSolveLines／minLineLengthのkey順・実値とfunction参照を維持する。探索のScope queryは従来のAnnotation仮scopeを読む同じ実体を使い、起点は元のraw constraintGraphNodesを使う。Scope query内部のannotationGeometryNodes対応wrapperを検出起点へ流用しない。minimumLengthはrootからcontextへ既に渡された同じ最小長を使い、閾値・計算式と生LineCollapseQueryは変更しない。
+
+実factoryが返す凍結Queryをそのまま返し、findのsnapshot／Point／LineのObject同一性、指定Sketch・live scope、短絡と元例外、返値・無変更を維持する。context→円中心十字→Query→Spline編集の既存生成順、factory失敗時の後続停止・test API未公開、UIと保存形式v26も保つ。配置は既存application／constraintsのままとし、新file・loader／test一覧変更は不要である。
+
+app.jsは1,263→1,261行（2行減）、非空白818→816行。root242文は不変、束縛409→410（明示builderの一つ増）、構文依存辺1,091→1,089。構築114文／467→465非空白行、別名・設定99行、委譲11行、test hooks158行。rootが個々のgraph入力と最小長を再配線する責務を既存求解contextへ集約した。200〜500行の全体目標は未完了。
+
+新規二テストで、context生成時にLineCollapseQuery namespaceが存在しなくてもcoldに完成すること、raw起点とAnnotation仮scopeの区別、同じ実Scope query／最小長、native QueryのObject同一性、snapshotとPoint／Lineの参照、Sketch・scope・長さのlive変更と無変更、constructor／graph例外の同一性、既存Queryを保持したままの再生成と短絡を確認した。対象を逆展開したroot ASTが基準781ec6fと一致し、新builder／公開property以外の求解Feature本体、raw Query・Solver／loader／E2E、free identifier集合も不変である。実browserのapp／module responseだけへ診断を挿入し、四入力の実値／参照・receiver・引数数／key／prototype、三つのown readonly graph field、native Queryの実identity、生成順と強制例外時の停止点、既存context公開項目と公開テスト204項目のkey／descriptor／型を前後照合した。診断は製品sourceと通常E2Eには残さない。
+
+関連単体20件・全単体2,515件・通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+基準develop 781ec6f、作業branch codex/solve-context-collapse-query、開始時週枠残量89%。証跡はTEMP cad-solve-context-collapse-{before,after,before-failure,after-failure,audit,selection,source-hashes}.jsonとfocused／check／unit／smoke／e2e.logへ保持する。全体目標は未完了で、新規分離は週枠残量50%未満で停止し、develop先行・main最後の反映を行う。
+
+今回、拘束確定と固定Selectionの六依存を一括で束ねる案は採用しなかった。生成段階が異なる二操作を共有optionsや後段holderで結び付けることになり、削れるroot配線に対して結合を増やす。まず既存Scope query ownerが既に持つ依存で完結する上記Query生成を集約した。次もprivate部品の公開・新しいsetterや一律wrapperを増やさず、機能単位の生成・接続を整理する。
 
 ### 最新：作図メッセージ生成をPresentationへ接続（2026-11-11）
 
