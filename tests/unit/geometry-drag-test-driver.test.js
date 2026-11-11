@@ -211,7 +211,7 @@ test('Workspace drag support preserves the exact three execution routes, live sc
  const bad=fixture('workspace');bad.fail();assert.throws(()=>bad.geometry({kind:'point',id:'P1'},[[1,1]]),/preview failed/);assert.deepEqual(bad.calls.map(c=>c[0]),['build','attach','preview']);
 });
 
-function responsiveWorkspaceFixture(probe={}){
+function responsiveWorkspaceFixture(probe={}, owned=false){
  return responsiveFixture(types=>types,options=>{
   const w=sandbox.window,fail=()=>assert.fail('no scope, solve or clock read during test assembly');
   const modelTypes={DistanceConstraint:options.DistanceConstraint,ParallelConstraint:options.ParallelConstraint,PerpendicularConstraint:options.PerpendicularConstraint};
@@ -220,23 +220,28 @@ function responsiveWorkspaceFixture(probe={}){
   const publicAPI=support.execution;
   const late={insertion:{push:options.pushModelConstraint},presentation:{log:options.log,draw:options.draw},fit:{fitAllGeometryToViewport:options.fitAllGeometryToViewport},modelTypes,
    resetModelState:options.resetModelState,ensureDimensionDefaults:options.ensureDimensionDefaults,solveAndRefresh:options.solveAndRefresh,resetHistory:options.resetHistory,serializeModel:options.serializeModel};
+  function build(){return owned?support.createResponsiveFromPersistence({...late,persistence:Object.freeze({ensureDimensionDefaults:late.ensureDimensionDefaults})}):support.createResponsiveForEditing(late);}
   if(probe.failTypes){late.modelTypes=new Proxy(modelTypes,{get(){throw probe.error;}});
-   try{assert.throws(()=>support.createResponsiveForEditing(late),error=>error===probe.error);assert.equal(support.execution,publicAPI);}
+   try{assert.throws(()=>build(),error=>error===probe.error);assert.equal(support.execution,publicAPI);}
    finally{late.modelTypes=modelTypes;}}
-  const result=support.createResponsiveForEditing(late);assert.equal(support.execution,publicAPI);probe.support=support;probe.types=modelTypes;return result;
+  const result=build();assert.equal(support.execution,publicAPI);probe.support=support;probe.types=modelTypes;return result;
  });
 }
 
 test('Workspace responsive fixture reuses Geometry references and preserves reset, solve, fit and history order at its later stage',()=>{
- const original=responsiveFixture(),probe={},next=responsiveWorkspaceFixture(probe);
+ for(const owned of [false,true]) {
+ const original=responsiveFixture(),probe={},next=responsiveWorkspaceFixture(probe,owned);
  assert.deepEqual(next.events,[]);assert.equal(next.state.scope,null);assert.equal(next.driver.reset(),next.state.result);original.driver.reset();
  assert.deepEqual(next.events,original.events);assert.equal(JSON.stringify(next.state.scope),JSON.stringify(original.state.scope));
  const {points,lines,constraints}=next.state.scope;assert.equal(lines[0].p1,points[0]);assert.equal(constraints[0].a,points[0]);assert.equal(constraints[2].a,lines[0]);
  assert.ok(constraints[0] instanceof probe.types.DistanceConstraint);assert.equal(Object.keys(probe.support.execution).length,3);
  const prior=next.state.scope;next.driver.reset();assert.notEqual(next.state.scope,prior);assert.notEqual(next.state.scope.points[0],points[0]);
+ }
 });
 
 test('Workspace responsive constructor and solve failures preserve prior execution support and stop at the original effects',()=>{
- const marker=new Error('types unavailable'),f=responsiveWorkspaceFixture({failTypes:true,error:marker});assert.deepEqual(f.events,[]);
+ for(const owned of [false,true]) {
+ const marker=new Error('types unavailable'),f=responsiveWorkspaceFixture({failTypes:true,error:marker},owned);assert.deepEqual(f.events,[]);
  f.state.fail=marker;assert.throws(()=>f.driver.reset(),error=>error===marker);assert.deepEqual(f.events,['reset','defaults',['solve','サンプル復元']]);assert.equal(f.state.scope.constraints.length,5);
+ }
 });
