@@ -266,3 +266,71 @@ test('a failed pointer flush preserves the previous profile and never starts a r
   const profile = f.api.stopInteractionProfileForTest(); assert.equal(profile.prior.samples, 1); assert.equal(profile.prior.totalMs, 2);
   assert.equal(profile.preview, undefined); assert.equal(f.api.interactionFrameStatsForTest(), null);
 });
+
+function sceneObservationFixture(composed, failRendering = false) {
+  const f = displayFixture(), profiling = interactionProfilingFixture(), calls = [], marker = new Error('scene failed');
+  const model = { units: { length: 'mm' } }, state = { mode: 'line', scope: { points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [] } };
+  const read = name => { assert.equal(f.state.ready, true); calls.push(name); };
+  const currentScope = () => { read('scope'); return state.scope; };
+  const geometryAppearance = { isVisibleSketchId: () => true, isVisibleSketchElement: () => true, effectiveAppearanceForElement() {} };
+  const snap = { candidates: () => [], active: null }, centerline = { targets: [], firstPoint: null }, selection = [];
+  const viewControls = { state: { showHiddenElements: false }, constraintStatus: { mouseLatched: false, spaceHeld: false } };
+  const sessions = { targets: { command: null }, pending: { current: null }, preview: {} };
+  const persistence = { serializeConstraint(c) { 'use strict'; assert.equal(this, undefined); read('serialize'); return { id: c.id }; },
+    decorateSerializedConstraint(data, c) { 'use strict'; assert.equal(this, undefined); read('decorate'); return { ...data, source: c.id }; } };
+  const observations = { viewControls, centerlineCommand: centerline, commit: { readPerformance() { 'use strict'; assert.equal(this, undefined); read('performance'); return { time: 3 }; } },
+    persistence, readSelectedGeometry() { 'use strict'; assert.equal(this, undefined); read('selection'); return selection.slice(); }, scheduler: profiling.scheduler };
+  const input = { document: { elementFromPoint() {} }, canvas: { getBoundingClientRect: () => f.state.rect }, viewport: f.viewport,
+    documentWorkspace: { document: model, workspace: { current: currentScope }, sketches: { activeSketchId: () => 'S1' } },
+    readServices: { reads: { allGeometryLines: () => [] }, projections: {}, geometryAppearance }, geometry: f.geometry,
+    interaction: { lifecycle: { readMode: () => { read('mode'); return state.mode; }, setMode() {} }, selection: {}, hover: {} }, sessions,
+    authoring: { tools: {}, snap, offsetSelection: {} }, presentation: { draw() {}, updateUI() {}, profiler: profiling.profiler },
+    display: { bounds: {}, fit: {}, geometry: {} }, layers: {}, blocks: {}, types: {}, hits: {}, rootSketchId: 'ROOT', defaultSketchId: 'S1', cssPxPerMm: 1,
+    resizeCanvas() {}, resetModelState() {}, observations };
+  const rendering = Object.freeze({ marker: 'rendering' }), original = sandbox.window.CanvasRenderTestDriver;
+  f.state.ready = false;
+  sandbox.window.CanvasRenderTestDriver = { createRenderingSupport(options) { assert.equal(options.currentScope, currentScope); if (failRendering) throw failRendering; return rendering; } };
+  let api;
+  try {
+    const driver = sandbox.window.CanvasTestDriver;
+    api = composed ? driver.createBrowserSupportForScene(input) : { ...driver.createForScene(input),
+      viewObservation: driver.createViewObservation({ viewState: viewControls.state, constraintStatusView: viewControls.constraintStatus }),
+      authoringObservation: driver.createAuthoringObservation({ readMode: input.interaction.lifecycle.readMode, constraintTargetSession: sessions.targets,
+        pendingCommandSession: sessions.pending, drawingSnap: snap, centerlineCommand: centerline, currentScope,
+        decorateSerializedConstraint: persistence.decorateSerializedConstraint, serializeConstraint: persistence.serializeConstraint,
+        readPerformance: observations.commit.readPerformance, readSelectedGeometry: observations.readSelectedGeometry }),
+      interactionProfilingTestApi: driver.createInteractionProfiling({ profiler: profiling.profiler, scheduler: profiling.scheduler }) };
+  } finally { if (original === undefined) delete sandbox.window.CanvasRenderTestDriver; else sandbox.window.CanvasRenderTestDriver = original; }
+  assert.deepEqual(calls, []); f.state.ready = true;
+  return { api, state, sessions, snap, centerline, selection, viewControls, model, calls, marker, rendering, profiling };
+}
+
+test('Canvas browser support keeps construction cold and raw observation results, live scope and shared owners identical', () => {
+  const results = [];
+  for (const composed of [false, true]) {
+    const f = sceneObservationFixture(composed); if (composed) assert.ok(Object.isFrozen(f.api));
+    assert.equal(f.api.rendering, f.rendering); assert.equal(typeof f.api.display.clientPosition, 'function');
+    const empty = f.api.authoringObservation.state(); assert.equal(empty.pointCount, 0);
+    f.state.scope = { points: [{ id: 'P9', fixed: true }], lines: [{ id: 'L9', construction: true }], circles: [], arcs: [], splines: [], constraints: [{ id: 'C9' }] };
+    f.state.mode = 'arc'; f.sessions.targets.command = { type: 'distance' }; f.sessions.pending.current = { type: 'distance-place', pointer: { x: 7, y: 8 } };
+    f.snap.active = { label: 'endpoint' }; f.centerline.targets.push({ id: 'L9' }); f.centerline.firstPoint = { x: 1, y: 2 }; f.selection.push('L9');
+    f.viewControls.state.showHiddenElements = true; f.viewControls.constraintStatus.mouseLatched = true;
+    const authoring = f.api.authoringObservation.state(), view = f.api.viewObservation.state();
+    assert.equal(authoring.mode, 'arc'); assert.equal(authoring.pointCount, 1); assert.equal(authoring.lastConstraint.source, 'C9');
+    assert.equal(authoring.pendingPlacementPoint.x, 7); assert.equal(view.mouseLatched, true); assert.equal(view.showHiddenElements, true);
+    authoring.pendingPlacementPoint.x = 99; assert.equal(f.sessions.pending.current.pointer.x, 7); assert.equal(f.model.units.length, 'mm');
+    results.push(JSON.stringify({ empty, authoring, view, calls: f.calls }));
+  }
+  assert.equal(results[1], results[0]);
+});
+
+test('Canvas browser support retains actual scheduler profiling and original scene or pending flush failures', () => {
+  for (const composed of [false, true]) {
+    const f = sceneObservationFixture(composed), api = f.api.interactionProfilingTestApi, p = f.profiling;
+    p.profiler.start(); p.profiler.phase('prior', () => { p.state.time += 2; }); p.scheduler.schedule({ offsetX: 1, offsetY: 2 }); p.state.fail = true;
+    assert.throws(api.startInteractionProfileForTest, error => error === p.marker);
+    const profile = api.stopInteractionProfileForTest(); assert.equal(profile.prior.totalMs, 2); assert.equal(profile.preview, undefined);
+    assert.equal(api.interactionFrameStatsForTest(), p.scheduler.stats());
+    const marker = new Error('scene construction failed'); assert.throws(() => sceneObservationFixture(composed, marker), error => error === marker);
+  }
+});
