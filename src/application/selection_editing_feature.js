@@ -1,6 +1,21 @@
 /* Compose deletion and Clipboard over the same selection; each operation keeps its own scope rules. */
 (() => {
   "use strict";
+  function prepare() {
+    let clipboardCommand;
+    function readCommand() {
+      if (clipboardCommand === undefined) throw new ReferenceError("Cannot access 'clipboardCommand' before initialization");
+      return clipboardCommand;
+    }
+    function createPreparedFeature(options) {
+      const completed = window.SelectionEditingFeature.createForEditing(options);
+      clipboardCommand = completed.clipboard.command;
+      return completed;
+    }
+    function copySelectionToClipboard(options = {}) { return readCommand().copy(options); }
+    function pasteGeometryClipboard() { return readCommand().paste(); }
+    return Object.freeze({ createForEditing: createPreparedFeature, copy: copySelectionToClipboard, paste: pasteGeometryClipboard });
+  }
   function createForEditing({ documentWorkspace, editingScope, readServices, interaction, references, geometry,
     annotationFeature, annotationLeaderAnchor, splineEditing, guardDimensionSymbolDeletion, sessions, lineCommand, circularCommands,
     solving, analysis, presentation, updateToolbar, recordHistory, referenceImageInteraction, clearSelection, solveAndRefresh,
@@ -22,5 +37,5 @@
     });
     return Object.freeze({ deletion, clipboard });
   }
-  window.SelectionEditingFeature = Object.freeze({ createForEditing });
+  window.SelectionEditingFeature = Object.freeze({ prepare, createForEditing });
 })();

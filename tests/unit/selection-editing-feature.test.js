@@ -43,7 +43,7 @@ function fixture(configure = () => {}) {
   vm.runInContext(fs.readFileSync('src/application/selection_editing_feature.js', 'utf8'), sandbox);
   configure(input, state);
   const create = () => w.SelectionEditingFeature.createForEditing(input);
-  return { input, state, events, captured, deletion, marker, create };
+  return { input, state, events, captured, deletion, marker, create, w };
 }
 
 test('selection editing shares actual owners, codecs and deletion API without reading either scope during ordered construction', () => {
@@ -98,4 +98,95 @@ test('selection assembly forwards explicit null callbacks and supplied owner val
   assert.equal(f.captured.clipboard.deserializeConstraint, null); assert.equal(f.captured.clipboard.blockScopeId, null);
   assert.equal(f.captured.clipboard.blockDefinitionScopeError, null); assert.equal(f.captured.deletion.resetGeometryDrag, null);
   assert.equal(f.captured.deletion.resetDimensionDrag, undefined); assert.equal(f.captured.deletion.resetAnnotationDrag, null);
+});
+
+function attachPreparedCommand(f, build) {
+  const raw = f.w.ClipboardFeature.createForEditing;
+  f.w.ClipboardFeature = { createForEditing(ports) {
+    const feature = raw.call(this, ports);
+    return Object.freeze({ ...feature, command: build(feature, ports) });
+  } };
+  const selection = f.w.SelectionEditingFeature;
+  f.w.SelectionEditingFeature = Object.freeze({ ...selection, createForEditing(options) {
+    assert.equal(this, f.w.SelectionEditingFeature); assert.equal(arguments.length, 1); assert.equal(options, f.input);
+    return f.captured.actual = selection.createForEditing.call(this, options);
+  } });
+  return f.w.SelectionEditingFeature.prepare();
+}
+
+test('prepared Selection owns native Clipboard construction and stable operations with original guards, defaults, arity and errors', () => {
+  const f = fixture(), calls = [], result = {}, error = new Error('command method failed');
+  const command = { copy(options) { assert.equal(this, command); assert.equal(arguments.length, 1); calls.push(options); return result; },
+    paste() { assert.equal(this, command); assert.equal(arguments.length, 0); calls.push('paste'); return result; } };
+  const owner = attachPreparedCommand(f, () => command);
+  assert.deepEqual(f.events, []); assert.deepEqual(calls, []); assert.ok(Object.isFrozen(owner));
+  for (const invoke of [() => owner.copy(), () => owner.paste('ignored')]) {
+    assert.throws(invoke, { name: 'ReferenceError', message: "Cannot access 'clipboardCommand' before initialization" });
+  }
+  assert.equal(owner.copy.name, 'copySelectionToClipboard'); assert.equal(owner.paste.name, 'pasteGeometryClipboard');
+  const feature = owner.createForEditing(f.input);
+  assert.equal(feature, f.captured.actual); assert.equal(feature.deletion, f.deletion); assert.equal(feature.clipboard.command, command);
+  assert.deepEqual(f.events, ['construct:delete', 'construct:clipboard']);
+  assert.equal(owner.copy(), result); assert.equal(owner.copy(undefined), result);
+  assert.equal(Object.keys(calls[0]).length, 0); assert.equal(Object.keys(calls[1]).length, 0); assert.notEqual(calls[0], calls[1]);
+  const options = { cut: true }; assert.equal(owner.copy(options, 'ignored'), result); assert.equal(calls[2], options);
+  assert.equal(owner.copy(null), result); assert.equal(calls[3], null);
+  assert.equal(owner.paste('ignored'), result); assert.equal(calls[4], 'paste');
+  Object.defineProperty(command, 'copy', { get() { throw error; } });
+  assert.throws(() => owner.copy(options), failure => failure === error);
+  command.paste = () => { throw error; }; assert.throws(owner.paste, failure => failure === error);
+});
+
+test('prepared Selection retains the previous Clipboard after either construction failure and isolates separate owners', () => {
+  const f = fixture(); let generation = 0;
+  const owner = attachPreparedCommand(f, () => { const id = generation++; return Object.freeze({ copy: () => id, paste: () => id }); });
+  owner.createForEditing(f.input); assert.equal(owner.copy(), 0);
+  for (const failAt of ['deletion', 'clipboard']) {
+    f.state.failAt = failAt; f.events.length = 0;
+    assert.throws(() => owner.createForEditing(f.input), failure => failure === f.marker);
+    assert.deepEqual(f.events, failAt === 'deletion' ? ['construct:delete'] : ['construct:delete', 'construct:clipboard']);
+    assert.equal(owner.copy(), 0); assert.equal(owner.paste(), 0);
+  }
+  f.state.failAt = null;
+  const other = f.w.SelectionEditingFeature.prepare();
+  assert.throws(other.copy, { name: 'ReferenceError', message: "Cannot access 'clipboardCommand' before initialization" });
+  other.createForEditing(f.input); assert.equal(other.copy(), 1); assert.equal(owner.copy(), 0);
+  owner.createForEditing(f.input); assert.equal(owner.copy(), 2); assert.equal(other.paste(), 1);
+});
+
+test('prepared Clipboard operations preserve native cut retention, distinct scopes and limited paste rollback', () => {
+  const traces = [];
+  for (const prepared of [false, true]) {
+    const f = fixture(), workspacePoint = { id: 'workspace' }, boundPoint = { id: 'bound', x: 1, y: 2 };
+    vm.runInNewContext(fs.readFileSync('src/commands/clipboard_command.js', 'utf8'), { window: f.w });
+    const owner = attachPreparedCommand(f, base => f.w.ClipboardCommand.create({ session: base.session,
+      isGeometryMode: () => true, buildCopyPayload: () => ({ points: f.input.editingScope.current.points.map(p => ({ ...p })),
+        lines: [], circles: [], arcs: [], blockInstances: [], pasteCount: 0 }), canCreate: () => true,
+      currentTarget: () => ({ model: f.input.editingScope.current, scale: 2, sketchId: 'S1' }),
+      parameterTarget: () => { assert.equal(f.input.documentWorkspace.workspace.current(), f.state.workspace); return {}; },
+      graph: { append(model, payload, { dx, dy }) { assert.equal(model, f.state.bound);
+        model.points.push(...payload.points.map(p => ({ ...p, x: p.x + dx, y: p.y + dy }))); f.events.push('append'); return { maps: {} }; } },
+      checkpoint: { capture(model) { const points = model.points.slice(); return { rollback() { model.points = points; f.events.push('rollback'); } }; } },
+      selection: { applyClipboard() { f.events.push('select'); } }, clearSelection: () => f.events.push('clear'),
+      finishPaste() { f.events.push('finish'); if (f.state.failure) throw f.state.failure; }, recoverView: () => f.events.push('recover'),
+      sketchName: id => id, setHint: (...args) => f.events.push(['hint', ...args]), updateToolbar: () => f.events.push('toolbar'),
+    }));
+    let command;
+    const copy = prepared ? owner.copy : function (options = {}) { return command.copy(options); };
+    const paste = prepared ? owner.paste : function () { return command.paste(); };
+    const feature = prepared ? owner.createForEditing(f.input) : f.create(); command = feature.clipboard.command;
+    assert.deepEqual(f.events, ['construct:delete', 'construct:clipboard']); f.events.length = 0;
+    f.state.ready = true; f.state.workspace.points = [workspacePoint]; f.state.bound.points = [boundPoint]; f.input.interaction.selection.points = [workspacePoint];
+    assert.equal(copy(), true); assert.equal(feature.clipboard.session.payload.points[0].id, 'bound');
+    f.state.allowed = false; assert.equal(copy({ cut: true }), false);
+    const rejected = feature.clipboard.session.payload; assert.equal(rejected.cut, true); assert.equal(f.state.workspace.points[0], workspacePoint);
+    assert.equal(paste(), true); assert.equal(rejected.pasteCount, 1); assert.deepEqual(f.state.bound.points[1], { id: 'bound', x: 13, y: 14 });
+    const error = new Error('operation failed'); f.state.failure = error;
+    assert.throws(() => copy({ cut: true }), failure => failure === error);
+    const failedCut = feature.clipboard.session.payload; assert.equal(failedCut.cut, true); assert.equal(failedCut.pasteCount, 0);
+    const before = f.state.bound.points.slice(); assert.equal(paste(), false);
+    assert.equal(failedCut.pasteCount, 1); assert.deepEqual(f.state.bound.points, before); assert.equal(f.state.workspace.points[0], workspacePoint);
+    traces.push(JSON.stringify({ events: f.events, workspace: f.state.workspace, bound: f.state.bound, payload: failedCut }));
+  }
+  assert.equal(traces[1], traces[0]);
 });
