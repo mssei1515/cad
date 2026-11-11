@@ -1,5 +1,52 @@
 # Composition rootの残存責務と依存監査
 
+## 段階的factoryの生成元を含む再監査（2026-11-11）
+
+基準はdevelop 6eed90d、app.jsのGit blobはf3fad1acb1e07c46a304fb4e6a02c883a7f3fc93。app.jsは1,264行・非空白819行、root242文・418束縛、構築・接続114文／468非空白行、別名・設定99行、委譲11行、test hooks158行。今回のapp.jsは1,264→1,264行（0行変化）で、製品の分離実装を進めた件数には数えない。
+
+### 生成元の系譜を再現する
+
+tools/audit-composition-root.jsのconstructionOriginsは、rootの各Call／New initializerについて、対応するroot文ID、callee、構文上のwindow namespaceと取得pathを返す。例えばcreateCanvasWorkspaceはwindow.CanvasDisplayのprepareForWorkspace()→createForEditing()→createEditingWorkspaceから取得されている。constの単純別名と入れ子ObjectPatternだけを追い、変数の再代入・computed key・default／rest binding・循環・外部関数・windowのshadowingは推定しない。アプリは実行せず、getterや返値・関数本体も評価しない。
+
+これは生成元の構文上の系譜であり、戻り値の実所有者、readonly data property、coldな生成、実行順や例外の同値性を証明しない。同じnamespaceから派生することだけでまとめて移動しない。複数initializerを持つ一文は各initializerを別記するため、集計時はroot文IDを重複除外する。既存の分類・束縛・依存辺・循環等の出力は変更していない。
+
+次で現物から再生成できる。出力JSONは一時ファイルへ保存し、巨大なsnapshotをrepositoryへ追加しない。
+
+```powershell
+node tools/audit-composition-root.js
+node --test tests/unit/composition-root-audit.test.js
+```
+
+### 生成元別の大きさと限界
+
+| 構文上の生成元 | initializer数 | 対応root文の非空白行 | 宣言される束縛数 | 生成段階の先頭行 |
+| --- | ---: | ---: | ---: | --- |
+| CanvasInteractionFeature | 15 | 74 | 21 | 83〜1024 |
+| CanvasDisplay | 10 | 49 | 37 | 205〜1058 |
+| BasicDrawingTools | 11 | 42 | 20 | 127〜942 |
+| ConstraintEditing | 8 | 36 | 28 | 50〜1077 |
+| SketchEditingFeature | 5 | 27 | 6 | 74〜789 |
+| BlockEditingFeature | 6 | 23 | 9 | 155〜822 |
+| AnnotationFeature | 6 | 22 | 9 | 28〜697 |
+| PresentationFeature | 7 | 22 | 9 | 35〜1054 |
+| DocumentWorkspace | 6 | 20 | 18 | 44〜321 |
+| PropertiesDisplay | 2 | 18 | 6 | 718〜841 |
+
+これらは消せる行数や、独立した機能数ではない。CanvasInteraction由来の15生成は83〜1,024行に分散し、Pointer／Keyboardの前にScene query・注記・拘束・描画command等の実体を待つ。CanvasDisplay由来の10生成もViewport→Workspace→Scene→Frame→Preview／PNGへ分かれ、37束縛を他機能へ共有する。大きなcreate一つへまとめると、依存の早期読取りや大量の戻り値、別のapp bootstrapになりやすい。
+
+### 次の境界の判断
+
+一律のBrowserTestSupport（十九中継関数・190行増に対してroot9行減）や、hoisted関数を準備holderへ移すだけの単位を繰り返して200〜500行へ達するとは扱わない。次は、同じ実ownerの完成recordを共有できる境界を優先する。関数群の再梱包とschemaの二重管理を減らし、実操作は現在のownerへ残す。
+
+最初の具体候補はCanvasDisplayの実Scene recordである。現在appはsketchStyle／geometry／overlay／bounds／fit／createHatchRenderingへ分解し、CanvasTestDriverにはbounds／fit／geometryを別のdisplay objectとして再梱包している。createForSceneはこのdisplayの三fieldを取出して既存描画支援へ接続しており、実Sceneを同じ限定用途へ渡せるか確認する。新しいテスト専用moduleを作らず、Sceneを可変app contextへ拡張しない。
+
+実装前に、八つのScene fieldのown data property／freeze、三field以外をtest driverが観測しないこと、元の生成位置、早期callbackのgeometryDisplay初期化前guardを確認する。GeometryDisplayの早期参照を無理にrecord参照へ置換しない。Memberを裸関数へ渡す／member呼出しする違い、Snapshotとliveなscope、公開204項目の参照、native factory失敗時の途中状態を別途検証する。単なる一括置換や引数圧縮はしない。ここで示した候補は未実装で、実record・依存の確認後に範囲を決める。
+
+### この監査の検証範囲
+
+監査関連6件、全単体2,511件が成功。構文639fileは成功（exit 0）。実appに対する旧toolと新toolの旧field全体の比較が一致し、全114initializerの系譜を記録した。app／src／index／E2E／package／serverの差分はゼロ。今回の変更は開発用tool・その境界テスト・文書のみであり、E2Eは再実行していない。直前6eed90dの関連504件成功（9.0分）と、最後の全体589件成功（f0a7954、30.0分）は、その時点の結果として区別する。TEMP cad-construction-audit-{root,verified}.jsonとfocused／check／unit.logに証跡を保持する。
+
+
 ## 構築依存の再監査と次の分離境界（2026-11-10）
 
 基準はdevelop `8162d28`、app.jsのGit blobは`57c7c49821c6f171f3bfed4c11f4715b56f56bd6`。`tools/audit-composition-root.js`と同じBabel ASTで再計測した。app.jsは1,349行・非空白903行、root289文・468束縛。直前の正式な全体検証は同じ製品／テスト入力で構文635file・単体2,446件・全E2E589件成功（22.6分）。本区切りは設計監査の更新のみで、製品・テスト・正式仕様を変更しない。

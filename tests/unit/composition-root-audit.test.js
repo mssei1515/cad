@@ -36,3 +36,32 @@ test('composition audit accounts for every nonblank line deterministically and r
   assert.throws(() => auditSource('register(function(){});'), /classic-script/);
   assert.throws(() => auditSource('(function(){ const a=1; const b=2; })();'), /Overlapping root statements/);
 });
+
+test('construction origins follow staged factories and nested lexical aliases without executing application code', () => {
+  const result = auditSource('(function(){\nconst prepared = window.Canvas.prepare();\nconst { create: build, nested: { factory } } = prepared;\nconst scene = build({ danger: () => { throw Error("must not run"); } });\nconst { createPreview } = scene;\nconst preview = createPreview();\nconst another = factory();\nconst item = new window.Model.Item();\n})();');
+  const origins = Object.fromEntries(result.constructionOrigins.map(item => [item.callee, item]));
+  assert.deepEqual(origins.build.origin, { namespace: 'window.Canvas', path: ['prepare()', 'create'] });
+  assert.deepEqual(origins.createPreview.origin, { namespace: 'window.Canvas', path: ['prepare()', 'create()', 'createPreview'] });
+  assert.deepEqual(origins.factory.origin, { namespace: 'window.Canvas', path: ['prepare()', 'nested', 'factory'] });
+  assert.equal(origins['window.Model.Item'].kind, 'NewExpression');
+  assert.deepEqual(origins['window.Model.Item'].origin, { namespace: 'window.Model', path: ['Item'] });
+  assert.equal(result.statements.find(node => node.id === origins.build.statement).call, 'build');
+});
+
+test('construction origins leave reassigned, computed, defaulted, spread and cyclic aliases unresolved', () => {
+  const result = auditSource('(function(){\nlet mutable = window.A.prepare();\nmutable = window.B.prepare();\nconst x = mutable.create();\nconst { factory = fallback, ...rest } = window.A;\nconst a = factory();\nconst b = rest.create();\nconst dynamic = window[key].create();\nconst { [key]: computed } = window.A;\nconst c = computed();\nconst left = right;\nconst right = left;\nconst d = left();\nconst unknown = external();\n})();');
+  const origins = Object.fromEntries(result.constructionOrigins.map(item => [item.callee, item.origin]));
+  assert.deepEqual(origins['window.A.prepare'], { namespace: 'window.A', path: ['prepare'] });
+  for (const callee of ['mutable.create', 'factory', 'rest.create', 'window[key].create', 'computed', 'left', 'external']) {
+    assert.equal(origins[callee], null, callee);
+  }
+});
+
+test('construction origins respect a shadowed window and report each constructor in a shared declaration', () => {
+  const shadowed = auditSource('(function(){\nconst window = external();\nconst fake = window.A.create();\n})();');
+  assert.equal(shadowed.constructionOrigins.find(item => item.callee === 'window.A.create').origin, null);
+  const result = auditSource('(function(){\nconst first = window.A.create(), second = window.B.create();\n})();');
+  assert.equal(result.constructionOrigins.length, 2);
+  assert.deepEqual(result.constructionOrigins.map(item => item.statement), [1, 1]);
+  assert.deepEqual(result.constructionOrigins.map(item => item.origin.namespace), ['window.A', 'window.B']);
+});
