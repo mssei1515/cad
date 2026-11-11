@@ -855,3 +855,39 @@ test('Workspace persistence keeps explicit invalid readers and its existing spre
     }
   } finally { w.DocumentApplication = original; }
 });
+
+test('fixed queries share the Document bound-scope port with native projected identity, endpoint locks and live constraints across Workspace restoration', () => {
+  const traces = [];
+  for (const direct of [false, true]) {
+    const { model, context } = ownedBoundWorkspace();
+    const { binding } = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} });
+    const G = w.GeometrySolver, p = new G.Point('P1', 0, 0), q = new G.Point('P2', 10, 0);
+    const line = Object.assign(new G.Line('B1@L1', p, q), { blockProjection: true });
+    const regenerated = Object.assign(new G.Line('B1@L1', p, q), { blockProjection: true });
+    const arc = Object.assign(new G.Arc('B1@A1', p, 10, 0, Math.PI), { blockProjection: true });
+    const regeneratedArc = Object.assign(new G.Arc('B1@A1', p, 10, 0, Math.PI), { blockProjection: true });
+    const highlight = w.SelectionHighlight.create({ types: G, geometryRefForItem: w.GeometryObjects.geometryRefForItem, geometryRefsEqual: w.GeometryRef.equals });
+    const fixed = w.ConstraintReferences.createFixedState({ currentScope: direct ? model.readEditingScope : () => binding.current,
+      sameConstraintDisplayElement: highlight.sameConstraintDisplayElement });
+    const disabled = new G.LineFixedConstraint(line), rootLine = new G.LineFixedConstraint(line), rootArc = new G.ArcEndpointFixedConstraint(arc, 'start', 10, 0);
+    disabled.enabled = false; model.document.constraints = [disabled, rootLine, rootArc];
+    function inspect(lineConstraint, arcConstraint) {
+      assert.equal(fixed.findLineFixedConstraint(regenerated), lineConstraint);
+      assert.equal(fixed.findArcEndpointFixedConstraint(regeneratedArc, 'start'), arcConstraint);
+      assert.equal(fixed.findArcEndpointFixedConstraint(regeneratedArc, 'end'), undefined);
+      assert.equal(fixed.pointLockedByLineFixed(p), Boolean(lineConstraint));
+      assert.equal(fixed.pointLockedByLineFixed(new G.Point('P1', 0, 0)), false);
+      return [Boolean(lineConstraint), Boolean(arcConstraint)];
+    }
+    const results = [inspect(rootLine, rootArc)], host = model.workspace.capture(), unbound = w.DocumentState.create();
+    model.workspace.activate(unbound); assert.equal(model.workspace.current(), unbound); results.push(inspect(rootLine, rootArc));
+    const draft = w.DocumentState.create(), draftLine = new G.LineFixedConstraint(line); draft.constraints = [draftLine];
+    binding.activate(draft); results.push(inspect(draftLine, undefined));
+    model.workspace.restore(host); assert.equal(model.workspace.current(), model.document); assert.equal(binding.current, draft);
+    results.push(inspect(draftLine, undefined)); draftLine.enabled = false; results.push(inspect(undefined, undefined));
+    const marker = new Error('bound constraints getter'); Object.defineProperty(draft, 'constraints', { get() { assert.equal(this, draft); throw marker; } });
+    for (const query of [() => fixed.findLineFixedConstraint(line), () => fixed.findArcEndpointFixedConstraint(arc, 'start'), () => fixed.pointLockedByLineFixed(p)]) assert.throws(query, error => error === marker);
+    assert.equal(binding.current, draft); traces.push(JSON.stringify(results));
+  }
+  assert.equal(traces[1], traces[0]);
+});
