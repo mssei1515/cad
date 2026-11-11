@@ -609,7 +609,6 @@
     imageClipboard, isGeometryMode,
   });
   const { remove: deleteElements, removeSelection: deleteCurrentSelection } = deletionFeature;
-  const { session: clipboardSession, copyableSelectionPayload } = clipboardFeature;
 
 
   const { selectionBounds: dimensionSelectionBounds, layer: dimensionLayer } = createDimensionTraversal({
@@ -1147,13 +1146,13 @@
       solvePreparation: constraintSolvePreparation, solving: sketchSolving, checkpoint: editingCheckpoint, sessions: operationSessions, presentation, viewport,
       resetModelState, serializeModel, loadModelData, clearSelection, fitAllGeometryToViewport: canvasScene.fit.fitAllGeometryToViewport, resetHistory, solveAndRefresh, canvas, document,
     });
-    const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createForWorkspace({
+    const sketchProjectionTestSupport = window.SketchProjectionTestDriver.createBrowserSupportForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, projection: sketchProjectionFeature,
       display: geometryDisplay, sketchPresentation: canvasScene.sketchStyle, analysis: constraintAnalysis, redundancy: constraintRedundancy, presentation, canvasDriver: canvasTestDriver,
       history: historyController, solving: sketchSolving, blocks: blockEditingFeature, blockDefinition: blockDefinitionCommand, blockCompletion: blockCompletionCommand, blockSelection: blockSelectionQuery,
       document, readHistory: readTestHistory, resetModelState, serializeModel, loadModelData, markReferenceConstraint, pushModelConstraint: constraintInsertion.push, synchronizeSketchProjectionMetadata,
       clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection: propertiesTestSupport.appearanceTestAction.set, version: CURRENT_JSON_VERSION,
-      copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
+      copySelectionToClipboard, pasteGeometryClipboard, clipboard: clipboardFeature,
     });
     const selectionTestApi = createSelectionTestApi({
       sketchMoveCommand, blockEditor, blockSelection: blockSelectionQuery, blocks: blockEditingFeature, drawingFit: canvasScene.fit, canvasDriver: canvasTestDriver,
@@ -1189,12 +1188,12 @@
       viewport, canvas, document, fit: canvasScene.fit, blocks: blockEditingFeature, blockSelection: blockSelectionQuery, clipboard: clipboardFeature,
       resetModelState, resetHistory, serializeModel, hitBlockInstance, hatchCommand, hatchRegionErrorText: authoringFeedback.hatchRegionErrorText, clearSelection,
     });
-    const splineTestSupport = window.SplineTestDriver.createForWorkspace({
+    const splineTestSupport = window.SplineTestDriver.createBrowserSupportForWorkspace({
       documentWorkspace, editingScope: editingScopeBinding, geometry: geometryCreation, readServices: geometryReadServices,
       interaction: canvasInteraction, presentation, splineEditing, blockSelection: blockSelectionQuery, blocks: blockEditingFeature,
       viewport, canvas, document, resizeCanvas: canvasWorkspaceLayout.resizeCanvas, resetModelState, resetHistory, serializeModel,
       pushModelConstraint: constraintInsertion.push, solveAndRefresh, serializeConstraint, annotationLeaderTargetFromItem,
-      clearSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
+      clearSelection, clipboard: clipboardFeature, pasteGeometryClipboard,
     });
     window.__jot2dTest = window.BrowserTestApi.createFromSupportRecords({
       canvas: { support: canvasTestSupport, responsiveDragFixture, dragExecutionSupport, canvasRenderProbe },
