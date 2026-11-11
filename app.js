@@ -208,7 +208,6 @@
   });
   const { state: viewState, constraintStatus: constraintStatusView } = canvasViewControls;
 
-  const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
   const { acceptError: CONSTRAINT_ACCEPT_ERROR, resultIsAccepted } = window.SketchSolving.createEditingPolicy();
   const constraintOperandFeature = selectionFeature.createConstraintOperands({
     targets: constraintTargetSession, pointer: pointerInteractionController, solver, acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -234,7 +233,7 @@
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction,
     history: historyFeature, analysis: constraintAnalysis, updateHistoryButtons,
   });
-  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview,
+  const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneWithAppearance: createCanvasScene, createPlacementPreview,
     createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
     dimensionScene: { onExpressionMark: canvasRenderProbe.captureExpressionMark },
@@ -250,7 +249,6 @@
     solveState: sketchSolveResultState, analysis: constraintAnalysis,
     instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
     selectionHighlight, isSidebarHighlightedElement,
-    constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
     sameArcEndpoint, arcEndpointPoint, fixedState: fixedStateQueries,
     editingQueries: { ...geometryDragPreparation.queries, editedSpline: () => splineEditing.current?.spline },
     annotationBounds: annotationPreparation.annotationBounds,
@@ -1089,12 +1087,12 @@
         persistence: documentPersistence, readSelectedGeometry: readTestSelectedGeometry, scheduler: pointerMoveScheduler },
     });
     const { display: canvasTestDriver } = canvasTestSupport;
-    const propertiesTestSupport = window.PropertiesTestDriver.createBrowserSupportForWorkspace({
+    const propertiesTestSupport = window.PropertiesTestDriver.createBrowserSupportForDisplay({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, blockQueries: blockEditingQueries,
       selectionHighlight, presentation, display: geometryDisplay, placement: dimensionPlacement, viewport, document, canvas, fixPointBtn,
       readHistory: readTestHistory, resetModelState, clearSelection, resetHistory,
       fit: canvasScene.fit, insertion: constraintInsertion, recordHistory, canvasThemeColor, isSidebarHighlightedElement,
-      propertiesSelection, fixedState: fixedStateQueries, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+      propertiesSelection, fixedState: fixedStateQueries,
     });
     const sketchTreeTestApi = window.SketchTreeTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,

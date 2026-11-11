@@ -9,14 +9,14 @@ for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geom
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox, { filename: file });
 }
 class Point { constructor(x, y) { Object.assign(this, { x, y, kind: 'explicit', sketchId: 'S1' }); } }
-function fixture() {
+function fixture(displayOptions = {}) {
   const state = { ready: false, dpr: 2, exporting: false, active: 'S1', edited: null, label: 'Fixed', scope: { points: [], lines: [], circles: [], arcs: [], splines: [] } };
   const calls = [], strokes = [], reads = [], ctx = {}, viewport = { scale: 2 };
   const ready = () => assert.equal(state.ready, true, 'construction must not read scene or paint');
   for (const method of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'fill', 'arc', 'fillText', 'setLineDash', 'setTransform']) {
     ctx[method] = (...args) => { ready(); calls.push([method, ...args]); if (method === 'moveTo') ctx.start = args; };
   }
-  ctx.stroke = () => { ready(); if (state.failure) throw state.failure; strokes.push({ start: ctx.start, color: ctx.strokeStyle, blur: ctx.shadowBlur, width: ctx.lineWidth }); };
+  ctx.stroke = () => { ready(); if (state.failure) throw state.failure; strokes.push({ start: ctx.start, color: ctx.strokeStyle, blur: ctx.shadowBlur, width: ctx.lineWidth, alpha: ctx.globalAlpha }); };
   const surface = sandbox.window.CanvasSurface.create({ canvas: {}, ctx, viewport, readPixelRatio: () => state.dpr });
   const selection = { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], geometryInstances: [] }, hover = { current: {} };
   const visible = item => { ready(); return item.visible !== false; }, active = item => item.sketchId === state.active;
@@ -37,12 +37,26 @@ function fixture() {
     canvasThemeColor: color => color, constructionAlpha: .72, constructionExtensionScreenPx: 10, fixedPointLabel: () => state.label, isVisibleSketchElement: visible,
     handleQueries: { sameArcEndpoint, arcEndpointPoint: (arc, end) => arc[end], findArcEndpointFixedConstraint: () => null, isDraggingArcEndpoint: () => false,
       editedSpline: () => state.edited, currentScope: () => state.scope },
-    pointQueries: { pointLockedByLineFixed: () => false, sidebarHoveredItem: () => null, isDraggingPoint: () => false, isDraggingCenter: () => false } });
+    pointQueries: { pointLockedByLineFixed: () => false, sidebarHoveredItem: () => null, isDraggingPoint: () => false, isDraggingCenter: () => false }, ...displayOptions });
   assert.equal(Object.isFrozen(display), true); assert.deepEqual(calls, []); assert.deepEqual(reads, []);
   state.ready = true; surface.syncCanvasBitmapSize(100, 80); calls.length = 0;
   return { state, calls, strokes, reads, display, selection, hover, viewport, surface, ctx };
 }
 function line(x, extra = {}) { return { p1: new Point(x, 0), p2: new Point(x + 10, 0), sketchId: 'S1', ...extra }; }
+
+test('geometry display exposes its actual immutable construction alpha for both normal and export paint', () => {
+  for (const constructionAlpha of [.72, .34, 0, null, undefined]) {
+    const f = fixture({ constructionAlpha });
+    assert.equal(f.display.constructionAlpha, constructionAlpha);
+    assert.equal(Object.getOwnPropertyDescriptor(f.display, 'constructionAlpha').writable, false);
+    const item = line(10, { construction: true, appearance: { endpointMarkers: false } });
+    f.display.drawLines([item]);
+    assert.equal(f.strokes.at(-1).alpha, 1 * constructionAlpha);
+    f.state.exporting = true; f.display.drawLines([item]);
+    assert.equal(f.strokes.at(-1).alpha, 1 * constructionAlpha);
+    f.display.drawLines([line(30)]); assert.equal(f.strokes.at(-1).alpha, 1);
+  }
+});
 
 test('disabled Block handles reset the drawing context without reading or painting geometry', () => {
   const f = fixture();

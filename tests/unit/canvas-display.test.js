@@ -1119,6 +1119,24 @@ test('Canvas workspace preparation preserves staged construction and shares actu
   assert.equal(p.dimensions.appearance, f.readServices.dimensionAppearance); assert.equal(p.dimensions.canvasThemeColor, f.color);
 });
 
+test('Canvas scene appearance defaults share the actual display configuration while explicit values and the raw API remain distinct', () => {
+  const f = preparedWorkspaceFixture(true), options = { ...f.probe.sceneOptions }, original = sceneWindow.GeometryDisplay;
+  delete options.constructionAlpha;
+  let actual, input;
+  sceneWindow.GeometryDisplay = { ...original, create(value) { input = value; return actual = original.create(value); } };
+  try {
+    f.state.ready = false; f.calls.length = 0; f.reads.length = 0;
+    const normal = f.workspace.createSceneWithAppearance(options);
+    assert.equal(normal.geometry, actual); assert.equal(input.constructionAlpha, .72); assert.equal(normal.geometry.constructionAlpha, .72);
+    for (const constructionAlpha of [0, .34, null, undefined]) {
+      const scene = f.workspace.createSceneWithAppearance({ ...options, constructionAlpha });
+      assert.equal(scene.geometry, actual); assert.equal(input.constructionAlpha, constructionAlpha); assert.equal(scene.geometry.constructionAlpha, constructionAlpha);
+    }
+    assert.equal(f.workspace.createSceneForEditing(options).geometry.constructionAlpha, undefined);
+    assert.deepEqual(f.calls, []); assert.deepEqual(f.reads, []);
+  } finally { sceneWindow.GeometryDisplay = original; }
+});
+
 test('Canvas workspace preparation preserves live scope, language, theme, DPR, pending resize and original zoom bounds', () => {
   const run = composed => {
     const f = preparedWorkspaceFixture(composed); f.calls.length = 0; f.reads.length = 0;
