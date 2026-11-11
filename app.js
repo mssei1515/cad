@@ -29,7 +29,7 @@
   const ctx = canvas.getContext("2d");
   const pngExportLifecycle = window.PngExport.prepare();
   const presentation = window.PresentationFeature.create({
-    document, storage: () => localStorage, refreshVersion: () => runtimeVersionView.render(), readDuplicateCount: () => constraintRedundancy.count,
+    document, storage: () => localStorage, readDuplicateCount: () => constraintRedundancy.count,
   });
   const { profiler: interactionProfiler,
     log, setHint, updateUI, updateGeometrySelectionUI, draw, updateToolbar, updateStatusUI, updateHistoryButtons } = presentation;
@@ -342,7 +342,7 @@
   const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreviewForEditing({
     ctx, surface: canvasSurface, geometry: geometryDisplay, canvas, centerlineCommand,
   });
-  const { versionView: runtimeVersionView, initialize: initializePresentation } = presentation.createStartup({
+  const { initialize: initializePresentation } = presentation.createStartup({
     canvasSurface, resizeCanvas: canvasWorkspaceLayout.resizeCanvas, readVersion: () => window.__JOT2D_RUNTIME_VERSION__,
   });
 

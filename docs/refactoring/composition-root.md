@@ -1,6 +1,21 @@
 # app.jsを起動・接続専用にする継続作業
 
 
+## 実行バージョン表示の再表示参照をPresentationへ移管（2026-11-12）
+
+PresentationFeature.createはrefreshVersionを未指定の場合、同じFeatureのcreateStartupが完成・公開した実RuntimeVersionViewへ言語変更時の再表示を委譲する。app.jsは表示Viewの後段束縛を持たず、再表示callbackを組み立てない。現在のRuntimeVersionView.renderをmember・ゼロ引数で呼び、返値と元例外をそのまま返す。default callbackの名前refreshVersion・arity 0、初期化前の元ReferenceErrorを維持する。
+
+createStartupは実View生成→ApplicationSettingsの二つの設定関数取得→既存initialize関数と返却cohortの完成、という従来の生成順を保ち、その完成参照だけをprivateに公開する。native constructorや設定getterが失敗した場合は以前の完成Viewを保持し、明示undefined／nullの生成結果と未初期化を区別する。呼出し時のrender取得・receiver／引数／返値・例外、初期化のUI→描画→通知→言語→theme→バージョン読込→resize→surface開始の順を変えない。
+
+明示したrefreshVersionはown／継承とundefined／nullを含め優先し、そのままApplicationSettingsへ渡す。raw createStartupの返すversionView／initializeも維持する。UIの完成参照をPresentationへ移すだけで、Git情報の検証・保持・DOM再表示はRuntimeVersionView、言語／theme・保存設定はApplicationSettingsが所有する。新file・global・model state／cache・registry・全体contextは追加しない。UI・操作・履歴・保存形式v26は不変。フォルダ配置は既存ownerに合致しているため変更しない。
+
+app.jsは1,170→1,170行（0行変化）、非空白737行。root200文・360→359束縛、構築423行・109文、別名77行・bind35行・test hooks151行は不変。旧runtimeVersionViewのroot consumerは初期Presentationへ渡した再表示callback一か所だけであることをASTで確認し、その遅延依存を所有者内へ収めた。新たな未束縛参照なし。行数だけの削減は行わず、200〜500行の全体目標は未完了。
+
+関連単体54件が成功。実ApplicationSettingsとRuntimeVersionViewの言語変更で、同じGit情報・dirty表示・unavailable表示が保持／翻訳されることを確認した。未完成時のguard、constructor中と設定getter中の公開時機、以前の完成View保持、実receiver・ゼロ引数・返値／元例外、明示／継承overrideを検証した。既存startupの初期化順・各段階失敗時の部分状態テストも実行した。ソース逆変換で再表示参照の所有以外の既存Startup／表示本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,647件・関連単体54件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E122件（5file、1.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
 ## 幾何計算のorientation既定値を各機能へ接続（2026-11-12）
 
 app.jsによるMIN_ORIENTATION_LENGTHの取出しと四つの生成先への指定をやめ、既存GeometryKernelの同じ定数を各機能の既定値にする。BasicDrawingTools.prepareGeometryForSolver・準備済みeditingのcreateCircleCenterCross、ConstraintEditing.prepareDimensionValuesのcreateForEditing、GeometryDragFeature.createForWorkspaceが対象。定数の値1e-9と、Solverから別途得る線分最小長の計算・許容誤差・求解の数値方針は変更しない。

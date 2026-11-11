@@ -54,7 +54,7 @@ test('presentation-owned toolbar updates retain real history, pending state and 
   }
   assert.deepEqual(run(true),run(false));
 });
-function fixture(){
+function fixture(configureOptions){
   const events=[],created={},state={moving:false,dialog:false,panel:null,derived:null,png:null,pending:null,mode:'select',frame:{id:'frame'},fail:null,domReads:0};
   const document={getElementById(id){state.domReads++;return id==='propertiesPanel'?state.properties:id==='blockDefinitionsDialog'?{open:state.dialog}:null;}};state.properties={inert:false};
   const settings={language:'ja',localizeApplicationUI:()=>events.push('localize'),applicationText:(ja,en)=>settings.language==='en'?en:ja},profiler={active:false,work:(category,work)=>{events.push('profile:'+category);return work();}};
@@ -62,7 +62,9 @@ function fixture(){
   const sandbox={window:{ApplicationSettings:{create(ports){events.push('settings');created.settings=ports;return settings;}},InteractionProfiler:{create(){events.push('profiler');return profiler;}},ApplicationFeedback:{create(ports){events.push('feedback');created.feedback=ports;return feedback;}}}};
   vm.createContext(sandbox);for(const file of ['src/application/application_refresh.js','src/ui/canvas_refresh.js','src/application/presentation_feature.js','src/ui/toolbar_view.js','src/ui/command_cursor.js','src/editing/edit_history.js','src/editing/history_controller.js','src/editing/draw_operation_lifecycle.js','src/editing/pending_command_session.js','src/editing/constraint_target_session.js'])vm.runInContext(fs.readFileSync(file,'utf8'),sandbox);
   const storage=()=>assert.fail('no eager storage read by assembly'),version=()=>events.push('version'),duplicates=()=>assert.fail('no eager duplicate query');
-  const feature=sandbox.window.PresentationFeature.create({document,storage,refreshVersion:version,readDuplicateCount:duplicates});
+  const options={document,storage,refreshVersion:version,readDuplicateCount:duplicates};
+  if(configureOptions)configureOptions(options);
+  const feature=sandbox.window.PresentationFeature.create(options);
   const step=name=>()=>{events.push(name);if(state.fail===name)throw state.marker;};
   const ui={syncAnnotationResize:step('annotation'),prepareParameterNamespace:step('prepare'),refreshConstraintAnalysis:step('analysis'),updateDocumentName:step('name'),updateToolbar:step('toolbar'),renderSketch:step('sketch'),updateBlockUI:step('blocks'),renderProperties:step('properties'),readSketchMoving:()=>state.moving,updateStatusUI:step('status'),updateConstraintButtons:step('buttons'),syncDimensionInput:step('dimension'),refreshSketchSelection:step('selection')};
   const canvas={readPngCommand:()=>state.png,readPending:()=>state.pending,readMode:()=>state.mode,readCommandPanel:()=>state.panel,
@@ -952,4 +954,71 @@ test('presentation choice dispatch preserves the actual receiver, one argument, 
   fail=true;assert.throws(f.feature.createChoiceDialog,error=>error===marker);assert.equal(f.feature.requestChoice(options),promise);fail=false;created=next;assert.equal(f.feature.createChoiceDialog(),next);
   showFailure=true;assert.throws(()=>f.feature.requestChoice(options),error=>error===marker);
   for(const invalid of [undefined,null]){created=invalid;assert.equal(f.feature.createChoiceDialog(),invalid);assert.throws(()=>f.feature.requestChoice(options),error=>error.name==='TypeError');}
+});
+
+test('Presentation owns the native runtime version view and language refresh uses its actual stored build state', () => {
+  const f = fixture(), target = { textContent: '', dataset: {}, removeAttribute(name) { delete this[name]; } };
+  Object.assign(f.document, {
+    defaultView: { Node: { ELEMENT_NODE: 1 }, NodeFilter: { SHOW_TEXT: 4 } },
+    documentElement: { nodeType: 1, dataset: { theme: 'light' }, querySelectorAll: () => [], matches: () => false, closest: () => null, hasAttribute: () => false },
+    getElementById: id => id === 'runtimeCommit' ? target : null,
+    createTreeWalker: () => ({ nextNode: () => false }),
+  });
+  for (const file of ['src/ui/application_settings.js', 'src/ui/runtime_version_view.js']) vm.runInNewContext(fs.readFileSync(file, 'utf8'), { window: f.w });
+  const feature = f.w.PresentationFeature.create({ document: f.document, storage: () => ({ getItem: () => null }), readDuplicateCount: () => 0 });
+  assert.equal(target.textContent, '');
+  assert.throws(() => feature.settings.setApplicationLanguage('en', { persist: false, refresh: false }),
+    error => error.name === 'ReferenceError' && error.message === "Cannot access 'runtimeVersionView' before initialization");
+  const startup = feature.createStartup({});
+  assert.ok(Object.isFrozen(startup)); assert.equal(target.textContent, '');
+  startup.versionView.load({ available: true, branch: 'develop', commit: 'a'.repeat(40), shortCommit: 'a'.repeat(12), dirty: true });
+  assert.equal(target.textContent, 'develop@aaaaaaaaaaaa (dirty)');
+  feature.settings.setApplicationLanguage('ja', { persist: false, refresh: false });
+  assert.equal(target.textContent, 'develop@aaaaaaaaaaaa（変更あり）');
+  assert.equal(target.title, 'develop@' + 'a'.repeat(40)); assert.equal(target.dataset.state, 'available');
+  feature.settings.setApplicationLanguage('en', { persist: false, refresh: false });
+  assert.equal(target.textContent, 'develop@aaaaaaaaaaaa (dirty)');
+  startup.versionView.load(null); assert.equal(target.textContent, 'Unavailable');
+  feature.settings.setApplicationLanguage('ja', { persist: false, refresh: false });
+  assert.equal(target.textContent, '取得できません'); assert.equal(target.dataset.state, 'unavailable');
+});
+
+test('Presentation version refresh preserves initialization publication, native receiver, no arguments and original returns and errors', () => {
+  const f = fixture(options => { delete options.refreshVersion; });
+  const refresh = f.created.settings.refreshVersion, marker = new Error('runtime view failed'), result = {};
+  assert.equal(refresh.name, 'refreshVersion'); assert.equal(refresh.length, 0);
+  let fail = false, created, renderError = false, reads = 0;
+  const first = { render() { assert.equal(this, first); assert.equal(arguments.length, 0); reads++; if (renderError) throw marker; return result; } };
+  f.w.RuntimeVersionView = { create() {
+    if (fail) throw marker;
+    if (created === first) assert.throws(refresh, error => error.name === 'ReferenceError');
+    return created;
+  } };
+  assert.throws(refresh, error => error.name === 'ReferenceError');
+  created = first; assert.equal(f.feature.createStartup({}).versionView, first);
+  assert.equal(refresh('ignored'), result); assert.equal(reads, 1);
+  fail = true; assert.throws(() => f.feature.createStartup({}), error => error === marker);
+  assert.equal(refresh(), result); fail = false;
+  // A settings getter can run callbacks during Startup construction; publication follows that getter.
+  Object.defineProperty(f.settings, 'setApplicationLanguage', { configurable: true, get() { assert.equal(refresh(), result); throw marker; } });
+  created = { render() { assert.fail('incomplete view must not be published'); } };
+  assert.throws(() => f.feature.createStartup({}), error => error === marker); assert.equal(refresh(), result);
+  delete f.settings.setApplicationLanguage;
+  renderError = true; assert.throws(refresh, error => error === marker); renderError = false;
+  for (const invalid of [undefined, null]) {
+    created = invalid; assert.equal(f.feature.createStartup({}).versionView, invalid);
+    assert.throws(refresh, error => error.name === 'TypeError');
+  }
+});
+
+test('Presentation preserves explicit own and inherited version refresh overrides, including undefined and null', () => {
+  for (const inherited of [false, true]) for (const value of [undefined, null, () => 17]) {
+    const f = fixture(options => {
+      delete options.refreshVersion;
+      if (inherited) Object.setPrototypeOf(options, { refreshVersion: value }); else options.refreshVersion = value;
+    });
+    assert.equal(f.created.settings.refreshVersion, value);
+    if (typeof value === 'function') assert.equal(f.created.settings.refreshVersion(), 17);
+    else assert.throws(() => f.created.settings.refreshVersion(), error => error.name === 'TypeError');
+  }
 });
