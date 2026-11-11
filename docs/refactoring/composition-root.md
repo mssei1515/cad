@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Pending取消入口を実session生成ownerへ集約（2026-11-11）
+
+CanvasInteractionFeature.create（src/application/canvas_interaction_feature.js）はcancelPendingCommandを公開し、同じfeatureが完成させた実PendingCommandSessionへ取消を依頼する。DrawingPreview→Pending→Constraint target→Pointerの既存生成順を保ち、操作session recordの凍結が成功した後にだけ、その実Pending参照をprivateに保持する。app.jsは早期に同じportを選び、Sketch Projection／Derived Instance／Annotationへ接続し、pendingCommandSessionを捕捉するrootの転送関数を持たない。
+
+portは旧cancelPendingCommandと同名・arity=1で、messageを実Pending.cancelへmember receiver・一引数で渡す。undefinedによるnative既定message、null／空文字、余剰引数の破棄、元の返値・例外を維持する。session完成前には旧pendingCommandSessionの初期化前ReferenceErrorを出し、途中でPendingだけ生成済みでも取消しない。四段いずれかの生成失敗では前に完成した参照を保持し、成功した再生成後は新しいsessionを対象とする。独立したfeature間で参照を共有しない。
+
+実Pending／target／Pointer／previewと返却session recordは従来のままで、新しい操作state・Pending複製・scope snapshot・listenerやsetter／wrapper controllerを追加しない。既存の各session内部callbackはそのsessionのPendingを参照するままで、今回のportへ一律に置き換えない。現在appのsession builder呼出しは一箇所だけで、同じ実Pendingを選ぶ。空取消のplacement解除、注記／PNGの専用ownerへの委譲、Offsetのresetとpointer解除、通常入力・hint・Toolbar等の順序、失敗時の部分更新、UIと保存形式v26を維持する。既存application／editing配置と読込順は変更しない。
+
+app.jsは1,259→1,258行（1行減）、非空白815→814行。root241→240文・405束縛、構文依存辺1,083→1,082、委譲9→8行。構築115文／467非空白行、別名・設定98行、test hooks158行は不変。新しい上位組立て層を作らず、生成成功時の参照と取消を同じownerへ揃えた。200〜500行の全体目標は未完了。
+
+関連単体42件・全単体2,526件・構文639fileが成功。追加三単体は、最終Pointer生成時点までのguard、native receiver／一message／返値／元例外、通常・空・注記・PNG・Offsetの取消とhint既定値、hide失敗後の部分状態、各constructor失敗と成功再生成・独立ownerを確認する。実browserでも旧root／旧CanvasInteractionFeatureと比較し、早期・途中guard、各consumerの同一port、凍結sessionの同じPending、既存feature fieldと公開204項目のkey／descriptor／型／name／arity、生成順・取消呼出しと同じ例外が一致した。featureには新しい取消操作一fieldだけを追加する。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに挿入し、製品へ残さない。
+
+関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
 ## Clipboardの早期操作と実Command生成をSelection編集へ集約（2026-11-11）
 
 SelectionEditingFeature.prepare（src/application/selection_editing_feature.js）は、早期に渡すcopy／paste portと後段の実Selection編集生成を同じownerで接続する。createForEditingは従来位置で生の同名factoryを同じnamespace receiver・一引数で呼び、成功した実Clipboard command参照だけを保持し、返された実deletion／clipboard recordをそのまま返す。外で作ったcomponentをsetter登録する方式ではなく、payload・cut・paste回数・scope・modelを複製しない。

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のClipboard操作所有単位ではapp.jsは1,259行、非空白815行。AST監査ではroot241文・405束縛、構築・接続467非空白行、別名・設定98行、委譲9行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のPending取消所有単位ではapp.jsは1,258行、非空白814行。AST監査ではroot240文・405束縛、構築・接続467非空白行、別名・設定98行、委譲8行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Clipboardの早期操作と実Command生成をSelection編集へ集約（2026-11-11）
+### 最新：Pending取消入口を実session生成ownerへ集約（2026-11-11）
+
+開始基準developは37e106be8550e4fe7f1e5d915587f27335ca5117、作業branchはcodex/pending-cancellation-owner（develop統合・Push後に削除）。開始時の週枠残量86%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを照合し、今回のPending取消と直前のSelection Clipboard／Keyboard／Annotation／BlockLayoutの分離を再実施しない。rootに残る八委譲はhitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／toggleSelectedVisibility／updateBlockUI。refreshConstraintAnalysisはUI bindがSketchSolvingFeatureの準備より早く、単独移管のためだけに新しい早期prepareやwrapperを重ねる案は今回は見送った。次は所有先と生成段階をcohort全体で評価し、巨大contextや単純な別file移動にしない。
+
+CanvasInteractionFeature.create（src/application/canvas_interaction_feature.js）はcancelPendingCommandを公開し、同じfeatureが完成させた実PendingCommandSessionへ取消を依頼する。DrawingPreview→Pending→Constraint target→Pointerの既存生成順を保ち、操作session recordの凍結が成功した後にだけ、その実Pending参照をprivateに保持する。app.jsは早期に同じportを選び、Sketch Projection／Derived Instance／Annotationへ接続し、pendingCommandSessionを捕捉するrootの転送関数を持たない。
+
+portは旧cancelPendingCommandと同名・arity=1で、messageを実Pending.cancelへmember receiver・一引数で渡す。undefinedによるnative既定message、null／空文字、余剰引数の破棄、元の返値・例外を維持する。session完成前には旧pendingCommandSessionの初期化前ReferenceErrorを出し、途中でPendingだけ生成済みでも取消しない。四段いずれかの生成失敗では前に完成した参照を保持し、成功した再生成後は新しいsessionを対象とする。独立したfeature間で参照を共有しない。
+
+実Pending／target／Pointer／previewと返却session recordは従来のままで、新しい操作state・Pending複製・scope snapshot・listenerやsetter／wrapper controllerを追加しない。既存の各session内部callbackはそのsessionのPendingを参照するままで、今回のportへ一律に置き換えない。現在appのsession builder呼出しは一箇所だけで、同じ実Pendingを選ぶ。空取消のplacement解除、注記／PNGの専用ownerへの委譲、Offsetのresetとpointer解除、通常入力・hint・Toolbar等の順序、失敗時の部分更新、UIと保存形式v26を維持する。既存application／editing配置と読込順は変更しない。
+
+app.jsは1,259→1,258行（1行減）、非空白815→814行。root241→240文・405束縛、構文依存辺1,083→1,082、委譲9→8行。構築115文／467非空白行、別名・設定98行、test hooks158行は不変。新しい上位組立て層を作らず、生成成功時の参照と取消を同じownerへ揃えた。200〜500行の全体目標は未完了。
+
+関連単体42件・全単体2,526件・構文639fileが成功。追加三単体は、最終Pointer生成時点までのguard、native receiver／一message／返値／元例外、通常・空・注記・PNG・Offsetの取消とhint既定値、hide失敗後の部分状態、各constructor失敗と成功再生成・独立ownerを確認する。実browserでも旧root／旧CanvasInteractionFeatureと比較し、早期・途中guard、各consumerの同一port、凍結sessionの同じPending、既存feature fieldと公開204項目のkey／descriptor／型／name／arity、生成順・取消呼出しと同じ例外が一致した。featureには新しい取消操作一fieldだけを追加する。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに挿入し、製品へ残さない。
+
+関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+### Clipboardの早期操作と実Command生成をSelection編集へ集約（2026-11-11）
 
 開始基準developは693877c71b462c0e686b0041974ab457fc7515a4、作業branchはcodex/selection-clipboard-preparation（develop統合・Push後に削除）。開始時の週枠残量86%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを確認し、今回のSelection Clipboard操作、Keyboard設定、Annotation／BlockLayoutの分離を再実施しない。rootに残る九つの委譲は、hitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／toggleSelectedVisibility／cancelPendingCommand／updateBlockUI。次は既存生成ownerとの結線・未生成guardを監査し、共通stateや巨大全体contextへ集約せず、既存ownerが生成と更新を持つ境界を選ぶ。
 

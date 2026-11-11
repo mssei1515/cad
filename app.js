@@ -88,7 +88,7 @@
     clearSelection, updateGeometrySelectionUI, draw,
   });
   const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, resetBlankCandidate,
-    pointUsage, createOperationSessionsForAuthoring: createOperationSessions } = canvasInteraction;
+    pointUsage, cancelPendingCommand, createOperationSessionsForAuthoring: createOperationSessions } = canvasInteraction;
   presentation.bindUI({
     syncAnnotationResize: annotationPreparation.syncResizeSelection,
     prepareParameterNamespace,
@@ -737,7 +737,6 @@
 
 
 
-  function cancelPendingCommand(message) { return pendingCommandSession.cancel(message); }
 
 
 
