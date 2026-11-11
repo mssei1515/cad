@@ -104,3 +104,24 @@ test('an interaction reset error propagates before model mutation and leaves sub
   assert.deepEqual(f.events, ['edit', 'scope', 'plan', 'dependents', 'symbols']); assert.equal(f.state.mode, 'line');
  }
 });
+
+vm.runInContext(fs.readFileSync('src/application/basic_drawing_tools.js', 'utf8'), sandbox);
+test('deletion delegates primitive reset to actual drawing tools at the original interaction stage and preserves each failure prefix', () => {
+  for (const phase of [null, 'line', 'circle', 'arcs']) {
+    let f; const marker = new Error('drawing reset');
+    const step = name => { f.interactionEvents.push(name); if (name === phase) throw marker; };
+    const line = { reset() { assert.equal(this, line); assert.equal(arguments.length, 0); step('line'); } };
+    const circular = { resetCircle() { assert.equal(this, circular); assert.equal(arguments.length, 0); step('circle'); }, resetArcs() { assert.equal(this, circular); assert.equal(arguments.length, 0); step('arcs'); } };
+    const w = sandbox.window;
+    for (const name of ['LineCommand', 'RectangleCommand', 'CircularConstruction', 'CircularCommands', 'SlotConstruction', 'SlotCommand']) w[name] = { create: () => name === 'LineCommand' ? line : name === 'CircularCommands' ? circular : {} };
+    const drawing = w.BasicDrawingTools.create({ geometry: {}, snapConstraints: {}, snap: {}, checkpoint: {} });
+    const { resetForDeletion } = drawing;
+    f = fixture({ lineCommand: null, circularCommands: null, resetDrawing: function() { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); return resetForDeletion(); } });
+    assert.equal(drawing.line, line); assert.equal(drawing.circular, circular);
+    if (phase) assert.throws(() => f.command.remove({ points: [f.point] }), error => error === marker);
+    else assert.equal(f.command.remove({ points: [f.point] }), true);
+    const expected = ['geometry', 'dimension', 'annotation', 'pending', 'constraint', 'line', 'circle', 'arcs', 'pointer', 'select'];
+    assert.deepEqual(f.interactionEvents, phase ? expected.slice(0, expected.indexOf(phase) + 1) : expected);
+    assert.equal(f.events.includes('apply'), !phase); assert.equal(f.events.includes('history'), !phase);
+  }
+});

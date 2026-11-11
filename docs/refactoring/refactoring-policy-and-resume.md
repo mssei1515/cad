@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の投影drag入力単位ではapp.jsは1,200行、非空白758行。AST監査ではroot210文・367束縛、構築434非空白行とbind35行、別名・設定86行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12の削除時作図reset単位ではapp.jsは1,199行、非空白757行。AST監査ではroot209文・365束縛、構築434非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：投影のdrag入力と操作時の拒否文をSketchProjectionFeatureへ集約（2026-11-12）
+### 最新：削除時のprimitive作図リセットをBasicDrawingToolsへ集約（2026-11-12）
+
+開始基準developは51c54213dc9dfa4696535f5cd2e5a5c2608ad28a、作業branchはcodex/drawing-deletion-reset。開始週枠残量62%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+BasicDrawingTools.createが返すresetForDeletionは、同じ実Line commandのreset、同じCircular commandのresetCircle／resetArcsを従来の順で呼ぶ。SelectionEditingFeature.prepareのcreateForDrawingがこの実関数をDeletionFeatureへ接続し、GeometryDeletionCommandは削除成立後の既存終了段階でresetDrawingを一度呼ぶ。app.jsと通常削除の接続は線・円コマンドの個別別名を必要としない。
+
+終了の順序はGeometry drag→Dimension drag→Annotation drag→Pending clear→Constraint command clear→primitive作図reset→pointer preview解除→selectで維持する。許可・依存・空plan・symbolの拒否時には終了操作を行わない。resetは操作時に同じactorのmethodをmember receiver・無引数で読み、戻り値を無視して元例外を透過する。途中で失敗しても完了済みのresetを巻き戻さず、後続reset・preview・mode・モデル変更・履歴へ進まない。Rectangle／Slot／Spline／Snap等の別状態を追加でresetしない。旧raw GeometryDeletionCommandはresetDrawing未指定時に従来のlineCommand／circularCommandsを使う互換経路を持つ。新Selection入口は明示resetDrawing値を優先し、従来の完成Clipboard公開・初期化前guard・失敗時の前参照保持を維持する。新しいcommand・state・file・global・全体contextを追加せず、既存application／commands内のownerへ配置する。削除計画・Workspace／bound editing scope・求解・履歴・UI・保存形式v26は変更しない。
+
+app.jsは1,200→1,199行（1行減）、非空白758→757行、root210→209文・束縛367→365。構築434行・115文、bind35行・test hooks152行は不変。別名86→85行・68→67文。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体87件が成功。実BasicDrawingToolsと実GeometryDeletionCommandの接続、既存DeletionFeatureと実計画／Selection／Pending／Constraint targets／Preview／Lifecycleを使う三経路（raw・Workspace構成・作図reset付き構成）の比較を行った。各resetの順・receiver・引数・途中例外、拒否時の無変更、失敗求解時の既存の履歴、mixed selectionの段階的削除、実command参照、前Clipboard保持と未生成guardを検証した。ソース逆変換で宣言したresetの委譲以外の作図・削除・Clipboard生成／操作本体は不変である。
+
+構文639ファイル・全単体2,600件・関連単体87件と通常ja/light・en/dark・test起動が成功。関連E2E195件（7file、2.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+PropertiesとSelectionの公開順を跨ぐ一括化は行っていない。次はPropertiesが既に持つSelection query／編集操作の依存を再確認し、rootが個別に抽出している操作portを、同じ実featureから受け取れる箇所を探す。構築434行とtest hooks152行が残り、単なる引数recordの包装を分離として採用しない。
+
+### 投影のdrag入力と操作時の拒否文をSketchProjectionFeatureへ集約（2026-11-12）
 
 開始基準developは35e6564f8b96dcc0cd590278eb945eb2dd609fde、作業branchはcodex/projection-drag-inputs。開始週枠残量63%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

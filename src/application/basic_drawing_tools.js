@@ -104,7 +104,12 @@
       threePointArc: point => { const snapped = snapForDrawing(point); circular.clickThreePointArc(snapped, snap.active); },
       slot: point => { const snapped = snapForDrawing(point); slot.click(snapped, snap.active); },
     });
-    return Object.freeze({ line, rectangle, circular, slot, input });
+    function resetForDeletion() {
+      line.reset();
+      circular.resetCircle();
+      circular.resetArcs();
+    }
+    return Object.freeze({ line, rectangle, circular, slot, input, resetForDeletion });
   }
   // Spline shares its draft with rendering and cancellation, independently of primitive tools.
   function createSpline({ currentScope, ids, endpointAt, samePosition, isPointUsedByPrimitive,

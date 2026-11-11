@@ -27,7 +27,7 @@
   const annotationPreparation = window.AnnotationFeature.prepare();
   const propertiesPreparation = window.PropertiesDisplay.prepare();
   const { createForFeature: createBlockCommandsWithView, update: updateBlockUI } = window.BlockEditingFeature.prepareCommandsWithView();
-  const { createForEditing: createSelectionEditing, copy: copySelectionToClipboard,
+  const { createForDrawing: createSelectionEditing, copy: copySelectionToClipboard,
     paste: pasteGeometryClipboard } = window.SelectionEditingFeature.prepare();
   const { createForWorkspace: createHistoryFeature, createBlockHistory: createBlockEditHistory, record: recordHistory } = window.HistoryController.prepare();
 
@@ -300,7 +300,6 @@
   const { snap: drawingSnap, spline: { command: splineCommand }, snapConstraints, tools: basicDrawingTools } = authoringTools;
   const { clear: clearSnap } = drawingSnap;
   const { addPointSnapConstraints } = snapConstraints;
-  const { line: lineCommand, circular: circularCommands } = basicDrawingTools;
   const offsetFeature = authoringTools.createOffsetForEditing({
     editingScope: editingScopeBinding, placement: dimensionPlacement, sourceSelection: offsetSelection,
     valueInput: dimensionInputController, ctx, surface: canvasSurface, drawDimension,
@@ -587,7 +586,7 @@
   const { deletion: deletionFeature, clipboard: clipboardFeature } = createSelectionEditing({
     documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices, interaction: canvasInteraction,
     references: constraintReferences, annotationFeature, annotationLeaderAnchor,
-    splineEditing, guardDimensionSymbolDeletion, geometry: geometryCreation, sessions: operationSessions, lineCommand, circularCommands,
+    splineEditing, guardDimensionSymbolDeletion, geometry: geometryCreation, sessions: operationSessions, drawing: basicDrawingTools,
     solving: sketchSolving, analysis: constraintAnalysis, presentation, updateToolbar, recordHistory,
     referenceImageInteraction, clearSelection, solveAndRefresh,
     resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: annotationPreparation.resetDrag,
