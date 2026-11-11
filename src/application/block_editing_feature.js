@@ -9,12 +9,18 @@
       published = Object.freeze({ value: updateBlockView });
       return commands;
     }
+    function createWithSelection(feature, { references, serializeConstraint, annotationBounds, createChoiceDialog }, readCommands) {
+      const selectionQuery = feature.createSelectionQuery({ references, serializeConstraint, annotationBounds });
+      const choiceDialog = createChoiceDialog();
+      const commands = createForFeature(feature, readCommands(selectionQuery, choiceDialog));
+      return Object.freeze({ selectionQuery, commands });
+    }
     function updateBlockUI() {
       if (published === undefined) throw new ReferenceError("Cannot access 'updateBlockView' before initialization");
       const updateBlockView = published.value;
       updateBlockView();
     }
-    return Object.freeze({ createForFeature, update: updateBlockUI });
+    return Object.freeze({ createForFeature, createWithSelection, update: updateBlockUI });
   }
   function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding, readEditingScope,
     normalizedSketchCopy, normalizeGeometryInstance, isDimensionConstraint, isReadOnlyDimension,

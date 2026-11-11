@@ -747,7 +747,7 @@ test("Block selection feature preserves constructor, reference, codec, label, pr
 
 function commandViewOwnersFixture(owned) {
  const f=workspacePlacementFixture(true),state={generation:0,constructorFailure:false,prepareFailure:false,renderFailure:false,error:new Error('view owner')};
- const preparation=owned==='prepared'?w.BlockEditingFeature.prepareCommandsWithView():null;
+ const preparation=owned==='prepared'||owned==='selection'?w.BlockEditingFeature.prepareCommandsWithView():null;
  let view,api;const reads=[],listeners=[],elements={};
  for(const id of ['blockList','blockOverlayTitle','blockEditorOverlay','blockEditorNameInput','blockEditorActions','openBlockDefinitionsBtn','completeBlockEditBtn','cancelBlockEditBtn','blockDefinitionsDialog']){
   const element={value:'',hidden:false,style:{},dataset:{},classList:{toggle(){}},addEventListener(type,handler){listeners.push([id,type,handler]);},
@@ -762,6 +762,7 @@ function commandViewOwnersFixture(owned) {
   Object.assign(f.owners.interaction,options.interaction);Object.assign(f.owners.presentation,options.presentation);
   f.owners.presentation.settings.localizeApplicationUI=localize;Object.assign(f.owners.documentWorkspace.sketches,options.sketches);
   const {interaction,presentation,sketches,readView,updateBlockUI,...input}=options;
+  if(owned==='selection'){f.owners.presentation.constraintFeedback={localizedConstraintName:name=>name};const cohort=preparation.createWithSelection(feature,{references:input.references,serializeConstraint:()=>null,annotationBounds:()=>null,createChoiceDialog:()=>input.choiceDialog},function(query,dialog){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,2);return{...input,selectionQuery:query,choiceDialog:dialog,prepareBlocks};});return api=cohort.commands;}
   return api=preparation?preparation.createForFeature(feature,{...input,prepareBlocks}):owned?feature.createCommandsWithView({...input,prepareBlocks}):feature.createCommandsForEditing({...options,readView:()=>view,updateBlockUI:updateView});
  });
  assert.deepEqual(f.events,[]);assert.deepEqual(reads,[]);assert.deepEqual(listeners,[]);
@@ -864,4 +865,22 @@ test('prepared Block command View keeps native records, bare void updates and th
     updater.createForFeature({ createCommandsWithView: () => commands }, {});
     assert.throws(updater.update, { name: 'TypeError', message: 'updateBlockView is not a function' });
   }
+});
+
+
+test('selection-aware Block assembly shares real commands, View and session while query construction and dialog precede command options',()=>{
+  const f=commandViewOwnersFixture('selection'),session=f.feature.session;assert.ok(Object.isFrozen(f.api));f.publish();assert.equal(f.update(),undefined);assert.equal(f.feature.session,session);
+  const definition=scope('outer');f.geometry(definition);f.document.blockDefinitions.push(definition);f.events.length=0;f.bundle.definition.enter('outer');assert.ok(session.current);f.bundle.definition.cancel();assert.equal(session.current,null);assert.equal(f.workspace.current(),f.document);assert.equal(f.events.includes('history'),false);
+});
+
+test('Block selection assembly preserves ordered factories, argument and result identities and the previous completed updater on every failure',()=>{
+  const marker=new Error('Block assembly'),events=[],query={},dialog={},options={},references={},serializeConstraint=()=>{},annotationBounds=()=>{};let fail,updates=0;
+  const p=w.BlockEditingFeature.prepareCommandsWithView(),commands=Object.freeze({get updateView(){events.push('update-port');if(fail==='update-port')throw marker;return()=>{updates++;};}});
+  const feature={createSelectionQuery(input){assert.equal(this,feature);assert.equal(arguments.length,1);assert.equal(input.references,references);assert.equal(input.serializeConstraint,serializeConstraint);assert.equal(input.annotationBounds,annotationBounds);events.push('query');if(fail==='query')throw marker;return query;},
+    createCommandsWithView(input){assert.equal(this,feature);assert.equal(arguments.length,1);assert.equal(input,options);events.push('commands');if(fail==='commands')throw marker;return commands;}};
+  const first={references,serializeConstraint,annotationBounds,createChoiceDialog(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);events.push('dialog');if(fail==='dialog')throw marker;return dialog;}};
+  function read(q,d){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,2);assert.equal(q,query);assert.equal(d,dialog);events.push('options');if(fail==='options')throw marker;return options;}
+  const result=p.createWithSelection(feature,first,read);assert.ok(Object.isFrozen(result));assert.equal(result.selectionQuery,query);assert.equal(result.commands,commands);assert.deepEqual(events,['query','dialog','options','commands','update-port']);p.update();assert.equal(updates,1);
+  for(const stage of ['query','dialog','options','commands','update-port']){events.length=0;fail=stage;assert.throws(()=>p.createWithSelection(feature,first,read),error=>error===marker);assert.deepEqual(events,['query','dialog','options','commands','update-port'].slice(0,['query','dialog','options','commands','update-port'].indexOf(stage)+1));p.update();}
+  assert.equal(updates,6);
 });

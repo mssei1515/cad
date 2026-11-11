@@ -6,6 +6,16 @@
     let toolFlyouts = null;
     let commandPanels = null;
     let toolbar = null;
+    let choice;
+    function createChoiceDialog() {
+      const dialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
+      choice = Object.freeze({ dialog });
+      return dialog;
+    }
+    function requestChoice(options) {
+      if (choice === undefined) throw new ReferenceError("Cannot access 'choiceDialog' before initialization");
+      return choice.dialog.show(options);
+    }
     function requireToolbar(binding) {
       if (!toolbar) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
       return toolbar;
@@ -174,7 +184,7 @@
         interactionProfiler: profiler, profileInteractionWork: profiler.work, withGeometryReadCache, drawCanvas });
       return canvas;
     }
-    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createAuthoringFeedback, createStartup, createToolbar, createToolNavigation, prepareWorkspaceControls, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
+    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createAuthoringFeedback, createStartup, createToolbar, createToolNavigation, prepareWorkspaceControls, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas, createChoiceDialog, requestChoice,
       log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw, updateToolbar, updateStatusUI, updateHistoryButtons,
       get selectedItem() { return canvas.selectedItem; } });
   }
