@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のCanvas式参照単位ではapp.jsは1,196行、非空白754行。AST監査ではroot209文・365束縛、構築431非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のReferenceImage browser生成単位ではapp.jsは1,196行、非空白754行。AST監査ではroot209文・365束縛、構築431非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Canvas式参照の接続をParameterEditorへ集約（2026-11-12）
+### 最新：参照画像のbrowser生成factoryをReferenceImageFeatureへ集約（2026-11-12）
+
+開始基準developはa41d23d5e77a4f105d49f868913c0556a828b1b0、作業branchはcodex/reference-image-browser-factory。開始週枠残量60%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+ReferenceImageFeature.createForBrowserWorkspaceは、明示したbrowser windowのImageをnewするcreateImageを既定として既存Workspace生成へ接続する。実constructorはRendererが画像resourceを必要とした時点で取得し、app.jsはImage生成factoryを持たない。既存create／createForWorkspaceは引き続き明示factoryを受け取る。
+
+生成中や画像がないprepareImagesではImage constructorを読み出さない。同じRenderer cacheを使い、cache missごとに現在のbrowser.Imageをnew・無引数で呼ぶ。factory名createImage・arity 0、実resourceの同一性、load listener・decode・描画・cache clearと失敗後の再取得を維持する。getter／constructorの元例外はそのまま透過する。明示createImageはundefined／nullを含め既定値より優先し、表示resourceの生成ではbrowser constructorを読まない。読み込み用の画像decode・resizeと表示用Renderer、Workspace importとbound editing display、Selection・較正・visibility・入力bindを従来のownerに残す。既存application/reference_image_feature.jsに配置し、新file／global／state・cache・全体contextを追加しない。UI・操作・PNG出力・履歴・保存形式v26は不変。
+
+app.jsは1,196→1,196行（0行変化）、非空白754行。root209文・365束縛、構築431行・115文、bind35行・別名85行・test hooks152行は不変。Imageのglobal constructor直接参照がなくなり、新たな未束縛参照なし。行数減ではなくbrowser resource生成の所有を整理した単位で、200〜500行の全体目標は未完了。
+
+関連単体17件が成功。raw／Workspace／browser構成で実Renderer／Layer／Interaction／Inputを使い、scope置換・Selection・import／較正／visibility／resource準備と生成失敗を比較した。browser既定factoryではconstructorの遅延取得とnew.target／無引数、実resource／load／描画参照、cache reuse・clear後のconstructor差替え、getter／constructor失敗と再取得、明示undefined／nullの優先を確認した。ソース逆変換で既存Image featureと生成・操作本体は不変、rootはbrowser入口とfactory指定の削除だけである。
+
+構文639ファイル・全単体2,608件・関連単体17件と通常ja/light・en/dark・test起動が成功。関連E2E190件（7file、2.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は起動時のCanvas DOM取得と2D context取得をCanvas表示ownerへ閉じられるか確認する。実canvas／ctxの同一性と、他のUI・Viewport生成より前の取得順・例外を維持する。構築431行とtest hooks152行は残り、browser callbackを移しただけで数百行へ達したと扱わない。
+
+### Canvas式参照の接続をParameterEditorへ集約（2026-11-12）
 
 開始基準developは1e55d0e92a1d258549304f1a70f391c3e66354da、作業branchはcodex/parameter-canvas-reference。開始週枠残量61%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
