@@ -29,7 +29,16 @@
       function createEditingWithViewForPresentation(editingOptions, readViewOwners) {
         return publish(buildForPresentation(...arguments));
       }
-      return Object.freeze({ ...feature, createEditingWithViewForWorkspace, createEditingWithViewForPresentation });
+      function createEditingWithViewForBrowser(editingOptions, readViewOwners) {
+        return publish(buildForPresentation(editingOptions, () => {
+          const owners = { ...readViewOwners() };
+          for (const name of ["HTMLTextAreaElement", "HTMLInputElement"]) {
+            if (!Object.hasOwn(owners, name)) owners[name] = options.document.defaultView[name];
+          }
+          return owners;
+        }));
+      }
+      return Object.freeze({ ...feature, createEditingWithViewForWorkspace, createEditingWithViewForPresentation, createEditingWithViewForBrowser });
     }
     return Object.freeze({ createForWorkspace: createWorkspace, render: renderProperties, readAppearance, toggleSelectedVisibility });
   }

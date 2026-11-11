@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Properties入力のブラウザ型依存を表示先Documentへ集約（2026-11-12）
+
+PropertiesDisplay.prepareの完成Workspaceが返すcreateEditingWithViewForBrowserは、従来のPresentation用生成を通り、編集とAppearanceUIが完成した後のView依存reader内で、表示先Document.defaultViewからHTMLTextAreaElement／HTMLInputElementを取得する。app.jsはPropertiesの入力判定に使うDOM型を個別に渡さず、同じDocumentを既存Workspaceに接続する。
+
+早期prepareやWorkspace生成時に新しいdefaultViewの読取りを行わない。View依存readerは従来どおりbare・無引数で編集生成後に一度呼ぶ。その返値を変更せず、own propertyとして明示された型はundefined／nullを含めそのまま優先し、対応するbrowser getterを読まない。既定値は表示先Documentの型を共有する。通常アプリではこのDocumentはrootのdocumentと同じで、従来のglobal DOM型と同じ実参照である。Document／型getterや各constructorの例外を透過し、全生成が成功するまでPropertiesの完成参照を公開しない。失敗時には前のView／Appearance／Visibilityを保持し、未生成guardも維持する。既存raw生成とPresentation用入口・Controller／View／Appearanceの生成・操作本体は不変。既存application/properties_display.jsに配置し、新file／global／可変slot／全体contextを追加しない。UI・入力判定・Workspace／bound editing scope・履歴・保存形式v26は変更しない。
+
+app.jsは1,199→1,198行（1行減）、非空白757→756行。root209文・365束縛は不変。構築434→433行・115文、bind35行・別名85行・test hooks152行は不変。rootのHTMLInputElementへの直接参照がなくなり、新たな未束縛参照なし。HTMLTextAreaElementはParameter参照入力の別接続でまだ使う。200〜500行の全体目標は未完了。
+
+関連単体34件が成功。既存の実Properties部品を使うraw／Workspace／一括生成／Presentation／browser経路で、Selection・外観編集・入力・操作port・live scope・生成順と各失敗段階を比較した。browser型取得がPropertyEditingFeatureとAppearanceUIの後であること、実型の同一性、明示undefined／nullでのgetter非参照、取得失敗時の前完成参照保持を確認した。ソース逆変換で既存Properties生成・操作本体は不変、rootは入口変更と型指定の削除だけである。
+
+構文639ファイル・全単体2,601件・関連単体34件と通常ja/light・en/dark・test起動が成功。関連E2E197件（7file、3.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 削除時のprimitive作図リセットをBasicDrawingToolsへ集約（2026-11-12）
 
 BasicDrawingTools.createが返すresetForDeletionは、同じ実Line commandのreset、同じCircular commandのresetCircle／resetArcsを従来の順で呼ぶ。SelectionEditingFeature.prepareのcreateForDrawingがこの実関数をDeletionFeatureへ接続し、GeometryDeletionCommandは削除成立後の既存終了段階でresetDrawingを一度呼ぶ。app.jsと通常削除の接続は線・円コマンドの個別別名を必要としない。

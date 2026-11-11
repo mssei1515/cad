@@ -688,7 +688,7 @@
 
 
   const { selection: propertiesSelection,
-    createEditingWithViewForPresentation: createPropertiesForEditing } = propertiesPreparation.createForWorkspace({
+    createEditingWithViewForBrowser: createPropertiesForEditing } = propertiesPreparation.createForWorkspace({
     document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
     operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
@@ -810,7 +810,6 @@
     isGeometryMode, toggleSketchVisibility, recordHistory, escapeHtml,
   }, () => ({
     analysis: constraintAnalysis, selectionHighlight, layout: blockLayout, feedback: authoringFeedback, parameterEditor,
-    HTMLTextAreaElement, HTMLInputElement,
     changeFreeInstanceProperty, commitAnnotationParameterEdit,
     instanceTransform: instanceTransformCommand, blockConfiguration: blockConfigurationCommand,
     dimensionValues: dimensionValueCommand, dimensions: dimensionPlacementCommand, referenceImages: referenceImageInteraction, hatch: hatchCommand, splineEditing,
