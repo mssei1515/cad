@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の共有regions公開単位ではapp.jsは1,218行、非空白776行。AST監査ではroot218文・371束縛、構築440非空白行とbind37行、別名・設定88行、委譲3行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の選択解除所有単位ではapp.jsは1,217行、非空白775行。AST監査ではroot217文・370束縛、構築440非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：共有regionsの完成参照と画像向け判定を既存CanvasHitInteractionへ集約（2026-11-11）
+### 最新：選択解除の完成参照をSelection自身へ集約（2026-11-11）
+
+開始基準developは12426b4027a8df65a64cc13e689e0938a5c65a8c、作業branchはcodex/selection-clearing-ownership。開始週枠残量67%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+CanvasSelectionFeature.createEditingWithOwnedClearingは、既存Selectionと後段で生成する選択解除actorへの安定したclearSelectionを所有する。CanvasInteractionFeature.createWithOwnedClearingは同じ関数をidentity選択と公開portへ共有する。app.jsは生成時に自分のclearSelectionを逆向きに渡さず、戻されたportを各機能へ接続する。後段presentationのhighlight／clearing／documentResetを従来の順で完成してから、実clearing参照を公開する。
+
+生成前のReferenceError、成功したundefined／null actorのTypeErrorを区別し、生成失敗は前の完成参照を保持する。解除時に実actor.clearを読み、同じmember receiver・無引数で呼び、戻り値と元例外を透過する。Selection／Hover／拘束対象sessionやモデルを複製せず、解除は拘束対象のoperandsを空にするがcommand自体は取り消さない。旧create／createEditingと外部clearSelection callbackの契約・公開recordを維持する。既存src/application/canvas_selection_feature.jsとcanvas_interaction_feature.jsへ集約し、新しいfileやglobalを増やさない。UI・履歴・保存形式v26は不変。
+
+app.jsは1,218→1,217行（1行減）、非空白776→775行。root218→217文・371→370束縛、委譲3→2行。構築440行・bind37行・別名88行・test hooks152行は不変。小さな行数削減より、Selection自身へのrootからの逆向き参照を解消したことを成果とする。200〜500行の全体目標は未完了。
+
+関連単体54件が成功。旧経路と所有経路で実Selection・Hover・拘束対象への効果とinactive Sketch選択を比較した。生成前guard、後段DocumentReset生成までの未公開、constructor失敗時の前参照保持、独立性、undefined／null、member receiver・引数数・getter取得時機・戻り値・元例外を検証した。構文639ファイル・全単体2,571件が成功。通常ja/light・en/dark・test起動でエラーなし。ASTと逆変換による比較では宣言した集約以外の生成本体とnative選択解除kernelは不変、新たな未束縛参照なし。
+
+関連E2E192件（9file、3.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。電源接続後の実行であり、電源が以前の性能失敗の原因だったとは断定しない。この単位では全E2E未実施。
+
+### 共有regionsの完成参照と画像向け判定を既存CanvasHitInteractionへ集約（2026-11-11）
 
 開始基準developはc764487cded1c42d420bdef7212ef5fa365e85a2、作業branchはcodex/canvas-region-query-publication（develop統合・Push後に削除）。開始週枠残量68%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

@@ -1,11 +1,14 @@
 /* Assemble Canvas interaction owners in stages without copying their operation state. */
 (() => {
   "use strict";
-  function create({ sketches, readServices, constraintReferencesPoint, editedFitPoints, isGeometryMode,
-    setHint, applicationText, clearSnap, clearPointerPreview, clearSelection, updateGeometrySelectionUI, draw }) {
+  function createInteraction({ sketches, readServices, constraintReferencesPoint, editedFitPoints, isGeometryMode,
+    setHint, applicationText, clearSnap, clearPointerPreview, clearSelection: suppliedClearSelection, updateGeometrySelectionUI, draw }, ownsClearing) {
     const lifecycle = window.DrawOperationLifecycle.createSession();
-    const selectionFeature = window.CanvasSelectionFeature.createEditing({ sketches, isGeometryMode, setHint, applicationText,
-      clearSnap, clearPointerPreview, clearSelection, updateGeometrySelectionUI, draw });
+    const selectionOptions = { sketches, isGeometryMode, setHint, applicationText,
+      clearSnap, clearPointerPreview, clearSelection: suppliedClearSelection, updateGeometrySelectionUI, draw };
+    const selectionFeature = ownsClearing ? window.CanvasSelectionFeature.createEditingWithOwnedClearing(selectionOptions)
+      : window.CanvasSelectionFeature.createEditing(selectionOptions);
+    const clearSelection = ownsClearing ? selectionFeature.clearSelection : suppliedClearSelection;
     const pointUsage = readServices.createPointUsage({ constraintReferencesPoint, editedFitPoints });
     const hover = window.CanvasHover.create({ isEndpointPoint: pointUsage.isEndpointPoint });
     let preparedBlankGesture = null;
@@ -170,9 +173,13 @@
       preparedPending = pending;
       return sessions;
     }
-    const feature = Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
-      identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring, resetBlankCandidate, cancelPendingCommand });
+    const capabilities = { lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
+      identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring, resetBlankCandidate, cancelPendingCommand };
+    if (ownsClearing) capabilities.clearSelection = clearSelection;
+    const feature = Object.freeze(capabilities);
     return feature;
   }
-  window.CanvasInteractionFeature = Object.freeze({ create });
+  function create(options) { return createInteraction(options, false); }
+  function createWithOwnedClearing(options) { return createInteraction(options, true); }
+  window.CanvasInteractionFeature = Object.freeze({ create, createWithOwnedClearing });
 })();

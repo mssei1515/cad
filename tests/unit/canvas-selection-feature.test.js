@@ -115,12 +115,12 @@ test('constraint operand conversion errors leave the existing Selection and targ
   assert.equal(f.feature.selection.points[0], item); assert.equal(f.targets.operands, operands); assert.deepEqual(f.calls, []);
 });
 
-function editingSelectionFixture() {
+function editingSelectionFixture(ownsClearing = false) {
  const calls=[],state={ready:false,active:'S1',locked:new Set(),geometryMode:true,snapFailure:null};let snap,preview;
  const check=()=>assert.equal(state.ready,true,'no eager Sketch or Selection policy read');
  const sketches={activeSketchId:()=>{check();return state.active;},canEditSketch:(id,operation)=>{check();calls.push(['permission',id,operation]);return id===state.active&&!state.locked.has(id);},
   sketchById:id=>{check();calls.push(['lookup',id]);return {id,locked:state.locked.has(id)};},elementSketchId:item=>item.sketchId};
- const feature=w.CanvasSelectionFeature.createEditing({sketches,isGeometryMode:()=>{check();return state.geometryMode;},setHint:(message,kind)=>calls.push(['hint',message,kind]),applicationText:(_ja,en)=>en,
+ const feature=w.CanvasSelectionFeature[ownsClearing?'createEditingWithOwnedClearing':'createEditing']({sketches,isGeometryMode:()=>{check();return state.geometryMode;},setHint:(message,kind)=>calls.push(['hint',message,kind]),applicationText:(_ja,en)=>en,
   clearSnap:()=>snap.clear(),clearPointerPreview:()=>preview.setPointer(null),clearSelection:()=>{calls.push('clear');feature.selection.clear();},
   updateGeometrySelectionUI:()=>calls.push('ui'),draw:()=>calls.push('draw')});
  assert.deepEqual(calls,[]);state.ready=true;
@@ -128,6 +128,27 @@ function editingSelectionFixture() {
  preview={setPointer(value){assert.equal(this,preview);calls.push(['pointer',value]);}};
  return {feature,state,calls};
 }
+
+test('owned Selection clearing publishes only complete presentation and retains native call and failure boundaries',()=>{
+ const f=editingSelectionFixture(true),original=w.CanvasSelectionInteraction,clear=f.feature.clearSelection,marker={},failure=new Error('clearing');
+ const hover=w.CanvasHover.create({isEndpointPoint:()=>false}),targets=w.ConstraintTargetSession.create({acceptTarget:()=>({ok:false})}),pointer=w.PointerInteractionController.createSession();
+ const options={hover,constraintTargets:targets,pointer,projections:{blockProjectionBundle:()=>null},constraintReferences:w.ConstraintReferences.create({resolveGeometryRef:()=>null}),clearSnap(){}};
+ let failAt=null,methodFailure=false,reads=0,calls=0,malformed=false,value;
+ const unready=()=>assert.throws(()=>clear(),{name:'ReferenceError',message:"Cannot access 'selectionClearing' before initialization"});unready();
+ w.CanvasSelectionInteraction={...original,createClearing(input){if(failAt==='clearing')throw failure;const native=original.createClearing(input);
+  if(malformed)return value;
+  const result={get clear(){reads++;return function(){'use strict';assert.equal(this,result);assert.equal(arguments.length,0);calls++;if(methodFailure)throw failure;native.clear();return marker;};}};return Object.freeze(result);},
+  createDocumentReset(input){if(calls===0)unready();if(failAt==='document-reset')throw failure;return original.createDocumentReset(input);}};
+ try{
+  failAt='document-reset';assert.throws(()=>f.feature.createPresentation(options),error=>error===failure);unready();
+  failAt=null;const first=f.feature.createPresentation(options);assert.ok(Object.isFrozen(first));assert.equal(reads,0);
+  assert.equal(clear('ignored'),marker);assert.equal(reads,1);assert.equal(calls,1);
+  for(const stage of ['clearing','document-reset']){failAt=stage;assert.throws(()=>f.feature.createPresentation(options),error=>error===failure);assert.equal(clear(),marker);}
+  failAt=null;methodFailure=true;assert.throws(()=>clear(),error=>error===failure);methodFailure=false;
+  const independent=editingSelectionFixture(true);assert.throws(()=>independent.feature.clearSelection(),error=>error.name==='ReferenceError');
+  for(value of [undefined,null]){malformed=true;f.feature.createPresentation(options);assert.throws(()=>clear(),error=>error.name==='TypeError');}
+ }finally{w.CanvasSelectionInteraction=original;}
+});
 
 test('editing Selection composition uses the same live scope for access and identity selection without an early app callback',()=>{
  const f=editingSelectionFixture(),a=point('P1'),b=point('P2','S2');
