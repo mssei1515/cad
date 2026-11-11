@@ -82,12 +82,12 @@
 
   const { session: fileSession, createForWorkspace: createDocumentFileFeature } = window.DocumentFileFeature.prepare();
 
-  const canvasInteraction = window.CanvasInteractionFeature.createWithOwnedClearing({
+  const canvasInteraction = window.CanvasInteractionFeature.createGeometryWorkspace({
     sketches: sketchContext, readServices: geometryReadServices, constraintReferencesPoint: constraintReferences.constraintReferencesPoint, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
-    isGeometryMode, setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null),
+    setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null),
     updateGeometrySelectionUI, draw,
   });
-  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, clearSelection, resetBlankCandidate,
+  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, clearSelection, isGeometryMode, resetBlankCandidate,
     pointUsage, cancelPendingCommand, createOperationSessionsForAuthoring: createOperationSessions } = canvasInteraction;
   presentation.bindUI({
     syncAnnotationResize: annotationPreparation.syncResizeSelection,
@@ -386,9 +386,6 @@
     stabilize: stabilizeDocumentParameters,
   });
 
-  function isGeometryMode() {
-    return true;
-  }
 
 
 

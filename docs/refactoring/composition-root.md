@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 通常Geometry Workspaceの判定をCanvasInteractionFeatureへ集約（2026-11-12）
+
+CanvasInteractionFeature.createGeometryWorkspaceは、通常Geometry Workspace用のisGeometryModeを内部で生成し、既存のSelection edit accessへ渡す。同じ実判定関数を同じInteraction featureの凍結APIへ公開し、app.jsは各機能へそれを共有する。通常判定は従来どおり常にtrueで、Lifecycleのselect／line／block-placeなどのツールmodeとは別のWorkspace種別判定である。Selection解除も既存所有経路を使い、外側のfeature cloneや第二のInteractionを作らない。
+
+明示したisGeometryMode callbackは元の実関数を使用し、undefined／nullも既定関数で置き換えない。旧create／createWithOwnedClearingの未指定値や公開recordは変更しない。Lifecycle→Selection／Edit access→PointUsage→Hoverの生成順、native callbackの名前・arity・同一性、guardでのbare・無引数呼出しと短絡・元例外を維持する。内部sessionが参照するfeatureとappが受け取るfeatureは同じ実体である。新しい操作modeや可変mode state、model・Selection・Pending・Pointerの複製、新file／global／全体contextを追加しない。UI・操作・履歴・保存形式v26は不変。既存src/application/canvas_interaction_feature.jsへ集約する。
+
+app.jsは1,210→1,207行（3行減）、非空白768→765行、root214→213文。束縛369・構築437行／115文・bind37行・別名88行・test hooks152行は不変。通常処理のroot named functionと委譲はゼロとなり、条件付きinstallTestHooksは残る。これは構築やinline callbackの分離完了を意味せず、200〜500行の全体目標は未完了。
+
+関連単体56件が成功。native生成順と実Lifecycle／Selection／Edit access／PointUsage／Hover参照、Selectionとaccessへの同じ判定関数の注入、default function名／arity、readonly公開、各ツールmodeでの従来のtrue判定を確認した。sessionからScene準備へ渡すInteractionもappの実featureと同一である。明示callbackの未評価・receiver／引数数・liveな結果・短絡・元例外、undefined／null、raw APIの違いとnative constructor例外も検証した。ソース逆変換では判定の構築・公開以外の既存Interaction生成本体は不変、rootのisGeometryMode参照はすべてfoundation宣言以後で、新たな未束縛参照なし。
+
+構文639ファイル・全単体2,589件、通常ja/light・en/dark・test起動が成功。関連E2E252件（8file、4.5m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## Propertiesパネルの状態照会と完成layoutへの更新をUI ownerへ集約（2026-11-11）
 
 CanvasWorkspaceLayout.prepareは、操作時にDOMを読むisPropertiesCollapsedと、完成した同じlayoutへ委譲するsetPropertiesPanelCollapsedを返す。createWorkspaceは既存Canvas Workspace factoryをbare・全引数で呼び、Workspace全体が完成してからlayout参照を一度選んで公開し、元の実Workspaceをそのまま返す。BlockEditingFeature.createPlacementWithPropertiesは同じProperties portを既存Block配置commandへ接続する。app.jsはProperties用のCSS class照会とsetter委譲を持たず、レイアウト準備と完成Workspaceの生成だけを接続する。

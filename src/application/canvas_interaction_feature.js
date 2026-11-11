@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function createInteraction({ sketches, readServices, constraintReferencesPoint, editedFitPoints, isGeometryMode,
-    setHint, applicationText, clearSnap, clearPointerPreview, clearSelection: suppliedClearSelection, updateGeometrySelectionUI, draw }, ownsClearing) {
+    setHint, applicationText, clearSnap, clearPointerPreview, clearSelection: suppliedClearSelection, updateGeometrySelectionUI, draw }, ownsClearing, exposeMode = false) {
     const lifecycle = window.DrawOperationLifecycle.createSession();
     const selectionOptions = { sketches, isGeometryMode, setHint, applicationText,
       clearSnap, clearPointerPreview, clearSelection: suppliedClearSelection, updateGeometrySelectionUI, draw };
@@ -176,10 +176,15 @@
     const capabilities = { lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
       identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring, resetBlankCandidate, cancelPendingCommand };
     if (ownsClearing) capabilities.clearSelection = clearSelection;
+    if (exposeMode) capabilities.isGeometryMode = isGeometryMode;
     const feature = Object.freeze(capabilities);
     return feature;
   }
   function create(options) { return createInteraction(options, false); }
   function createWithOwnedClearing(options) { return createInteraction(options, true); }
-  window.CanvasInteractionFeature = Object.freeze({ create, createWithOwnedClearing });
+  function createGeometryWorkspace(options) {
+    function isGeometryMode() { return true; }
+    return createInteraction({ isGeometryMode, ...options }, true, true);
+  }
+  window.CanvasInteractionFeature = Object.freeze({ create, createWithOwnedClearing, createGeometryWorkspace });
 })();
