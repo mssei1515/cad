@@ -380,7 +380,7 @@
     serializeModel, requestChoice: options => choiceDialog.show(options), loadModelData, solveAndRefresh,
     repairMessage: readDocumentRepairMessage,
   });
-  const { effectiveDocumentName, refreshStatus: updateDocumentNameUI, markCheckpoint: markDocumentFileCheckpoint } = documentFileFeature;
+  const { effectiveDocumentName, refreshStatus: updateDocumentNameUI } = documentFileFeature;
 
 
 
@@ -1237,9 +1237,5 @@
 
   installTestHooks();
   installExpressionInputHighlights(document);
-  resetModelState();
-  initializePresentation("空の新規Documentを作成しました");
-  resetHistory("起動");
-  markDocumentFileCheckpoint("new");
-  documentFileFeature.start();
+  documentFileFeature.startForEmptyDocument({ resetModelState, initializePresentation });
 })();
