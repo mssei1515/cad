@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のDocument起動ライフサイクル単位ではapp.jsは1,241行、非空白798行。AST監査ではroot227文・390束縛、構築449非空白行とbind41行、別名・設定93行、委譲7行、条件付きtest hooks157行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のCanvasテスト用owner入力単位ではapp.jsは1,238行、非空白795行。AST監査ではroot226文・384束縛、構築449非空白行とbind41行、別名・設定92行、委譲7行、条件付きtest hooks155行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：空Documentの保存基準と起動時読込の開始を既存File Featureへ集約（2026-11-11）
+### 最新：Canvasテスト専用の関数選択を実ownerから組み立てる（2026-11-11）
+
+開始基準developはeb17cf523214ea102de0c6f8848b96d4f718a48a、作業branchはcodex/canvas-test-owner-inputs（develop統合・Push後に削除）。開始週枠残量81%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
+
+CanvasTestDriver.createBrowserSupportForWorkspace（src/testing/canvas_test_driver.js）は、実Block editing／placement、注記renderer、Frame bundle、Scene queriesからCanvasテスト支援の関数を選び、既存createBrowserSupportForSceneへ渡す。Sketch定数、型、Spline評価も同じ既存namespaceから選ぶ。app.jsはテスト専用のROOT_SKETCH_ID／DEFAULT_SKETCH_ID／blockDefinitionEditing／drawAnnotationLeader／hitArcEndpoint／hitSpline／drawSelectionRect別名を持たない。通常機能のstateや操作をtestingへ移さず、旧createBrowserSupportForScene／createForScene／個別fixtureは維持する。
+
+Frameは既存createCanvasFrameが返す同じ凍結bundleを保持し、通常のcanvasFrameRendererは同じframe fieldから取得する。描画時には従来の同名bindingを読み、生成前のReferenceErrorも変えない。実関数をwrap・bind・実行せず、従来のblocks三fieldとhits七fieldを同じkey順・参照で接続する。必要fieldは実ownerのreadonly data propertyで、テスト生成時の選択でも同じ値になる。scope／倍率／Selection／hover／pending／Documentは既存支援が操作時に読む。生成・公開・bind／start段階、通常起動でtest支援を生成しない条件、公開204項目、描画・履歴・取消・保存形式v26と既存testing／application／rendering配置・読込順を保つ。全体contextや追加のmodel・cache・listenerは作らない。
+
+app.jsは1,241→1,238行（3行減）、非空白798→795行、root227→226文・390→384束縛、構文依存辺1,065→1,063。テスト専用の七別名を除き、実Frame bundle一つの保持を加えたためroot束縛は差引六つ減る。別名・設定93→92行、test hooks157→155行。構築114文／449行、bind41行・委譲7行は不変。全体の200〜500行目標は未完了。
+
+関連単体21件・全単体2,545件・構文639fileが成功。既存の二つのScene比較テストへowner入力経路を加え、生成時のscope無照会、同じ描画支援・現在scope／pending／Selection／表示状態の観測、実profiler／PointerMoveSchedulerの計測とflush／生成失敗の同一性を確認した。新しい期待値や性能基準には変更していない。browser比較では実参照16項目、14fieldのreadonly、同じ実Frameと支援result、旧frame bindingの生成前ReferenceError、option／blocks／hitsのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体とCanvasDisplay／CanvasSurface sourceは不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+再監査でtest hooks内だけから参照されるroot bindingは24→17個。これは残作業17単位という意味ではない。次は残る照会・fixture・操作の入力選択を、既存TestDriverの責務と実ownerから判断する。Canvas WorkspaceとSceneの一括生成は途中aliasの公開時点を変えるため採用しない。今回のCanvasテスト接続、Document起動、Canvas入力ライフサイクル等を再実施せず、巨大contextや単純な移動に置き換えない。
+
+
+
+### 前回：空Documentの保存基準と起動時読込の開始を既存File Featureへ集約（2026-11-11）
 
 開始基準developはc6c104a603e6765b3b4c0e1e00e1c03faa74efda、作業branchはcodex/document-startup-lifecycle（develop統合・Push後に削除）。開始週枠残量82%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
 
