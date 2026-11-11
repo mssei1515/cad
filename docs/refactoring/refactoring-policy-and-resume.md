@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の補助Geometry描画設定単位ではapp.jsは1,214行、非空白772行。AST監査ではroot215文・368束縛、構築439非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の拘束注記／求解context単位ではapp.jsは1,212行、非空白770行。AST監査ではroot214文・368束縛、構築437非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：補助Geometryの描画設定を描画ownerと観測で共有（2026-11-11）
+### 最新：拘束注記ドラッグの求解scopeと分析無効化を求解contextへ集約（2026-11-11）
+
+開始基準developは220c7fbc310ad6a1d8fabce2d76631e8f593bd9c、作業branchはcodex/annotation-solve-context。開始週枠残量66%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchSolvingFeatureのWorkspace準備が返すcreateContextWithAnnotationDragは、既存Annotation factoryへGeometryDragのbuild／beginと分析無効化portを接続し、実AnnotationDragを生成してから既存の求解contextを構築する。実dragのscope／追加variablesをSolveScopeQueryへ渡し、完成した同じcontextのanalysisを無効化する。返す凍結recordは既存contextの実owner／関数と同じannotationDragを共有する。app.jsはこの求解対象と分析への折返しcallbackを仲介しない。
+
+Annotation factoryはbare・一引数で、buildPlan／beginGeometryDrag／invalidateAnalysisを従来のkey順と同じ実参照で渡す。Annotation→ScopeQuery→Analysisの生成順と、後段のcreateSolving・SolveState／ReferenceState共有は不変。context完成前には従来のconstraintAnalysisのReferenceErrorを返し、完成したundefined／null analysisはTypeErrorとして区別する。無効化時に同じ実analysis.invalidateをmember・無引数で呼び、戻り値と元例外を透過する。生成失敗はそのcontextのportを未完成のまま保ち、別の完成済みcontextへ影響しない。Annotation dragのsession、仮想scope・追加variables・同期・終了時の更新順は既存AnnotationDragが引き続き所有する。旧createContextForWorkspace等と既存生成本体を維持し、model・scope・analysisを複製せず新file／global／全体contextを追加しない。UI・求解条件・履歴・保存形式v26は不変。
+
+app.jsは1,214→1,212行（2行減）、非空白772→770行、root215→214文。束縛368は不変。構築439→437行・114→113文、bind37行・別名88行・委譲2行・test hooks152行は不変。関連する求解scopeと分析への通知を既存SketchSolvingFeatureへ集約した単位であり、200〜500行の全体目標は未完了。
+
+関連単体65件が成功。実AnnotationDragを用いて、旧明示構成と新context構成の補助点・追加variables・モデルidentity・文字位置同期・ドラッグ中のWorkspace置換・終了時の解除とUI通知順を比較した。native actor共有、factoryのreceiver／引数／key順、生成三段階での初期化前guard、Annotation／Query／Analysis生成例外、遅延method取得・同じanalysis receiver・無引数・戻り値・元例外、context間の独立性とundefined／nullを検証した。ソース逆変換では既存context・AnnotationFeature・AnnotationDrag・SolveScopeQuery・ConstraintAnalysis本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,580件、通常ja/light・en/dark・test起動が成功。関連E2E252件（8file、4.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はrootに残るrefreshConstraintAnalysisの所有と初期化順を監査する。presentation.bindUIへ渡す時点はSketchSolvingFeatureのReferenceState／SolveState準備より早いため、native owner生成を前倒ししない方法を検討する。単にcallbackを隠すのでなく、同じ完成analysisを更新する入口の責務と共有を確認する。構築437行とtest hooks152行は残り、数百行への目標は維持する。
+
+### 補助Geometryの描画設定を描画ownerと観測で共有（2026-11-11）
 
 開始基準developはda9a781b091ee14d2a1060cdc343fb7debfaa896、作業branchはcodex/construction-paint-configuration。開始週枠残量66%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

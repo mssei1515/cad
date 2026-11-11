@@ -28,7 +28,19 @@
       }
       return Object.freeze({ ...context, createSolving });
     }
-    return Object.freeze({ solveState, solveAndRefresh, createContextForWorkspace: createContext });
+    function createContextWithAnnotationDrag({ createAnnotationDrag, geometryDrag, minimumLength, acceptError }) {
+      let completedAnalysis;
+      function invalidateAnalysis() {
+        if (completedAnalysis === undefined) throw new ReferenceError("Cannot access 'constraintAnalysis' before initialization");
+        return completedAnalysis.value.invalidate();
+      }
+      const annotationDrag = createAnnotationDrag({ buildPlan: geometryDrag.build, beginGeometryDrag: geometryDrag.begin, invalidateAnalysis });
+      const context = createContext({ annotationDrag, minimumLength, acceptError });
+      const result = Object.freeze({ ...context, annotationDrag });
+      completedAnalysis = { value: result.analysis };
+      return result;
+    }
+    return Object.freeze({ solveState, solveAndRefresh, createContextForWorkspace: createContext, createContextWithAnnotationDrag });
   }
   // Query/analysis precede Canvas construction; solving waits for the editing owners.
   function createContextForWorkspace({ documentWorkspace, readServices, references, referenceState, annotationDrag,
