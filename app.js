@@ -68,7 +68,7 @@
   const { serializeConstraint, decorateSerializedConstraint, serializeModel, ensureBlockState,
     loadModelData, normalizeGeometryInstance, readRepairMessage: readDocumentRepairMessage } = documentPersistence;
   const { projections: blockProjections, reads: geometryReads,
-    geometryAppearance, dimensionAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
+    geometryAppearance, hatches: hatchGeometryQuery } = geometryReadServices;
   const { resolveGeometryRef } = geometryReads;
   const blockLayout = geometryReadServices.createBlockLayout({ annotationBounds: annotationPreparation.annotationBounds });
   const sketchNavigation = window.SketchEditingFeature.prepareNavigation();
@@ -316,11 +316,11 @@
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, chainDraft: offsetChainDraft } = offsetFeature;
   const { submit: submitOffsetValue } = offsetCommand;
   const editingCheckpoint = createEditingCheckpoint();
-  const { dimensions: { serialize: serializeDimension },
-    ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
+  const persistenceComponents = createPersistence({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
     version: CURRENT_JSON_VERSION, constraintReferencesPoint: constraintReferences.constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps: geometryCreation.normalizeArcSweeps,
   });
+  const { createApplication: createDocumentApplication } = persistenceComponents;
   const { solving: sketchSolving, parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization } = createSolving({
     projectionEditing: sketchProjectionEditing, geometry: geometryCreation, checkpoint: editingCheckpoint, editingScope: editingScopeBinding,
     historyController, recordHistory, resultIsAccepted,
@@ -1083,7 +1083,7 @@
       pushModelConstraint: constraintInsertion.push, fitAllGeometryToViewport: canvasScene.fit.fitAllGeometryToViewport, acceptError: CONSTRAINT_ACCEPT_ERROR,
     });
     const { readStatuses: readTestConstraintStatuses } = constraintBrowserSupport;
-    const { execution: dragExecutionSupport, createResponsiveForEditing: createResponsiveDragFixture } = window.GeometryDragTestDriver.createForWorkspace({
+    const { execution: dragExecutionSupport, createResponsiveFromPersistence: createResponsiveDragFixture } = window.GeometryDragTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, scopeQuery: solveScopeQuery, feature: geometryDragFeature, solver,
       modelTypes: window.GeometrySolver, arcEndpointPoint, now: () => performance.now(), readConstraintStatuses: readTestConstraintStatuses,
     });
@@ -1128,19 +1128,19 @@
       resetModelState, pushModelConstraint: constraintInsertion.push, fitAllGeometryToViewport: canvasScene.fit.fitAllGeometryToViewport, recordHistory, serializeConstraint, serializeModel, loadModelData, blockInstanceDisplayCenter: blockLayout.blockInstanceDisplayCenter,
       dimensionPlacement, readOnlyDimensions,
     });
-    const dimensionTestSupport = window.DimensionTestDriver.createBrowserSupportForWorkspace({
+    const dimensionTestSupport = window.DimensionTestDriver.createBrowserSupportFromOwners({
       documentWorkspace, interaction: canvasInteraction, sessions: operationSessions,
-      geometry: geometryCreation, display: dimensionDisplay, appearance: geometryAppearance,
+      geometry: geometryCreation, display: dimensionDisplay, readServices: geometryReadServices,
       viewport, resetModelState, addDistanceConstraintFromTarget,
-      dimensions: dimensionPlacementCommand, serializeModel, serializeDimension,
+      dimensions: dimensionPlacementCommand, serializeModel, persistence: persistenceComponents,
       dimensionValueInput, ctx, layer: dimensionLayer, dimensionLabelForConstraint,
     }, {
       canvasDriver: canvasTestDriver, dimensionValues: dimensionValueCommand, clearSelection, presentation, fit: canvasScene.fit, references: constraintReferences, canvas,
       solving: sketchSolving, checkpoint: editingCheckpoint, analysis: constraintAnalysis, dimensionDrag,
-    }, dimensionAppearance);
+    });
     const responsiveDragFixture = createResponsiveDragFixture({
       insertion: constraintInsertion, presentation, fit: canvasScene.fit, modelTypes: window.GeometrySolver,
-      resetModelState, ensureDimensionDefaults, solveAndRefresh, resetHistory, serializeModel,
+      resetModelState, persistence: persistenceComponents, solveAndRefresh, resetHistory, serializeModel,
     });
     const offsetTestSupport = window.OffsetTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, insertion: constraintInsertion, offset: offsetFeature, sourceSelection: offsetSelection,

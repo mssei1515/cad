@@ -1,5 +1,20 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 寸法テストの保存・外観入力を実ownerから共有（2026-11-11）
+
+DimensionTestDriver.createBrowserSupportFromOwners（src/testing/dimension_test_driver.js）が、実Geometry read servicesからGeometry外観と寸法外観を別々に選び、実Persistence componentsのdimensions.serializeを既存createBrowserSupportForWorkspaceへ接続する。Geometry外観はfixtureの可視性照会へ、寸法外観は第三引数として表示支援へ渡す。固定Documentを返すreaderと、操作時に読むWorkspace.currentを混同せず、従来のfixture→interaction→displayの順・実recordを保つ。旧三引数APIはそのまま残す。
+
+GeometryDragTestDriver.createForWorkspaceが返すcreateResponsiveFromPersistence（src/testing/geometry_drag_test_driver.js）は、同じPersistence componentsのensureDimensionDefaultsを選び、既存createResponsiveForEditingへ渡す。型constructorの捕捉、実Geometry参照とreset→寸法補完→求解→log→fit→draw→履歴→serialize、例外と途中状態、既存execution三入口と旧responsive APIを維持する。補完関数は既存readEditingScopeを呼ぶ同じ関数で、現在Workspaceへの独断の置換や新しい補完処理は作らない。
+
+app.jsは既存createPersistenceの返す同じ凍結recordをpersistenceComponentsとして保持し、通常Application用のcreateDocumentApplicationは同じ実関数のbare呼出し用別名に残す。serializeDimension／ensureDimensionDefaults／dimensionAppearanceのテスト専用別名を持たず、各TestDriverは必要なreadonly fieldのみを選ぶ。実recordは既にDocumentWorkspace側でも保持しており、model・writer・codec・loadingのコピーや新しいstateは作らない。Application生成前guard、生成・公開・bind／start段階、function参照・key順・receiver／引数と元例外、UI・保存形式v26、既存application／persistence／testing配置と読込順を維持する。
+
+app.jsは1,234→1,234行（変化なし）、非空白791行のまま。root226→227文・382→380束縛、構文依存辺1,063→1,064。実Persistence recordと、通常Applicationの既存bindingを別々に保持するため一文・一辺が増える一方、三つのテスト専用別名を除いて実record一つへ置き換える。構築449→448非空白行、別名・設定91→92行、bind41行・委譲7行・test hooks152行は不変。test専用のroot bindingは15→12個だが、残タスク数ではない。行数・辺数の減少を装わず、全体の200〜500行目標は未完了。
+
+関連単体24件・全単体2,545件・構文639fileが成功。既存の寸法比較とresponsive比較へowner入力経路を追加し、固定Documentと現在Workspaceの分離、実Geometry／Selection／投影参照、表示依存と型constructorの生成失敗、実サンプルのreset→補完→求解→表示→履歴順と途中状態を照合した。browser比較ではPersistence→Application→Dimension→responsiveの生成順、Application factoryの生成前ReferenceErrorとbare一引数呼出し、七つの実参照と六fieldのreadonly、別々のGeometry／寸法外観、同じ実支援result、optionのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧二driver本体とPersistence生成ownerは不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、9.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## Propertiesテストの関数選択を実ownerから組み立てる（2026-11-11）
 
 PropertiesTestDriver.createBrowserSupportForWorkspace（src/testing/properties_test_driver.js）が、実Properties Selection／Drawing fit／Constraint insertion／Fixed-state queryから、selectedDisplayTarget／fitAllGeometryToViewport／push／assignSketch／findLineFixedConstraintを選び、既存createBrowserSupportへ接続する。app.jsは実ownerを渡し、テスト専用のselectedPropertiesTarget別名と五関数の対応選択を持たない。通常UIの選択可視性関数は従来どおり残す。

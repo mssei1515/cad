@@ -1,6 +1,14 @@
 /* Dimension browser observations through live scope, appearance and rendering owners. */
 (() => {
   "use strict";
+  function createBrowserSupportFromOwners({ documentWorkspace, interaction, sessions, geometry, display, readServices,
+    viewport, resetModelState, addDistanceConstraintFromTarget, dimensions, serializeModel, persistence,
+    dimensionValueInput, ctx, layer, dimensionLabelForConstraint }, interactionOptions) {
+    return createBrowserSupportForWorkspace({ documentWorkspace, interaction, sessions, geometry, display,
+      appearance: readServices.geometryAppearance, viewport, resetModelState, addDistanceConstraintFromTarget,
+      dimensions, serializeModel, serializeDimension: persistence.dimensions.serialize,
+      dimensionValueInput, ctx, layer, dimensionLabelForConstraint }, interactionOptions, readServices.dimensionAppearance);
+  }
   function createAppearanceObservation({ currentScope, readDocument, isDimensionConstraint, constraintSketchId, activeSketchId, normalizeDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState }) {
     function state(index = 0) {
       const constraint = currentScope().constraints.filter(isDimensionConstraint)[index] || null;
@@ -962,5 +970,5 @@
     const dimensionDisplaySupport = support.createDisplayForEditing({ canvasHover: interaction.hover, readDocument: () => documentModel, appearance: dimensionAppearance });
     return Object.freeze({ dimensionDisplaySupport, dimensionFixtureSupport: support.fixtures, dimensionInteractionSupport });
   }
-  window.DimensionTestDriver = Object.freeze({ createForEditing, createBrowserSupportForWorkspace, createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
+  window.DimensionTestDriver = Object.freeze({ createBrowserSupportFromOwners, createForEditing, createBrowserSupportForWorkspace, createSupport, createFixtureSupport, createInteractionSupport, createDisplaySupport, createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation, createReadOnlyDuplicateFixture, createReadOnlyPlacementFixture, createExtensionVisibilityFixture, createDisplayCases, createTextAngleCases, createAngleLabelFixture, createSketchVisibilityFixture, createPositionObservation, createExpressionAction, createSelectionDriver, createCommandLineDragFixture, createClickPlacementFixture, createLineCircleFixture, createLineCircleObservation, createRadiusDifferenceRecovery, createClickPlacementObservation, createCommandLineDragObservation });
 })();

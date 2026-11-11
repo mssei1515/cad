@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のPropertiesテスト用owner入力単位ではapp.jsは1,234行、非空白791行。AST監査ではroot226文・382束縛、構築449非空白行とbind41行、別名・設定91行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の寸法テスト用Persistence入力単位ではapp.jsは1,234行、非空白791行。AST監査ではroot227文・380束縛、構築448非空白行とbind41行、別名・設定92行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,27 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Propertiesテストの関数選択を実ownerから組み立てる（2026-11-11）
+### 最新：寸法テストの保存・外観入力を実ownerから共有（2026-11-11）
+
+開始基準developは7837bd6eafc4f4733aa3d299cea95cef765620c8、作業branchはcodex/dimension-test-persistence-inputs（develop統合・Push後に削除）。開始週枠残量79%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
+
+DimensionTestDriver.createBrowserSupportFromOwners（src/testing/dimension_test_driver.js）が、実Geometry read servicesからGeometry外観と寸法外観を別々に選び、実Persistence componentsのdimensions.serializeを既存createBrowserSupportForWorkspaceへ接続する。Geometry外観はfixtureの可視性照会へ、寸法外観は第三引数として表示支援へ渡す。固定Documentを返すreaderと、操作時に読むWorkspace.currentを混同せず、従来のfixture→interaction→displayの順・実recordを保つ。旧三引数APIはそのまま残す。
+
+GeometryDragTestDriver.createForWorkspaceが返すcreateResponsiveFromPersistence（src/testing/geometry_drag_test_driver.js）は、同じPersistence componentsのensureDimensionDefaultsを選び、既存createResponsiveForEditingへ渡す。型constructorの捕捉、実Geometry参照とreset→寸法補完→求解→log→fit→draw→履歴→serialize、例外と途中状態、既存execution三入口と旧responsive APIを維持する。補完関数は既存readEditingScopeを呼ぶ同じ関数で、現在Workspaceへの独断の置換や新しい補完処理は作らない。
+
+app.jsは既存createPersistenceの返す同じ凍結recordをpersistenceComponentsとして保持し、通常Application用のcreateDocumentApplicationは同じ実関数のbare呼出し用別名に残す。serializeDimension／ensureDimensionDefaults／dimensionAppearanceのテスト専用別名を持たず、各TestDriverは必要なreadonly fieldのみを選ぶ。実recordは既にDocumentWorkspace側でも保持しており、model・writer・codec・loadingのコピーや新しいstateは作らない。Application生成前guard、生成・公開・bind／start段階、function参照・key順・receiver／引数と元例外、UI・保存形式v26、既存application／persistence／testing配置と読込順を維持する。
+
+app.jsは1,234→1,234行（変化なし）、非空白791行のまま。root226→227文・382→380束縛、構文依存辺1,063→1,064。実Persistence recordと、通常Applicationの既存bindingを別々に保持するため一文・一辺が増える一方、三つのテスト専用別名を除いて実record一つへ置き換える。構築449→448非空白行、別名・設定91→92行、bind41行・委譲7行・test hooks152行は不変。test専用のroot bindingは15→12個だが、残タスク数ではない。行数・辺数の減少を装わず、全体の200〜500行目標は未完了。
+
+関連単体24件・全単体2,545件・構文639fileが成功。既存の寸法比較とresponsive比較へowner入力経路を追加し、固定Documentと現在Workspaceの分離、実Geometry／Selection／投影参照、表示依存と型constructorの生成失敗、実サンプルのreset→補完→求解→表示→履歴順と途中状態を照合した。browser比較ではPersistence→Application→Dimension→responsiveの生成順、Application factoryの生成前ReferenceErrorとbare一引数呼出し、七つの実参照と六fieldのreadonly、別々のGeometry／寸法外観、同じ実支援result、optionのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧二driver本体とPersistence生成ownerは不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、9.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+次は残る生成・接続を、既存ownerと公開時点から評価する。今回のPersistence record／寸法外観／responsive補完、Properties／Block／Canvasテスト支援、Document起動／Canvas入力ライフサイクルを再実施しない。テスト専用という理由だけで共有historyやcommandを機械的に動かさず、巨大contextや別の巨大bootstrap、単純な別名移動・blank削除で数百行へ到達したことにしない。
+
+
+
+### 前回：Propertiesテストの関数選択を実ownerから組み立てる（2026-11-11）
 
 開始基準developは98837c7d28e20e80614bf326e4058b8ef1bb53ca、作業branchはcodex/properties-test-owner-inputs（develop統合・Push後に削除）。開始週枠残量80%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
 

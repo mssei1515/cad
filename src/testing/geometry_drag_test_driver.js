@@ -10,7 +10,11 @@
         pushModelConstraint: insertion.push, modelTypes, ensureDimensionDefaults, solveAndRefresh,
         log: presentation.log, fitAllGeometryToViewport: fit.fitAllGeometryToViewport, draw: presentation.draw, resetHistory, serializeModel });
     }
-    return Object.freeze({ execution, createResponsiveForEditing });
+    function createResponsiveFromPersistence({ insertion, presentation, fit, modelTypes, resetModelState, persistence, solveAndRefresh, resetHistory, serializeModel }) {
+      return createResponsiveForEditing({ insertion, presentation, fit, modelTypes, resetModelState,
+        ensureDimensionDefaults: persistence.ensureDimensionDefaults, solveAndRefresh, resetHistory, serializeModel });
+    }
+    return Object.freeze({ execution, createResponsiveForEditing, createResponsiveFromPersistence });
   }
   function createExecutionSupport({ feature, solver, currentScope, normalizeArcSweeps, vectorNorm, sketchSolveConstraints,
     arcEndpointPoint, now, readConstraintStatuses }) {
