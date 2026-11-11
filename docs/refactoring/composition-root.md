@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 保存・履歴・Clipboardショートカット設定を入力側へ集約（2026-11-11）
+
+KeyboardInput.createWorkspaceShortcuts（src/application/keyboard_input.js）が、実DocumentFileFeatureのsave／saveAs、実HistoryControllerのundo／redo、明示copy／paste callbackとnative clipboard方針を既存の八field recordへまとめる。app.jsは実files／historyとコピー・貼付けの入口を渡し、八fieldの対応とnativePaste／nativeCopy=trueを直接管理しない。rootの保存専用二別名を除く。既存createとKeyboardInteractionControllerのroutingは変更せず、元の関数を包まずに同じ順序で選ぶ。返却は従来どおりObject prototypeの通常の可変own data propertyで、凍結やgetter化を追加しない。
+
+DocumentFileFeature.save／saveAsとHistoryController.undo／redoは凍結recordのown readonly data fieldであり、早期root別名からKeyboard生成時の同じ実record読取りへ移しても値は変わらない。save／saveAs／copy／paste／nativePaste／nativeCopy／undo／redoのkey順、callbackのObject同一性、receiver・引数・返値・元例外、現在Document／Block履歴の選択は維持する。作成時に保存や履歴操作を実行せず、Clipboardのネイティブイベント処理も移さない。生成→明示start／disposeのlistener管理と入力優先順、UI、保存形式v26は不変。新しいfile・global・state・wrapper controllerは不要である。
+
+app.jsは1,261→1,260行（1行減）、非空白816→815行。root242文・構築114文／465非空白行は不変、束縛407→405、別名・設定99→98行。構文依存辺1,087、委譲11行・test hooks158行は不変。行数だけのための新しい上位wrapperを作らず、既存application／UI配置を維持する。200〜500行の全体目標は未完了。
+
+関連単体46件・全単体2,520件・構文639fileが成功。追加した一単体は実KeyboardInput／KeyboardInteractionControllerで旧設定と生成recordを比較し、保存・別名保存・repeat抑制・Ctrl／MetaのUndo／Redo、ネイティブcopy／cut／pasteの非介入、重複start防止・dispose後の非実行と再startを検証する。実ブラウザでも四つのreadonly field・選択する同じ実関数・recordのkey／descriptor／型、生成順、実Keyboard APIと公開204項目を旧root／旧moduleと比較して一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに加え、製品sourceへ残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
 ## 注記リサイズ可否の同期を既存AnnotationFeatureへ集約（2026-11-11）
 
 AnnotationFeature.prepareのsyncResizeSelectionが、実Dragに対応するInteractionのLifecycleとOperationSessionsのPending／拘束targetを使ってリサイズ可否を同期する。app.jsは既存UIへこの遅延portを渡し、条件式を直接持たない。Dragのmethod読取り後、select mode→Pending不在→拘束target不在の順に短絡評価し、実Dragをreceiverとしてboolean一引数で呼ぶ。返値・元例外を維持し、Drag未生成時は状態を読む前に旧annotationDragの初期化前ReferenceErrorを出す。
