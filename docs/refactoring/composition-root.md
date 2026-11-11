@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Parameter編集の削除guard・editor・適用処理を専用の組立てへ統合（2026-11-11）
+
+ParameterEditingFeature（src/application/parameter_editing_feature.js）は、同じDocumentWorkspaceとPresentationを用いるパラメータ編集の生成・接続を担当する。prepareForWorkspaceで既存ParameterApplication.createDeletionGuardと実ParameterEditor.createForWorkspaceをこの順に生成し、guardと実editorを公開する。createApplicationは従来の後段位置で実ParameterApplication.createForWorkspaceを呼び、成功した実applicationのみを保持する。計算・復元・Blockへの伝播は既存ParameterApplication、dialog draft／DOM入力は既存ParameterEditorが所有し、組立て側へ複製しない。
+
+prepareNamespaceと削除guardは捕捉したWorkspaceのcurrent関数を裸で呼び、編集UIには別のcurrentScope／readBlockEditorを遅延readerとして渡す。現在scopeと固定Documentを混同しない。languageは表示時に読む。editorのapplyDraftは同じ実applicationをmember receiverで呼び、全引数・返値・元例外をそのまま通す。生成前は旧parameterApplicationの初期化前ReferenceErrorを維持し、factory失敗では前に完成したapplicationを置き換えない。生成順・後段の適用処理生成位置・publish後のbind／start順は維持する。従来の二つのfactoryおよび生APIは変更しない。
+
+ParameterNamespaceの公開値と適用factoryの完成recordはObject.freezeしたown data propertyであり、dimensionUsesExpressionとapplication／stabilizeDocumentの受渡しの読取り順変更は実関数・値を変えない。getterや可変値snapshotへの一般化はしない。新しいmodel・Selection・scope・cache・dialog draft・DOM listenerや汎用app contextは追加しない。UIと保存形式v26の変更はない。
+
+app.jsは1,288→1,282行（6行減）、非空白843→837行。root253→252文・束縛425は不変、構文依存辺1,111→1,105、構築474→471行・別名／設定102→99行。委譲16行・test hooks162行は不変。二つの生成と後段適用接続を既存ownerへ渡す一単位であり、200〜500行の全体目標は未完了。
+
+新規三テストは、実editor／dialog適用とnative ParameterApplicationを通した成功・求解失敗復元、Workspace／編集scope／明示namespaceとlive language、実applicationのreceiver・余剰引数・返値・元例外・失敗時公開・独立contextを検証する。新規test fixtureのensure関数に不要なbare-call前提がありnative applicationの正常member callで失敗したため、その前提のみ除いた。製品処理はこの検証修正のためには変更していない。
+
+関連447件が成功（38file、7.8m、exit 0）。709入力と開始HEAD不変、一覧447件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop 0bbe1e6、作業branch codex/parameter-editing-assembly、週枠残量94%。構文639file・全単体2,495件・起動3経路が成功。関連38file・447件の成功と、709入力・開始HEAD不変を確認した。直前全体589件成功（b2619b0のtree、develop 0bbe1e6、27.2分）と今回の関連検証を区別する。TEMP cad-parameter-editing-{check,unit,smoke,e2e}.logとaudit／source-hashes／selection JSONに証跡を保持する。停止条件は週枠残量50%未満、mainは停止時の最後に反映する。
+
 ### 最新：読取・描画APIの重複別名28個を実所有元への参照へ整理（2026-11-11）
 
 app.jsは、ConstraintReferences／SketchContext／Block catalog・projection／Geometry reads・creation／constraint insertion／Solve scope query／Viewport・Canvas surface／workspace layout／Dimension placement／Geometry display・bounds・fit等の実APIから、関数値を他機能へ渡す箇所で所有元のdata propertyを明示して読む。28個の重複した別名（未参照2個を含む）を外し、45参照を同じowner.propertyへ接続する。Object shorthandは元の引数名を保つ明示keyへ展開し、各子factoryが受け取る名前と実関数値を維持する。分離済みownerとの依存を明確にする段階であり、関数本体や機能の再分割を行わない。
