@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Propertiesパネルの状態照会と完成layoutへの更新をUI ownerへ集約（2026-11-11）
+
+CanvasWorkspaceLayout.prepareは、操作時にDOMを読むisPropertiesCollapsedと、完成した同じlayoutへ委譲するsetPropertiesPanelCollapsedを返す。createWorkspaceは既存Canvas Workspace factoryをbare・全引数で呼び、Workspace全体が完成してからlayout参照を一度選んで公開し、元の実Workspaceをそのまま返す。BlockEditingFeature.createPlacementWithPropertiesは同じProperties portを既存Block配置commandへ接続する。app.jsはProperties用のCSS class照会とsetter委譲を持たず、レイアウト準備と完成Workspaceの生成だけを接続する。
+
+早期prepareはDOM・viewport・モデル・listenerを生成・照会しない。状態照会は毎回同じDocumentから現在workspaceを選び、workspaceがなければfalseを返す。更新は同じ実layoutのmethodを操作時に読み、member receiver・全引数・戻り値・元例外を維持する。Layout単体が生成された時点では公開せず、後続DimensionDisplay／DimensionInputを含むWorkspace生成が完成するまでは従来のcanvasWorkspaceLayoutのReferenceErrorを維持する。factory／layout選択の失敗は前の完成参照を保持し、独立prepareや成功したundefined／null layoutを区別する。Block配置は明示callback／undefined／null overrideを優先する。既存CanvasDisplayの全生成本体・CanvasWorkspaceLayout.create・BlockPlacementCommandとraw createPlacementは不変で、実Workspace／layout／command・mode／Selection／履歴を複製しない。UI・サイズ変更時の表示中心・開閉復元・翻訳・保存形式v26を変えず、新file／global／全体contextを追加しない。
+
+app.jsは1,212→1,210行（2行減）、非空白770→768行。root214文・369束縛は不変。構築438→437行・114→115文、委譲1→0行。bind37行・別名88行・test hooks152行は不変。DOM状態の照会と更新先の完成管理を既存UI ownerへ集約した単位であり、200〜500行の全体目標は未完了。
+
+関連単体112件が成功。raw／既存Workspace構成／Properties付き構成で、Blockの実owner・pointer・preview・ID・配置回転・パネル復元・取消・求解例外を検証した。明示callbackのundefined／nullも維持する。実layoutのDOM・aria-label・言語変更・Canvas表示中心、状態照会の操作時取得・欠落workspace・元例外、native Workspace factoryのbare receiver・全引数・実record参照、遅延method取得・同じlayout receiver・元例外、再生成失敗時の前参照保持と独立性を確認した。実CanvasDisplayのLayout／DimensionDisplay／DimensionInputの各生成中、および三段階の生成失敗ではportが未公開のままである。ソース逆変換では既存layout・CanvasDisplay・Block配置の生成本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,587件、通常ja/light・en/dark・test起動が成功。関連E2E180件（7file、3.2m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 分析更新の早期portと完成参照をSketchSolvingFeatureへ集約（2026-11-11）
 
 SketchSolvingFeature.prepareは、実ownerをまだ生成せず、安定したrefreshConstraintAnalysisとReference-aware準備の入口を返す。後者は従来のprepareWithReferencesForWorkspaceを同じ位置で呼び、二つのcontext生成入口の完成時に実analysis参照をprivateに公開する。context自体は元の実recordを返し、ReferenceState／SolveState／solveAndRefreshも同じ実owner・関数を共有する。app.jsは完成分析を更新する委譲関数を持たず、返された更新portをUIや各編集機能へ接続する。

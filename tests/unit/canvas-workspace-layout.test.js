@@ -23,6 +23,39 @@ function fixture() {
   });
   return { layout, state, calls, viewport, attributes, classes, button, browser };
 }
+test('prepared Properties ports read the live DOM and apply collapse through the same native layout', () => {
+  const f = fixture(); let queries = 0, node = { classList: { contains: name => f.classes.has(name) } };
+  const prepared = sandbox.window.CanvasWorkspaceLayout.prepare({ document: { querySelector(selector) { assert.equal(selector, '.workspace'); queries++; return node; } } });
+  assert.ok(Object.isFrozen(prepared)); assert.equal(queries, 0);
+  assert.throws(() => prepared.setPropertiesPanelCollapsed(true), { name: 'ReferenceError', message: "Cannot access 'canvasWorkspaceLayout' before initialization" });
+  assert.equal(prepared.isPropertiesCollapsed(), false);
+  const workspace = Object.freeze({ layout: f.layout }); assert.equal(prepared.createWorkspace(() => workspace), workspace);
+  prepared.setPropertiesPanelCollapsed(true); assert.equal(prepared.isPropertiesCollapsed(), true);
+  assert.equal(f.attributes['aria-expanded'], 'false'); assert.equal(f.viewport.x, 80); assert.equal(f.viewport.y, 20);
+  f.state.language = 'en'; prepared.setPropertiesPanelCollapsed(false); assert.equal(prepared.isPropertiesCollapsed(), false);
+  assert.equal(f.attributes['aria-label'], 'Collapse Properties'); node = null; assert.equal(prepared.isPropertiesCollapsed(), false);
+  const marker = new Error('DOM query'); node = { classList: { contains() { throw marker; } } };
+  assert.throws(prepared.isPropertiesCollapsed, error => error === marker);
+});
+
+test('prepared layout publication waits for the whole Workspace and retains native call and failure boundaries', () => {
+  const prepared = sandbox.window.CanvasWorkspaceLayout.prepare({ document: {} }), independent = sandbox.window.CanvasWorkspaceLayout.prepare({ document: {} });
+  const input = {}, extra = {}, marker = {}, failure = new Error('workspace'); let reads = 0, methodReads = 0, methodFailure = false;
+  const unready = () => assert.throws(prepared.setPropertiesPanelCollapsed, { name: 'ReferenceError', message: "Cannot access 'canvasWorkspaceLayout' before initialization" });
+  const layout = { get setPropertiesPanelCollapsed() { methodReads++; return function () { assert.equal(this, layout); assert.deepEqual(Array.from(arguments), [true, input, null]); if (methodFailure) throw failure; return marker; }; } };
+  const workspace = Object.freeze({ get layout() { reads++; unready(); return layout; } });
+  function build() { 'use strict'; assert.equal(this, undefined); assert.deepEqual(Array.from(arguments), [input, extra]); unready(); return workspace; }
+  unready(); assert.equal(prepared.createWorkspace(build, input, extra), workspace); assert.equal(reads, 1); assert.equal(methodReads, 0);
+  assert.equal(prepared.setPropertiesPanelCollapsed(true, input, null), marker); assert.equal(methodReads, 1);
+  for (const build of [() => { throw failure; }, () => ({ get layout() { throw failure; } })]) {
+    assert.throws(() => prepared.createWorkspace(build), error => error === failure);
+    assert.equal(prepared.setPropertiesPanelCollapsed(true, input, null), marker);
+  }
+  methodFailure = true; assert.throws(() => prepared.setPropertiesPanelCollapsed(true, input, null), error => error === failure); methodFailure = false;
+  assert.throws(independent.setPropertiesPanelCollapsed, error => error.name === 'ReferenceError');
+  for (const value of [undefined, null]) { prepared.createWorkspace(() => ({ layout: value })); assert.throws(prepared.setPropertiesPanelCollapsed, error => error.name === 'TypeError'); }
+});
+
 test('resize preserves the requested world center and reads pending state after drawing', () => {
   const f = fixture(); f.state.onDraw = () => { f.state.pending = true; };
   f.layout.resizeCanvas({ centerWorld: f.state.center });
