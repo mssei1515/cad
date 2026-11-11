@@ -277,5 +277,19 @@
     }
     return Object.freeze({ controls, canvasThemeColor, createForEditing });
   }
-  window.CanvasDisplay = Object.freeze({ prepareForWorkspace, create, createRendering });
+  function prepareRendering() {
+    let completed;
+    function drawCanvas() {
+      if (completed === undefined) throw new ReferenceError("Cannot access 'canvasFrameRenderer' before initialization");
+      return completed.value.draw();
+    }
+    function createFrame(factory, ...options) {
+      const frame = factory(...options);
+      const renderer = frame.frame;
+      completed = { value: renderer };
+      return frame;
+    }
+    return Object.freeze({ drawCanvas, createFrame });
+  }
+  window.CanvasDisplay = Object.freeze({ prepareForWorkspace, create, createRendering, prepareRendering });
 })();

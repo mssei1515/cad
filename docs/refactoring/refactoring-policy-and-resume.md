@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のキーボードWorkspace設定単位ではapp.jsは1,223行、非空白780行。AST監査ではroot221文・374束縛、構築439非空白行とbind38行、別名・設定89行、委譲5行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のCanvas描画公開単位ではapp.jsは1,222行、非空白779行。AST監査ではroot220文・374束縛、構築440非空白行とbind38行、別名・設定88行、委譲4行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：キーボードのメニュー判定とWorkspace設定を既存KeyboardInputへ集約（2026-11-11）
+### 最新：Canvas描画実体の完成参照と描画入口を既存CanvasDisplayへ集約（2026-11-11）
+
+開始基準developは29623426fb586988f72b71dd032732285bbc2718、作業branchはcodex/canvas-frame-publication（develop統合・Push後に削除）。開始週枠残量70%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+CanvasDisplay.prepareRenderingは、安定したdrawCanvasとcreateFrameを返し、既存factoryが完成したFrame bundleのframeを一度選んで内部完了recordへ保持する。factoryはbare・全引数で呼び、返されたnative bundleをそのままapp.jsとCanvasテストへ共有する。app.jsはcanvasFrameRendererの別名と描画委譲を持たず、Frame生成と既存ownerへの接続だけを行う。
+
+準備はdrawCanvasを最初に渡すpresentation.bindCanvasの直前、実Frameの生成は旧位置のままである。未生成時は従来のcanvasFrameRendererのReferenceErrorを保ち、成功したundefined／null rendererはTypeErrorとして区別する。描画ごとに実renderer.drawを読み、同じmember receiver・無引数で呼び、返値と元例外を透過する。factory／frame field取得の失敗は前の完成rendererを置き換えない。Frame／Viewport／Selection／描画modelは複製せず、通常／exportの描画順、surface／Frame rendererとCanvasDisplayの既存生成本体、UI・履歴・保存形式v26を維持する。新moduleは作らず既存src/application/canvas_display.jsへ集約する。
+
+app.jsは1,223→1,222行（1行減）、非空白780→779行。root221→220文・374束縛は同数、構文依存辺1,054→1,053。別名・設定89→88行、構築439→440行、委譲5→4行、bind38行・test hooks152行は不変。行数削減より、完成した描画実体への参照と描画入口を既存表示ownerへ集めた単位であり、200〜500行の全体目標は未完了。
+
+関連単体59件が成功。実Frame rendererで旧経路と新入口の通常描画／PNG出力／失敗後の復元を比較し、生成前guard、bare factoryの全引数、実bundle返却、field一度選択、member draw・無引数・返値・元例外と入力引数無視、生成失敗時の前renderer保持、独立性、undefined／nullのTypeErrorを確認した。browser比較で準備後／renderer生成中／bundle完成直前の三つのReferenceError、同じnative rendererと凍結bundle／readonly frame、生成一回、実drawのmember receiver・引数なし、function名／arityと公開204項目が一致した。ja/light・en/dark・test起動も成功。rootのdrawCanvas全二参照が新宣言後であることをlexical dependencyで確認し、宣言した集約以外のroot／CanvasDisplayとnative surface／export／Presentation sourceは不変、新たな未束縛参照なし。
+
+初回の関連E2Eは矩形選択267ms（基準250ms未満）で停止し、9成功・1失敗・160未実施だった。他の検証との同時実行があったため、終了後に変更前／後／後／前の固定ABBA比較を行い、全四回が成功した。矩形選択は変更前234／198ms、変更後216／165msで、継続的な悪化は再現しなかった。同時実行だけが原因とは断定せず、初回log／receiptをinitial名で保存し、同じ関連170件を単独実行した。閾値・期待値・sourceは変えていない。
+
+構文639file・全単体2,563件と単独再検証の関連E2E170件（6file、3.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。再検証時の矩形選択は199msで基準内だった。初回失敗を最終成功と混同せず、失敗・固定比較・再検証の各証跡を保持する。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+### キーボードのメニュー判定とWorkspace設定を既存KeyboardInputへ集約（2026-11-11）
 
 開始基準developはdec1e41754b8bc5bc497ca786fd68a68d7f8ff5e、作業branchはcodex/keyboard-workspace-routing（develop統合・Push後に削除）。開始週枠残量70%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
