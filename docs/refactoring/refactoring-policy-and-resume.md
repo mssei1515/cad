@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のBrowser support record公開組立て単位ではapp.jsは1,265行、非空白820行。AST監査ではroot243文・417束縛、構築・接続467非空白行、別名・設定99行、委譲13行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の履歴準備単位ではapp.jsは1,264行、非空白819行。AST監査ではroot242文・418束縛、構築・接続468非空白行、別名・設定99行、委譲11行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：履歴の段階的生成と早期操作port（2026-11-11）
+
+HistoryController.prepare（src/editing/history_controller.js）は、早期に渡すrecord／createBlockHistoryと後段の実履歴生成を同じownerで接続する。prepareはclosureと凍結portだけを生成し、model／scope／DOMを読まず、履歴stackを作らない。createForWorkspaceは従来位置で同名の生factoryを同じnamespace receiver・一引数で呼び、成功した実featureをそのまま返す。外部生成物をsetterで登録する方式や、別の履歴stack／session／app contextは追加しない。
+
+recordは既定label「変更」と一引数、createBlockHistoryは零引数を維持し、実featureをmember receiverとして呼ぶ。返値・元例外・余剰引数の破棄、生成前の旧historyFeature初期化前ReferenceErrorを維持する。生成失敗では完成済みfeatureを置き換えず、準備単位は独立する。Document／Blockの履歴選択、復元中の記録抑止、profiling、上限80・同一snapshot／Undo／Redo・通知順と保存形式v26は既存の実APIに残す。app.jsは早期portを接続して後段に実featureを生成し、実controllerを従来どおり共有する。新fileやloader／test一覧変更はない。
+
+app.jsは1,265→1,264行（1行減）、非空白820→819行。root243→242文、417→418束縛、依存辺1,091→1,090。二つのhoisted委譲を一つのcold準備に置換したため、委譲13→11行、構築467→468行となる。別名・設定99行とtest hooks158行は不変。束縛数の増加を隠さず、行数削減より初期化と操作の所有を優先する。200〜500行の全体目標は未完了。
+
+履歴関連21件・構文639file・全単体2,508件・通常二経路とtest経路の起動が成功。新規三テストは実Document／Block stackとlive scope・復元抑止・profiling・元例外、coldな生成と成功時のみの公開・独立性、receiver／引数数／既定値／返値を確認する。既存の期待値は変更しない。準備生成・旧二関数とnative factory呼出しを逆展開したroot ASTが基準と同じこと、生history APIのASTとfree identifier集合が不変なことも照合した。関連E2E504件（40file、9.0m、exit 0）も成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。全体589件の直近成功はdevelop f0a7954（30.0分）であり、この単位の関連検証とは区別する。
+
+基準develop 141a63a、作業branch codex/history-preparation、開始時週枠残量90%。証跡はTEMP cad-history-preparation-{focused,check,unit,smoke,e2e}.logとaudit／selection／source-hashes JSON。mainは残量50%未満での停止時の最後に反映する。
+
+今回、共通五依存を十九driverへ補う汎用BrowserTestSupport案は不採用とした。試算ではapp.jsが9行減る一方で190行の中継moduleが増え、各driver schemaを二重管理する。製品source／loaderへは導入しない。今後も一律wrapperや微小な委譲移動を繰り返すのでなく、実ownerが同時に構築・接続できる機能群と依存の共有を先に再監査する。単に行数を稼ぐ新bootstrapや巨大contextを作らない。
 
 ### 最新：実support recordからの公開契約生成をBrowserTestApiへ集約（2026-11-11）
 
