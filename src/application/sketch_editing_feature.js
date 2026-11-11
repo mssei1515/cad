@@ -112,12 +112,28 @@
   }
   // Keep navigation references with their factories; publish only successful constructions.
   function prepareNavigation() {
-    let move = null, context = null;
+    let move = null, context = null, editingFeature = null;
     function resetMove() { return move?.reset(); }
-    function closeContext() { return context?.close(); }
+    function closeContext() { return context?.menu?.close(); }
     function readMoving() { return move.active; }
+    function requireEditing(binding) {
+      if (editingFeature === null) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return editingFeature;
+    }
+    function requireTree(binding) {
+      if (context === null) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return context;
+    }
+    function clearInteractionForSketchChange() { return requireEditing("sketchInteractionReset").reset.clear(); }
+    function toggleSketchVisibility(id) {
+      const { toggleVisibility } = requireEditing("toggleSketchVisibilityCommand").editing.command;
+      return toggleVisibility(id);
+    }
+    function isSidebarHighlightedElement(item) { return requireTree("sketchTreeController").controller.isHighlightedElement(item); }
+    function clearTreeHover() { return requireTree("sketchTreeController").controller.clearHoverSketch(); }
+    function startContext() { return requireTree("sketchContextController").menu.start(); }
     function createEditing(options) {
-      const feature = createForInteraction({ ...options, resetSketchMove: resetMove });
+      const feature = createForInteraction({ clearInteractionForSketchChange, clearTreeHover, ...options, resetSketchMove: resetMove });
       function createMoveWithInput(options) {
         const result = feature.editing.createMoveWithInput(options);
         move = result.command;
@@ -125,12 +141,14 @@
       }
       function createTreeForEditing(options) {
         const result = feature.editing.createTreeForEditing(options);
-        context = result.menu;
+        context = result;
         return result;
       }
+      editingFeature = feature;
       return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing }) });
     }
-    return Object.freeze({ resetMove, closeContext, readMoving, createForInteraction: createEditing });
+    return Object.freeze({ resetMove, closeContext, readMoving, clearInteractionForSketchChange, toggleSketchVisibility,
+      isSidebarHighlightedElement, startContext, createForInteraction: createEditing });
   }
   window.SketchEditingFeature = Object.freeze({ create, createForInteraction, prepareNavigation });
 })();

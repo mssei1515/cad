@@ -86,6 +86,7 @@
   function annotationBounds(...args) { return annotationFeature.spatial.annotationBounds(...args); }
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor, snappedBlockRotation } = geometryReadServices.createBlockLayout({ annotationBounds });
   const sketchNavigation = window.SketchEditingFeature.prepareNavigation();
+  const { clearInteractionForSketchChange, toggleSketchVisibility, isSidebarHighlightedElement } = sketchNavigation;
   const { binding: editingScopeBinding, solver, dimensionQueries: dimensionModelQueries, insertion: constraintInsertion } = createEditingScope({
     Solver: ConstraintSolver,
     closeSketchContext: sketchNavigation.closeContext, resetSketchMove: sketchNavigation.resetMove,
@@ -788,18 +789,16 @@
 
 
 
-  const { reset: sketchInteractionReset, editing: sketchEditing } = sketchNavigation.createForInteraction({
+  const { editing: sketchEditing } = sketchNavigation.createForInteraction({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions,
     constraintTargets: constraintTargetCommand, valueInput: dimensionInputController, presentation, constraintReferences, recordHistory,
     clearSelection, clearSnap, updateToolbar,
     resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(),
     referenceImage: referenceImageInteraction, selectionRectangle, projection: sketchProjectionCommand, instances: geometryInstanceCommand, instanceSources: instanceSourceCommand,
-    clearInteractionForSketchChange, promptName: (title, name) => window.prompt(title, name), clearTreeHover: () => sketchTreeController.clearHoverSketch(),
+    promptName: (title, name) => window.prompt(title, name),
   });
-  function clearInteractionForSketchChange() { return sketchInteractionReset.clear(); }
 
-  const { createSketch, toggleVisibility: toggleSketchVisibilityCommand } = sketchEditing.command;
-  function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
+  const { createSketch } = sketchEditing.command;
   const { command: sketchMoveCommand, input: sketchMoveInputBinding } = sketchEditing.createMoveWithInput({
     document,
     readEditingScope: () => editingScopeBinding.current, hatches: hatchGeometryQuery, rebinding: constraintRebinding,
@@ -827,7 +826,7 @@
     projection: sketchProjectionFeature, selectionHighlight, deleteElements, commitNewConstraint, solveAndRefresh,
   });
 
-  const { view: sketchTreeView, controller: sketchTreeController, menu: sketchContextController } = sketchEditing.createTreeForEditing({
+  const { view: sketchTreeView } = sketchEditing.createTreeForEditing({
     document, window, selectionHighlight,
     objectOptions: { isHidden: selectionVisibilityIsHidden, analysis: constraintAnalysis, redundancy: constraintRedundancy,
       referenceState: referenceConstraintState, projectionQueries: sketchProjectionQueries,
@@ -837,9 +836,8 @@
     deleteElements, deleteCurrentSelection, toggleSelectedVisibility, fixedOperands: fixedOperandCommand,
   });
   const { applyWidth: applySketchTreeWidth } = sketchTreeView;
-  sketchContextController.start();
+  sketchNavigation.startContext();
 
-  function isSidebarHighlightedElement(item) { return sketchTreeController.isHighlightedElement(item); }
 
 
 
@@ -1064,7 +1062,7 @@
   dimensionInput.bind();
 
   const keyboardInput = canvasEditingInput.createKeyboard({
-    window, menus: { closeSketch: () => sketchContextController.close(),
+    window, menus: { closeSketch: sketchNavigation.closeContext,
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
