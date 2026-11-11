@@ -22,6 +22,9 @@
       refreshViews: options => updateUI(options), redrawCanvas: () => draw(), refreshVersion });
     const profiler = window.InteractionProfiler.create();
     const feedback = window.ApplicationFeedback.create({ document, settings, interactionProfiler: profiler, readDuplicateCount });
+    function createAuthoringFeedback() {
+      return window.AuthoringFeedback.create({ applicationText: settings.applicationText });
+    }
     function log(message) { return feedback.log(message); }
     function setHint(message, kind = "normal") { return feedback.hint(message, kind); }
     function setSolveResultHint(label, solved, analysis, dependent) { return feedback.solveResult(label, solved, analysis, dependent); }
@@ -165,7 +168,7 @@
         interactionProfiler: profiler, profileInteractionWork: profiler.work, withGeometryReadCache, drawCanvas });
       return canvas;
     }
-    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createStartup, createToolbar, createToolNavigation, prepareWorkspaceControls, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
+    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createAuthoringFeedback, createStartup, createToolbar, createToolNavigation, prepareWorkspaceControls, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
       log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw, updateToolbar, updateStatusUI, updateHistoryButtons,
       get selectedItem() { return canvas.selectedItem; } });
   }
