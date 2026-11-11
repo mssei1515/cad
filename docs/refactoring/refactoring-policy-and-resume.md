@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の実行バージョン表示単位ではapp.jsは1,170行、非空白737行。AST監査ではroot200文・359束縛、構築423非空白行とbind35行、別名・設定77行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12の重複拘束数照会単位ではapp.jsは1,170行、非空白737行。AST監査ではroot200文・360束縛、構築423非空白行とbind35行、別名・設定77行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：実行バージョン表示の再表示参照をPresentationへ移管（2026-11-12）
+### 最新：重複拘束数の表示照会を解析ownerへ移管（2026-11-12）
+
+開始基準developはa823a365ca789623e0b92c521c77617e36791de2、作業branchはcodex/solving-duplicate-count。開始週枠残量54%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchSolvingFeature.prepareのreadDuplicateCountは、既存の完成解析recordが保持する実contextのConstraintRedundancyから現在のcountを返す。app.jsはこの狭い照会をPresentationへ渡し、後段のconstraintRedundancyを捕捉するcallbackを組み立てない。countの保持・更新と拘束の分類は既存ConstraintRedundancy／ConstraintAnalysisに残し、表示側へ移さない。
+
+完成解析recordには既存analysisと同じnative context参照を保持する。Contextは通常経路・注記drag付き経路ともimmutableな値プロパティのcohortであり、生成・公開時にredundancyやcountを先読みしない。readDuplicateCountはcount getterを実redundancy receiverで一回だけ読み、値・元例外をそのまま返す。最初のContext完成前は元のconstraintRedundancy初期化前ReferenceErrorを保ち、失敗したContext再構築では以前の完成recordを保持する。追加の可変slot・数値cacheやモデルsnapshotは作らない。
+
+照会は現在のcached countを読むだけで、Workspace切替時にも解析を自動実行しない。通常のrefreshが件数を更新するまで以前の値を表示する従来の時機を維持する。戻り値の変換やゼロ補完はせず、callback名readDuplicateCount・arity 0と余分な引数の無視を保つ。既存のrefreshConstraintAnalysis、native context／solver／解析・重複判定の全本体、raw生成API、モデル・ID／scope／履歴・UI・保存形式v26は不変。新file・global・registry・全体contextは追加しない。既存の解析ownerに収まるためフォルダ配置も維持する。
+
+app.jsは1,170→1,170行（0行変化）、非空白737行。root200文・359→360束縛、構築423行・109文、別名77行・bind35行・test hooks151行は不変。関数値を受け取るreadonly照会が一つ増えるが、既存の後段可変参照・代入は追加しない。ASTで旧constraintRedundancyの初期化前consumerは表示callback一か所だけと確認し、その遅延依存を所有者の完成recordへ移した。新たな未束縛参照なし。行数だけの削減は行わず、200〜500行の全体目標は未完了。
+
+関連単体33件が成功。両native Context経路で実ConstraintRedundancyとApplicationFeedbackを接続し、cached countが0→1→Workspace置換後も1→通常refresh後0となること、表示messageとerror class、仮想注記scopeとWorkspaceの区別を確認した。構築中のcount／モデル非読取、live getterのreceiver・値／元例外、未初期化guard、準備／build／analysis取得失敗時の前回record保持、独立した準備ownerも検証した。ソース逆変換で既存解析・求解本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,649件・関連単体33件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E140件（5file、2.1m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は残る構築423行・109文の既存ownerへの中継と後段const参照を監査する。今回のreadDuplicateCountのような操作時読取りでは、cached状態を更新するAPIと照会APIを混同しない。新しいslotでroot参照を隠すだけの分割や、通常モデルを所有するtest registry／巨大contextは導入しない。
+
+### 実行バージョン表示の再表示参照をPresentationへ移管（2026-11-12）
 
 開始基準developはd04461897502fbc3397c9e47b8fe08c8caa8c65b、作業branchはcodex/presentation-runtime-version。開始週枠残量54%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

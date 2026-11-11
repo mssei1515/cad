@@ -7,9 +7,14 @@
       if (completedAnalysis === undefined) throw new ReferenceError("Cannot access 'constraintAnalysis' before initialization");
       return completedAnalysis.value.refresh(options);
     }
+    function readDuplicateCount() {
+      if (completedAnalysis === undefined) throw new ReferenceError("Cannot access 'constraintRedundancy' before initialization");
+      const constraintRedundancy = completedAnalysis.context.redundancy;
+      return constraintRedundancy.count;
+    }
     function publishContext(build, options) {
       const context = build(options);
-      completedAnalysis = { value: context.analysis };
+      completedAnalysis = { value: context.analysis, context };
       return context;
     }
     function prepareWithReferences(options) {
@@ -20,7 +25,7 @@
         createContextWithAnnotationDrag(options) { return publishContext(buildWithAnnotationDrag, options); },
       });
     }
-    return Object.freeze({ refreshConstraintAnalysis, prepareWithReferencesForWorkspace: prepareWithReferences });
+    return Object.freeze({ refreshConstraintAnalysis, readDuplicateCount, prepareWithReferencesForWorkspace: prepareWithReferences });
   }
   function prepareWithReferencesForWorkspace({ documentWorkspace, readServices, references, solver, pointUsage, presentation }) {
     const referenceState = window.ReferenceConstraintState.create({

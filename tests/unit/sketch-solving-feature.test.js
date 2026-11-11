@@ -436,3 +436,72 @@ test('early publication shares actual reference, solve and analysis owners throu
   }finally{w.ReferenceConstraintState=rawReference;w.SketchSolving=rawSolving;w.ConstraintAnalysis=rawAnalysis;w.SolveScopeQuery=rawQuery;}
  }
 });
+
+test('prepared duplicate count shares native cached redundancy and feedback across Workspace replacement without refreshing on read', () => {
+  for (const withAnnotation of [false, true]) {
+    const f = contextFixture('prepared'), w = f.probe.window, early = w.SketchSolvingFeature.prepare();
+    assert.throws(early.readDuplicateCount, { name: 'ReferenceError', message: "Cannot access 'constraintRedundancy' before initialization" });
+    f.state.ready = false;
+    const prepared = early.prepareWithReferencesForWorkspace(f.probe.contextInput);
+    const context = withAnnotation ? prepared.createContextWithAnnotationDrag({
+      createAnnotationDrag: () => f.probe.contextInput.annotationDrag, geometryDrag: { build() {}, begin() {} }, minimumLength: 0.001, acceptError: f.owners.acceptError,
+    }) : prepared.createContextForWorkspace(f.probe.contextInput);
+    assert.ok(Object.isFrozen(context));
+    assert.equal(Object.getOwnPropertyDescriptor(context, 'redundancy').value, context.redundancy);
+    const before = f.events.length;
+    assert.equal(early.readDuplicateCount(), 0); assert.equal(f.events.length, before);
+    f.state.ready = true;
+    const constraint = { sketchId: 'A' };
+    f.state.scope.constraints.push(constraint);
+    const target = { dataset: {}, textContent: '', classList: { toggle(name, value) { assert.equal(name, 'error'); target.error = value; } } };
+    const feedback = w.ApplicationFeedback.create({ document: { getElementById: id => id === 'hint' ? target : null },
+      settings: { applicationText: (_ja, en) => en, translatedHintText: message => message, language: 'en' },
+      interactionProfiler: { active: false }, readDuplicateCount: early.readDuplicateCount });
+    const solved = Object.freeze({ success: true, errorNorm: 0 }), analysis = Object.freeze({ analysis: Object.freeze({ stable: true }) });
+    function display(count) {
+      feedback.solveResult('edit', solved, analysis, null);
+      assert.equal(target.dataset.hintSource, feedback.constraints.resultHint('edit', solved, analysis, null, count).message);
+      assert.equal(target.error, count > 0);
+    }
+    assert.equal(early.readDuplicateCount(), 0); display(0);
+    context.redundancy.refreshConstraintRedundancy(new Map([['A', { stable: true, byConstraint: new Map([[constraint, { redundant: true, rankBefore: 1, rankAfter: 1 }]]) }]]));
+    assert.equal(early.readDuplicateCount(), 1); display(1);
+    f.state.scope = { ...f.state.scope, activeSketchId: 'B', sketches: [{ id: 'B' }], constraints: [] };
+    // Reading the count preserves cached display timing until the normal analysis updates it.
+    assert.equal(early.readDuplicateCount(), 1); display(1);
+    context.redundancy.refreshConstraintRedundancy(new Map([['B', { stable: true, byConstraint: new Map() }]]));
+    assert.equal(early.readDuplicateCount(), 0); display(0);
+    assert.equal(f.state.virtual.points[0], f.probe.point);
+  }
+});
+
+test('duplicate count publication preserves cold native contexts, live getter receiver, values, failures and independent preparations', () => {
+  const sandbox = { window: {} }; vm.runInNewContext(fs.readFileSync('src/application/sketch_solving_feature.js', 'utf8'), sandbox);
+  const w = sandbox.window, original = w.SketchSolvingFeature, early = original.prepare(), other = original.prepare();
+  const marker = new Error('duplicate count failed'), input = {}, contextInput = {};
+  let count = 3, reads = 0, failure, current;
+  const owner = Object.freeze({ get count() { assert.equal(this, owner); reads++; if (failure === 'count') throw marker; return count; } });
+  const context = Object.freeze({ analysis: {}, redundancy: owner }); current = context;
+  function build(options) { assert.equal(options, contextInput); if (failure === 'build') throw marker; return current; }
+  w.SketchSolvingFeature = { ...original, prepareWithReferencesForWorkspace(options) {
+    assert.equal(options, input); if (failure === 'prepare') throw marker;
+    return { createContextForWorkspace: build, createContextWithAnnotationDrag: build };
+  } };
+  const prepared = early.prepareWithReferencesForWorkspace(input), read = early.readDuplicateCount;
+  assert.equal(read.name, 'readDuplicateCount'); assert.equal(read.length, 0);
+  assert.throws(read, error => error.name === 'ReferenceError'); assert.equal(reads, 0);
+  assert.equal(prepared.createContextForWorkspace(contextInput), context); assert.equal(reads, 0);
+  for (const value of [3, 0, undefined, null, {}]) { count = value; assert.equal(read('ignored'), value); }
+  for (const stage of ['prepare', 'build', 'analysis']) {
+    failure = stage;
+    if (stage === 'analysis') current = Object.freeze({ get analysis() { throw marker; }, redundancy: owner });
+    assert.throws(() => stage === 'prepare' ? early.prepareWithReferencesForWorkspace(input) : prepared.createContextWithAnnotationDrag(contextInput), error => error === marker);
+    failure = null; assert.equal(read(), count); current = context;
+  }
+  failure = 'count'; assert.throws(read, error => error === marker); failure = null;
+  assert.throws(other.readDuplicateCount, error => error.name === 'ReferenceError');
+  for (const value of [undefined, null]) {
+    current = Object.freeze({ analysis: {}, redundancy: value }); prepared.createContextWithAnnotationDrag(contextInput);
+    assert.throws(read, error => error.name === 'TypeError');
+  }
+});

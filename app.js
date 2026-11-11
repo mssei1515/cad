@@ -16,7 +16,7 @@
 
 
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
-  const { refreshConstraintAnalysis, prepareWithReferencesForWorkspace: prepareSketchSolving } = window.SketchSolvingFeature.prepare();
+  const { refreshConstraintAnalysis, readDuplicateCount, prepareWithReferencesForWorkspace: prepareSketchSolving } = window.SketchSolvingFeature.prepare();
   const annotationPreparation = window.AnnotationFeature.prepare();
   const propertiesPreparation = window.PropertiesDisplay.prepare();
   const { createWithSelection: createBlockCommandsWithSelection, update: updateBlockUI } = window.BlockEditingFeature.prepareCommandsWithView();
@@ -29,7 +29,7 @@
   const ctx = canvas.getContext("2d");
   const pngExportLifecycle = window.PngExport.prepare();
   const presentation = window.PresentationFeature.create({
-    document, storage: () => localStorage, readDuplicateCount: () => constraintRedundancy.count,
+    document, storage: () => localStorage, readDuplicateCount,
   });
   const { profiler: interactionProfiler,
     log, setHint, updateUI, updateGeometrySelectionUI, draw, updateToolbar, updateStatusUI, updateHistoryButtons } = presentation;
