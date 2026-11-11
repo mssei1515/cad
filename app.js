@@ -26,6 +26,7 @@
 
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const annotationPreparation = window.AnnotationFeature.prepare();
+  const propertiesPreparation = window.PropertiesDisplay.prepare();
   const { createForEditing: createSelectionEditing, copy: copySelectionToClipboard,
     paste: pasteGeometryClipboard } = window.SelectionEditingFeature.prepare();
   const { createForWorkspace: createHistoryFeature, createBlockHistory: createBlockEditHistory, record: recordHistory } = window.HistoryController.prepare();
@@ -94,7 +95,7 @@
     prepareParameterNamespace,
     refreshConstraintAnalysis, updateDocumentName: () => updateDocumentNameUI(), updateToolbar,
     renderSketch: () => sketchTreeView.render(), updateBlockUI,
-    renderProperties: () => propertiesView.render(selectedPropertiesTarget()), readSketchMoving: sketchNavigation.readMoving,
+    renderProperties: propertiesPreparation.render, readSketchMoving: sketchNavigation.readMoving,
     updateStatusUI, updateConstraintButtons, syncDimensionInput: () => syncDimensionValueInput(),
     refreshSketchSelection: () => sketchTreeView.refreshSelection(),
   });
@@ -268,7 +269,7 @@
   });
   const annotationFeature = createAnnotationFeature({
     ctx, viewport, surface: canvasSurface, editingScope: editingScopeBinding, sessions: operationSessions,
-    placement: dimensionPlacement, readAppearance: () => appearanceEditing,
+    placement: dimensionPlacement, readAppearance: propertiesPreparation.readAppearance,
     readExportFrame: () => pngRendering.frame, canvasThemeColor,
     constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand,
     startDistanceResolution, clearSelection, updateToolbar,
@@ -711,13 +712,12 @@
 
 
   const { selection: propertiesSelection,
-    createEditingWithViewForWorkspace: createPropertiesForEditing } = window.PropertiesDisplay.createForWorkspace({
+    createEditingWithViewForWorkspace: createPropertiesForEditing } = propertiesPreparation.createForWorkspace({
     document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
     operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
   const { visibilityIsHidden: selectionVisibilityIsHidden,
     selectedDisplayTarget: selectedPropertiesTarget } = propertiesSelection;
-  function toggleSelectedVisibility() { return selectionVisibilityCommand.toggle(); }
 
   createToolbarControls({ selection: propertiesSelection, sketches: sketchContext });
 
@@ -787,7 +787,7 @@
       toolbarSvgMarkup, constraintToolbarIcon, findLineFixedConstraint, geometryInstanceTypeLabel: authoringFeedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: authoringFeedback.hatchPatternTypeLabel },
     escapeHtml, closeCanvasContextMenu, moveCommand: sketchMoveCommand, deletion: sketchDeletionCommand,
     blockEditor, editingScope: editingScopeBinding, solveState: sketchSolveResultState, dimensionScope: dimensionPresentationScope,
-    deleteElements, deleteCurrentSelection, toggleSelectedVisibility, fixedOperands: fixedOperandCommand,
+    deleteElements, deleteCurrentSelection, toggleSelectedVisibility: propertiesPreparation.toggleSelectedVisibility, fixedOperands: fixedOperandCommand,
   });
   const { applyWidth: applySketchTreeWidth } = sketchTreeView;
   sketchNavigation.startContext();
@@ -832,8 +832,7 @@
 
 
 
-  const { editing: { appearanceEditing, visibility: selectionVisibilityCommand }, appearanceUI,
-    view: propertiesView } = createPropertiesForEditing({
+  const { appearanceUI } = createPropertiesForEditing({
     editingScope: editingScopeBinding, viewport, checkpoint: editingCheckpoint, parameters: parameterStabilization,
     projection: sketchProjectionFeature, projectionEditing: sketchProjectionEditing, annotationFeature,
     isGeometryMode, toggleSketchVisibility, recordHistory, escapeHtml,
@@ -1037,7 +1036,7 @@
   const workspaceControls = toolbarPresentation.prepareWorkspace({
     window, canvasViewControls, layout: canvasWorkspaceLayout,
     parameters: parameterEditor, appearance: appearanceUI, blocks: blockView,
-    editing: { undo: undoHistory, redo: redoHistory, toggleVisibility: toggleSelectedVisibility, deleteSelection: deleteCurrentSelection, annotation: annotationCommand },
+    editing: { undo: undoHistory, redo: redoHistory, toggleVisibility: propertiesPreparation.toggleSelectedVisibility, deleteSelection: deleteCurrentSelection, annotation: annotationCommand },
     drawing: { centerline: centerlineCommand, circleCenterCross: circleCenterCrossCommand,
       projection: sketchProjectionCommand, instances: geometryInstanceCommand, fillet: filletCommand,
       blockCreation: blockDefinitionCommand, offset: offsetCommand, spline: splineCommand, hatch: hatchCommand },

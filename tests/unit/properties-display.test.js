@@ -340,7 +340,10 @@ function workspaceFixture(composed, onSelectionReady, probe) {
   const annotationFeature = { materialize: e.materializeAnchor, command: { addLeader: item => { f.calls.push(['leader', item]); return 'leader-result'; } } };
   const inputs = { document: f.document, documentWorkspace, readServices, interaction, presentation,
     operations: { sources: operations.sources, placement: operations.placement, blocks: operations.blocks } };
-  const composition = composed ? w.PropertiesDisplay.createForWorkspace(inputs) : w.PropertiesDisplay.createFeature({
+  const owner = composed === 'owned' ? w.PropertiesDisplay.prepare() : null;
+  if (owner && probe) probe.owner = owner;
+  if (owner) probe?.beforeWorkspace?.(owner, f);
+  const composition = owner ? owner.createForWorkspace(inputs) : composed ? w.PropertiesDisplay.createForWorkspace(inputs) : w.PropertiesDisplay.createFeature({
     document: f.document, documentModel: f.model, currentScope: current, canvasSelection: f.selection,
     readServices, sketchContext: f.sketchContext, hatchAppearanceForDisplay: w.HatchData.hatchAppearanceForDisplay, operations });
   if (onSelectionReady) onSelectionReady(composition.selection, f);
@@ -369,7 +372,7 @@ function workspaceFixture(composed, onSelectionReady, probe) {
     return viewInputs;
   }
   try {
-    if (composed === 'combined') { editor = composition.createEditingWithViewForWorkspace(editingInputs, readViewOptions); view = editor.view; }
+    if (composed === 'combined' || composed === 'owned') { editor = composition.createEditingWithViewForWorkspace(editingInputs, readViewOptions); view = editor.view; }
     else {
       editor = composed ? composition.createEditingForWorkspace(editingInputs) : composition.createEditing(e);
       view = composed ? editor.createViewForWorkspace(readViewOptions()) : editor.createViewForEditing({ ...v, ...f.editingActors,
@@ -378,7 +381,7 @@ function workspaceFixture(composed, onSelectionReady, probe) {
     }
   } finally { for (const [name, original] of originals) w[name] = original; }
   assert.deepEqual(f.calls, []); assert.equal(f.state.operationReads, undefined); assert.equal(f.state.scopeReads, undefined);
-  return { ...f, view, editor, composition, propertySelection: composition.selection,
+  return { ...f, view, editor, composition, owner, workspaceInputs: inputs, editingInputs, viewInputs, readViewOptions, propertySelection: composition.selection,
     snapshot() { return JSON.parse(JSON.stringify({ calls: f.calls, model: f.model, html: f.panel.innerHTML,
       operationReads: f.state.operationReads, scopeReads: f.state.scopeReads })); } };
 }
@@ -494,14 +497,14 @@ test('direct Properties query functions retain live operations and original fail
 
 test('combined Properties construction returns the real editing, Appearance UI and View in the same constructor order', () => {
   const expected = ['PropertyEditingFeature', 'AppearanceUI', 'PropertiesController', 'PropertyRows', 'PropertyPresentation', 'PropertiesContent', 'PropertiesView'];
-  for (const composed of [true, 'combined']) {
+  for (const composed of [true, 'combined', 'owned']) {
     const probe = {}, f = workspaceFixture(composed, undefined, probe);
     assert.deepEqual(probe.order, expected); assert.deepEqual(f.calls, []); assert.equal(f.state.ready, false);
     assert.equal(probe.viewOptionsReads, 1); assert.deepEqual(probe.viewOptionsOrder, expected.slice(0, 2));
     assert.equal(f.editor.editing, probe.results.PropertyEditingFeature); assert.equal(f.editor.appearanceUI, probe.results.AppearanceUI);
     assert.equal(f.view, probe.results.PropertiesView); assert.equal(probe.inputs.AppearanceUI.appearanceEditing, f.editor.editing.appearanceEditing);
     assert.equal(probe.inputs.PropertiesController.selectedPropertiesTarget, f.composition.selection.selectedDisplayTarget);
-    if (composed === 'combined') { assert.ok(Object.isFrozen(f.editor)); assert.deepEqual(Object.keys(f.editor), ['editing', 'appearanceUI', 'view']); }
+    if (composed === 'combined' || composed === 'owned') { assert.ok(Object.isFrozen(f.editor)); assert.deepEqual(Object.keys(f.editor), ['editing', 'appearanceUI', 'view']); }
     f.state.ready = true; const point = f.point('P1'); f.selection.set('points', [point]);
     assert.equal(f.composition.selection.selectedDisplayTarget().item, point); f.view.render(f.composition.selection.selectedDisplayTarget());
     assert.ok(f.panel.innerHTML.length > 0); assert.equal(f.selection.points[0], point);
@@ -510,7 +513,7 @@ test('combined Properties construction returns the real editing, Appearance UI a
 
 test('combined Properties construction stops at the same failing stage without model, DOM or operation reads', () => {
   const expected = ['PropertyEditingFeature', 'AppearanceUI', 'PropertiesController', 'PropertyRows', 'PropertyPresentation', 'PropertiesContent', 'PropertiesView'];
-  for (const composed of [true, 'combined']) for (const [index, failure] of [...expected, 'viewOptions'].entries()) {
+  for (const composed of [true, 'combined', 'owned']) for (const [index, failure] of [...expected, 'viewOptions'].entries()) {
     const error = new Error(failure), probe = { failure, error };
     assert.throws(() => workspaceFixture(composed, undefined, probe), value => value === error);
     assert.deepEqual(probe.order, expected.slice(0, failure === 'viewOptions' ? 2 : index + 1)); assert.deepEqual(probe.scene.calls, []);
@@ -518,5 +521,92 @@ test('combined Properties construction stops at the same failing stage without m
     assert.equal(probe.scene.state.ready, false); assert.equal(probe.scene.state.operationReads, undefined); assert.equal(probe.scene.state.scopeReads, undefined);
     assert.equal(probe.scene.model.points.length, 0); assert.equal(probe.scene.panel.innerHTML, ''); assert.equal(probe.scene.selection.hasSelection(), false);
     assert.equal(Object.hasOwn(w, '__jot2dTest'), false);
+    if (composed === 'owned') assertPropertiesPortsUninitialized(probe.owner);
   }
+});
+
+function assertPropertiesPortsUninitialized(owner) {
+  for (const [operation, binding] of [['render', 'propertiesView'], ['readAppearance', 'appearanceEditing'], ['toggleSelectedVisibility', 'selectionVisibilityCommand']]) {
+    assert.throws(owner[operation], { name: 'ReferenceError', message: `Cannot access '${binding}' before initialization` });
+  }
+}
+
+test('prepared Properties keeps native components and the original method, target, receiver, argument and failure boundaries', () => {
+  const original = w.PropertiesDisplay, events = [], result = {}, marker = new Error('properties failed'), inputs = {}; let failure;
+  const appearanceEditing = Object.freeze({}), target = {};
+  const visibility = Object.freeze({ toggle() { assert.equal(this, visibility); assert.equal(arguments.length, 0); events.push('toggle'); if (failure === 'toggle') throw marker; return result; } });
+  const view = Object.freeze(Object.defineProperty({}, 'render', { enumerable: true, get() {
+    assert.equal(this, view); events.push('method'); if (failure === 'method') throw marker;
+    return function (value) { 'use strict'; assert.equal(this, view); assert.equal(arguments.length, 1); assert.equal(value, target);
+      events.push('render'); if (failure === 'render') throw marker; return result; };
+  } }));
+  const selectedDisplayTarget = function () { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0);
+    events.push('target'); if (failure === 'target') throw marker; return target; };
+  const component = Object.freeze({ editing: Object.freeze({ appearanceEditing, visibility }), appearanceUI: Object.freeze({}), view });
+  let args;
+  const native = Object.freeze({ selection: Object.freeze({ selectedDisplayTarget }), other: () => {},
+    createEditingWithViewForWorkspace: function (options, read) { 'use strict'; assert.equal(this, undefined); args = [...arguments]; read(); return component; } });
+  let creates = 0;
+  w.PropertiesDisplay = Object.freeze({ ...original, createForWorkspace(options) { assert.equal(this, w.PropertiesDisplay); assert.equal(arguments.length, 1); assert.equal(options, inputs); creates++; return native; } });
+  try {
+    const owner = w.PropertiesDisplay.prepare(); assert.equal(creates, 0); assertPropertiesPortsUninitialized(owner);
+    const workspace = owner.createForWorkspace(inputs); assert.equal(creates, 1); assert.equal(workspace.selection, native.selection); assert.equal(workspace.other, native.other);
+    assert.equal(workspace.createEditingWithViewForWorkspace.length, 2); assertPropertiesPortsUninitialized(owner);
+    const options = {}, read = () => assertPropertiesPortsUninitialized(owner), extra = {};
+    assert.equal(workspace.createEditingWithViewForWorkspace(options, read, extra), component); assert.deepEqual(args, [options, read, extra]);
+    assert.equal(owner.readAppearance('ignored'), appearanceEditing); assert.equal(owner.render('ignored'), result);
+    assert.deepEqual(events, ['method', 'target', 'render']); events.length = 0;
+    assert.equal(owner.toggleSelectedVisibility('ignored'), result); assert.deepEqual(events, ['toggle']);
+    for (const name of ['render', 'readAppearance']) { assert.equal(owner[name].length, 0); assert.equal(Object.hasOwn(owner[name], 'prototype'), false); }
+    assert.equal(owner.render.name, 'renderProperties'); assert.equal(owner.readAppearance.name, 'readAppearance');
+    for (const stage of ['method', 'target', 'render']) {
+      failure = stage; events.length = 0; assert.throws(owner.render, error => error === marker);
+      assert.deepEqual(events, ['method', 'target', 'render'].slice(0, ['method', 'target', 'render'].indexOf(stage) + 1));
+    }
+    failure = 'toggle'; assert.throws(owner.toggleSelectedVisibility, error => error === marker);
+  } finally { w.PropertiesDisplay = original; }
+});
+
+test('prepared Properties stays cold until the full View is ready and preserves real rendering, appearance, visibility and locked input', () => {
+  const snapshots = [];
+  for (const owned of [false, true]) {
+    const probe = { beforeWorkspace: assertPropertiesPortsUninitialized, beforeEditing: assertPropertiesPortsUninitialized, readViewOptions: assertPropertiesPortsUninitialized };
+    const f = workspaceFixture(owned ? 'owned' : 'combined', undefined, probe);
+    const selectedPropertiesTarget = f.propertySelection.selectedDisplayTarget;
+    const render = owned ? f.owner.render : () => f.view.render(selectedPropertiesTarget());
+    const appearance = owned ? f.owner.readAppearance : () => f.editor.editing.appearanceEditing;
+    const toggle = owned ? f.owner.toggleSelectedVisibility : () => f.editor.editing.visibility.toggle();
+    assert.deepEqual(f.calls, []); assert.equal(f.state.operationReads, undefined); assert.equal(appearance(), f.editor.editing.appearanceEditing);
+    assert.equal(f.editor.editing, probe.results.PropertyEditingFeature); assert.equal(f.editor.appearanceUI, probe.results.AppearanceUI); assert.equal(f.view, probe.results.PropertiesView);
+    f.state.ready = true; const point = f.point('P1'); f.selection.set('points', [point]); render();
+    f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#123456') }); assert.equal(point.appearance.color, '#123456');
+    toggle(); assert.equal(point.appearance.visible, false); render(); toggle(); assert.equal(point.appearance.visible, true);
+    f.model.sketches.find(s => s.id === point.sketchId).locked = true; render();
+    f.panel.onchange({ target: new Input({ appearanceKey: 'color' }, '#abcdef') }); assert.equal(point.appearance.color, '#123456');
+    assert.equal(f.selection.points[0], point); snapshots.push(f.snapshot());
+  }
+  assert.deepEqual(snapshots[1], snapshots[0]);
+});
+
+test('prepared Properties retains the View and its producing selection through workspace replacement and failed View generation', () => {
+  const original = w.PropertiesDisplay, marker = new Error('new View failed'); let current, fail = false;
+  const make = id => {
+    const appearanceEditing = Object.freeze({ id }), visibility = Object.freeze({ toggle: () => 'toggle-' + id });
+    const selectedDisplayTarget = function () { 'use strict'; assert.equal(this, undefined); return id; };
+    const view = Object.freeze({ render(target) { assert.equal(this, view); assert.equal(target, id); return 'view-' + id; } });
+    const result = Object.freeze({ editing: Object.freeze({ appearanceEditing, visibility }), appearanceUI: Object.freeze({}), view });
+    return Object.freeze({ selection: Object.freeze({ selectedDisplayTarget }), createEditingWithViewForWorkspace() { if (fail) throw marker; return result; } });
+  };
+  const a = make('A'), b = make('B'); w.PropertiesDisplay = Object.freeze({ ...original, createForWorkspace() { return current; } });
+  try {
+    const owner = w.PropertiesDisplay.prepare(); current = a; owner.createForWorkspace({}).createEditingWithViewForWorkspace({}, () => ({}));
+    assert.equal(owner.readAppearance().id, 'A'); current = b; const pending = owner.createForWorkspace({});
+    current = a; owner.createForWorkspace({}); assert.equal(owner.render(), 'view-A');
+    fail = true; assert.throws(() => pending.createEditingWithViewForWorkspace({}, () => ({})), error => error === marker);
+    assert.equal(owner.render(), 'view-A'); assert.equal(owner.toggleSelectedVisibility(), 'toggle-A');
+    fail = false; pending.createEditingWithViewForWorkspace({}, () => ({}));
+    assert.equal(owner.render(), 'view-B'); assert.equal(owner.readAppearance().id, 'B'); assert.equal(owner.toggleSelectedVisibility(), 'toggle-B');
+    const other = w.PropertiesDisplay.prepare(); assertPropertiesPortsUninitialized(other); current = a;
+    other.createForWorkspace({}).createEditingWithViewForWorkspace({}, () => ({})); assert.equal(other.render(), 'view-A'); assert.equal(owner.render(), 'view-B');
+  } finally { w.PropertiesDisplay = original; }
 });
