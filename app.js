@@ -710,8 +710,7 @@
     document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
     operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
-  const { visibilityIsHidden: selectionVisibilityIsHidden,
-    selectedDisplayTarget: selectedPropertiesTarget } = propertiesSelection;
+  const { visibilityIsHidden: selectionVisibilityIsHidden } = propertiesSelection;
 
   createToolbarControls({ selection: propertiesSelection, sketches: sketchContext });
 
@@ -1108,12 +1107,12 @@
         persistence: documentPersistence, readSelectedGeometry: readTestSelectedGeometry, scheduler: pointerMoveScheduler },
     });
     const { display: canvasTestDriver } = canvasTestSupport;
-    const propertiesTestSupport = window.PropertiesTestDriver.createBrowserSupport({
+    const propertiesTestSupport = window.PropertiesTestDriver.createBrowserSupportForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, blockQueries: blockEditingQueries,
       selectionHighlight, presentation, display: geometryDisplay, placement: dimensionPlacement, viewport, document, canvas, fixPointBtn,
-      readHistory: readTestHistory, resetModelState, clearSelection, resetHistory, fitAllGeometryToViewport: canvasScene.fit.fitAllGeometryToViewport, pushModelConstraint: constraintInsertion.push,
-      assignConstraintSketchId: constraintInsertion.assignSketch, recordHistory, canvasThemeColor, isSidebarHighlightedElement, selectedPropertiesTarget,
-      findLineFixedConstraint, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+      readHistory: readTestHistory, resetModelState, clearSelection, resetHistory,
+      fit: canvasScene.fit, insertion: constraintInsertion, recordHistory, canvasThemeColor, isSidebarHighlightedElement,
+      propertiesSelection, fixedState: fixedStateQueries, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
     });
     const sketchTreeTestApi = window.SketchTreeTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,

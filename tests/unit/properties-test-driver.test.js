@@ -82,22 +82,27 @@ function browserFixture(composed=true) {
  options.selectionHighlight=p.selectionHighlight;Object.assign(options.selectionHighlight,{constraintHighlightNodes:p.constraintHighlightNodes,isSidebarHoveredElement:p.isSidebarHoveredElement});
  const methods=['createStrokeStyleCases','createHighlightObservation','createHoverKeyObservation','createThemeObservation','createInspectionFixture','createAppearanceAction','createHoverObservation','createAppearanceObservation','createFixture','createPropertiesObservation','createFixedObservation'];
  const fields=['strokeStyleCases','sidebarHighlightObservation','sidebarHoverKeyObservation','themeObservation','sidebarInspectionFixture','appearanceTestAction','hoverDisplayObservation','propertyAppearanceObservation','propertiesFixture','propertiesObservation','fixedObservation'];
- const factories=composed==='cohort'?null:composed?w.PropertiesTestDriver.createBrowserFactories(options):Object.fromEntries(methods.map(method=>[method,()=>w.PropertiesTestDriver[method](p)]));
- assert.deepEqual(events,[]);const browserSupport=composed==='cohort'?w.PropertiesTestDriver.createBrowserSupport(options):null;
+ const factories=['cohort','workspace'].includes(composed)?null:composed?w.PropertiesTestDriver.createBrowserFactories(options):Object.fromEntries(methods.map(method=>[method,()=>w.PropertiesTestDriver[method](p)]));
+ const ownedOptions={...options,fit:Object.freeze({fitAllGeometryToViewport:options.fitAllGeometryToViewport}),
+  insertion:Object.freeze({push:options.pushModelConstraint,assignSketch:options.assignConstraintSketchId}),
+  propertiesSelection:Object.freeze({selectedDisplayTarget:options.selectedPropertiesTarget}),fixedState:Object.freeze({findLineFixedConstraint:options.findLineFixedConstraint})};
+ assert.deepEqual(events,[]);const browserSupport=composed==='workspace'?w.PropertiesTestDriver.createBrowserSupportForWorkspace(ownedOptions):composed==='cohort'?w.PropertiesTestDriver.createBrowserSupport(options):null;
  const support=Object.fromEntries(methods.map((method,index)=>[method,browserSupport?browserSupport[fields[index]]:factories[method]()]));assert.deepEqual(events,[]);state.ready=true;
- return{w,p,options,state,events,support,factories,browserSupport,fields,selection,hover,marker,original,model,LineFixedConstraint,seedLine(){const a=addPoint(0,0,false,'explicit'),b=addPoint(10,0,false,'endpoint');return addLine(a,b);}};
+ return{w,p,options,ownedOptions,state,events,support,factories,browserSupport,fields,selection,hover,marker,original,model,LineFixedConstraint,seedLine(){const a=addPoint(0,0,false,'explicit'),b=addPoint(10,0,false,'endpoint');return addLine(a,b);}};
 }
 
 test('Properties support cohort is cold, independent and atomic when the final capability cannot be constructed',()=>{
- const f=browserFixture('cohort');assert.ok(Object.isFrozen(f.browserSupport));assert.deepEqual(Object.keys(f.browserSupport),f.fields);
+ for(const mode of ['cohort','workspace']) {
+ const f=browserFixture(mode),build=()=>mode==='workspace'?f.w.PropertiesTestDriver.createBrowserSupportForWorkspace(f.ownedOptions):f.w.PropertiesTestDriver.createBrowserSupport(f.options);assert.ok(Object.isFrozen(f.browserSupport));assert.deepEqual(Object.keys(f.browserSupport),f.fields);
  assert.equal(f.state.sequence,0);assert.equal(f.state.model,f.original);assert.equal(f.selection.hasSelection(),false);assert.deepEqual(f.events,[]);
- f.state.ready=false;const next=f.w.PropertiesTestDriver.createBrowserSupport(f.options);
+ f.state.ready=false;const next=build();
  assert.notEqual(next,f.browserSupport);for(const key of f.fields){assert.ok(Object.isFrozen(next[key]));assert.notEqual(next[key],f.browserSupport[key]);}
  const before=JSON.stringify(f.state.model);
  Object.defineProperty(f.w.GeometrySolver,'LineFixedConstraint',{configurable:true,get(){throw f.marker;}});
- assert.throws(()=>f.w.PropertiesTestDriver.createBrowserSupport(f.options),error=>error===f.marker);
+ assert.throws(build,error=>error===f.marker);
  assert.equal(JSON.stringify(f.state.model),before);assert.equal(f.state.sequence,0);assert.deepEqual(f.events,[]);
  assert.equal(Object.hasOwn(f.w,'__jot2dTest'),false);
+ }
 });
 
 test('Properties browser factories retain separate lazy creation stages and shared owners without querying editing state',()=>{
@@ -107,7 +112,7 @@ test('Properties browser factories retain separate lazy creation stages and shar
 });
 
 test('Properties observations use live Workspace, Selection, hover, style, theme, DOM and history owners',()=>{
- for(const composed of [false,true,'cohort']){
+ for(const composed of [false,true,'cohort','workspace']){
   const f=browserFixture(composed),s=f.support;f.state.model=f.model();const line=f.seedLine();f.selection.set('lines',[line]);f.hover.update({line});f.state.hoverIds=[line.id];f.state.treeIds=[line.id];f.state.highlight=[line.p1];
   const appearance=s.createAppearanceObservation.appearance('line',line.id);assert.equal(appearance.effective,f.state.effective);
   const hovered=s.createHoverObservation.state('line',line.id);assert.equal(hovered.canvasHovered,true);assert.equal(hovered.sidebarHovered,true);assert.equal(hovered.treeHovered,true);assert.equal(hovered.color,'hover');
@@ -122,16 +127,16 @@ test('Properties observations use live Workspace, Selection, hover, style, theme
 test('Properties fixture creation preserves editing and history order, selection identity and live reset scope',()=>{
  const normalized=value=>JSON.parse(JSON.stringify(value));
  for(const scenario of ['mixed','fixed','inspection','stroke']){
-  const runs=[];for(const composed of [false,true,'cohort']){const f=browserFixture(composed),s=f.support;f.events.length=0;let result;
+  const runs=[];for(const composed of [false,true,'cohort','workspace']){const f=browserFixture(composed),s=f.support;f.events.length=0;let result;
    if(scenario==='mixed')result=s.createFixture.resetProperties(true);if(scenario==='fixed')result=s.createFixture.resetFixed();if(scenario==='inspection')result=s.createInspectionFixture.reset();if(scenario==='stroke')result=s.createStrokeStyleCases.cases();
    assert.notEqual(f.state.model,f.original);assert.equal(f.original.points.length,0);if(scenario==='mixed'){assert.equal(f.selection.lines[0],f.state.model.lines[0]);assert.equal(f.selection.circles[0],f.state.model.circles[0]);}
    runs.push({result:normalized(result),events:f.events.slice(),model:normalized(f.state.model)});
-  }assert.deepEqual(runs[1],runs[0],scenario);assert.deepEqual(runs[2],runs[0],scenario);
+  }assert.deepEqual(runs[1],runs[0],scenario);assert.deepEqual(runs[2],runs[0],scenario);assert.deepEqual(runs[3],runs[0],scenario);
  }
 });
 
 test('Properties appearance actions retain live selection, Block invalidation, receiver and partial-state error boundaries',()=>{
- for(const composed of [false,true,'cohort'])for(const failure of [null,'normalize','properties','draw']){
+ for(const composed of [false,true,'cohort','workspace'])for(const failure of [null,'normalize','properties','draw']){
   const f=browserFixture(composed),block={id:'B',appearanceOverride:{color:'old'}},prior=block.appearanceOverride;f.selection.set('blockInstances',[block]);f.state.fail=failure;f.events.length=0;
   if(failure)assert.throws(()=>f.support.createAppearanceAction.set({color:'new'}),error=>error===f.marker);else assert.equal(f.support.createAppearanceAction.set({color:'new'}),true);
   assert.equal(block.appearanceOverride===prior,failure==='normalize');assert.equal(prior.color,'old');
