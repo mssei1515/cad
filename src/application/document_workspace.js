@@ -1,28 +1,38 @@
 /* Compose Document data, editing scope queries and ID owners without UI or history. */
 (() => {
   "use strict";
-  function create({ applicationText, constraintGraphNodes, nextHatchIndex }) {
+  function create(options) {
+    const { applicationText, constraintGraphNodes, nextHatchIndex: suppliedHatchIndex } = options;
+    let completedBinding;
+    function requireEditingScopeBinding() {
+      if (completedBinding === undefined) throw new ReferenceError("Cannot access 'editingScopeBinding' before initialization");
+      return completedBinding.value;
+    }
+    const nextHatchIndex = () => requireEditingScopeBinding().current.nextHatchIndex;
+    const currentSketches = () => requireEditingScopeBinding().current.sketches;
     const document = window.DocumentState.create();
     const workspace = window.EditingWorkspace.create(document);
     const parameters = window.ParameterNamespace.create({ currentParameterNamespace: workspace.current, applicationText });
     const sketches = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
     const geometryIds = window.GeometryIds.create();
     const documentIds = window.DocumentIds.create();
-    const reservation = window.DocumentIds.createReservation({ geometryIds, documentIds, nextHatchIndex });
+    const reservation = window.DocumentIds.createReservation({ geometryIds, documentIds,
+      nextHatchIndex: "nextHatchIndex" in options ? suppliedHatchIndex : nextHatchIndex });
     function createGeometryReadServices({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead }) {
       const { elementSketchId, sketchById, isRootSketch, activeSketchId } = sketches;
       return window.GeometryReadServices.createWithHatches({ document, currentScope: workspace.current, currentSketches,
         prepareBlocks, elementSketchId, applicationText, sketchById, isRootSketch, activeSketchId,
         showHiddenElements, viewportScale, profileRead });
     }
-    function createReadContext({ currentSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead }) {
+    function createReadContext(options) {
+      const { currentSketches: suppliedSketches, prepareBlocks, showHiddenElements, viewportScale, profileRead } = options;
       let currentPersistence, currentApplication;
       function requirePersistence(binding) {
         if (currentPersistence === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
         return currentPersistence;
       }
       function ensureBlockState() { return requirePersistence("documentPreparation").preparation.blocks(); }
-      const services = createGeometryReadServices({ currentSketches,
+      const services = createGeometryReadServices({ currentSketches: "currentSketches" in options ? suppliedSketches : currentSketches,
         prepareBlocks: prepareBlocks === undefined ? ensureBlockState : prepareBlocks, showHiddenElements, viewportScale, profileRead });
       function serializeConstraint(c) { return requirePersistence("constraintCodecs").codecs.serialize(c); }
       function deserializeConstraint(...args) { return requirePersistence("constraintCodecs").codecs.deserialize(...args); }
@@ -63,7 +73,9 @@
         const insertion = window.ConstraintCommitCommand.createInsertion({
           currentScope: () => binding.current, currentParameterNamespace: workspace.current,
           activeSketchId, isDrawableSketch, firstDrawableSketchId, ensureDimensionParameter });
-        return Object.freeze({ binding, solver, dimensionQueries, insertion });
+        const editing = Object.freeze({ binding, solver, dimensionQueries, insertion });
+        completedBinding = Object.freeze({ value: binding });
+        return editing;
       }
       function createPersistence({ placement, pointUsage, readEditingScope, readBlockEditor, version,
         constraintReferencesPoint, separateSharedSketchProjectionTargetPoints, normalizeArcSweeps }) {

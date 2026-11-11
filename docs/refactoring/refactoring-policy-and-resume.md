@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の重複拘束数照会単位ではapp.jsは1,170行、非空白737行。AST監査ではroot200文・360束縛、構築423非空白行とbind35行、別名・設定77行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12の結線済みscope照会単位ではapp.jsは1,169行、非空白736行。AST監査ではroot200文・360束縛、構築422非空白行とbind35行、別名・設定77行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：重複拘束数の表示照会を解析ownerへ移管（2026-11-12）
+### 最新：Hatch採番とSketch外観の結線済みscope照会をDocumentへ移管（2026-11-12）
+
+開始基準developはe36e8ee2d66fe4de4ee89b84682457d610552b9c、作業branchはcodex/workspace-bound-scope-reads。開始週枠残量53%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+DocumentWorkspaceは、同じWorkspaceで最後に完成したcreateEditingScopeの実EditingScopeBinding参照を保持し、既定のnextHatchIndexとcurrentSketchesをそのcurrentから操作時に読む。app.jsは二つの後段binding参照callbackを組み立てない。採番は既存DocumentIds／GeometryIds、外観解決はGeometryReadServices、現在scopeとSolverの結線はEditingScopeBindingが引き続き所有する。
+
+binding→model queries→insertion→immutable cohort完成の従来順を保ち、全段階が成功してから実bindingの完成参照だけを公開する。最初の完成前は元のeditingScopeBinding初期化前ReferenceError、再構築失敗時は以前の完成参照を維持する。raw createScopeBindingでは公開しない。親／read context生成時にはscope・Sketch配列・Hatch番号を読まない。default callbackの名前nextHatchIndex／currentSketches・arity 0、実scopeのgetter receiver・返値／元例外と余分な引数の無視を保持する。実modelや配列のcopy・cacheは作らない。
+
+Workspaceを直接activate／restoreしただけでは結線先を切り替えず、最後にboundとなったscopeのSketch配列・Hatch番号を使う。binding.activateが切り替えた実scopeを両方の読取りとSolverが共有する。予約処理はgeometry／attachments確保→Hatch番号読取→scope counter確保の元の順序を保ち、未初期化やgetter失敗時にも先行した予約を戻さない。明示readerはown／継承とundefined／nullを含め優先する。raw createGeometryReadServices／createScopeBindingと各native constructor本体、UI・操作・履歴・保存形式v26は不変。新file・global・汎用setter・registry・全体contextは追加しない。Document側の完成参照を一つ追加するが、scope値を二重所有しない。フォルダ配置は既存ownerに合致しているため維持する。
+
+app.jsは1,170→1,169行（1行減）、非空白737→736行。root200文・360束縛、構築423→422行・109文、別名77行・bind35行・test hooks151行。ASTで初期化前のeditingScopeBinding参照は3→1か所となり、Hatch番号・Sketch配列の二中継がなくなった。Parameter編集向けの遅延scope readerは残る。rootの後段可変参照・代入を追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体46件が成功。実Hatch counter・外観reader・Workspace・Solverを使い、直接activate／restoreとbinding切替を区別した。未完成時の部分予約、native binding／query／insertion各段階での未公開と再構築失敗時の前回参照、raw binding生成の無公開、scope getterのreceiver／元例外、明示／継承readerと低水準生成APIの保持も確認した。ソース逆変換で既存scope・予約処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,652件・関連単体46件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E187件（7file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は残る構築422行・109文と、Parameter編集向けの後段scope readerを監査する。今回の二つのreaderが要求するbound scopeをWorkspace.currentへ置換しない。完成済みbinding参照を保持する責務と、model値を複製・cacheする責務を混同せず、巨大contextでrootを短くしない。
+
+### 重複拘束数の表示照会を解析ownerへ移管（2026-11-12）
 
 開始基準developはa823a365ca789623e0b92c521c77617e36791de2、作業branchはcodex/solving-duplicate-count。開始週枠残量54%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
