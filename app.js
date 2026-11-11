@@ -26,6 +26,8 @@
 
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const annotationPreparation = window.AnnotationFeature.prepare();
+  const { createForEditing: createSelectionEditing, copy: copySelectionToClipboard,
+    paste: pasteGeometryClipboard } = window.SelectionEditingFeature.prepare();
   const { createForWorkspace: createHistoryFeature, createBlockHistory: createBlockEditHistory, record: recordHistory } = window.HistoryController.prepare();
 
 
@@ -602,7 +604,7 @@
 
 
 
-  const { deletion: deletionFeature, clipboard: clipboardFeature } = window.SelectionEditingFeature.createForEditing({
+  const { deletion: deletionFeature, clipboard: clipboardFeature } = createSelectionEditing({
     documentWorkspace, editingScope: editingScopeBinding, readServices: geometryReadServices, interaction: canvasInteraction,
     references: constraintReferences, annotationFeature, annotationLeaderAnchor,
     splineEditing, guardDimensionSymbolDeletion, geometry: geometryCreation, sessions: operationSessions, lineCommand, circularCommands,
@@ -613,10 +615,7 @@
     imageClipboard, isGeometryMode,
   });
   const { remove: deleteElements, removeSelection: deleteCurrentSelection } = deletionFeature;
-  const { session: clipboardSession, command: clipboardCommand, copyableSelectionPayload } = clipboardFeature;
-  function copySelectionToClipboard(options = {}) { return clipboardCommand.copy(options); }
-
-  function pasteGeometryClipboard() { return clipboardCommand.paste(); }
+  const { session: clipboardSession, copyableSelectionPayload } = clipboardFeature;
 
 
   const { selectionBounds: dimensionSelectionBounds, layer: dimensionLayer } = createDimensionTraversal({

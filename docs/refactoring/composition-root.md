@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Clipboardの早期操作と実Command生成をSelection編集へ集約（2026-11-11）
+
+SelectionEditingFeature.prepare（src/application/selection_editing_feature.js）は、早期に渡すcopy／paste portと後段の実Selection編集生成を同じownerで接続する。createForEditingは従来位置で生の同名factoryを同じnamespace receiver・一引数で呼び、成功した実Clipboard command参照だけを保持し、返された実deletion／clipboard recordをそのまま返す。外で作ったcomponentをsetter登録する方式ではなく、payload・cut・paste回数・scope・modelを複製しない。
+
+copy portは旧copySelectionToClipboardと同名・同じoptions={}の既定値で、実Command.copyをmember receiver・一引数で呼ぶ。paste portも旧pasteGeometryClipboardと同名で、実Command.pasteを零引数で呼ぶ。明示null／undefined、余剰引数の破棄、返値・元例外を維持する。未生成時には、実methodやmodelを読む前に旧clipboardCommandの初期化前ReferenceErrorを出す。Deletion／Clipboardいずれの生成失敗でも前に成功したCommandを置き換えず、別prepare間は独立する。早期prepareはclosureと凍結portだけを作り、scope・Selection・DOMやCommandを照会・生成しない。
+
+生のSelectionEditingFeature.createForEditingとDeletion／Clipboard各factory・操作実装は変更しない。実Selection recordのclipboardと実Clipboard recordのcommandは凍結own data propertyであり、Command参照の捕捉を従来rootの取出し直前へ移しても同じ実体になる。Reference Imageのネイティブ入力、Context Menu、Keyboardとtest hooksへ同じ安定portを渡す。削除のWorkspace.currentとコピー／貼付けのbound editingScope.current、Cut拒否・例外後のpayload保持、paste失敗の限定rollback、保存形式v26と通常UIを維持する。配置は既存application／commands／editingのままとし、新module・global・listenerは追加しない。
+
+app.jsは1,260→1,259行（1行減）、非空白815行は不変。root242→241文・405束縛、構文依存辺1,087→1,083、委譲11→9行。早期準備一文の追加で構築114→115文／465→467非空白行、別名・設定98行とtest hooks158行は不変。行数だけを減らす分割ではなく、実生成と操作portの所有を同じ機能へ揃える。200〜500行の全体目標は未完了。
+
+関連単体24件・全単体2,523件・構文639fileが成功。追加三単体は、旧guard・引数／既定値・receiver／返値／元例外、失敗後の前回Commandと独立ownerの保持、実ClipboardCommand／ClipboardSessionを使う旧root委譲との比較を検証する。拒否Cutと削除例外後のpayload、異なるWorkspace／bound scope、paste成功とfinish失敗時のmodel rollback後に回数を戻さない挙動を元のまま照合した。browserでは早期guard、consumer間の同一port、実record・callbackのname／arity・公開204項目のkey／descriptor／型、生成順とnative receiver／引数数／返値／同じ例外が前後一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに挿入し、製品には残さない。
+
+関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
 ## 保存・履歴・Clipboardショートカット設定を入力側へ集約（2026-11-11）
 
 KeyboardInput.createWorkspaceShortcuts（src/application/keyboard_input.js）が、実DocumentFileFeatureのsave／saveAs、実HistoryControllerのundo／redo、明示copy／paste callbackとnative clipboard方針を既存の八field recordへまとめる。app.jsは実files／historyとコピー・貼付けの入口を渡し、八fieldの対応とnativePaste／nativeCopy=trueを直接管理しない。rootの保存専用二別名を除く。既存createとKeyboardInteractionControllerのroutingは変更せず、元の関数を包まずに同じ順序で選ぶ。返却は従来どおりObject prototypeの通常の可変own data propertyで、凍結やgetter化を追加しない。
