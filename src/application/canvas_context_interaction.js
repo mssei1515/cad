@@ -108,7 +108,19 @@
         commandInteraction = result;
         return result;
       }
-      return Object.freeze({ ...scene, createInteraction });
+      function prepareInteraction({ instances, constraints, blockPlacement }) {
+        const cancellation = options.sessions.createCommandCancellation({
+          instances, constraints, blockPlacementCommand: blockPlacement,
+          restoreBlockPlacementPropertiesPanel: blockPlacement.restorePropertiesPanel, updateUI: presentation.updateUI,
+        });
+        function startInteraction(options) {
+          const result = createInteraction({ ...options, cancellation });
+          menu.controller.start();
+          return result;
+        }
+        return startInteraction;
+      }
+      return Object.freeze({ ...scene, createInteraction, prepareInteraction });
     }
     function createSceneForPresentation({ icons, feedback, ...options }) {
       return createSceneForEditing({ ...options, candidates: {

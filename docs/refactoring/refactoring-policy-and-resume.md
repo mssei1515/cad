@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のClipboardテスト入力単位ではapp.jsは1,233行、非空白790行。AST監査ではroot226文・378束縛、構築448非空白行とbind41行、別名・設定91行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のContextライフサイクル単位ではapp.jsは1,231行、非空白788行。AST監査ではroot225文・377束縛、構築448非空白行とbind41行、別名・設定90行、委譲7行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Clipboardを使うテスト支援の入力を実ownerから共有（2026-11-11）
+### 最新：Canvas Contextの取消準備と操作公開・開始を既存ownerへ集約（2026-11-11）
+
+開始基準developは4fb50e1cf8b31bb94c251f330f6689a83c275a47、作業branchはcodex/context-interaction-lifecycle（develop統合・Push後に削除）。開始週枠残量78%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+CanvasContextInteraction.createMenuForWorkspaceのSceneはprepareInteractionを持つ。既存operationSessions.createCommandCancellationを同じ段階で呼び、Context専用の取消機能をclosureへ保持してstartInteractionを返す。取消は同じCanvasCommandCancellationが担当し、Context側でmodeやpending、drawing stateを複製しない。Block placementのreadonly restorePropertiesPanelとPresentationの同じupdateUIを選び、app.jsはその関数別名と取消recordを保持しない。
+
+startInteractionは既存createInteractionの成功後に同じ実Controller.startをmember・引数なしで呼び、実操作recordを返す。取消準備→外部の描画順操作生成→操作生成・成功時公開→listener開始の順を維持する。取消生成失敗では後続を始めず、操作生成失敗では以前の公開操作を保持し、listener登録失敗では新操作と既存の部分登録を残す。独自のstarted flagやrollbackを追加せず、native Controllerの重複開始・disposeを利用する。旧createInteraction／Scene API、通常取消・Keyboardの別ポリシー、例外、receiver／引数、live Selection／scope／pointer、UI・保存形式v26は不変。既存src/application／commands／uiの配置で責務が一致し、新しいbootstrapやフォルダは作らない。
+
+app.jsは1,233→1,231行（2行減）、非空白790→788行、root226→225文・378→377束縛、構文依存辺1,062→1,058。別名・設定91→90行。構築448行・bind41行・委譲7行・test hooks152行は不変。呼出し名がstartへ変わったためASTのotherCallsは35→23行、startupCallsは5→16行へ分類が移るが、実際の削減は2行である。全体の200〜500行目標は未完了。
+
+関連単体23件が成功。実Menu／Context Actions／Cancellationを使い、旧接続との操作順、取消全段階、操作の成功時公開、生成失敗と部分listener登録失敗、重複startとdisposeを照合した。browser比較では取消→描画順→Interaction→Actions→公開→startの六段階、六つの実参照とrestore fieldのreadonly、同じController receiver・引数なし・公開済み操作、closeAppMenus生成前ReferenceError、native option key順・function名／arityと公開204項目が一致。ja/light・en/dark・test起動も成功。既存Context関数本体と五つのnative owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,548件と関連E2E193件（8file、3.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+次は残る通常機能の構築・接続を、共有ownerと生成・公開段階から再評価する。今回のContext取消・startや、Clipboard／寸法等のテスト接続を再実施しない。Sketch Treeの表示依存も候補だが、関数別名を渡し直すだけの細分化を目的にせず、責務と依存が実際に整理できる場合に限る。巨大contextや別の巨大bootstrapを作らず、未到達の行数をblank削除で埋めない。
+
+### 前回：Clipboardを使うテスト支援の入力を実ownerから共有（2026-11-11）
 
 開始基準developはc22ab5022d0949e6746efd4c2dba75d25c271c78、作業branchはcodex/clipboard-test-owner-inputs（develop統合・Push後に削除）。開始週枠残量78%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 
