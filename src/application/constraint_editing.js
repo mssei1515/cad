@@ -1,6 +1,27 @@
 /* Connect selection capabilities, constraint targeting and dimension placement over shared sessions. */
 (() => {
   "use strict";
+  function prepare() {
+    let feature;
+    function requireFeature(binding) {
+      if (feature === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return feature;
+    }
+    function createPreparedWorkspace(options) {
+      const completed = createForWorkspace(options);
+      feature = completed;
+      return completed;
+    }
+    function cancelConstraintTargetCommand(message) { return requireFeature("constraintTargetCommand").targets.cancel(message); }
+    function startDistanceValueInput(pointer) { return requireFeature("dimensionPlacementCommand").dimensions.startDistanceValueInput(pointer); }
+    function startDistanceResolution(resolution, pointer) { return requireFeature("dimensionPlacementCommand").dimensions.startDistanceResolution(resolution, pointer); }
+    function updateConstraintButtons() { requireFeature("constraintControlsView").controls.view.update(); }
+    function commitNewConstraint(...args) { return requireFeature("constraintCommitCommand").commitCommand.ordinary(...args); }
+    function addConstraintIfMissing(...args) { return requireFeature("constraintCommitCommand").commitCommand.ifMissing(...args); }
+    function addDistanceConstraintFromTarget(...args) { return requireFeature("constraintCommitCommand").commitCommand.dimension(...args); }
+    return Object.freeze({ createForWorkspace: createPreparedWorkspace, cancelConstraintTargetCommand, startDistanceValueInput,
+      startDistanceResolution, updateConstraintButtons, commitNewConstraint, addConstraintIfMissing, addDistanceConstraintFromTarget });
+  }
   function create({ session, selection, pending, candidates, lifecycle, valueInput,
     resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
     elementSketchId, canEditSketch, findLineFixedConstraint, selectedGeometryItems,
@@ -239,7 +260,11 @@
     return Object.freeze({ selectionQuery: editing.selectionQuery, targets: editing.targets, dimensions: editing.dimensions,
       createControls: editing.createControls, createCommandInput: editing.createCommandInput,
       constraintTargetHint: editing.constraintTargetHint, input: Object.freeze({ ...editing.input, createWithDraggingForWorkspace }), controls: editing.controls,
-      createCommitWithIntentForWorkspace, createFixedEditing, createFixedForWorkspace, readOnlyDimensions });
+      createCommitWithIntentForWorkspace, createFixedEditing, createFixedForWorkspace, readOnlyDimensions,
+      get commitCommand() {
+        if (commit === undefined) throw new ReferenceError("Cannot access 'constraintCommitCommand' before initialization");
+        return commit.command;
+      } });
   }
   function prepareDimensionValues({ workspace, sketches, bounds, minimumLineLength }) {
     const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
@@ -286,5 +311,5 @@
       restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
     });
   }
-  window.ConstraintEditing = Object.freeze({ create, createWithFeedback, createWithControls, createForEditing, createForWorkspace, prepareDimensionValues, createDimensionValues });
+  window.ConstraintEditing = Object.freeze({ prepare, create, createWithFeedback, createWithControls, createForEditing, createForWorkspace, prepareDimensionValues, createDimensionValues });
 })();
