@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のProperties browser型単位ではapp.jsは1,198行、非空白756行。AST監査ではroot209文・365束縛、構築433非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のSketch browser dialog単位ではapp.jsは1,197行、非空白755行。AST監査ではroot209文・365束縛、構築432非空白行とbind35行、別名・設定85行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Properties入力のブラウザ型依存を表示先Documentへ集約（2026-11-12）
+### 最新：Sketch名入力と削除確認のbrowser接続をSketchEditingFeatureへ集約（2026-11-12）
+
+開始基準developは884b423b2a83c65eceddb11425b6c4b5ef1dfe33、作業branchはcodex/sketch-browser-dialogs。開始週枠残量61%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchEditingFeature.prepareNavigationのcreateForBrowserは、明示したbrowser windowに対するpromptNameとconfirmDeletionを既定として既存の生成経路へ接続する。名前入力は従来のInteraction生成時、削除確認は従来の後段Deletion生成時に準備し、実際のprompt／confirmは操作時に呼ぶ。app.jsはSketchのbrowser dialog callbackを組み立てない。
+
+早期prepareと各生成ではbrowserのdialog method・model・scope・DOM・listenerを新しく読み書きしない。操作時に同じbrowserの現在のmethodをmember receiverで読み、promptにはtitleとnameの二引数、confirmにはmessageの一引数を渡す。callback名・arity・戻り値・元例外、名前入力の取消／空文字／trim、確認取消、既存の権限・Root／lock・空Sketchの無確認削除・参照拒否と履歴を維持する。明示promptName／confirmDeletionはundefined／nullを含め優先し、raw createForInteraction等は変更しない。Navigationの既存完成公開、Move／Treeの実actorと入力bindの段階、scope・Selection・reset・求解を変更しない。新しいcommand・state・file・global／全体contextを作らず、既存application/sketch_editing_feature.js内のUI接続に配置する。UI・操作・保存形式v26は不変。
+
+app.jsは1,198→1,197行（1行減）、非空白756→755行。root209文・365束縛は不変。構築433→432行・115文、bind35行・別名85行・test hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体49件が成功。実Sketch command／DeletionとNavigationを使い、生成中のmethod非取得、操作時のgetter・receiverと引数、同じSketch／Pointのidentity、名前入力取消／空文字／trimと履歴、確認取消／承認／例外、明示undefined／nullでのbrowser非参照を検証した。削除取消の比較前には既存のSketch state正規化を行い、既存正規化の副作用とGeometry削除を混同しない。ソース逆変換で既存Sketch生成・Navigation公開・Move／Tree・Deletion／resetの本体は不変、rootはbrowser入口と既存dialog callbackの置換だけである。
+
+構文639ファイル・全単体2,604件・関連単体49件と通常ja/light・en/dark・test起動が成功。関連E2E199件（7file、3.1m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はParameter参照入力に残るHTMLTextAreaElementとbrowserイベント接続を確認する。既存Documentと編集scopeを共有し、入力型の取得／guard／Canvas参照の挿入をUI ownerへ閉じられるか検討する。構築432行とtest hooks152行は残り、段階を跨ぐ一括生成や全体contextで行数だけを縮めない。
+
+### Properties入力のブラウザ型依存を表示先Documentへ集約（2026-11-12）
 
 開始基準developはf2f812da5e17befdcb34e9c505083e2e14c24030、作業branchはcodex/properties-browser-types。開始週枠残量62%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

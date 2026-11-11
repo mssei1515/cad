@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Sketch名入力と削除確認のbrowser接続をSketchEditingFeatureへ集約（2026-11-12）
+
+SketchEditingFeature.prepareNavigationのcreateForBrowserは、明示したbrowser windowに対するpromptNameとconfirmDeletionを既定として既存の生成経路へ接続する。名前入力は従来のInteraction生成時、削除確認は従来の後段Deletion生成時に準備し、実際のprompt／confirmは操作時に呼ぶ。app.jsはSketchのbrowser dialog callbackを組み立てない。
+
+早期prepareと各生成ではbrowserのdialog method・model・scope・DOM・listenerを新しく読み書きしない。操作時に同じbrowserの現在のmethodをmember receiverで読み、promptにはtitleとnameの二引数、confirmにはmessageの一引数を渡す。callback名・arity・戻り値・元例外、名前入力の取消／空文字／trim、確認取消、既存の権限・Root／lock・空Sketchの無確認削除・参照拒否と履歴を維持する。明示promptName／confirmDeletionはundefined／nullを含め優先し、raw createForInteraction等は変更しない。Navigationの既存完成公開、Move／Treeの実actorと入力bindの段階、scope・Selection・reset・求解を変更しない。新しいcommand・state・file・global／全体contextを作らず、既存application/sketch_editing_feature.js内のUI接続に配置する。UI・操作・保存形式v26は不変。
+
+app.jsは1,198→1,197行（1行減）、非空白756→755行。root209文・365束縛は不変。構築433→432行・115文、bind35行・別名85行・test hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体49件が成功。実Sketch command／DeletionとNavigationを使い、生成中のmethod非取得、操作時のgetter・receiverと引数、同じSketch／Pointのidentity、名前入力取消／空文字／trimと履歴、確認取消／承認／例外、明示undefined／nullでのbrowser非参照を検証した。削除取消の比較前には既存のSketch state正規化を行い、既存正規化の副作用とGeometry削除を混同しない。ソース逆変換で既存Sketch生成・Navigation公開・Move／Tree・Deletion／resetの本体は不変、rootはbrowser入口と既存dialog callbackの置換だけである。
+
+構文639ファイル・全単体2,604件・関連単体49件と通常ja/light・en/dark・test起動が成功。関連E2E199件（7file、3.1m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## Properties入力のブラウザ型依存を表示先Documentへ集約（2026-11-12）
 
 PropertiesDisplay.prepareの完成Workspaceが返すcreateEditingWithViewForBrowserは、従来のPresentation用生成を通り、編集とAppearanceUIが完成した後のView依存reader内で、表示先Document.defaultViewからHTMLTextAreaElement／HTMLInputElementを取得する。app.jsはPropertiesの入力判定に使うDOM型を個別に渡さず、同じDocumentを既存Workspaceに接続する。

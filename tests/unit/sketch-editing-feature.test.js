@@ -364,8 +364,8 @@ test('editing Tree visibility, locking and move completion use the same real com
 });
 
 
-function deletionOwnersFixture(composed, failConstruction = false) {
- const f=interactionFixture(true),{state,calls,owners}=f;
+function deletionOwnersFixture(composed, failConstruction = false, navigation) {
+ const f=interactionFixture(true,navigation),{state,calls,owners}=f;
  state.ready=false;state.references=false;state.confirm=true;state.result={};state.error=new Error('deletion owner');
  const record=name=>function(){'use strict';assert.equal(this,undefined);assert.equal(state.ready,true);calls.push([name,...arguments]);if(state.failStage===name)throw state.error;return state.result;};
  owners.presentation.log=record('log');
@@ -379,6 +379,7 @@ function deletionOwnersFixture(composed, failConstruction = false) {
   annotationReferencesRemovedGeometry:w.AnnotationAnchorData.referencesRemovedGeometry,clearSketchSolveState:solveState.clearSketchSolveState,
   invalidateAnalysis:()=>{analysis.invalidate();},solveSketchAndDependents:solving.solveSketchAndDependents,
   refreshConstraintAnalysis:(options={})=>analysis.refresh(options),confirmDeletion:config.confirmDeletion};
+ if(composed==='browser')delete config.confirmDeletion;
  const original=w.SketchDeletionCommand;let ports,command;
  w.SketchDeletionCommand={...original,create(input){ports=input;if(failConstruction)throw state.error;return original.create(input);}};
  try{
@@ -615,4 +616,46 @@ test('presentation-owned Tree retains the published native Controller after fiel
     assert.equal(next.generation, 2); assert.notEqual(next, first);
     assert.equal(f.state.scope.points[0], f.point); assert.equal(f.state.keyReads, 0);
   } finally { w.SketchTreeController = original; }
+});
+
+function browserSketchNavigation(browserWindow, overrides) {
+  const navigation = w.SketchEditingFeature.prepareNavigation();
+  return { navigation, createForInteraction({ promptName, ...options }) { return navigation.createForBrowser({ window: browserWindow, ...options, ...overrides }); } };
+}
+
+test('Sketch browser name input stays cold, reads the live prompt method and retains rename cancellation, trimming and history', () => {
+  let f, reads = 0, answer = null; const marker = new Error('prompt'), browser = {};
+  Object.defineProperty(browser, 'prompt', { configurable: true, get() { reads++; return function(title, name) {
+    assert.equal(this, browser); assert.equal(arguments.length, 2); assert.equal(title, 'スケッチ名'); assert.equal(name, f.state.scope.sketches.find(s => s.id === 'S1').name); return answer;
+  }; } });
+  const adapter = browserSketchNavigation(browser); f = interactionFixture(true, adapter);
+  assert.equal(reads, 0); assert.deepEqual(f.calls, []);
+  const original = f.state.scope.sketches.find(s => s.id === 'S1');
+  for (const value of [null, '', '   ', '  Renamed  ']) { answer = value; const histories = f.calls.filter(c => c[0] === 'history').length; f.feature.command.rename('S1');
+    assert.equal(f.state.scope.sketches.find(s => s.id === 'S1'), original); assert.equal(f.calls.filter(c => c[0] === 'history').length, histories + (value ? 1 : 0)); }
+  assert.equal(original.name, 'Renamed'); assert.equal(reads, 4);
+  Object.defineProperty(browser, 'prompt', { get() { throw marker; } }); const before = JSON.stringify(f.state.scope), history = f.calls.filter(c => c[0] === 'history').length;
+  assert.throws(() => f.feature.command.rename('S1'), error => error === marker); assert.equal(JSON.stringify(f.state.scope), before); assert.equal(f.calls.filter(c => c[0] === 'history').length, history);
+});
+
+test('Sketch browser confirmation shares native deletion, preserves cancellation and uses live receiver, one argument and original exceptions', () => {
+  for (const response of [false, true, 'throw']) {
+    let f, reads = 0; const marker = new Error('confirm'), browser = { get confirm() { reads++; return function(message) {
+      assert.equal(this, browser); assert.equal(arguments.length, 1); assert.equal(typeof message, 'string'); if (response === 'throw') throw marker; return response;
+    }; } };
+    f = deletionOwnersFixture('browser', false, browserSketchNavigation(browser)); assert.equal(reads, 0); assert.equal(f.ports.confirmDeletion.name, 'confirmDeletion'); assert.equal(f.ports.confirmDeletion.length, 1);
+    f.owners.documentWorkspace.sketches.ensureSketchState(); const before = JSON.stringify(f.state.scope), point = f.point;
+    if (response === 'throw') assert.throws(() => f.command.remove('S1'), error => error === marker); else assert.equal(f.command.remove('S1'), response);
+    assert.equal(reads, 1); if (response !== true) { assert.equal(JSON.stringify(f.state.scope), before); assert.equal(f.state.scope.points[0], point); assert.equal(f.calls.some(c => c[0] === 'history'), false); }
+    else { assert.equal(f.state.scope.points.length, 0); assert.equal(f.calls.filter(c => c[0] === 'history').length, 1); }
+  }
+});
+
+test('Sketch browser adapters preserve explicit null or undefined dialog overrides without reading browser methods', () => {
+  const marker = new Error('browser must stay unread'), browser = new Proxy({}, { get() { throw marker; } });
+  for (const value of [undefined, null]) {
+    const f = interactionFixture(true, browserSketchNavigation(browser, { promptName: value })); assert.throws(() => f.feature.command.rename('S1'), error => error.name === 'TypeError');
+    const d = deletionOwnersFixture('browser', false, browserSketchNavigation(browser)); const command = d.feature.createDeletionForEditing({ ...d.config, confirmDeletion: value });
+    d.owners.documentWorkspace.sketches.ensureSketchState(); const before = JSON.stringify(d.state.scope); assert.throws(() => command.remove('S1'), error => error.name === 'TypeError'); assert.equal(JSON.stringify(d.state.scope), before);
+  }
 });
