@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：読取・描画APIの重複別名28個を実所有元への参照へ整理（2026-11-11）
+
+app.jsは、ConstraintReferences／SketchContext／Block catalog・projection／Geometry reads・creation／constraint insertion／Solve scope query／Viewport・Canvas surface／workspace layout／Dimension placement／Geometry display・bounds・fit等の実APIから、関数値を他機能へ渡す箇所で所有元のdata propertyを明示して読む。28個の重複した別名（未参照2個を含む）を外し、45参照を同じowner.propertyへ接続する。Object shorthandは元の引数名を保つ明示keyへ展開し、各子factoryが受け取る名前と実関数値を維持する。分離済みownerとの依存を明確にする段階であり、関数本体や機能の再分割を行わない。
+
+対象は、実アプリの読取り専用診断でObject.isFrozen=true、own data property、関数値、writable=false／configurable=false、旧別名との同一性を確認した28値に限定する。getter、可変値のsnapshot、直接call／tag／new、所有元bindingのshadowは対象外。参照は宣言後のrootの値受渡し、または全体構築後に一度だけ呼ぶinstallTestHooks内に限定する。data propertyの読取り位置は別名の束縛時から受渡し時へ移るが、値は同じ変更不可の実関数であり、model読取りやcallbackを早期実行しない。裸／member call・返値／例外、引数key、Workspace／bound scope、factory／公開／bind／start順、既存UIと保存形式v26を維持する。新しいstate・model・scope・cache・listener／wrapper／登録setterや汎用app contextを追加しない。
+
+app.jsは1,308→1,288行（20行減）、非空白863→843行。root268→253文・453→425束縛、別名／設定122→102行。構築474行・委譲16行・その他call37行・条件付きtest hooks162行は不変。構文依存辺1,138→1,111。十五の別名宣言を除き、一つの部分patternを維持した。空行削除や圧縮による減行ではなく、重複した値の束縛を取り除いた分である。200〜500行の全体目標は未完了。
+
+基準bc39e2bのASTで対象bindingの全参照・callee／scope／初期化段階を確認し、値だけを同じreadonly propertyへ展開して純粋な別名宣言を除いたASTが変更後と一致することを照合した。編集planのbefore／after hash、全28 APIの前後のdata property descriptor、原module／test／一覧の不変、新しい未使用／未束縛参照なしも照合した。既存自動テストと実起動で検証し、変換をなぞるだけの単体テストは追加しない。診断は別browserのresponseへ読取りだけのprobeを挿入して行い、製品sourceや通常起動へprobeを残さない。構文637file・全単体2,492件・全E2E589件が成功（50file、27.2m、exit 0）。E2E実行中の707入力と開始HEAD不変、全50fileの一覧589件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。28のreadonly function descriptorを前後で照合し、別名を展開したAST等価性・引数key／scope／callee receiver／初期化段階・原module／test／一覧の不変を確認した。TEMP cad-read-display-aliases-{check,unit,e2e,proof,smoke,before,after}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop bc39e2b、作業branch codex/read-display-port-aliases、開始時週枠残量95%。構文637file・全単体2,492件・起動3経路と前後の28 readonly property診断は成功済み。全50file・589件のE2Eが成功（27.2m）。707入力と開始HEADを固定し、TEMP cad-read-display-aliases-{check,unit,e2e,proof,smoke,before,after}.logとdescriptor／編集plan JSONに証跡を保持する。runnerはcad-read-display-aliases-run.ps1。全runner終了を回収済み。既存の全体検証7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
 ### 最新：Sketch切替reset／表示切替／TreeとMenuの接続をnavigation生成ownerへ統合（2026-11-11）
 
 SketchEditingFeature.prepareNavigation（src/application/sketch_editing_feature.js）は、従来のMoveとMenuに加え、実createForInteractionが返した完成editing／resetと、実createTreeForEditingが返した完成Tree recordを所有する。clearInteractionForSketchChange／toggleSketchVisibility／isSidebarHighlightedElement／startContextを安定した操作入口として提供し、closeContextは同じTreeの実menuへ接続する。rootのreset・Tree Controller・Menu・表示切替関数の四別名と三つの委譲、Tree hoverとKeyboardの局所bridgeを外す。実Tree viewは表示更新・幅・creation bindに必要なためrootに残す。
