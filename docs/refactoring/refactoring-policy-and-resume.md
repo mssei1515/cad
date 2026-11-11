@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のToolbar連続開始単位ではapp.jsは1,226行、非空白783行。AST監査ではroot222文・375束縛、構築440非空白行とbind40行、別名・設定89行、委譲5行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の拘束接続開始単位ではapp.jsは1,225行、非空白782行。AST監査ではroot221文・374束縛、構築439非空白行とbind40行、別名・設定89行、委譲5行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：Toolbar Workspaceと作図接続の連続開始を既存Presentationへ集約（2026-11-11）
+### 最新：拘束操作の接続開始を既存ConstraintEditingへ集約（2026-11-11）
+
+開始基準developは87ef156fef6c54b3cc9cb2c097a43729fb4b95b7、作業branchはcodex/constraint-controls-binding（develop統合・Push後に削除）。開始週枠残量70%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+ConstraintEditing.createControlsが返すbindForEditingは、既存createBindingをbare・無引数で呼び、返された実ConstraintControlsView bindingのbindをmember・無引数で呼ぶ。app.jsは固定選択commandの準備後・Canvas window接続前という従来の位置で開始だけを依頼する。操作command・UI listenerの生成と接続手順は既存ConstraintEditingに集約し、新しいファイルや全体contextを追加しない。
+
+旧createBinding／viewとnative command／UIの実装は維持する。生成時にはlive scope・Selectionを照会せず、元の例外と部分listener登録、dispose／再接続、繰返し開始時の新binding生成を変えない。独自のstarted flag・rollbackを加えず、操作状態は既存session／Selection、listener状態は既存UI bindingが所有する。UI・履歴・保存形式v26とapplication／ui／commandsの配置は不変。
+
+app.jsは1,226→1,225行（1行減）、非空白783→782行、root222→221文・375→374束縛、構文依存辺1,055→1,054。単独でbindにしか使わないconstraintControlBindingをrootから除いた。全体の200〜500行目標は未完了。
+
+関連単体52件が成功。既存の実メニュー／固定／寸法／Selection操作を旧手動経路と新入口で比較し、接続解除と再接続、command／binding生成失敗と途中listener登録の元例外・残存状態、繰返し開始時の二つの実接続を確認した。browser比較で固定準備完了→接続生成→操作command→UI binding→実体完成→bind→window接続の順、同じ実commandの二操作、裸／member receiver・引数数、凍結実体と公開204項目が一致した。通常ja/light・en/dark・test起動も成功。宣言した集約を逆変換すると元のroot／ConstraintEditingと一致し、native command／UI sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,558件と関連E2E169件（9file、14.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+### Toolbar Workspaceと作図接続の連続開始を既存Presentationへ集約（2026-11-11）
 
 開始基準developはdefa78348f81cba9a91f0ac6eec348032dccb766、作業branchはcodex/workspace-drawing-startup（develop統合・Push後に削除）。開始週枠残量71%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

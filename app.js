@@ -715,7 +715,7 @@
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
     createCommitWithIntentForWorkspace: createConstraintCommit, createFixedForWorkspace, constraintTargetHint, readOnlyDimensions,
     input: { updateHover: updatePendingDistanceRetargetHover, createWithDraggingForWorkspace: createConstraintInputWithDragging },
-    controls: { createBinding: createConstraintControlBinding } } = createConstraintEditing({
+    controls: { bindForEditing: bindConstraintControls } } = createConstraintEditing({
     document, controls: toolbarControls, interaction: canvasInteraction, sessions: operationSessions, documentWorkspace, readServices: geometryReadServices, presentation,
     operands: constraintOperandFeature, viewport, annotationFeature, instances: geometryInstanceCommand, valueInput: dimensionInputController, fixedState: fixedStateQueries,
     isGeometryMode, clearSelection, updateToolbar, updateConstraintButtons,
@@ -1046,8 +1046,7 @@
     acceptError: CONSTRAINT_ACCEPT_ERROR, refreshConstraintAnalysis, recordHistory,
   });
 
-  const constraintControlBinding = createConstraintControlBinding();
-  constraintControlBinding.bind();
+  bindConstraintControls();
 
 
 
