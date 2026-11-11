@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Sketch Treeの表示依存選択を既存Sketch機能へ集約（2026-11-11）
+
+SketchEditingFeature.createForInteractionが返すcreateTreeForPresentationは、既存Properties Selection・Constraint analysis／redundancy／reference state・Sketch Projection・Toolbar icons・Authoring feedback・Fixed-state queryから、Tree用objectOptionsの10項目を選ぶ。app.jsは実ownerを渡し、isHidden／投影照会／アイコン／ラベル／固定照会のfield選択とテスト専用ではないvisibility別名を持たない。個々のmodel／constraint／表示値は読まず、同じ実関数・recordを既存createTreeForEditingへ渡す。
+
+prepareNavigation経由でも新入口の成功した実Treeだけを既存contextへ公開する。field選択やTree生成の失敗は以前のController／Menuを保持し、完成前のものを公開しない。旧createTreeForEditing／createTree、実Tree／Objects／View本体、別々のDocument・bound view・dimension scope、live Selection／Hover／Block state、元例外・receiver／引数、生成→公開→明示startの段階、UI・履歴・保存形式v26を維持する。新たなview state・cache・listenerや全体contextを作らず、既存application／ui配置を使う。
+
+app.jsは1,231→1,229行（2行減）、非空白788→786行、root225→224文・377→376束縛、構文依存辺1,058→1,057。構築448→447行、別名・設定90→89行。bind41行・委譲7行・条件付きtest hooks152行は不変。表示10項目の組立てがSketch側へ移り、appに新しいまとめ用contextは追加しない。全体の200〜500行目標は未完了。
+
+関連単体26件が成功。既存の実Tree／Geometry／Selection／Hover比較に新入口を加え、live scopeの区別、可視性・lock・moveの実操作と一履歴、field選択失敗とTree生成失敗後の旧Controller保持・次の成功時の切替を確認した。browser比較では10項目の実参照、七つのreadonly field、Tree生成→完了→Menu開始、同じ実View／Menu receiver・引数なし、sketchTreeView生成前ReferenceError、native option key順・function名／arityと公開204項目が一致。ja/light・en/dark・test起動も成功。旧Sketch関数本体と三つのnative Tree owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,549件と関連E2E218件（9file、4.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
 ## Canvas Contextの取消準備と操作公開・開始を既存ownerへ集約（2026-11-11）
 
 CanvasContextInteraction.createMenuForWorkspaceのSceneはprepareInteractionを持つ。既存operationSessions.createCommandCancellationを同じ段階で呼び、Context専用の取消機能をclosureへ保持してstartInteractionを返す。取消は同じCanvasCommandCancellationが担当し、Context側でmodeやpending、drawing stateを複製しない。Block placementのreadonly restorePropertiesPanelとPresentationの同じupdateUIを選び、app.jsはその関数別名と取消recordを保持しない。

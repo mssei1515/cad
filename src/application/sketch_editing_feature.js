@@ -108,7 +108,15 @@
         updateSketchUI, selectionSketchId: interaction.scope.selectionSketchId, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
         updateSelectionUI: updateGeometrySelectionUI, unfixPoint: fixedOperands.unfixPoint });
     }
-    return Object.freeze({ reset, editing: Object.freeze({ ...editing, createDeletionForEditing, createTreeForEditing }) });
+    function createTreeForPresentation({ selection, analysis, redundancy, referenceState, projection, icons, feedback, fixedState, ...options }) {
+      return createTreeForEditing({ ...options, objectOptions: {
+        isHidden: selection.visibilityIsHidden, analysis, redundancy, referenceState, projectionQueries: projection.queries,
+        toolbarSvgMarkup: icons.toolbarSvgMarkup, constraintToolbarIcon: icons.constraintToolbarIcon,
+        findLineFixedConstraint: fixedState.findLineFixedConstraint,
+        geometryInstanceTypeLabel: feedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: feedback.hatchPatternTypeLabel,
+      } });
+    }
+    return Object.freeze({ reset, editing: Object.freeze({ ...editing, createDeletionForEditing, createTreeForEditing, createTreeForPresentation }) });
   }
   // Keep navigation references with their factories; publish only successful constructions.
   function prepareNavigation() {
@@ -144,8 +152,13 @@
         context = result;
         return result;
       }
+      function createTreeForPresentation(options) {
+        const result = feature.editing.createTreeForPresentation(options);
+        context = result;
+        return result;
+      }
       editingFeature = feature;
-      return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing }) });
+      return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing, createTreeForPresentation }) });
     }
     return Object.freeze({ resetMove, closeContext, readMoving, clearInteractionForSketchChange, toggleSketchVisibility,
       isSidebarHighlightedElement, startContext, createForInteraction: createEditing });
