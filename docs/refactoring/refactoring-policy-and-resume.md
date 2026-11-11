@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の拘束注記／求解context単位ではapp.jsは1,212行、非空白770行。AST監査ではroot214文・368束縛、構築437非空白行とbind37行、別名・設定88行、委譲2行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の分析更新公開単位ではapp.jsは1,212行、非空白770行。AST監査ではroot214文・369束縛、構築438非空白行とbind37行、別名・設定88行、委譲1行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,23 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：拘束注記ドラッグの求解scopeと分析無効化を求解contextへ集約（2026-11-11）
+### 最新：分析更新の早期portと完成参照をSketchSolvingFeatureへ集約（2026-11-11）
+
+開始基準developは12f6983b69936d4de5dc12157db5c64aa28d2f6b、作業branchはcodex/analysis-refresh-publication。開始週枠残量65%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+SketchSolvingFeature.prepareは、実ownerをまだ生成せず、安定したrefreshConstraintAnalysisとReference-aware準備の入口を返す。後者は従来のprepareWithReferencesForWorkspaceを同じ位置で呼び、二つのcontext生成入口の完成時に実analysis参照をprivateに公開する。context自体は元の実recordを返し、ReferenceState／SolveState／solveAndRefreshも同じ実owner・関数を共有する。app.jsは完成分析を更新する委譲関数を持たず、返された更新portをUIや各編集機能へ接続する。
+
+早期prepareはObject.freezeとclosureの生成だけを行い、ReferenceState／SolveState／Query／Analysis、Document・Workspace・DOM・listenerを生成・照会しない。native Reference-aware準備は同じnamespace receiver・一引数、context生成はbare・一引数で呼び、元例外を透過する。完成前には従来のconstraintAnalysisのReferenceErrorを返し、完成したundefined／null analysisはTypeErrorとして区別する。更新は操作時に同じanalysis.refreshをmember receiver・一引数で呼ぶ。未指定／undefinedは毎回新しい空record、nullや明示optionsはそのまま渡し、余分な引数を無視し、戻り値・getter例外・method例外を維持する。準備・context生成・analysis選択の失敗は前の完成参照を置き換えず、別prepareとは独立する。既存raw APIとnative生成本体、分析cache・求解条件・scopeの読取り・履歴・UI・保存形式v26を変えず、新file／global／全体contextを追加しない。
+
+app.jsは1,212→1,212行（変化なし）、非空白770行・root214文も不変。束縛368→369、構築437→438行・113→114文、委譲2→1行。bind37行・別名88行・test hooks152行は不変。早期の準備入口を追加したため行数削減・依存数削減とは扱わず、分析の完成参照と更新portの所有を既存SketchSolvingFeatureへ集めた単位とする。200〜500行の全体目標は未完了。
+
+関連単体68件が成功。native ownerへのアクセスを拒否した状態でも早期prepareだけは成功すること、従来の生成位置でReferenceState→SolveStateを作り、通常context／Annotation付きcontext双方で同じ実analysisを更新することを確認した。native準備・contextのreceiver／引数・実record参照、毎回の空options・明示null／options参照・余分な引数、遅延method取得と同じanalysis receiver、元例外、再生成失敗時の前参照保持・別prepareの独立性・undefined／nullを検証した。ソース逆変換では既存の求解準備とcontext生成本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,583件、通常ja/light・en/dark・test起動が成功。関連E2E252件（8file、4.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+残るroot委譲はsetPropertiesPanelCollapsed、通常モード判定のisGeometryModeもrootに残る。前者はBlock配置へ渡す時点がCanvasDisplay／Workspace layoutの生成より早く、既存layoutの完成参照と接続順を監査する。同じBlock配置に渡すisPropertiesCollapsedもappがworkspaceのCSS classを読むため、状態照会と更新をlayoutの責務として一緒に確認する。純粋な準備の層を際限なく増やさず、既存CanvasDisplay内で初期化段階を整理できるか確認する。構築438行とtest hooks152行が残るため、委譲の移動だけで数百行へ到達するとは見積もらない。
+
+### 拘束注記ドラッグの求解scopeと分析無効化を求解contextへ集約（2026-11-11）
 
 開始基準developは220c7fbc310ad6a1d8fabce2d76631e8f593bd9c、作業branchはcodex/annotation-solve-context。開始週枠残量66%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

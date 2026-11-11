@@ -380,3 +380,59 @@ test('annotation context publishes only completed analysis and preserves actor c
   for(badValue of [undefined,null]){bad=true;build();assert.throws(captures.at(-1).invalidateAnalysis,error=>error.name==='TypeError');assert.equal(port(),marker);}
  }finally{w.SolveScopeQuery=rawQuery;w.ConstraintAnalysis=rawAnalysis;}
 });
+
+test('early analysis preparation is cold and retains the pre-context refresh guard without creating native owners',()=>{
+ const sandbox={window:{}};vm.runInNewContext(fs.readFileSync('src/application/sketch_solving_feature.js','utf8'),sandbox);const w=sandbox.window,marker=new Error('native preparation');
+ for(const name of ['ReferenceConstraintState','SketchSolving','SolveScopeQuery','ConstraintAnalysis'])Object.defineProperty(w,name,{get(){throw marker;}});
+ const prepared=w.SketchSolvingFeature.prepare(),independent=w.SketchSolvingFeature.prepare();assert.ok(Object.isFrozen(prepared));
+ assert.equal(prepared.refreshConstraintAnalysis.name,'refreshConstraintAnalysis');assert.equal(prepared.refreshConstraintAnalysis.length,0);
+ for(const owner of [prepared,independent])assert.throws(()=>owner.refreshConstraintAnalysis(),{name:'ReferenceError',message:"Cannot access 'constraintAnalysis' before initialization"});
+ assert.throws(()=>prepared.prepareWithReferencesForWorkspace({}),error=>error===marker);
+ assert.throws(prepared.refreshConstraintAnalysis,error=>error.name==='ReferenceError');
+});
+
+test('analysis publication returns native contexts and preserves refresh defaults, receiver, return, errors and previous completed owners',()=>{
+ const sandbox={window:{}};vm.runInNewContext(fs.readFileSync('src/application/sketch_solving_feature.js','utf8'),sandbox);const w=sandbox.window,original=w.SketchSolvingFeature;
+ const early=original.prepare(),other=original.prepare(),input={},contextInput={},marker={},failure=new Error('analysis publication');
+ let failAt=null,currentAnalysis,methodReads=0,analysisReads=0;const calls=[];
+ function analysis(value){let owner;owner=Object.freeze({get refresh(){methodReads++;if(failAt==='method-get')throw failure;return function(options){'use strict';assert.equal(this,owner);assert.equal(arguments.length,1);calls.push(options);if(failAt==='refresh')throw failure;return value;};}});return owner;}
+ const first=analysis(marker);currentAnalysis=first;
+ const context=Object.freeze({get analysis(){analysisReads++;if(failAt==='analysis-get')throw failure;return currentAnalysis;}});
+ function build(options){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(options,contextInput);if(failAt==='context')throw failure;return context;}
+ const raw=Object.freeze({referenceState:{},solveState:{},solveAndRefresh(){},createContextForWorkspace:build,createContextWithAnnotationDrag:build});
+ const namespace={...original,prepareWithReferencesForWorkspace(options){assert.equal(this,namespace);assert.equal(arguments.length,1);assert.equal(options,input);if(failAt==='prepare')throw failure;return raw;}};w.SketchSolvingFeature=namespace;
+ const prepared=early.prepareWithReferencesForWorkspace(input);assert.ok(Object.isFrozen(prepared));assert.deepEqual(Object.keys(prepared),Object.keys(raw));
+ for(const key of ['referenceState','solveState','solveAndRefresh'])assert.equal(prepared[key],raw[key]);
+ assert.throws(early.refreshConstraintAnalysis,error=>error.name==='ReferenceError');assert.equal(prepared.createContextForWorkspace(contextInput),context);
+ assert.equal(analysisReads,1);assert.equal(methodReads,0);
+ for(const args of [[],[undefined],[null],[input,'ignored']])assert.equal(early.refreshConstraintAnalysis(...args),marker);
+ assert.deepEqual(Object.keys(calls[0]),[]);assert.deepEqual(Object.keys(calls[1]),[]);assert.notEqual(calls[0],calls[1]);assert.equal(calls[2],null);assert.equal(calls[3],input);
+ for(const stage of ['prepare','context','analysis-get']){failAt=stage;
+  assert.throws(()=>stage==='prepare'?early.prepareWithReferencesForWorkspace(input):prepared.createContextWithAnnotationDrag(contextInput),error=>error===failure);
+  failAt=null;assert.equal(early.refreshConstraintAnalysis(input),marker);}
+ for(const stage of ['method-get','refresh']){failAt=stage;assert.throws(early.refreshConstraintAnalysis,error=>error===failure);}failAt=null;
+ const second={};currentAnalysis=analysis(second);assert.equal(prepared.createContextWithAnnotationDrag(contextInput),context);assert.equal(early.refreshConstraintAnalysis(),second);
+ assert.throws(other.refreshConstraintAnalysis,error=>error.name==='ReferenceError');
+ for(const value of [undefined,null]){currentAnalysis=value;prepared.createContextForWorkspace(contextInput);assert.throws(early.refreshConstraintAnalysis,error=>error.name==='TypeError');}
+});
+
+test('early publication shares actual reference, solve and analysis owners through both native context routes and failed reconstruction',()=>{
+ for(const withAnnotation of [false,true]){
+  const f=contextFixture('prepared'),w=f.probe.window,early=w.SketchSolvingFeature.prepare(),rawReference=w.ReferenceConstraintState,rawSolving=w.SketchSolving,rawAnalysis=w.ConstraintAnalysis,rawQuery=w.SolveScopeQuery;
+  const order=[],calls=[],failure=new Error('context query');let nativeParts,actualAnalysis,nativeResult;
+  w.ReferenceConstraintState={...rawReference,create(options){order.push('reference');return rawReference.create(options);}};
+  w.SketchSolving={...rawSolving,createState(){order.push('state');return rawSolving.createState();}};
+  w.ConstraintAnalysis={...rawAnalysis,createWithRedundancy(options){order.push('analysis');assert.throws(early.refreshConstraintAnalysis,error=>error.name==='ReferenceError');
+   nativeParts=rawAnalysis.createWithRedundancy(options);actualAnalysis=Object.freeze({...nativeParts.analysis,refresh(options){assert.equal(this,actualAnalysis);assert.equal(arguments.length,1);calls.push(options);return nativeResult=nativeParts.analysis.refresh(options);}});
+   return {...nativeParts,analysis:actualAnalysis};}};
+  try{
+   f.state.ready=false;assert.deepEqual(order,[]);const prepared=early.prepareWithReferencesForWorkspace(f.probe.contextInput);assert.deepEqual(order,['reference','state']);
+   const context=withAnnotation?prepared.createContextWithAnnotationDrag({createAnnotationDrag(){order.push('annotation');return f.probe.contextInput.annotationDrag;},geometryDrag:{build(){},begin(){}},minimumLength:0.001,acceptError:f.owners.acceptError})
+    :prepared.createContextForWorkspace(f.probe.contextInput);
+   assert.equal(context.analysis,actualAnalysis);assert.deepEqual(order,withAnnotation?['reference','state','annotation','analysis']:['reference','state','analysis']);assert.deepEqual(f.events,[]);
+   f.state.ready=true;const options={ifStale:false};assert.equal(early.refreshConstraintAnalysis(options),nativeResult);assert.equal(calls[0],options);
+   w.SolveScopeQuery={...rawQuery,create(){throw failure;}};assert.throws(()=>prepared.createContextForWorkspace(f.probe.contextInput),error=>error===failure);
+   assert.equal(early.refreshConstraintAnalysis(options),nativeResult);assert.equal(context.analysis,actualAnalysis);
+  }finally{w.ReferenceConstraintState=rawReference;w.SketchSolving=rawSolving;w.ConstraintAnalysis=rawAnalysis;w.SolveScopeQuery=rawQuery;}
+ }
+});

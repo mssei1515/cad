@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 分析更新の早期portと完成参照をSketchSolvingFeatureへ集約（2026-11-11）
+
+SketchSolvingFeature.prepareは、実ownerをまだ生成せず、安定したrefreshConstraintAnalysisとReference-aware準備の入口を返す。後者は従来のprepareWithReferencesForWorkspaceを同じ位置で呼び、二つのcontext生成入口の完成時に実analysis参照をprivateに公開する。context自体は元の実recordを返し、ReferenceState／SolveState／solveAndRefreshも同じ実owner・関数を共有する。app.jsは完成分析を更新する委譲関数を持たず、返された更新portをUIや各編集機能へ接続する。
+
+早期prepareはObject.freezeとclosureの生成だけを行い、ReferenceState／SolveState／Query／Analysis、Document・Workspace・DOM・listenerを生成・照会しない。native Reference-aware準備は同じnamespace receiver・一引数、context生成はbare・一引数で呼び、元例外を透過する。完成前には従来のconstraintAnalysisのReferenceErrorを返し、完成したundefined／null analysisはTypeErrorとして区別する。更新は操作時に同じanalysis.refreshをmember receiver・一引数で呼ぶ。未指定／undefinedは毎回新しい空record、nullや明示optionsはそのまま渡し、余分な引数を無視し、戻り値・getter例外・method例外を維持する。準備・context生成・analysis選択の失敗は前の完成参照を置き換えず、別prepareとは独立する。既存raw APIとnative生成本体、分析cache・求解条件・scopeの読取り・履歴・UI・保存形式v26を変えず、新file／global／全体contextを追加しない。
+
+app.jsは1,212→1,212行（変化なし）、非空白770行・root214文も不変。束縛368→369、構築437→438行・113→114文、委譲2→1行。bind37行・別名88行・test hooks152行は不変。早期の準備入口を追加したため行数削減・依存数削減とは扱わず、分析の完成参照と更新portの所有を既存SketchSolvingFeatureへ集めた単位とする。200〜500行の全体目標は未完了。
+
+関連単体68件が成功。native ownerへのアクセスを拒否した状態でも早期prepareだけは成功すること、従来の生成位置でReferenceState→SolveStateを作り、通常context／Annotation付きcontext双方で同じ実analysisを更新することを確認した。native準備・contextのreceiver／引数・実record参照、毎回の空options・明示null／options参照・余分な引数、遅延method取得と同じanalysis receiver、元例外、再生成失敗時の前参照保持・別prepareの独立性・undefined／nullを検証した。ソース逆変換では既存の求解準備とcontext生成本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,583件、通常ja/light・en/dark・test起動が成功。関連E2E252件（8file、4.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## 拘束注記ドラッグの求解scopeと分析無効化を求解contextへ集約（2026-11-11）
 
 SketchSolvingFeatureのWorkspace準備が返すcreateContextWithAnnotationDragは、既存Annotation factoryへGeometryDragのbuild／beginと分析無効化portを接続し、実AnnotationDragを生成してから既存の求解contextを構築する。実dragのscope／追加variablesをSolveScopeQueryへ渡し、完成した同じcontextのanalysisを無効化する。返す凍結recordは既存contextの実owner／関数と同じannotationDragを共有する。app.jsはこの求解対象と分析への折返しcallbackを仲介しない。
