@@ -2,6 +2,19 @@
 
 
 
+
+## 全E2Eの再検証checkpoint（2026-11-12）
+
+develop 6b3fcc6b342e8ebc6c3c18dbe548a0a9a9090381を対象に全E2E589件・50fileを実行し、22.5分・exit 0ですべて成功した。対象suite指定なし、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHはすべて未設定。710入力のraw SHA256と開始HEAD不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。テスト中にソース・テスト・閾値・timeoutを変更していない。
+
+拘束ドラッグ回帰はfillets 3,744、offsets 10,296、aircraft 1,872、coupled-lines 5,304、vertical-line 936 previewsが失敗なしで完了した。通常の全suite実行でgeometry-drag-smoothnessも通過した。これらの件数は該当fixtureの出力であり、全ドラッグケースの合計ではない。電源接続後の今回の全体実行は成功したが、電源だけを原因として以前の不安定性を説明できると断定しない。
+
+直前の実装単位で同じコードに対して構文639ファイル・全単体2,664件・関連単体10件・関連E2E176件と通常起動5条件が成功済み。今回の変更は文書だけで、実装・テスト・loader・保存形式v26は不変。仕様との不一致を追加しない。
+
+app.jsは1,167→1,167行（0行変化）、非空白734行。root199文・360束縛、構築109文・421行、別名76行・bind35行・test hooks151行。空白433行を除いても非空白734行であり、数百行・目安200〜500行の目標は未完了。全E2E成功は今回のコードの統合検証であって、責務分離全体の完成ではない。
+
+確認時の週枠残量50%（usedPercent 50）。まだ50%未満の停止条件には達していない。main c2edef1は維持し、途中で自動リリースしない。残量50%未満になったら新規分離を停止し、その時点のコードに必要な全体検証を確認後、main最後・develop同期・Push・runtime再生成・実remote ref照合を行う。今回以後コードを変更した場合、この全E2Eを新しいコードの成功根拠に流用しない。文書のみの変更なら同じ実装の検証であることをdiffで確認する。
+
 ## Selection編集の既存owner capabilityを通常生成へ接続（2026-11-12）
 
 SelectionEditingFeature.prepare().createForDrawingは、既に受け取るinteractionからclearSelectionとisGeometryMode、presentationからupdateToolbar、persistenceからnormalizeGeometryInstanceを接続する。app.jsが同じ関数を別fieldで重ねて渡す責務を除く。新factory・global・可変slot・全体contextは追加せず、既存application ownerへ結線を集める。フォルダ配置は変更しない。
