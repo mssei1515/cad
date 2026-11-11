@@ -81,12 +81,12 @@
 
   const { session: fileSession, createForWorkspace: createDocumentFileFeature } = window.DocumentFileFeature.prepare();
 
-  const canvasInteraction = window.CanvasInteractionFeature.create({
+  const canvasInteraction = window.CanvasInteractionFeature.createWithOwnedClearing({
     sketches: sketchContext, readServices: geometryReadServices, constraintReferencesPoint: constraintReferences.constraintReferencesPoint, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
     isGeometryMode, setHint, applicationText, clearSnap: () => clearSnap(), clearPointerPreview: () => drawingPreview.setPointer(null),
-    clearSelection, updateGeometrySelectionUI, draw,
+    updateGeometrySelectionUI, draw,
   });
-  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, resetBlankCandidate,
+  const { lifecycle: drawOperationLifecycle, selectionFeature, selection: canvasSelection, clearSelection, resetBlankCandidate,
     pointUsage, cancelPendingCommand, createOperationSessionsForAuthoring: createOperationSessions } = canvasInteraction;
   presentation.bindUI({
     syncAnnotationResize: annotationPreparation.syncResizeSelection,
@@ -142,7 +142,7 @@
     projection: sketchProjectionFeature, cancelConstraintTargetCommand, updateUI, recordHistory,
     synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), clearSnap: () => clearSnap(), updateToolbar,
   });
-  const { highlight: selectionHighlight, clearing: selectionClearing, documentReset: documentCanvasReset } = createSelectionPresentation({
+  const { highlight: selectionHighlight, documentReset: documentCanvasReset } = createSelectionPresentation({
     projections: blockProjections, constraintReferences,
   });
   const fixedStateQueries = window.ConstraintReferences.createFixedState({
@@ -510,7 +510,6 @@
 
 
 
-  function clearSelection() { return selectionClearing.clear(); }
 
   authoringTools.createLifecycle({ interaction: canvasInteraction,
     instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, centerline: centerlineCommand,

@@ -9,9 +9,9 @@ function fixture(probe = {}){
  const sketches={activeSketchId:()=>{read();return state.active;},elementSketchId:item=>item.sketchId,canEditSketch:id=>{read();return id===state.active;},sketchById:id=>{read();return {id};}};
  const readServices={createPointUsage(options){assert.equal(this,readServices);events.push('pointUsage:create');return w.PointUsage.create({...options,currentScope:read,
   allGeometryLines:()=>read().lines,allGeometryCircles:()=>read().circles,allGeometryArcs:()=>read().arcs,allGeometrySplines:()=>read().splines});}};
- const foundation=w.CanvasInteractionFeature.create({sketches,readServices,constraintReferencesPoint:()=>false,editedFitPoints:()=>{read();return [];},isGeometryMode:()=>{read();return true;},
+ const foundation=w.CanvasInteractionFeature[probe.ownsClearing?'createWithOwnedClearing':'create']({sketches,readServices,constraintReferencesPoint:()=>false,editedFitPoints:()=>{read();return [];},isGeometryMode:()=>{read();return true;},
   setHint:()=>events.push('hint'),applicationText:(_ja,en)=>en,clearSnap:()=>lateSnap(),clearPointerPreview:()=>sessions.preview.setPointer(null),
-  clearSelection:()=>presentation.clearing.clear(),updateGeometrySelectionUI:()=>events.push('ui'),draw:()=>events.push('draw')});
+  clearSelection:probe.ownsClearing?undefined:()=>presentation.clearing.clear(),updateGeometrySelectionUI:()=>events.push('ui'),draw:()=>events.push('draw')});
  assert.deepEqual(events,['pointUsage:create']);assert.equal(foundation.selection,foundation.selectionFeature.selection);assert.equal(foundation.scope,foundation.selectionFeature.scope);assert.equal(foundation.access,foundation.selectionFeature.access);
  const sessionOptions = {snapForDrawing:p=>latePreview(p),linePreviewPoint:p=>latePreview(p),readCenterline:()=>latePreview(),projectPointToCenterlineSupport:p=>latePreview(p),
   readOffsetSelection:()=>latePreview(),computeTrimPreview:p=>latePreview(p),hits:{hitPoint:()=>latePreview(),hitLine:()=>latePreview(),hitCircle:()=>latePreview(),hitArc:()=>latePreview()},
@@ -38,6 +38,25 @@ test('Canvas interaction stages retain live owners, deferred ports and independe
  s.pending.cancel('');assert.equal(s.pending.current,null);assert.equal(s.preview.pointer,null);assert.equal(s.preview.trim,trim);
  assert.equal(s.targets.command,command);assert.equal(s.targets.operands.length,2);assert.equal(s.pointer.readLastPointer(),f.point);
  assert.deepEqual(f.events,['placement','offset','hide','toolbar','buttons','draw']);
+});
+
+test('Selection-owned clearing is shared by the foundation and identity input and preserves native selection, targets and hover effects',()=>{
+ const observations=[];
+ for(const ownsClearing of [false,true]){
+  const f=fixture({ownsClearing,beforeSessions(foundation){if(ownsClearing){assert.equal(foundation.clearSelection,foundation.selectionFeature.clearSelection);
+   assert.throws(()=>foundation.clearSelection(),{name:'ReferenceError',message:"Cannot access 'selectionClearing' before initialization"});}}});
+  const b=f.foundation,s=f.sessions,clear=ownsClearing?b.clearSelection:()=>f.presentation.clearing.clear();
+  b.selection.set('points',[f.point]);b.selection.set('referenceImages',[{id:'I1'}]);s.targets.begin('distance',[{kind:'point',point:f.point}]);
+  const command=s.targets.command;b.hover.update({point:f.point,referenceImage:{id:'I1'},block:{id:'B1'}});
+  f.presentation.highlight.setSidebarHover('point',f.point,new Set(),{redraw:false});f.events.length=0;
+  assert.equal(clear('ignored',null),undefined);assert.equal(b.selection.selectedElementCount(),0);assert.equal(s.targets.operands.length,0);
+  assert.equal(s.targets.command,command);assert.equal(b.hover.current.referenceImage,null);assert.equal(b.hover.current.block,null);
+  assert.equal(f.presentation.highlight.current,null);assert.equal(f.state.scope.points[0],f.point);assert.deepEqual(f.events,[]);
+  b.selection.set('points',[f.point]);const next={...f.point,id:'P2',sketchId:'S2'};
+  b.identity.selectInactive({}, {kind:'point',item:next,sketchId:'S2'});assert.equal(b.selection.points[0],next);
+  observations.push(JSON.stringify({events:f.events,selected:b.selection.points.map(p=>p.id),hover:b.hover.current.referenceImage,operands:s.targets.operands}));
+ }
+ assert.equal(observations[1],observations[0]);
 });
 
 test('Canvas interaction presentation shares original clearing/reset subsets and preserves the snap failure boundary',()=>{

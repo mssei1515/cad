@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 選択解除の完成参照をSelection自身へ集約（2026-11-11）
+
+CanvasSelectionFeature.createEditingWithOwnedClearingは、既存Selectionと後段で生成する選択解除actorへの安定したclearSelectionを所有する。CanvasInteractionFeature.createWithOwnedClearingは同じ関数をidentity選択と公開portへ共有する。app.jsは生成時に自分のclearSelectionを逆向きに渡さず、戻されたportを各機能へ接続する。後段presentationのhighlight／clearing／documentResetを従来の順で完成してから、実clearing参照を公開する。
+
+生成前のReferenceError、成功したundefined／null actorのTypeErrorを区別し、生成失敗は前の完成参照を保持する。解除時に実actor.clearを読み、同じmember receiver・無引数で呼び、戻り値と元例外を透過する。Selection／Hover／拘束対象sessionやモデルを複製せず、解除は拘束対象のoperandsを空にするがcommand自体は取り消さない。旧create／createEditingと外部clearSelection callbackの契約・公開recordを維持する。既存src/application/canvas_selection_feature.jsとcanvas_interaction_feature.jsへ集約し、新しいfileやglobalを増やさない。UI・履歴・保存形式v26は不変。
+
+app.jsは1,218→1,217行（1行減）、非空白776→775行。root218→217文・371→370束縛、委譲3→2行。構築440行・bind37行・別名88行・test hooks152行は不変。小さな行数削減より、Selection自身へのrootからの逆向き参照を解消したことを成果とする。200〜500行の全体目標は未完了。
+
+関連単体54件が成功。旧経路と所有経路で実Selection・Hover・拘束対象への効果とinactive Sketch選択を比較した。生成前guard、後段DocumentReset生成までの未公開、constructor失敗時の前参照保持、独立性、undefined／null、member receiver・引数数・getter取得時機・戻り値・元例外を検証した。構文639ファイル・全単体2,571件が成功。通常ja/light・en/dark・test起動でエラーなし。ASTと逆変換による比較では宣言した集約以外の生成本体とnative選択解除kernelは不変、新たな未束縛参照なし。
+
+関連E2E192件（9file、3.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。電源接続後の実行であり、電源が以前の性能失敗の原因だったとは断定しない。この単位では全E2E未実施。
+
 ## 共有regionsの完成参照と画像向け判定を既存CanvasHitInteractionへ集約（2026-11-11）
 
 CanvasHitInteraction.prepareSceneWithAnnotationsForWorkspaceは、画像向けの安定したhitReferenceImageAtと、従来と同じScene生成を行うcreateSceneを返す。実createQueriesが全queryを完成し、返すrecordのregionsを選んだ後だけ内部完了recordを更新する。画像・Hover・Canvas press／contextは同じ実regionsを使い、画像用の別queryや判定規則を作らない。Operation sessionsのprepareSceneWithAnnotationsは実Read services／Interaction／Sessionsを共有して、このprepared recordをそのまま返す。
