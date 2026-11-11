@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：Canvasの表示・作図・性能観測の組立てをCanvasTestDriverへ集約（2026-11-11）
+
+CanvasTestDriver.createBrowserSupportForScene（src/testing/canvas_test_driver.js）は、既存createForSceneによるdisplay／rendering支援を生成した後、同じCanvasViewControls・Lifecycle／OperationSessions・DrawingSnap・Workspace・Document persistence・Commit・Selection reader・profiler／schedulerから既存のviewObservation／authoringObservation／interactionProfilingTestApiを生成し、実APIを凍結recordで返す。追加のobservations入力はこのCanvas観測に必要な六つの既存owner／readerに限定し、他domainのtest fixtureや汎用app contextを受け取らない。raw createForSceneと各個別create API・観測計算・public browser test API名を維持する。
+
+三つの観測APIの確保は、従来の別々の位置から同じcreateForScene直後へ前進する。各raw constructorは関数／methodとObject.freezeによるAPIの確保だけで、model／scope／DOM・計測器を読んだりcallbackを実行したりしないことをASTとcold構築テストで照合した。全test constructorの絶対位置が不変とは扱わない。観測時のWorkspace.current読取り順、作図pending／targets・snap／Centerlineのlive値、metadata serialize／decorateと性能readerの裸呼出し、選択の実reader、pointer flush→profiler startのmember呼出し順・元例外を維持する。実display／renderingの同一性を保ち、model／Selection／session／計測器・cacheを複製しない。rootのtest query条件内でだけ生成し、全test支援完成後の一回の__jot2dTest公開、通常起動・UI・操作・保存形式v26は不変。
+
+app.jsは1,316→1,313行（3行減）、非空白871→868行。条件付きtest hooks165→162行。root269文・460束縛、構築474行・別名／設定121行・委譲19行は不変。構文依存辺1,143→1,141。Canvas観測の構築と共有依存の選択を既存testing ownerへ揃えた段階であり、200〜500行の全体目標は未完了。
+
+CanvasTestDriver単体へ2件を追加。raw構成と新しい組立てでcoldな生成、liveなscope／mode／pending／view変更、観測結果と読取り順の一致・pointer snapshotの独立、実profiler／scheduler、失敗flush時の既存profile保持、scene構築の元例外を検証する。root五編集以外、raw scene／三観測本体の不変、全scene入力と三観測の各入力が同じowner／関数であること、三観測constructorがObject.freeze以外の操作を行わないことを照合した。構文637file・全単体2,485件・focused14件・関連E2E447件が成功（38file、7.7m、exit 0）。E2E実行中の707入力と開始HEAD不変、選択38fileの一覧447件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-canvas-test-observation-assembly-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直近の全体検証7557059の全589件成功（27.2分）とは区別する。
+
+基準develop 6b35b90、作業branch codex/canvas-test-observation-assembly、開始時週枠残量97%。構文637file・全単体2,485件・focused14件・起動3経路は成功済み。関連38file・447件が成功（7.7m）。707入力と開始HEADを固定し、TEMP cad-canvas-test-observation-assembly-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。runnerはcad-canvas-test-observation-assembly-run.ps1。全runner終了を回収済み。直近の全体検証7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
 ### 最新：拘束操作の安定した入口を実command／Viewの生成ownerへ統合（2026-11-11）
 
 ConstraintEditing.prepare（src/application/constraint_editing.js）は、実createForWorkspaceを従来の位置で生成するcreatorと、取消／距離入力開始／距離解決開始／Controls更新／通常確定／重複除外確定／距離拘束確定の七つの安定した入口を提供する。prepare自体は関数と凍結APIを確保するだけで、Workspace／command／Viewやlistenerを生成せず、model・scope・UI・callbackを読まない。後段creatorは既存の実Workspace featureの生成が成功した後だけ同じ完成実体をprivateに保持し、実体そのものを返す。外部生成物を登録するsetterや汎用app contextを追加しない。

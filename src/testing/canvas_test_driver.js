@@ -1,6 +1,20 @@
 /* Browser-test viewport focus and world-to-client positions through existing display owners. */
 (() => {
   "use strict";
+  function createBrowserSupportForScene({ observations, ...options }) {
+    const scene = createForScene(options);
+    const { documentWorkspace, interaction, sessions, authoring, presentation } = options;
+    const { viewControls, centerlineCommand, commit, persistence, readSelectedGeometry, scheduler } = observations;
+    const viewObservation = createViewObservation({ viewState: viewControls.state, constraintStatusView: viewControls.constraintStatus });
+    const authoringObservation = createAuthoringObservation({
+      readMode: interaction.lifecycle.readMode, constraintTargetSession: sessions.targets, pendingCommandSession: sessions.pending,
+      drawingSnap: authoring.snap, centerlineCommand, currentScope: documentWorkspace.workspace.current,
+      decorateSerializedConstraint: persistence.decorateSerializedConstraint, serializeConstraint: persistence.serializeConstraint,
+      readPerformance: commit.readPerformance, readSelectedGeometry,
+    });
+    const interactionProfilingTestApi = createInteractionProfiling({ profiler: presentation.profiler, scheduler });
+    return Object.freeze({ ...scene, viewObservation, authoringObservation, interactionProfilingTestApi });
+  }
   function createDisplaySupport({ viewport, canvas, resizeCanvas, draw, resetModelState, geometry, currentScope, rootSketchId,
     fitAllGeometryToViewport, allGeometryBounds, visibleGeometryBounds, isVisibleSketchId, updateUI, readUnits, cssPxPerMm,
     snapCandidates, hits, evaluateSpline, elementFromPoint }) {
@@ -309,5 +323,5 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createDisplaySupport, createForScene, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation, createInteractionProfiling });
+  window.CanvasTestDriver = Object.freeze({ createBrowserSupportForScene, create, createDisplaySupport, createForScene, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation, createInteractionProfiling });
 })();

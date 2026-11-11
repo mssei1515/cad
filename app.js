@@ -1160,7 +1160,8 @@
     const { lineTransfer: trimLineTransferFixture, constructionBoundary: trimConstructionFixture, diameterTransfer: trimDiameterFixture } = window.TrimTestDriver.createFeature({
       feature: trimFeature, resetModelState, geometry: geometryCreation, pushModelConstraint, currentScope: workspace.current,
     });
-    const { display: canvasTestDriver, rendering: canvasRenderingTestSupport } = window.CanvasTestDriver.createForScene({
+    const { display: canvasTestDriver, rendering: canvasRenderingTestSupport, viewObservation,
+      authoringObservation, interactionProfilingTestApi } = window.CanvasTestDriver.createBrowserSupportForScene({
       document, canvas, viewport, documentWorkspace, readServices: geometryReadServices, geometry: geometryCreation,
       interaction: canvasInteraction, sessions: operationSessions, presentation,
       authoring: { tools: basicDrawingTools, snap: drawingSnap, offsetSelection },
@@ -1170,6 +1171,8 @@
       drawSelectionRect, drawAnnotationLeader, resizeCanvas, resetModelState, rootSketchId: ROOT_SKETCH_ID, defaultSketchId: DEFAULT_SKETCH_ID,
       cssPxPerMm: CSS_PX_PER_MM, types: window.GeometrySolver, evaluateSpline: window.SplineGeometry.evaluate,
       hits: { hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitDimension },
+      observations: { viewControls: canvasViewControls, centerlineCommand, commit: constraintCommitCommand,
+        persistence: documentPersistence, readSelectedGeometry: readTestSelectedGeometry, scheduler: pointerMoveScheduler },
     });
     const propertiesTestSupport = window.PropertiesTestDriver.createBrowserSupport({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, blockQueries: blockEditingQueries,
@@ -1205,7 +1208,6 @@
       canvasDriver: canvasTestDriver, dimensionValues: dimensionValueCommand, clearSelection, presentation, fit: drawingFit, references: constraintReferences, canvas,
       solving: sketchSolving, checkpoint: editingCheckpoint, analysis: constraintAnalysis, dimensionDrag,
     }, dimensionAppearance);
-    const viewObservation = window.CanvasTestDriver.createViewObservation({ viewState, constraintStatusView });
     const responsiveDragFixture = createResponsiveDragFixture({
       insertion: constraintInsertion, presentation, fit: drawingFit, modelTypes: window.GeometrySolver,
       resetModelState, ensureDimensionDefaults, solveAndRefresh, resetHistory, serializeModel,
@@ -1222,10 +1224,6 @@
       document, readHistory: readTestHistory, resetModelState, serializeModel, loadModelData, markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata,
       clearSelection, deleteCurrentSelection, deleteElements, deleteSketch, setAppearanceForSelection: propertiesTestSupport.appearanceTestAction.set, version: CURRENT_JSON_VERSION,
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
-    });
-    const authoringObservation = window.CanvasTestDriver.createAuthoringObservation({
-      readMode: drawOperationLifecycle.readMode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
-      decorateSerializedConstraint, serializeConstraint, readPerformance: constraintCommitCommand.readPerformance, readSelectedGeometry: readTestSelectedGeometry,
     });
     const selectionTestApi = createSelectionTestApi({
       sketchMoveCommand, blockEditor, blockSelection: blockSelectionQuery, blocks: blockEditingFeature, drawingFit, canvasDriver: canvasTestDriver,
@@ -1271,7 +1269,6 @@
       pushModelConstraint, solveAndRefresh, serializeConstraint, annotationLeaderTargetFromItem,
       clearSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
     });
-    const interactionProfilingTestApi = window.CanvasTestDriver.createInteractionProfiling({ profiler: interactionProfiler, scheduler: pointerMoveScheduler });
     window.__jot2dTest = window.BrowserTestApi.createWithProperties({
       canvas: { interactionProfilingTestApi, responsiveDragFixture, canvasTestDriver, viewObservation,
         authoringObservation, dragExecutionSupport, canvasRenderingTestSupport, canvasRenderProbe },
