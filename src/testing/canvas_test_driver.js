@@ -1,9 +1,11 @@
 /* Browser-test viewport focus and world-to-client positions through existing display owners. */
 (() => {
   "use strict";
-  function createBrowserSupportForWorkspace({ document, canvas, viewport, documentWorkspace, readServices, geometry, interaction, sessions, authoring, presentation,
+  function createBrowserSupportForWorkspace(options) {
+    const { document, canvas, viewport, documentWorkspace, readServices, geometry, interaction, sessions, authoring, presentation,
     display, ctx, selectionRectangle, layers, blocks, blockPlacement, annotations, frame, sceneQueries,
-    resizeCanvas, resetModelState, cssPxPerMm, observations }) {
+    resizeCanvas, resetModelState, cssPxPerMm: suppliedCssPxPerMm, observations } = options;
+    const cssPxPerMm = Object.hasOwn(options, "cssPxPerMm") ? suppliedCssPxPerMm : window.Appearance.CSS_PX_PER_MM;
     const { ROOT_SKETCH_ID: rootSketchId, DEFAULT_SKETCH_ID: defaultSketchId } = window.SketchHierarchy;
     const { geometry: hits } = sceneQueries;
     return createBrowserSupportForScene({ document, canvas, viewport, documentWorkspace, readServices, geometry, interaction, sessions, presentation, authoring,
