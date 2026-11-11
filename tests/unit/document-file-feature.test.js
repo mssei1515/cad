@@ -186,6 +186,7 @@ function fileOwnersFixture(composed, probe = {}) {
       for (const [key, name] of [["readDocumentName", "name"], ["currentSnapshot", "snapshot"], ["isEditingBlock", "block"]]) {
         const original = input[key]; input[key] = () => { assert.equal(probe.ready, true); reads.push(name); if (probe.failRead === name) throw probe.error; return original(); };
       }
+      if (probe.configureInput) probe.configureInput(input, w);
       const options = { window: input.window, document: input.document,
         documentWorkspace: { document: { get documentName() { return input.readDocumentName(); } } },
         history: { documentHistory: { get currentSnapshot() { return input.currentSnapshot(); } }, controller: { resetDocument: input.resetHistory } },
@@ -349,3 +350,47 @@ test('parent-owned DXF preserves constructor and completion failure identity or 
  assert.equal(results[1],results[0]);
 });
 })();
+
+function documentStartupFixture(composed) {
+ 'use strict';
+ const trace=[],state={fail:null,resets:0},marker=new Error('Document startup');
+ const step=name=>{trace.push(name);if(state.fail===name)throw marker;};
+ const f=fileOwnersFixture(true,{configureInput(input){
+  const history=input.resetHistory,serialize=input.serializeModel,descriptor=Object.getOwnPropertyDescriptor(input.document,'title'),listen=input.window.addEventListener;
+  input.resetHistory=function(label){assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(label,'起動');step('history');return history(label);};
+  input.serializeModel=function(){assert.equal(this,undefined);assert.equal(arguments.length,0);step('serialize');return serialize();};
+  Object.defineProperty(input.document,'title',{...descriptor,set(value){step('status');descriptor.set.call(this,value);}});
+  input.window.addEventListener=function(type,listener){assert.equal(this,input.window);assert.equal(type,'beforeunload');step('listen');return listen(type,listener);};
+ }});
+ const getElement=f.document.getElementById;
+ f.document.getElementById=function(id){if(id==='copyDocumentLinkBtn'){step('startup');assert.equal(f.session.checkpointKind,'new');assert.equal(f.session.matchesCheckpoint(f.state.data),true);}return getElement.call(this,id);};
+ function resetModelState(){assert.equal(this,undefined);assert.equal(arguments.length,0);step('reset');state.resets++;f.state.data={documentName:'New drawing',points:[]};}
+ function initializePresentation(message){assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(message,'空の新規Documentを作成しました');step('presentation');}
+ function start(){
+  if(composed)return f.feature.startForEmptyDocument({resetModelState,initializePresentation});
+  resetModelState();initializePresentation('空の新規Documentを作成しました');const {resetDocument:resetHistory}=f.probe.options.history.controller;resetHistory('起動');const {markCheckpoint}=f.feature;markCheckpoint('new');f.feature.start();
+ }
+ function snapshot(){return JSON.stringify({trace,events:f.events,data:f.state.data,snapshot:f.state.snapshot,checkpointKind:f.session.checkpointKind,checkpointMatches:f.session.matchesCheckpoint(f.state.data),status:f.status,title:f.document.title,resets:state.resets});}
+ assert.deepEqual(trace,[]);return {...f,trace,start,snapshot,startState:state,marker};
+}
+
+test('empty Document startup resets and presents before history and checkpoint, then installs unload protection before native startup opening',async()=>{
+ const snapshots=[];for(const composed of [false,true]){const f=documentStartupFixture(composed),original=f.state.data;assert.equal(f.start(),undefined);
+  await Promise.resolve();assert.notEqual(f.state.data,original);assert.deepEqual(f.trace,['reset','presentation','history','serialize','status','listen','startup']);
+  assert.equal(f.session.checkpointKind,'new');assert.equal(f.session.matchesCheckpoint(f.state.data),true);assert.equal(f.status.dataset.dirty,'false');
+  f.state.data.points.push({id:'P1'});const event=new Event('beforeunload',{cancelable:true});f.browser.dispatchEvent(event);assert.equal(event.defaultPrevented,true);snapshots.push(f.snapshot());
+ }assert.equal(snapshots[1],snapshots[0]);
+});
+
+test('empty Document startup propagates each synchronous failure without rolling back completed reset, history, checkpoint or listener-start state',()=>{
+ for(const stage of ['reset','presentation','history','serialize','status','listen']){const snapshots=[];for(const composed of [false,true]){
+  const f=documentStartupFixture(composed);f.startState.fail=stage;assert.throws(f.start,e=>e===f.marker);assert.equal(f.trace.at(-1),stage);assert.equal(f.trace.includes('startup'),false);snapshots.push(f.snapshot());
+ }assert.equal(snapshots[1],snapshots[0],stage);}
+});
+
+test('empty Document startup preserves native start idempotency while repeating explicit initialization and restarts after dispose',async()=>{
+ const snapshots=[];for(const composed of [false,true]){const f=documentStartupFixture(composed);f.start();f.start();await Promise.resolve();
+  assert.equal(f.startState.resets,2);assert.equal(f.trace.filter(x=>x==='history').length,2);assert.equal(f.trace.filter(x=>x==='listen').length,1);assert.equal(f.trace.filter(x=>x==='startup').length,1);
+  f.feature.dispose();f.start();await Promise.resolve();assert.equal(f.startState.resets,3);assert.equal(f.trace.filter(x=>x==='listen').length,2);assert.equal(f.trace.filter(x=>x==='startup').length,2);snapshots.push(f.snapshot());
+ }assert.equal(snapshots[1],snapshots[0]);
+});

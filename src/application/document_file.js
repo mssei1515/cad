@@ -5,17 +5,27 @@
     const session = window.DocumentFiles.create();
     function createForWorkspace({ window: browserWindow, document, documentWorkspace, history, blockEditor, presentation, fit,
       serializeModel, requestChoice, loadModelData, solveAndRefresh, repairMessage }) {
+      const { resetDocument: resetHistory } = history.controller;
       const feature = create({ window: browserWindow, document, fileSession: session, applicationText: presentation.settings.applicationText,
         readDocumentName: () => documentWorkspace.document.documentName, currentSnapshot: () => history.documentHistory.currentSnapshot,
         isEditingBlock: () => Boolean(blockEditor.current), serializeModel, requestChoice, loadModelData, solveAndRefresh,
-        resetHistory: history.controller.resetDocument, fitAllGeometryToViewport: fit.fitAllGeometryToViewport,
+        resetHistory, fitAllGeometryToViewport: fit.fitAllGeometryToViewport,
         repairMessage, setHint: presentation.setHint, log: presentation.log, draw: presentation.draw });
       function createDxfForWorkspace({ geometry, interaction, sessions, minimumLength, clearSelection }) {
         function recordHistory(label = "変更") { return history.record(label); }
         return feature.createDxfForEditing({ documentWorkspace, geometry, interaction, sessions, minimumLength, clearSelection,
           updateUI: presentation.updateUI, recordHistory });
       }
-      return Object.freeze({ ...feature, createDxfForWorkspace });
+      const { markCheckpoint } = feature;
+      function startForEmptyDocument({ resetModelState, initializePresentation }) {
+        resetModelState();
+        initializePresentation("空の新規Documentを作成しました");
+        resetHistory("起動");
+        markCheckpoint("new");
+        completed.start();
+      }
+      const completed = Object.freeze({ ...feature, createDxfForWorkspace, startForEmptyDocument });
+      return completed;
     }
     return Object.freeze({ session, createForWorkspace });
   }

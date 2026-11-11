@@ -1,5 +1,18 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 空Documentの保存基準と起動時読込の開始を既存File Featureへ集約（2026-11-11）
+
+DocumentFileFeature.prepareが返すcreateForWorkspace（src/application/document_file.js）は、startForEmptyDocumentを公開する。app.jsのtest hooks公開・式入力装飾後の同じ段階から、既存resetModelStateとinitializePresentationだけを明示portとして渡す。入口はリセット→表示初期化（従来の新規Documentメッセージ）→実履歴のresetDocument("起動")→実markCheckpoint("new")→同じ完成Feature.start()の順で実行する。空Documentの保存基準を作ってから起動時のリンク読込を始め、別のbootstrapや全体contextは作らない。
+
+reset／表示初期化／履歴／checkpointは従来のbare呼出しと零／一引数を保つ。startは同じ外側の凍結完成Featureをmember receiverとして零引数で呼ぶ。履歴のresetDocumentは実controllerのreadonly data propertyで、同じ実関数を選び、checkpointのdefault serializeも既存処理に残す。起動例外はそのまま伝え、すでに終えたreset／履歴／checkpointやlistener開始状態を巻き戻さない。新入口は初期化全体の実行済みflagを追加せず、native startのlistener重複防止・dispose後の再起動、voidの起動時非同期読込を維持する。生のcreate／start／markCheckpoint／保存読込、Document／History／File sessionの状態所有、UI・保存形式v26、既存application／persistence／UI配置と読込順は不変。
+
+app.jsは1,245→1,241行（4行減）、非空白802→798行、root231→227文・391→390束縛、構文依存辺1,067→1,065。その他call38→35行、起動6→5行。構築114文／449行・bind41行・別名設定93行・委譲7行・test hooks157行は不変。全体の200〜500行目標は未完了。
+
+関連単体18件・全単体2,545件・構文639fileが成功。追加三単体は実DocumentFileFeature／History snapshot／File session／Status／Command／browser EventTargetを用いる旧手順比較で、初期化と起動時読込の順、dirty判定とbeforeunload、六段階の同期例外・途中状態、重複start時の明示初期化とlistener非重複、dispose後の再起動を確認した。browser比較では実reset→表示初期化→履歴→checkpoint→Feature.start→startup openの順、bare／member receiverと引数数、履歴関数のreadonly、初期保存状態・タイトル・履歴snapshotと公開204項目が一致した。保存データも実行時刻savedAtだけを除いて一致した。通常ja/light・en/darkとtest起動も成功。既存ownerの宣言した変更を逆変換すると旧sourceと一致し、四つのnative actor sourceは不変で、新しい未束縛参照もない。
+
+関連E2E147件（unified-ui／file-safety／document-bookmarks／application-menus／phase0-characterization／dxf-importの6file、2.2m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## Canvas入力の実体保持と接続ライフサイクルを生成ownerへ集約（2026-11-11）
 
 CanvasInteractionFeature（src/application/canvas_interaction_feature.js）のoperation sessionsが、既存preparePointerForEditing.createBindingで成功して返された実CanvasInputBindingをprivateに保持する。新しいcreateMoveSchedulerForEditingは、その実体を遅延して読む既存createMoveSchedulerを生成する。app.jsからreadInput callbackと入力実体のroot保持を外し、生成ownerとスケジューラの参照先を揃える。生のcreateMoveSchedulerは明示readerを受ける従来APIとして維持する。
