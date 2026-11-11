@@ -222,8 +222,9 @@ function workspaceFixture(composed, probe = {}) {
     };
     probe.input = input;
     if (probe.configure) probe.configure(input, options);
-    if (composed === 'prepared' || composed === 'prepared-projection') {
+    if (composed === 'prepared' || composed === 'prepared-projection' || composed === 'prepared-input') {
       probe.preparation = w.GeometryDragFeature.prepare();
+      if (composed === 'prepared-input') { probe.cohort=probe.preparation.createWithConstraintInputForWorkspace(input); return probe.cohort.geometry; }
       if (composed === 'prepared-projection') return probe.preparation.createForWorkspaceWithProjection(input);
       return probe.preparation.createForWorkspace(input);
     }
@@ -370,4 +371,33 @@ test('projection drag defaults retain explicit message overrides and undefined o
   const custom = () => 'custom reason', p = projectionDragProbe({ projectionBlockedMessage: custom }), f = workspaceFixture('prepared-projection', p.probe);
   f.state.ready = true; f.state.lockedProjection = true; const plan = f.feature.build('point', f.point, { x: 0, y: 0 }); f.feature.prepare(plan);
   assert.equal(f.feature.preview(plan, { x: 2, y: 0 }).reason, 'custom reason'); assert.deepEqual(p.trace, ['inputs']); assert.equal(f.point.x, 0);
+});
+
+
+test('drag input composition publishes native Geometry first and passes the same pointer and history to a bare input factory',()=>{
+  const p=projectionDragProbe(),trace=[],input=Object.freeze({dimension:{}}),dragging=Object.freeze({command:{}});let factoryOptions;
+  const configure=p.probe.configure;
+  p.probe.configure=function(options,legacy){configure(options,legacy);options.clearSnap=()=>trace.push('clear');options.createConstraintInput=function(received){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);factoryOptions=received;
+    assert.equal(p.probe.preparation.queries.isDraggingPoint({}),false);trace.push('factory');return{get input(){trace.push('input');return input;},get dragging(){trace.push('dragging');return dragging;}};};};
+  const f=workspaceFixture('prepared-input',p.probe),cohort=p.probe.cohort;assert.ok(Object.isFrozen(cohort));assert.equal(cohort.geometry,f.feature);assert.equal(cohort.command,f.feature.command);assert.equal(cohort.input,input);assert.equal(cohort.dragging,dragging);
+  assert.deepEqual(Object.keys(factoryOptions),['pointer','clearSnap','recordHistory']);assert.equal(factoryOptions.pointer,p.probe.input.pointer);assert.equal(factoryOptions.clearSnap,p.probe.input.clearSnap);assert.equal(factoryOptions.recordHistory,p.probe.input.recordHistory);
+  assert.deepEqual(trace,['factory','input','dragging']);assert.equal(f.state.reads,0);assert.equal(f.scaleReads(),0);assert.deepEqual(f.events,[]);assert.deepEqual(f.pointerEvents,[]);
+  f.state.ready=true;const plan=p.probe.preparation.build('point',f.point,{x:0,y:0});p.probe.preparation.begin({pointerId:71},plan);assert.equal(cohort.command.active,true);assert.equal(p.probe.preparation.queries.isDraggingPoint(f.point),true);cohort.command.update({x:6,y:4});assert.equal(f.point.x,6);assert.equal(f.point.y,4);cohort.command.finish({pointerId:71});assert.equal(f.events.filter(e=>e==='history').length,1);
+});
+
+test('drag input failures retain the completed Geometry publication and original pending point session without rollback',()=>{
+  for(const failAt of ['factory','input','dragging']){
+    const p=projectionDragProbe(),f=workspaceFixture('prepared-projection',p.probe),ready=p.probe.preparation,marker=new Error(failAt),trace=[];f.state.ready=true;
+    const plan=ready.build('point',f.point,{x:0,y:0});ready.begin({pointerId:72},plan);assert.equal(f.feature.command.active,true);const before=[f.point.x,f.point.y],events=f.events.slice();
+    assert.throws(()=>ready.createWithConstraintInputForWorkspace({...p.probe.input,clearSnap(){},createConstraintInput(){'use strict';assert.equal(this,undefined);trace.push('factory');assert.equal(ready.queries.isDraggingPoint(f.point),false);if(failAt==='factory')throw marker;return{get input(){trace.push('input');if(failAt==='input')throw marker;return{};},get dragging(){trace.push('dragging');throw marker;}};}}),error=>error===marker);
+    assert.deepEqual(trace,['factory','input','dragging'].slice(0,['factory','input','dragging'].indexOf(failAt)+1));assert.equal(ready.queries.isDraggingPoint(f.point),false);assert.equal(f.feature.command.active,true);assert.deepEqual([f.point.x,f.point.y],before);assert.deepEqual(f.events,events);f.feature.command.reset();
+  }
+});
+
+test('drag input composition does not construct input after a native Geometry constructor failure and preserves the previous prepared owner',()=>{
+  const p=projectionDragProbe(),f=workspaceFixture('prepared-projection',p.probe),ready=p.probe.preparation,original=w.GeometryDragPlan,marker=new Error('Geometry plan failed');let calls=0;f.state.ready=true;
+  const plan=ready.build('point',f.point,{x:0,y:0});ready.begin({pointerId:73},plan);
+  w.GeometryDragPlan={...original,create(){throw marker;}};
+  try{assert.throws(()=>ready.createWithConstraintInputForWorkspace({...p.probe.input,createConstraintInput(){calls++;}}),error=>error===marker);}finally{w.GeometryDragPlan=original;}
+  assert.equal(calls,0);assert.equal(ready.queries.isDraggingPoint(f.point),true);ready.reset();assert.equal(f.feature.command.active,false);
 });
