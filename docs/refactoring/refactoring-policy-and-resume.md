@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の機能policy既定値移管単位ではapp.jsは1,271行、非空白826行。AST監査ではroot243文・417束縛、構築・接続468非空白行、別名・設定99行、委譲14行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のAnnotation component owner統合単位ではapp.jsは1,269行、非空白824行。AST監査ではroot243文・417束縛、構築・接続467非空白行、別名・設定99行、委譲13行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：Annotationの生成とbounds・resize・reset・syncを実component ownerへ集約（2026-11-11）
+
+AnnotationFeature.prepareは、注記の既存生成段階と遅延操作の接続を担当する。prepareForWorkspaceの既存query／constrained drag／Featureの段階は維持し、成功した実Featureのみを保持する。createEditorForEditing／createDragForEditingは同じ実Featureのfactoryをmember receiverで呼び、成功した実Editor record／Dragのみを保持して、その実recordをそのまま返す。raw Featureを複製したfacadeで置き換えず、他機能は従来どおり実APIを直接受け取る。生成に失敗した場合は前に完成したcomponentを置き換えない。setterで外からcomponentを登録する方式にはしない。
+
+annotationBoundsは実spatialへ全引数をmember callし、resizeEnabledは実Dragへ一引数、resetDragとsyncInputは実Drag／実Editorのcontrollerへ零引数をmember callする。返値・元例外・余剰引数の破棄、Workspace／bound editing scope、実componentのObject同一性を維持する。未生成時は、bounds／Feature reader／Editor・Drag生成で旧annotationFeature、resize／resetで旧annotationDrag、syncで旧annotationInputControllerの初期化前ReferenceErrorを維持する。Editor recordのcontrollerはObject.freezeしたown data propertyであり、root aliasからの読取りを同じ完成recordのfield読取りへ移しても対象は変わらない。
+
+prepared createConstrainedDragForFeatureの既定readFeature、Feature生成の既定resizeEnabled、Editor生成の既定resetDragは実ownerの遅延portへ接続する。default propertyより後にoptionsを展開し、明示callback／undefined／nullによる上書きを維持する。native query・Feature・Editor・Dragの生成位置と公開→bind／start順は変えない。早期prepareはclosureとfrozen APIだけを生成し、model・DOM・viewport／scopeや未完成componentを読まない。モード／Pending／拘束targetを組み合わせるresize UI条件はapp.jsに残す。生のcreate／createForEditing／prepareForWorkspace等は変更せず、新しいmodel・Selection・scope・cache・listener／global contextは追加しない。UIと保存形式v26も維持する。
+
+app.jsは1,271→1,269行（2行減）、非空白826→824行。root243文・417束縛は不変、構文依存辺1,094→1,091、構築468→467行・委譲14→13行。別名／設定99行・test hooks162行は不変。構築文112→113は早期のcold prepare一つを追加した分であり、native componentの生成を移動したり増やしたりしていない。減行よりも五つの遅延接続を実生成ownerへ寄せる単位であり、200〜500行の全体目標は未完了。
+
+新規四テストは、未生成時guardとcoldな生成順・実record同一性、native constrained dragのvirtual geometry／leader移動とlive scale／元例外、実member receiver・引数・返値、factory失敗時の完成component保持とcontext独立性、明示callback／undefined／nullの上書きを検証する。callback上書きfixtureはケースごとに生成し、freeze済みrendererを再構築する初期fixtureの問題のみ修正した。既存の期待値は緩めていない。新しいprepare関数とnamespaceへの公開だけを除いたASTが基準と等しく、全ての従来APIは不変。root十四編集・free identifier集合・load／E2E一覧不変も照合した。
+
+構文639file・全単体2,503件・関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、一覧504件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop f0a7954、作業branch codex/annotation-component-ownership、開始時週枠残量92%。構文639file・注記関連27件・全単体2,503件・通常二経路／test一経路の起動が成功。注記専用のanchor／display-sizeを含む関連40file・504件の成功と、709入力・開始HEAD不変を確認した。直前の全体589件成功（develop f0a7954、code b2905a1のtree、30.0分）と今回の関連検証を区別する。証跡はTEMP cad-annotation-component-ownership-{focused,check,unit,smoke,e2e}.logとaudit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
 
 ### 最新：単一機能の固定既定値を各組立てownerへ移管（2026-11-11）
 
