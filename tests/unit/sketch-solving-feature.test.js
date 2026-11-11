@@ -59,7 +59,7 @@ function contextFixture(composed, failureAt=null) {
   state.extra={object:{sketchId:'A',value:3},prop:'value'};
   const annotationDrag={scope:()=>{read();return state.virtual;},additionalVariables:()=>{read();return [state.extra];}};
   Object.assign(owners.documentWorkspace.sketches,{membershipQuery:()=>{read();return {activeSketchId:'A',elementSketchId:input.elementSketchId};},
-   descendantSketchIds:()=>[],isEditableSketchElement:()=>true,isRootSketch:()=>false});
+   descendantSketchIds:()=>[],isEditableSketchElement:()=>true,isRootSketch:()=>false,isReferenceSourceSketchId:()=>true});
   const reads={resolveGeometryRef:ref=>ref.target};for(const name of ['Points','Lines','Circles','Arcs','Splines'])reads['allGeometry'+name]=()=>{read();return state.virtual[name.toLowerCase()];};
   Object.assign(owners.readServices,{reads:{...reads,geometryInstanceBundles:()=>[],blockProjectionBundles:()=>[]},instances:{geometryInstanceSourcePoints:()=>[]},geometryAppearance:{isVisibleSketchElement:()=>true}});
   owners.references.geometryInstanceDependencyRefs=item=>item.refs||[];
@@ -72,8 +72,11 @@ function contextFixture(composed, failureAt=null) {
    const contextInput={documentWorkspace:owners.documentWorkspace,readServices:owners.readServices,references:owners.references,referenceState:owners.referenceState,
     annotationDrag,solver,pointUsage:{isExplicitPoint:()=>true},presentation:owners.presentation,solveState:owners.solveState,minimumLength:0.001,acceptError:owners.acceptError};
    probe.contextInput=contextInput;
-   if(composed==='prepared') {
-    const prepared=w.SketchSolvingFeature.prepareForWorkspace(contextInput);probe.preparation=prepared;
+   if(composed==='prepared'||composed==='reference-prepared') {
+    const prepared=composed==='reference-prepared'
+     ?w.SketchSolvingFeature.prepareWithReferencesForWorkspace(contextInput)
+     :w.SketchSolvingFeature.prepareForWorkspace(contextInput);probe.preparation=prepared;
+    if(composed==='reference-prepared')owners.referenceState=prepared.referenceState;
     assert.throws(()=>prepared.solveAndRefresh(),e=>e.name==='ReferenceError'&&e.message==="Cannot access 'solveRefreshCommand' before initialization");
     owners.solveState=prepared.solveState;
     context=prepared.createContextForWorkspace(contextInput);
@@ -216,4 +219,48 @@ test('prepared refresh forwards all arguments to the completed command with its 
  try{const api=f.probe.context.createSolving(f.owners);assert.equal(api.refresh,refresh);}finally{w.SolveRefreshCommand=original;}
  const run=p.solveAndRefresh;assert.equal(run(undefined,null,'extra'),result);assert.deepEqual(calls,[[undefined,null,'extra']]);
  fail=true;assert.throws(()=>run('next'),e=>e===marker);assert.deepEqual(calls[1],['next']);
+});
+
+test('reference-aware solving preparation stays cold and owns independent live reference diagnostics and solve results',()=>{
+ const f=contextFixture('prepared'),w=f.probe.window;let ready=false,current={constraints:[]};
+ const read=()=>{assert.equal(ready,true);return current;};
+ const options={...f.probe.contextInput,documentWorkspace:{workspace:{current:read},sketches:{
+  constraintSketchId:c=>c.sketchId,isReferenceSourceSketchId:(source,target)=>source!==target}}};
+ const first=w.SketchSolvingFeature.prepareWithReferencesForWorkspace(options);
+ const second=w.SketchSolvingFeature.prepareWithReferencesForWorkspace(options);
+ assert.ok(Object.isFrozen(first));assert.notEqual(first.referenceState,second.referenceState);assert.notEqual(first.solveState,second.solveState);
+ assert.throws(first.solveAndRefresh,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'solveRefreshCommand' before initialization");
+ ready=true;const a={reference:true,sketchId:'A',referenceSketchId:'B'},b={reference:true,sketchId:'B',referenceSketchId:'A'};
+ current={constraints:[a,b]};first.referenceState.refreshReferenceConstraintValidity();
+ assert.equal(first.referenceState.constraintIsOperational(a),true);assert.equal(first.referenceState.referenceConstraintErrorInfo(b),'循環参照');
+ assert.equal(second.referenceState.constraintIsOperational(b),true);assert.equal(second.referenceState.errorCount,0);
+ first.solveState.setSketchSolveError('A',{errorNorm:1});assert.equal(second.solveState.hasError('A'),false);
+ current={constraints:[]};first.referenceState.refreshReferenceConstraintValidity();assert.equal(first.referenceState.errorCount,0);
+ assert.equal(first.solveState.hasError('A'),true);
+});
+
+test('reference-aware preparation shares the actual reference owner through query, analysis and completed solving',()=>{
+ const f=contextFixture('reference-prepared'),p=f.probe.preparation,reference=p.referenceState;
+ assert.equal(f.probe.queryPorts.constraintIsOperational,reference.constraintIsOperational);
+ assert.equal(f.probe.analysisPorts.constraintIsOperational,reference.constraintIsOperational);
+ assert.equal(f.probe.analysisPorts.refreshReferenceConstraintValidity,reference.refreshReferenceConstraintValidity);
+ assert.equal(f.probe.analysisPorts.sketchHasSolveError,p.solveState.hasError);
+ const invalid={reference:true,referenceSketchId:'A',sketchId:'A',enabled:true};f.state.scope.constraints=[invalid];
+ reference.refreshReferenceConstraintValidity();assert.equal(reference.constraintIsOperational(invalid),false);
+ f.state.scope.constraints=[];assert.equal(p.solveAndRefresh('same owner'),f.state.result);
+ assert.equal(reference.errorCount,0);assert.equal(p.solveState.sketchSolveState('A').result,f.state.result);
+ assert.equal(f.probe.preparation.referenceState,reference);
+});
+
+test('reference-aware preparation preserves original construction failures and creates no solve state after reference failure',()=>{
+ const f=contextFixture('prepared'),w=f.probe.window,referenceFactory=w.ReferenceConstraintState,solving=w.SketchSolving;
+ const marker=new Error('construction failed'),order=[];let failReference=true;
+ w.ReferenceConstraintState={create(options){order.push('references');if(failReference)throw marker;return referenceFactory.create(options);}};
+ w.SketchSolving={...solving,createState(){order.push('results');throw marker;}};
+ try{
+  assert.throws(()=>w.SketchSolvingFeature.prepareWithReferencesForWorkspace(f.probe.contextInput),e=>e===marker);
+  assert.deepEqual(order,['references']);failReference=false;
+  assert.throws(()=>w.SketchSolvingFeature.prepareWithReferencesForWorkspace(f.probe.contextInput),e=>e===marker);
+  assert.deepEqual(order,['references','references','results']);
+ }finally{w.ReferenceConstraintState=referenceFactory;w.SketchSolving=solving;}
 });

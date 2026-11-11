@@ -1,4 +1,16 @@
 # app.jsを起動・接続専用にする継続作業
+### 最新：参照拘束の妥当性と求解準備の組立てを求解機能へ集約（2026-11-11）
+
+SketchSolvingFeature.prepareWithReferencesForWorkspace（src/application/sketch_solving_feature.js）は、DocumentWorkspace／Geometry read／Constraint references／solver／PointUsage／Presentationの六つの既存ownerから、実ReferenceConstraintStateと既存prepareForWorkspaceによる実求解準備をこの順に生成し、同じreferenceStateとsolveState／createContextForWorkspace／solveAndRefreshを凍結recordで返す。appは参照妥当性を別途構築せず、返された同じ実体をSketch投影・求解・Tree・Block・Document resetとtestへ共有する。参照診断のMapと求解結果のMapは別々の既存ownerに残り、第二のmodel／solver／session／解析cacheや登録setter、汎用app contextを追加しない。
+
+ReferenceConstraintStateの生成位置は従来のまま。求解結果Mapを作るSketchSolving.createStateだけはその直後へ前進する。この二つのraw constructorはMap確保とObject.freezeによるAPI生成だけで、Workspace／Sketch・Solver・UI・callback・listenerを読んだり実行したりしないことをASTで照合した。全constructorの絶対位置が不変とは扱わない。Query／Analysis／Redundancy、後段求解とParameter構築、bind／startは従来の位置に残る。旧prepareForWorkspace／createContextForWorkspace／createForWorkspace等のAPI、各raw constructorと妥当性・求解アルゴリズムは維持する。Workspace.current、Annotation仮scope、bound editing scope、元のguard・member receiver・可変長引数・返値／例外、UI・履歴・保存形式v26は不変。
+
+app.jsは1,323→1,320行（3行減）、非空白878→875行。root276→275文・461→460束縛。構築473→471行、別名・設定122→121行、委譲26行・条件付きtest hooks165行は不変。構文依存辺1,159→1,153。appから参照状態の三入力の選択と別個の求解準備の接続を外し、実体の生成・共有を求解機能の組立てへ揃えた段階であり、200〜500行の全体目標は未完了。
+
+既存SketchSolvingFeature単体へ3件を追加。coldな構築とcontext間の診断／結果state独立、操作時に読むscope切替後の参照診断更新、同じReference stateをQuery／Analysis／実求解まで使うこと、初期guard、参照生成失敗時に結果stateを作らないことと元例外を検証する。root三編集以外と既存feature本体・raw妥当性／求解／Analysis／scope query実装の不変、未使用／未束縛／初期化前root参照の追加なしを照合した。構文637file・全単体2,479件・focused20件・全E2E589件が成功（50file、27.2m、exit 0）。E2E実行中の707入力と開始HEAD不変、全50fileの一覧589件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-solving-reference-assembly-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop 223a953、作業branch codex/solving-reference-assembly、開始時週枠残量98%。構文637file・全単体2,479件・focused20件・起動3経路は成功済み。生成位置変更の検証として全50file・589件のE2Eを実行して成功（27.2m）。707入力と開始HEADを固定し、TEMP cad-solving-reference-assembly-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。実行runnerはcad-solving-reference-assembly-run.ps1。全runner終了を回収済み。停止条件は週枠残量50%未満、mainは停止時に最新の全体検証後、最後に反映・develop同期する。
+
 
 ### 最新：DocumentApplicationと遅延load／正規化入口を生成ownerへ統合（2026-11-11）
 
