@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 
-function fixture() {
+function fixture(configureOptions) {
   const events = [], scope = { parameters: [], sketches: [{ id: 'S1' }] };
   const state = { workspace: scope, editing: scope, language: 'ja', dependents: [], fail: null };
   const draft = { current: null };
@@ -32,6 +32,7 @@ function fixture() {
   const options = { document: {}, window: {}, documentWorkspace, presentation,
     currentNamespace: documentWorkspace.workspace.current, currentScope: () => state.editing, readBlockEditor: () => null,
     recordHistory: label => events.push(['history', label]), pickDimension() {} };
+  if (configureOptions) configureOptions(options, { w, state, events });
   const feature = w.ParameterEditingFeature.prepareForWorkspace(options);
   const applicationOptions = { editingScope: { get current() { return state.editing; } },
     blocks: { session: { current: null }, createPropagation: () => ({ propagate: value => events.push(['propagate', value]) }) },
@@ -86,4 +87,62 @@ test('application publication preserves receiver, all arguments, return and orig
   first.apply = () => value; assert.equal(applyDraft(), value);
   const other = f.w.ParameterEditingFeature.prepareForWorkspace(f.options), otherApply = applyDraft;
   assert.throws(() => otherApply(), /before initialization/); assert.notEqual(other.editor, feature.editor);
+});
+
+test('Parameter defaults separate the live Workspace namespace from the lazy bound-scope reader and keep native expression highlights on that scope', () => {
+  const marker = new Error('bound read failed'); let editorPorts, referenceNames, namespaceReader, namespaceGets = 0, boundGets = 0, ready = false, failure;
+  const f = fixture((options, { w, state }) => {
+    delete options.currentNamespace; delete options.currentScope;
+    const owner = options.documentWorkspace;
+    const readNamespace = function() { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); return state.workspace; };
+    Object.defineProperty(owner.workspace, 'current', { get() { namespaceGets++; return readNamespace; } });
+    Object.defineProperty(owner, 'readEditingScope', { get() {
+      boundGets++; if (failure === 'getter') throw marker;
+      return function() {
+        assert.equal(this, owner); assert.equal(arguments.length, 0);
+        if (!ready) throw new ReferenceError("Cannot access 'editingScopeBinding' before initialization");
+        if (failure === 'method') throw marker; return state.editing;
+      };
+    } });
+    owner.parameters = { ...owner.parameters, symbolElementsInNamespace(scope) { assert.equal(scope, state.editing); return []; } };
+    const editor = w.ParameterEditor, guard = w.ParameterApplication, input = w.ExpressionInputView;
+    w.ParameterEditor = { ...editor, createForWorkspace(ports) { editorPorts = ports; return editor.createForWorkspace(ports); } };
+    w.ParameterApplication = { ...guard, createDeletionGuard(ports) { namespaceReader = ports.currentNamespace; return guard.createDeletionGuard(ports); } };
+    w.ExpressionInputView = { ...input, create(ports) { referenceNames = ports.referenceNamesForInput; return input.create(ports); } };
+    assert.equal(namespaceGets, 0); assert.equal(boundGets, 0);
+    state.readNamespace = readNamespace;
+  });
+  assert.equal(namespaceGets, 1); assert.equal(namespaceReader, f.state.readNamespace); assert.equal(boundGets, 0); assert.deepEqual(f.events, []);
+  assert.equal(editorPorts.currentScope.name, 'currentScope'); assert.equal(editorPorts.currentScope.length, 0);
+  assert.throws(editorPorts.currentScope, { name: 'ReferenceError', message: "Cannot access 'editingScopeBinding' before initialization" });
+  ready = true;
+  const workspace = { parameters: [{ name: 'workspaceName' }] }, bound = { parameters: [{ name: 'boundName' }] };
+  f.state.workspace = workspace; f.state.editing = bound;
+  assert.equal(editorPorts.currentScope.call({}, 'ignored'), bound);
+  f.feature.prepareNamespace(); assert.deepEqual(f.events.splice(0), [['normalize', workspace]]);
+  assert.equal(f.feature.guard([]), true); assert.equal(f.events.shift()[2], workspace);
+  const input = { closest: () => null };
+  assert.deepEqual([...referenceNames(input)], ['boundName']); assert.equal(namespaceGets, 1);
+  const replacement = { parameters: [{ name: 'otherBound' }] }; f.state.editing = replacement;
+  assert.deepEqual([...referenceNames(input)], ['otherBound']); assert.equal(f.state.workspace, workspace);
+  for (const stage of ['getter', 'method']) { failure = stage; assert.throws(editorPorts.currentScope, error => error === marker); }
+});
+
+test('Parameter default readers preserve explicit own and inherited overrides including undefined and null without reading fallback owners', () => {
+  for (const inherited of [false, true]) for (const value of [undefined, null, () => 17]) {
+    let scope, namespace; const marker = new Error('unexpected fallback read');
+    const f = fixture((options, { w }) => {
+      delete options.currentScope; delete options.currentNamespace;
+      if (inherited) Object.setPrototypeOf(options, { currentScope: value, currentNamespace: value });
+      else Object.assign(options, { currentScope: value, currentNamespace: value });
+      Object.defineProperty(options.documentWorkspace, 'readEditingScope', { get() { throw marker; } });
+      Object.defineProperty(options.documentWorkspace.workspace, 'current', { get() { throw marker; } });
+      const editor = w.ParameterEditor, guard = w.ParameterApplication;
+      w.ParameterEditor = { ...editor, createForWorkspace(ports) { scope = ports.currentScope; return editor.createForWorkspace(ports); } };
+      w.ParameterApplication = { ...guard, createDeletionGuard(ports) { namespace = ports.currentNamespace; return guard.createDeletionGuard(ports); } };
+    });
+    assert.equal(scope, value); assert.equal(namespace, value);
+    if (typeof value === 'function') { f.feature.prepareNamespace(); assert.deepEqual(f.events, [['normalize', 17]]); }
+    else assert.throws(f.feature.prepareNamespace, error => error.name === 'TypeError');
+  }
 });
