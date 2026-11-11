@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のProperties layout port単位ではapp.jsは1,210行、非空白768行。AST監査ではroot214文・369束縛、構築437非空白行とbind37行、別名・設定88行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のGeometry Workspace判定単位ではapp.jsは1,207行、非空白765行。AST監査ではroot213文・369束縛、構築437非空白行とbind37行、別名・設定88行、委譲0行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -96,9 +96,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-11-11）
+## 8. 再開地点（2026-11-12）
 
-### 最新：Propertiesパネルの状態照会と完成layoutへの更新をUI ownerへ集約（2026-11-11）
+### 最新：通常Geometry Workspaceの判定をCanvasInteractionFeatureへ集約（2026-11-12）
+
+開始基準developは80e0a60f8b7494f6cea989c5f57d598ec616fb3c、作業branchはcodex/geometry-workspace-policy。開始週枠残量64%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+CanvasInteractionFeature.createGeometryWorkspaceは、通常Geometry Workspace用のisGeometryModeを内部で生成し、既存のSelection edit accessへ渡す。同じ実判定関数を同じInteraction featureの凍結APIへ公開し、app.jsは各機能へそれを共有する。通常判定は従来どおり常にtrueで、Lifecycleのselect／line／block-placeなどのツールmodeとは別のWorkspace種別判定である。Selection解除も既存所有経路を使い、外側のfeature cloneや第二のInteractionを作らない。
+
+明示したisGeometryMode callbackは元の実関数を使用し、undefined／nullも既定関数で置き換えない。旧create／createWithOwnedClearingの未指定値や公開recordは変更しない。Lifecycle→Selection／Edit access→PointUsage→Hoverの生成順、native callbackの名前・arity・同一性、guardでのbare・無引数呼出しと短絡・元例外を維持する。内部sessionが参照するfeatureとappが受け取るfeatureは同じ実体である。新しい操作modeや可変mode state、model・Selection・Pending・Pointerの複製、新file／global／全体contextを追加しない。UI・操作・履歴・保存形式v26は不変。既存src/application/canvas_interaction_feature.jsへ集約する。
+
+app.jsは1,210→1,207行（3行減）、非空白768→765行、root214→213文。束縛369・構築437行／115文・bind37行・別名88行・test hooks152行は不変。通常処理のroot named functionと委譲はゼロとなり、条件付きinstallTestHooksは残る。これは構築やinline callbackの分離完了を意味せず、200〜500行の全体目標は未完了。
+
+関連単体56件が成功。native生成順と実Lifecycle／Selection／Edit access／PointUsage／Hover参照、Selectionとaccessへの同じ判定関数の注入、default function名／arity、readonly公開、各ツールmodeでの従来のtrue判定を確認した。sessionからScene準備へ渡すInteractionもappの実featureと同一である。明示callbackの未評価・receiver／引数数・liveな結果・短絡・元例外、undefined／null、raw APIの違いとnative constructor例外も検証した。ソース逆変換では判定の構築・公開以外の既存Interaction生成本体は不変、rootのisGeometryMode参照はすべてfoundation宣言以後で、新たな未束縛参照なし。
+
+構文639ファイル・全単体2,589件、通常ja/light・en/dark・test起動が成功。関連E2E252件（8file、4.5m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次はMIN_LINE_LENGTH／MIN_ARC_LENGTHの導出と、Geometry作成・求解・Viewportへ渡す設定の所有を監査する。意味の異なる数値閾値を同じpolicyへ統合せず、solver値の取得時機と現在Workspace／bound editing scopeを維持する。構築437行・別名88行・test hooks152行は残る。named functionがなくなったことを全体完了とせず、数百行へ向けた機能単位の構築境界の再監査も続ける。
+
+### Propertiesパネルの状態照会と完成layoutへの更新をUI ownerへ集約（2026-11-11）
 
 開始基準developは018a58ce1ee780ecbf669f744760d06fd7922847、作業branchはcodex/properties-panel-layout-ports。開始週枠残量65%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

@@ -9,9 +9,13 @@ function fixture(probe = {}){
  const sketches={activeSketchId:()=>{read();return state.active;},elementSketchId:item=>item.sketchId,canEditSketch:id=>{read();return id===state.active;},sketchById:id=>{read();return {id};}};
  const readServices={createPointUsage(options){assert.equal(this,readServices);events.push('pointUsage:create');return w.PointUsage.create({...options,currentScope:read,
   allGeometryLines:()=>read().lines,allGeometryCircles:()=>read().circles,allGeometryArcs:()=>read().arcs,allGeometrySplines:()=>read().splines});}};
- const foundation=w.CanvasInteractionFeature[probe.ownsClearing?'createWithOwnedClearing':'create']({sketches,readServices,constraintReferencesPoint:()=>false,editedFitPoints:()=>{read();return [];},isGeometryMode:()=>{read();return true;},
+ const options={sketches,readServices,constraintReferencesPoint:()=>false,editedFitPoints:()=>{read();return [];},isGeometryMode:()=>{read();return true;},
   setHint:()=>events.push('hint'),applicationText:(_ja,en)=>en,clearSnap:()=>lateSnap(),clearPointerPreview:()=>sessions.preview.setPointer(null),
-  clearSelection:probe.ownsClearing?undefined:()=>presentation.clearing.clear(),updateGeometrySelectionUI:()=>events.push('ui'),draw:()=>events.push('draw')});
+  clearSelection:probe.ownsClearing||probe.geometryWorkspace?undefined:()=>presentation.clearing.clear(),updateGeometrySelectionUI:()=>events.push('ui'),draw:()=>events.push('draw')};
+ if(probe.geometryWorkspace)delete options.isGeometryMode;
+ if(Object.hasOwn(probe,'mode'))options.isGeometryMode=probe.mode;
+ probe.beforeFoundation?.(options,w);
+ const foundation=w.CanvasInteractionFeature[probe.geometryWorkspace?'createGeometryWorkspace':probe.ownsClearing?'createWithOwnedClearing':'create'](options);
  assert.deepEqual(events,['pointUsage:create']);assert.equal(foundation.selection,foundation.selectionFeature.selection);assert.equal(foundation.scope,foundation.selectionFeature.scope);assert.equal(foundation.access,foundation.selectionFeature.access);
  const sessionOptions = {snapForDrawing:p=>latePreview(p),linePreviewPoint:p=>latePreview(p),readCenterline:()=>latePreview(),projectPointToCenterlineSupport:p=>latePreview(p),
   readOffsetSelection:()=>latePreview(),computeTrimPreview:p=>latePreview(p),hits:{hitPoint:()=>latePreview(),hitLine:()=>latePreview(),hitCircle:()=>latePreview(),hitArc:()=>latePreview()},
@@ -874,4 +878,39 @@ test('Canvas input binding replacement follows successful native construction wh
   f.state.fail='move';assert.throws(f.move,e=>e===f.marker);f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
  }
  const a=inputLifecycleFixture(true),b=inputLifecycleFixture(true);a.assemble();assert.throws(b.move,e=>e.name==='ReferenceError');
+});
+
+test('Geometry Workspace owns one cold predicate shared by native access and the actual interaction and session owners',()=>{
+ const order=[],ports={},actors={};
+ const f=fixture({geometryWorkspace:true,beforeFoundation(options,w){
+  for(const [namespace,method,name]of [['DrawOperationLifecycle','createSession','lifecycle'],['CanvasSelectionFeature','createEditingWithOwnedClearing','selection'],['SketchCommand','createEditAccess','access'],['CanvasHover','create','hover']]){
+   const raw=w[namespace];w[namespace]={...raw,[method](...args){order.push(name);ports[name]=args[0];return actors[name]=Reflect.apply(raw[method],this,args);}};
+  }
+  const owner=options.readServices,raw=owner.createPointUsage;owner.createPointUsage=function(...args){order.push('usage');return actors.usage=Reflect.apply(raw,this,args);};
+ },beforeSessions(foundation){const mode=foundation.isGeometryMode;assert.equal(mode.name,'isGeometryMode');assert.equal(mode.length,0);assert.equal(mode(),true);
+  assert.equal(ports.selection.isGeometryMode,mode);assert.equal(ports.access.isGeometryMode,mode);
+  assert.throws(foundation.clearSelection,{name:'ReferenceError',message:"Cannot access 'selectionClearing' before initialization"});}});
+ assert.deepEqual(order,['lifecycle','selection','access','usage','hover']);
+ assert.equal(f.foundation.lifecycle,actors.lifecycle);assert.equal(f.foundation.selectionFeature,actors.selection);assert.equal(f.foundation.access,actors.access);assert.equal(f.foundation.pointUsage,actors.usage);assert.equal(f.foundation.hover,actors.hover);
+ assert.equal(Object.getOwnPropertyDescriptor(f.foundation,'isGeometryMode').writable,false);
+ const mode=f.foundation.isGeometryMode;
+ for(const value of ['select','line','block-place']){f.foundation.lifecycle.setMode(value);assert.equal(mode(),true);}
+ const raw=f.w.CanvasHitInteraction,marker={};f.w.CanvasHitInteraction={...raw,prepareSceneWithAnnotationsForWorkspace(options){assert.equal(options.interaction,f.foundation);assert.equal(options.sessions,f.sessions);return marker;}};
+ try{assert.equal(f.sessions.prepareSceneWithAnnotations(),marker);}finally{f.w.CanvasHitInteraction=raw;}
+ assert.equal(f.foundation.access.canCreateInActiveSketch(),true);assert.deepEqual(f.events,[]);assert.equal(f.state.scope.points[0],f.point);
+});
+
+test('Geometry Workspace preserves explicit predicate identity, short-circuiting and errors while raw factories retain missing-mode behavior',()=>{
+ let calls=0,enabled=false,fail=false;const marker=new Error('mode');
+ function customMode(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);calls++;if(fail)throw marker;return enabled;}
+ const f=fixture({geometryWorkspace:true,mode:customMode});assert.equal(f.foundation.isGeometryMode,customMode);assert.equal(calls,0);
+ f.state.ready=false;assert.equal(f.foundation.access.canCreateInActiveSketch(),false);assert.equal(calls,1);
+ f.state.ready=true;enabled=true;assert.equal(f.foundation.access.canCreateInActiveSketch(),true);assert.equal(calls,2);
+ f.state.ready=false;fail=true;assert.throws(f.foundation.access.canCreateInActiveSketch,error=>error===marker);assert.equal(calls,3);assert.equal(f.state.scope.points[0],f.point);
+ for(const mode of [undefined,null]){
+  const explicit=fixture({geometryWorkspace:true,mode});assert.equal(explicit.foundation.isGeometryMode,mode);
+  assert.throws(explicit.foundation.access.canCreateInActiveSketch,error=>error.name==='TypeError');
+  for(const ownsClearing of [false,true]){const raw=fixture({ownsClearing,mode});assert.equal(Object.hasOwn(raw.foundation,'isGeometryMode'),false);assert.throws(raw.foundation.access.canCreateInActiveSketch,error=>error.name==='TypeError');}
+ }
+ assert.throws(()=>fixture({geometryWorkspace:true,beforeFoundation(_options,w){w.SketchCommand={...w.SketchCommand,createEditAccess(){throw marker;}};}}),error=>error===marker);
 });
