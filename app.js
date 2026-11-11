@@ -15,7 +15,7 @@
 
 
 
-  const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
+  const { references: constraintReferences, create: createDocumentWorkspace } = window.DocumentWorkspace.prepareReferences();
   const { refreshConstraintAnalysis, readDuplicateCount, prepareWithReferencesForWorkspace: prepareSketchSolving } = window.SketchSolvingFeature.prepare();
   const annotationPreparation = window.AnnotationFeature.prepare();
   const propertiesPreparation = window.PropertiesDisplay.prepare();
@@ -36,8 +36,8 @@
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   const { applicationText } = presentation.settings;
   const authoringFeedback = presentation.createAuthoringFeedback();
-  const documentWorkspace = window.DocumentWorkspace.create({
-    applicationText, constraintGraphNodes: constraintReferences.constraintGraphNodes,
+  const documentWorkspace = createDocumentWorkspace({
+    applicationText,
   });
   const { workspace, parameters: parameterNamespace, sketches: sketchContext,
     geometryIds, createReadContext } = documentWorkspace;

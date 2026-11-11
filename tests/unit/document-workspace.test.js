@@ -891,3 +891,79 @@ test('fixed queries share the Document bound-scope port with native projected id
   }
   assert.equal(traces[1], traces[0]);
 });
+
+test('prepared Document references share native graph nodes and the live geometry reader across Workspace changes and independent preparations', () => {
+  const G = w.GeometrySolver, ref = w.GeometryRef.create('point', 'P1');
+  const source = new G.Point('derived-source', 0, 0), target = new G.Point('target', 10, 0);
+  source.derivedInstance = { id: 'FI1', sources: [ref], placement: {} };
+  const constraint = new G.SketchProjectionConstraint('point', source, target);
+  const preparation = w.DocumentWorkspace.prepareReferences();
+  assert.ok(Object.isFrozen(preparation)); assert.ok(Object.isFrozen(preparation.references));
+  assert.deepEqual(Array.from(preparation.references.constraintGraphNodes(constraint, { includeIntrinsicDependencies: false })), [source, target]);
+  const early = error => error.name === 'ReferenceError' && error.message === "Cannot access 'resolveGeometryRef' before initialization";
+  assert.throws(() => preparation.references.constraintGraphNodes(constraint), early);
+  const model = preparation.create({ applicationText: (_ja, en) => en });
+  assert.throws(() => preparation.references.constraintGraphNodes(constraint), early);
+  const first = new G.Point('P1', 1, 2); model.document.points.push(first);
+  const input = { prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() };
+  const context = model.createReadContext(input), editing = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} });
+  assert.ok(preparation.references.constraintGraphNodes(constraint).includes(first));
+  assert.equal(preparation.references.constraintReferencesPoint(constraint, first), true);
+  const local = w.DocumentState.create(), replacement = new G.Point('P1', 7, 9); local.points.push(replacement); model.workspace.activate(local);
+  assert.equal(editing.binding.current, model.document); assert.equal(model.workspace.current(), local);
+  const nodes = preparation.references.constraintGraphNodes(constraint);
+  assert.ok(nodes.includes(replacement)); assert.equal(nodes.includes(first), false); assert.equal(nodes.includes(source.derivedInstance), true);
+  const independent = w.DocumentWorkspace.prepareReferences(), other = independent.create({ applicationText: (_ja, en) => en });
+  const point = new G.Point('P1', 12, 13); other.document.points.push(point); other.createReadContext(input);
+  assert.notEqual(independent.references, preparation.references);
+  assert.ok(independent.references.constraintGraphNodes(constraint).includes(point));
+  assert.equal(preparation.references.constraintGraphNodes(constraint).includes(point), false);
+  const original = w.GeometryReadServices, marker = new Error('read context failed');
+  w.GeometryReadServices = { ...original, createWithHatches() { throw marker; } };
+  try { assert.throws(() => model.createReadContext(input), error => error === marker); }
+  finally { w.GeometryReadServices = original; }
+  assert.ok(preparation.references.constraintGraphNodes(constraint).includes(replacement));
+  assert.equal(context.services.reads.resolveGeometryRef(ref), replacement);
+});
+
+test('Document reference preparation preserves staged constructors, bare resolver calls, completion guards and prior readers after failure', () => {
+  const originals = { references: w.ConstraintReferences, document: w.DocumentState, reads: w.GeometryReadServices, sketches: w.SketchContext };
+  const events = [], ref = {}, result = {}, marker = new Error('reader failed');
+  let resolverPort, actualReferences, graphNodes, readerGets = 0, nativeCalls = 0, fail, invalid = false, invalidValue;
+  w.ConstraintReferences = { ...originals.references, create(input) {
+    assert.equal(this, w.ConstraintReferences); assert.equal(arguments.length, 1); resolverPort = input.resolveGeometryRef; events.push('references');
+    assert.throws(() => resolverPort(ref), error => error.name === 'ReferenceError');
+    return actualReferences = originals.references.create(input);
+  } };
+  w.DocumentState = { ...originals.document, create() { events.push('document'); if (fail === 'document') throw marker; return originals.document.create(); } };
+  w.SketchContext = { ...originals.sketches, create(input) { graphNodes = input.constraintGraphNodes; return originals.sketches.create(input); } };
+  w.GeometryReadServices = { ...originals.reads, createWithHatches(input) {
+    events.push('reads'); if (fail === 'reads') throw marker;
+    const services = originals.reads.createWithHatches(input);
+    const reads = Object.freeze({ ...services.reads, get resolveGeometryRef() {
+      events.push('reader'); readerGets++; if (fail === 'reader') throw marker;
+      return invalid ? invalidValue : function(value) { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 1); assert.equal(value, ref); nativeCalls++; if (fail === 'resolve') throw marker; return result; };
+    } });
+    return Object.freeze({ ...services, reads });
+  } };
+  try {
+    const preparation = w.DocumentWorkspace.prepareReferences();
+    assert.equal(preparation.references, actualReferences); assert.deepEqual(events, ['references']);
+    assert.equal(resolverPort.name, 'resolveGeometryRef'); assert.equal(resolverPort.length, 1);
+    const model = preparation.create({ applicationText: (_ja, en) => en }); assert.equal(graphNodes, preparation.references.constraintGraphNodes);
+    assert.deepEqual(events, ['references', 'document']); assert.throws(() => resolverPort(ref), error => error.name === 'ReferenceError');
+    const input = { prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() };
+    model.createReadContext(input); assert.deepEqual(events, ['references', 'document', 'reads', 'reader']); assert.equal(readerGets, 1); assert.equal(nativeCalls, 0);
+    assert.equal(resolverPort.call({}, ref, 'ignored'), result); assert.equal(nativeCalls, 1); assert.equal(readerGets, 1);
+    for (const stage of ['document', 'reads', 'reader']) {
+      fail = stage;
+      assert.throws(() => stage === 'document' ? preparation.create({ applicationText: () => '' }) : model.createReadContext(input), error => error === marker);
+      fail = null; assert.equal(resolverPort(ref), result);
+    }
+    fail = 'resolve'; assert.throws(() => resolverPort(ref), error => error === marker); fail = null;
+    for (invalidValue of [undefined, null]) {
+      invalid = true; model.createReadContext(input);
+      assert.throws(() => resolverPort(ref), { name: 'TypeError', message: 'resolveGeometryRef is not a function' });
+    }
+  } finally { w.ConstraintReferences = originals.references; w.DocumentState = originals.document; w.GeometryReadServices = originals.reads; w.SketchContext = originals.sketches; }
+});

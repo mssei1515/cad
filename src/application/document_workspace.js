@@ -1,6 +1,27 @@
 /* Compose Document data, editing scope queries and ID owners without UI or history. */
 (() => {
   "use strict";
+  function prepareReferences() {
+    let completedReader;
+    function resolveGeometryRef(ref) {
+      if (completedReader === undefined) throw new ReferenceError("Cannot access 'resolveGeometryRef' before initialization");
+      const resolveGeometryRef = completedReader.value;
+      return resolveGeometryRef(ref);
+    }
+    const references = window.ConstraintReferences.create({ resolveGeometryRef });
+    function createWithReferences(options) {
+      const workspace = create({ ...options, constraintGraphNodes: references.constraintGraphNodes });
+      const { createReadContext: buildReadContext } = workspace;
+      function createReadContext(options) {
+        const context = buildReadContext(options);
+        const resolveGeometryRef = context.services.reads.resolveGeometryRef;
+        completedReader = Object.freeze({ value: resolveGeometryRef });
+        return context;
+      }
+      return Object.freeze({ ...workspace, createReadContext });
+    }
+    return Object.freeze({ references, create: createWithReferences });
+  }
   function create(options) {
     const { applicationText, constraintGraphNodes, nextHatchIndex: suppliedHatchIndex } = options;
     let completedBinding;
@@ -128,5 +149,5 @@
     }
     return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, readEditingScope, createGeometryReadServices, createReadContext });
   }
-  window.DocumentWorkspace = Object.freeze({ create });
+  window.DocumentWorkspace = Object.freeze({ create, prepareReferences });
 })();
