@@ -57,9 +57,10 @@ function fixture({ composed = false, configure = null, overrides = {}, activatio
   }
   const input = { ...deps, ...overrides, ...owners };
   if (activationMode === 'owned' && !Object.hasOwn(overrides, 'activateEditingScope')) delete input.activateEditingScope;
-  const controller = composed ? w.DocumentEditingReset.createForWorkspace(input) : w.DocumentEditingReset.create({ ...deps, ...overrides });
+  const preparation = composed === 'prepared' ? w.DocumentEditingReset.prepare() : null;
+  const controller = preparation ? preparation.createForWorkspace(input) : composed ? w.DocumentEditingReset.createForWorkspace(input) : w.DocumentEditingReset.create({ ...deps, ...overrides });
   assert.deepEqual(calls, []); state.ready = true;
-  return { document, workspace, blockScope, selection, geometryIds, documentIds, state, calls, controller, point, owners, deps, binding };
+  return { document, workspace, blockScope, selection, geometryIds, documentIds, state, calls, controller, reset: preparation ? preparation.reset : () => controller.reset(), preparation, input, point, owners, deps, binding };
 }
 
 test('owned reset activation synchronizes real binding and Solver before clearing Document and preserves failure and explicit null', () => {
@@ -71,15 +72,15 @@ test('owned reset activation synchronizes real binding and Solver before clearin
         assert.equal(f.binding.current, f.document); assert.equal(f.binding.solver.model, f.document); assert.equal(f.document.points[0], f.point);
       });
       if (failAt) {
-        assert.throws(() => f.controller.reset(), error => error === f.state.failure);
+        assert.throws(() => f.reset(), error => error === f.state.failure);
         assert.equal(f.binding.current, f.blockScope); assert.equal(f.document.points[0], f.point);
-      } else { f.controller.reset(); assert.equal(f.document.points.length, 0); assert.equal(f.binding.current, f.document); }
+      } else { f.reset(); assert.equal(f.document.points.length, 0); assert.equal(f.binding.current, f.document); }
       assert.equal(f.binding.solver.model, f.workspace.current()); outcomes.push(JSON.stringify({ calls: f.calls, points: f.document.points.length }));
     }
     assert.equal(outcomes[1], outcomes[0]);
   }
   const f = fixture({ composed: true, activationMode: 'owned', overrides: { activateEditingScope: null } });
-  assert.throws(() => f.controller.reset(), error => error.name === 'TypeError'); assert.deepEqual(f.calls, ['sketchMove']);
+  assert.throws(() => f.reset(), error => error.name === 'TypeError'); assert.deepEqual(f.calls, ['sketchMove']);
   assert.equal(f.workspace.current(), f.blockScope); assert.equal(f.document.points[0], f.point);
 });
 
@@ -104,7 +105,7 @@ test('reset returns to document ownership, discards queued input and preserves t
     assert.equal(f.document.activeSketchId, w.SketchHierarchy.DEFAULT_SKETCH_ID);
     assert.equal(f.document.defaultAppearance.color, w.Appearance.DEFAULT_APPEARANCE.color);
   });
-  f.controller.reset();
+  f.reset();
   assert.equal(f.selection.selectedElementCount(), 0); assert.equal(f.blockScope.points[0], f.point);
   assert.equal(f.state.imageStages.length, 2); assert.equal(f.state.imageStages[0], annotations); assert.equal(f.state.imageStages[1], f.document.annotations);
   assert.equal(f.calls.at(-1), 'imageInteraction'); assert.equal(f.document.parameters.length, 0);
@@ -113,7 +114,7 @@ test('reset returns to document ownership, discards queued input and preserves t
 test('reset stops at the original failure boundary without swallowing errors or clearing later state', () => {
   for (const failAt of ['flush', 'imageCache', 'blockEditor']) {
     const f = fixture(); f.state.failAt = failAt;
-    assert.throws(() => f.controller.reset(), error => error === f.state.failure);
+    assert.throws(() => f.reset(), error => error === f.state.failure);
     assert.equal(f.workspace.current(), f.document); assert.equal(f.calls.at(-1), failAt);
     assert.equal(f.document.defaultAppearance.color, '#123456'); assert.equal(f.document.annotations.length, 1);
     assert.equal(f.calls.includes('hatchCommand'), false);
@@ -125,9 +126,9 @@ test('reset stops at the original failure boundary without swallowing errors or 
 
 test('repeated resets keep model collections stable while IDs and sessions return to initial state each time', () => {
   const f = fixture(), points = f.document.points, sketches = f.document.sketches;
-  f.controller.reset(); f.document.points.push(f.point); f.selection.set('points', [f.point]);
+  f.reset(); f.document.points.push(f.point); f.selection.set('points', [f.point]);
   f.geometryIds.allocate('point'); f.documentIds.allocate('annotation'); f.state.mode = 'offset'; f.state.pending = {};
-  f.calls.length = 0; f.controller.reset();
+  f.calls.length = 0; f.reset();
   assert.equal(f.document.points, points); assert.equal(points.length, 0); assert.equal(f.document.sketches, sketches); assert.equal(sketches.length, 2);
   assert.equal(f.geometryIds.allocate('point'), 'P1'); assert.equal(f.documentIds.allocate('annotation'), 'AN1');
   assert.equal(f.state.mode, 'select'); assert.equal(f.state.pending, null); assert.equal(f.selection.selectedElementCount(), 0);
@@ -143,48 +144,95 @@ function resetResult(f) {
 
 test('Workspace reset assembly retains Document and ID ownership, exact operation order, repeated reset and Block scope separation',()=>{
  const results=[];
- for(const composed of [false,true]){
+ for(const composed of [false,true,'prepared']){
   const f=fixture({composed}),points=f.document.points,sketches=f.document.sketches;
   assert.equal(Object.isFrozen(f.controller),true);assert.equal(f.workspace.current(),f.blockScope);assert.deepEqual(f.calls,[]);
-  assert.equal(f.controller.reset(),undefined);assert.equal(f.workspace.current(),f.document);assert.equal(f.document.points,points);assert.equal(f.document.sketches,sketches);assert.equal(f.blockScope.points[0],f.point);
+  assert.equal(f.reset(),undefined);assert.equal(f.workspace.current(),f.document);assert.equal(f.document.points,points);assert.equal(f.document.sketches,sketches);assert.equal(f.blockScope.points[0],f.point);
   assert.equal(f.state.imageStages.length,2);assert.notEqual(f.state.imageStages[0],f.state.imageStages[1]);
   f.document.points.push(f.point);f.geometryIds.allocate('point');f.documentIds.allocate('annotation');f.state.pending={type:'offset-value'};f.state.mode='offset';
-  f.controller.reset();assert.equal(f.document.points.length,0);assert.equal(f.geometryIds.peek('point'),1);assert.equal(f.documentIds.peek('annotation'),1);assert.equal(f.state.mode,'select');
+  f.reset();assert.equal(f.document.points.length,0);assert.equal(f.geometryIds.peek('point'),1);assert.equal(f.documentIds.peek('annotation'),1);assert.equal(f.state.mode,'select');
   results.push(resetResult(f));
  }
- assert.equal(results[1],results[0]);
+ assert.equal(results[1],results[0]);assert.equal(results[2],results[0]);
 });
 
 test('Workspace reset assembly preserves every original effect failure boundary and the last image reset failure after defaults',()=>{
- const baseline=fixture();baseline.controller.reset();
+ const baseline=fixture();baseline.reset();
  for(const failAt of new Set(baseline.calls)){
   const results=[];
-  for(const composed of [false,true]){const f=fixture({composed});f.state.failAt=failAt;assert.throws(()=>f.controller.reset(),error=>error===f.state.failure);assert.equal(f.calls.at(-1),failAt);results.push(resetResult(f));}
-  assert.equal(results[1],results[0],failAt);
+  for(const composed of [false,true,'prepared']){const f=fixture({composed});f.state.failAt=failAt;assert.throws(()=>f.reset(),error=>error===f.state.failure);assert.equal(f.calls.at(-1),failAt);results.push(resetResult(f));}
+  assert.equal(results[1],results[0],failAt);assert.equal(results[2],results[0],failAt);
  }
  const results=[];
- for(const composed of [false,true]){
+ for(const composed of [false,true,'prepared']){
   const f=fixture({composed,configure(deps,state){const original=deps.referenceImageInteraction.reset;let count=0;deps.referenceImageInteraction.reset=function(){assert.equal(this,deps.referenceImageInteraction);if(++count===2)throw state.failure;return original();};}});
-  assert.throws(()=>f.controller.reset(),error=>error===f.state.failure);assert.equal(f.document.activeSketchId,w.SketchHierarchy.DEFAULT_SKETCH_ID);assert.equal(f.state.imageStages.length,1);results.push(resetResult(f));
+  assert.throws(()=>f.reset(),error=>error===f.state.failure);assert.equal(f.document.activeSketchId,w.SketchHierarchy.DEFAULT_SKETCH_ID);assert.equal(f.state.imageStages.length,1);results.push(resetResult(f));
  }
- assert.equal(results[1],results[0]);
+ assert.equal(results[1],results[0]);assert.equal(results[2],results[0]);
 });
 
 test('Workspace reset captures bare capabilities once, retains member receivers and ignores inconsistent lower-level overrides',()=>{
  const results=[];
- for(const composed of [false,true]){
+ for(const composed of [false,true,'prepared']){
   const f=fixture({composed,configure(deps){
    for(const name of ['selectMode','clearAuthoringPerformance','invalidateBlockProjectionCache']){const original=deps[name];deps[name]=function(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);return original();};}
    for(const [owner,name]of [[deps.referenceImageRenderer,'clear'],[deps.hatchGeometryQuery,'clear'],[deps.blockEditor,'reset'],[deps.pendingCommandSession,'clear'],[deps.constraintTargetSession,'reset']]){const original=owner[name];owner[name]=function(){assert.equal(this,owner);assert.equal(arguments.length,0);return original();};}
   }});
   f.owners.interaction.lifecycle.selectMode=()=>assert.fail('captured select method must not be replaced');
   f.owners.constraints.clearPerformance=()=>assert.fail('captured performance method must not be replaced');
-  f.controller.reset();results.push(resetResult(f));
+  f.reset();results.push(resetResult(f));
  }
- assert.equal(results[1],results[0]);
+ assert.equal(results[1],results[0]);assert.equal(results[2],results[0]);
  const unexpected=()=>assert.fail('lower-level override must not replace its owner');
  const f=fixture({composed:true,overrides:{documentModel:{points:[{id:'wrong'}]},geometryIds:{reset:unexpected},documentIds:{reset:unexpected},
   drawOperationLifecycle:{resetForDocument:unexpected},selectMode:unexpected,clearAuthoringPerformance:unexpected,invalidateBlockProjectionCache:unexpected,
   pendingCommandSession:{clear:unexpected},constraintTargetSession:{reset:unexpected},blockEditor:{reset:unexpected},hatchGeometryQuery:{clear:unexpected}}});
- f.controller.reset();assert.equal(f.workspace.current(),f.document);assert.equal(f.document.points.length,0);assert.equal(f.geometryIds.peek('point'),1);assert.equal(f.documentIds.peek('annotation'),1);
+ f.reset();assert.equal(f.workspace.current(),f.document);assert.equal(f.document.points.length,0);assert.equal(f.geometryIds.peek('point'),1);assert.equal(f.documentIds.peek('annotation'),1);
+});
+
+
+test('prepared reset publishes only complete native actors and preserves method lookup, receiver, ignored arguments and failure identity', () => {
+  const original = w.DocumentEditingReset, events = [], marker = new Error('reset boundary'), result = {}, input = {}, extra = {};
+  let next, failBuild = false, failReset = false, failGet = false;
+  const make = name => {
+    const actor = Object.freeze(Object.defineProperty({}, 'reset', { get() {
+      assert.equal(this, actor); events.push('get-' + name); if (failGet) throw marker;
+      return function() { 'use strict'; assert.equal(this, actor); assert.equal(arguments.length, 0); events.push(name); if (failReset) throw marker; return result; };
+    } })); return actor;
+  };
+  const a = make('A'), b = make('B');
+  const namespace = { ...original, createForWorkspace: function() {
+    'use strict'; assert.equal(this, namespace); assert.deepEqual([...arguments], [input, extra]); events.push('build');
+    if (failBuild) throw marker; return next;
+  } };
+  w.DocumentEditingReset = namespace;
+  try {
+    const preparation = original.prepare(); assert.ok(Object.isFrozen(preparation)); assert.deepEqual(events, []);
+    assert.equal(preparation.reset.name, 'resetModelState'); assert.equal(preparation.reset.length, 0); assert.ok(Object.hasOwn(preparation.reset, 'prototype'));
+    const guard = { name: 'ReferenceError', message: "Cannot access 'documentEditingReset' before initialization" };
+    assert.throws(preparation.reset, guard);
+    failBuild = true; assert.throws(() => preparation.createForWorkspace(input, extra), error => error === marker); assert.throws(preparation.reset, guard);
+    failBuild = false; next = a; assert.equal(preparation.createForWorkspace(input, extra), a); assert.equal(events.includes('get-A'), false);
+    assert.equal(preparation.reset('ignored'), result); assert.deepEqual(events.slice(-2), ['get-A', 'A']);
+    next = b; failBuild = true; assert.throws(() => preparation.createForWorkspace(input, extra), error => error === marker);
+    assert.equal(preparation.reset(), result); assert.equal(events.at(-1), 'A');
+    failBuild = false; assert.equal(preparation.createForWorkspace(input, extra), b); assert.equal(preparation.reset(), result); assert.equal(events.at(-1), 'B');
+    failGet = true; assert.throws(preparation.reset, error => error === marker); failGet = false;
+    failReset = true; assert.throws(preparation.reset, error => error === marker); failReset = false;
+    assert.equal(preparation.reset(), result);
+    const separate = original.prepare(); assert.throws(separate.reset, guard);
+  } finally { w.DocumentEditingReset = original; }
+});
+
+test('completed undefined and null reset actors retain the original delegate TypeError rather than the initialization guard', () => {
+  const original = w.DocumentEditingReset;
+  try {
+    for (const value of [undefined, null, Object.freeze({})]) {
+      w.DocumentEditingReset = { ...original, createForWorkspace: () => value };
+      const preparation = original.prepare(); assert.equal(preparation.createForWorkspace({}), value);
+      const readError = fn => { try { fn(); assert.fail('reset must throw'); } catch (error) { return { name: error.name, message: error.message }; } };
+      function legacy() { const documentEditingReset = value; return documentEditingReset.reset(); }
+      assert.deepEqual(readError(preparation.reset), readError(legacy));
+    }
+  } finally { w.DocumentEditingReset = original; }
 });

@@ -474,7 +474,7 @@
   const { enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
 
 
-  function resetModelState() { return documentEditingReset.reset(); }
+  const { createForWorkspace: createDocumentEditingReset, reset: resetModelState } = window.DocumentEditingReset.prepare();
 
 
 
@@ -1214,7 +1214,7 @@
     changeFreeProperty: changeFreeInstanceProperty, hatchCommand, annotationCommand, pngExportCommand,
   });
 
-  const documentEditingReset = window.DocumentEditingReset.createForWorkspace({
+  createDocumentEditingReset({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, sessions: operationSessions, blocks: blockEditingFeature, constraints: constraintCommitCommand,
     sketchMoveCommand, editingScope: editingScopeBinding, flushPointerMoves: flushScheduledCanvasPointerMove, referenceImageRenderer,
     sketchSolving, referenceConstraintState, constraintAnalysis, clearSelection, geometryDrag, dimensionDrag,
