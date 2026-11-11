@@ -463,7 +463,6 @@
   const blockSelectionQuery = blockEditingFeature.createSelectionQuery({
     references: constraintReferences, serializeConstraint, annotationBounds: annotationPreparation.annotationBounds,
   });
-  const { read: blockSelectionGeometry, center: blockSelectionBoundsCenter } = blockSelectionQuery;
 
 
 
@@ -1174,11 +1173,10 @@
       decorateSerializedConstraint, serializeConstraint, serializeModel, resetModelState, resetHistory,
       canvasContextMenu, canvasContextController, canvasContextCandidatePresentation, canvas, viewport,
     });
-    const parameterTestSupport = window.ParameterTestDriver.createBrowserSupport({
-      resetModelState, documentWorkspace, geometry: geometryCreation,
-      pushModelConstraint: constraintInsertion.push, dimensionFromAnchor: dimensionPlacement.dimensionFromAnchor, createEmptyBlockDefinition: blockDefinitionEditing.empty, invalidateBlockProjectionCache: blockProjections.invalidateBlockProjectionCache,
-      stabilizeActiveParameterNamespace, activeSketchId: sketchContext.activeSketchId, resetHistory, updateUI, draw, blockProjectionBundle: blockProjections.blockProjectionBundle, serializeModel,
-      clearSelection, canvasSelection, blockSelectionGeometry, createBlockDefinitionFromSelection: blockDefinitionEditing.fromSelection, blockSelectionBoundsCenter, deleteElements, document,
+    const parameterTestSupport = window.ParameterTestDriver.createForWorkspace({
+      documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, blocks: blockEditingFeature, blockSelection: blockSelectionQuery,
+      insertion: constraintInsertion, placement: dimensionPlacement, presentation, resetModelState, stabilizeActiveParameterNamespace,
+      resetHistory, serializeModel, clearSelection, canvasSelection, deleteElements, document,
     });
     const referenceImageTestSupport = window.ReferenceImageTestDriver.createBrowserSupport({
       feature: referenceImageFeature, blocks: blockEditingFeature, canvasSelection, currentScope: workspace.current, readHistory: readTestHistory, viewport,

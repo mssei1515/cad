@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の注記Editor checkpoint接続単位ではapp.jsは1,253行、非空白809行。AST監査ではroot237文・397束縛、構築・接続466非空白行、別名・設定95行、委譲7行、条件付きtest hooks158行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のParameterテスト支援組立て単位ではapp.jsは1,251行、非空白807行。AST監査ではroot236文・395束縛、構築・接続466非空白行、別名・設定94行、委譲7行、条件付きtest hooks157行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：注記Editorのcheckpoint field選択を既存生成ownerへ集約（2026-11-11）
+### 最新：Parameterテスト支援の関数選択を既存TestDriverへ集約（2026-11-11）
+
+開始基準developは0eadc4877280ee1fe65b6b60c1998d79d83639c9、作業branchはcodex/parameter-test-assembly（develop統合・Push後に削除）。開始週枠残量83%。mainはc2edef1を維持し、停止条件到達時に最新全体検証後、最後に反映する。
+
+ParameterTestDriver.createForWorkspace（src/testing/parameter_test_driver.js）が、DocumentWorkspace／Geometry read／Block editing／Block selection／Constraint insertion／Dimension placement／Presentationの既存ownerから、Parameter fixture・観測・操作に必要な関数を選び、従来のcreateBrowserSupportへ接続する。app.jsはownerと操作portを渡し、テスト専用のblockSelectionGeometry／blockSelectionBoundsCenter別名を持たない。通常機能をtestingへ移さず、既存createBrowserSupport／createFixture／createObservation／createInteractionは維持する。
+
+実関数をwrap・bind・実行せず、同じfixture／observation／interactionの凍結resultを返す。選択対象11fieldは実ownerのown readonly data propertyで、遅いfield選択でも同じ参照になる。現在scopeは既存workspace.currentが操作時に読み、Document定義の追記、ID採番、Block選択と寸法削除、履歴・UI順・元例外と途中状態を維持する。生成位置、test-mode判定、公開204項目、通常の初期化と保存形式v26、既存testing配置・読込順は不変。アプリ全体contextや通常機能の状態を持つ別のtesting ownerは作らない。
+
+app.jsは1,253→1,251行（2行減）、root236文・395束縛、依存辺1,075。全体目標は未完了。次は残る生成・接続をowner単位で再監査する。ReferenceImageのテスト準備も候補だが、通常機能の状態所有と初期化順を先に確認する。完了済みParameter組立てやAnnotation checkpoint等を再実施しない。
+
+構文639file・全単体2,536件・関連E2E115件（unified-ui／free-text-input-drag／parameter-dialog-controllerの3file、1.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。旧・新両経路の単体6件は現在scopeの切替、Geometry／Selection参照、ID採番・定義追記、寸法削除と各失敗時の途中状態を確認する。browser比較で実関数・owner参照21項目、選択対象11fieldのreadonly、同じ実support resultと公開204項目が一致し、通常ja/light・en/darkとtest起動も成功した。生の既存driver本体の不変と新しい未束縛参照がないことを確認した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+
+### 前回：注記Editorのcheckpoint field選択を既存生成ownerへ集約（2026-11-11）
 
 開始基準developは3d5d212ce37a3401ba489d5a209350ed6a33b547、作業branchはcodex/annotation-editor-checkpoint（develop統合・Push後に削除）。開始時の週枠残量84%。mainはc2edef1を維持し、停止時の最新全体検証後に最後に反映する。再開時はGit・usageを確認し、今回のEditor checkpoint、Context候補表示、Properties三port、Pending取消、Selection Clipboard等の完了済み分離を再実施しない。rootの七委譲はhitReferenceImageAt／refreshConstraintAnalysis／resetModelState／clearSelection／setPropertiesPanelCollapsed／drawCanvas／updateBlockUI。次は必要なfield選択と実生成・完成境界をowner単位で評価し、単なる別名・小関数移動や巨大全体contextにしない。value checkpoint本体とGeometry membership／ID rollbackを再抽出・統合しない。
 
