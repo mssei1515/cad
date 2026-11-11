@@ -1021,7 +1021,9 @@ function preparedWorkspaceFixture(composed, probe) {
     else { controls = w.CanvasViewControls.create({ document: f.document, window: f.browser, setHint: presentation.setHint, draw: presentation.draw }); color = value => w.CanvasThemeColors.color(value, settings.theme); }
     assert.deepEqual(probe.order, ['controls']); assert.deepEqual(f.reads, []);
     const displayOptions = { initialScale: 2, minLength: 1e-6, fitVisibleGeometry: () => true, flushPointerMoves: () => f.calls.push('flush'), syncDimensionValueInput: () => f.calls.push('sync') };
+    if (probe.configureDisplay) probe.configureDisplay(displayOptions);
     display = composed ? prepared.createForEditing(displayOptions) : w.CanvasDisplay.create({ ...displayOptions, canvas: f.canvas, document: f.document, minZoom: .002, maxZoom: 20000000, draw: presentation.draw, setHint: presentation.setHint });
+    if (probe.afterDisplay) probe.afterDisplay(display);
     const dimensionInput = { syncHighlight() {}, scheduleFrame() {}, evaluateDimensionExpressionDraft: (_c,text) => Number(text), expressionFromUserInput: text => text,
       cancelPendingCommand() {}, startDistanceValueInput() {}, submitOffsetValue() {}, submitDistanceValue() {} };
     if (probe.configureInput) probe.configureInput(dimensionInput);
@@ -1035,6 +1037,7 @@ function preparedWorkspaceFixture(composed, probe) {
     for (const name of ['currentScope','sketches','readServices','viewState','canvasThemeColor','applicationText']) delete common[name];
     const sceneOptions = { ...common, solveState: f.editing.solveState, analysis: { statusOf: () => state.status }, operandElement: operand => operand.element,
       instanceSources: { includesRef: () => false }, projection: { includes: () => false }, instances: { reference: null, sources: [] } };
+    probe.sceneOptions = sceneOptions;
     scene = workspace.createSceneForEditing(composed ? sceneOptions : { ...sceneOptions, currentScope: documentWorkspace.workspace.current, sketches: seed.sketches, readServices, interaction, targets, pending,
       readPanelSelection: () => presentation.selectedItem, viewState: controls.state, canvasThemeColor: color, applicationText: settings.applicationText });
     const placementOptions = { geometry: scene.geometry, annotations: { drawAnnotationLeader() {}, drawAnnotationText() {} }, hatchLayer: { drawResolvedHatch() {} }, blockPlacementCommand: {}, geometryInstanceCommand: {}, createBlockProjectionBundle() {} };
@@ -1254,4 +1257,82 @@ test('Workspace input Parameter default failure stops before creating the surfac
  const marker=new Error('Parameter defaults failed'),probe={configureOwners({documentWorkspace}){documentWorkspace.parameters={get evaluateEditingExpressionDraft(){throw marker;}};},configureInput(input){delete input.evaluateDimensionExpressionDraft;}};
  assert.throws(()=>preparedWorkspaceFixture(true,probe),error=>error===marker);
  assert.deepEqual(probe.order,['controls','viewport','navigation','zoom']);
+});
+
+test('prepared Canvas fit owns the completed scene, shares navigation and preserves live visible geometry, padding and errors', () => {
+  const f = preparedWorkspaceFixture(true, {
+    configureDisplay(options) { delete options.fitVisibleGeometry; },
+    afterDisplay(display) { assert.throws(() => display.fitVisibleGeometryToViewport(), /Cannot access 'drawingFit' before initialization/); },
+  });
+  assert.equal(f.probe.ports.navigation.fitVisibleGeometry, f.display.fitVisibleGeometryToViewport);
+  const { Point, Line } = sceneWindow.GeometrySolver;
+  const line = Object.assign(new Line('L1', new Point('P1', 0, 0), new Point('P2', 20, 10)), { sketchId: 'S1' });
+  f.sceneState.scope.lines.push(line);
+  const initial = { ...f.display.viewport.snapshot() };
+  for (const padding of [undefined, 0, 12, null]) {
+    f.display.viewport.update(initial); const expected = f.scene.fit.fitVisibleGeometryToViewport(padding);
+    const view = { ...f.display.viewport.snapshot() };
+    f.display.viewport.update(initial); assert.equal(f.display.fitVisibleGeometryToViewport(padding, 'ignored'), expected);
+    assert.deepEqual({ ...f.display.viewport.snapshot() }, view);
+  }
+  line.visible = false; assert.equal(f.display.fitVisibleGeometryToViewport(), false);
+  line.visible = true; f.sceneState.scope = { ...f.sceneState.scope, lines: [] };
+  assert.equal(f.probe.ports.navigation.fitVisibleGeometry(), false);
+  f.sceneState.scope.lines = [line]; const marker = new Error('bounds failed'), before = { ...f.display.viewport.snapshot() };
+  f.sceneState.failure = marker; assert.throws(() => f.display.fitVisibleGeometryToViewport(), error => error === marker);
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, before); f.sceneState.failure = null;
+  assert.equal(f.display.fitVisibleGeometryToViewport(0), true); assert.equal(f.sceneState.scope.lines[0], line);
+});
+
+test('Canvas fit preserves explicit navigation callbacks and completed-scene publication after factory failure', () => {
+  const explicit = () => false;
+  for (const supplied of [explicit, null]) {
+    const f = preparedWorkspaceFixture(true, { configureDisplay(options) { options.fitVisibleGeometry = supplied; } });
+    assert.equal(f.probe.ports.navigation.fitVisibleGeometry, supplied);
+  }
+  const f = preparedWorkspaceFixture(true), other = preparedWorkspaceFixture(true);
+  const { Point, Line } = sceneWindow.GeometrySolver;
+  f.sceneState.scope.lines.push(Object.assign(new Line('L', new Point('P1', 0, 0), new Point('P2', 10, 10)), { sketchId: 'S1' }));
+  const raw = sceneWindow.GeometryDisplay, marker = new Error('scene construction failed');
+  sceneWindow.GeometryDisplay = { ...raw, create() { throw marker; } };
+  try { assert.throws(() => f.workspace.createSceneForEditing(f.probe.sceneOptions), error => error === marker); }
+  finally { sceneWindow.GeometryDisplay = raw; }
+  assert.equal(f.display.fitVisibleGeometryToViewport(0), true);
+  assert.equal(other.display.fitVisibleGeometryToViewport(0), false);
+});
+
+test('owned dimension preview uses the actual preview with live Pending, expression evaluation and fillet presentation', () => {
+  const f = preparedWorkspaceFixture(true, { configureOwners({ documentWorkspace }) {
+    documentWorkspace.parameters = { evaluateEditingExpressionDraft: (_constraint, text) => Number(text) };
+  } }), paints = [], fillets = [], raw = sceneWindow.DimensionPreview;
+  assert.throws(() => f.workspace.drawDimensionPreview(), /Cannot access 'dimensionPreview' before initialization/);
+  let actual;
+  sceneWindow.DimensionPreview = { ...raw, create(options) { return actual = raw.create({ ...options, drawDimension: (...args) => paints.push(args) }); } };
+  try { assert.equal(f.workspace.createDimensionPreview({ drawFilletPreviewArc: value => fillets.push(value) }), actual); }
+  finally { sceneWindow.DimensionPreview = raw; }
+  assert.deepEqual(paints, []); f.workspace.drawDimensionPreview(); assert.deepEqual(paints, []);
+  const target = { kind: 'radius', value: 10 }, dimension = { offset: 4 };
+  f.pending.replace({ type: 'distance-value', target, dimension, buffer: '12', editing: false });
+  f.workspace.drawDimensionPreview(); assert.equal(paints[0][0], target); assert.equal(paints[0][1], dimension); assert.equal(paints[0][2], '12|');
+  f.pending.current.buffer = '-1'; f.workspace.drawDimensionPreview(); assert.equal(paints.at(-1)[5].invalid, true);
+  const geometry = { ok: true, radius: 5, center: { x: 0, y: 0 }, startAngle: 0, endAngle: 1 };
+  f.pending.replace({ type: 'fillet-radius-place', preview: geometry }); f.workspace.drawDimensionPreview();
+  assert.equal(fillets[0], geometry); assert.equal(paints.at(-1)[2], 'R5');
+  f.pending.clear(); const count = paints.length; f.workspace.drawDimensionPreview(); assert.equal(paints.length, count);
+});
+
+test('dimension preview publication retains the actual receiver, zero arguments, return and errors and isolates workspaces', () => {
+  const f = preparedWorkspaceFixture(true), other = preparedWorkspaceFixture(true), raw = sceneWindow.DimensionPreview;
+  const value = {}, marker = new Error('preview failed'); let fail = false;
+  const actual = { draw() { assert.equal(this, actual); assert.equal(arguments.length, 0); if (fail) throw marker; return value; } };
+  sceneWindow.DimensionPreview = { ...raw, create: () => actual };
+  try {
+    assert.equal(f.workspace.createDimensionPreview({ drawFilletPreviewArc() {} }), actual);
+    assert.equal(f.workspace.drawDimensionPreview('ignored'), value);
+    fail = true; assert.throws(() => f.workspace.drawDimensionPreview(), error => error === marker);
+    sceneWindow.DimensionPreview.create = () => { throw marker; };
+    assert.throws(() => f.workspace.createDimensionPreview({ drawFilletPreviewArc() {} }), error => error === marker);
+    fail = false; assert.equal(f.workspace.drawDimensionPreview(), value);
+    assert.throws(() => other.workspace.drawDimensionPreview(), /before initialization/);
+  } finally { sceneWindow.DimensionPreview = raw; }
 });

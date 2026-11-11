@@ -218,8 +218,14 @@
     const controls = window.CanvasViewControls.create({ document, window: browserWindow, setHint, draw });
     function canvasThemeColor(value) { return window.CanvasThemeColors.color(value, settings.theme); }
     function createForEditing({ initialScale, minLength, fitVisibleGeometry, flushPointerMoves, syncDimensionValueInput }) {
+      let completedScene = null;
+      function fitVisibleGeometryToViewport(paddingPx = 96) {
+        if (completedScene === null) throw new ReferenceError("Cannot access 'drawingFit' before initialization");
+        return completedScene.fit.fitVisibleGeometryToViewport(paddingPx);
+      }
       const display = create({ canvas, document, initialScale, minZoom: initialScale * 0.001, maxZoom: initialScale * 10000000,
-        minLength, draw, setHint, fitVisibleGeometry, flushPointerMoves, syncDimensionValueInput });
+        minLength, draw, setHint, fitVisibleGeometry: fitVisibleGeometry === undefined ? fitVisibleGeometryToViewport : fitVisibleGeometry,
+        flushPointerMoves, syncDimensionValueInput });
       function createEditingWorkspace({ dimensionScene, dimensionInput, ...options }) {
         const displayWorkspace = display.createEditingWorkspace({ ...options,
           dimensionScene: { ...dimensionScene, currentLines: () => workspace.current().lines, minLineLength: minLength,
@@ -231,8 +237,10 @@
           window: browserWindow, updatePropertiesUI, applicationText, readLanguage: () => settings.language,
         });
         function createSceneForEditing(options) {
-          return displayWorkspace.createSceneForEditing({ ...options, currentScope: workspace.current, sketches, readServices, interaction,
+          const scene = displayWorkspace.createSceneForEditing({ ...options, currentScope: workspace.current, sketches, readServices, interaction,
             targets, pending, readPanelSelection: () => presentation.selectedItem, viewState: controls.state, canvasThemeColor, applicationText });
+          completedScene = scene;
+          return scene;
         }
         function createPlacementPreview(options) { return displayWorkspace.createPlacementPreview({ ...options, readServices, interaction, sessions }); }
         function createInputBinding(options) {
@@ -252,13 +260,20 @@
             readConstraintStatus: () => controls.state.constraintStatus, inactiveColor: window.GeometryPresentation.INACTIVE_CONSTRAINT_STATUS_COLOR,
             dimensionLabelForConstraint: displayWorkspace.dimensions.labels.label, dimensionUsesExpression });
         }
-        function createDimensionPreview({ drawFilletPreviewArc }) {
-          return displayWorkspace.dimensions.display.createPreview({ readPending: () => pending.current, drawFilletPreviewArc,
-            evaluateDimensionExpressionDraft: documentWorkspace.parameters?.evaluateEditingExpressionDraft });
+        let dimensionPreview = null;
+        function drawDimensionPreview() {
+          if (dimensionPreview === null) throw new ReferenceError("Cannot access 'dimensionPreview' before initialization");
+          return dimensionPreview.draw();
         }
-        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview });
+        function createDimensionPreview({ drawFilletPreviewArc }) {
+          const preview = displayWorkspace.dimensions.display.createPreview({ readPending: () => pending.current, drawFilletPreviewArc,
+            evaluateDimensionExpressionDraft: documentWorkspace.parameters?.evaluateEditingExpressionDraft });
+          dimensionPreview = preview;
+          return preview;
+        }
+        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview });
       }
-      return Object.freeze({ ...display, createEditingWorkspace });
+      return Object.freeze({ ...display, createEditingWorkspace, fitVisibleGeometryToViewport });
     }
     return Object.freeze({ controls, canvasThemeColor, createForEditing });
   }
