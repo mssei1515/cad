@@ -95,7 +95,14 @@
         const fixPointBtn = document.getElementById("fixPointBtn");
         const cursor = window.CommandCursor.create({ document, canvas, fixPointBtn, constraintButtons });
         function createPreparedControls(options) { return createControls({ ...options, updateCursor: cursor.update }); }
-        return Object.freeze({ constraintButtons, constraintMenuButtons, fixPointBtn, cursor, createControls: createPreparedControls });
+        function createForSelection({ selection, sketches, syncFlyouts }) {
+          const { canEditSketch, constraintSketchId, elementSketchId } = sketches;
+          return createPreparedControls({ selectedVisibilityTargets: selection.visibilityTargets,
+            selectionVisibilityIsHidden: selection.visibilityIsHidden, syncFlyouts,
+            canEditTarget: target => canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)),
+          });
+        }
+        return Object.freeze({ constraintButtons, constraintMenuButtons, fixPointBtn, cursor, createControls: createPreparedControls, createForSelection });
       }
       function createEditingBinding({ undo, redo, toggleVisibility, deleteSelection, annotation }) {
         return window.ToolbarView.createEditingBinding({ document, undo, redo, toggleVisibility,

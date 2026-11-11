@@ -68,8 +68,6 @@
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
     activeSketchId, assignSketchId,
-    elementSketchId, canEditSketch,
-    constraintSketchId,
   } = sketchContext;
 
   const { services: geometryReadServices, createEditingScope, createPersistence, createRebinding,
@@ -406,7 +404,7 @@
   });
 
   const toolbarControls = toolbarPresentation.prepareControls({ canvas });
-  const { fixPointBtn, createControls: createToolbarControls } = toolbarControls;
+  const { fixPointBtn, createForSelection: createToolbarControls } = toolbarControls;
 
   applicationSettings.prepareButtonTooltips();
 
@@ -756,17 +754,16 @@
 
 
 
-  const { selection: { visibilityTargets: selectedVisibilityTargets, visibilityIsHidden: selectionVisibilityIsHidden,
-    selectedDisplayTarget: selectedPropertiesTarget }, createEditingWithViewForWorkspace: createPropertiesForEditing } = window.PropertiesDisplay.createForWorkspace({
+  const { selection: propertiesSelection,
+    createEditingWithViewForWorkspace: createPropertiesForEditing } = window.PropertiesDisplay.createForWorkspace({
     document, documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation,
     operations: { sources: instanceSourceCommand, placement: geometryInstanceCommand, blocks: blockPlacementCommand },
   });
+  const { visibilityIsHidden: selectionVisibilityIsHidden,
+    selectedDisplayTarget: selectedPropertiesTarget } = propertiesSelection;
   function toggleSelectedVisibility() { return selectionVisibilityCommand.toggle(); }
 
-  createToolbarControls({
-    selectedVisibilityTargets, selectionVisibilityIsHidden,
-    canEditTarget: target => canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)),
-  });
+  createToolbarControls({ selection: propertiesSelection, sketches: sketchContext });
 
   const { selectionQuery: constraintSelectionQuery, targets: constraintTargetCommand, dimensions: dimensionPlacementCommand,
     createCommitWithIntentForWorkspace: createConstraintCommit, createFixedForWorkspace, constraintTargetHint, readOnlyDimensions,

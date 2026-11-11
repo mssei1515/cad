@@ -340,7 +340,7 @@ function preparedToolbarFixture(composed, probe = {}) {
       probe.prepared = prepared; probe.canvas = canvas; probe.writes = writes; probe.fixed = fixed; probe.distance = distance; probe.menu = menu;
       probe.preparationReads = [...f.events]; assert.deepEqual(probe.preparationReads, ['query:[data-constraint]', 'query:[data-menu-constraint]', 'dom:fixPointBtn']);
       if (probe.afterPrepare) probe.afterPrepare({ prepared, lists, nodes, button });
-      f.events.length = 0; return prepared.createControls(options);
+      f.events.length = 0; return probe.assemble ? probe.assemble(prepared, options) : prepared.createControls(options);
     } finally { f.w.CommandCursor = originalCursor; f.w.ToolbarView = originalView; }
   });
   return { ...f, probe };
@@ -803,4 +803,66 @@ test('toolbar icon assembly preserves constructor and namespace failures without
  assert.throws(()=>toolbar.createIcons(),error=>error===marker);assert.equal(count,1);const history=toolbar.updateHistory;toolbar.updateHistory();assert.equal(f.events.at(-1),'history-status');assert.equal(toolbar.updateHistory,history);
  const next={icons:true};f.w.ToolbarView={...raw,createIcons(){count++;return next;}};assert.equal(toolbar.createIcons(),next);assert.equal(count,2);
  Object.defineProperty(f.w,'DimensionQueries',{get(){throw marker;}});assert.throws(()=>toolbar.createIcons(),error=>error===marker);assert.equal(count,2);
+});
+
+function selectionToolbarFixture(composed, probe = {}, useDefaultFlyouts = false) {
+  const calls = [], marker = new Error('selection query failed'), state = { ready: false, targets: [], hidden: false, denied: new Set(), fail: null };
+  const note = (name, value) => { assert.equal(state.ready, true); calls.push([name, value]); if (state.fail === name) throw marker; };
+  const selection = Object.freeze({ visibilityTargets() { 'use strict'; assert.equal(this, undefined); note('targets'); return state.targets; },
+    visibilityIsHidden(targets) { 'use strict'; assert.equal(this, undefined); assert.equal(targets, state.targets); note('hidden'); return state.hidden; } });
+  const sketches = Object.freeze({ constraintSketchId(item) { 'use strict'; assert.equal(this, undefined); note('constraint', item.id); return item.constraintOwner; },
+    elementSketchId(item) { 'use strict'; assert.equal(this, undefined); note('element', item.id); return item.elementOwner; },
+    canEditSketch(id) { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 1); note('permission', id); return !state.denied.has(id); } });
+  probe.selectionCalls = calls; probe.assemble = (prepared, options) => {
+    const syncFlyouts = useDefaultFlyouts ? undefined : options.syncFlyouts;
+    return composed ? prepared.createForSelection({ selection, sketches, syncFlyouts }) : prepared.createControls({
+      selectedVisibilityTargets: selection.visibilityTargets, selectionVisibilityIsHidden: selection.visibilityIsHidden, syncFlyouts,
+      canEditTarget: target => sketches.canEditSketch.call(undefined, target.kind === 'constraint'
+        ? sketches.constraintSketchId.call(undefined, target.item) : sketches.elementSketchId.call(undefined, target.item)),
+    });
+  };
+  const f = preparedToolbarFixture(true, probe); assert.deepEqual(calls, []); state.ready = true;
+  return { ...f, selectionState: state, selection, sketches, selectionCalls: calls, selectionMarker: marker };
+}
+
+test('Toolbar selection assembly preserves live visibility, Sketch bypass, permission order and short circuit with actual View and Cursor', () => {
+  const traces = [];
+  for (const composed of [false, true]) {
+    const f = selectionToolbarFixture(composed), s = f.selectionState, button = f.nodes.get('selectionVisibilityBtn');
+    assert.equal(f.controls.view, f.probe.results.view); assert.equal(f.controls.status, f.probe.results.status);
+    assert.equal(f.probe.ports.view.selectedVisibilityTargets, f.selection.visibilityTargets);
+    assert.equal(f.probe.ports.view.selectionVisibilityIsHidden, f.selection.visibilityIsHidden);
+    s.targets = [{ kind: 'sketch', item: { id: 'SK' } }, { kind: 'constraint', item: { id: 'C', constraintOwner: 'S1', elementOwner: 'wrong' } },
+      { kind: 'line', item: { id: 'L', elementOwner: 'S2', constraintOwner: 'wrong' } }];
+    s.denied.add('S1'); s.hidden = true; f.controls.view.update(); assert.equal(button.disabled, true); assert.equal(button.attributes['aria-pressed'], 'true');
+    assert.deepEqual(f.selectionCalls, [['targets', undefined], ['hidden', undefined], ['constraint', 'C'], ['permission', 'S1']]);
+    f.selectionCalls.length = 0; s.denied.clear(); f.controls.view.update(); assert.equal(button.disabled, false);
+    assert.deepEqual(f.selectionCalls.slice(-4), [['constraint', 'C'], ['permission', 'S1'], ['element', 'L'], ['permission', 'S2']]);
+    f.selectionCalls.length = 0; f.state.geometry = false; f.controls.view.update(); assert.equal(button.disabled, true); assert.equal(f.selectionCalls.length, 2);
+    f.state.geometry = true; s.targets = []; s.hidden = false; f.controls.view.update(); assert.equal(button.disabled, true); assert.equal(button.attributes['aria-pressed'], 'false');
+    traces.push(JSON.stringify({ calls: f.selectionCalls, events: f.events, writes: f.probe.writes }));
+  }
+  assert.equal(traces[1], traces[0]);
+});
+
+test('Toolbar selection assembly retains query failure identity and partial DOM updates, and supports the existing flyout default', () => {
+  for (const composed of [false, true]) {
+    for (const stage of ['targets', 'hidden', 'constraint', 'permission']) {
+      const f = selectionToolbarFixture(composed), s = f.selectionState, button = f.nodes.get('selectionVisibilityBtn');
+      s.targets = [{ kind: 'constraint', item: { id: 'C', constraintOwner: 'S1' } }]; s.fail = stage; button.disabled = 'prior';
+      assert.throws(() => f.controls.view.update(), error => error === f.selectionMarker); assert.equal(button.disabled, 'prior');
+      assert.equal(f.selectionCalls.at(-1)[0], stage); assert.equal(f.events.includes('flyouts'), false);
+    }
+    const defaults = selectionToolbarFixture(composed, {}, true); defaults.controls.view.update();
+    assert.equal(defaults.nodes.get('selectionVisibilityBtn').disabled, true);
+  }
+});
+
+test('Toolbar selection assembly constructs View then Status without reading queries and preserves constructor errors', () => {
+  for (const composed of [false, true]) for (const stage of ['view', 'status']) {
+    const marker = new Error('construction failed'), probe = { failAt: stage, error: marker };
+    assert.throws(() => selectionToolbarFixture(composed, probe), error => error === marker);
+    assert.deepEqual(probe.selectionCalls, []);
+    assert.deepEqual(probe.steps, ['query-constraints', 'query-menu', 'fix', 'cursor', 'view', ...(stage === 'status' ? ['status'] : [])]);
+  }
 });

@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のCanvas test観測組立て単位ではapp.jsは1,313行、非空白868行。AST監査ではroot269文・460束縛、構築・接続474非空白行、別名・設定121行、委譲19行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のToolbar selection組立て単位ではapp.jsは1,310行、非空白865行。AST監査ではroot270文・457束縛、構築・接続474非空白行、別名・設定121行、委譲19行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,18 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：Toolbarの選択照会と編集可否の組立てをPresentationへ集約（2026-11-11）
+
+PresentationFeature.createToolbar().prepareControls().createForSelection（src/application/presentation_feature.js）は、PropertiesDisplayが返す実selection照会と実SketchContextを受け、visibilityTargets／visibilityIsHiddenとcanEditSketch／constraintSketchId／elementSketchIdを既存Toolbar Viewへ接続する。対象のkindがconstraintの場合だけconstraintSketchId、それ以外はelementSketchIdを一度選び、その結果だけをcanEditSketchへ裸呼出しで渡す。旧rootの同じarrow本体・一引数・条件分岐と返値／元例外を維持し、新しい編集可否の規則やfallbackを追加しない。
+
+既存createPreparedControlsへ同じ選択照会関数と同じcursor.updateを渡し、同じ位置でView→CommandStatusを生成して完成後だけ公開する。早期のbutton registry／Cursor生成、DOM再照会回避、既存createControls API、syncFlyoutsの省略時のdefaultと明示時の関数、raw ToolbarView／Cursor／PropertiesDisplay／SketchContextは維持する。生成時に選択・model／Sketchを読まず、表示更新時の照会・Sketch種別の迂回・permission短絡・Hidden表示／disable・履歴／flyout／cursorの順序はraw Viewに残す。原例外と部分DOM更新、Workspaceを操作時に読む既存Sketch関数を維持し、Selection／View／model・listener・cacheを複製しない。UI・操作・保存形式v26は不変。
+
+app.jsは1,313→1,310行（3行減）、非空白868→865行。root269→270文（選択照会recordの別名宣言を追加）、460→457束縛。構築474行・別名／設定121行・委譲19行・条件付きtest hooks162行は不変、その他call40→37行。構文依存辺1,141→1,142であり、すべての構文指標が減るとは扱わない。rootから三つのSketch照会とvisibilityTargetsの別名を外し、共有selection recordを渡して表示機能が同じ依存を選ぶ構成へ整理した段階で、200〜500行の全体目標は未完了。
+
+PresentationFeature単体へ3件を追加。raw接続と新しい組立てで、実View／Status／Cursor、liveな選択・permission／Hidden変更、Sketch迂回、拘束／Geometryの所属選択と短絡・一引数の裸呼出し、non-geometry／空選択、照会例外と部分DOM更新、flyoutの既存default、cold構築とView→Statusの元例外を比較する。root五編集以外と既存Toolbar／Properties／Sketch／Cursorの不変、旧permission arrowのAST同一、新しい未使用／未束縛／初期化前selection参照なしを照合した。構文637file・全単体2,488件・focused38件・関連E2E447件が成功（38file、7.7m、exit 0）。E2E実行中の707入力と開始HEAD不変、選択38fileの一覧447件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-toolbar-selection-assembly-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直近の全体検証7557059の全589件成功（27.2分）とは区別する。
+
+基準develop a8946b6、作業branch codex/toolbar-selection-assembly、開始時週枠残量96%。構文637file・全単体2,488件・focused38件・起動3経路は成功済み。関連38file・447件が成功（7.7m）。707入力と開始HEADを固定し、TEMP cad-toolbar-selection-assembly-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。runnerはcad-toolbar-selection-assembly-run.ps1。全runner終了を回収済み。直近の全体検証7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
 
 ### 最新：Canvasの表示・作図・性能観測の組立てをCanvasTestDriverへ集約（2026-11-11）
 
