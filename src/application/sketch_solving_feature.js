@@ -48,7 +48,7 @@
       refreshReferenceConstraintValidity, sketchHasSolveError: solveState.hasError, isExplicitPoint: pointUsage.isExplicitPoint, minimumLength, acceptError,
       profileAnalysis: work => profiler.active ? profileWork("analysis", work) : work(),
     });
-    function createSolving({ projectionEditing, geometry, checkpoint, editingScope, historyController, recordHistory, resultIsAccepted, maxPasses, relativeTolerance }) {
+    function createSolving({ projectionEditing, geometry, checkpoint, editingScope, historyController, recordHistory, resultIsAccepted, maxPasses = 20, relativeTolerance = 1e-7 }) {
       return createForWorkspace({ documentWorkspace, scopeQuery, references, referenceState, readServices, analysis, presentation, solveState, acceptError,
         projectionEditing, geometry, checkpoint, editingScope, historyController, recordHistory, resultIsAccepted, maxPasses, relativeTolerance });
     }

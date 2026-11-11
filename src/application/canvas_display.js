@@ -237,7 +237,7 @@
           window: browserWindow, updatePropertiesUI, applicationText, readLanguage: () => settings.language,
         });
         function createSceneForEditing(options) {
-          const scene = displayWorkspace.createSceneForEditing({ ...options, currentScope: workspace.current, sketches, readServices, interaction,
+          const scene = displayWorkspace.createSceneForEditing({ constructionExtensionScreenPx: 12, ...options, currentScope: workspace.current, sketches, readServices, interaction,
             targets, pending, readPanelSelection: () => presentation.selectedItem, viewState: controls.state, canvasThemeColor, applicationText });
           completedScene = scene;
           return scene;

@@ -106,7 +106,7 @@
     });
   }
   function createForWorkspace({ documentWorkspace, interaction, presentation, sourceQueries, projectionQueries,
-    solver, scopeQuery, solving, checkpoint, geometry, readServices, viewport, pointer, acceptError, previewMaxModelError, minimumLength,
+    solver, scopeQuery, solving, checkpoint, geometry, readServices, viewport, pointer, acceptError, previewMaxModelError = 0.125, minimumLength,
     fixedState, blockLocalGeometryBounds, blockWorldPoint = readServices.projections.blockWorldPoint,
     pointLockedByLineFixed = fixedState?.pointLockedByLineFixed, findLineFixedConstraint = fixedState?.findLineFixedConstraint,
     findArcEndpointFixedConstraint = fixedState?.findArcEndpointFixedConstraint,

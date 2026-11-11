@@ -170,7 +170,7 @@
           return tools.createSplineEditing({ editingScope, checkpoint, parameters, analysis, access: interaction.access,
             guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion });
         }
-        function createCenterline({ commitNewConstraint, parallelTolerance }) {
+        function createCenterline({ commitNewConstraint, parallelTolerance = 1e-5 }) {
           return tools.createCenterline({ commitNewConstraint, parallelTolerance, invalidateAnalysis: () => { analysis.invalidate(); } });
         }
         function createTrim({ references, hitSketchIdentityElement }) {

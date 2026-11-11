@@ -5,7 +5,7 @@
     annotationFeature, annotationLeaderAnchor, splineEditing, guardDimensionSymbolDeletion, sessions, lineCommand, circularCommands,
     solving, analysis, presentation, updateToolbar, recordHistory, referenceImageInteraction, clearSelection, solveAndRefresh,
     resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag, viewport, persistence, normalizeGeometryInstance, blocks,
-    pasteOffsetScreenPx, imageClipboard, isGeometryMode }) {
+    pasteOffsetScreenPx = 24, imageClipboard, isGeometryMode }) {
     const deletion = window.DeletionFeature.createForEditing({
       documentWorkspace, readServices, interaction, references, annotationDimensions: annotationFeature.dimensions,
       splineEditing, guardDimensionSymbolDeletion, geometry, sessions, lineCommand, circularCommands,

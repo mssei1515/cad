@@ -161,7 +161,6 @@
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
-  const HISTORY_LIMIT = 80;
   presentation.bindCanvas({
     readPngCommand: pngExportLifecycle.readCommand, readPending: () => pendingCommandSession.current, readMode: drawOperationLifecycle.readMode,
     syncAnnotationInput: () => annotationInputController.sync(),
@@ -182,7 +181,7 @@
   const historyFeature = window.HistoryController.createForWorkspace({
     documentWorkspace, blocks: blockEditingFeature, readServices: geometryReadServices, presentation,
     serializeDocument: serializeModel, loadDocument: loadModelData, serializeConstraint, decorateSerializedConstraint,
-    constructionCommand, clearInteractionForSketchChange, solveAndRefresh, changed: updateHistoryButtons, limit: HISTORY_LIMIT,
+    constructionCommand, clearInteractionForSketchChange, solveAndRefresh, changed: updateHistoryButtons,
   });
   const { controller: historyController } = historyFeature;
   const { active: activeEditHistory, resetBlock: resetBlockEditorHistory, resetDocument: resetHistory,
@@ -193,7 +192,6 @@
     updateDocumentStatus: () => updateDocumentNameUI(), isGeometryMode,
   });
   const CURRENT_JSON_VERSION = 26;
-  const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
 
 
   const pointerMoveScheduler = operationSessions.createMoveScheduler({
@@ -209,8 +207,6 @@
   });
   const { state: viewState, constraintStatus: constraintStatusView } = canvasViewControls;
 
-  const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
-  const CENTERLINE_PARALLEL_TOLERANCE = 1e-5;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const resultIsAccepted = window.SketchSolving.createResultAcceptance(CONSTRAINT_ACCEPT_ERROR);
@@ -221,9 +217,6 @@
     fromSelection: constraintOperandsFromSelection } = constraintOperandFeature;
   const { sameArcEndpoint } = constraintCandidates;
   const { operandElement } = constraintOperandValues;
-  const PARAMETER_STABILIZATION_MAX_PASSES = 20;
-  const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
-  const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const geometryDragPreparation = window.GeometryDragFeature.prepare();
   const constrainedAnnotationDrag = createConstrainedAnnotationDrag({
@@ -259,7 +252,7 @@
     solveState: sketchSolveResultState, analysis: constraintAnalysis,
     instanceSources: instanceSourceCommand, projection: sketchProjectionCommand, instances: geometryInstanceCommand, operandElement,
     selectionHighlight, isSidebarHighlightedElement,
-    constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA, constructionExtensionScreenPx: CONSTRUCTION_EXTENSION_SCREEN_PX,
+    constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
     sameArcEndpoint, arcEndpointPoint, fixedState: fixedStateQueries,
     editingQueries: { ...geometryDragPreparation.queries, editedSpline: () => splineEditing.current?.spline },
     annotationBounds,
@@ -333,7 +326,6 @@
   const { solving: sketchSolving, parameters: parameterStabilization, storedDefinitions: storedDefinitionStabilization } = createSolving({
     projectionEditing: sketchProjectionEditing, geometry: geometryCreation, checkpoint: editingCheckpoint, editingScope: editingScopeBinding,
     historyController, recordHistory, resultIsAccepted,
-    maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
   });
   const { stabilize: stabilizeActiveParameterNamespace } = parameterStabilization;
   const { fillet: filletCommand, createCircleCenterCross } = createDrawingEditing({
@@ -368,7 +360,6 @@
   });
   const centerlineCommand = createCenterline({
     commitNewConstraint,
-    parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE,
   });
   const { renderer: { drawFilletArc: drawFilletPreviewArc }, layer: authoringPreviewLayer } = authoringTools.createPreviewForEditing({
     ctx, surface: canvasSurface, geometry: geometryDisplay, canvas, centerlineCommand,
@@ -626,7 +617,7 @@
     referenceImageInteraction, clearSelection, solveAndRefresh,
     resetGeometryDrag: geometryDragPreparation.reset, resetDimensionDrag: () => dimensionDrag.reset(), resetAnnotationDrag: () => annotationDrag.reset(),
     viewport, persistence: documentPersistence, normalizeGeometryInstance, blocks: blockEditingFeature,
-    pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX, imageClipboard, isGeometryMode,
+    imageClipboard, isGeometryMode,
   });
   const { remove: deleteElements, removeSelection: deleteCurrentSelection } = deletionFeature;
   const { session: clipboardSession, command: clipboardCommand, copyableSelectionPayload } = clipboardFeature;
@@ -929,7 +920,7 @@
     solver, scopeQuery: solveScopeQuery, solving: sketchSolving,
     checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
     viewport, pointer: dragPointer, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR, minimumLength: MIN_ORIENTATION_LENGTH,
+    minimumLength: MIN_ORIENTATION_LENGTH,
     blockLocalGeometryBounds, fixedState: fixedStateQueries,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
