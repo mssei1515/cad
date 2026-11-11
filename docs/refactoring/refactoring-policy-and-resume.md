@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11の保存形式設定単位ではapp.jsは1,218行、非空白776行。AST監査ではroot218文・372束縛、構築439非空白行とbind37行、別名・設定88行、委譲4行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の共有regions公開単位ではapp.jsは1,218行、非空白776行。AST監査ではroot218文・371束縛、構築440非空白行とbind37行、別名・設定88行、委譲3行、条件付きtest hooks152行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,21 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-11）
 
-### 最新：保存形式の定義とwriter設定の共有を保存ownerへ集約（2026-11-11）
+### 最新：共有regionsの完成参照と画像向け判定を既存CanvasHitInteractionへ集約（2026-11-11）
+
+開始基準developはc764487cded1c42d420bdef7212ef5fa365e85a2、作業branchはcodex/canvas-region-query-publication（develop統合・Push後に削除）。開始週枠残量68%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+CanvasHitInteraction.prepareSceneWithAnnotationsForWorkspaceは、画像向けの安定したhitReferenceImageAtと、従来と同じScene生成を行うcreateSceneを返す。実createQueriesが全queryを完成し、返すrecordのregionsを選んだ後だけ内部完了recordを更新する。画像・Hover・Canvas press／contextは同じ実regionsを使い、画像用の別queryや判定規則を作らない。Operation sessionsのprepareSceneWithAnnotationsは実Read services／Interaction／Sessionsを共有して、このprepared recordをそのまま返す。
+
+app.jsはregionHitQueryの保持と画像向けの委譲を持たない。準備は画像機能生成の直前、Sceneと実queryの生成は従来の位置で行う。完成前には同じregionHitQueryのReferenceErrorを返し、完成したundefined／null regionsはTypeErrorとして区別する。実regions.hitReferenceImageAtを操作時にmember・全引数で呼び、返値と元例外を透過する。生成失敗は前の完成参照を保持し、prepareごとの参照は独立する。旧Scene生成APIとSessionのcreateSceneWithAnnotationsは維持し、実Scene／query recordをcloneしない。画像の配列逆順・回転後のinclusive境界・可視性・activeOnlyと現在scope／mode／Pendingの照会、UI・履歴・保存形式v26は不変。既存application内のCanvasHitInteraction／CanvasInteractionFeatureへ集約し、新しいfileやglobalを加えない。
+
+app.jsは1,218→1,218行（変化なし）、非空白776行・root218文・構文依存辺1,046も不変。root束縛372→371、委譲4→3行、構築439→440行。bind37行・別名88行・test hooks152行は不変。初期化時の準備が増えたため行数削減とは扱わず、完成参照と画像への中継を既存query ownerへ集めた単位とする。200〜500行の全体目標は未完了。
+
+関連単体93件が成功。旧経路とprepared経路で注記queryの引数・policy・例外・model参照も比較し、実画像queryの重なり順・回転境界・可視性・activeOnly・scope置換、生成前guardを確認した。getterの操作時取得、同じ実regions receiver・全引数・返値と元例外、四段階のquery生成失敗時の前参照保持、再生成成功後の切替、独立性とundefined／nullのTypeErrorも照合した。Sessionの新prepareはscopeを読まず実ownerを共有し、元factory返値・receiver・一引数と元例外を保つ。browser比較では画像生成中／policy／regions／geometry生成中／query record完成直前の五つのReferenceError、完成後の同じ実regions receiver・四引数、native optionのkey順／function名／arity、旧APIの名前／arityと公開204項目が一致した。通常ja/light・en/dark・test起動も成功。宣言した集約以外の生成本体と、native hit algorithm／ReferenceImageFeature／Interaction sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,569件と関連E2E160件（7file、2.3m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+### 保存形式の定義とwriter設定の共有を保存ownerへ集約（2026-11-11）
 
 開始基準developは328b53209d4cb31c5d5a020de3f3d4c1174a4de1、作業branchはcodex/document-format-policy（develop統合・Push後に削除）。開始週枠残量69%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

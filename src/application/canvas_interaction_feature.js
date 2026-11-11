@@ -39,6 +39,9 @@
         return window.CanvasHitInteraction.createSceneWithAnnotationsForWorkspace({ documentWorkspace, readServices, interaction: feature, sessions,
           viewport, dimensionScope, dimensions, dimensionLabelForConstraint, annotationBounds, annotationSpatial, operandValues });
       }
+      function prepareSceneWithAnnotations() {
+        return window.CanvasHitInteraction.prepareSceneWithAnnotationsForWorkspace({ readServices, interaction: feature, sessions });
+      }
       function createConstruction({ projection, cancelConstraintTargetCommand, synchronizeSketchProjectionMetadata, updateUI, recordHistory, clearSnap, updateToolbar }) {
         return window.ConstructionCommand.create({ cancelConstraintTargetCommand,
           selectedConstructionTogglePrimitives: selectionFeature.selection.selectedConstructionTogglePrimitives,
@@ -163,7 +166,7 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, createConstruction, createMoveScheduler, createMoveSchedulerForEditing, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, prepareInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, prepareSceneWithAnnotations, createConstruction, createMoveScheduler, createMoveSchedulerForEditing, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, prepareInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
       preparedPending = pending;
       return sessions;
     }

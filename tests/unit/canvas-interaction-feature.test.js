@@ -675,6 +675,17 @@ test('Canvas session owns scene construction with the actual shared foundation a
  }finally{w.CanvasHitInteraction=original;}
 });
 
+test('Canvas session prepares the shared hit owner cold and returns its actual ports with original factory failures',()=>{
+ const f=fixture(),w=f.w,original=w.CanvasHitInteraction,result=Object.freeze({}),failure=new Error('hit preparation');let fail=false,calls=0;
+ w.CanvasHitInteraction={...original,prepareSceneWithAnnotationsForWorkspace(options){assert.equal(this,w.CanvasHitInteraction);assert.equal(arguments.length,1);calls++;
+  assert.deepEqual(Object.keys(options),['readServices','interaction','sessions']);assert.equal(options.readServices,f.readServices);assert.equal(options.interaction,f.foundation);assert.equal(options.sessions,f.sessions);
+  if(fail)throw failure;return result;}};
+ f.state.ready=false;
+ try{assert.equal(f.sessions.prepareSceneWithAnnotations(),result);fail=true;assert.throws(()=>f.sessions.prepareSceneWithAnnotations(),error=>error===failure);}
+ finally{w.CanvasHitInteraction=original;}
+ assert.equal(calls,2);assert.deepEqual(f.events,[]);assert.equal(f.state.scope.points[0],f.point);
+});
+
 test('Canvas-owned real scene stays cold and shares live mode, pending, targets, geometry scope and annotation policy without changing selection',()=>{
  const f=fixture(),{w,foundation:b,sessions:s,state,readServices:services}=f,calls=[];let hidden=false,error=null;
  const read=()=>{assert.equal(state.ready,true);if(error)throw error;return state.scope;};
