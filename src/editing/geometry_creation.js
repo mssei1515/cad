@@ -3,6 +3,10 @@
   "use strict";
   const { Point, Line, Circle, Arc, Spline, GeometryFixedConstraint, OffsetChainConstraint, hypot2 } = window.GeometrySolver;
   const { MIN_ORIENTATION_LENGTH, arcSweep } = window.GeometryKernel;
+  function createLengthPolicy(minLineLength, minimumOrientationLength) {
+    const minimumLength = Math.max(minimumOrientationLength, minLineLength || 12);
+    return Object.freeze({ minLineLength: minimumLength, minArcLength: minimumLength });
+  }
   function create({ currentScope, ids, assignSketchId, currentConstruction, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH }) {
     function addPoint(x, y, fixed = false, kind = "explicit") {
       const p = new Point(ids.allocate("point"), x, y, fixed, kind);
@@ -133,5 +137,5 @@
     return Object.freeze({ endpointAt });
   }
 
-  window.GeometryCreation = Object.freeze({ create, createEndpointResolver });
+  window.GeometryCreation = Object.freeze({ create, createEndpointResolver, createLengthPolicy });
 })();

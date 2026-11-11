@@ -68,7 +68,7 @@ function browserFixture(composed) {
   loadModelData:()=>{if(state.loadFailure)throw state.loadFailure;},enterBlockDefinitionEdit:()=>{},blockInstanceDisplayCenter:item=>({x:item.x,y:item.y}),buildDragSession:()=>({}),
   constraintTargetSession:targets,canvasHover:hover,blockSelectionGeometry:()=>({}),geometryRefForItem:w.GeometryObjects.geometryRefForItem};
  editor.chain=ports.editorChain;placement.commit=ports.commitBlockPlacement;ports.viewport.worldToCanvasScreen=ports.worldToCanvasScreen;
- const support=composed?w.BlockTestDriver.createForWorkspace({
+ const workspaceOptions={
   documentWorkspace:{document:documentModel,workspace:{current:read},sketches:ports.sketches},geometry,
   readServices:{projections:ports.projections,reads:ports.reads},blocks:{session:editor,queries:ports.queries},
   interaction:{selection,hover,lifecycle:{readMode:ports.readMode}},sessions:{targets},presentation:{updateUI:ports.updateUI,draw:ports.draw},
@@ -77,10 +77,19 @@ function browserFixture(composed) {
   configuration:{setEnabledSketchIds:ports.setBlockInstanceEnabledSketchIds},sketchEditing:{command:{createSketch:ports.createSketch}},dragging:{build:ports.buildDragSession},selectionQuery:{read:ports.blockSelectionGeometry},
   resetModelState:ports.resetModelState,pushModelConstraint:ports.pushModelConstraint,fitAllGeometryToViewport:ports.fitAllGeometryToViewport,
   recordHistory:ports.recordHistory,serializeConstraint:ports.serializeConstraint,serializeModel:ports.serializeModel,loadModelData:ports.loadModelData,blockInstanceDisplayCenter:ports.blockInstanceDisplayCenter,
- }):w.BlockTestDriver.createBrowserSupport(ports);
- const actions=support.createDimensionCases({defaultDimensionForTarget:target=>{events.push(['dimension',target]);return {kind:'linear'};},
+ };
+ const dimensionPorts={defaultDimensionForTarget:target=>{events.push(['dimension',target]);return {kind:'linear'};},
   readOnlyDimensionConstraintForPlacement:(target,value,dimension,options)=>{events.push(['create',target,value,dimension,options]);return {readOnlyDimension:true,enabled:false,target};},
-  addReadOnlyDimensionConstraint:(...args)=>events.push(['add',...args]),blockDefinitionById:id=>state.definitions.find(d=>d.id===id)});
+  addReadOnlyDimensionConstraint:(...args)=>events.push(['add',...args]),blockDefinitionById:id=>state.definitions.find(d=>d.id===id)};
+ let support,actions;
+ if(composed==='browser') {
+  const browser=w.BlockTestDriver.createBrowserSupportForWorkspace({...workspaceOptions,
+   readServices:Object.freeze({...workspaceOptions.readServices,catalog:Object.freeze({blockDefinitionById:dimensionPorts.blockDefinitionById})}),
+   dimensionPlacement:Object.freeze({defaultDimensionForTarget:dimensionPorts.defaultDimensionForTarget}),
+   readOnlyDimensions:Object.freeze({forPlacement:dimensionPorts.readOnlyDimensionConstraintForPlacement,add:dimensionPorts.addReadOnlyDimensionConstraint})});
+  assert.equal(Object.isFrozen(browser),true);assert.deepEqual(Object.keys(browser),['blockTestSupport','blockTestActions']);
+  support=browser.blockTestSupport;actions=browser.blockTestActions;
+ }else{support=composed?w.BlockTestDriver.createForWorkspace(workspaceOptions):w.BlockTestDriver.createBrowserSupport(ports);actions=support.createDimensionCases(dimensionPorts);}
  assert.deepEqual(events,[]);state.ready=true;
  return {support,actions,state,ports,selection,editor,hover,targets,events,t};
 }
@@ -123,7 +132,7 @@ test('Block workspace browser support preserves cold ordered APIs, actual geomet
   f.targets.command={type:'distance'};f.hover.current={block:instance,point:line.p1};const hover=f.support.observations.blockProjectionHoverState();
   f.state.scope={...f.state.scope,points:[],lines:[],blockInstances:[]};assert.equal(f.support.observations.blockRotationLockStateForTest(),null);
   return JSON.parse(JSON.stringify({keys,reset,rotation,endpoint,position,hover,observed:f.support.observations.blockState(),snapshot:browserSnapshot(f)}));};
- assert.deepEqual(run(true),run(false));
+ assert.deepEqual(run(true),run(false));assert.deepEqual(run('browser'),run(false));
 });
 
 test('Block workspace browser actions retain projected dimensions, nested constraint identity and placement coercion and receiver',()=>{
@@ -137,7 +146,7 @@ test('Block workspace browser actions retain projected dimensions, nested constr
   assert.equal(child.lineCount,5);f.state.mode='block-place';const placed=f.actions.commitBlockPlacementForTest({x:'7',y:'8'},'0.5');
   assert.equal(placed.x,7);assert.equal(placed.y,8);assert.equal(placed.rotation,0.5);
   return JSON.parse(JSON.stringify({dimension,constrained,child,placed,snapshot:browserSnapshot(f)}));};
- assert.deepEqual(run(true),run(false));
+ assert.deepEqual(run(true),run(false));assert.deepEqual(run('browser'),run(false));
 });
 
 test('Block workspace support retains cancellation, solve and reload failure identities and partially changed model',()=>{
@@ -147,5 +156,5 @@ test('Block workspace support retains cancellation, solve and reload failure ide
    const marker=new Error('same Block failure');f.state[failure+'Failure']=marker;f.events.length=0;
    const action=failure==='cancel'?()=>f.actions.cancelBlockEditor():failure==='solve'?()=>f.actions.constrainFirstNestedBlockLineForTest():()=>f.actions.reloadBlockState();
    assert.throws(action,error=>error===marker);if(failure==='solve')assert.equal(f.state.scope.constraints.length,5);
-   return browserSnapshot(f);};assert.deepEqual(run(true),run(false),failure);}
+   return browserSnapshot(f);};assert.deepEqual(run(true),run(false),failure);assert.deepEqual(run('browser'),run(false),failure);}
 });

@@ -145,7 +145,7 @@ test('read context binds the same Workspace and Solver while invalidating its ac
   assert.deepEqual(f.calls.map(call => call.name), ['close', 'move']);
 });
 
-function persistenceFixture(beforeCreate = () => {}, readOptions = {}) {
+function persistenceFixture(beforeCreate = () => {}, readOptions = {}, build = (context, options) => context.createPersistence(options)) {
   const { model } = fixture(), state = { ready: false, bound: model.document, block: null }, calls = [];
   const check = () => assert.equal(state.ready, true, 'persistence construction must defer model queries');
   const context = model.createReadContext({ currentSketches: () => { check(); return state.bound.sketches; },
@@ -161,10 +161,45 @@ function persistenceFixture(beforeCreate = () => {}, readOptions = {}) {
     normalizeArcSweeps: arcs => { check(); calls.push(['arcs', arcs]); },
   };
   beforeCreate(context, options);
-  const persistence = context.createPersistence(options);
+  const persistence = build(context, options);
   assert.equal(JSON.stringify(model.document), before); assert.deepEqual(calls, []); state.ready = true;
   return { model, state, calls, persistence, placement, context, options };
 }
+
+test('Workspace persistence selects the current format without changing explicit versions or native writer results', () => {
+  const omitted = Symbol('omitted');
+  for (const version of [omitted, undefined, null, 27]) {
+    const results = [];
+    for (const owned of [false, true]) {
+      const original = w.DocumentSnapshot, expected = version === omitted ? 26 : version;
+      let writer, ports;
+      w.DocumentSnapshot = { ...original, createWriter(options) {
+        assert.equal(this, w.DocumentSnapshot); assert.equal(arguments.length, 1); ports = options;
+        return writer = original.createWriter(options);
+      } };
+      let f;
+      try {
+        f = persistenceFixture((_context, options) => {
+          if (version === omitted) delete options.version; else options.version = version;
+        }, {}, (context, options) => owned ? context.createPersistenceForWorkspace(options)
+          : context.createPersistence({ ...options, version: expected }));
+      } finally { w.DocumentSnapshot = original; }
+      assert.equal(f.persistence.writer, writer); assert.equal(ports.version, expected); assert.equal(f.persistence.version, expected);
+      assert.equal(Object.getOwnPropertyDescriptor(f.persistence, 'version').writable, false);
+      const source = addPersistedLine(f.model.document, 'FORMAT', 10);
+      const saved = f.context.persistence.serializeModel(); assert.equal(saved.version, expected); assert.ok(Object.hasOwn(saved, 'version'));
+      assert.equal(f.model.document.lines[0], source.line);
+      if (version === omitted) {
+        const loaded = f.persistence.loading.decode(saved);
+        assert.equal(loaded.lines[0].p1, loaded.points[0]); assert.equal(loaded.constraints[0].p1, loaded.points[0]);
+      }
+      saved.savedAt = 'TIME'; results.push(JSON.stringify(saved));
+    }
+    assert.equal(results[1], results[0]);
+  }
+  const raw = persistenceFixture((_context, options) => { delete options.version; });
+  assert.equal(raw.persistence.version, undefined); assert.equal(raw.context.persistence.serializeModel().version, undefined);
+});
 
 test('read context connects the same Block preparation before services exist and normalizes only when read', () => {
   const original = w.GeometryReadServices; let connected;
@@ -524,6 +559,7 @@ test('persistence application retains geometry and attachment reservation before
 function editingScopeFixture(composed) {
   let editing;
   const f = readContextFixture((context, options, model) => {
+    if (composed === 'default') delete options.Solver;
     if (composed) editing = context.createEditingScope(options);
     else {
       const binding = context.createScopeBinding(options), { solver } = binding;
@@ -544,7 +580,7 @@ function radiusDimension(id) {
 
 test('Document editing scope constructs binding, model queries and insertion once in order and preserves their actual owners', () => {
   const original = { binding: w.EditingScopeBinding, dimensions: w.DimensionQueries, insertion: w.ConstraintCommitCommand };
-  try { for (const composed of [false, true]) for (const failure of [null, 'dimensions']) {
+  try { for (const composed of [false, true, 'default']) for (const failure of [null, 'dimensions']) {
     const events = [], ports = {}, marker = new Error('model query construction');
     w.EditingScopeBinding = { ...original.binding, create(input) { events.push('binding'); ports.binding = input; return original.binding.create(input); } };
     w.DimensionQueries = { ...original.dimensions, createModelQueries(input) { events.push('dimensions'); ports.dimensions = input; if (failure) throw marker; return original.dimensions.createModelQueries(input); } };
@@ -561,7 +597,7 @@ test('Document editing scope constructs binding, model queries and insertion onc
 });
 
 test('Document editing queries and insertion follow bound scope while sketch choice and Parameter allocation follow current Workspace', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'default']) {
     const f = editingScopeFixture(composed), { model, binding, editing } = f, draft = w.DocumentState.create(), solver = editing.solver;
     binding.activate(draft); assert.equal(editing.solver, solver); assert.equal(solver.model, draft);
     const first = radiusDimension('C1'); draft.circles.push(first.circle); assert.equal(editing.insertion.push(first.constraint, 'ROOT'), first.constraint);
@@ -580,7 +616,7 @@ test('Document editing queries and insertion follow bound scope while sketch cho
 });
 
 test('Document editing scope keeps failed activation and insertion partial effects at their original boundaries', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'default']) {
     const f = editingScopeFixture(composed), { model, binding, editing } = f, draft = w.DocumentState.create(), marker = new Error('boundary');
     binding.activate(draft); model.workspace.activate(model.document); f.state.failure = 'move'; f.state.error = marker;
     assert.throws(() => binding.activate(model.document), error => error === marker); assert.equal(binding.current, draft); assert.equal(editing.solver.model, draft);
@@ -591,4 +627,343 @@ test('Document editing scope keeps failed activation and insertion partial effec
     assert.equal(constraint.sketchId, 'S1'); assert.equal(constraint.parameterName, undefined); assert.equal(model.document.constraints.length, 0);
     assert.equal(editing.dimensionQueries.hasDirectRadiusDimension(circle), true); assert.equal(binding.current, draft); assert.equal(editing.solver.model, draft);
   }
+});
+
+test('Document persistence entry points keep initialization guards and normalize against the live Workspace through the actual codec',()=>{
+ const f=persistenceFixture(context=>{
+  for(const [run,binding]of [[()=>context.persistence.normalizeGeometryInstance({}),'normalizeEditingGeometryInstance'],[()=>context.persistence.loadModelData({}),'documentApplication'],[context.persistence.readRepairMessage,'documentApplication']])assert.throws(run,error=>error.name==='ReferenceError'&&error.message==="Cannot access '"+binding+"' before initialization");
+ });
+ const api=f.context.persistence;assert.equal(api.normalizeGeometryInstance.length,1);assert.equal(api.loadModelData.length,1);assert.equal(api.readRepairMessage.length,0);
+ for(const run of [()=>api.loadModelData({}),api.readRepairMessage])assert.throws(run,error=>error.name==='ReferenceError'&&error.message==="Cannot access 'documentApplication' before initialization");
+ assert.equal(api.normalizeGeometryInstance({type:'pattern'},undefined,4).id,'PI5');assert.equal(api.normalizeGeometryInstance({type:'pattern'}).sketchId,'S1');
+ const other=w.DocumentState.create();other.sketches[1].id='S9';other.activeSketchId='S9';f.model.workspace.activate(other);
+ assert.equal(api.normalizeGeometryInstance({type:'pattern'}).sketchId,'S9');assert.equal(f.state.bound,f.model.document);
+ assert.equal(api.normalizeGeometryInstance({type:'pattern'},value=>'explicit:'+value).sketchId,'explicit:undefined');
+});
+
+test('owned Document load retains the captured target, Tree sequencing, references and ID restoration across a different current scope',()=>{
+ const f=applicationCompositionFixture(true),api=f.context.persistence,root=f.model.document,source=addPersistedLine(root,'L42');source.p1.id='P20';source.p2.id='P21';f.model.documentIds.restore({hatchSeq:12});const data=f.persistence.writer.serialize();
+ const local=w.DocumentState.create();addPersistedLine(local,'LOCAL');f.model.workspace.activate(local);f.state.bound=local;const before=JSON.stringify(local);
+ api.loadModelData(data,{preserveSketchTreeState:true});assert.equal(JSON.stringify(local),before);assert.equal(f.state.bound,root);assert.equal(root.lines[0].id,'L42');
+ assert.equal(root.lines[0].p1,root.points[0]);assert.equal(root.constraints[0].p2,root.points[1]);assert.deepEqual(f.events.slice(0,3),['capture','reset','tree']);
+ assert.equal(f.model.geometryIds.allocate('point'),'P22');assert.equal(f.model.geometryIds.allocate('line'),'L43');assert.equal(f.model.documentIds.peek('hatch'),12);
+ assert.equal(api.readRepairMessage(),f.application.blockConstraintRepairMessage);
+});
+
+test('owned Document load preserves receiver, two arguments, fresh default options, return and original load or repair getter exceptions',()=>{
+ const f=persistenceFixture(),api=f.context.persistence,original=w.DocumentApplication,marker=new Error('application failed'),calls=[],result={},message={};let fail=false,gets=0;
+ const component=Object.freeze({load(...args){assert.equal(this,component);calls.push(args);if(fail)throw marker;return result;},get blockConstraintRepairMessage(){assert.equal(this,component);gets++;if(fail)throw marker;return message;}});
+ const ports={resetEditingState(){},sketchTreeView:{capture(){},restore(){}},refreshReferenceConstraintValidity(){},enforceMinimumLineLengths(){},log(){}};
+ w.DocumentApplication={...original,create:()=>component};
+ try{assert.equal(f.persistence.createApplication(ports),component);}finally{w.DocumentApplication=original;}
+ const data={};assert.equal(api.loadModelData(data),result);assert.equal(api.loadModelData(data,undefined,'ignored'),result);assert.equal(api.loadModelData(data,null,'ignored'),result);
+ assert.equal(calls.length,3);assert.ok(calls.every(args=>args.length===2&&args[0]===data));assert.deepEqual(Object.keys(calls[0][1]),[]);assert.notEqual(calls[0][1],calls[1][1]);assert.equal(calls[2][1],null);
+ assert.equal(api.readRepairMessage('ignored'),message);assert.equal(gets,1);fail=true;assert.throws(()=>api.loadModelData(data),error=>error===marker);assert.throws(api.readRepairMessage,error=>error===marker);
+});
+
+test('each read context publishes only completed Document applications and persistence reconstruction keeps its previous application',()=>{
+ const f=persistenceFixture(),g=persistenceFixture(),original=w.DocumentApplication,marker=new Error('application construction failed'),seen=[];
+ const make=label=>Object.freeze({load(data){seen.push([label,this]);return data;},get blockConstraintRepairMessage(){return label;}}),first=make('first'),other=make('other'),replacement=make('replacement');
+ const ports={resetEditingState(){},sketchTreeView:{capture(){},restore(){}},refreshReferenceConstraintValidity(){},enforceMinimumLineLengths(){},log(){}};let fail=false,next=first;
+ w.DocumentApplication={...original,create(options){if(fail)throw marker;return options.document===f.model.document?next:other;}};
+ try{
+  assert.equal(f.persistence.createApplication(ports),first);assert.equal(g.persistence.createApplication(ports),other);const data={};assert.equal(f.context.persistence.loadModelData(data),data);
+  fail=true;assert.throws(()=>f.persistence.createApplication(ports),error=>error===marker);const empty=persistenceFixture();assert.throws(()=>empty.persistence.createApplication(ports),error=>error===marker);assert.throws(empty.context.persistence.readRepairMessage,error=>error.name==='ReferenceError');assert.equal(f.context.persistence.readRepairMessage(),'first');assert.equal(g.context.persistence.readRepairMessage(),'other');
+  const fresh=f.context.createPersistence({...f.options,version:27});assert.equal(f.context.persistence.readRepairMessage(),'first');assert.equal(f.context.persistence.serializeModel().version,27);
+  fail=false;next=replacement;assert.equal(fresh.createApplication(ports),replacement);f.context.persistence.loadModelData(data);g.context.persistence.loadModelData(data);
+  assert.equal(seen[0][1],first);assert.equal(seen[1][1],replacement);assert.equal(seen[2][1],other);assert.equal(g.context.persistence.readRepairMessage(),'other');
+ }finally{w.DocumentApplication=original;}
+});
+
+
+test('Document editing scope owns the default Solver construction at the existing bound-scope stage without eager model operations', () => {
+  const original=w.GeometrySolver,events=[],marker=new Error('solver ctor');let reads=0,created,fail=false;
+  const DefaultSolver=class extends original.ConstraintSolver {constructor(model){assert.equal(arguments.length,1);events.push(['solver',model]);if(fail)throw marker;super(model);created=this;}};
+  w.GeometrySolver={...original,get ConstraintSolver(){reads++;return DefaultSolver;}};
+  try{
+    const f=fixture(),context=f.model.createReadContext({currentSketches:()=>f.model.workspace.current().sketches,prepareBlocks(){},showHiddenElements:()=>false,viewportScale:()=>1,profileRead:read=>read()});
+    assert.equal(reads,0);assert.deepEqual(events,[]);
+    const editing=context.createEditingScope({closeSketchContext(){events.push(['close']);},resetSketchMove(){events.push(['move']);}});
+    assert.equal(reads,1);assert.equal(editing.solver,created);assert.equal(editing.binding.solver,created);assert.equal(created.model,f.model.document);assert.deepEqual(events,[['solver',f.model.document]]);
+    const draft=w.DocumentState.create();editing.binding.activate(draft);assert.equal(reads,1);assert.equal(editing.solver,created);assert.equal(created.model,draft);assert.equal(editing.binding.current,draft);
+    assert.deepEqual(events.slice(1),[['close'],['move']]);
+    const before=JSON.stringify(draft),old=created;fail=true;assert.throws(()=>context.createEditingScope({closeSketchContext(){},resetSketchMove(){}}),error=>error===marker);
+    assert.equal(reads,2);assert.equal(created,old);assert.equal(editing.binding.current,draft);assert.equal(JSON.stringify(draft),before);
+  }finally{w.GeometrySolver=original;}
+});
+
+test('Document editing scope preserves custom Solver identity, explicit invalid classes and the raw binding constructor requirement', () => {
+  const original=w.GeometrySolver,marker=new Error('unexpected default');let created;
+  const f=fixture(),context=f.model.createReadContext({currentSketches:()=>f.model.workspace.current().sketches,prepareBlocks(){},showHiddenElements:()=>false,viewportScale:()=>1,profileRead:read=>read()});
+  class CustomSolver {constructor(model){assert.equal(arguments.length,1);this.model=model;created=this;}}
+  w.GeometrySolver={...original,get ConstraintSolver(){throw marker;}};
+  try{
+    const options={Solver:CustomSolver,closeSketchContext(){},resetSketchMove(){}},editing=context.createEditingScope(options);
+    assert.equal(editing.solver,created);assert.equal(editing.solver.constructor,CustomSolver);assert.equal(editing.binding.current,f.model.document);
+    for(const Solver of [undefined,null])assert.throws(()=>context.createEditingScope({...options,Solver}),error=>error.name==='TypeError');
+    const inherited=context.createEditingScope(Object.assign(Object.create({Solver:CustomSolver}),{closeSketchContext(){},resetSketchMove(){}}));
+    assert.equal(inherited.solver,created);assert.equal(inherited.solver.constructor,CustomSolver);
+    for(const Solver of [undefined,null])assert.throws(()=>context.createEditingScope(Object.create({...options,Solver})),error=>error.name==='TypeError');
+    assert.throws(()=>context.createScopeBinding({closeSketchContext(){},resetSketchMove(){}}),error=>error.name==='TypeError');
+    assert.equal(f.model.workspace.current(),f.model.document);assert.equal(editing.solver.constructor,CustomSolver);
+  }finally{w.GeometrySolver=original;}
+});
+
+function ownedBoundWorkspace() {
+  const model = w.DocumentWorkspace.create({ applicationText: (_ja, en) => en, constraintGraphNodes: () => [] });
+  const context = model.createReadContext({ prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() });
+  const display = () => context.services.dimensionAppearance.dimensionDisplayState({}).prefix;
+  return { model, context, display };
+}
+
+test('Document-owned Hatch and Sketch reads follow the native bound scope through direct Workspace changes, raw binding creation and restoration', () => {
+  const { model, context, display } = ownedBoundWorkspace();
+  const source = { points: [{ id: 'P20' }], hatches: [{ id: 'H8' }], sketches: [{ id: 'S7' }], annotations: [{ id: 'AN4' }] };
+  const unready = error => error.name === 'ReferenceError' && error.message === "Cannot access 'editingScopeBinding' before initialization";
+  assert.throws(display, unready); assert.throws(() => model.reservation.scope(source), unready);
+  assert.equal(model.geometryIds.peek('point'), 21); assert.equal(model.documentIds.peek('hatch'), 9);
+  assert.equal(model.documentIds.peek('sketch'), 2); assert.equal(model.documentIds.peek('annotation'), 1);
+  model.document.nextHatchIndex = 12; model.document.sketches[1].dimensionAppearance = { prefix: 'document-bound' };
+  const { binding } = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} });
+  assert.equal(display(), 'document-bound'); model.reservation.scope(source); assert.equal(model.documentIds.peek('hatch'), 12);
+  const host = model.workspace.capture(), unbound = w.DocumentState.create();
+  unbound.nextHatchIndex = 90; unbound.sketches[1].dimensionAppearance = { prefix: 'unbound' }; model.workspace.activate(unbound);
+  const raw = context.createScopeBinding({ Solver: w.GeometrySolver.ConstraintSolver, closeSketchContext() {}, resetSketchMove() {} });
+  assert.equal(raw.current, unbound); assert.equal(binding.current, model.document);
+  assert.equal(display(), 'document-bound'); model.reservation.scope({}); assert.equal(model.documentIds.peek('hatch'), 12);
+  const draft = w.DocumentState.create(); draft.nextHatchIndex = 22; draft.sketches[1].dimensionAppearance = { prefix: 'draft-bound' };
+  binding.activate(draft); assert.equal(display(), 'draft-bound'); assert.equal(binding.current, draft); assert.equal(binding.solver.model, draft);
+  model.reservation.scope({}); assert.equal(model.documentIds.peek('hatch'), 22);
+  model.workspace.restore(host); assert.equal(model.workspace.current(), model.document); assert.equal(binding.current, draft);
+  assert.equal(display(), 'draft-bound'); model.reservation.scope({}); assert.equal(model.documentIds.peek('hatch'), 22);
+  model.document.nextHatchIndex = 30; binding.activate(model.document);
+  assert.equal(display(), 'document-bound'); model.reservation.scope({}); assert.equal(model.documentIds.peek('hatch'), 30);
+});
+
+test('Document-owned bound readers publish after native binding, queries and insertion and preserve prior completion on every construction failure', () => {
+  const originals = { ids: w.DocumentIds, reads: w.GeometryReadServices, binding: w.EditingScopeBinding, dimensions: w.DimensionQueries, insertion: w.ConstraintCommitCommand };
+  const ports = {}, stages = [], marker = new Error('bound scope construction'); let expected, failure;
+  function observe(name) {
+    stages.push(name);
+    if (expected) { assert.equal(ports.sketches(), expected.sketches); assert.equal(ports.hatch(), expected.nextHatchIndex); }
+    else for (const read of [ports.sketches, ports.hatch]) assert.throws(read, error => error.name === 'ReferenceError');
+    if (failure === name) throw marker;
+  }
+  w.DocumentIds = { ...originals.ids, createReservation(input) { ports.hatch = input.nextHatchIndex; return originals.ids.createReservation(input); } };
+  w.GeometryReadServices = { ...originals.reads, createWithHatches(input) { ports.sketches = input.currentSketches; return originals.reads.createWithHatches(input); } };
+  w.EditingScopeBinding = { ...originals.binding, create(input) { observe('binding'); return originals.binding.create(input); } };
+  w.DimensionQueries = { ...originals.dimensions, createModelQueries(input) { observe('queries'); return originals.dimensions.createModelQueries(input); } };
+  w.ConstraintCommitCommand = { ...originals.insertion, createInsertion(input) { observe('insertion'); return originals.insertion.createInsertion(input); } };
+  try {
+    const { model, context } = ownedBoundWorkspace(), input = { closeSketchContext() {}, resetSketchMove() {} };
+    assert.equal(ports.sketches.name, 'currentSketches'); assert.equal(ports.sketches.length, 0);
+    assert.equal(ports.hatch.name, 'nextHatchIndex'); assert.equal(ports.hatch.length, 0);
+    for (const stage of ['binding', 'queries', 'insertion']) {
+      failure = stage; stages.length = 0; assert.throws(() => context.createEditingScope(input), error => error === marker);
+      assert.deepEqual(stages, ['binding', 'queries', 'insertion'].slice(0, ['binding', 'queries', 'insertion'].indexOf(stage) + 1));
+      assert.throws(ports.sketches, error => error.name === 'ReferenceError'); assert.throws(ports.hatch, error => error.name === 'ReferenceError');
+    }
+    failure = null; model.document.nextHatchIndex = 13;
+    const first = context.createEditingScope(input); expected = first.binding.current;
+    assert.equal(ports.sketches('ignored'), expected.sketches); assert.equal(ports.hatch('ignored'), 13);
+    const draft = w.DocumentState.create(); draft.nextHatchIndex = 31; model.workspace.activate(draft);
+    for (const stage of ['binding', 'queries', 'insertion']) {
+      failure = stage; assert.throws(() => context.createEditingScope(input), error => error === marker);
+      assert.equal(ports.sketches(), expected.sketches); assert.equal(ports.hatch(), 13);
+    }
+    failure = null; const second = context.createEditingScope(input); expected = second.binding.current;
+    assert.equal(expected, draft); assert.notEqual(second.binding, first.binding); assert.equal(ports.sketches(), draft.sketches); assert.equal(ports.hatch(), 31);
+    Object.defineProperty(draft, 'nextHatchIndex', { configurable: true, get() { assert.equal(this, draft); throw marker; } });
+    assert.throws(ports.hatch, error => error === marker);
+    Object.defineProperty(draft, 'sketches', { configurable: true, get() { assert.equal(this, draft); throw marker; } });
+    assert.throws(ports.sketches, error => error === marker);
+  } finally {
+    w.DocumentIds = originals.ids; w.GeometryReadServices = originals.reads; w.EditingScopeBinding = originals.binding;
+    w.DimensionQueries = originals.dimensions; w.ConstraintCommitCommand = originals.insertion;
+  }
+});
+
+test('Document-owned scope defaults preserve explicit own and inherited readers and leave the raw geometry-read API unchanged', () => {
+  const originalIds = w.DocumentIds, originalReads = w.GeometryReadServices; let hatch, sketches;
+  w.DocumentIds = { ...originalIds, createReservation(input) { hatch = input.nextHatchIndex; return originalIds.createReservation(input); } };
+  w.GeometryReadServices = { ...originalReads, createWithHatches(input) { sketches = input.currentSketches; return originalReads.createWithHatches(input); } };
+  try {
+    for (const inherited of [false, true]) for (const value of [undefined, null, () => []]) {
+      const options = { applicationText: (_ja, en) => en, constraintGraphNodes: () => [] };
+      if (inherited) Object.setPrototypeOf(options, { nextHatchIndex: value }); else options.nextHatchIndex = value;
+      const model = w.DocumentWorkspace.create(options); assert.equal(hatch, value);
+      const input = { prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() };
+      if (inherited) Object.setPrototypeOf(input, { currentSketches: value }); else input.currentSketches = value;
+      model.createReadContext(input); assert.equal(sketches, value);
+      model.createGeometryReadServices(input); assert.equal(sketches, value);
+    }
+    const { model } = ownedBoundWorkspace();
+    model.createGeometryReadServices({ prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() });
+    assert.equal(sketches, undefined);
+  } finally { w.DocumentIds = originalIds; w.GeometryReadServices = originalReads; }
+});
+
+test('Document editing-scope query returns the actual bound model independently of Workspace restoration and failed reconstruction', () => {
+  const { model, context } = ownedBoundWorkspace(), read = model.readEditingScope;
+  assert.equal(read.name, 'readEditingScope'); assert.equal(read.length, 0);
+  assert.throws(read, { name: 'ReferenceError', message: "Cannot access 'editingScopeBinding' before initialization" });
+  const editing = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} }), host = model.workspace.capture();
+  assert.equal(read('ignored'), editing.binding.current); assert.equal(read(), model.document);
+  const unbound = w.DocumentState.create(); model.workspace.activate(unbound);
+  assert.equal(read(), model.document); assert.notEqual(read(), model.workspace.current());
+  const draft = w.DocumentState.create(); editing.binding.activate(draft); assert.equal(read(), draft); assert.equal(editing.solver.model, draft);
+  model.workspace.restore(host); assert.equal(model.workspace.current(), model.document); assert.equal(read.call({}), draft);
+  const marker = new Error('scope query reconstruction'); class FailingSolver { constructor() { throw marker; } }
+  assert.throws(() => context.createEditingScope({ Solver: FailingSolver, closeSketchContext() {}, resetSketchMove() {} }), error => error === marker);
+  assert.equal(read(), draft); assert.equal(model.workspace.current(), model.document);
+});
+
+test('Workspace persistence defaults to the actual bound reader while the native writer still snapshots the live Workspace', () => {
+  const original = w.DocumentApplication, results = []; let reader;
+  w.DocumentApplication = { ...original, createPreparation(input) { reader = input.currentScope; return original.createPreparation(input); } };
+  try {
+    for (const omitted of [false, true]) {
+      let binding;
+      const f = persistenceFixture((context, options) => {
+        binding = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} }).binding;
+        if (omitted) delete options.readEditingScope;
+      }, {}, (context, options) => context.createPersistenceForWorkspace(options));
+      assert.equal(reader, omitted ? f.model.readEditingScope : f.options.readEditingScope);
+      const draft = w.DocumentState.create(); addPersistedLine(draft, 'BOUND', 20); binding.activate(draft); f.state.bound = draft;
+      const unbound = w.DocumentState.create(); addPersistedLine(unbound, 'WORKSPACE', 30); f.model.workspace.activate(unbound);
+      assert.equal(reader(), draft); assert.equal(binding.current, draft); assert.equal(f.model.workspace.current(), unbound);
+      const saved = f.context.persistence.serializeModel(); saved.savedAt = 'TIME';
+      assert.equal(saved.version, 26); assert.equal(saved.lines[0].id, 'WORKSPACE'); assert.equal(reader(), draft);
+      results.push(JSON.stringify(saved));
+    }
+    assert.equal(results[1], results[0]);
+  } finally { w.DocumentApplication = original; }
+});
+
+test('Workspace persistence keeps explicit invalid readers and its existing spread policy for inherited options while raw persistence remains injectable', () => {
+  const original = w.DocumentApplication; let reader;
+  w.DocumentApplication = { ...original, createPreparation(input) { reader = input.currentScope; return original.createPreparation(input); } };
+  try {
+    for (const raw of [false, true]) for (const inherited of [false, true]) for (const value of [undefined, null, () => ({})]) {
+      const f = persistenceFixture((_context, options) => {
+        delete options.readEditingScope;
+        if (inherited) Object.setPrototypeOf(options, { readEditingScope: value }); else options.readEditingScope = value;
+      }, {}, (context, options) => raw ? context.createPersistence(options) : context.createPersistenceForWorkspace(options));
+      const expected = !raw && inherited ? undefined : value;
+      assert.equal(reader, expected);
+      if (typeof expected !== 'function') assert.throws(f.persistence.ensureDimensionDefaults, error => error.name === 'TypeError');
+    }
+  } finally { w.DocumentApplication = original; }
+});
+
+test('fixed queries share the Document bound-scope port with native projected identity, endpoint locks and live constraints across Workspace restoration', () => {
+  const traces = [];
+  for (const direct of [false, true]) {
+    const { model, context } = ownedBoundWorkspace();
+    const { binding } = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} });
+    const G = w.GeometrySolver, p = new G.Point('P1', 0, 0), q = new G.Point('P2', 10, 0);
+    const line = Object.assign(new G.Line('B1@L1', p, q), { blockProjection: true });
+    const regenerated = Object.assign(new G.Line('B1@L1', p, q), { blockProjection: true });
+    const arc = Object.assign(new G.Arc('B1@A1', p, 10, 0, Math.PI), { blockProjection: true });
+    const regeneratedArc = Object.assign(new G.Arc('B1@A1', p, 10, 0, Math.PI), { blockProjection: true });
+    const highlight = w.SelectionHighlight.create({ types: G, geometryRefForItem: w.GeometryObjects.geometryRefForItem, geometryRefsEqual: w.GeometryRef.equals });
+    const fixed = w.ConstraintReferences.createFixedState({ currentScope: direct ? model.readEditingScope : () => binding.current,
+      sameConstraintDisplayElement: highlight.sameConstraintDisplayElement });
+    const disabled = new G.LineFixedConstraint(line), rootLine = new G.LineFixedConstraint(line), rootArc = new G.ArcEndpointFixedConstraint(arc, 'start', 10, 0);
+    disabled.enabled = false; model.document.constraints = [disabled, rootLine, rootArc];
+    function inspect(lineConstraint, arcConstraint) {
+      assert.equal(fixed.findLineFixedConstraint(regenerated), lineConstraint);
+      assert.equal(fixed.findArcEndpointFixedConstraint(regeneratedArc, 'start'), arcConstraint);
+      assert.equal(fixed.findArcEndpointFixedConstraint(regeneratedArc, 'end'), undefined);
+      assert.equal(fixed.pointLockedByLineFixed(p), Boolean(lineConstraint));
+      assert.equal(fixed.pointLockedByLineFixed(new G.Point('P1', 0, 0)), false);
+      return [Boolean(lineConstraint), Boolean(arcConstraint)];
+    }
+    const results = [inspect(rootLine, rootArc)], host = model.workspace.capture(), unbound = w.DocumentState.create();
+    model.workspace.activate(unbound); assert.equal(model.workspace.current(), unbound); results.push(inspect(rootLine, rootArc));
+    const draft = w.DocumentState.create(), draftLine = new G.LineFixedConstraint(line); draft.constraints = [draftLine];
+    binding.activate(draft); results.push(inspect(draftLine, undefined));
+    model.workspace.restore(host); assert.equal(model.workspace.current(), model.document); assert.equal(binding.current, draft);
+    results.push(inspect(draftLine, undefined)); draftLine.enabled = false; results.push(inspect(undefined, undefined));
+    const marker = new Error('bound constraints getter'); Object.defineProperty(draft, 'constraints', { get() { assert.equal(this, draft); throw marker; } });
+    for (const query of [() => fixed.findLineFixedConstraint(line), () => fixed.findArcEndpointFixedConstraint(arc, 'start'), () => fixed.pointLockedByLineFixed(p)]) assert.throws(query, error => error === marker);
+    assert.equal(binding.current, draft); traces.push(JSON.stringify(results));
+  }
+  assert.equal(traces[1], traces[0]);
+});
+
+test('prepared Document references share native graph nodes and the live geometry reader across Workspace changes and independent preparations', () => {
+  const G = w.GeometrySolver, ref = w.GeometryRef.create('point', 'P1');
+  const source = new G.Point('derived-source', 0, 0), target = new G.Point('target', 10, 0);
+  source.derivedInstance = { id: 'FI1', sources: [ref], placement: {} };
+  const constraint = new G.SketchProjectionConstraint('point', source, target);
+  const preparation = w.DocumentWorkspace.prepareReferences();
+  assert.ok(Object.isFrozen(preparation)); assert.ok(Object.isFrozen(preparation.references));
+  assert.deepEqual(Array.from(preparation.references.constraintGraphNodes(constraint, { includeIntrinsicDependencies: false })), [source, target]);
+  const early = error => error.name === 'ReferenceError' && error.message === "Cannot access 'resolveGeometryRef' before initialization";
+  assert.throws(() => preparation.references.constraintGraphNodes(constraint), early);
+  const model = preparation.create({ applicationText: (_ja, en) => en });
+  assert.throws(() => preparation.references.constraintGraphNodes(constraint), early);
+  const first = new G.Point('P1', 1, 2); model.document.points.push(first);
+  const input = { prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() };
+  const context = model.createReadContext(input), editing = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} });
+  assert.ok(preparation.references.constraintGraphNodes(constraint).includes(first));
+  assert.equal(preparation.references.constraintReferencesPoint(constraint, first), true);
+  const local = w.DocumentState.create(), replacement = new G.Point('P1', 7, 9); local.points.push(replacement); model.workspace.activate(local);
+  assert.equal(editing.binding.current, model.document); assert.equal(model.workspace.current(), local);
+  const nodes = preparation.references.constraintGraphNodes(constraint);
+  assert.ok(nodes.includes(replacement)); assert.equal(nodes.includes(first), false); assert.equal(nodes.includes(source.derivedInstance), true);
+  const independent = w.DocumentWorkspace.prepareReferences(), other = independent.create({ applicationText: (_ja, en) => en });
+  const point = new G.Point('P1', 12, 13); other.document.points.push(point); other.createReadContext(input);
+  assert.notEqual(independent.references, preparation.references);
+  assert.ok(independent.references.constraintGraphNodes(constraint).includes(point));
+  assert.equal(preparation.references.constraintGraphNodes(constraint).includes(point), false);
+  const original = w.GeometryReadServices, marker = new Error('read context failed');
+  w.GeometryReadServices = { ...original, createWithHatches() { throw marker; } };
+  try { assert.throws(() => model.createReadContext(input), error => error === marker); }
+  finally { w.GeometryReadServices = original; }
+  assert.ok(preparation.references.constraintGraphNodes(constraint).includes(replacement));
+  assert.equal(context.services.reads.resolveGeometryRef(ref), replacement);
+});
+
+test('Document reference preparation preserves staged constructors, bare resolver calls, completion guards and prior readers after failure', () => {
+  const originals = { references: w.ConstraintReferences, document: w.DocumentState, reads: w.GeometryReadServices, sketches: w.SketchContext };
+  const events = [], ref = {}, result = {}, marker = new Error('reader failed');
+  let resolverPort, actualReferences, graphNodes, readerGets = 0, nativeCalls = 0, fail, invalid = false, invalidValue;
+  w.ConstraintReferences = { ...originals.references, create(input) {
+    assert.equal(this, w.ConstraintReferences); assert.equal(arguments.length, 1); resolverPort = input.resolveGeometryRef; events.push('references');
+    assert.throws(() => resolverPort(ref), error => error.name === 'ReferenceError');
+    return actualReferences = originals.references.create(input);
+  } };
+  w.DocumentState = { ...originals.document, create() { events.push('document'); if (fail === 'document') throw marker; return originals.document.create(); } };
+  w.SketchContext = { ...originals.sketches, create(input) { graphNodes = input.constraintGraphNodes; return originals.sketches.create(input); } };
+  w.GeometryReadServices = { ...originals.reads, createWithHatches(input) {
+    events.push('reads'); if (fail === 'reads') throw marker;
+    const services = originals.reads.createWithHatches(input);
+    const reads = Object.freeze({ ...services.reads, get resolveGeometryRef() {
+      events.push('reader'); readerGets++; if (fail === 'reader') throw marker;
+      return invalid ? invalidValue : function(value) { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 1); assert.equal(value, ref); nativeCalls++; if (fail === 'resolve') throw marker; return result; };
+    } });
+    return Object.freeze({ ...services, reads });
+  } };
+  try {
+    const preparation = w.DocumentWorkspace.prepareReferences();
+    assert.equal(preparation.references, actualReferences); assert.deepEqual(events, ['references']);
+    assert.equal(resolverPort.name, 'resolveGeometryRef'); assert.equal(resolverPort.length, 1);
+    const model = preparation.create({ applicationText: (_ja, en) => en }); assert.equal(graphNodes, preparation.references.constraintGraphNodes);
+    assert.deepEqual(events, ['references', 'document']); assert.throws(() => resolverPort(ref), error => error.name === 'ReferenceError');
+    const input = { prepareBlocks() {}, showHiddenElements: () => false, viewportScale: () => 1, profileRead: read => read() };
+    model.createReadContext(input); assert.deepEqual(events, ['references', 'document', 'reads', 'reader']); assert.equal(readerGets, 1); assert.equal(nativeCalls, 0);
+    assert.equal(resolverPort.call({}, ref, 'ignored'), result); assert.equal(nativeCalls, 1); assert.equal(readerGets, 1);
+    for (const stage of ['document', 'reads', 'reader']) {
+      fail = stage;
+      assert.throws(() => stage === 'document' ? preparation.create({ applicationText: () => '' }) : model.createReadContext(input), error => error === marker);
+      fail = null; assert.equal(resolverPort(ref), result);
+    }
+    fail = 'resolve'; assert.throws(() => resolverPort(ref), error => error === marker); fail = null;
+    for (invalidValue of [undefined, null]) {
+      invalid = true; model.createReadContext(input);
+      assert.throws(() => resolverPort(ref), { name: 'TypeError', message: 'resolveGeometryRef is not a function' });
+    }
+  } finally { w.ConstraintReferences = originals.references; w.DocumentState = originals.document; w.GeometryReadServices = originals.reads; w.SketchContext = originals.sketches; }
 });

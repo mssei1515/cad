@@ -51,11 +51,12 @@ test('projection reload and selection/transfer reuse the shared live observation
   assert.equal(reloaded.serialized.version, 25); assert.equal(reloaded.propertiesText, 'latest');
 });
 const ownerSandbox={window:{}};vm.createContext(ownerSandbox);
-for(const file of ['src/geometry/geometry_kernel.js','src/geometry/spline_geometry.js','src/solver/constraint_solver.js','src/geometry/geometry_ref.js','src/geometry/objects.js','src/document/appearance.js','src/document/sketch_hierarchy.js','src/editing/geometry_ids.js','src/editing/geometry_creation.js','src/editing/selection.js'])vm.runInContext(fs.readFileSync(file,'utf8'),ownerSandbox);
+for(const file of ['src/geometry/geometry_kernel.js','src/geometry/spline_geometry.js','src/solver/constraint_solver.js','src/geometry/geometry_ref.js','src/geometry/objects.js','src/document/appearance.js','src/document/sketch_hierarchy.js','src/editing/geometry_ids.js','src/editing/geometry_creation.js','src/editing/selection.js','src/editing/clipboard_session.js'])vm.runInContext(fs.readFileSync(file,'utf8'),ownerSandbox);
 Object.assign(sandbox.window,ownerSandbox.window);
-function browserOwnersFixture(composed,failure){
+function browserOwnersFixture(composed,failure,nativeClipboard){
   'use strict';
   const f=fixture(),w=sandbox.window,G=w.GeometrySolver,events=f.events,marker=new Error('browser projection support failure'),extra={block:null,id:0};
+  if(nativeClipboard)f.ports.clipboardSession=w.ClipboardSession.create({pasteOffsetScreenPx:20,onCopyStored:()=>{},deleteSelection:()=>true});
   const check=name=>{if(failure===name)throw marker;};
   const effect=name=>(...args)=>{check(name);events.push([name,...args]);};
   const empty=()=>({points:[],lines:[],circles:[],arcs:[],splines:[],constraints:[],annotations:[],hatches:[],geometryInstances:[],blockDefinitions:[],blockInstances:[],activeSketchId:'S1',sketches:[{id:'ROOT',parentSketchId:null},{id:'S1',parentSketchId:'ROOT'}]});
@@ -86,16 +87,18 @@ function browserOwnersFixture(composed,failure){
   const history={resetDocument:f.ports.resetHistory,resetBlock:f.ports.resetBlockEditorHistory},presentation={updateUI:f.ports.updateUI,draw:f.ports.draw};
   const blocks={editing:{empty:f.ports.createEmptyBlockDefinition,fromSelection:f.ports.createBlockDefinitionFromSelection},session:{get current(){return extra.block;}}};
   const blockDefinition={open:f.ports.openBlockDefinitionEditor},blockCompletion={complete:f.ports.completeBlockDefinitionEdit},blockSelection={read:f.ports.blockSelectionGeometry,center:f.ports.blockSelectionBoundsCenter};
-  const support=composed?w.SketchProjectionTestDriver.createForWorkspace({documentWorkspace,geometry,readServices,interaction,projection,display:{geometryDisplayColor:f.ports.geometryDisplayColor},
+  const workspaceOptions={documentWorkspace,geometry,readServices,interaction,projection,display:{geometryDisplayColor:f.ports.geometryDisplayColor},
     sketchPresentation:{constraintStatusColor:f.ports.constraintStatusColor},analysis:{statusOf:f.ports.constraintStatusOf},redundancy:{constraintIsRedundant:f.ports.constraintIsRedundant},presentation,
     canvasDriver:{focus:f.ports.focus,clientPosition:f.ports.clientPosition},history,solving:{solveSketchAndDependents:f.ports.solveSketchAndDependents},blocks,blockDefinition,blockCompletion,blockSelection,
     document:f.ports.document,readHistory:f.ports.readHistory,resetModelState:f.ports.resetModelState,serializeModel:f.ports.serializeModel,loadModelData:f.ports.loadModelData,markReferenceConstraint:f.ports.markReferenceConstraint,
     pushModelConstraint:f.ports.pushModelConstraint,synchronizeSketchProjectionMetadata:f.ports.synchronizeSketchProjectionMetadata,clearSelection:f.ports.clearSelection,deleteCurrentSelection:f.ports.deleteCurrentSelection,
     deleteElements:f.ports.deleteElements,deleteSketch:f.ports.deleteSketch,setAppearanceForSelection:f.ports.setAppearanceForSelection,version:f.ports.CURRENT_JSON_VERSION,
-    copySelectionToClipboard:f.ports.copySelectionToClipboard,pasteGeometryClipboard:f.ports.pasteGeometryClipboard,clipboardSession:f.ports.clipboardSession}):w.SketchProjectionTestDriver.createSupport(f.ports);
+    copySelectionToClipboard:f.ports.copySelectionToClipboard,pasteGeometryClipboard:f.ports.pasteGeometryClipboard,clipboardSession:f.ports.clipboardSession};
+  const support=composed==='clipboard'?w.SketchProjectionTestDriver.createBrowserSupportForWorkspace({...workspaceOptions,clipboard:Object.freeze({session:f.ports.clipboardSession})})
+    :composed?w.SketchProjectionTestDriver.createForWorkspace(workspaceOptions):w.SketchProjectionTestDriver.createSupport(f.ports);
   assert.deepEqual(events,[]);
   function seed(){const source=new G.Point('P101',0,0),target=new G.Point('P102',4,5),constraint=Object.assign(new G.SketchProjectionConstraint('point',source,target),{sketchId:'S3',referenceSketchId:'S1'});f.state.constraints=[constraint];return target;}
-  return{...f,support,selection,documentModel,projection,marker,extra,seed};
+  return{...f,support,selection,documentModel,projection,marker,extra,seed,clipboardSession:f.ports.clipboardSession};
 }
 
 test('workspace browser support stays cold, exposes the same ordered API and observes live mode, sources, history and actual Geometry identities',()=>{
@@ -104,14 +107,14 @@ test('workspace browser support stays cold, exposes the same ordered API and obs
     const copied=f.support.copySketchProjectionTargetForTest('point');assert.equal(copied.copied,true);assert.equal(copied.clipboardProjectionCount,1);assert.ok(f.events.indexOf('copy')<f.events.indexOf('paste'));
     const block=f.support.blockizeSketchProjectionTargetForTest('point');assert.equal(block.projectionConstraintCount,1);
     const reload=f.support.reloadSketchProjectionForTest(25);assert.equal(reload.serialized.version,25);return JSON.parse(JSON.stringify({keys,selected,copied,block,reload,events:f.events}));
-  };assert.deepEqual(run(true),run(false));
+  };assert.deepEqual(run(true),run(false));assert.deepEqual(run('clipboard'),run(true));
 });
 
 test('workspace projection fixtures share actual Geometry construction and keep root Document definitions separate from the live scope',()=>{
   const run=composed=>{const f=browserOwnersFixture(composed),geometry=f.support.resetForSketchProjectionTest();assert.ok(f.state.scope.splines[0] instanceof ownerSandbox.window.GeometrySolver.Spline);
     const block=f.support.resetForBlockProjectionSketchProjectionTest();assert.equal(block.instanceId,'BI1');assert.equal(f.documentModel.blockDefinitions.length,1);assert.equal(f.state.scope.blockDefinitions.length,0);
     f.support.resetForSketchProjectionBlockEditorTest();assert.ok(f.extra.block);const complete=f.support.completeSketchProjectionBlockEditorForTest();assert.equal(complete.completed,true);
-    return JSON.parse(JSON.stringify({geometry,block,complete,events:f.events,model:f.state.scope,definitions:f.documentModel.blockDefinitions}));};assert.deepEqual(run(true),run(false));
+    return JSON.parse(JSON.stringify({geometry,block,complete,events:f.events,model:f.state.scope,definitions:f.documentModel.blockDefinitions}));};assert.deepEqual(run(true),run(false));assert.deepEqual(run('clipboard'),run(true));
 });
 
 test('workspace projection browser support preserves owner callback failures and their existing partial fixture state',()=>{
@@ -123,6 +126,27 @@ test('workspace projection browser support preserves owner callback failures and
       else if(failure==='complete')operation=()=>f.support.completeSketchProjectionBlockEditorForTest();
       else operation=()=>f.support.resetForSketchProjectionTest();
       assert.throws(operation,error=>error===f.marker);return JSON.parse(JSON.stringify({events:f.events,model:f.state.scope,data:f.state.data,definitions:f.documentModel.blockDefinitions,block:f.extra.block}));};
-    assert.deepEqual(run(true),run(false),failure);
+    assert.deepEqual(run(true),run(false),failure);assert.deepEqual(run('clipboard'),run(true),failure);
   }
+});
+
+
+test('projection support shares the native live Clipboard session across replacement, paste accounting, rejected copy and clear',()=>{
+  const run=mode=>{
+    const f=browserOwnersFixture(mode,undefined,true),session=f.clipboardSession;
+    f.seed();assert.equal(session.payload,null);
+    const payloadA={constraints:[{type:'sketchProjection'}],pasteCount:0};
+    session.replaceForDiagnostics(payloadA);
+    assert.equal(f.support.copySketchProjectionTargetForTest('point').clipboardProjectionCount,1);
+    const payloadB={constraints:[{type:'sketchProjection'},{type:'sketchProjection'}],pasteCount:3};
+    session.replaceForDiagnostics(payloadB);
+    const plan=session.preparePaste(2);assert.equal(plan.payload,payloadB);assert.equal(plan.dx,40);
+    session.recordPaste(plan);assert.equal(payloadB.pasteCount,4);
+    assert.equal(f.support.copySketchProjectionTargetForTest('point').clipboardProjectionCount,2);
+    assert.equal(session.copy(null),false);assert.equal(session.payload,payloadB);assert.equal(payloadB.pasteCount,4);
+    session.clear();assert.equal(session.payload,null);
+    assert.equal(f.support.copySketchProjectionTargetForTest('point').clipboardProjectionCount,0);
+    return JSON.parse(JSON.stringify({events:f.events,payloadA,payloadB}));
+  };
+  assert.deepEqual(run('clipboard'),run(true));
 });

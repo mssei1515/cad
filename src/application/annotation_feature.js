@@ -1,9 +1,59 @@
 /* Connect annotation presentation, anchors and placement over the same operation owners. */
 (() => {
   "use strict";
+  function prepare() {
+    let feature, editor, drag;
+    function requireComponent(component, binding) {
+      if (component === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return component;
+    }
+    function readFeature() { return requireComponent(feature, "annotationFeature").api; }
+    function readDrag() { return requireComponent(drag, "annotationDrag").api; }
+    function annotationBounds(...args) { return readFeature().spatial.annotationBounds(...args); }
+    function resizeEnabled(element) { return readDrag().resizeEnabled(element); }
+    function resetDrag() { return readDrag().reset(); }
+    function syncResizeSelection() {
+      const component = requireComponent(drag, "annotationDrag");
+      return component.owner.syncResizeSelection(component.api, component.owner.sessions);
+    }
+    function syncInput() { return requireComponent(editor, "annotationInputController").controller.sync(); }
+    function prepareWorkspace(options) {
+      const prepared = prepareForWorkspace(options);
+      const { createFeature: buildFeature, createConstrainedDragForFeature: buildConstrainedDrag } = prepared;
+      function createFeature(options) {
+        const inputs = { resizeEnabled, ...options };
+        const completed = buildFeature(inputs);
+        feature = Object.freeze({ api: completed, sessions: inputs.sessions, syncResizeSelection: prepared.syncDragResizeSelection });
+        return completed;
+      }
+      function createConstrainedDragForFeature(options) {
+        return buildConstrainedDrag({ readFeature, ...options });
+      }
+      return Object.freeze({ ...prepared, createFeature, createConstrainedDragForFeature });
+    }
+    function createEditorForEditing(options) {
+      const completed = readFeature().createEditorForEditing({ resetDrag, ...options });
+      editor = completed;
+      return completed;
+    }
+    function createEditorForCheckpoint({ document, host, checkpoint, ...options }) {
+      return createEditorForEditing({ document, host, capture: checkpoint.captureValues, restore: checkpoint.restoreValues, ...options });
+    }
+    function createDragForEditing(options) {
+      const owner = requireComponent(feature, "annotationFeature");
+      const completed = owner.api.createDragForEditing(options);
+      drag = Object.freeze({ api: completed, owner });
+      return completed;
+    }
+    return Object.freeze({ annotationBounds, resizeEnabled, resetDrag, syncResizeSelection, syncInput,
+      prepareForWorkspace: prepareWorkspace, createEditorForEditing, createEditorForCheckpoint, createDragForEditing });
+  }
   function prepareForWorkspace({ documentWorkspace, readServices, interaction, presentation, viewportScale }) {
     const { workspace, sketches } = documentWorkspace;
     const targets = createAnchorQuery({ sketches, readServices, pointUsage: interaction.pointUsage, selection: interaction.selection, viewportScale });
+    function syncDragResizeSelection(drag, sessions) {
+      return drag.syncResizeSelection(interaction.lifecycle.mode === "select" && !sessions.pending.current && !sessions.targets.command);
+    }
     function createConstrainedDrag({ placementAnchor, buildPlan, beginGeometryDrag, leaderDisplay, invalidateAnalysis }) {
       const { settings: { applicationText }, setHint, updateUI, draw } = presentation;
       return window.AnnotationDrag.createConstrained({ currentScope: workspace.current, placementAnchor, resolveGeometryRef: readServices.reads.resolveGeometryRef,
@@ -24,7 +74,7 @@
         ctx, viewport, surface, editingScope, sessions, placement, readAppearance, readExportFrame, canvasThemeColor,
         resizeEnabled, constraintOperandsFromSelection, recordHistory, cancelPendingCommand, cancelConstraintTargetCommand, startDistanceResolution, clearSelection, updateToolbar });
     }
-    return Object.freeze({ targets, createConstrainedDrag, createConstrainedDragForFeature, createFeature });
+    return Object.freeze({ targets, createConstrainedDrag, createConstrainedDragForFeature, createFeature, syncDragResizeSelection });
   }
   function createAnchorQuery({ sketches, readServices, pointUsage, selection, viewportScale }) {
     const { reads, geometryAppearance } = readServices;
@@ -155,5 +205,5 @@
       parameterErrorText, exitDrawMode: interaction.lifecycle.exit, nextAnnotationId: () => documentIds.allocate("annotation"),
       canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar, annotationLeaderTargetFromHit });
   }
-  window.AnnotationFeature = Object.freeze({ create, createAnchorQuery, createForEditing, prepareForWorkspace });
+  window.AnnotationFeature = Object.freeze({ prepare, create, createAnchorQuery, createForEditing, prepareForWorkspace });
 })();

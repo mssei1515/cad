@@ -1,6 +1,19 @@
 /* Parameter browser fixtures, observations and existing edit operations with explicit ownership. */
 (() => {
   "use strict";
+  function createForWorkspace({ documentWorkspace, geometry, readServices, blocks, blockSelection, insertion, placement,
+    presentation, resetModelState, stabilizeActiveParameterNamespace, resetHistory, serializeModel, clearSelection,
+    canvasSelection, deleteElements, document }) {
+    return createBrowserSupport({ documentWorkspace, geometry, resetModelState,
+      pushModelConstraint: insertion.push, dimensionFromAnchor: placement.dimensionFromAnchor,
+      createEmptyBlockDefinition: blocks.editing.empty, invalidateBlockProjectionCache: readServices.projections.invalidateBlockProjectionCache,
+      stabilizeActiveParameterNamespace, activeSketchId: documentWorkspace.sketches.activeSketchId,
+      resetHistory, updateUI: presentation.updateUI, draw: presentation.draw,
+      blockProjectionBundle: readServices.projections.blockProjectionBundle, serializeModel,
+      clearSelection, canvasSelection, blockSelectionGeometry: blockSelection.read,
+      createBlockDefinitionFromSelection: blocks.editing.fromSelection, blockSelectionBoundsCenter: blockSelection.center,
+      deleteElements, document });
+  }
   function createBrowserSupport({ documentWorkspace, geometry, resetModelState,
     pushModelConstraint, dimensionFromAnchor, createEmptyBlockDefinition, invalidateBlockProjectionCache,
     stabilizeActiveParameterNamespace, activeSketchId, resetHistory, updateUI, draw, blockProjectionBundle, serializeModel,
@@ -168,5 +181,5 @@
     }
     return Object.freeze({ freezeBlock, deleteDimension });
   }
-  window.ParameterTestDriver = Object.freeze({ createBrowserSupport, createFixture, createObservation, createInteraction });
+  window.ParameterTestDriver = Object.freeze({ createForWorkspace, createBrowserSupport, createFixture, createObservation, createInteraction });
 })();

@@ -12,6 +12,15 @@
       feature = completed;
       return completed;
     }
+    function createWorkspaceWithProjection({ projection, ...options }) {
+      return createPreparedWorkspace({ ...projection.createDragInputs(), ...options });
+    }
+    function createWithConstraintInputForWorkspace({ createConstraintInput, clearSnap, ...options }) {
+      const geometry = createWorkspaceWithProjection(options);
+      const { command } = geometry;
+      const { input, dragging } = createConstraintInput({ pointer: options.pointer, clearSnap, recordHistory: options.recordHistory });
+      return Object.freeze({ geometry, command, input, dragging });
+    }
     function build(...args) {
       const { build } = requireFeature("buildDragSession");
       return build(...args);
@@ -23,7 +32,8 @@
       isDraggingPoint(point) { return requireFeature("geometryDrag").command.isPoint(point); },
       isDraggingCenter(point) { return requireFeature("geometryDrag").command.isCenter(point); },
     });
-    return Object.freeze({ createForWorkspace: createPreparedWorkspace, build, begin, reset, queries });
+    return Object.freeze({ createForWorkspace: createPreparedWorkspace, createForWorkspaceWithProjection: createWorkspaceWithProjection,
+      createWithConstraintInputForWorkspace, build, begin, reset, queries });
   }
   function create({ solver, currentScope, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
     viewScale, arcEndpointPoint, acceptError, previewMaxModelError,
@@ -105,12 +115,14 @@
       geometryInstanceSourceObjects, clearSelection, geometryInstanceSourcePoints, resolveDerivedDragSource,
     });
   }
-  function createForWorkspace({ documentWorkspace, interaction, presentation, sourceQueries, projectionQueries,
-    solver, scopeQuery, solving, checkpoint, geometry, readServices, viewport, pointer, acceptError, previewMaxModelError, minimumLength,
+  function createForWorkspace(options) {
+    const { documentWorkspace, interaction, presentation, sourceQueries, projectionQueries,
+    solver, scopeQuery, solving, checkpoint, geometry, readServices, viewport, pointer, acceptError, previewMaxModelError = 0.125, minimumLength: suppliedLength,
     fixedState, blockLocalGeometryBounds, blockWorldPoint = readServices.projections.blockWorldPoint,
     pointLockedByLineFixed = fixedState?.pointLockedByLineFixed, findLineFixedConstraint = fixedState?.findLineFixedConstraint,
     findArcEndpointFixedConstraint = fixedState?.findArcEndpointFixedConstraint,
-    projectionBlockedMessage, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection }) {
+    projectionBlockedMessage, stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection } = options;
+    const minimumLength = "minimumLength" in options ? suppliedLength : window.GeometryKernel.MIN_ORIENTATION_LENGTH;
     const { workspace, sketches } = documentWorkspace;
     const { access: { guardSketchEdit: canEdit }, selection: canvasSelection } = interaction;
     const { profiler, settings: { applicationText }, setHint, updateUI, updateGeometrySelectionUI, draw } = presentation;

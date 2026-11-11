@@ -1,6 +1,27 @@
 /* Compose Block drafts, nested editing sessions and queries over the same owners. */
 (() => {
   "use strict";
+  function prepareCommandsWithView() {
+    let published;
+    function createForFeature(feature, options) {
+      const commands = feature.createCommandsWithView(options);
+      const updateBlockView = commands.updateView;
+      published = Object.freeze({ value: updateBlockView });
+      return commands;
+    }
+    function createWithSelection(feature, { references, serializeConstraint, annotationBounds, createChoiceDialog }, readCommands) {
+      const selectionQuery = feature.createSelectionQuery({ references, serializeConstraint, annotationBounds });
+      const choiceDialog = createChoiceDialog();
+      const commands = createForFeature(feature, readCommands(selectionQuery, choiceDialog));
+      return Object.freeze({ selectionQuery, commands });
+    }
+    function updateBlockUI() {
+      if (published === undefined) throw new ReferenceError("Cannot access 'updateBlockView' before initialization");
+      const updateBlockView = published.value;
+      updateBlockView();
+    }
+    return Object.freeze({ createForFeature, createWithSelection, update: updateBlockUI });
+  }
   function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding, readEditingScope,
     normalizedSketchCopy, normalizeGeometryInstance, isDimensionConstraint, isReadOnlyDimension,
     numericDimensionExpression, ensureParameterNamespace, activeSketchId, blockProjectionBundles, geometryElementKey,
@@ -137,6 +158,10 @@
         getPointerPreview: () => preview.pointer, setPointerPreview: value => { preview.setPointer(value); }, getLastPointerWorld: pointer.readLastPointer,
         setMode: lifecycle.setMode, setHint, updateUI, draw, solveAndRefresh, recordHistory });
     }
+    function createPlacementWithProperties({ propertiesPanel, ...options }) {
+      return createPlacement({ isPropertiesCollapsed: propertiesPanel.isPropertiesCollapsed,
+        setPropertiesPanelCollapsed: propertiesPanel.setPropertiesPanelCollapsed, ...options });
+    }
     function createSelectionQuery({ references, serializeConstraint, annotationBounds }) {
       const { mergeBounds, lineBBox, primitiveBBox, splineBBox } = window.GeometryBounds;
       const { applicationText } = presentation.settings;
@@ -159,7 +184,7 @@
         clearRemovedHover: removed => { if (removed.has(interaction.hover.current.dimension)) interaction.hover.update({ dimension: null }); },
         invalidateBlockProjectionCache: projections.invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory });
     }
-    return Object.freeze({ ...feature, createCommandsWithView, createPlacement, createSelectionQuery, createConfiguration });
+    return Object.freeze({ ...feature, createCommandsWithView, createPlacement, createSelectionQuery, createConfiguration, createPlacementWithProperties });
   }
-  window.BlockEditingFeature = Object.freeze({ create, createForWorkspace });
+  window.BlockEditingFeature = Object.freeze({ prepareCommandsWithView, create, createForWorkspace });
 })();

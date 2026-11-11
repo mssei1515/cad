@@ -209,7 +209,7 @@ test("Sketch move command remains usable when the separately enabled input bindi
   assert.equal(f.point.sketchId, "S1"); assert.equal(f.calls.some(call => call[0] === "history"), false);
 });
 
-function interactionFixture(composed, navigation){
+function interactionFixture(composed, navigation, useNavigationDefaults = false){
  let assembled,owners,controls;const listeners=[];
  const document={addEventListener:(...args)=>listeners.push(args),removeEventListener(){}};
  const f=fixture(undefined,(feature,options)=>{
@@ -232,6 +232,7 @@ function interactionFixture(composed, navigation){
    projection:{reset:step('projection')},instances:{clearSources:step('instances')},instanceSources:{reset:step('sources')},
    clearInteractionForSketchChange:()=>assembled.reset.clear(),promptName:options.promptName,clearTreeHover:options.clearTreeHover};
   owners.rawPointer=rawPointer;
+  if(useNavigationDefaults){delete owners.clearInteractionForSketchChange;delete owners.clearTreeHover;}
   if(composed)assembled=(navigation || w.SketchEditingFeature).createForInteraction(owners);
   else{
    const reset=w.SketchCommand.createInteractionReset({resetSketchMove,clearSelection:options.clearSelection,resetGeometryDrag:owners.resetGeometryDrag,resetDimensionDrag:owners.resetDimensionDrag,
@@ -274,7 +275,16 @@ test('Sketch interaction composition propagates cancellation failures before loc
  }
 });
 
-function editingTreeFixture(composed, navigation) {
+function treePresentationOptions(config) {
+  const { objectOptions, ...options } = config;
+  return { ...options, selection: Object.freeze({ visibilityIsHidden: objectOptions.isHidden }), analysis: objectOptions.analysis,
+    redundancy: objectOptions.redundancy, referenceState: objectOptions.referenceState, projection: Object.freeze({ queries: objectOptions.projectionQueries }),
+    icons: Object.freeze({ toolbarSvgMarkup: objectOptions.toolbarSvgMarkup, constraintToolbarIcon: objectOptions.constraintToolbarIcon }),
+    feedback: Object.freeze({ geometryInstanceTypeLabel: objectOptions.geometryInstanceTypeLabel, hatchPatternTypeLabel: objectOptions.hatchPatternTypeLabel }),
+    fixedState: Object.freeze({ findLineFixedConstraint: objectOptions.findLineFixedConstraint }) };
+}
+
+function editingTreeFixture(composed, navigation, useNavigationDefaults = false) {
   let ports, config;
   const original = w.SketchTreeController;
   w.SketchTreeController = { ...original, createWithDocumentObjects(input) { ports = input; return original.createWithDocumentObjects(input); } };
@@ -299,14 +309,15 @@ function editingTreeFixture(composed, navigation) {
         deleteElements: p.deleteElements, deleteCurrentSelection: p.deleteCurrentSelection, toggleSelectedVisibility: p.toggleSelectedVisibility,
         fixedOperands: { unfixPoint: p.unfixPoint } };
       delete config.objectOptions.constraintFeedback; delete config.objectOptions.pointUsage;
-      return composed ? f.feature.createTreeForEditing(config) : f.feature.createTree(p);
-    }, () => interactionFixture(true, navigation));
+      return composed === 'presentation' ? f.feature.createTreeForPresentation(treePresentationOptions(config))
+        : composed ? f.feature.createTreeForEditing(config) : f.feature.createTree(p);
+    }, () => interactionFixture(true, navigation, useNavigationDefaults));
     return { ...f, ports, config };
   } finally { w.SketchTreeController = original; }
 }
 
 test('editing Tree stage reuses captured interaction, presentation and command identities without early scope reads or menu start', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'presentation']) {
     const f = editingTreeFixture(composed), p = f.ports;
     assert.equal(Object.isFrozen(f.feature), true); assert.equal(f.feature, f.editing); assert.deepEqual(f.calls, []); assert.equal(f.state.keyReads, 0);
     assert.equal(p.canvasSelection, f.selection); assert.equal(p.canvasHover, f.owners.interaction.hover); assert.equal(p.readServices, f.owners.readServices);
@@ -326,7 +337,7 @@ test('editing Tree stage reuses captured interaction, presentation and command i
 });
 
 test('editing Tree keeps live dimension objects and Hover separate from the command model and shares Block selection', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'presentation']) {
     const f = editingTreeFixture(composed), replacement = { ...f.point, id: 'P-new' };
     f.state.dimensionScope = { ...f.empty(), points: [replacement] };
     assert.equal(f.tree.objects.index().get('S1').point[0], replacement); assert.equal(f.state.scope.points[0], f.point);
@@ -339,7 +350,7 @@ test('editing Tree keeps live dimension objects and Hover separate from the comm
 });
 
 test('editing Tree visibility, locking and move completion use the same real commands and retain one history commit', () => {
-  for (const composed of [false, true]) {
+  for (const composed of [false, true, 'presentation']) {
     const f = editingTreeFixture(composed), destination = f.state.scope.sketches.find(sketch => sketch.id === 'S2'); destination.appearance = { visible: false };
     f.tree.controller.click(f.event('S2', 'sketchVisibilityBtn')); assert.equal(destination.appearance.visible, true);
     f.tree.controller.click(f.event('S2', 'sketchLockBtn')); assert.equal(destination.locked, true);
@@ -353,8 +364,8 @@ test('editing Tree visibility, locking and move completion use the same real com
 });
 
 
-function deletionOwnersFixture(composed, failConstruction = false) {
- const f=interactionFixture(true),{state,calls,owners}=f;
+function deletionOwnersFixture(composed, failConstruction = false, navigation) {
+ const f=interactionFixture(true,navigation),{state,calls,owners}=f;
  state.ready=false;state.references=false;state.confirm=true;state.result={};state.error=new Error('deletion owner');
  const record=name=>function(){'use strict';assert.equal(this,undefined);assert.equal(state.ready,true);calls.push([name,...arguments]);if(state.failStage===name)throw state.error;return state.result;};
  owners.presentation.log=record('log');
@@ -368,6 +379,7 @@ function deletionOwnersFixture(composed, failConstruction = false) {
   annotationReferencesRemovedGeometry:w.AnnotationAnchorData.referencesRemovedGeometry,clearSketchSolveState:solveState.clearSketchSolveState,
   invalidateAnalysis:()=>{analysis.invalidate();},solveSketchAndDependents:solving.solveSketchAndDependents,
   refreshConstraintAnalysis:(options={})=>analysis.refresh(options),confirmDeletion:config.confirmDeletion};
+ if(composed==='browser')delete config.confirmDeletion;
  const original=w.SketchDeletionCommand;let ports,command;
  w.SketchDeletionCommand={...original,create(input){ports=input;if(failConstruction)throw state.error;return original.create(input);}};
  try{
@@ -509,4 +521,258 @@ test('Sketch navigation references are independent between workspaces', () => {
   assert.equal(a.readMoving(), true); assert.equal(b.readMoving(), false);
   b.resetMove(); assert.equal(fa.move.active, true); assert.equal(fb.move.active, false);
   a.resetMove(); assert.equal(fa.move.active, false);
+});
+
+test('owned Sketch navigation keeps initialization guards and preserves supplied callbacks including explicit undefined', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation();
+  for (const [run, binding] of [[navigation.clearInteractionForSketchChange, 'sketchInteractionReset'],
+    [navigation.toggleSketchVisibility, 'toggleSketchVisibilityCommand'], [navigation.isSidebarHighlightedElement, 'sketchTreeController'],
+    [navigation.startContext, 'sketchContextController']]) {
+    assert.throws(run, error => error.name === 'ReferenceError' && error.message === `Cannot access '${binding}' before initialization`);
+  }
+  assert.equal(navigation.closeContext(), undefined);
+  const supplied = interactionFixture(true, navigation); assert.equal(navigation.toggleSketchVisibility('S2'), true);
+  assert.ok(supplied.names().includes('hover'));
+  const own = w.SketchEditingFeature.prepareNavigation(), f = interactionFixture(true, own, true);
+  assert.throws(() => own.toggleSketchVisibility('S2'), error => error.name === 'ReferenceError' && error.message === "Cannot access 'sketchTreeController' before initialization");
+  assert.equal(f.state.scope.sketches.find(sketch => sketch.id === 'S2').visible, true);
+  const explicit = own.createForInteraction({ ...f.owners, clearInteractionForSketchChange: undefined, clearTreeHover: undefined });
+  assert.throws(() => explicit.editing.command.activate('S2'), error => error.name === 'TypeError');
+});
+
+test('owned Sketch reset defaults preserve real activation, shared Selection and pointer, ordered reset and partial failure', () => {
+  const results = [];
+  for (const owned of [false, true]) {
+    const navigation = w.SketchEditingFeature.prepareNavigation(), f = interactionFixture(true, navigation, owned);
+    f.selection.set('points', [f.point]); f.owners.rawPointer.setLastPointer(f.point); f.state.pending = { type: 'distance-value' }; f.state.target = { type: 'distance' };
+    f.feature.command.activate('S2'); assert.equal(f.state.scope.activeSketchId, 'S2'); assert.equal(f.selection.points.length, 0);
+    f.state.failStage = 'geometry'; const marker = f.state.error = new Error('reset failed');
+    assert.throws(() => owned ? navigation.clearInteractionForSketchChange('ignored') : f.reset.clear(), error => error === marker);
+    results.push(JSON.stringify({ calls: f.calls, pending: f.state.pending, target: f.state.target, scope: f.state.scope }));
+  }
+  assert.equal(results[1], results[0]);
+});
+
+test('owned Sketch Tree navigation keeps actual Controller and Menu receivers, bare visibility calls and prior Tree after failure', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation(), originals = { command: w.SketchCommand, tree: w.SketchTreeController, menu: w.CanvasContextMenu };
+  const calls = [], value = {}, marker = new Error('Tree failed'); let fail = false;
+  w.SketchCommand = { ...originals.command, create(options) { const raw = originals.command.create(options), toggle = raw.toggleVisibility;
+    return Object.freeze({ ...raw, toggleVisibility: function(id) { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 1); calls.push(['toggle', id]); return toggle(id); } }); } };
+  w.SketchTreeController = { ...originals.tree, createWithDocumentObjects(options) { const tree = originals.tree.createWithDocumentObjects(options), raw = tree.controller;
+    const controller = Object.freeze({ ...raw, isHighlightedElement: function(item) { 'use strict'; assert.equal(this, controller); assert.equal(arguments.length, 1); calls.push(['highlight', item]); if (fail) throw marker; return value; },
+      clearHoverSketch: function() { 'use strict'; assert.equal(this, controller); assert.equal(arguments.length, 0); calls.push(['hover']); if (fail) throw marker; return value; } }); return Object.freeze({ ...tree, controller }); } };
+  w.CanvasContextMenu = { ...originals.menu, create(options) { const raw = originals.menu.create(options);
+    const menu = Object.freeze({ ...raw, start: function() { 'use strict'; assert.equal(this, menu); assert.equal(arguments.length, 0); calls.push(['start']); if (fail) throw marker; return value; },
+      close: function() { 'use strict'; assert.equal(this, menu); assert.equal(arguments.length, 0); calls.push(['close']); if (fail) throw marker; return value; } }); return menu; } };
+  let f;
+  try {
+    f = editingTreeFixture(true, navigation, true); assert.deepEqual(calls, []);
+    assert.equal(navigation.toggleSketchVisibility('S2', 'ignored'), true); assert.deepEqual(calls, [['toggle', 'S2'], ['hover']]);
+    assert.equal(navigation.isSidebarHighlightedElement(f.point, 'ignored'), value); assert.equal(navigation.startContext('ignored'), value); assert.equal(navigation.closeContext('ignored'), value);
+    fail = true; assert.throws(() => navigation.isSidebarHighlightedElement(f.point), error => error === marker); assert.throws(navigation.startContext, error => error === marker); fail = false;
+    w.SketchTreeController = { ...originals.tree, createWithDocumentObjects() { throw marker; } };
+    assert.throws(() => f.feature.createTreeForEditing(f.config), error => error === marker);
+    assert.equal(navigation.isSidebarHighlightedElement(f.point), value); assert.equal(navigation.closeContext(), value);
+    const separate = w.SketchEditingFeature.prepareNavigation(); assert.throws(() => separate.isSidebarHighlightedElement(f.point), error => error.name === 'ReferenceError');
+  } finally { w.SketchCommand = originals.command; w.SketchTreeController = originals.tree; w.CanvasContextMenu = originals.menu; }
+});
+
+test('owned Sketch navigation publishes reset only after complete editing construction and retains the actual reset receiver', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation(), original = w.SketchCommand, marker = new Error('editing failed'); let generation = 0, fail = false;
+  w.SketchCommand = { ...original, create(options) { if (fail) throw marker; return original.create(options); },
+    createInteractionReset(options) { const raw = original.createInteractionReset(options), value = { generation: ++generation };
+      const reset = Object.freeze({ ...raw, clear: function() { 'use strict'; assert.equal(this, reset); assert.equal(arguments.length, 0); raw.clear(); return value; } }); return reset; } };
+  try {
+    const f = interactionFixture(true, navigation, true), first = navigation.clearInteractionForSketchChange('ignored'); assert.equal(first.generation, 1);
+    fail = true; assert.throws(() => navigation.createForInteraction(f.owners), error => error === marker);
+    assert.equal(navigation.clearInteractionForSketchChange(), first); assert.equal(generation, 2);
+    const fresh = w.SketchEditingFeature.prepareNavigation(); assert.throws(() => fresh.createForInteraction(f.owners), error => error === marker);
+    assert.throws(fresh.clearInteractionForSketchChange, error => error.name === 'ReferenceError');
+  } finally { w.SketchCommand = original; }
+});
+
+
+test('presentation-owned Tree retains the published native Controller after field and Tree construction failure', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation(), original = w.SketchTreeController;
+  const marker = new Error('Tree presentation failed'); let fail = false, generation = 0;
+  w.SketchTreeController = { ...original, createWithDocumentObjects(options) {
+    if (fail) throw marker;
+    const tree = original.createWithDocumentObjects(options), result = { generation: ++generation };
+    const controller = Object.freeze({ ...tree.controller, isHighlightedElement(item) {
+      assert.equal(this, controller); assert.equal(arguments.length, 1); assert.ok(item); return result;
+    } });
+    return Object.freeze({ ...tree, controller });
+  } };
+  try {
+    const f = editingTreeFixture('presentation', navigation, true), first = navigation.isSidebarHighlightedElement(f.point);
+    assert.equal(first.generation, 1); const options = treePresentationOptions(f.config);
+    const badIcons = Object.freeze(Object.defineProperty({ ...options.icons }, 'toolbarSvgMarkup', { get() { throw marker; } }));
+    assert.throws(() => f.feature.createTreeForPresentation({ ...options, icons: badIcons }), error => error === marker);
+    assert.equal(generation, 1); assert.equal(navigation.isSidebarHighlightedElement(f.point), first);
+    fail = true; assert.throws(() => f.feature.createTreeForPresentation(options), error => error === marker);
+    assert.equal(navigation.isSidebarHighlightedElement(f.point), first);
+    fail = false; const tree = f.feature.createTreeForPresentation(options);
+    assert.equal(Object.isFrozen(tree), true); const next = navigation.isSidebarHighlightedElement(f.point);
+    assert.equal(next.generation, 2); assert.notEqual(next, first);
+    assert.equal(f.state.scope.points[0], f.point); assert.equal(f.state.keyReads, 0);
+  } finally { w.SketchTreeController = original; }
+});
+
+function browserSketchNavigation(browserWindow, overrides) {
+  const navigation = w.SketchEditingFeature.prepareNavigation();
+  return { navigation, createForInteraction({ promptName, ...options }) { return navigation.createForBrowser({ window: browserWindow, ...options, ...overrides }); } };
+}
+
+test('Sketch browser name input stays cold, reads the live prompt method and retains rename cancellation, trimming and history', () => {
+  let f, reads = 0, answer = null; const marker = new Error('prompt'), browser = {};
+  Object.defineProperty(browser, 'prompt', { configurable: true, get() { reads++; return function(title, name) {
+    assert.equal(this, browser); assert.equal(arguments.length, 2); assert.equal(title, 'スケッチ名'); assert.equal(name, f.state.scope.sketches.find(s => s.id === 'S1').name); return answer;
+  }; } });
+  const adapter = browserSketchNavigation(browser); f = interactionFixture(true, adapter);
+  assert.equal(reads, 0); assert.deepEqual(f.calls, []);
+  const original = f.state.scope.sketches.find(s => s.id === 'S1');
+  for (const value of [null, '', '   ', '  Renamed  ']) { answer = value; const histories = f.calls.filter(c => c[0] === 'history').length; f.feature.command.rename('S1');
+    assert.equal(f.state.scope.sketches.find(s => s.id === 'S1'), original); assert.equal(f.calls.filter(c => c[0] === 'history').length, histories + (value ? 1 : 0)); }
+  assert.equal(original.name, 'Renamed'); assert.equal(reads, 4);
+  Object.defineProperty(browser, 'prompt', { get() { throw marker; } }); const before = JSON.stringify(f.state.scope), history = f.calls.filter(c => c[0] === 'history').length;
+  assert.throws(() => f.feature.command.rename('S1'), error => error === marker); assert.equal(JSON.stringify(f.state.scope), before); assert.equal(f.calls.filter(c => c[0] === 'history').length, history);
+});
+
+test('Sketch browser confirmation shares native deletion, preserves cancellation and uses live receiver, one argument and original exceptions', () => {
+  for (const response of [false, true, 'throw']) {
+    let f, reads = 0; const marker = new Error('confirm'), browser = { get confirm() { reads++; return function(message) {
+      assert.equal(this, browser); assert.equal(arguments.length, 1); assert.equal(typeof message, 'string'); if (response === 'throw') throw marker; return response;
+    }; } };
+    f = deletionOwnersFixture('browser', false, browserSketchNavigation(browser)); assert.equal(reads, 0); assert.equal(f.ports.confirmDeletion.name, 'confirmDeletion'); assert.equal(f.ports.confirmDeletion.length, 1);
+    f.owners.documentWorkspace.sketches.ensureSketchState(); const before = JSON.stringify(f.state.scope), point = f.point;
+    if (response === 'throw') assert.throws(() => f.command.remove('S1'), error => error === marker); else assert.equal(f.command.remove('S1'), response);
+    assert.equal(reads, 1); if (response !== true) { assert.equal(JSON.stringify(f.state.scope), before); assert.equal(f.state.scope.points[0], point); assert.equal(f.calls.some(c => c[0] === 'history'), false); }
+    else { assert.equal(f.state.scope.points.length, 0); assert.equal(f.calls.filter(c => c[0] === 'history').length, 1); }
+  }
+});
+
+test('Sketch browser adapters preserve explicit null or undefined dialog overrides without reading browser methods', () => {
+  const marker = new Error('browser must stay unread'), browser = new Proxy({}, { get() { throw marker; } });
+  for (const value of [undefined, null]) {
+    const f = interactionFixture(true, browserSketchNavigation(browser, { promptName: value })); assert.throws(() => f.feature.command.rename('S1'), error => error.name === 'TypeError');
+    const d = deletionOwnersFixture('browser', false, browserSketchNavigation(browser)); const command = d.feature.createDeletionForEditing({ ...d.config, confirmDeletion: value });
+    d.owners.documentWorkspace.sketches.ensureSketchState(); const before = JSON.stringify(d.state.scope); assert.throws(() => command.remove('S1'), error => error.name === 'TypeError'); assert.equal(JSON.stringify(d.state.scope), before);
+  }
+});
+
+test('Tree fixed controls share actual icons and operand with the native Tree and leave selection initialization deferred', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation();
+  const f = editingTreeFixture('presentation', navigation, true);
+  const options = treePresentationOptions(f.config), events = [], fixedOptions = {};
+  const icons = options.icons, operand = options.fixedOperands;
+  let selectionCalls = 0;
+  function createSelection() { selectionCalls++; return operand; }
+  const toolbar = { createIcons() { assert.equal(this, toolbar); assert.equal(arguments.length, 0); events.push('icons'); return icons; } };
+  const original = w.SketchTreeController; let ports, controls;
+  w.SketchTreeController = { ...original, createWithDocumentObjects(input) { ports = input; return original.createWithDocumentObjects(input); } };
+  try { controls = f.feature.createTreeWithFixedControls({ toolbar, createFixed(input) {
+    'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 1); assert.equal(input, fixedOptions);
+    events.push('fixed'); return { operand, createSelectionForWorkspace: createSelection };
+  } }, function() {
+    'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); events.push('fixed-options'); return fixedOptions;
+  }, function(actualIcons, actualOperand) {
+    'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 2);
+    assert.equal(actualIcons, icons); assert.equal(actualOperand, operand); events.push('tree-options');
+    return { ...options, icons: actualIcons, fixedOperands: actualOperand };
+  }); } finally { w.SketchTreeController = original; }
+  assert.ok(Object.isFrozen(controls)); assert.equal(controls.icons, icons); assert.equal(controls.createFixedSelection, createSelection);
+  assert.deepEqual(events, ['icons', 'fixed-options', 'fixed', 'tree-options']); assert.equal(selectionCalls, 0);
+  assert.equal(ports.unfixPoint, operand.unfixPoint); assert.equal(f.state.keyReads, 0);
+  controls.tree.view.render(); assert.equal(f.label.textContent, 'Drawing sketch: Bound view');
+  controls.tree.controller.doubleClick(f.event('S2')); assert.equal(f.state.scope.activeSketchId, 'S2');
+  assert.equal(f.state.scope.points[0], f.point); assert.equal(controls.createFixedSelection(), operand); assert.equal(selectionCalls, 1);
+  navigation.startContext(); navigation.closeContext(); controls.tree.menu.dispose();
+});
+
+test('Tree fixed assembly preserves construction order and partial publications when factories, ports or native Tree fail', () => {
+  const navigation = w.SketchEditingFeature.prepareNavigation();
+  const f = editingTreeFixture('presentation', navigation, true), options = treePresentationOptions(f.config);
+  const original = w.SketchTreeController, marker = new Error('Tree controls failed'), events = [];
+  let failure, publishedFixed = null, generation = 0;
+  const step = name => { events.push(name); if (failure === name) throw marker; };
+  const toolbar = { createIcons() { step('icons'); return options.icons; } };
+  function createFixed() {
+    step('fixed'); publishedFixed = { generation: ++generation };
+    return { get operand() { step('operand'); return options.fixedOperands; },
+      get createSelectionForWorkspace() { step('selection'); return () => publishedFixed; } };
+  }
+  function readFixed() { step('fixed-options'); return {}; }
+  function readTree(icons, operand) { step('tree-options'); return { ...options, icons, fixedOperands: operand }; }
+  w.SketchTreeController = { ...original, createWithDocumentObjects(input) { step('tree'); return original.createWithDocumentObjects(input); } };
+  try {
+    const first = f.feature.createTreeWithFixedControls({ toolbar, createFixed }, readFixed, readTree);
+    const firstFixed = publishedFixed;
+    const sequence = ['icons', 'fixed-options', 'fixed', 'operand', 'selection', 'tree-options', 'tree'];
+    assert.deepEqual(events, sequence);
+    for (const name of sequence) {
+      events.length = 0; failure = name; const prior = publishedFixed;
+      assert.throws(() => f.feature.createTreeWithFixedControls({ toolbar, createFixed }, readFixed, readTree), error => error === marker);
+      assert.deepEqual(events, sequence.slice(0, sequence.indexOf(name) + 1));
+      if (sequence.indexOf(name) <= sequence.indexOf('fixed')) assert.equal(publishedFixed, prior);
+      else assert.notEqual(publishedFixed, firstFixed);
+      // Failed Tree replacement leaves the previous native menu usable.
+      assert.doesNotThrow(navigation.startContext); assert.doesNotThrow(navigation.closeContext);
+    }
+    first.tree.menu.dispose();
+  } finally { w.SketchTreeController = original; }
+});
+
+function boundMoveOptions(f, steps, readEditingScope) {
+  const reads = f.owners.readServices.reads, projections = f.owners.readServices.projections;
+  projections.invalidateBlockProjectionCache = () => steps.push('block-cache');
+  reads.clearReadCache = () => steps.push('geometry-cache');
+  reads.blockProjectionBundles = () => { steps.push('blocks'); return []; };
+  reads.geometryInstanceBundles = () => { steps.push('instances'); return []; };
+  const options = { document: { addEventListener() {}, removeEventListener() {} },
+    hatches: { clear() { steps.push('hatch-cache'); } },
+    rebinding: { rebuildDocument(scope, bundles) { steps.push('rebind'); f.state.rebound = scope; assert.equal(bundles.length, 0); } },
+    analysis: { invalidate() { steps.push('analysis'); } }, refreshReferenceConstraintValidity: () => steps.push('references') };
+  if (arguments.length > 2) options.readEditingScope = readEditingScope;
+  Object.defineProperty(options, 'unused', { enumerable: true, get() { assert.fail('Move assembly must not inspect unused options'); } });
+  return options;
+}
+
+test('Sketch Move defaults use the captured Document owner only during native commit and retain both command routes, order and one history step', () => {
+  for (const withInput of [false, true]) {
+    const traces = [];
+    for (const omitted of [false, true]) {
+      const navigation = w.SketchEditingFeature.prepareNavigation(), f = interactionFixture(true, navigation), steps = [], owner = f.owners.documentWorkspace;
+      const bound = {}; let lookups = 0;
+      Object.defineProperty(owner, 'readEditingScope', { get() {
+        assert.equal(f.state.ready, true); lookups++;
+        return function() { assert.equal(this, owner); assert.equal(arguments.length, 0); steps.push('bound-scope'); return bound; };
+      } });
+      const options = omitted ? boundMoveOptions(f, steps) : boundMoveOptions(f, steps, () => owner.readEditingScope());
+      f.state.ready = false;
+      const result = withInput ? f.feature.createMoveWithInput(options) : { command: f.feature.createMove(options) };
+      assert.equal(lookups, 0); assert.deepEqual(steps, []); f.state.ready = true;
+      f.selection.set('points', [f.point]); assert.equal(result.command.start(), true); assert.equal(result.command.choose('S2'), true);
+      assert.equal(lookups, 0); assert.equal(result.command.commit(), true);
+      assert.equal(f.state.rebound, bound); assert.equal(f.state.scope.points[0], f.point); assert.equal(f.point.sketchId, 'S2');
+      assert.equal(f.calls.filter(call => call[0] === 'history').length, 1); assert.equal(lookups, 1);
+      assert.deepEqual(steps, refreshOrder);
+      traces.push(JSON.stringify({ calls: f.calls, steps, point: [f.point.x, f.point.y, f.point.sketchId] }));
+    }
+    assert.equal(traces[1], traces[0]);
+  }
+});
+
+test('Sketch Move keeps explicit own and inherited readers including invalid values without fallback reads or unused getter evaluation', () => {
+  for (const withInput of [false, true]) for (const inherited of [false, true]) for (const value of [undefined, null, () => ({ id: 'explicit-bound' })]) {
+    const navigation = w.SketchEditingFeature.prepareNavigation(), f = interactionFixture(true, navigation), steps = [], marker = new Error('unexpected default scope');
+    Object.defineProperty(f.owners.documentWorkspace, 'readEditingScope', { get() { throw marker; } });
+    const options = boundMoveOptions(f, steps);
+    if (inherited) Object.setPrototypeOf(options, { readEditingScope: value }); else options.readEditingScope = value;
+    const result = withInput ? f.feature.createMoveWithInput(options) : { command: f.feature.createMove(options) };
+    f.selection.set('points', [f.point]); result.command.start(); result.command.choose('S2');
+    const accepted = typeof value === 'function'; assert.equal(result.command.commit(), accepted);
+    assert.equal(f.point.sketchId, accepted ? 'S2' : 'S1'); assert.equal(f.state.scope.points[0], f.point);
+    assert.equal(f.calls.filter(call => call[0] === 'history').length, accepted ? 1 : 0);
+    if (accepted) assert.equal(f.state.rebound.id, 'explicit-bound');
+  }
 });

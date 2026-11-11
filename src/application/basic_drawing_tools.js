@@ -15,9 +15,20 @@
     function createPreparedGeometry(options) {
       const geometry = createGeometry(options);
       const build = geometry.createAuthoring, buildForEditing = geometry.createAuthoringForEditing;
+      function createAuthoringWithProjectionForEditing({ projectionFeature, references, ...options }) {
+        const projectionEditing = projectionFeature.createModelEditingForConstruction({ geometry: geometry.geometry, references });
+        const authoring = publishAuthoring(buildForEditing, options);
+        return Object.freeze({ authoring, projectionEditing });
+      }
       return Object.freeze({ ...geometry,
         createAuthoring: options => publishAuthoring(build, options),
-        createAuthoringForEditing: options => publishAuthoring(buildForEditing, options) });
+        createAuthoringForEditing: options => publishAuthoring(buildForEditing, options), createAuthoringWithProjectionForEditing });
+    }
+    function prepareGeometryForSolver(solver, minimumOrientationLength) {
+      const lengths = window.GeometryCreation.createLengthPolicy(solver.minLineLength,
+        arguments.length < 2 ? window.GeometryKernel.MIN_ORIENTATION_LENGTH : minimumOrientationLength);
+      function createGeometry(options) { return createPreparedGeometry({ ...lengths, ...options }); }
+      return Object.freeze({ minimumLength: lengths.minLineLength, createGeometry });
     }
     function createEditing(options) {
       const completed = requireComponent(authoring, "authoringTools").createEditing(options);
@@ -53,7 +64,7 @@
       },
       computeTrimPreview(pointer) { return requireComponent(trim, "trimFeature").computePreview(pointer); },
     });
-    return Object.freeze({ createGeometry: createPreparedGeometry, createEditing, createCenterline, createTrim, createSplineEditing, resetSplineEditing, preview });
+    return Object.freeze({ createGeometry: createPreparedGeometry, createEditing, createCenterline, createTrim, createSplineEditing, resetSplineEditing, preview, prepareGeometryForSolver });
   }
   function createCanvasInput({ point, drawing }) {
     const pointCommand = window.PointCommand.create(point);
@@ -99,7 +110,12 @@
       threePointArc: point => { const snapped = snapForDrawing(point); circular.clickThreePointArc(snapped, snap.active); },
       slot: point => { const snapped = snapForDrawing(point); slot.click(snapped, snap.active); },
     });
-    return Object.freeze({ line, rectangle, circular, slot, input });
+    function resetForDeletion() {
+      line.reset();
+      circular.resetCircle();
+      circular.resetArcs();
+    }
+    return Object.freeze({ line, rectangle, circular, slot, input, resetForDeletion });
   }
   // Spline shares its draft with rendering and cancellation, independently of primitive tools.
   function createSpline({ currentScope, ids, endpointAt, samePosition, isPointUsedByPrimitive,
@@ -161,7 +177,9 @@
           invalidateAnalysis: () => { analysis.invalidate(); }, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options),
           updateGeometrySelectionUI,
         });
-        function createCircleCenterCross({ resultIsAccepted, minOrientationLength }) {
+        function createCircleCenterCross(options) {
+          const { resultIsAccepted, minOrientationLength: suppliedLength } = options;
+          const minOrientationLength = "minOrientationLength" in options ? suppliedLength : window.GeometryKernel.MIN_ORIENTATION_LENGTH;
           return tools.createCircleCenterCross({ checkpoint, solveSketchAndDependents: solving.solveSketchAndDependents,
             resultIsAccepted, minOrientationLength, selectedElementCount: interaction.selection.selectedElementCount,
             invalidateAnalysis: () => analysis.invalidate() });
@@ -170,7 +188,7 @@
           return tools.createSplineEditing({ editingScope, checkpoint, parameters, analysis, access: interaction.access,
             guardSketchProjectionShapeEdit: projection.guardSketchProjectionShapeEdit, constraintReferences, guardDimensionSymbolDeletion });
         }
-        function createCenterline({ commitNewConstraint, parallelTolerance }) {
+        function createCenterline({ commitNewConstraint, parallelTolerance = 1e-5 }) {
           return tools.createCenterline({ commitNewConstraint, parallelTolerance, invalidateAnalysis: () => { analysis.invalidate(); } });
         }
         function createTrim({ references, hitSketchIdentityElement }) {

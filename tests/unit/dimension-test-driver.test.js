@@ -244,6 +244,9 @@ function browserSupportFixture(owned) {
  const omitted=new Set(['sketches','currentScope','canvasSelection','constraintTargetSession','pendingCommandSession']);
  const fixtureOptions=Object.freeze({...Object.fromEntries(Object.entries(p).filter(([key])=>!omitted.has(key))),documentWorkspace,interaction,sessions});
  function build(appearance=dimensionAppearance){
+  if(owned==='owners')return w.DimensionTestDriver.createBrowserSupportFromOwners({...fixtureOptions,
+    readServices:Object.freeze({geometryAppearance:p.appearance,dimensionAppearance:appearance}),
+    persistence:Object.freeze({dimensions:Object.freeze({serialize:p.serializeDimension})})},interactionOptions);
   if(owned)return w.DimensionTestDriver.createBrowserSupportForWorkspace(fixtureOptions,interactionOptions,appearance);
   const stage=w.DimensionTestDriver.createForEditing(p),dimensionInteractionSupport=stage.createInteractionForEditing(interactionOptions);
   const dimensionDisplaySupport=stage.createDisplayForEditing({canvasHover:hover,readDocument:()=>root,appearance});
@@ -254,7 +257,7 @@ function browserSupportFixture(owned) {
 }
 
 test('dimension browser support stays cold, shares real capabilities and keeps fixed Document reads separate from live Workspace',()=>{
- const results=[];for(const owned of [false,true]){
+ const results=[];for(const owned of [false,true,'owners']){
   const f=browserSupportFixture(owned),s=f.browserSupport;assert.ok(Object.isFrozen(s));
   assert.deepEqual(Object.keys(s),['dimensionDisplaySupport','dimensionFixtureSupport','dimensionInteractionSupport']);
   for(const value of Object.values(s))assert.ok(Object.isFrozen(value));
@@ -265,11 +268,11 @@ test('dimension browser support stays cold, shares real capabilities and keeps f
   assert.equal(original.defaultDimensionAppearance.dimensionTextHeight,19);assert.equal(f.documentWorkspace.document,f.root);
   assert.equal(f.interaction.selection,f.ports.canvasSelection);assert.equal(f.sessions.pending,f.ports.pendingCommandSession);
   results.push(JSON.stringify({before,after}));
- }assert.equal(results[1],results[0]);
+ }assert.equal(results[1],results[0]);assert.equal(results[2],results[0]);
 });
 
 test('dimension browser support retains real fixture Geometry, Selection, edit results and original operation exceptions',()=>{
- const results=[];for(const owned of [false,true]){
+ const results=[];for(const owned of [false,true,'owners']){
   const f=browserSupportFixture(owned),s=f.browserSupport;s.dimensionFixtureSupport.readOnly.resetForReadOnlyDimensionPlacement();
   const constraint=f.state.scope.constraints[0],selection=s.dimensionInteractionSupport.selection;
   const result=f.state.editResult={edited:true};assert.equal(selection.startDimensionExpressionEditForTest(),result);
@@ -278,11 +281,11 @@ test('dimension browser support retains real fixture Geometry, Selection, edit r
   const error=new Error('dimension edit');f.state.editError=error;assert.throws(()=>selection.startDimensionExpressionEditForTest(),value=>value===error);
   f.state.scope=f.w.DocumentState.create();assert.equal(selection.startDimensionExpressionEditForTest(),false);
   results.push(JSON.stringify({position,events:f.events,selectedId:constraint.id}));
- }assert.equal(results[1],results[0]);
+ }assert.equal(results[1],results[0]);assert.equal(results[2],results[0]);
 });
 
 test('dimension browser support propagates final display dependency failures without changing model, Selection or prior support',()=>{
- for(const owned of [false,true]){
+ for(const owned of [false,true,'owners']){
   const f=browserSupportFixture(owned),existing=f.browserSupport,error=new Error('display dependency');f.state.ready=false;
   const appearance=new Proxy(f.dimensionAppearance,{get(target,key){if(key==='effectiveDimensionAppearance')throw error;return Reflect.get(target,key);}});
   assert.throws(()=>f.build(appearance),value=>value===error);assert.equal(f.browserSupport,existing);

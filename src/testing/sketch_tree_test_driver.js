@@ -348,9 +348,14 @@
     });
   }
 
-  function createForWorkspace({ documentWorkspace, geometry, readServices, interaction, presentation, sketchPresentation, overlay,
+  function createForWorkspace(options) {
+    const { documentWorkspace, geometry, readServices, interaction, presentation, sketchPresentation, overlay,
     viewport, canvasDriver, drawingFit, blocks, dimensionDisplay, referenceState,
-    document, canvas, getComputedStyle, serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter }) {
+    document, canvas, getComputedStyle: suppliedGetComputedStyle, serializeModel, resetModelState, addDistanceConstraintFromTarget, dimensionLayout, blockInstanceDisplayCenter } = options;
+    const getComputedStyle = element => {
+      const { getComputedStyle } = document.defaultView;
+      return getComputedStyle(element);
+    };
     const { workspace, sketches, document: documentModel, documentIds } = documentWorkspace;
     const { ROOT_SKETCH_ID: rootSketchId, DEFAULT_SKETCH_ID: defaultSketchId } = window.SketchHierarchy;
     const { Point, Line } = window.GeometrySolver;
@@ -358,7 +363,8 @@
       addPoint: geometry.addPoint, addLine: geometry.addLine, addCircle: geometry.addCircle, addArc: geometry.addArc,
       refreshReferenceConstraintValidity: referenceState.refreshReferenceConstraintValidity, fitAllGeometryToViewport: drawingFit.fitAllGeometryToViewport,
       updateUI: presentation.updateUI, draw: presentation.draw, canvas, worldToCanvasScreen: viewport.worldToCanvasScreen, sketchRelationToActive: sketches.sketchRelationToActive,
-      sketchIdentityRelationLabel: overlay.sketchIdentityRelationLabel, sketchIdentityRelationColor: overlay.sketchIdentityRelationColor, document, getComputedStyle,
+      sketchIdentityRelationLabel: overlay.sketchIdentityRelationLabel, sketchIdentityRelationColor: overlay.sketchIdentityRelationColor, document,
+      getComputedStyle: "getComputedStyle" in options ? suppliedGetComputedStyle : getComputedStyle,
       isVisibleSketchId: readServices.geometryAppearance.isVisibleSketchId, serializeModel, sketchStrokeWidth: sketchPresentation.sketchStrokeWidth,
       constraintStatusColor: sketchPresentation.constraintStatusColor, activeSketchId: sketches.activeSketchId, addDistanceConstraintFromTarget,
       dimensionFromAnchor: dimensionDisplay.placement.dimensionFromAnchor, isDimensionConstraint: window.DimensionQueries.isDimensionConstraint,

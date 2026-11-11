@@ -1,11 +1,26 @@
 /* Connect application feedback and view refreshes without taking over views or models. */
 (() => {
   "use strict";
-  function create({ document, storage, refreshVersion, readDuplicateCount }) {
+  function create(options) {
+    const { document, storage, refreshVersion: suppliedVersionRefresh, readDuplicateCount } = options;
     let ui, canvas;
     let toolFlyouts = null;
     let commandPanels = null;
     let toolbar = null;
+    let choice, runtimeVersion;
+    const refreshVersion = () => {
+      if (runtimeVersion === undefined) throw new ReferenceError("Cannot access 'runtimeVersionView' before initialization");
+      return runtimeVersion.value.render();
+    };
+    function createChoiceDialog() {
+      const dialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
+      choice = Object.freeze({ dialog });
+      return dialog;
+    }
+    function requestChoice(options) {
+      if (choice === undefined) throw new ReferenceError("Cannot access 'choiceDialog' before initialization");
+      return choice.dialog.show(options);
+    }
     function requireToolbar(binding) {
       if (!toolbar) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
       return toolbar;
@@ -19,9 +34,13 @@
     function updateSketchUI() { return ui.sketch(); }
     function draw() { return canvas.draw(); }
     const settings = window.ApplicationSettings.create({ document, storage,
-      refreshViews: options => updateUI(options), redrawCanvas: () => draw(), refreshVersion });
+      refreshViews: options => updateUI(options), redrawCanvas: () => draw(),
+      refreshVersion: "refreshVersion" in options ? suppliedVersionRefresh : refreshVersion });
     const profiler = window.InteractionProfiler.create();
     const feedback = window.ApplicationFeedback.create({ document, settings, interactionProfiler: profiler, readDuplicateCount });
+    function createAuthoringFeedback() {
+      return window.AuthoringFeedback.create({ applicationText: settings.applicationText });
+    }
     function log(message) { return feedback.log(message); }
     function setHint(message, kind = "normal") { return feedback.hint(message, kind); }
     function setSolveResultHint(label, solved, analysis, dependent) { return feedback.solveResult(label, solved, analysis, dependent); }
@@ -39,7 +58,9 @@
         resizeCanvas();
         canvasSurface.start();
       }
-      return Object.freeze({ versionView, initialize });
+      const startup = Object.freeze({ versionView, initialize });
+      runtimeVersion = Object.freeze({ value: versionView });
+      return startup;
     }
     function createToolNavigation({ window: browserWindow }) {
       const menus = window.ApplicationMenus.create({ document, window: browserWindow,
@@ -95,7 +116,14 @@
         const fixPointBtn = document.getElementById("fixPointBtn");
         const cursor = window.CommandCursor.create({ document, canvas, fixPointBtn, constraintButtons });
         function createPreparedControls(options) { return createControls({ ...options, updateCursor: cursor.update }); }
-        return Object.freeze({ constraintButtons, constraintMenuButtons, fixPointBtn, cursor, createControls: createPreparedControls });
+        function createForSelection({ selection, sketches, syncFlyouts }) {
+          const { canEditSketch, constraintSketchId, elementSketchId } = sketches;
+          return createPreparedControls({ selectedVisibilityTargets: selection.visibilityTargets,
+            selectionVisibilityIsHidden: selection.visibilityIsHidden, syncFlyouts,
+            canEditTarget: target => canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)),
+          });
+        }
+        return Object.freeze({ constraintButtons, constraintMenuButtons, fixPointBtn, cursor, createControls: createPreparedControls, createForSelection });
       }
       function createEditingBinding({ undo, redo, toggleVisibility, deleteSelection, annotation }) {
         return window.ToolbarView.createEditingBinding({ document, undo, redo, toggleVisibility,
@@ -116,7 +144,13 @@
             startSketchProjectionCommand: projection.start, startGeometryInstanceCommand: instances.start, filletCommand: fillet,
             startBlockCreation: blockCreation.startCreation, offsetCommand: offset, beginSplineCreation: spline.start, startHatchCreation: hatch.startHatchCreation });
         }
-        return Object.freeze({ ...controls, createDrawingBinding: createWorkspaceDrawingBinding });
+        function startWithDrawingTools() {
+          workspace.start();
+          const drawingToolBinding = workspace.createDrawingBinding();
+          drawingToolBinding.bind();
+        }
+        const workspace = Object.freeze({ ...controls, createDrawingBinding: createWorkspaceDrawingBinding, startWithDrawingTools });
+        return workspace;
       }
       toolbar = Object.freeze({ updateHistory: history.update, createIcons, createControls, prepareControls, createEditingBinding, createDrawingBinding, prepareWorkspace, update, updateStatus });
       return toolbar;
@@ -158,7 +192,7 @@
         interactionProfiler: profiler, profileInteractionWork: profiler.work, withGeometryReadCache, drawCanvas });
       return canvas;
     }
-    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createStartup, createToolbar, createToolNavigation, prepareWorkspaceControls, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas,
+    return Object.freeze({ settings, profiler, constraintFeedback: feedback.constraints, createAuthoringFeedback, createStartup, createToolbar, createToolNavigation, prepareWorkspaceControls, createCommandPanels, createCommandPanelsForEditing, readCommandPanel, bindUI, bindCanvas, createChoiceDialog, requestChoice,
       log, setHint, setSolveResultHint, updateUI, updateGeometrySelectionUI, updatePropertiesUI, updateSketchUI, draw, updateToolbar, updateStatusUI, updateHistoryButtons,
       get selectedItem() { return canvas.selectedItem; } });
   }

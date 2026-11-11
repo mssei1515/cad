@@ -63,8 +63,14 @@
         pendingCommandSession, parameterDraft, ensureDimensionParameter: namespace.ensureDimensionParameter, setParameterDialogError,
         setHint, applicationText, language, insertIdentifierIntoExpressionInput, canvas, canvasPoint, hitDimension, hitAnnotationElement });
     }
+    function createReferenceInputForCanvas({ viewport, ...options }) {
+      const defaults = { currentNamespace: () => currentScope() };
+      if (!Object.hasOwn(options, "TextAreaElement")) defaults.TextAreaElement = browserWindow.HTMLTextAreaElement;
+      if (!Object.hasOwn(options, "canvasPoint")) defaults.canvasPoint = viewport.canvasPoint;
+      return createReferenceInput({ ...defaults, ...options });
+    }
     return Object.freeze({
-      draft: parameterDraft, createReferenceInput, setParameterDialogError, insertIdentifierIntoExpressionInput,
+      draft: parameterDraft, createReferenceInput, createReferenceInputForCanvas, setParameterDialogError, insertIdentifierIntoExpressionInput,
       syncExpressionInputHighlight, installExpressionInputHighlights,
       start: controller.start, dispose: controller.dispose, apply: application.apply,
     });

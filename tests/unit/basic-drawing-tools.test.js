@@ -494,18 +494,50 @@ function geometryFoundationFixture({composed=false,prepared=false,probe=null,con
   interaction:{pointUsage,selection,lifecycle,access:{canCreateInActiveSketch:ports.canCreateInActiveSketch,rejectRootSketchCreation:ports.rejectRootSketchCreation}},
   sessions:{preview,pending},presentation:{settings:{applicationText:ports.applicationText},setHint:ports.setHint,updateUI:ports.updateUI,draw:ports.draw,log:ports.log},
   viewport:{get scale(){read();return state.scale??1;}}};
- if(configure)configure({w,state,owners,ports,events,ids,foundation});
+ if(configure)configure({w,state,owners,ports,events,ids,foundation,preparation});
  const remaining={...ports};
  for(const key of ['samePosition','sketchContext','pointUsage','geometryReads','isVisibleSketchElement','scale','selection','preview','cancelPendingCommand',
   'canCreateInActiveSketch','rejectRootSketchCreation','setMode','applicationText','setHint','updateUI','draw','log'])delete remaining[key];
  const originals=new Map();if(probe){probe.ports={};probe.order=[];
   for(const name of ['DrawingSnap','SplineCommand','LineCommand','SlotConstruction']){const original=w[name];originals.set(name,original);w[name]={...original,create(input){
    probe.order.push(name);probe.ports[name]=input;if(probe.failAt===name)throw probe.error;return original.create(input);}};}}
- let tools;try{tools=composed?foundation.createAuthoringForEditing({...remaining,...owners}):foundation.createAuthoring(ports);}
+ let tools,cohort;try{tools=composed==='projection'?(cohort=foundation.createAuthoringWithProjectionForEditing({...remaining,...owners})).authoring:composed?foundation.createAuthoringForEditing({...remaining,...owners}):foundation.createAuthoring(ports);}
  finally{for(const[name,original]of originals)w[name]=original;}
  assert.deepEqual(events,[]);assert.equal(Object.isFrozen(foundation),true);state.ready=true;checkpoint=probe?.checkpoint??{capture:noop,restore:noop};
- return {foundation,preparation,geometryOptions,tools,state,ids,events,empty,owners,ports,w};
+ return {foundation,preparation,geometryOptions,tools,cohort,state,ids,events,empty,owners,ports,w};
 }
+
+test('solver-derived geometry lengths are read once, shared by native creation and retained independently of later solver changes',()=>{
+ const f=geometryFoundationFixture({prepared:true}),w=f.w,raw=w.GeometryCreation;let reads=0,value=4,ports,actual;
+ const solver={get minLineLength(){reads++;return value;}},options={...f.geometryOptions};delete options.minLineLength;delete options.minArcLength;
+ f.state.ready=false;const prepared=f.preparation.prepareGeometryForSolver(solver,1e-9);
+ assert.ok(Object.isFrozen(prepared));assert.equal(prepared.minimumLength,4);assert.equal(reads,1);assert.deepEqual(f.events,[]);value=9;
+ w.GeometryCreation={...raw,create(input){ports=input;return actual=raw.create(input);}};
+ try{
+  const foundation=prepared.createGeometry(options);assert.equal(foundation.geometry,actual);assert.equal(ports.minLineLength,4);assert.equal(ports.minArcLength,4);assert.equal(reads,1);
+  for(const key of ['currentScope','ids','assignSketchId','currentConstruction'])assert.equal(ports[key],options[key]);
+  f.state.ready=true;const a=foundation.geometry.addPoint(0,0),b=foundation.geometry.addPoint(1,0),line=foundation.geometry.addLine(a,b);
+  assert.equal(line.p1,a);assert.equal(line.p2,b);assert.equal(line.length(),4);
+  assert.equal(foundation.geometry.addArc(a,5,0,1).endAngle,1);assert.equal(foundation.geometry.addArc(a,3,0,1).endAngle,0);
+  assert.equal(f.foundation.geometry.addArc(a,5,0,1).endAngle,0,'raw geometry retains its distinct explicit arc minimum of 6');
+  for(const override of [0,null,undefined]){prepared.createGeometry({...options,minLineLength:override,minArcLength:override});assert.equal(ports.minLineLength,override);assert.equal(ports.minArcLength,override);}
+  f.state.scope=f.empty();f.state.sketch='S2';const point=foundation.geometry.addPoint(8,9);assert.equal(f.state.scope.points[0],point);assert.equal(point.sketchId,'S2');assert.equal(reads,1);
+ }finally{w.GeometryCreation=raw;}
+});
+
+test('geometry length preparation and deferred construction propagate failures without allocating model objects or publishing authoring',()=>{
+ const f=geometryFoundationFixture(),w=f.w,raw=w.GeometryCreation,preparation=w.BasicDrawingTools.prepare(),marker=new Error('length preparation'),options={...f.geometryOptions};let calls=0,failPolicy=false;
+ delete options.minLineLength;delete options.minArcLength;f.state.ready=false;
+ w.GeometryCreation={...raw,createLengthPolicy(value,lower){assert.equal(this,w.GeometryCreation);assert.equal(arguments.length,2);calls++;if(failPolicy)throw marker;return raw.createLengthPolicy(value,lower);}};
+ try{
+  assert.throws(()=>preparation.prepareGeometryForSolver({get minLineLength(){throw marker;}},1e-9),error=>error===marker);assert.equal(calls,0);
+  failPolicy=true;assert.throws(()=>preparation.prepareGeometryForSolver({minLineLength:4},1e-9),error=>error===marker);failPolicy=false;
+  const prepared=preparation.prepareGeometryForSolver({minLineLength:4},1e-9);
+  for(const method of ['create','createEndpointResolver']){w.GeometryCreation[method]=()=>{throw marker;};assert.throws(()=>prepared.createGeometry(options),error=>error===marker);w.GeometryCreation[method]=raw[method];}
+  assert.equal(f.ids.peek('point'),1);assert.equal(f.state.scope.points.length,0);assert.deepEqual(f.events,[]);
+  assert.throws(()=>preparation.preview.snapForDrawing({}),error=>error.name==='ReferenceError');
+ }finally{w.GeometryCreation=raw;}
+});
 
 test('geometry foundation shares IDs, scope and construction with real drawing tools and retains endpoint versus explicit Point identity',()=>{
  const f=geometryFoundationFixture(),{foundation:b,tools,state,ids}=f,first=state.scope;
@@ -1126,6 +1158,25 @@ test('prepared Spline construction failure preserves the last reset target, memb
  fail=true;assert.throws(reset,e=>e===marker);
 });
 
+test('prepared circle center cross defaults to Kernel without changing actual command ports or explicit inherited values', () => {
+  const f = editingToolStagesFixture('prepared'), raw = f.w.GeometryKernel, value = raw.MIN_ORIENTATION_LENGTH;
+  let reads = 0;
+  f.w.GeometryKernel = { ...raw, get MIN_ORIENTATION_LENGTH() { reads++; return value; } };
+  const resultIsAccepted = () => true;
+  f.state.ready = false; f.state.parent.ready = false;
+  const command = f.editors.createCircleCenterCross({ resultIsAccepted });
+  assert.equal(command, f.actual.CircleCenterCrossCommand);
+  assert.equal(f.captured.CircleCenterCrossCommand.minOrientationLength, value);
+  assert.equal(f.captured.CircleCenterCrossCommand.resultIsAccepted, resultIsAccepted);
+  for (const inherited of [false, true]) for (const explicit of [undefined, null, 0, 0.25]) {
+    const options = inherited ? Object.create({ minOrientationLength: explicit }) : { minOrientationLength: explicit };
+    options.resultIsAccepted = resultIsAccepted;
+    f.editors.createCircleCenterCross(options);
+    assert.equal(f.captured.CircleCenterCrossCommand.minOrientationLength, explicit);
+  }
+  assert.equal(reads, 1);
+});
+
 })();
 
 function hatchOwnersFixture(composed, probe = {}) {
@@ -1257,4 +1308,94 @@ test('authoring preview retains constructor and Canvas getter exceptions with th
   f.tools.spline.draft.points.push({x:0,y:0},{x:10,y:10});f.owners.sessions.preview.pointer={x:20,y:10};f.owners.interaction.lifecycle.setMode('spline');
   assert.throws(()=>f.preview.layer.drawSplinePreview(),value=>value===error);assert.deepEqual(f.calls.at(-1),['exit']);assert.deepEqual(f.reads,[]);
  }
+});
+
+test('drawing deletion reset shares actual command owners and preserves live methods, order and partial failures', () => {
+  for (const failure of [null, 'line', 'circle', 'arcs']) {
+    const f = fixture(), marker = new Error('drawing reset'), calls = [];
+    for (const [owner, method, label] of [[f.tools.line, 'reset', 'line'], [f.tools.circular, 'resetCircle', 'circle'], [f.tools.circular, 'resetArcs', 'arcs']]) {
+      owner[method] = function() { assert.equal(this, owner); assert.equal(arguments.length, 0); calls.push(label); if (label === failure) throw marker; return 'ignored'; };
+    }
+    assert.deepEqual(f.events, []); const { resetForDeletion } = f.tools;
+    if (failure) assert.throws(resetForDeletion, error => error === marker); else assert.equal(resetForDeletion(), undefined);
+    assert.deepEqual(calls, failure ? ['line', 'circle', 'arcs'].slice(0, ['line', 'circle', 'arcs'].indexOf(failure) + 1) : ['line', 'circle', 'arcs']);
+    assert.deepEqual(f.events, []);
+    const getterError = new Error('live method'); Object.defineProperty(f.tools.line, 'reset', { get() { throw getterError; } });
+    assert.throws(resetForDeletion, error => error === getterError);
+  }
+});
+
+
+function projectionAuthoringFixture(composed,probe={}){
+  const phases=[];probe.phases=phases;const marker=probe.marker||new Error('projection authoring boundary');probe.marker=marker;
+  const f=geometryFoundationFixture({prepared:true,composed:composed?'projection':true,probe,configure({w,state,owners,ports,foundation,preparation}){
+    const noop=()=>{},documentWorkspace={...owners.documentWorkspace,workspace:{current:()=>state.scope},documentIds:w.DocumentIds.create()};
+    const readServices={...owners.readServices,reads:{...owners.readServices.reads,allHatches:()=>[],resolveGeometryRef:()=>null}};
+    const feature=w.SketchProjectionFeature.createForWorkspace({documentWorkspace,editingScope:{get current(){return state.scope;}},readServices,
+      referenceState:{constraintIsOperational:()=>true},interaction:{...owners.interaction,hover:{update:noop}},presentation:owners.presentation,
+      operandElement:noop,readProjectionRectangle:noop,cancelConstraintTargetCommand:noop,cancelPendingCommand:noop,clearSelection:noop,clearSnap:noop,updateToolbar:noop,
+      normalizeGeometryInstance:instance=>instance,refreshConstraintAnalysis:noop,recordHistory:noop});
+    probe.feature=feature;probe.foundation=foundation;probe.preparation=preparation;probe.state=state;
+    const references={constraintReferencesPoint:()=>false},raw=w.SketchProjectionEditing;probe.rawEditing=raw;
+    w.SketchProjectionEditing={create(options){phases.push('projection');assert.equal(options.addPointToSketch,foundation.geometry.addPointToSketch);assert.equal(options.constraintReferencesPoint,references.constraintReferencesPoint);
+      assert.throws(()=>feature.synchronizeConstructionMetadata(),error=>error.name==='ReferenceError');if(probe.failAt==='projection')throw marker;return probe.editing=raw.create(options);}};
+    const snap=w.DrawingSnap;probe.rawSnap=snap;w.DrawingSnap={...snap,create(options){phases.push('snap');const synchronize=composed?feature.synchronizeConstructionMetadata:()=>probe.editing.synchronizeSketchProjectionMetadata();assert.equal(synchronize(),false);phases.push('metadata-ready');if(probe.failAt==='snap')throw marker;return snap.create(options);}};
+    owners.projectionFeature=feature;owners.references=references;
+    if(!composed)probe.editing=feature.createModelEditing({geometry:foundation.geometry,references});
+  }});
+  return{...f,probe,phases};
+}
+
+test('projection-aware authoring keeps native Geometry, Projection, Snap and command owners and publishes metadata before authoring constructors',()=>{
+  const results=[];
+  for(const composed of [false,true]){
+    const f=projectionAuthoringFixture(composed);assert.deepEqual(f.phases,['projection','snap','metadata-ready']);
+    if(composed){assert.ok(Object.isFrozen(f.cohort));assert.equal(f.cohort.authoring,f.tools);assert.equal(f.cohort.projectionEditing,f.probe.editing);}
+    const p={x:10,y:20};assert.deepEqual(f.preparation.preview.snapForDrawing(p),f.tools.snapForDrawing(p));
+    f.foundation.geometry.addPoint(3,4,false,'explicit');f.state.scope=f.empty();f.state.sketch='S2';f.state.scale=3;const point=f.foundation.geometry.addPoint(7,8,false,'explicit');assert.equal(point.sketchId,'S2');
+    assert.equal(f.tools.tools.line.click({x:0,y:0}),undefined);f.tools.tools.line.reset();assert.equal(f.ids.peek('point')>1,true);
+    results.push(JSON.stringify({order:f.probe.order,scope:f.state.scope,ids:f.ids.snapshot(),events:f.events}));
+  }
+  assert.equal(results[1],results[0]);
+});
+
+test('projection-aware authoring keeps original constructor failures and metadata publication without publishing partial authoring',()=>{
+  for(const failure of ['projection','snap','SplineCommand','LineCommand','SlotConstruction']){
+    const probe={failAt:failure,error:new Error(failure)};probe.marker=probe.error;
+    assert.throws(()=>projectionAuthoringFixture(true,probe),error=>error===probe.error);
+    assert.throws(()=>probe.preparation.preview.snapForDrawing({x:0,y:0}),error=>error.name==='ReferenceError'&&error.message.includes('authoringTools'));
+    if(failure==='projection')assert.throws(()=>probe.feature.synchronizeConstructionMetadata(),error=>error.name==='ReferenceError');
+    else assert.equal(probe.feature.synchronizeConstructionMetadata(),false);
+  }
+});
+
+
+test('projection-aware reconstruction retains previous authoring when a later native command fails after metadata publication',()=>{
+  const f=projectionAuthoringFixture(true),w=f.w,marker=new Error('later authoring failed'),replacement={replacement:true},before=JSON.stringify(f.state.scope),ids=f.ids.snapshot();
+  w.SketchProjectionEditing=f.probe.rawEditing;const rawLine=w.LineCommand;
+  w.DrawingSnap={...f.probe.rawSnap,create(options){return Object.freeze({...f.probe.rawSnap.create(options),resolve:()=>replacement});}};
+  w.LineCommand={...rawLine,create(){assert.equal(f.probe.feature.synchronizeConstructionMetadata(),false);throw marker;}};
+  assert.throws(()=>f.foundation.createAuthoringWithProjectionForEditing({...f.ports,...f.owners}),error=>error===marker);
+  assert.equal(f.probe.feature.synchronizeConstructionMetadata(),false);assert.equal(JSON.stringify(f.state.scope),before);assert.deepEqual(f.ids.snapshot(),ids);
+  const point={x:7,y:8};assert.notEqual(f.preparation.preview.snapForDrawing(point),replacement);assert.deepEqual(f.preparation.preview.snapForDrawing(point),f.tools.snapForDrawing(point));
+});
+
+test('solver geometry uses the Kernel orientation default only for an omitted argument and retains explicit invalid and custom lengths', () => {
+  const f = geometryFoundationFixture({ prepared: true }), raw = f.w.GeometryKernel, value = raw.MIN_ORIENTATION_LENGTH;
+  let reads = 0;
+  f.w.GeometryKernel = { ...raw, get MIN_ORIENTATION_LENGTH() { reads++; return value; } };
+  for (const minLineLength of [-1, 0, 1e-12, 4]) {
+    const solver = { minLineLength };
+    assert.equal(f.preparation.prepareGeometryForSolver(solver).minimumLength,
+      f.preparation.prepareGeometryForSolver(solver, value).minimumLength);
+  }
+  assert.equal(reads, 4);
+  for (const explicit of [undefined, null, 0, 0.25]) {
+    assert.equal(f.preparation.prepareGeometryForSolver({ minLineLength: -1 }, explicit).minimumLength,
+      f.w.GeometryCreation.createLengthPolicy(-1, explicit).minLineLength);
+  }
+  assert.equal(reads, 4);
+  const marker = new Error('minimum length getter');
+  assert.throws(() => f.preparation.prepareGeometryForSolver({ get minLineLength() { throw marker; } }), error => error === marker);
+  assert.equal(reads, 4);
 });

@@ -1,6 +1,20 @@
 /* Coordinate new-document editing reset; each component retains its own state. */
 (() => {
   "use strict";
+  function prepare() {
+    let published;
+    function createWorkspace(options) {
+      const completed = window.DocumentEditingReset.createForWorkspace(...arguments);
+      published = Object.freeze({ value: completed });
+      return completed;
+    }
+    function resetModelState() {
+      if (published === undefined) throw new ReferenceError("Cannot access 'documentEditingReset' before initialization");
+      const documentEditingReset = published.value;
+      return documentEditingReset.reset();
+    }
+    return Object.freeze({ createForWorkspace: createWorkspace, reset: resetModelState });
+  }
   function create({ documentModel, sketchMoveCommand, activateEditingScope, flushPointerMoves, selectMode, clearAuthoringPerformance,
     referenceImageRenderer, invalidateBlockProjectionCache, sketchSolving, referenceConstraintState, constraintAnalysis,
     clearSelection, geometryDrag, dimensionDrag, referenceImageInteraction, canvasNavigation, blankCanvasGesture,
@@ -51,5 +65,5 @@
       pendingCommandSession: sessions.pending, constraintTargetSession: sessions.targets,
       blockEditor: blocks.session, clearAuthoringPerformance: constraints.clearPerformance, activateEditingScope });
   }
-  window.DocumentEditingReset = Object.freeze({ create, createForWorkspace });
+  window.DocumentEditingReset = Object.freeze({ prepare, create, createForWorkspace });
 })();

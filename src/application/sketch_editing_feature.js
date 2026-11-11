@@ -3,7 +3,7 @@
   "use strict";
   function create({ currentScope, sketches, ids, selection, geometryReads, projections, constraintReferences,
     clearInteractionForSketchChange, clearSelection, applicationText, setHint, updateUI, draw, recordHistory,
-    promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, prepareLockToggle, prepareMove }) {
+    promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, prepareLockToggle, prepareMove, readEditingScope: defaultReadEditingScope }) {
     const { ensureSketchState, activeSketch, activeSketchId, sketchById, childSketchesOf, sketchName,
       descendantSketchIds, constraintSketchId, elementSketchId, isReferenceSourceSketchId } = sketches;
     const { resolveGeometryRef } = geometryReads;
@@ -13,7 +13,9 @@
       nextSketchId: () => ids.allocate("sketch"), clearInteractionForSketchChange, setHint, updateUI, draw, recordHistory,
       promptName, effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit, applicationText, prepareLockToggle,
     });
-    function createMove({ prepare = prepareMove, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity }) {
+    function createMove(options) {
+      const { prepare = prepareMove, refresh, readEditingScope: suppliedScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity } = options;
+      const readEditingScope = "readEditingScope" in options ? suppliedScope : defaultReadEditingScope;
       function refreshGeometry() {
         const { invalidateBlockProjectionCache } = projections;
         invalidateBlockProjectionCache();
@@ -30,7 +32,9 @@
         clearSelection, updateUI, draw, setHint, recordHistory, applicationText });
     }
     // Keep destination-only input tied to the same command; the application chooses when to bind it.
-    function createMoveWithInput({ document, prepare, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity }) {
+    function createMoveWithInput(options) {
+      const { document, prepare, refresh, readEditingScope: suppliedScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity } = options;
+      const readEditingScope = "readEditingScope" in options ? suppliedScope : defaultReadEditingScope;
       const command = createMove({ prepare, refresh, readEditingScope, hatches, rebinding, analysis, refreshReferenceConstraintValidity });
       const input = window.SketchTreeController.createMoveInputBinding({ document, isMoving: () => command.active });
       return Object.freeze({ command, input });
@@ -78,7 +82,8 @@
       clearInteractionForSketchChange, clearSelection, applicationText, setHint, updateUI, draw, recordHistory, promptName,
       effectiveAppearanceForElement: readServices.geometryAppearance.effectiveAppearanceForElement, clearTreeHover, clearSnap, guardEdit,
       prepareLockToggle: () => { sessions.pending.cancel(""); constraintTargets.cancel(""); exitDrawMode(); },
-      prepareMove: () => { constraintTargets.cancel(""); sessions.pending.cancel(""); exitDrawMode(); hover.clear(); } });
+      prepareMove: () => { constraintTargets.cancel(""); sessions.pending.cancel(""); exitDrawMode(); hover.clear(); },
+      readEditingScope: () => documentWorkspace.readEditingScope() });
     // Reuse the interaction/presentation owners captured before the later Tree stage.
     function createDeletionForEditing({ deletion, guardDimensionSymbolDeletion, solveState, solving, analysis, confirmDeletion }) {
       const { geometryKeyForItem: geometryElementKey } = window.GeometryObjects;
@@ -108,16 +113,40 @@
         updateSketchUI, selectionSketchId: interaction.scope.selectionSketchId, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
         updateSelectionUI: updateGeometrySelectionUI, unfixPoint: fixedOperands.unfixPoint });
     }
-    return Object.freeze({ reset, editing: Object.freeze({ ...editing, createDeletionForEditing, createTreeForEditing }) });
+    function createTreeForPresentation({ selection, analysis, redundancy, referenceState, projection, icons, feedback, fixedState, ...options }) {
+      return createTreeForEditing({ ...options, objectOptions: {
+        isHidden: selection.visibilityIsHidden, analysis, redundancy, referenceState, projectionQueries: projection.queries,
+        toolbarSvgMarkup: icons.toolbarSvgMarkup, constraintToolbarIcon: icons.constraintToolbarIcon,
+        findLineFixedConstraint: fixedState.findLineFixedConstraint,
+        geometryInstanceTypeLabel: feedback.geometryInstanceTypeLabel, hatchPatternTypeLabel: feedback.hatchPatternTypeLabel,
+      } });
+    }
+    return Object.freeze({ reset, editing: Object.freeze({ ...editing, createDeletionForEditing, createTreeForEditing, createTreeForPresentation }) });
   }
   // Keep navigation references with their factories; publish only successful constructions.
   function prepareNavigation() {
-    let move = null, context = null;
+    let move = null, context = null, editingFeature = null;
     function resetMove() { return move?.reset(); }
-    function closeContext() { return context?.close(); }
+    function closeContext() { return context?.menu?.close(); }
     function readMoving() { return move.active; }
+    function requireEditing(binding) {
+      if (editingFeature === null) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return editingFeature;
+    }
+    function requireTree(binding) {
+      if (context === null) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return context;
+    }
+    function clearInteractionForSketchChange() { return requireEditing("sketchInteractionReset").reset.clear(); }
+    function toggleSketchVisibility(id) {
+      const { toggleVisibility } = requireEditing("toggleSketchVisibilityCommand").editing.command;
+      return toggleVisibility(id);
+    }
+    function isSidebarHighlightedElement(item) { return requireTree("sketchTreeController").controller.isHighlightedElement(item); }
+    function clearTreeHover() { return requireTree("sketchTreeController").controller.clearHoverSketch(); }
+    function startContext() { return requireTree("sketchContextController").menu.start(); }
     function createEditing(options) {
-      const feature = createForInteraction({ ...options, resetSketchMove: resetMove });
+      const feature = createForInteraction({ clearInteractionForSketchChange, clearTreeHover, ...options, resetSketchMove: resetMove });
       function createMoveWithInput(options) {
         const result = feature.editing.createMoveWithInput(options);
         move = result.command;
@@ -125,12 +154,33 @@
       }
       function createTreeForEditing(options) {
         const result = feature.editing.createTreeForEditing(options);
-        context = result.menu;
+        context = result;
         return result;
       }
-      return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing }) });
+      function createTreeForPresentation(options) {
+        const result = feature.editing.createTreeForPresentation(options);
+        context = result;
+        return result;
+      }
+      function createTreeWithFixedControls({ toolbar, createFixed }, readFixed, readTree) {
+        const icons = toolbar.createIcons();
+        const { operand, createSelectionForWorkspace } = createFixed(readFixed());
+        const tree = createTreeForPresentation(readTree(icons, operand));
+        return Object.freeze({ icons, createFixedSelection: createSelectionForWorkspace, tree });
+      }
+      editingFeature = feature;
+      return Object.freeze({ ...feature, editing: Object.freeze({ ...feature.editing, createMoveWithInput, createTreeForEditing, createTreeForPresentation, createTreeWithFixedControls }) });
     }
-    return Object.freeze({ resetMove, closeContext, readMoving, createForInteraction: createEditing });
+    function createForBrowser({ window: browserWindow, ...options }) {
+      const feature = createEditing({ promptName: (title, name) => browserWindow.prompt(title, name), ...options });
+      const { editing } = feature;
+      function createDeletionForEditing(options) {
+        return editing.createDeletionForEditing({ confirmDeletion: message => browserWindow.confirm(message), ...options });
+      }
+      return Object.freeze({ ...feature, editing: Object.freeze({ ...editing, createDeletionForEditing }) });
+    }
+    return Object.freeze({ resetMove, closeContext, readMoving, clearInteractionForSketchChange, toggleSketchVisibility,
+      isSidebarHighlightedElement, startContext, createForInteraction: createEditing, createForBrowser });
   }
   window.SketchEditingFeature = Object.freeze({ create, createForInteraction, prepareNavigation });
 })();

@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),test=require('node:test');
-function fixture(){
+function fixture(probe = {}){
  const sandbox={window:{},structuredClone};vm.createContext(sandbox);
  const sources=vm.runInNewContext(fs.readFileSync('index.html','utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
  for(const file of sources.filter(p=>p.startsWith('src/')))vm.runInContext(fs.readFileSync(file,'utf8'),sandbox,{filename:file});
@@ -9,19 +9,25 @@ function fixture(){
  const sketches={activeSketchId:()=>{read();return state.active;},elementSketchId:item=>item.sketchId,canEditSketch:id=>{read();return id===state.active;},sketchById:id=>{read();return {id};}};
  const readServices={createPointUsage(options){assert.equal(this,readServices);events.push('pointUsage:create');return w.PointUsage.create({...options,currentScope:read,
   allGeometryLines:()=>read().lines,allGeometryCircles:()=>read().circles,allGeometryArcs:()=>read().arcs,allGeometrySplines:()=>read().splines});}};
- const foundation=w.CanvasInteractionFeature.create({sketches,readServices,constraintReferencesPoint:()=>false,editedFitPoints:()=>{read();return [];},isGeometryMode:()=>{read();return true;},
+ const options={sketches,readServices,constraintReferencesPoint:()=>false,editedFitPoints:()=>{read();return [];},isGeometryMode:()=>{read();return true;},
   setHint:()=>events.push('hint'),applicationText:(_ja,en)=>en,clearSnap:()=>lateSnap(),clearPointerPreview:()=>sessions.preview.setPointer(null),
-  clearSelection:()=>presentation.clearing.clear(),updateGeometrySelectionUI:()=>events.push('ui'),draw:()=>events.push('draw')});
+  clearSelection:probe.ownsClearing||probe.geometryWorkspace?undefined:()=>presentation.clearing.clear(),updateGeometrySelectionUI:()=>events.push('ui'),draw:()=>events.push('draw')};
+ if(probe.geometryWorkspace)delete options.isGeometryMode;
+ if(Object.hasOwn(probe,'mode'))options.isGeometryMode=probe.mode;
+ probe.beforeFoundation?.(options,w);
+ const foundation=w.CanvasInteractionFeature[probe.geometryWorkspace?'createGeometryWorkspace':probe.ownsClearing?'createWithOwnedClearing':'create'](options);
  assert.deepEqual(events,['pointUsage:create']);assert.equal(foundation.selection,foundation.selectionFeature.selection);assert.equal(foundation.scope,foundation.selectionFeature.scope);assert.equal(foundation.access,foundation.selectionFeature.access);
- sessions=foundation.createOperationSessions({snapForDrawing:p=>latePreview(p),linePreviewPoint:p=>latePreview(p),readCenterline:()=>latePreview(),projectPointToCenterlineSupport:p=>latePreview(p),
+ const sessionOptions = {snapForDrawing:p=>latePreview(p),linePreviewPoint:p=>latePreview(p),readCenterline:()=>latePreview(),projectPointToCenterlineSupport:p=>latePreview(p),
   readOffsetSelection:()=>latePreview(),computeTrimPreview:p=>latePreview(p),hits:{hitPoint:()=>latePreview(),hitLine:()=>latePreview(),hitCircle:()=>latePreview(),hitArc:()=>latePreview()},
   clearPlacement:()=>events.push('placement'),cancelAnnotation:()=>events.push('annotation'),cancelPngExport:()=>events.push('png'),resetOffset:()=>events.push('offset'),
-  hideInput:()=>events.push('hide'),updateToolbar:()=>events.push('toolbar'),updateConstraintButtons:()=>events.push('buttons'),acceptTarget:(...args)=>lateOperand(...args)});
+  hideInput:()=>events.push('hide'),updateToolbar:()=>events.push('toolbar'),updateConstraintButtons:()=>events.push('buttons'),acceptTarget:(...args)=>lateOperand(...args)};
+ probe.beforeSessions?.(foundation, w, sessionOptions);
+ sessions=foundation.createOperationSessions(sessionOptions);
  presentation=sessions.createSelectionPresentation({projections:{blockProjectionBundle:()=>{read();return {};}},constraintReferences:{constraintGraphNodes:()=>new Set()}});
  assert.deepEqual(events,['pointUsage:create']);assert.equal(Object.isFrozen(foundation),true);assert.equal(Object.isFrozen(sessions),true);
  lateSnap=()=>{events.push('snap');if(state.snapFailure)throw state.snapFailure;};latePreview=p=>p;lateOperand=(_type,operands,candidate)=>({ok:true,operands:[...operands,candidate]});state.ready=true;events.length=0;
  const point=new w.GeometrySolver.Point('P1',0,0,false,'endpoint');point.sketchId='S1';state.scope.points.push(point);
- return {w,foundation,sessions,presentation,state,events,point,readServices};
+ return {w,foundation,sessions,presentation,state,events,point,readServices,sessionOptions};
 }
 
 test('Canvas interaction stages retain live owners, deferred ports and independent pending, constraint and pointer state',()=>{
@@ -36,6 +42,25 @@ test('Canvas interaction stages retain live owners, deferred ports and independe
  s.pending.cancel('');assert.equal(s.pending.current,null);assert.equal(s.preview.pointer,null);assert.equal(s.preview.trim,trim);
  assert.equal(s.targets.command,command);assert.equal(s.targets.operands.length,2);assert.equal(s.pointer.readLastPointer(),f.point);
  assert.deepEqual(f.events,['placement','offset','hide','toolbar','buttons','draw']);
+});
+
+test('Selection-owned clearing is shared by the foundation and identity input and preserves native selection, targets and hover effects',()=>{
+ const observations=[];
+ for(const ownsClearing of [false,true]){
+  const f=fixture({ownsClearing,beforeSessions(foundation){if(ownsClearing){assert.equal(foundation.clearSelection,foundation.selectionFeature.clearSelection);
+   assert.throws(()=>foundation.clearSelection(),{name:'ReferenceError',message:"Cannot access 'selectionClearing' before initialization"});}}});
+  const b=f.foundation,s=f.sessions,clear=ownsClearing?b.clearSelection:()=>f.presentation.clearing.clear();
+  b.selection.set('points',[f.point]);b.selection.set('referenceImages',[{id:'I1'}]);s.targets.begin('distance',[{kind:'point',point:f.point}]);
+  const command=s.targets.command;b.hover.update({point:f.point,referenceImage:{id:'I1'},block:{id:'B1'}});
+  f.presentation.highlight.setSidebarHover('point',f.point,new Set(),{redraw:false});f.events.length=0;
+  assert.equal(clear('ignored',null),undefined);assert.equal(b.selection.selectedElementCount(),0);assert.equal(s.targets.operands.length,0);
+  assert.equal(s.targets.command,command);assert.equal(b.hover.current.referenceImage,null);assert.equal(b.hover.current.block,null);
+  assert.equal(f.presentation.highlight.current,null);assert.equal(f.state.scope.points[0],f.point);assert.deepEqual(f.events,[]);
+  b.selection.set('points',[f.point]);const next={...f.point,id:'P2',sketchId:'S2'};
+  b.identity.selectInactive({}, {kind:'point',item:next,sketchId:'S2'});assert.equal(b.selection.points[0],next);
+  observations.push(JSON.stringify({events:f.events,selected:b.selection.points.map(p=>p.id),hover:b.hover.current.referenceImage,operands:s.targets.operands}));
+ }
+ assert.equal(observations[1],observations[0]);
 });
 
 test('Canvas interaction presentation shares original clearing/reset subsets and preserves the snap failure boundary',()=>{
@@ -122,7 +147,7 @@ function editingInputsFixture(composed,probe={}){
    return probe.drawing=w.BasicDrawingTools.createCanvasInput({point:{},drawing:{getMode:options.readMode,rejectRootSketchCreation:()=>false,handleLineClick:record('line')}});}};
  const constraint=w.ConstraintCommandInput.createFeature({pending:s.pending,targets:s.targets,canvasHover:b.hover,canvasPoint:()=>f.point,
   placement:{retargetDistancePlaceWithOperand:()=>false,startDistanceValueInput:()=>{}},constraints:{operandClick:()=>false}});
- const constraintInputFeature={createInput(options){probe.order.push('ConstraintCommandInput');assert.equal(options.dragging,dimensionDragging);return constraint.createInput(options);}};
+ const constraintInputFeature={createInput(options){probe.order.push('ConstraintCommandInput');if(probe.failAt==='ConstraintCommandInput')throw probe.error;assert.equal(options.dragging,dimensionDragging);return constraint.createInput(options);}};
  const source={document:{activeElement:null},canvas:{setPointerCapture(id){assert.equal(this,source.canvas);events.push(['capture',id]);}},updateUI:()=>events.push('input-ui'),annotationFeature,annotationDrag:{},constraintInputFeature,dimensionDragging,
   constraintTargetHint:()=>{},instanceSourceCommand:{finish:()=>{}},geometryInstanceCommand:{cancel:()=>false},
   sceneQueries:{operands:{hitReferenceTarget:()=>null,hitDerivedProjectionOperand:()=>null,hitBlockProjectionOperand:()=>null},regions:{hitHatchAt:()=>null}},
@@ -673,6 +698,17 @@ test('Canvas session owns scene construction with the actual shared foundation a
  }finally{w.CanvasHitInteraction=original;}
 });
 
+test('Canvas session prepares the shared hit owner cold and returns its actual ports with original factory failures',()=>{
+ const f=fixture(),w=f.w,original=w.CanvasHitInteraction,result=Object.freeze({}),failure=new Error('hit preparation');let fail=false,calls=0;
+ w.CanvasHitInteraction={...original,prepareSceneWithAnnotationsForWorkspace(options){assert.equal(this,w.CanvasHitInteraction);assert.equal(arguments.length,1);calls++;
+  assert.deepEqual(Object.keys(options),['readServices','interaction','sessions']);assert.equal(options.readServices,f.readServices);assert.equal(options.interaction,f.foundation);assert.equal(options.sessions,f.sessions);
+  if(fail)throw failure;return result;}};
+ f.state.ready=false;
+ try{assert.equal(f.sessions.prepareSceneWithAnnotations(),result);fail=true;assert.throws(()=>f.sessions.prepareSceneWithAnnotations(),error=>error===failure);}
+ finally{w.CanvasHitInteraction=original;}
+ assert.equal(calls,2);assert.deepEqual(f.events,[]);assert.equal(f.state.scope.points[0],f.point);
+});
+
 test('Canvas-owned real scene stays cold and shares live mode, pending, targets, geometry scope and annotation policy without changing selection',()=>{
  const f=fixture(),{w,foundation:b,sessions:s,state,readServices:services}=f,calls=[];let hidden=false,error=null;
  const read=()=>{assert.equal(state.ready,true);if(error)throw error;return state.scope;};
@@ -693,4 +729,213 @@ test('Canvas-owned real scene stays cold and shares live mode, pending, targets,
  const next=Object.assign(new w.GeometrySolver.Point('P2',40,50),{sketchId:'S1'});state.scope={...state.scope,points:[next]};assert.equal(q.geometry.hitPoint(0,0),null);assert.equal(q.geometry.hitPoint(40,50),next);
  hidden=true;assert.equal(q.geometry.hitPoint(40,50),null);hidden=false;error=new Error('scope failed');assert.throws(()=>q.geometry.hitPoint(40,50),e=>e===error);error=null;
  assert.equal(b.selection.points.length,0);assert.equal(state.scope.points[0],next);assert.equal(scene.policy.ordinarySelectionMode(),true);
+});
+
+test('owned pending cancellation stays uninitialized through construction and preserves the native receiver, single message, result and error',()=>{
+ const messages=[],result={},marker=new Error('cancel failed');let pending,fail=false;
+ const f=fixture({beforeSessions(b,w){
+  assert.throws(b.cancelPendingCommand,{name:'ReferenceError',message:"Cannot access 'pendingCommandSession' before initialization"});
+  pending=Object.freeze({cancel(message){assert.equal(this,pending);assert.equal(arguments.length,1);messages.push(message);if(fail)throw marker;return result;}});
+  w.PendingCommandSession={create(){return pending;}};
+  const pointer=w.PointerInteractionController;w.PointerInteractionController={...pointer,createSession(){
+   assert.throws(b.cancelPendingCommand,{name:'ReferenceError',message:"Cannot access 'pendingCommandSession' before initialization"});
+   return pointer.createSession();
+  }};
+ }});
+ assert.equal(f.sessions.pending,pending);assert.deepEqual(messages,[]);
+ assert.equal(f.foundation.cancelPendingCommand.name,'cancelPendingCommand');assert.equal(f.foundation.cancelPendingCommand.length,1);
+ const object={message:'unchanged'};
+ for(const message of [undefined,null,'',object])assert.equal(f.foundation.cancelPendingCommand(message,'ignored'),result);
+ assert.deepEqual(messages,[undefined,null,'',object]);assert.equal(messages[3],object);
+ fail=true;assert.throws(()=>f.foundation.cancelPendingCommand('failed'),error=>error===marker);
+});
+
+test('owned pending cancellation preserves native special routing, default hints, pointer independence and the partial failure boundary',()=>{
+ const traces=[];
+ for(const owned of [false,true]){
+  const f=fixture(),all=[];
+  for(const type of ['none','annotation','png-export','offset-value','distance-value'])for(const message of [undefined,'',null,'custom']){
+   const s=f.foundation.createOperationSessions(f.sessionOptions),command={type:'horizontal'};
+   s.targets.replaceCommand(command);s.pointer.setLastPointer(f.point);s.preview.setPointer(f.point);
+   s.pending.replace(type==='none'?null:type==='annotation'?{type,annotationDraft:true}:{type});f.events.length=0;
+   const cancel=owned?f.foundation.cancelPendingCommand:function(message){return s.pending.cancel(message);};
+   assert.equal(cancel(message),undefined);assert.equal(s.targets.command,command);assert.equal(s.pointer.readLastPointer(),f.point);
+   assert.equal(s.preview.pointer,type==='offset-value'?null:f.point);
+   all.push(JSON.stringify({type,message,events:f.events,pending:s.pending.current}));
+  }
+  const marker=new Error('hide failed');const s=f.foundation.createOperationSessions({...f.sessionOptions,hideInput(){f.events.push('hide');throw marker;}});
+  s.pending.replace({type:'offset-value'});s.preview.setPointer(f.point);f.events.length=0;
+  const cancel=owned?f.foundation.cancelPendingCommand:function(message){return s.pending.cancel(message);};
+  assert.throws(()=>cancel('custom'),error=>error===marker);assert.equal(s.pending.current,null);assert.equal(s.preview.pointer,null);
+  assert.deepEqual(f.events,['placement','offset','hide']);all.push(JSON.stringify(f.events));traces.push(all);
+ }
+ assert.deepEqual(traces[1],traces[0]);
+});
+
+test('pending publication waits for complete sessions, retains the last success through constructor failures and isolates owners',()=>{
+ const marker=new Error('session construction failed');
+ const f=fixture({beforeSessions(b,w,options){const pointer=w.PointerInteractionController;
+  w.PointerInteractionController={...pointer,createSession(){throw marker;}};
+  assert.throws(()=>b.createOperationSessions(options),error=>error===marker);
+  assert.throws(b.cancelPendingCommand,{name:'ReferenceError',message:"Cannot access 'pendingCommandSession' before initialization"});
+  w.PointerInteractionController=pointer;
+ }});
+ for(const [name,method] of [['DrawingPreview','create'],['PendingCommandSession','create'],['ConstraintTargetSession','create'],['PointerInteractionController','createSession']]){
+  const original=f.w[name];f.w[name]={...original,[method](){throw marker;}};
+  f.sessions.pending.replace({type:'offset-value'});f.events.length=0;f.state.ready=false;
+  assert.throws(()=>f.foundation.createOperationSessions(f.sessionOptions),error=>error===marker);
+  f.w[name]=original;f.state.ready=true;f.foundation.cancelPendingCommand('');
+  assert.equal(f.sessions.pending.current,null);assert.deepEqual(f.events,['placement','offset','hide','toolbar','buttons','draw']);
+ }
+ const next=f.foundation.createOperationSessions({...f.sessionOptions,clearPlacement:()=>f.events.push('new-placement')});
+ const previous={type:'old'},other=fixture();f.sessions.pending.replace(previous);next.pending.replace({type:'new'});other.sessions.pending.replace({type:'other'});
+ f.events.length=0;f.foundation.cancelPendingCommand('');assert.equal(next.pending.current,null);assert.equal(f.sessions.pending.current,previous);
+ assert.equal(f.events[0],'new-placement');assert.equal(other.sessions.pending.current.type,'other');
+});
+
+test('Canvas input preparation retains constructor order, deferred gesture inputs and completed blank state',()=>{
+ const stages=[null,'AnnotationCommandInput','ConstraintCommandInput','InstanceCommandInput','drawingFactory','PointCommand','DrawingCommandInput','CanvasSelectionInteraction','gesture-options','blank'];
+ for(const stage of stages){const observations=[];
+  for(const owned of [false,true]){
+   const probe={},f=editingInputsFixture('owned',probe),s=f.sessions,options={splineEditing:{current:null},dimensionValues:{},annotationInput:{}};
+   const marker=probe.error;let blank;probe.order.length=0;probe.failAt=stage;f.state.ready=false;
+   function step(name){probe.order.push(name);if(stage===name)throw marker;}
+   function readGestureOptions(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);step('gesture-options');return options;}
+   f.source.authoring.createBlankGesture=function(ports){assert.equal(this,f.source.authoring);step('blank');
+    assert.equal(ports.splineEditing,options.splineEditing);assert.equal(ports.dimensionValues,options.dimensionValues);assert.equal(ports.annotationInput,options.annotationInput);
+    return blank=f.w.BlankCanvasGesture.create({getMode:ports.lifecycle.readMode,getPending:()=>ports.pending.current,
+     getPendingConstraint:()=>ports.constraintTargets.command,getSplineEditSession:()=>ports.splineEditing.current,
+     getLineCommand:()=>({}),getTransientAuthoring:()=>({}),getTime:()=>100,hypot2:Math.hypot,hasActiveDrawOperation:()=>false,
+     hasSelection:f.foundation.selection.hasSelection,updateGeometrySelectionUI:ports.updateGeometrySelectionUI});};
+   function assemble(){if(owned)return s.prepareInputForEditing(f.source,readGestureOptions);
+    const input=s.createEditingInput(f.source);return input.preparePointerForEditing(readGestureOptions());}
+   if(stage){assert.throws(assemble,error=>error===marker);assert.throws(f.foundation.resetBlankCandidate,error=>error.name==='ReferenceError');}
+   else{
+    const prepared=assemble();assert.ok(Object.isFrozen(prepared));assert.equal(prepared.blankGesture,blank);assert.equal(typeof prepared.bindForWorkspace,'function');
+    const point={x:1,y:2};assert.equal(blank.isRepeated(point),false);assert.equal(blank.isRepeated(point),true);
+    probe.failAt='drawingFactory';assert.throws(assemble,error=>error===marker);assert.equal(f.foundation.resetBlankCandidate(),undefined);
+    assert.equal(blank.isRepeated(point),false);
+   }
+   assert.deepEqual(f.events,[]);assert.equal(f.state.scope.points[0],f.point);observations.push(probe.order.slice());
+  }
+  assert.deepEqual(observations[1],observations[0],stage);
+ }
+});
+
+function inputLifecycleFixture(composed) {
+ 'use strict';
+ const probe={stubBindings:true},f=editingInputsFixture('owned',probe),s=f.sessions,trace=[],frames=new Map(),marker=new Error('input lifecycle'),state={fail:null,generation:0};let legacyBinding;
+ const step=name=>{trace.push(name);if(state.fail===name)throw marker;};
+ const readLegacy=()=>{if(legacyBinding===undefined)throw new ReferenceError("Cannot access 'canvasInputBinding' before initialization");return legacyBinding.value;};
+ const schedulerOptions={requestFrame:callback=>{const id=frames.size;frames.set(id,callback);return id;},cancelFrame:id=>frames.delete(id),
+  profilePhase:(name,work)=>{assert.equal(name,'preview');return work();},withGeometryReadCache:work=>work(),syncDimensionValueInput:()=>trace.push('sync')};
+ const {requestFrame,cancelFrame,...editingSchedulerOptions}=schedulerOptions;
+ const scheduler=composed==='browser'?s.createMoveSchedulerForBrowser({window:{requestAnimationFrame:requestFrame,cancelAnimationFrame:cancelFrame},...editingSchedulerOptions}):composed?s.createMoveSchedulerForEditing(schedulerOptions):s.createMoveScheduler({...schedulerOptions,readInput:readLegacy});
+ function move(){scheduler.schedule({offsetX:7,offsetY:9,shiftKey:true});return scheduler.flush();}
+ f.source.authoring.createBlankGesture=()=>{step('blank');return Object.freeze({resetCandidate(){}});};
+ f.source.sceneQueries.createInteraction=()=>{step('query');return {press:{},hover:{},isBlankCommandPanelPoint:()=>true};};
+ const originalKeyboard=probe.boundInputs.createKeyboard;
+ probe.boundInputs.createKeyboard=function(options){step('keyboard-create');assert.equal(options.splineEditing,prepare.splineEditing);assert.equal(options.blockPlacement,ports.blockPlacement);return originalKeyboard.call(this,options);};
+ const keyboard=Object.freeze({start(){assert.equal(this,keyboard);step('keyboard-start');return marker;}});probe.result=keyboard;
+ const dimensionInput={bind(){assert.equal(this,dimensionInput);step('dimension-bind');return marker;}};
+ const prepare={splineEditing:{},dimensionValues:{},annotationInput:{}};
+ const ports={hatch:{},spline:{},blockPlacement:{},dimensions:{},expressions:{},scheduler};
+ ports.createCanvasInputBinding=function(){assert.equal(this,undefined);step('native');const id=++state.generation;
+  const binding=Object.freeze({bind(){assert.equal(this,binding);step('native-bind');move();},processMove(pointer){assert.equal(this,binding);trace.push(['move',id,JSON.parse(JSON.stringify(pointer))]);if(state.fail==='move')throw marker;}});return binding;};
+ function readKeyboardOwners(){assert.equal(this,undefined);step('keyboard-options');return {constraints:{},projection:{},navigation:{},files:{},history:{}};}
+ function readKeyboardOptions(){const {deleteSelection,...owners}=readKeyboardOwners();return f.w.KeyboardInput.createWorkspaceOptions({...owners,
+  spline:ports.spline,hatch:ports.hatch,splineEditing:prepare.splineEditing,blockPlacement:ports.blockPlacement,deleteSelection});}
+ function assemble(){const prepared=f.inputs.preparePointerForEditing(prepare);
+  if(composed==='workspace'||composed==='browser')return prepared.bindForWorkspace(ports,readKeyboardOwners,dimensionInput);
+  if(composed)return prepared.bindForEditing(ports,readKeyboardOptions,dimensionInput);
+  const binding=prepared.createBinding(ports);legacyBinding={value:binding};binding.bind();dimensionInput.bind();const keyboard=f.inputs.createKeyboard(readKeyboardOptions());keyboard.start();return binding;
+ }
+ return {...f,modelScope:f.state.scope,trace,state,marker,scheduler,move,assemble,frames};
+}
+
+test('Canvas input lifecycle publishes the actual binding before listeners, then binds dimensions before reading and starting keyboard',()=>{
+ const observations=[];for(const composed of [false,true,'workspace','browser']){const f=inputLifecycleFixture(composed);assert.deepEqual(f.trace,[]);
+  assert.throws(f.move,e=>e.name==='ReferenceError'&&e.message==="Cannot access 'canvasInputBinding' before initialization");
+  const binding=f.assemble();assert.ok(Object.isFrozen(binding));assert.deepEqual(f.trace.slice(0,4),['blank','query','native','native-bind']);
+  assert.deepEqual(f.trace.slice(-4),['dimension-bind','keyboard-options','keyboard-create','keyboard-start']);
+  assert.equal(f.trace.indexOf('dimension-bind')>f.trace.findIndex(v=>Array.isArray(v)),true);f.trace.length=0;
+  f.sessions.pending.replace({type:'distance-value'});assert.equal(f.move(),true);assert.equal(f.trace.at(-1),'sync');assert.equal(f.trace[0][1],1);
+  assert.equal(f.modelScope.points[0],f.point);observations.push(JSON.stringify(f.trace));}
+ assert.equal(observations[1],observations[0]);assert.equal(observations[2],observations[0]);assert.equal(observations[3],observations[0]);
+});
+
+test('Canvas input lifecycle retains original failure identity and partial publication at each construction and binding boundary',()=>{
+ for(const stage of ['blank','query','native','native-bind','dimension-bind','keyboard-options','keyboard-create','keyboard-start']){const observations=[];
+  for(const composed of [false,true,'workspace','browser']){const f=inputLifecycleFixture(composed);f.state.fail=stage;assert.throws(f.assemble,e=>e===f.marker);f.state.fail=null;
+   const before=f.trace.slice();if(['blank','query','native'].includes(stage))assert.throws(f.move,e=>e.name==='ReferenceError');else {assert.equal(f.move(),true);assert.equal(f.trace.at(-1)[1],1);}
+   assert.equal(f.modelScope.points[0],f.point);observations.push(JSON.stringify({before,after:f.trace}));}
+  assert.equal(observations[1],observations[0],stage);assert.equal(observations[2],observations[0],stage);assert.equal(observations[3],observations[0],stage);
+ }
+});
+
+test('Canvas input binding replacement follows successful native construction while constructor failure retains the previous scheduler target',()=>{
+ for(const composed of [false,true,'workspace','browser']){const f=inputLifecycleFixture(composed),first=f.assemble();f.state.fail='native';assert.throws(f.assemble,e=>e===f.marker);
+  f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],1);const second=f.assemble();assert.notEqual(second,first);f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
+  f.state.fail='move';assert.throws(f.move,e=>e===f.marker);f.state.fail=null;f.trace.length=0;f.move();assert.equal(f.trace.at(-1)[1],2);
+ }
+ const a=inputLifecycleFixture(true),b=inputLifecycleFixture(true);a.assemble();assert.throws(b.move,e=>e.name==='ReferenceError');
+});
+
+test('Geometry Workspace owns one cold predicate shared by native access and the actual interaction and session owners',()=>{
+ const order=[],ports={},actors={};
+ const f=fixture({geometryWorkspace:true,beforeFoundation(options,w){
+  for(const [namespace,method,name]of [['DrawOperationLifecycle','createSession','lifecycle'],['CanvasSelectionFeature','createEditingWithOwnedClearing','selection'],['SketchCommand','createEditAccess','access'],['CanvasHover','create','hover']]){
+   const raw=w[namespace];w[namespace]={...raw,[method](...args){order.push(name);ports[name]=args[0];return actors[name]=Reflect.apply(raw[method],this,args);}};
+  }
+  const owner=options.readServices,raw=owner.createPointUsage;owner.createPointUsage=function(...args){order.push('usage');return actors.usage=Reflect.apply(raw,this,args);};
+ },beforeSessions(foundation){const mode=foundation.isGeometryMode;assert.equal(mode.name,'isGeometryMode');assert.equal(mode.length,0);assert.equal(mode(),true);
+  assert.equal(ports.selection.isGeometryMode,mode);assert.equal(ports.access.isGeometryMode,mode);
+  assert.throws(foundation.clearSelection,{name:'ReferenceError',message:"Cannot access 'selectionClearing' before initialization"});}});
+ assert.deepEqual(order,['lifecycle','selection','access','usage','hover']);
+ assert.equal(f.foundation.lifecycle,actors.lifecycle);assert.equal(f.foundation.selectionFeature,actors.selection);assert.equal(f.foundation.access,actors.access);assert.equal(f.foundation.pointUsage,actors.usage);assert.equal(f.foundation.hover,actors.hover);
+ assert.equal(Object.getOwnPropertyDescriptor(f.foundation,'isGeometryMode').writable,false);
+ const mode=f.foundation.isGeometryMode;
+ for(const value of ['select','line','block-place']){f.foundation.lifecycle.setMode(value);assert.equal(mode(),true);}
+ const raw=f.w.CanvasHitInteraction,marker={};f.w.CanvasHitInteraction={...raw,prepareSceneWithAnnotationsForWorkspace(options){assert.equal(options.interaction,f.foundation);assert.equal(options.sessions,f.sessions);return marker;}};
+ try{assert.equal(f.sessions.prepareSceneWithAnnotations(),marker);}finally{f.w.CanvasHitInteraction=raw;}
+ assert.equal(f.foundation.access.canCreateInActiveSketch(),true);assert.deepEqual(f.events,[]);assert.equal(f.state.scope.points[0],f.point);
+});
+
+test('Geometry Workspace preserves explicit predicate identity, short-circuiting and errors while raw factories retain missing-mode behavior',()=>{
+ let calls=0,enabled=false,fail=false;const marker=new Error('mode');
+ function customMode(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);calls++;if(fail)throw marker;return enabled;}
+ const f=fixture({geometryWorkspace:true,mode:customMode});assert.equal(f.foundation.isGeometryMode,customMode);assert.equal(calls,0);
+ f.state.ready=false;assert.equal(f.foundation.access.canCreateInActiveSketch(),false);assert.equal(calls,1);
+ f.state.ready=true;enabled=true;assert.equal(f.foundation.access.canCreateInActiveSketch(),true);assert.equal(calls,2);
+ f.state.ready=false;fail=true;assert.throws(f.foundation.access.canCreateInActiveSketch,error=>error===marker);assert.equal(calls,3);assert.equal(f.state.scope.points[0],f.point);
+ for(const mode of [undefined,null]){
+  const explicit=fixture({geometryWorkspace:true,mode});assert.equal(explicit.foundation.isGeometryMode,mode);
+  assert.throws(explicit.foundation.access.canCreateInActiveSketch,error=>error.name==='TypeError');
+  for(const ownsClearing of [false,true]){const raw=fixture({ownsClearing,mode});assert.equal(Object.hasOwn(raw.foundation,'isGeometryMode'),false);assert.throws(raw.foundation.access.canCreateInActiveSketch,error=>error.name==='TypeError');}
+ }
+ assert.throws(()=>fixture({geometryWorkspace:true,beforeFoundation(_options,w){w.SketchCommand={...w.SketchCommand,createEditAccess(){throw marker;}};}}),error=>error===marker);
+});
+
+test('browser pointer frames stay cold and retain live bare API calls, zero frame IDs, coalescing and failure state', () => {
+  'use strict';
+  const f=fixture(),trace=[],frames=new Map(),marker=new Error('frame API');let failGet,failCall,requestId=0,ports,actual;
+  const browser={get requestAnimationFrame(){trace.push('get-request');if(failGet==='request')throw marker;return function(callback){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);trace.push('request');if(failCall==='request')throw marker;frames.set(requestId,callback);return requestId;};},
+    get cancelAnimationFrame(){trace.push('get-cancel');if(failGet==='cancel')throw marker;return function(id){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);trace.push(['cancel',id]);frames.delete(id);};}};
+  const original=f.w.PointerMoveScheduler;f.w.PointerMoveScheduler={create(options){ports=options;return actual=original.create(options);}};
+  const scheduler=f.sessions.createMoveSchedulerForBrowser({window:browser,profilePhase:(_name,work)=>work(),withGeometryReadCache:work=>work(),syncDimensionValueInput(){}});
+  assert.equal(scheduler,actual);assert.deepEqual(trace,[]);assert.equal(ports.requestFrame.name,'requestFrame');assert.equal(ports.requestFrame.length,1);assert.equal(ports.cancelFrame.name,'cancelFrame');assert.equal(ports.cancelFrame.length,1);
+  scheduler.resetStats();scheduler.schedule({offsetX:1});scheduler.schedule({offsetX:2});assert.equal(frames.size,1);assert.equal(scheduler.stats().coalescedMoves,1);
+  assert.equal(scheduler.flush({discard:true}),false);assert.deepEqual(trace,['get-request','request','get-cancel',['cancel',0]]);assert.equal(frames.size,0);
+  requestId=7;trace.length=0;scheduler.schedule({offsetX:3});assert.equal(frames.has(7),true);failGet='cancel';assert.throws(()=>scheduler.flush({discard:true}),error=>error===marker);
+  assert.equal(scheduler.stats().frameScheduled,true);assert.equal(scheduler.stats().pendingMove,true);failGet=null;scheduler.flush({discard:true});assert.equal(frames.size,0);
+  for(const mode of ['getter','call']){failGet=mode==='getter'?'request':null;failCall=mode==='call'?'request':null;assert.throws(()=>scheduler.schedule({offsetX:5}),error=>error===marker);
+    assert.equal(scheduler.stats().pendingMove,true);assert.equal(scheduler.stats().frameScheduled,false);scheduler.flush({discard:true});}
+  assert.equal(f.state.scope.points[0],f.point);
+});
+
+test('browser pointer frame setup retains explicit undefined or null callbacks without reading browser API defaults', () => {
+  const f=fixture(),browser=new Proxy({},{get(){assert.fail('browser APIs must stay unread');}}),original=f.w.PointerMoveScheduler;let ports;
+  f.w.PointerMoveScheduler={create(options){ports=options;return original.create(options);}};
+  for(const value of [undefined,null]){const scheduler=f.sessions.createMoveSchedulerForBrowser({window:browser,requestFrame:value,cancelFrame:value});
+    assert.equal(ports.requestFrame,value);assert.equal(ports.cancelFrame,value);assert.throws(()=>scheduler.schedule({offsetX:1}),error=>error.name==='TypeError');scheduler.flush({discard:true});}
 });

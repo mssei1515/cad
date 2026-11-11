@@ -9,7 +9,7 @@
     lineCommand, circularCommands, drawingPreview, selectMode, solveSketchAndDependents, normalizeArcSweeps,
     updateToolbar, updateUI, draw, analysisStable, setHint, log, recordHistory,
     referenceImageInteraction, guardSelectionEdit, selectionSketchId, activeSketchId, geometryRefForItem,
-    invalidateBlockProjectionCache, effectiveSelectedConstraint, clearSelection, solveAndRefresh }) {
+    invalidateBlockProjectionCache, effectiveSelectedConstraint, clearSelection, solveAndRefresh, resetDrawing }) {
     function usesRemovedGeometry(instance, removedKeys = new Set(), removedOwnerIds = new Set()) {
       return geometryInstanceDependencyRefs(instance).some(ref => removedKeys.has(geometryRefKey(ref)) || removedOwnerIds.has(ref.path?.[0]));
     }
@@ -33,7 +33,7 @@
       guardSketchEdit, elementSketchId, geometryElementKey, geometryInstanceUsesRemovedGeometry: usesRemovedGeometry,
       rejectReferencedGeometryDeletion: rejectReferences, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion, applicationText,
       resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag, pendingCommandSession, constraintTargetSession,
-      lineCommand, circularCommands, drawingPreview, selectMode, solveSketchAndDependents, normalizeArcSweeps,
+      lineCommand, circularCommands, resetDrawing, drawingPreview, selectMode, solveSketchAndDependents, normalizeArcSweeps,
       refreshView: () => { updateToolbar(); updateUI(); draw(); }, analysisStable, setHint, log, recordHistory,
     });
     function remove(options) { return geometryCommand.remove(options); }
@@ -51,7 +51,7 @@
   function createForEditing({ documentWorkspace, readServices, interaction, references, annotationDimensions, splineEditing,
     guardDimensionSymbolDeletion, geometry, sessions, lineCommand, circularCommands, solving, analysis, presentation,
     updateToolbar, recordHistory, referenceImageInteraction, clearSelection, solveAndRefresh,
-    resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag }) {
+    resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag, resetDrawing }) {
     const { workspace, sketches } = documentWorkspace;
     const { constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive, constraintGraphNodes, geometryInstanceDependencyRefs } = references;
     const { geometryKeyForItem: geometryElementKey, geometryRefForItem } = window.GeometryObjects;
@@ -67,7 +67,7 @@
       annotationDimensions, canvasSelection, splineEditing, canvasHover, guardSketchEdit, elementSketchId,
       geometryInstanceDependencyRefs, geometryRefKey, guardDimensionSymbolDeletion, applicationText,
       resetGeometryDrag, resetDimensionDrag, resetAnnotationDrag, pendingCommandSession: sessions.pending, constraintTargetSession: sessions.targets,
-      lineCommand, circularCommands, drawingPreview: sessions.preview, selectMode: interaction.lifecycle.selectMode, solveSketchAndDependents, normalizeArcSweeps,
+      lineCommand, circularCommands, resetDrawing, drawingPreview: sessions.preview, selectMode: interaction.lifecycle.selectMode, solveSketchAndDependents, normalizeArcSweeps,
       updateToolbar, updateUI, draw, analysisStable: () => analysis.stable, setHint, log, recordHistory,
       referenceImageInteraction, guardSelectionEdit, selectionSketchId, activeSketchId, geometryRefForItem,
       invalidateBlockProjectionCache, effectiveSelectedConstraint: canvasSelection.effectiveSelectedConstraint, clearSelection, solveAndRefresh });

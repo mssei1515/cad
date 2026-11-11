@@ -59,10 +59,11 @@
     updateToolbar, normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory }) {
     const queries = window.SketchProjectionQueries.create({ currentScope: documentWorkspace.workspace.current,
       constraintIsOperational: referenceState.constraintIsOperational });
+    const { applicationText } = presentation.settings;
     const feature = createForEditing({ currentScope: () => editingScope.current, queries, sketches: documentWorkspace.sketches, readServices, referenceState,
       access: interaction.access, selection: interaction.selection, lifecycle: interaction.lifecycle, ids: documentWorkspace.documentIds, hover: interaction.hover,
       operandElement, readProjectionRectangle, cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, clearSnap, updateToolbar,
-      setHint: presentation.setHint, applicationText: presentation.settings.applicationText, updateUI: presentation.updateUI, draw: presentation.draw,
+      setHint: presentation.setHint, applicationText, updateUI: presentation.updateUI, draw: presentation.draw,
       normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory });
     function createModelEditing({ geometry, references }) {
       const { geometryRefForItem, geometryKindForItem } = window.GeometryObjects;
@@ -72,7 +73,27 @@
         addPointToSketch: geometry.addPointToSketch, constraintReferencesPoint: references.constraintReferencesPoint,
         nextSeq: window.GeometryIds.nextSeq, normalizeAppearance: window.Appearance.normalizeAppearance });
     }
-    return Object.freeze({ ...feature, queries, createModelEditing });
+    function createDragInputs() {
+      const { sketchProjectionShapeEditBlockedMessage } = feature;
+      function projectionBlockedMessage() {
+        return sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag"));
+      }
+      return Object.freeze({ projectionQueries: queries, projectionBlockedMessage });
+    }
+    let constructionMetadata;
+    function createModelEditingForConstruction(options) {
+      const completed = createModelEditing(options);
+      const synchronize = completed.synchronizeSketchProjectionMetadata;
+      constructionMetadata = Object.freeze({ synchronize });
+      return completed;
+    }
+    function synchronizeSketchProjectionMetadata() {
+      if (constructionMetadata === undefined) throw new ReferenceError("Cannot access 'synchronizeSketchProjectionMetadata' before initialization");
+      const { synchronize } = constructionMetadata;
+      return synchronize();
+    }
+    return Object.freeze({ ...feature, queries, createModelEditing, createDragInputs, createModelEditingForConstruction,
+      synchronizeConstructionMetadata: synchronizeSketchProjectionMetadata });
   }
   window.SketchProjectionFeature = Object.freeze({ createForWorkspace, createForEditing, create });
 })();

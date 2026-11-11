@@ -1,6 +1,36 @@
 /* Browser-test viewport focus and world-to-client positions through existing display owners. */
 (() => {
   "use strict";
+  function createBrowserSupportForWorkspace(options) {
+    const { document, canvas, viewport, documentWorkspace, readServices, geometry, interaction, sessions, authoring, presentation,
+    display, ctx, selectionRectangle, layers, blocks, blockPlacement, annotations, frame, sceneQueries,
+    resizeCanvas, resetModelState, cssPxPerMm: suppliedCssPxPerMm, observations } = options;
+    const cssPxPerMm = Object.hasOwn(options, "cssPxPerMm") ? suppliedCssPxPerMm : window.Appearance.CSS_PX_PER_MM;
+    const { ROOT_SKETCH_ID: rootSketchId, DEFAULT_SKETCH_ID: defaultSketchId } = window.SketchHierarchy;
+    const { geometry: hits } = sceneQueries;
+    return createBrowserSupportForScene({ document, canvas, viewport, documentWorkspace, readServices, geometry, interaction, sessions, presentation, authoring,
+      display, ctx, selectionRectangle, layers,
+      blocks: { createEmptyBlockDefinition: blocks.editing.empty, blockPlacementCommand: blockPlacement, drawBlockInstanceHandles: display.geometry.drawBlockInstanceHandles },
+      drawSelectionRect: frame.overlays.drawSelectionRect, drawAnnotationLeader: annotations.drawAnnotationLeader,
+      resizeCanvas, resetModelState, rootSketchId, defaultSketchId, cssPxPerMm, types: window.GeometrySolver,
+      evaluateSpline: window.SplineGeometry.evaluate,
+      hits: { hitArcEndpoint: hits.hitArcEndpoint, hitPoint: hits.hitPoint, hitLine: hits.hitLine, hitCircle: hits.hitCircle,
+        hitArc: hits.hitArc, hitSpline: hits.hitSpline, hitDimension: sceneQueries.hitDimension }, observations });
+  }
+  function createBrowserSupportForScene({ observations, ...options }) {
+    const scene = createForScene(options);
+    const { documentWorkspace, interaction, sessions, authoring, presentation } = options;
+    const { viewControls, centerlineCommand, commit, persistence, readSelectedGeometry, scheduler } = observations;
+    const viewObservation = createViewObservation({ viewState: viewControls.state, constraintStatusView: viewControls.constraintStatus });
+    const authoringObservation = createAuthoringObservation({
+      readMode: interaction.lifecycle.readMode, constraintTargetSession: sessions.targets, pendingCommandSession: sessions.pending,
+      drawingSnap: authoring.snap, centerlineCommand, currentScope: documentWorkspace.workspace.current,
+      decorateSerializedConstraint: persistence.decorateSerializedConstraint, serializeConstraint: persistence.serializeConstraint,
+      readPerformance: commit.readPerformance, readSelectedGeometry,
+    });
+    const interactionProfilingTestApi = createInteractionProfiling({ profiler: presentation.profiler, scheduler });
+    return Object.freeze({ ...scene, viewObservation, authoringObservation, interactionProfilingTestApi });
+  }
   function createDisplaySupport({ viewport, canvas, resizeCanvas, draw, resetModelState, geometry, currentScope, rootSketchId,
     fitAllGeometryToViewport, allGeometryBounds, visibleGeometryBounds, isVisibleSketchId, updateUI, readUnits, cssPxPerMm,
     snapCandidates, hits, evaluateSpline, elementFromPoint }) {
@@ -309,5 +339,5 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createDisplaySupport, createForScene, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation, createInteractionProfiling });
+  window.CanvasTestDriver = Object.freeze({ createBrowserSupportForWorkspace, createBrowserSupportForScene, create, createDisplaySupport, createForScene, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition, createAllGeometryFitFixture, createMiddleButtonFitFixture, createFitObservation, createFitOperation, createFixedPointFixture, createViewObservation, createInteractionProfiling });
 })();

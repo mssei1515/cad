@@ -100,7 +100,7 @@ test('composed history retains moved stacks, finally notifications and short cir
   assert.equal(feature.documentHistory.undoCount, 1); assert.equal(feature.documentHistory.redoCount, 1);
 });
 
-function workspaceHistoryFixture(composed) {
+function workspaceHistoryFixture(composed, usePreparation) {
   'use strict';
   const w = featureSandbox.window, events = [], error = new Error('workspace history failure');
   const state = { name: 'Current', value: 0, enabled: true, current: null, profiling: false,
@@ -130,9 +130,10 @@ function workspaceHistoryFixture(composed) {
     constructionCommand, clearInteractionForSketchChange: raw('clear'), changed: raw('changed'), limit: 3,
     solveAndRefresh: raw('solve', () => { assert.equal(feature.controller.restoring, true); feature.controller.record('suppressed'); }) };
   const original = w.HistoryRestoration;
+  const prepared = usePreparation ? w.HistoryController.prepare() : null;
   w.HistoryRestoration = { create(input) { documentAdapter = input.document; return original.create(input); } };
   try {
-    feature = composed ? w.HistoryController.createForWorkspace(options) : w.HistoryController.createFeature({
+    feature = composed ? (prepared ? prepared.createForWorkspace(options) : w.HistoryController.createForWorkspace(options)) : w.HistoryController.createFeature({
       serializeDocument, document: { getName: () => documentModel.documentName,
         setName: name => { documentModel.documentName = name; }, load: loadDocument },
       blockEditor: session, liveBlockDefinition: session.live, cloneBlockDefinition: blocks.editing.clone,
@@ -142,7 +143,7 @@ function workspaceHistoryFixture(composed) {
       changed: options.changed, limit: 3, setHint: presentation.setHint, log: presentation.log, interactionProfiler: presentation.profiler });
   } finally { w.HistoryRestoration = original; }
   assert.deepEqual(events, []);
-  return { state, events, error, feature, documentModel,
+  return { state, events, error, feature, documentModel, prepared,
     snapshot() { return JSON.parse(JSON.stringify({ events, value: state.value, name: state.name, enabled: state.enabled,
       definition: state.definition, restoring: feature.controller.restoring, documentUndo: feature.documentHistory.undoCount,
       documentRedo: feature.documentHistory.redoCount, blockUndo: state.current?.history.undoCount, blockRedo: state.current?.history.redoCount })); } };
@@ -158,6 +159,81 @@ test('workspace history connects cold to the same owners and preserves live name
     assert.equal(h.captureDocument(), '{"value":1}'); return f.snapshot();
   };
   assert.deepEqual(run(true), run(false));
+});
+
+test('prepared history uses the actual workspace stacks, live block scope, profiling and restoration guard', () => {
+  const run = usePreparation => {
+    const f = workspaceHistoryFixture(true, usePreparation), h = f.feature, operations = f.prepared || h;
+    h.documentHistory.reset(); f.state.value = 1; operations.record();
+    assert.equal(h.documentHistory.undoCount, 2);
+    const first = operations.createBlockHistory(), second = operations.createBlockHistory();
+    assert.notEqual(first, second);
+    f.state.current = { history: first }; h.controller.resetBlock();
+    f.state.definition.points[0].x = 12; operations.record('block');
+    assert.equal(h.controller.undo(), true); assert.equal(f.state.definition.points[0].x, 0);
+    f.state.current = { history: second }; h.controller.resetBlock();
+    assert.equal(first.redoCount, 1); assert.equal(h.documentHistory.undoCount, 2);
+    f.state.current = null; f.state.profiling = true;
+    assert.equal(operations.record(), 'profile-result');
+    f.events.length = 0;
+    h.controller.restore(() => operations.record('suppressed'));
+    assert.equal(h.controller.restoring, false);
+    assert.equal(f.events.includes('capture'), false);
+    f.state.fail = 'profile';
+    assert.throws(() => operations.record(), error => error === f.error);
+    return f.snapshot();
+  };
+  assert.deepEqual(run(true), run(false));
+});
+
+function preparationFixture() {
+  const context = { window: {} }; vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'src/editing/history_controller.js'), 'utf8'), context);
+  const calls = [], state = {}, failure = new Error('history preparation failure');
+  const owner = context.window.HistoryController;
+  context.window.HistoryController = { ...owner, createForWorkspace: function (...args) {
+    assert.equal(this, context.window.HistoryController); calls.push(args);
+    if (state.fail) throw failure;
+    return state.feature;
+  } };
+  return { prepare: owner.prepare, calls, state, failure };
+}
+
+test('history preparation stays cold and publishes only successful constructions with isolated initialization guards', () => {
+  const f = preparationFixture(), first = f.prepare(), second = f.prepare();
+  assert.equal(Object.isFrozen(first), true); assert.deepEqual(f.calls, []);
+  const uninitialized = error => error.name === 'ReferenceError' && error.message === "Cannot access 'historyFeature' before initialization";
+  for (const port of [first, second]) {
+    assert.throws(() => port.record(), uninitialized);
+    assert.throws(() => port.createBlockHistory(), uninitialized);
+  }
+  const options = {}; f.state.fail = true;
+  assert.throws(() => first.createForWorkspace(options), error => error === f.failure);
+  assert.deepEqual(f.calls, [[options]]); assert.throws(() => first.record(), uninitialized);
+  f.state.fail = false;
+  f.state.feature = Object.freeze({ record: () => 'recorded', createBlockHistory: () => 'block' });
+  assert.equal(first.createForWorkspace(options), f.state.feature);
+  assert.equal(first.record(), 'recorded'); assert.equal(first.createBlockHistory(), 'block');
+  assert.throws(() => second.record(), uninitialized);
+  f.state.fail = true;
+  assert.throws(() => first.createForWorkspace(options), error => error === f.failure);
+  assert.equal(first.record(), 'recorded');
+});
+
+test('prepared history preserves operation receivers, argument counts, label defaults, results and original exceptions', () => {
+  const f = preparationFixture(), port = f.prepare(), calls = [], result = {};
+  const feature = Object.freeze({ record: function (...args) {
+    assert.equal(this, feature); calls.push(['record', args]);
+    if (args[0] === 'fail') throw f.failure;
+    return result;
+  }, createBlockHistory: function (...args) {
+    assert.equal(this, feature); calls.push(['block', args]); return result;
+  } });
+  f.state.feature = feature; assert.equal(port.createForWorkspace({}), feature);
+  for (const args of [[], [undefined], [null], ['edit', 'ignored']]) assert.equal(port.record(...args), result);
+  assert.equal(port.createBlockHistory('ignored'), result);
+  assert.deepEqual(calls, [['record', ['変更']], ['record', ['変更']], ['record', [null]], ['record', ['edit']], ['block', []]]);
+  assert.throws(() => port.record('fail'), error => error === f.failure);
 });
 
 test('workspace history retains independent block stacks and restores cloned drafts through the actual editor', () => {

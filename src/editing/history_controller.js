@@ -1,6 +1,22 @@
 /* Route history operations to the current editing scope and guard restoration. */
 (() => {
   "use strict";
+  // Publish stable operations before the workspace history can be constructed.
+  function prepare() {
+    let feature;
+    function readFeature() {
+      if (feature === undefined) throw new ReferenceError("Cannot access 'historyFeature' before initialization");
+      return feature;
+    }
+    function createPreparedFeature(options) {
+      const completed = window.HistoryController.createForWorkspace(options);
+      feature = completed;
+      return completed;
+    }
+    function createBlockHistory() { return readFeature().createBlockHistory(); }
+    function record(label = "変更") { return readFeature().record(label); }
+    return Object.freeze({ createForWorkspace: createPreparedFeature, createBlockHistory, record });
+  }
   function create({ documentHistory, currentBlockHistory, changed, log }) {
     let restoring = false;
     function active() { return currentBlockHistory() || documentHistory; }
@@ -64,7 +80,7 @@
   }
   function createForWorkspace({ documentWorkspace, blocks, readServices, presentation, serializeDocument, loadDocument,
     serializeConstraint, decorateSerializedConstraint, constructionCommand, clearInteractionForSketchChange,
-    solveAndRefresh, changed, limit }) {
+    solveAndRefresh, changed, limit = 80 }) {
     const documentModel = documentWorkspace.document;
     return createFeature({ serializeDocument, document: { getName: () => documentModel.documentName,
       setName: name => { documentModel.documentName = name; }, load: loadDocument },
@@ -74,5 +90,5 @@
       clearInteractionForSketchChange, solveAndRefresh, setHint: presentation.setHint, changed,
       log: presentation.log, limit, interactionProfiler: presentation.profiler });
   }
-  window.HistoryController = Object.freeze({ create, createFeature, createForWorkspace });
+  window.HistoryController = Object.freeze({ prepare, create, createFeature, createForWorkspace });
 })();

@@ -175,3 +175,95 @@ test('derived browser owner assembly preserves constructor and observation error
     assert.throws(()=>f.api.derivedInstanceStateForTest(),error=>error===marker);assert.equal(f.state.scope,scope);assert.equal(JSON.stringify(scope),before);
   }
 });
+
+function supportRecordContractFixture(collisions = false) {
+  const f = propertiesContractFixture(collisions);
+  const data = (parent, keys) => Object.freeze(Object.fromEntries(keys.map(key => [key, parent[key]])));
+  const splines = data(f.groups.splines, ['splineTestDriver', 'splineTransferDriver']);
+  const authoring = data(f.groups.authoring, ['hatchTestApi', 'drawingOrderTestApi', 'offsetTestSupport', 'trimLineTransferFixture', 'trimConstructionFixture', 'trimDiameterFixture']);
+  const images = data(f.groups.images, ['referenceImageTestObservation', 'referenceImageTestImport', 'referenceImageBlockFixture']);
+  const parameters = data(f.groups.parameters, ['parameterFixture', 'parameterObservation', 'parameterInteraction']);
+  const sketchValues = data(f.groups.sketches, ['referenceLineMove', 'dependencyOrderFixture', 'sketchProjectionTestSupport', 'sketchTreeTestApi', 'sketchDeletionFixture']);
+  const references = Object.freeze({ referenceLineMove: sketchValues.referenceLineMove, dependencyOrderFixture: sketchValues.dependencyOrderFixture,
+    ...(collisions ? { sketchProjectionTestSupport: f.groups.derived, sketchDeletionFixture: f.groups.clipboard } : {}) });
+  const sketches = Object.freeze({ ...references, sketchProjectionTestSupport: sketchValues.sketchProjectionTestSupport,
+    sketchTreeTestApi: sketchValues.sketchTreeTestApi, sketchDeletionFixture: sketchValues.sketchDeletionFixture });
+  const legacy = Object.freeze({ ...f.owned, splines, authoring, images, parameters, sketches });
+  const records = Object.freeze({ ...legacy,
+    canvas: Object.freeze({ support: Object.freeze({ interactionProfilingTestApi: legacy.canvas.interactionProfilingTestApi,
+      display: legacy.canvas.canvasTestDriver, viewObservation: legacy.canvas.viewObservation, authoringObservation: legacy.canvas.authoringObservation,
+      rendering: legacy.canvas.canvasRenderingTestSupport }), responsiveDragFixture: legacy.canvas.responsiveDragFixture,
+      dragExecutionSupport: legacy.canvas.dragExecutionSupport, canvasRenderProbe: legacy.canvas.canvasRenderProbe }),
+    splines: Object.freeze({ setup: splines.splineTestDriver, transfer: splines.splineTransferDriver }),
+    authoring: Object.freeze({ hatchTestApi: authoring.hatchTestApi, drawingOrderTestApi: authoring.drawingOrderTestApi, offsetTestSupport: authoring.offsetTestSupport,
+      trim: Object.freeze({ lineTransfer: authoring.trimLineTransferFixture, constructionBoundary: authoring.trimConstructionFixture, diameterTransfer: authoring.trimDiameterFixture }) }),
+    constraints: Object.freeze({ readStatuses() { assert.fail('no status read during publication'); }, constraints: legacy.constraints, referenceCases: references }),
+    documents: Object.freeze({ documents: legacy.documents, sketchDeletionFixture: sketches.sketchDeletionFixture }),
+    sketches: Object.freeze({ sketchProjectionTestSupport: sketches.sketchProjectionTestSupport, sketchTreeTestApi: sketches.sketchTreeTestApi }),
+    images: Object.freeze({ observation: images.referenceImageTestObservation, dataImport: images.referenceImageTestImport, blockFixture: images.referenceImageBlockFixture }),
+    parameters: Object.freeze({ fixture: parameters.parameterFixture, observation: parameters.parameterObservation, interaction: parameters.parameterInteraction }),
+  });
+  f.events.length = 0;
+  return { ...f, legacy, records };
+}
+
+test('support-record publication preserves the whole public contract, lookup order, collision precedence and live callback receivers', () => {
+  for (const collisions of [false, true]) {
+    const f = supportRecordContractFixture(collisions), receiver = {};
+    const before = f.w.BrowserTestApi.createWithProperties.call(receiver, f.legacy), events = f.events.slice(); f.events.length = 0;
+    const after = f.w.BrowserTestApi.createFromSupportRecords.call(receiver, f.records);
+    assert.deepEqual(Reflect.ownKeys(after), Reflect.ownKeys(before));
+    assert.deepEqual(Object.getOwnPropertyDescriptors(after), Object.getOwnPropertyDescriptors(before));
+    assert.equal(Object.getPrototypeOf(after), Object.getPrototypeOf(before)); assert.deepEqual(f.events, events); assert.deepEqual(f.calls, []);
+    assert.equal(Object.hasOwn(f.w, '__jot2dTest'), false); assert.equal(Object.isFrozen(after), false);
+    f.state.value = { id: 'replacement' }; const args = [{}, 'extra'];
+    for (const key of ['resetForSplineTest', 'resetForTrimConstraintTransfer', 'parameterStateForTest', 'referenceImageStateForTest', 'constraintInputStateForTest', 'historyState']) {
+      assert.equal(after[key](...args), f.state.value); assert.equal(f.calls.at(-1).receiver, after); assert.deepEqual(f.calls.at(-1).args, args);
+    }
+  }
+});
+
+test('support-record publication preserves original capability failures at the same lookup without calling actions or publishing', () => {
+  for (const failure of ['canvas.viewObservation.state', 'parameters.parameterObservation.state', 'images.referenceImageTestObservation.state', 'properties.sidebarHighlightObservation.ids']) {
+    const f = supportRecordContractFixture(); f.state.failure = failure;
+    assert.throws(() => f.w.BrowserTestApi.createWithProperties(f.legacy), error => error === f.marker);
+    const events = f.events.slice(); f.events.length = 0;
+    assert.throws(() => f.w.BrowserTestApi.createFromSupportRecords(f.records), error => error === f.marker);
+    assert.deepEqual(f.events, events); assert.deepEqual(f.calls, []); assert.equal(Object.hasOwn(f.w, '__jot2dTest'), false);
+  }
+});
+
+
+test('browser installation reads the current URL only when invoked, skips ordinary startup, and publishes the actual completed API', () => {
+  const f=supportRecordContractFixture(),events=[],state={search:'?contest=1',published:{prior:true}},old=state.published;
+  const browser={get URLSearchParams(){events.push('parser');return URLSearchParams;},get location(){events.push('location');return{get search(){events.push('search');return state.search;}};},
+    get __jot2dTest(){return state.published;},set __jot2dTest(api){events.push('publish');state.published=api;}};
+  let created,calls=0;
+  function createApi(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);calls++;events.push('create');assert.equal(browser.__jot2dTest,old);return created=f.w.BrowserTestApi.createFromSupportRecords(f.records);}
+  assert.deepEqual(events,[]);assert.deepEqual(f.calls,[]);
+  assert.equal(f.w.BrowserTestApi.installForBrowser(browser,createApi),undefined);assert.equal(calls,0);assert.equal(state.published,old);assert.deepEqual(events,['parser','location','search']);
+  state.search='?test=0';events.length=0;assert.equal(f.w.BrowserTestApi.installForBrowser(browser,createApi),undefined);
+  assert.equal(calls,1);assert.equal(state.published,created);assert.equal(Object.isFrozen(created),false);assert.deepEqual(events,['parser','location','search','create','publish']);
+  assert.deepEqual(f.calls,[]);f.state.value={replacement:true};const args=[{},'extra'];assert.equal(created.historyState(...args),f.state.value);assert.equal(f.calls.at(-1).receiver,created);assert.deepEqual(f.calls.at(-1).args,args);
+});
+
+test('browser installation retains native query presence rules and rechecks the URL without caching or deleting an earlier API', () => {
+  const f=fixture(),browser={URLSearchParams,location:{search:''},__jot2dTest:{prior:true}};let count=0,expected=0;
+  const create=()=>({generation:++count});
+  for(const search of ['', '?contest=1','?TEST=1','?x=test']){browser.location.search=search;const before=browser.__jot2dTest;f.w.BrowserTestApi.installForBrowser(browser,create);assert.equal(browser.__jot2dTest,before);assert.equal(count,0);}
+  for(const search of ['?test','?test=','?test=false','?%74est=1','?test=0&test=1']){browser.location.search=search;assert.equal(f.w.BrowserTestApi.installForBrowser(browser,create),undefined);assert.equal(browser.__jot2dTest.generation,++expected);}
+  const previous=browser.__jot2dTest;browser.location.search='';f.w.BrowserTestApi.installForBrowser(browser,create);assert.equal(browser.__jot2dTest,previous);assert.equal(count,expected);
+});
+
+test('browser installation propagates gate, construction and publication failures while retaining existing partial effects', () => {
+  const f=supportRecordContractFixture(),marker=new Error('installation failed'),old={prior:true};let calls=0;
+  const build=()=>{calls++;return f.w.BrowserTestApi.createFromSupportRecords(f.records);};
+  for(const stage of ['parser','location','search']){
+    const browser={get URLSearchParams(){if(stage==='parser')throw marker;return URLSearchParams;},get location(){if(stage==='location')throw marker;return{get search(){throw marker;}};},__jot2dTest:old};
+    assert.throws(()=>f.w.BrowserTestApi.installForBrowser(browser,build),error=>error===marker);assert.equal(calls,0);assert.equal(browser.__jot2dTest,old);
+  }
+  const browser={URLSearchParams,location:{search:'?test=1'},__jot2dTest:old};f.state.failure='parameters.parameterObservation.state';
+  assert.throws(()=>f.w.BrowserTestApi.installForBrowser(browser,build),error=>error===f.marker);assert.equal(calls,1);assert.equal(browser.__jot2dTest,old);assert.deepEqual(f.calls,[]);
+  f.state.failure=null;Object.defineProperty(browser,'__jot2dTest',{get:()=>old,set(){throw marker;}});
+  assert.throws(()=>f.w.BrowserTestApi.installForBrowser(browser,build),error=>error===marker);assert.equal(calls,2);assert.equal(browser.__jot2dTest,old);assert.deepEqual(f.calls,[]);
+});

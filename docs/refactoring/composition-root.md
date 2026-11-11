@@ -1,5 +1,1106 @@
 # app.jsを起動・接続専用にする継続作業
 
+
+
+
+
+
+## 停止checkpoint：週枠残量49%・最新全E2E成功（2026-11-12）
+
+週枠usedPercent 51・残量49%を確認し、合意した「残量50%未満」の停止条件を満たしたため、新しい責務分離を停止した。残量回復後にユーザーの再開指示で再開する。無料reset creditは使用していない。200〜500行の目標と責務境界を縮小せず、全体完了とはしない。
+
+最終実装commitはdfd4edd04007bb0503d962a011e3ba38f6ff76ab、検証対象developは50396d46554952e74e15cd1dc93edfa43e4c0e73。構文639ファイル・全単体2,666件・関連単体70件・関連E2E187件（7file・2.8分）と通常起動5条件が成功した。その後、同じ最新コードで全E2E589件・50fileが22.4分・exit 0ですべて成功した。710入力と開始HEAD不変、三つのfilter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。前の6b3fcc6に対する全E2Eとは別の今回の証跡である。閾値・timeout・期待値を緩和していない。
+
+今回のcheckpoint追加は三つのrefactoring文書だけで、検証後の実装・テスト・spec・loader・保存形式v26は変更しない。mainは正式リリース版のまま扱い、この記録をdevelopへ保存した後、最新検証済みコードを最後にmainへ反映する。main Push後は直ちにdevelopへff-only同期してPushし、local／tracking／実remoteのmain・develop一致、祖先関係、両worktreeのclean状態とruntime-version更新を確認する。最終release mergeのSHAは記録commitより後に決まるため、再開時はGitの実refで取得する。
+
+app.jsは1,166行、非空白733行。今回の停止処理では1,166→1,166行（0行変化）。最後の実装単位は1,167→1,166行（1行減）。root198文・359束縛、構築109文・421行、別名75行・bind35行・test hooks151行である。余白433行を除いても残る構築と機能別の依存整理が未完了であり、行数目標未達のまま全体目標を一時停止する。
+
+再開場所はmanaged worktree C:\Users\osamu\.codex\worktrees\app-refactoring-resume\cad、通常の実行場所はC:\dev\cadのdevelop。originはhttps://github.com/mssei1515/cad。再開前にusageの実残量、remote取得、mainがdevelopの祖先であること、HEADと未コミット変更の所有を確認し、最新developからcodex/*を作成する。サブエージェント・Computer Useは使わない。
+
+次はCanvas表示の寸法input生成とsync／hide後段参照を追う。DimensionInputの生成位置、PropertiesPanelの完成公開、CanvasViewControlsとPointerMoveSchedulerによる読取り時機、GeometryMutationFeatureがCanvas構築の間に入る順序を確認する。新たなslot・段階APIを増やすだけなら採用しない。構築421行とtest hooks151行を、実ownerの能力とライフサイクルに沿って整理し、巨大なapp context・全test registry・単なる別名置換や余白削除で目標達成を装わない。source／test変更後は必要な検証を実施し、古い全E2E結果を新コードの成功根拠に流用しない。
+
+## Canvas表示の読取りcapabilityを既存ownerから接続（2026-11-12）
+
+CanvasDisplay.prepareForWorkspaceが保持済みのDocumentWorkspace.parametersとreadServices.projectionsから、寸法式判定とBlock配置の投影bundle生成を既存の通常factoryへ接続する。app.jsのdimensionUsesExpression別名と、二つの個別port指定を除く。新しいwrapper API・module・global・可変slot・model cacheは設けず、フォルダ配置は既存application／rendering／parametersの責務に合っているため維持する。
+
+createDimensionTraversalはdimensionUsesExpression省略時だけParameter namespaceの実関数を取得する。明示own／継承の関数・undefined／nullはそのまま優先する。元のnamespaceは不変な実関数値を公開するため、rootの早期別名から通常生成時の取得へ変えても参照する関数は同じである。拘束のexpressionは従来どおり描画操作時に評価し、判定結果やscopeをcacheしない。注記を含むdimensionPresentationScopeを受け取る入口をWorkspace.currentへ置換しない。
+
+createPlacementPreviewはcreateBlockProjectionBundleを省略したときだけ、同じreadServices.projectionsの実関数を一度取得する。個別ownのundefined／nullを含む上書きを優先し、未使用のowner getterは読まない。既存のoptions spreadが継承fieldをコピーしない規則も維持する。関数は包装せずnative PlacementPreviewRendererへ渡し、プレビュー描画時のbare・二引数呼出し、実instance／definitionとbundle・元例外を保つ。生成中に投影や描画を実行しない。
+
+Canvas各native constructorの生成→公開→bind／start順、低水準CanvasDisplay.createの個別注入、実actor同一性とUI・操作・保存形式v26は不変。逆変換照合で変更は上記二つの既存normal factoryとroot接続だけで、Parameter／DimensionDisplay／PlacementPreviewRenderer本体は不変。新たな未束縛参照なし。
+
+app.jsは1,167→1,166行（1行減）、非空白734→733行。root199→198文・360→359束縛、構築109文・421行、別名76→75行・bind35行・test hooks151行。200〜500行の全体目標は未完了。
+
+関連単体70件が成功。native Parameter namespaceによる数値／式の判定が、明示注入と通常生成の両方で同じ寸法描画へ届き、expression変更とscope切替を追うことを確認した。native PlacementPreviewRendererの同じ描画層で投影の遅延・引数／receiver／返値・元例外を確認した。明示null／undefined／継承port、owner getterの未使用時非評価と取得後の実関数保持も検証した。
+
+構文639ファイル・全単体2,666件・関連単体70件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E187件（7file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 全E2Eの再検証checkpoint（2026-11-12）
+
+develop 6b3fcc6b342e8ebc6c3c18dbe548a0a9a9090381を対象に全E2E589件・50fileを実行し、22.5分・exit 0ですべて成功した。対象suite指定なし、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHはすべて未設定。710入力のraw SHA256と開始HEAD不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。テスト中にソース・テスト・閾値・timeoutを変更していない。
+
+拘束ドラッグ回帰はfillets 3,744、offsets 10,296、aircraft 1,872、coupled-lines 5,304、vertical-line 936 previewsが失敗なしで完了した。通常の全suite実行でgeometry-drag-smoothnessも通過した。これらの件数は該当fixtureの出力であり、全ドラッグケースの合計ではない。電源接続後の今回の全体実行は成功したが、電源だけを原因として以前の不安定性を説明できると断定しない。
+
+直前の実装単位で同じコードに対して構文639ファイル・全単体2,664件・関連単体10件・関連E2E176件と通常起動5条件が成功済み。今回の変更は文書だけで、実装・テスト・loader・保存形式v26は不変。仕様との不一致を追加しない。
+
+app.jsは1,167→1,167行（0行変化）、非空白734行。root199文・360束縛、構築109文・421行、別名76行・bind35行・test hooks151行。空白433行を除いても非空白734行であり、数百行・目安200〜500行の目標は未完了。全E2E成功は今回のコードの統合検証であって、責務分離全体の完成ではない。
+
+確認時の週枠残量50%（usedPercent 50）。まだ50%未満の停止条件には達していない。main c2edef1は維持し、途中で自動リリースしない。残量50%未満になったら新規分離を停止し、その時点のコードに必要な全体検証を確認後、main最後・develop同期・Push・runtime再生成・実remote ref照合を行う。今回以後コードを変更した場合、この全E2Eを新しいコードの成功根拠に流用しない。文書のみの変更なら同じ実装の検証であることをdiffで確認する。
+
+## Selection編集の既存owner capabilityを通常生成へ接続（2026-11-12）
+
+SelectionEditingFeature.prepare().createForDrawingは、既に受け取るinteractionからclearSelectionとisGeometryMode、presentationからupdateToolbar、persistenceからnormalizeGeometryInstanceを接続する。app.jsが同じ関数を別fieldで重ねて渡す責務を除く。新factory・global・可変slot・全体contextは追加せず、既存application ownerへ結線を集める。フォルダ配置は変更しない。
+
+既存のdrawing分解とoptions rest copyの後、resetDrawing取得を従来位置で行う。copy済みoptionsで個別portが省略された場合だけ対応ownerの関数を一度取得する。明示ownのundefined／nullを含む上書きは維持し、未使用のowner getterは読まない。rest copyが継承fieldを除外する規則は維持する。関数を包装せず実関数を渡し、生成中に操作・scope読取・normalizeを実行しない。raw createForEditingによる個別注入は不変。
+
+Deletion→Clipboardのnative生成順、実Selection／モデル／Commandの同一性、prepared Clipboardの完成公開と失敗時の以前のCommand保持は不変。Deletionが使うWorkspace.currentとClipboardが使うbound scopeを統合しない。UI・操作・履歴・保存形式v26とbind／start順は変更しない。SelectionEditingFeature.createForEditing以降の既存処理本体はソース照合で不変。
+
+app.jsは1,168→1,167行（1行減）、非空白735→734行。root199文・360束縛、構築109文・422→421行、別名76行・bind35行・test hooks151行。四つの重複portを除き、新たな未束縛参照なし。行数目標200〜500行は未完了。
+
+関連単体10件が成功。ownerの同じ実関数が遅延操作へ渡り、bare呼出しの引数・返値を保持すること、生成時の非実行、明示null／undefined時の未使用getter非評価、raw注入を確認した。native ClipboardSessionでcutが同じDeletionを使い、Workspaceのみの削除とbound model保持を維持することを検証した。
+
+構文639ファイル・全単体2,664件・関連単体10件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E176件（5file、2.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## Document参照グラフの準備と解決関数の完成公開（2026-11-12）
+
+DocumentWorkspace.prepareReferencesは実ConstraintReferencesを先に一度生成し、同じgraphのDocument生成入口を返す。app.jsは各既存機能の準備と表示生成を従来位置で行い、その後でprepared入口からDocumentWorkspaceを生成する。参照のgraph関数を実SketchContextへ接続し、Reference→Document→ReadContextというnative constructorの生成順を保つ。raw DocumentWorkspace.createによる個別graph関数の注入も維持する。
+
+prepared DocumentのcreateReadContextは既存の実contextを生成し、完成したservices.reads.resolveGeometryRefを一度取得してから、参照graph向けにその実関数の完成参照だけを公開する。contextとそのcomponentは同じ実体を返し、model／配列／幾何を複製しない。公開前は元のresolveGeometryRef初期化前ReferenceError、Document／ReadContext生成やresolver取得失敗時は以前の完成参照を保つ。正常に取得したundefined／nullと未初期化を区別し、元のTypeErrorも維持する。
+
+graph向けresolveGeometryRefは同じ名前・arity 1で、取得済みの実resolverをbare・一引数で呼び、refと返値・元例外をそのまま渡す。refや幾何結果をcacheしない。geometry readerは従来どおりWorkspace.currentを読み、最後のbound scopeへ置換しない。prepared graphは独立した参照ownerを持ち、そのgraphで最後に完成したread contextのresolverを使う。API containerを準備入口で結線し、各Document／Workspace／ID／query／serviceの実ownerは既存moduleに残す。
+
+app.jsは1,168→1,168行（0行変化）、非空白735行。root199文・359→360束縛、構築422行・109文、別名76行・bind35行・test hooks151行は不変。preparedな生成入口の関数値が一つ増えるが、後段のresolveGeometryRefをroot callbackが読む依存は1→0となった。新file・global・汎用setter・registry・全体contextは追加せず、rootに可変参照・代入を追加しない。既存UI・操作・履歴・保存形式v26とbind／start順は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体50件が成功。実派生参照の拘束graphとgeometry readerを使い、Workspace切替時に同じIDの新しい実Pointを解決し、bound scopeと混ざらないこと、独立した準備graphの分離とContext生成失敗時の保持を確認した。native constructor順と同じgraph関数の接続、coldなresolver取得と一度のcapture、receiver／引数・返値・元例外、constructor／reader getter失敗、invalid resolverのTypeErrorも検証した。ソース逆変換で既存Document・読取り・拘束本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,662件・関連単体50件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E193件（7file、4.3m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
+## 固定拘束queryを既存の結線済みscope照会へ接続（2026-11-12）
+
+app.jsはConstraintReferences.createFixedStateのcurrentScopeへ既存DocumentWorkspace.readEditingScopeを直接渡す。editingScopeBinding.currentを読むroot callbackを除き、新しいfactoryや包装関数は追加しない。ConstraintReferencesは従来の関数portだけを受け、DocumentWorkspace／UIの新しい依存を持たない。比較には同じSelectionHighlight.sameConstraintDisplayElementを使う。
+
+scope取得はquery操作時のまま、実bindingが指すmodelそのものを返す。Workspaceの直接activate／restoreとbinding切替の区別、未完成guard・元例外、裸のゼロ引数呼出しと返値を維持する。固定拘束の三query本体、enabledの厳密判定・最初の元拘束の返却・投影表示比較・endpointのraw Object同一性は変えない。readerの実体は既存の公開照会となり、root固有の別名関数を作らない。
+
+新file・API・global・slot／model cache・registry・全体contextは追加しない。既存のDocument／Constraint／Selection owner、UI・操作・履歴・保存形式v26、初期化・bind／startの順は不変。フォルダ配置も既存ownerに合致しているため維持する。
+
+app.jsは1,168→1,168行（0行変化）、非空白735行。root199文・359束縛、構築422行・109文、別名76行・bind35行・test hooks151行は不変。ASTでrootのeditingScopeBinding.current直接読取りは1→0か所となった。これはbound scopeの読取りの所有整理であり、他の後段依存や構築責務がすべてなくなったという意味ではない。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体52件が成功。実Document binding・固定拘束・SelectionHighlightを使い、旧callback経由と既存照会の直接接続で、Workspace切替／復元後の投影線・円弧端点の同一性判定・実拘束の返却・無効化・endpoint lock・getterの元例外が一致することを確認した。ソース照合で変更はrootの接続一か所のみ、ConstraintReferences／DocumentWorkspace／SelectionHighlightの本体は不変。
+
+構文639ファイル・全単体2,660件・関連単体52件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E166件（5file、2.5m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
+## 保存準備とSketch移動の結線済みscope readerを共有（2026-11-12）
+
+DocumentWorkspace.createPersistenceForWorkspaceはreadEditingScopeを省略した場合、同じDocument ownerの既存照会をcreatePersistenceへ渡す。現在形式の既定値取得→options展開→native persistence生成の順を保つ。明示own readerはundefined／nullを含めそのまま渡し、継承プロパティをoptions展開がコピーしない従来の規則も維持する。raw createPersistenceの直接注入は変更しない。
+
+SketchEditingFeature.createForInteractionは保持済みDocumentWorkspaceから操作時に結線済みscopeを読む既定capabilityを、既存createへ接続する。createMove／createMoveWithInputはreader未指定の場合だけそのcapabilityを使い、明示own／継承readerとundefined／nullを優先する。reader名readEditingScope・arity 0、Docへのmember・ゼロ引数呼出し、返値と元例外、lookupをcommit時まで遅延することを保つ。raw createへの既定capabilityは任意であり、従来の個別reader注入と低水準生成APIを維持する。新しいwrapper層・input全体copy・未使用getterの評価は追加しない。
+
+保存準備が使うbound scopeとwriterがsnapshotを取るWorkspace.current、移動queryが使うWorkspaceと再結線が使うbound scopeを混同しない。geometry／hatch cache無効化→bound scope読取→bundle生成→再結線→解析無効化→参照更新の順、Point／Selection／履歴一回、失敗時の復元、Command→Input生成→完成公開と明示bindは不変。native persistence／Move処理本体と公開owner、UI・保存形式v26は変えない。新file・global・可変slot／model cache・registry・全体contextを追加せず、フォルダ配置も維持する。
+
+app.jsは1,168→1,168行（0行変化）、非空白735行。root199文・359束縛、構築422行・109文、別名76行・bind35行・test hooks151行は不変。二つのreadEditingScope中継を除き、rootがeditingScopeBinding.currentを直接読む箇所は3→1となった。残る一か所は固定拘束queryのcurrentScopeであり、全直接参照がなくなったとは扱わない。rootの後段可変参照・代入を追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体72件が成功。実保存writerの出力でWorkspaceとbound scopeの区別・v26を確認し、明示／継承／invalid readerの既存コピー規則も検証した。実Move CommandとInputの両入口で、省略と明示readerのPoint同一性・移動結果・refresh順・履歴一回が一致することを確認した。constructor中のscope非読取、Doc lookupのreceiver・ゼロ引数、未使用getter非評価とinvalid reader時の元の復元／履歴なしも確認した。ソース逆変換で既存保存・移動処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,659件・関連単体72件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E194件（7file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
+## Parameter編集のWorkspaceと結線済みscope依存を整理（2026-11-12）
+
+DocumentWorkspace.readEditingScopeは、既存の完成binding参照から現在の結線済みmodelそのものを返す。Hatch番号／Sketch配列の既定readerも同じ照会を使い、既存の初期化前ReferenceError・完成公開・失敗時の前回参照保持・raw binding生成の無公開を維持する。追加のslot・model copy・cacheは作らない。Workspaceを直接activate／restoreした場合とbinding.activateした場合の区別、実model／Solverの同一性も変えない。
+
+ParameterEditingFeature.prepareForWorkspaceはcurrentNamespace未指定時に既存documentWorkspace.workspace.currentの実関数を一度取得し、名前空間準備と削除guardへそのまま渡す。currentScope未指定時は操作ごとにDocumentWorkspace.readEditingScopeをmember・ゼロ引数で呼ぶ遅延readerをParameterEditorへ渡す。reader名currentScope・arity 0、余分な引数の無視・返値／元例外を維持し、Feature生成時にはreadEditingScopeのlookupも行わない。NamespaceはWorkspaceの現在値、式参照候補は結線済みscopeを読む従来の違いを保持する。
+
+明示currentNamespace／currentScopeはown／継承とundefined／nullを含め優先し、fallback ownerを読まない。ParameterEditor・ParameterApplication・DeletionGuard、既存のbinding／採番・外観reader・namespace更新・draftの確定／復元の全処理本体、raw生成API、UI・履歴・保存形式v26は不変。新file・global・registry・全体contextを追加しない。新しいscopeモデルではなく、既存Document ownerからの狭い照会を共有する。フォルダ配置も既存ownerに合致しているため維持する。
+
+app.jsは1,169→1,168行（1行減）、非空白736→735行。root200→199文・360→359束縛、構築422行・109文、別名77→76行・bind35行・test hooks151行。currentParameterNamespaceの別名とParameter向けscope中継を除き、editingScopeBindingの初期化前root consumerは1→0か所となった。他の後段依存がすべて解消したという意味ではない。rootの後段可変参照・代入を追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体51件が成功。実Document binding照会のguard・scope切替・Workspace復元・再構築失敗時の保持を確認した。実ParameterEditorの式候補表示と名前空間準備／削除guardへ既定readerを接続し、Workspaceとbound modelの読取り先が混ざらないことを検証した。名前空間の関数同一性と一度の取得、scope readerのcold／live lookup・receiver／ゼロ引数・元例外、明示／継承overrideとinvalid値を保持することも確認した。ソース逆変換で既存Parameter・scope本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,655件・関連単体51件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E185件（7file、2.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
+## Hatch採番とSketch外観の結線済みscope照会をDocumentへ移管（2026-11-12）
+
+DocumentWorkspaceは、同じWorkspaceで最後に完成したcreateEditingScopeの実EditingScopeBinding参照を保持し、既定のnextHatchIndexとcurrentSketchesをそのcurrentから操作時に読む。app.jsは二つの後段binding参照callbackを組み立てない。採番は既存DocumentIds／GeometryIds、外観解決はGeometryReadServices、現在scopeとSolverの結線はEditingScopeBindingが引き続き所有する。
+
+binding→model queries→insertion→immutable cohort完成の従来順を保ち、全段階が成功してから実bindingの完成参照だけを公開する。最初の完成前は元のeditingScopeBinding初期化前ReferenceError、再構築失敗時は以前の完成参照を維持する。raw createScopeBindingでは公開しない。親／read context生成時にはscope・Sketch配列・Hatch番号を読まない。default callbackの名前nextHatchIndex／currentSketches・arity 0、実scopeのgetter receiver・返値／元例外と余分な引数の無視を保持する。実modelや配列のcopy・cacheは作らない。
+
+Workspaceを直接activate／restoreしただけでは結線先を切り替えず、最後にboundとなったscopeのSketch配列・Hatch番号を使う。binding.activateが切り替えた実scopeを両方の読取りとSolverが共有する。予約処理はgeometry／attachments確保→Hatch番号読取→scope counter確保の元の順序を保ち、未初期化やgetter失敗時にも先行した予約を戻さない。明示readerはown／継承とundefined／nullを含め優先する。raw createGeometryReadServices／createScopeBindingと各native constructor本体、UI・操作・履歴・保存形式v26は不変。新file・global・汎用setter・registry・全体contextは追加しない。Document側の完成参照を一つ追加するが、scope値を二重所有しない。フォルダ配置は既存ownerに合致しているため維持する。
+
+app.jsは1,170→1,169行（1行減）、非空白737→736行。root200文・360束縛、構築423→422行・109文、別名77行・bind35行・test hooks151行。ASTで初期化前のeditingScopeBinding参照は3→1か所となり、Hatch番号・Sketch配列の二中継がなくなった。Parameter編集向けの遅延scope readerは残る。rootの後段可変参照・代入を追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体46件が成功。実Hatch counter・外観reader・Workspace・Solverを使い、直接activate／restoreとbinding切替を区別した。未完成時の部分予約、native binding／query／insertion各段階での未公開と再構築失敗時の前回参照、raw binding生成の無公開、scope getterのreceiver／元例外、明示／継承readerと低水準生成APIの保持も確認した。ソース逆変換で既存scope・予約処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,652件・関連単体46件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E187件（7file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
+## 重複拘束数の表示照会を解析ownerへ移管（2026-11-12）
+
+SketchSolvingFeature.prepareのreadDuplicateCountは、既存の完成解析recordが保持する実contextのConstraintRedundancyから現在のcountを返す。app.jsはこの狭い照会をPresentationへ渡し、後段のconstraintRedundancyを捕捉するcallbackを組み立てない。countの保持・更新と拘束の分類は既存ConstraintRedundancy／ConstraintAnalysisに残し、表示側へ移さない。
+
+完成解析recordには既存analysisと同じnative context参照を保持する。Contextは通常経路・注記drag付き経路ともimmutableな値プロパティのcohortであり、生成・公開時にredundancyやcountを先読みしない。readDuplicateCountはcount getterを実redundancy receiverで一回だけ読み、値・元例外をそのまま返す。最初のContext完成前は元のconstraintRedundancy初期化前ReferenceErrorを保ち、失敗したContext再構築では以前の完成recordを保持する。追加の可変slot・数値cacheやモデルsnapshotは作らない。
+
+照会は現在のcached countを読むだけで、Workspace切替時にも解析を自動実行しない。通常のrefreshが件数を更新するまで以前の値を表示する従来の時機を維持する。戻り値の変換やゼロ補完はせず、callback名readDuplicateCount・arity 0と余分な引数の無視を保つ。既存のrefreshConstraintAnalysis、native context／solver／解析・重複判定の全本体、raw生成API、モデル・ID／scope／履歴・UI・保存形式v26は不変。新file・global・registry・全体contextは追加しない。既存の解析ownerに収まるためフォルダ配置も維持する。
+
+app.jsは1,170→1,170行（0行変化）、非空白737行。root200文・359→360束縛、構築423行・109文、別名77行・bind35行・test hooks151行は不変。関数値を受け取るreadonly照会が一つ増えるが、既存の後段可変参照・代入は追加しない。ASTで旧constraintRedundancyの初期化前consumerは表示callback一か所だけと確認し、その遅延依存を所有者の完成recordへ移した。新たな未束縛参照なし。行数だけの削減は行わず、200〜500行の全体目標は未完了。
+
+関連単体33件が成功。両native Context経路で実ConstraintRedundancyとApplicationFeedbackを接続し、cached countが0→1→Workspace置換後も1→通常refresh後0となること、表示messageとerror class、仮想注記scopeとWorkspaceの区別を確認した。構築中のcount／モデル非読取、live getterのreceiver・値／元例外、未初期化guard、準備／build／analysis取得失敗時の前回record保持、独立した準備ownerも検証した。ソース逆変換で既存解析・求解本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,649件・関連単体33件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E140件（5file、2.1m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
+## 実行バージョン表示の再表示参照をPresentationへ移管（2026-11-12）
+
+PresentationFeature.createはrefreshVersionを未指定の場合、同じFeatureのcreateStartupが完成・公開した実RuntimeVersionViewへ言語変更時の再表示を委譲する。app.jsは表示Viewの後段束縛を持たず、再表示callbackを組み立てない。現在のRuntimeVersionView.renderをmember・ゼロ引数で呼び、返値と元例外をそのまま返す。default callbackの名前refreshVersion・arity 0、初期化前の元ReferenceErrorを維持する。
+
+createStartupは実View生成→ApplicationSettingsの二つの設定関数取得→既存initialize関数と返却cohortの完成、という従来の生成順を保ち、その完成参照だけをprivateに公開する。native constructorや設定getterが失敗した場合は以前の完成Viewを保持し、明示undefined／nullの生成結果と未初期化を区別する。呼出し時のrender取得・receiver／引数／返値・例外、初期化のUI→描画→通知→言語→theme→バージョン読込→resize→surface開始の順を変えない。
+
+明示したrefreshVersionはown／継承とundefined／nullを含め優先し、そのままApplicationSettingsへ渡す。raw createStartupの返すversionView／initializeも維持する。UIの完成参照をPresentationへ移すだけで、Git情報の検証・保持・DOM再表示はRuntimeVersionView、言語／theme・保存設定はApplicationSettingsが所有する。新file・global・model state／cache・registry・全体contextは追加しない。UI・操作・履歴・保存形式v26は不変。フォルダ配置は既存ownerに合致しているため変更しない。
+
+app.jsは1,170→1,170行（0行変化）、非空白737行。root200文・360→359束縛、構築423行・109文、別名77行・bind35行・test hooks151行は不変。旧runtimeVersionViewのroot consumerは初期Presentationへ渡した再表示callback一か所だけであることをASTで確認し、その遅延依存を所有者内へ収めた。新たな未束縛参照なし。行数だけの削減は行わず、200〜500行の全体目標は未完了。
+
+関連単体54件が成功。実ApplicationSettingsとRuntimeVersionViewの言語変更で、同じGit情報・dirty表示・unavailable表示が保持／翻訳されることを確認した。未完成時のguard、constructor中と設定getter中の公開時機、以前の完成View保持、実receiver・ゼロ引数・返値／元例外、明示／継承overrideを検証した。既存startupの初期化順・各段階失敗時の部分状態テストも実行した。ソース逆変換で再表示参照の所有以外の既存Startup／表示本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,647件・関連単体54件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E122件（5file、1.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
+## 幾何計算のorientation既定値を各機能へ接続（2026-11-12）
+
+app.jsによるMIN_ORIENTATION_LENGTHの取出しと四つの生成先への指定をやめ、既存GeometryKernelの同じ定数を各機能の既定値にする。BasicDrawingTools.prepareGeometryForSolver・準備済みeditingのcreateCircleCenterCross、ConstraintEditing.prepareDimensionValuesのcreateForEditing、GeometryDragFeature.createForWorkspaceが対象。定数の値1e-9と、Solverから別途得る線分最小長の計算・許容誤差・求解の数値方針は変更しない。
+
+位置引数の作図長は第二引数を省略した場合だけ既定にし、明示undefined／null／0／個別値を元のcreateLengthPolicyへそのまま渡す。Solver.minLineLengthを先に一度読み、次に省略時のKernel定数を取得して元のMath.max／fallbackを使う。object入力の三入口ではキーの存在で判定し、own／継承を問わず明示undefined／null／0／個別値を保持する。明示値があればKernel既定値を読まない。親Feature生成時に数値を先読み・cacheせず、従来の各生成段階で接続する。
+
+個別GeometryCreation／CircleCenterCrossCommand／ConstraintSolvePreparation／GeometryDragPlan等の低水準生成APIと全計算・操作本体、native actor・scope／ID／Selection／履歴・部分失敗・UI・保存形式v26は不変。新file・global・state／guard・registry・全体contextや別の数値定数は追加しない。静的な幾何定義への依存を既存namespaceに明示し、個別検証の値注入を維持する。フォルダ配置は既存ownerに合致しているため変更しない。
+
+app.jsは1,172→1,170行（2行減）、非空白739→737行。root200文・361→360束縛、構築424→423行・109文、別名78→77行。bind35行・test hooks151行は不変。新たな未束縛参照なし。行数差より、四つの数値既定値の中継をappから除く責務整理を成果とする。200〜500行の全体目標は未完了。
+
+関連単体141件が成功。省略と元の定数注入が同じnative長さ・寸法編集・point dragを生むこと、live scopeと幾何同一性・履歴を維持すること、明示／継承値を保持し既定値を読まないことを検証した。Solver getter失敗時にKernelを読まない順序も確認した。ソース逆変換で既定値解決以外の計算・command本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,644件・関連単体141件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E152件（7file、14.3m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+検証終了後、差分確認で検出したBasicDrawingTools単体file末尾の余分な改行一つだけを除去した。直前hashがE2E開始snapshotと一致し、trimEnd前後の実行ソースが同一であることを照合した。
+
+
+## Sketch Treeの共有アイコンと固定操作の結線（2026-11-12）
+
+SketchEditingFeature.prepareNavigationが返すediting.createTreeWithFixedControlsは、既存Toolbarの実アイコン生成→提供された固定操作factory→実Tree生成をまとめる。アイコンはToolbarへのmember・ゼロ引数呼出し、固定操作factoryはbare・一引数で呼ぶ。依存readerを各段階で呼び、固定操作のoperand→選択factoryの取出し→Tree依存取得という従来順序を保つ。Treeの生成・完成公開は既存createTreeForPresentationを使い、context menuのstartはappの従来位置に残す。
+
+返すcohortは実icons・実Treeと後段の固定選択factoryそのものを保持する。固定操作／固定選択のstate・Solver・scopeは既存ConstraintEditingに残し、Treeに移さない。固定選択は同じ後段で一度生成する。rootの早期参照をASTで調べ、旧境界内のicons／operand参照はTree optionsだけで、固定選択factoryの外部consumerは後段のみと確認した。Tree optionsのreaderはroot公開前の二つの実actorを仮引数で受け、未完成root束縛を参照しない。
+
+native TreeのController／View／Menuと固定操作・アイコン生成本体は不変。固定操作の先行公開をTree生成失敗時にも巻き戻さず、以前の完成Tree contextを保持する。scope／model／ID／Selection・UI・履歴・保存形式v26、raw生成APIを変えない。新file・global・state／guard・registry・全体contextは追加しない。生成順維持のため二つの依存readerを追加する負担はあるが、全アプリを渡さず同じTree構築段階に限定する。
+
+app.jsは1,176→1,172行（4行減）、非空白739行は不変。root202→200文・362→361束縛、構築111→109文・424行。別名78行・bind35行・test hooks151行は不変。行数差は結線をまとめた際の区切り整理であり、実質の成果は三つの構築呼出しの順序を同じownerに置き、rootのoperand参照を除いたことである。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体83件が成功。実Treeへの固定解除portと同一actorの接続、bound viewと操作scopeの区別、実activation・menu起動、固定選択の後段初期化を確認した。icons→依存reader→固定操作→operand／選択factory取得→Tree依存reader→native Treeの順と各段階失敗時の先行公開・以前のTree保持も検証した。ソース逆変換で既存処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,640件・関連単体83件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E171件（8file、2.6m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
+## 共有確認ダイアログの所有とBlock command構築を整理（2026-11-12）
+
+PresentationFeatureが共有ChoiceDialogの生成と要求入口を所有する。DocumentFileはPresentationのrequestChoiceへ接続し、rootの後段dialog参照を持たない。実dialogのshowをmember・一引数で呼び、Promise・結果・元例外を返す。生成前のReferenceError、生成失敗時の以前の完成参照、明示undefined／null生成後のTypeErrorを維持する。新しい状態はUIの完成参照だけで、選択肢・pending処理は既存ChoiceDialogに残す。
+
+BlockEditingFeature.prepareCommandsWithViewのcreateWithSelectionは、実selection query→提供されたdialog factory→遅延command依存reader→既存command生成の順で接続する。factoryはbareゼロ引数、readerはbare二引数で同じqueryとdialogを受け、元のoptionsをそのまま既存createForFeatureへ渡す。完成した実queryと実commandsをimmutableなcohortで返す。root readerの仮引数が未完成のroot束縛を参照しないようにし、native dialogのlistener登録とcommand依存取得の前後関係を維持する。
+
+旧境界の早期consumerはDocumentFileの遅延dialog要求一か所で、queryはcommand optionsだけが参照していた。dialog生成失敗時の以前の完成参照、command生成／updater取得失敗時の以前のupdater、既存の部分状態と元例外を維持する。native query・ChoiceDialog・Definition／Completion・Viewの本体と生の生成API、実actor同一性、scope／ID／UI・履歴・保存形式v26は不変。新file・global・registry・全体contextは追加しない。
+
+app.jsは1,181→1,176行（5行減）、非空白740→739行。root204→202文・363→362束縛、構築425→424行・113→111文。別名78行・bind35行・test hooks151行は不変。行数差には不要になった区切りも含むが、成果はUI完成参照の所有移管とroot構築二文の統合である。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体80件が成功。実ChoiceDialogの表示・選択・取消・重複要求拒否、実Block commandとViewの共有・編集開始と取消復元を確認した。生成順、receiver／引数・返値・actor同一性、未完成時と各段階失敗時の公開状態も検証した。ソース逆変換で既存処理本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,638件・関連単体80件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E178件（7file、2.6m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+## Geometry dragと拘束・寸法入力を同じpointerで結線（2026-11-12）
+
+GeometryDragFeature.prepareが返すcreateWithConstraintInputForWorkspaceは、既存の投影対応Geometry dragを完成・公開して実commandを取り出し、その後で提供された拘束／寸法入力factoryを呼ぶ。input factoryへは同じpointer・clearSnap・recordHistoryをbare・一引数で渡し、実Geometry feature／command・input・dimension draggingをimmutableなcohortで返す。app.jsはこの生成順とpointer／履歴の二重指定を担当せず、既存ownerの入口へ接続する。
+
+GeometryのPlan／Solver／Editing／Command・Derived entry、ConstraintCommandInput→DimensionDragFeatureのnative生成順と全処理本体は不変。Geometry完成のprivate公開はinput生成前に行う。input factory／input取得／dragging取得が失敗したときも先行公開のGeometryを巻き戻さず、Geometry生成自体の失敗なら以前のprepared ownerを保持しinputを作らない。各actorと元例外・getterの読取順・実pointer・履歴callbackを維持する。rootのgeometryDragFeature／geometryDragは返却後の公開へ移るが、旧境界内のGeometry feature参照はcommandの取出しだけで、実commandを消費する外部callbackはなかった。早期のGeometry query／resetは従来から準備ownerを参照し、Dimension commandのroot公開位置は入力完成後のままである。rawの各生成API・寸法入力factory・mode／session／model／履歴／UI・保存形式v26を変えない。新file・global・可変slot／guard・registry・全体contextを追加しない。
+
+app.jsは1,184→1,181行（3行減）、非空白742→740行。root206→204文・363束縛、構築426→425行・114→113文、別名79→78行。bind35行、test hooks151行は不変。rootの可変参照は追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体81件が成功。実Geometry dragの生成・Point操作と既存のConstraint／Dimension入力単体を実行した。新しい境界ではGeometryを先に公開すること、bare一引数と三つのport／返却actor同一性、input→draggingの取得順、生成時のscope／scale／pointer非読取、Point操作の履歴一回を確認した。native Geometry生成失敗・input生成／返却getter失敗での元例外・既存sessionと段階的公開の保持も確認した。ソース逆変換で既存Geometry／入力の本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,634件・関連単体81件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E180件（7file、4.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 投影metadataの公開を所有者へ移し、投影編集から作図構築を接続（2026-11-12）
+
+SketchProjectionFeature.createModelEditingForConstructionは既存の実Projection editorを生成し、完成した同期capabilityをConstruction向けに公開して同じeditorを返す。synchronizeConstructionMetadataはそのcapabilityだけを読み、未初期化時の元ReferenceErrorとbare・ゼロ引数・戻り値／元例外を保持する。同期関数は完成時に一度取得して保持し、raw createModelEditingは公開状態を変えない。計算と投影モデルの更新は既存SketchProjectionEditingが所有する。
+
+BasicDrawingTools.prepareの準備済みGeometryが返すcreateAuthoringWithProjectionForEditingは、同じ実Geometryとreferencesで投影editorを完成・公開し、その後で既存の作図機能を一度生成する。返すcohortは実authoringと実projectionEditingを保持し、actorを複製・再生成しない。Geometryのroot公開は従来の位置のままとし、app.jsはこの段階の二つのfactoryを順に呼ぶ代わりに既存ownerの入口へ接続する。
+
+AST参照を照合し、旧authoring完成前にmetadata同期を遅延参照する外部consumerはConstructionの一か所だけと確認した。rootのmetadata別名はcohort返却後に移るが、このconsumerは生成前から用意されたFeatureのguard付きportを使い、投影editor完成後・作図constructor中にも同期できる。未完成editor／同期capabilityの取得失敗では以前のcapabilityを保持し、作図の途中失敗では先行公開されたmetadataを戻さず、以前の完成済みauthoringを保持する。これは元の段階的公開であり、新しい一括rollbackを追加しない。rawの投影editor・Geometry／Authoring生成API、全native constructor本体と順序、model／ID／scope／Snap／commandの実体、UI・履歴・保存形式v26は不変。新file・global・model state・registry・全体contextは追加しない。Feature内の小さな完成capability参照を既存モデル状態と混同しない。
+
+app.jsは1,186→1,184行（2行減）、非空白744→742行。root207→206文・363束縛、構築428→426行・115→114文。別名79行、bind35行、test hooks151行は不変。rootの可変参照は追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体81件が成功。実Geometry・Projection editor・Snap・作図commandによる旧順序との比較で、全actor同一性とscope／ID／line操作を確認した。作図constructor中のmetadata利用、投影生成・Snap／Spline／Line／Slot生成失敗の公開状態、以前のauthoring保持、元guard・callback名／arity・bareゼロ引数・元例外・capability取得失敗とraw APIの無副作用を検証した。実Construction切替で投影Splineのmetadata同期とGeometry同一性・通知／描画／履歴順も確認した。ソース逆変換で既存native factory／操作本体は不変。
+
+構文639ファイル・全単体2,631件・関連単体81件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E192件（8file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## SketchTreeのstyle観測を既存Documentのブラウザへ接続（2026-11-12）
+
+SketchTreeTestDriver.createForWorkspaceはgetComputedStyle未指定の場合、既存documentのdefaultViewから操作時に現在のnative関数を取り出して使う。app.jsはブラウザstyle取得callbackを組み立てず、既存のDocumentと機能ownerを渡す。新しいfactory入口やbrowser contextを追加しない。
+
+通常callbackは元と同じ名前getComputedStyle・arity 1で、native関数をbare・一引数で呼び、戻り値と元例外を返す。生成中はdefaultView／getComputedStyleを取得しない。明示callbackはundefined／nullと継承プロパティを含め優先し、その場合はDocumentのbrowserを読まない。raw createBrowserApiと各fixture／observationへ既定値を追加しない。行がない場合の空色文字列・row class false、実DOM行の選択、subtree生成→参照更新→fit→UI→描画→観測の順、モデル・Viewport・root Document定義とlive Workspaceの区別、失敗時の部分状態、公開する八APIの順・実関数を維持する。新file・global・state／cache・registry・全体contextを追加せず、製品feature・UI・履歴・保存形式v26は不変。
+
+app.jsは1,186→1,186行（0行変化）、非空白744行。root207文・363束縛、構築428行・115文、別名79行、bind35行、test hooks151行は不変。getComputedStyleのroot直接参照がなくなり、新たな未束縛参照なし。行数減ではなく、既存Documentが持つbrowser依存の中継を省いた単位である。200〜500行の全体目標は未完了。
+
+関連単体6件が成功。raw／明示Workspace／既定Workspaceの実Geometry・Sketch・Viewportを比較し、全八API・全fixtureとscope／reset／references／fit／draw／DOM／CSSの失敗時の部分モデルを照合した。実subtree fixtureで生成時のbrowser非取得、最新native関数・bare一引数・同じDOM行・返却style、browser／関数getter／呼出失敗の元例外、明示callbackの優先、行なし時のbrowser非取得を確認した。ソース逆変換で既存fixture／observationとappの他の接続は不変を確認した。
+
+構文639ファイル・全単体2,625件・関連単体6件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E129件（3file、1.9m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## テストAPIの有効条件と公開をBrowserTestApiへ集約（2026-11-12）
+
+BrowserTestApi.installForBrowser(window, createApi)が、現在URLのtestパラメータの存在を確認し、必要な場合だけfactoryを呼んで完成APIをwindow.__jot2dTestへ公開する。app.jsのcreateTestApiは機能別driverの構築と既存createFromSupportRecordsへの接続だけを担当する。公開呼出しは従来どおりDocument編集resetの構築後、式入力highlight導入と空Document開始の前に置く。
+
+factoryはbare・ゼロ引数で呼び、完成した実APIを包み直さず代入する。test／test=0／test=falseを含め、値でなくnative URLSearchParams.hasによる存在判定を維持する。判定は呼出しごとに現在URLを読み、未指定ではfactoryを呼ばず、以前の公開値も削除しない。構築中と構築失敗時には以前の公開APIを保持し、公開setter失敗も元例外のまま伝える。返却値は以前のinstallerと同じundefined。通常起動では既存BrowserTestApiによる条件確認だけを行い、テストdriverを生成しない。raw create／createWithProperties／createFromSupportRecordsは純粋な組立てのままである。生成するdriver・順序・公開名・descriptor・関数identity・receiver／引数／結果・collision優先順は不変。新file・global・state／cache・registry・全体contextを追加せず、製品featureにtesting依存を導入しない。UI・履歴・保存形式v26は不変。
+
+app.jsは1,187→1,186行（1行減）、非空白745→744行。root207文・363束縛、構築428行・115文、別名79行、bind35行は不変。条件付きtest hooksは152→151行。URLSearchParamsのroot直接参照がなくなり、新たな未束縛参照なし。監査toolは生成だけを行うcreateTestApiも従来のinstallTestHooksと同じtestHooks分類として計測する。200〜500行の全体目標は未完了。
+
+関連単体20件が成功。実公開契約の全groupを使い、通常起動の生成省略、parser→location→search→factory→公開の順序、最新URLの再読取り、native query解釈、実APIの同一性と可変性、callbackのbare／ゼロ引数と実公開後のreceiver・結果、各段階の元例外と以前の公開値保持を確認した。既存公開組立てとapp内の全driver構築本体はソース逆変換で不変を確認した。
+
+構文639ファイル・全単体2,622件・関連単体20件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E173件（6file、2.6m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 通常Solverの実装選択をDocumentWorkspaceへ集約（2026-11-12）
+
+DocumentWorkspaceのReadContextが返すcreateEditingScopeは、Solverプロパティの指定がない場合にGeometrySolver.ConstraintSolverを選び、既存のscope binding・model query・constraint insertionを構築する。app.jsはSolverクラスを取得・中継せず、Sketch切替のclose／resetを接続する。
+
+独自Solverと明示undefined／nullは、継承プロパティの場合も既存どおり優先し、無効なクラスは同じnative生成で失敗する。raw createScopeBinding／EditingScopeBinding.createへ既定値を追加しない。通常クラスの読取りはcreateEditingScope呼出時だけ行い、Workspace／ReadContextの準備では取得も生成もしない。Solverは初期のWorkspace実体を一引数で受け、binding→DimensionQueries→Insertionの順に一度ずつ生成する。以後のscope切替では同じSolverのmodelを更新する。束縛済み編集対象と現在WorkspaceによるSketch／Parameter割当の区別、close→move reset→activate→model→read cache→projectionの順、失敗時の既存部分状態を維持する。新file・global・可変state／cache・全体contextを追加せず、Solver計算・UI・履歴・保存形式v26は不変。
+
+app.jsは1,191→1,187行（4行減）、非空白749→745行。root208→207文・364→363束縛、別名・設定82→79行、構築429→428行（115文）。bind35行とtest hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体37件が成功。既存のscope構築・現在Workspaceとの乖離・切替／挿入失敗の比較へ通常既定の入口を加えた。実ConstraintSolverを継承したconstructorで初期モデルの同一性・一引数・生成一回・切替後の同じSolverを確認し、初期準備時のクラス非取得、constructor失敗の元例外と既存binding保持、独自／無効クラス・継承プロパティの優先、raw入口の未指定失敗を確認した。既存binding・query・insertionの処理本体はソース逆変換で不変を確認した。
+
+構文639ファイル・全単体2,618件・関連単体37件と通常ja/light・en/dark・test起動が成功。関連E2E178件（6file、2.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## Canvas初期倍率とテスト観測のCSS単位依存を所有者へ集約（2026-11-12）
+
+CanvasDisplay.prepareForWorkspaceが返すcreateForBrowserは、initialScaleの指定がない場合に既存Appearance.CSS_PX_PER_MMを使い、既存createForEditingへ接続する。CanvasTestDriver.createBrowserSupportForWorkspaceもcssPxPerMm未指定の場合だけ同じ実定数を使う。app.jsは表示単位定数を所有・中継せず、通常のCanvas構築とテスト支援の入口を接続する。
+
+明示された倍率は0・undefined・nullを含め優先する。raw createForEditing／CanvasDisplay.createとCanvasTestDriverのScene／DisplaySupport／ZoomObservationには既定値を追加しない。既存定数96/25.4を複製せず、通常の初期倍率、初期倍率に比例するズーム上下限、100%表示、空図面のfit、DPR・PNG一時viewportと復元の計算は既存Viewport／Surface／Exportが所有する。Canvasの段階的生成・公開順、操作・履歴・UI・保存形式v26は不変。新file・global・可変state・全体contextを追加しない。
+
+app.jsは1,194→1,191行（3行減）、非空白752→749行。root209→208文・365→364束縛、別名・設定85→82行。構築429行・115文、bind35行、test hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体83件が成功。実Canvas WorkspaceとViewport／Navigation／Surface／Exportによる既存入口と通常入口の比較で、初期値・上下限・百分率・空図面fit・DPR bitmap・PNG後のviewportとbitmap復元、同じ実Viewport、生成失敗の元例外と部分生成順を確認した。テスト支援は未指定時だけAppearanceを一度読み、既存ZoomObservationへ接続すること、明示値とraw未指定を保持することを確認した。
+
+構文639ファイル・全単体2,616件・関連単体83件と通常ja/light・en/dark・test起動が成功。関連E2E139件（7file、2.1m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 寸法入力focusのbrowserフレーム接続をCanvasDisplayへ集約（2026-11-12）
+
+CanvasDisplayの準備済みdisplayが返すcreateEditingWorkspaceForBrowserは、同じbrowser windowのrequestAnimationFrameを操作時に読むscheduleFrameを既定として、既存Editing Workspace生成へ接続する。返値は既存生成の実Workspaceであり、app.jsは寸法入力のframe callbackを組み立てない。
+
+生成中はbrowser frame API・モデル・pending・listenerを読み書きせず、予約も行わない。scheduleFrameは元と同じ名前・arity 1で、現在のnative APIをbare・一引数で呼び、戻り値・元例外を返す。明示dimensionInput.scheduleFrameはundefined／nullを含め優先する。raw createEditingWorkspace、Surface→export→Layout→DimensionDisplay→DimensionInputの順序、Workspace全体完成後のProperties用layout公開を変えない。予約後の最新pending／buffer／Viewportに対する同期とfocus／select、非表示時のfocus省略、入力のguard・履歴・UI・保存形式v26は既存View／Controllerのままである。既存application/canvas_display.jsへ配置し、新file・global・state／frame slot・全体contextを追加しない。
+
+app.jsは1,194→1,194行（0行変化）、非空白752行。root209文・365束縛、構築429行・115文、bind35行・別名85行・test hooks152行は不変。requestAnimationFrameのglobal直接参照がなくなり、新たな未束縛参照なし。行数減ではなく寸法入力表示のbrowser依存を整理した単位であり、200〜500行の全体目標は未完了。
+
+関連単体76件が成功。実Workspace／DimensionDisplay／DimensionInput／View／Controllerを使い、生成時のframe API非取得、同じ入力element、予約後に変更されたpending値・Viewportでの同期→focus→select、元例外と前入力状態の保持、callbackのmetadata・bare receiver・一引数・返却ID 0、明示undefined／nullの優先を確認した。ソース逆変換で既存Canvasと寸法入力の生成・操作本体は不変、rootはWorkspace入口とframe指定の置換だけである。
+
+構文639ファイル・全単体2,612件・関連単体76件と通常ja/light・en/dark・test起動が成功。関連E2E187件（7file、2.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## Pointerフレーム予約と取消のbrowser接続をCanvasInteractionFeatureへ集約（2026-11-12）
+
+CanvasInteractionFeatureの操作sessionが返すcreateMoveSchedulerForBrowserは、同じbrowserのrequestAnimationFrame／cancelAnimationFrameを操作時に読むrequestFrame／cancelFrameを既定として、既存createMoveSchedulerForEditingへ接続する。app.jsは予約・取消のcallbackを組み立てず、既存profile・Geometry read cache・寸法入力同期とbrowserを渡す。
+
+生成中はbrowserのframe API・input binding・モデル・scopeを読み書きせず、listenerも登録しない。callbackは元と同じ名前・arity 1で、毎回取得したnative APIをbare・一引数で呼び、戻り値と元例外を返す。Frame ID 0、coalescing、queued pointer copy、flush／discard、reentrant move、profile／cache／入力処理／寸法同期の順序と入力完成前guardは既存PointerMoveSchedulerとInput lifecycleが所有する。明示requestFrame／cancelFrameはundefined／nullを含め優先し、raw APIは変更しない。実scheduler／入力bindingを作り直さず、新しいstate／queue／frame slot・file・global／全体contextを追加しない。既存application/canvas_interaction_feature.jsへ配置し、UI・Pointer操作・履歴・保存形式v26は不変。
+
+app.jsは1,196→1,194行（2行減）、非空白754→752行。root209文・365束縛は不変。構築431→429行・115文、bind35行・別名85行・test hooks152行は不変。cancelAnimationFrameのglobal直接参照がなくなり、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体50件が成功。実PointerMoveSchedulerと既存Input lifecycleを、raw／Editing／Workspace／browser経路で比較し、初期化前guard・binding公開とlistener順・各失敗時の部分公開・再生成失敗後の前binding保持を確認した。browserのAPI取得時機、bare receiver・一引数、ID 0、入力coalescingとdiscard、getter／関数例外時のqueued／scheduled状態、明示undefined／nullの優先も検証した。ソース逆変換で既存scheduler生成・入力生成／bind・guard／公開・操作本体は不変、rootは宣言したbrowser接続置換だけである。
+
+構文639ファイル・全単体2,610件・関連単体50件と通常ja/light・en/dark・test起動が成功。関連E2E194件（7file、4.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 参照画像のbrowser生成factoryをReferenceImageFeatureへ集約（2026-11-12）
+
+ReferenceImageFeature.createForBrowserWorkspaceは、明示したbrowser windowのImageをnewするcreateImageを既定として既存Workspace生成へ接続する。実constructorはRendererが画像resourceを必要とした時点で取得し、app.jsはImage生成factoryを持たない。既存create／createForWorkspaceは引き続き明示factoryを受け取る。
+
+生成中や画像がないprepareImagesではImage constructorを読み出さない。同じRenderer cacheを使い、cache missごとに現在のbrowser.Imageをnew・無引数で呼ぶ。factory名createImage・arity 0、実resourceの同一性、load listener・decode・描画・cache clearと失敗後の再取得を維持する。getter／constructorの元例外はそのまま透過する。明示createImageはundefined／nullを含め既定値より優先し、表示resourceの生成ではbrowser constructorを読まない。読み込み用の画像decode・resizeと表示用Renderer、Workspace importとbound editing display、Selection・較正・visibility・入力bindを従来のownerに残す。既存application/reference_image_feature.jsに配置し、新file／global／state・cache・全体contextを追加しない。UI・操作・PNG出力・履歴・保存形式v26は不変。
+
+app.jsは1,196→1,196行（0行変化）、非空白754行。root209文・365束縛、構築431行・115文、bind35行・別名85行・test hooks152行は不変。Imageのglobal constructor直接参照がなくなり、新たな未束縛参照なし。行数減ではなくbrowser resource生成の所有を整理した単位で、200〜500行の全体目標は未完了。
+
+関連単体17件が成功。raw／Workspace／browser構成で実Renderer／Layer／Interaction／Inputを使い、scope置換・Selection・import／較正／visibility／resource準備と生成失敗を比較した。browser既定factoryではconstructorの遅延取得とnew.target／無引数、実resource／load／描画参照、cache reuse・clear後のconstructor差替え、getter／constructor失敗と再取得、明示undefined／nullの優先を確認した。ソース逆変換で既存Image featureと生成・操作本体は不変、rootはbrowser入口とfactory指定の削除だけである。
+
+構文639ファイル・全単体2,608件・関連単体17件と通常ja/light・en/dark・test起動が成功。関連E2E190件（7file、2.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## Canvas式参照の接続をParameterEditorへ集約（2026-11-12）
+
+ParameterEditorのcreateReferenceInputForCanvasは、既存editorが持つbrowser windowのHTMLTextAreaElement、操作時に現在の編集scopeを読むcurrentNamespace、同じViewportのcanvasPointを既存ExpressionInputControllerへ接続する。app.jsは入力型・scope読取りのcallback・座標関数を組み立てず、CanvasとViewport、既存入力欄・Pending・hit queryを渡す。
+
+入力型と座標関数は従来の参照入力生成段階で取得し、scope・モデル・dialog draft・Canvas座標・listenerを生成中に読み書きしない。currentNamespaceは同名・arity 0で、editorへ渡されたcurrentScopeを操作時にbare・無引数で呼び、同じ値と元例外を返す。Workspace.currentへ置き換えず、最後にactivateされた編集scopeとParameter dialog draftの名前空間を区別する。TextAreaElement／canvasPointのown propertyがある場合はundefined／nullを含めその値を使い、対応するbrowser／Viewport getterを読まない。currentNamespaceの明示値も優先する。raw createReferenceInputとEditor／ExpressionInputControllerの本体、実draft・挿入・hit／feedback・入力Eventの順は不変。新しいstate・file・global／全体contextを作らず、既存application/parameter_editor.jsへ配置する。UI・操作・履歴・保存形式v26は変更しない。
+
+app.jsは1,197→1,196行（1行減）、非空白755→754行。root209文・365束縛は不変。構築432→431行・115文、bind35行・別名85行・test hooks152行は不変。rootからHTMLTextAreaElementの直接参照がなくなり、DOM入力要素のconstructorをrootが渡す接続はなくなった。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体18件が成功。rawとCanvas構成の実ExpressionInputControllerで、dialog draftとCanvas namespaceの区別、同じ寸法・注記への挿入、live scope置換・日英feedback・エラー時のevent未消費と順序を比較した。browser型／Viewport関数と実controllerの参照同一性、生成中のscope非読取り、callbackの名前・arity・bare呼出し／戻り値／例外、明示undefined／nullの優先とgetter非参照も確認した。ソース逆変換で既存Parameter UI／式入力生成と操作本体は不変、rootは参照入力入口と接続の置換だけである。
+
+構文639ファイル・全単体2,606件・関連単体18件と通常ja/light・en/dark・test起動が成功。関連E2E196件（7file、3.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## Sketch名入力と削除確認のbrowser接続をSketchEditingFeatureへ集約（2026-11-12）
+
+SketchEditingFeature.prepareNavigationのcreateForBrowserは、明示したbrowser windowに対するpromptNameとconfirmDeletionを既定として既存の生成経路へ接続する。名前入力は従来のInteraction生成時、削除確認は従来の後段Deletion生成時に準備し、実際のprompt／confirmは操作時に呼ぶ。app.jsはSketchのbrowser dialog callbackを組み立てない。
+
+早期prepareと各生成ではbrowserのdialog method・model・scope・DOM・listenerを新しく読み書きしない。操作時に同じbrowserの現在のmethodをmember receiverで読み、promptにはtitleとnameの二引数、confirmにはmessageの一引数を渡す。callback名・arity・戻り値・元例外、名前入力の取消／空文字／trim、確認取消、既存の権限・Root／lock・空Sketchの無確認削除・参照拒否と履歴を維持する。明示promptName／confirmDeletionはundefined／nullを含め優先し、raw createForInteraction等は変更しない。Navigationの既存完成公開、Move／Treeの実actorと入力bindの段階、scope・Selection・reset・求解を変更しない。新しいcommand・state・file・global／全体contextを作らず、既存application/sketch_editing_feature.js内のUI接続に配置する。UI・操作・保存形式v26は不変。
+
+app.jsは1,198→1,197行（1行減）、非空白756→755行。root209文・365束縛は不変。構築433→432行・115文、bind35行・別名85行・test hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体49件が成功。実Sketch command／DeletionとNavigationを使い、生成中のmethod非取得、操作時のgetter・receiverと引数、同じSketch／Pointのidentity、名前入力取消／空文字／trimと履歴、確認取消／承認／例外、明示undefined／nullでのbrowser非参照を検証した。削除取消の比較前には既存のSketch state正規化を行い、既存正規化の副作用とGeometry削除を混同しない。ソース逆変換で既存Sketch生成・Navigation公開・Move／Tree・Deletion／resetの本体は不変、rootはbrowser入口と既存dialog callbackの置換だけである。
+
+構文639ファイル・全単体2,604件・関連単体49件と通常ja/light・en/dark・test起動が成功。関連E2E199件（7file、3.1m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## Properties入力のブラウザ型依存を表示先Documentへ集約（2026-11-12）
+
+PropertiesDisplay.prepareの完成Workspaceが返すcreateEditingWithViewForBrowserは、従来のPresentation用生成を通り、編集とAppearanceUIが完成した後のView依存reader内で、表示先Document.defaultViewからHTMLTextAreaElement／HTMLInputElementを取得する。app.jsはPropertiesの入力判定に使うDOM型を個別に渡さず、同じDocumentを既存Workspaceに接続する。
+
+早期prepareやWorkspace生成時に新しいdefaultViewの読取りを行わない。View依存readerは従来どおりbare・無引数で編集生成後に一度呼ぶ。その返値を変更せず、own propertyとして明示された型はundefined／nullを含めそのまま優先し、対応するbrowser getterを読まない。既定値は表示先Documentの型を共有する。通常アプリではこのDocumentはrootのdocumentと同じで、従来のglobal DOM型と同じ実参照である。Document／型getterや各constructorの例外を透過し、全生成が成功するまでPropertiesの完成参照を公開しない。失敗時には前のView／Appearance／Visibilityを保持し、未生成guardも維持する。既存raw生成とPresentation用入口・Controller／View／Appearanceの生成・操作本体は不変。既存application/properties_display.jsに配置し、新file／global／可変slot／全体contextを追加しない。UI・入力判定・Workspace／bound editing scope・履歴・保存形式v26は変更しない。
+
+app.jsは1,199→1,198行（1行減）、非空白757→756行。root209文・365束縛は不変。構築434→433行・115文、bind35行・別名85行・test hooks152行は不変。rootのHTMLInputElementへの直接参照がなくなり、新たな未束縛参照なし。HTMLTextAreaElementはParameter参照入力の別接続でまだ使う。200〜500行の全体目標は未完了。
+
+関連単体34件が成功。既存の実Properties部品を使うraw／Workspace／一括生成／Presentation／browser経路で、Selection・外観編集・入力・操作port・live scope・生成順と各失敗段階を比較した。browser型取得がPropertyEditingFeatureとAppearanceUIの後であること、実型の同一性、明示undefined／nullでのgetter非参照、取得失敗時の前完成参照保持を確認した。ソース逆変換で既存Properties生成・操作本体は不変、rootは入口変更と型指定の削除だけである。
+
+構文639ファイル・全単体2,601件・関連単体34件と通常ja/light・en/dark・test起動が成功。関連E2E197件（7file、3.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 削除時のprimitive作図リセットをBasicDrawingToolsへ集約（2026-11-12）
+
+BasicDrawingTools.createが返すresetForDeletionは、同じ実Line commandのreset、同じCircular commandのresetCircle／resetArcsを従来の順で呼ぶ。SelectionEditingFeature.prepareのcreateForDrawingがこの実関数をDeletionFeatureへ接続し、GeometryDeletionCommandは削除成立後の既存終了段階でresetDrawingを一度呼ぶ。app.jsと通常削除の接続は線・円コマンドの個別別名を必要としない。
+
+終了の順序はGeometry drag→Dimension drag→Annotation drag→Pending clear→Constraint command clear→primitive作図reset→pointer preview解除→selectで維持する。許可・依存・空plan・symbolの拒否時には終了操作を行わない。resetは操作時に同じactorのmethodをmember receiver・無引数で読み、戻り値を無視して元例外を透過する。途中で失敗しても完了済みのresetを巻き戻さず、後続reset・preview・mode・モデル変更・履歴へ進まない。Rectangle／Slot／Spline／Snap等の別状態を追加でresetしない。旧raw GeometryDeletionCommandはresetDrawing未指定時に従来のlineCommand／circularCommandsを使う互換経路を持つ。新Selection入口は明示resetDrawing値を優先し、従来の完成Clipboard公開・初期化前guard・失敗時の前参照保持を維持する。新しいcommand・state・file・global・全体contextを追加せず、既存application／commands内のownerへ配置する。削除計画・Workspace／bound editing scope・求解・履歴・UI・保存形式v26は変更しない。
+
+app.jsは1,200→1,199行（1行減）、非空白758→757行、root210→209文・束縛367→365。構築434行・115文、bind35行・test hooks152行は不変。別名86→85行・68→67文。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体87件が成功。実BasicDrawingToolsと実GeometryDeletionCommandの接続、既存DeletionFeatureと実計画／Selection／Pending／Constraint targets／Preview／Lifecycleを使う三経路（raw・Workspace構成・作図reset付き構成）の比較を行った。各resetの順・receiver・引数・途中例外、拒否時の無変更、失敗求解時の既存の履歴、mixed selectionの段階的削除、実command参照、前Clipboard保持と未生成guardを検証した。ソース逆変換で宣言したresetの委譲以外の作図・削除・Clipboard生成／操作本体は不変である。
+
+構文639ファイル・全単体2,600件・関連単体87件と通常ja/light・en/dark・test起動が成功。関連E2E195件（7file、2.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 投影のdrag入力と操作時の拒否文をSketchProjectionFeatureへ集約（2026-11-12）
+
+SketchProjectionFeature.createForWorkspaceのcreateDragInputsは、同じ実projectionQueriesとprojectionBlockedMessageを凍結recordで返す。拒否文は操作時に既存applicationTextでドラッグ名を翻訳し、既存の投影形状編集拒否文を生成する。GeometryDragFeature.prepareのcreateForWorkspaceWithProjectionがこれを既存Workspace生成へ接続し、完成した同じfeatureを既存経路で公開する。app.jsは投影queryと拒否文関数を個別に抜き出したり、翻訳と拒否文を組み立てたりしない。
+
+入力準備ではモデル・scope・言語・描画・listenerを読み書きしない。queryは実参照を共有し、native Plan／Solver／Editing／Commandの生成と投影lock判定・preview／finish・rollback・履歴は従来のownerに残す。拒否文callbackは元と同じ名前・arity 0、翻訳と文生成はbare呼出しで同じ順序・引数・戻り値・元例外を維持する。翻訳関数の実参照はWorkspace生成時に既存と共有し、言語は操作時に読む。新routeの明示projectionQueries／projectionBlockedMessageはundefined／nullを含め既定値より優先する。provider／生成失敗では完成featureの公開を更新せず、前の実drag sessionと初期化前guardを維持する。raw APIと既存生成本体は不変。既存application/sketch_projection_feature.jsとgeometry_drag_feature.jsに配置し、新file／global／全体contextや可変保持slotを追加しない。UI・操作・保存形式v26は変更しない。
+
+app.jsは1,202→1,200行（2行減）、非空白760→758行。root210文は不変、束縛369→367。構築435→434行・115文、別名87→86行・68文、bind35行・test hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体30件が成功。投影の実queryと準備時の無読取り、実際の日英拒否文・言語変更・元例外、native dragの投影lock拒否時のPoint identity／座標・履歴無変更、provider失敗時の前session保持と未生成guard、明示callbackとundefined／null overrideを確認した。ソース逆変換で投影の既存生成／操作本体とdragの既存生成／公開／操作本体は不変で、rootは宣言した接続置換だけである。
+
+構文639ファイル・全単体2,597件・関連単体30件と通常ja/light・en/dark・test起動が成功。関連E2E193件（8file、4.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## ファイル操作のControls接続とPNG公開後の開始をDocumentFileFeatureへ集約（2026-11-12）
+
+DocumentFileFeature.prepareのcreateForWorkspaceが返すprepareExportControlsは、同じ完成File featureのDocument controlsをbindし、共有File session・文書名・参照画像準備・Canvas snap・pointer flushを既存PNG factoryへ接続する。返すpngはfactoryが返した実recordで、startを別に返す。app.jsはpng.commandを従来の位置で公開した後にstartを呼び、同じPNG lifecycleのstart、同じDXF featureのcontrols bindを順に実行する。
+
+Document controlsのbindより前に参照画像のprepareImagesを読まず、PNG factoryはbare・一引数、既存optionsの順序と実関数・sessionを維持する。snapは操作時に同じdrawingSnap.findをmember receiver・二引数で呼び、結果・元例外を透過する。PNG commandの公開をstart前に残し、各段階の例外や途中まで登録されたlistenerを巻き戻さない。繰返し呼出しは各native ownerの既存規則に従い、新しい開始済みflagを追加しない。PNG描画／mode・画像入力・DXF変換／権限・Document command／File sessionの状態は各ownerに残す。無関係な参照画像入力やSketch Treeのbindを取り込まず、CanvasDisplay／PngExport／DocumentFileControls／DXF commandの生成・操作本体は不変。保存形式v26・UI・操作・履歴を変えず、既存src/application/document_file.jsに配置し、新file／global／全体contextを追加しない。
+
+app.jsは1,205→1,202行（3行減）、非空白763→760行、root212→210文。束縛369は不変。構築436→435行・115文は不変、bind37→35行・13→11文、別名87行・test hooks152行は不変。新たな未束縛参照なし。関連するファイル操作の接続を既存ownerへ集約した単位であり、200〜500行の全体目標は未完了。
+
+関連単体55件が成功。新旧の接続を実Document controls・PNG lifecycle／command・DXF controlsへ接続して比較し、同じsession・実PNG record・live文書名・snapのreceiver／引数／戻り値／例外、command公開前の無起動と公開後の開始、busy時の拒否、実ボタンの動作、native再開始規則を確認した。Document bind／listener登録／画像port取得／PNG生成／PNG start／DXF bindの各失敗で、例外同一性・公開状態・登録済みlistenerの挙動が従来と一致する。ソース逆変換で既存File生成本体は不変、rootは宣言した接続置換だけである。
+
+構文639ファイル・全単体2,594件・関連単体55件と通常ja/light・en/dark・test起動が成功。関連E2E150件（7file、2.2m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 作図最小長さの導出と線・円弧への既定値共有をGeometry作成側へ集約（2026-11-12）
+
+GeometryCreation.createLengthPolicyは、従来app.jsが持っていたMath.max(minimumOrientationLength, solver値 || 12)の導出を担当し、通常作図で共有するminLineLength／minArcLengthを凍結recordで返す。BasicDrawingTools.prepareのprepareGeometryForSolverは、従来の導出位置でsolver.minLineLengthを一度だけ読み、同じ既定値を保持するGeometry factoryとminimumLengthを返す。後段Geometry生成は既存createPreparedGeometryを通り、実Geometry／Endpoint resolverとauthoring公開を従来の位置で作る。app.jsは導出式・円弧用の別名・作図factoryへの二重設定を持たない。
+
+solver値の読取りと純粋なpolicy生成だけを前段で行い、モデル・scope・hit・ID・Selection・UIを生成・照会しない。solverの後続変更を再読取りせず、実Geometry生成は既存の後段で行う。|| 12によるfalsy値のfallback、Math.maxの下限・型変換・非有限値・元例外を維持し、新しい数値検証や閾値変更を加えない。後段factoryの明示minLineLength／minArcLengthは0／null／undefinedを含め既定値より優先し、raw createGeometry等の独立した線・円弧設定と未指定値も維持する。既存GeometryCreationとBasicDrawingToolsの生成・修復・求解・履歴本体、現在Workspace／bound editing scope・Point identity・constructorの順は不変。方向判定のMIN_ORIENTATION_LENGTH、求解条件、Viewport側の処理を統合せず、既存箇所へ同じ値を渡す。保存形式v26は不変。既存editing／geometry_creation.jsとapplication／basic_drawing_tools.jsに配置し、新file／global／全体contextを追加しない。
+
+app.jsは1,207→1,205行（2行減）、非空白765→763行、root213→212文。束縛369は不変。構築437→436行・115文は不変、別名88→87行・69→68文。bind37行・test hooks152行は不変。rootのMath直接参照がなくなり、新たな未束縛参照なし。数値policyと通常作図の既定値共有を既存ownerへ集約した単位であり、200〜500行の全体目標は未完了。
+
+関連単体72件が成功。通常値1e-6、微小・負値、0／NaN／null／undefined／false／空文字、Infinityと文字列の従来の結果、下限・型変換例外を検証した。実GeometryのLine補正、短いArcの正規化、rawで円弧6・通常既定値4という独立設定の維持、solver getterの一度だけの読取りと後続変更の非反映、明示override、scope置換とPoint identityも確認した。getter・policy・Geometry・Endpoint resolver生成例外を透過し、失敗時にID・modelを変更せず、未生成のauthoringへのguardを維持する。ソース逆変換では宣言したpolicy準備以外のGeometry／authoring生成本体は不変で、rootのGeometry factory参照は新しい導出宣言以後である。
+
+構文639ファイル・全単体2,592件・関連単体72件と通常ja/light・en/dark・test起動が成功。関連E2E190件（8file、3.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 通常Geometry Workspaceの判定をCanvasInteractionFeatureへ集約（2026-11-12）
+
+CanvasInteractionFeature.createGeometryWorkspaceは、通常Geometry Workspace用のisGeometryModeを内部で生成し、既存のSelection edit accessへ渡す。同じ実判定関数を同じInteraction featureの凍結APIへ公開し、app.jsは各機能へそれを共有する。通常判定は従来どおり常にtrueで、Lifecycleのselect／line／block-placeなどのツールmodeとは別のWorkspace種別判定である。Selection解除も既存所有経路を使い、外側のfeature cloneや第二のInteractionを作らない。
+
+明示したisGeometryMode callbackは元の実関数を使用し、undefined／nullも既定関数で置き換えない。旧create／createWithOwnedClearingの未指定値や公開recordは変更しない。Lifecycle→Selection／Edit access→PointUsage→Hoverの生成順、native callbackの名前・arity・同一性、guardでのbare・無引数呼出しと短絡・元例外を維持する。内部sessionが参照するfeatureとappが受け取るfeatureは同じ実体である。新しい操作modeや可変mode state、model・Selection・Pending・Pointerの複製、新file／global／全体contextを追加しない。UI・操作・履歴・保存形式v26は不変。既存src/application/canvas_interaction_feature.jsへ集約する。
+
+app.jsは1,210→1,207行（3行減）、非空白768→765行、root214→213文。束縛369・構築437行／115文・bind37行・別名88行・test hooks152行は不変。通常処理のroot named functionと委譲はゼロとなり、条件付きinstallTestHooksは残る。これは構築やinline callbackの分離完了を意味せず、200〜500行の全体目標は未完了。
+
+関連単体56件が成功。native生成順と実Lifecycle／Selection／Edit access／PointUsage／Hover参照、Selectionとaccessへの同じ判定関数の注入、default function名／arity、readonly公開、各ツールmodeでの従来のtrue判定を確認した。sessionからScene準備へ渡すInteractionもappの実featureと同一である。明示callbackの未評価・receiver／引数数・liveな結果・短絡・元例外、undefined／null、raw APIの違いとnative constructor例外も検証した。ソース逆変換では判定の構築・公開以外の既存Interaction生成本体は不変、rootのisGeometryMode参照はすべてfoundation宣言以後で、新たな未束縛参照なし。
+
+構文639ファイル・全単体2,589件、通常ja/light・en/dark・test起動が成功。関連E2E252件（8file、4.5m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## Propertiesパネルの状態照会と完成layoutへの更新をUI ownerへ集約（2026-11-11）
+
+CanvasWorkspaceLayout.prepareは、操作時にDOMを読むisPropertiesCollapsedと、完成した同じlayoutへ委譲するsetPropertiesPanelCollapsedを返す。createWorkspaceは既存Canvas Workspace factoryをbare・全引数で呼び、Workspace全体が完成してからlayout参照を一度選んで公開し、元の実Workspaceをそのまま返す。BlockEditingFeature.createPlacementWithPropertiesは同じProperties portを既存Block配置commandへ接続する。app.jsはProperties用のCSS class照会とsetter委譲を持たず、レイアウト準備と完成Workspaceの生成だけを接続する。
+
+早期prepareはDOM・viewport・モデル・listenerを生成・照会しない。状態照会は毎回同じDocumentから現在workspaceを選び、workspaceがなければfalseを返す。更新は同じ実layoutのmethodを操作時に読み、member receiver・全引数・戻り値・元例外を維持する。Layout単体が生成された時点では公開せず、後続DimensionDisplay／DimensionInputを含むWorkspace生成が完成するまでは従来のcanvasWorkspaceLayoutのReferenceErrorを維持する。factory／layout選択の失敗は前の完成参照を保持し、独立prepareや成功したundefined／null layoutを区別する。Block配置は明示callback／undefined／null overrideを優先する。既存CanvasDisplayの全生成本体・CanvasWorkspaceLayout.create・BlockPlacementCommandとraw createPlacementは不変で、実Workspace／layout／command・mode／Selection／履歴を複製しない。UI・サイズ変更時の表示中心・開閉復元・翻訳・保存形式v26を変えず、新file／global／全体contextを追加しない。
+
+app.jsは1,212→1,210行（2行減）、非空白770→768行。root214文・369束縛は不変。構築438→437行・114→115文、委譲1→0行。bind37行・別名88行・test hooks152行は不変。DOM状態の照会と更新先の完成管理を既存UI ownerへ集約した単位であり、200〜500行の全体目標は未完了。
+
+関連単体112件が成功。raw／既存Workspace構成／Properties付き構成で、Blockの実owner・pointer・preview・ID・配置回転・パネル復元・取消・求解例外を検証した。明示callbackのundefined／nullも維持する。実layoutのDOM・aria-label・言語変更・Canvas表示中心、状態照会の操作時取得・欠落workspace・元例外、native Workspace factoryのbare receiver・全引数・実record参照、遅延method取得・同じlayout receiver・元例外、再生成失敗時の前参照保持と独立性を確認した。実CanvasDisplayのLayout／DimensionDisplay／DimensionInputの各生成中、および三段階の生成失敗ではportが未公開のままである。ソース逆変換では既存layout・CanvasDisplay・Block配置の生成本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,587件、通常ja/light・en/dark・test起動が成功。関連E2E180件（7file、3.2m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 分析更新の早期portと完成参照をSketchSolvingFeatureへ集約（2026-11-11）
+
+SketchSolvingFeature.prepareは、実ownerをまだ生成せず、安定したrefreshConstraintAnalysisとReference-aware準備の入口を返す。後者は従来のprepareWithReferencesForWorkspaceを同じ位置で呼び、二つのcontext生成入口の完成時に実analysis参照をprivateに公開する。context自体は元の実recordを返し、ReferenceState／SolveState／solveAndRefreshも同じ実owner・関数を共有する。app.jsは完成分析を更新する委譲関数を持たず、返された更新portをUIや各編集機能へ接続する。
+
+早期prepareはObject.freezeとclosureの生成だけを行い、ReferenceState／SolveState／Query／Analysis、Document・Workspace・DOM・listenerを生成・照会しない。native Reference-aware準備は同じnamespace receiver・一引数、context生成はbare・一引数で呼び、元例外を透過する。完成前には従来のconstraintAnalysisのReferenceErrorを返し、完成したundefined／null analysisはTypeErrorとして区別する。更新は操作時に同じanalysis.refreshをmember receiver・一引数で呼ぶ。未指定／undefinedは毎回新しい空record、nullや明示optionsはそのまま渡し、余分な引数を無視し、戻り値・getter例外・method例外を維持する。準備・context生成・analysis選択の失敗は前の完成参照を置き換えず、別prepareとは独立する。既存raw APIとnative生成本体、分析cache・求解条件・scopeの読取り・履歴・UI・保存形式v26を変えず、新file／global／全体contextを追加しない。
+
+app.jsは1,212→1,212行（変化なし）、非空白770行・root214文も不変。束縛368→369、構築437→438行・113→114文、委譲2→1行。bind37行・別名88行・test hooks152行は不変。早期の準備入口を追加したため行数削減・依存数削減とは扱わず、分析の完成参照と更新portの所有を既存SketchSolvingFeatureへ集めた単位とする。200〜500行の全体目標は未完了。
+
+関連単体68件が成功。native ownerへのアクセスを拒否した状態でも早期prepareだけは成功すること、従来の生成位置でReferenceState→SolveStateを作り、通常context／Annotation付きcontext双方で同じ実analysisを更新することを確認した。native準備・contextのreceiver／引数・実record参照、毎回の空options・明示null／options参照・余分な引数、遅延method取得と同じanalysis receiver、元例外、再生成失敗時の前参照保持・別prepareの独立性・undefined／nullを検証した。ソース逆変換では既存の求解準備とcontext生成本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,583件、通常ja/light・en/dark・test起動が成功。関連E2E252件（8file、4.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 拘束注記ドラッグの求解scopeと分析無効化を求解contextへ集約（2026-11-11）
+
+SketchSolvingFeatureのWorkspace準備が返すcreateContextWithAnnotationDragは、既存Annotation factoryへGeometryDragのbuild／beginと分析無効化portを接続し、実AnnotationDragを生成してから既存の求解contextを構築する。実dragのscope／追加variablesをSolveScopeQueryへ渡し、完成した同じcontextのanalysisを無効化する。返す凍結recordは既存contextの実owner／関数と同じannotationDragを共有する。app.jsはこの求解対象と分析への折返しcallbackを仲介しない。
+
+Annotation factoryはbare・一引数で、buildPlan／beginGeometryDrag／invalidateAnalysisを従来のkey順と同じ実参照で渡す。Annotation→ScopeQuery→Analysisの生成順と、後段のcreateSolving・SolveState／ReferenceState共有は不変。context完成前には従来のconstraintAnalysisのReferenceErrorを返し、完成したundefined／null analysisはTypeErrorとして区別する。無効化時に同じ実analysis.invalidateをmember・無引数で呼び、戻り値と元例外を透過する。生成失敗はそのcontextのportを未完成のまま保ち、別の完成済みcontextへ影響しない。Annotation dragのsession、仮想scope・追加variables・同期・終了時の更新順は既存AnnotationDragが引き続き所有する。旧createContextForWorkspace等と既存生成本体を維持し、model・scope・analysisを複製せず新file／global／全体contextを追加しない。UI・求解条件・履歴・保存形式v26は不変。
+
+app.jsは1,214→1,212行（2行減）、非空白772→770行、root215→214文。束縛368は不変。構築439→437行・114→113文、bind37行・別名88行・委譲2行・test hooks152行は不変。関連する求解scopeと分析への通知を既存SketchSolvingFeatureへ集約した単位であり、200〜500行の全体目標は未完了。
+
+関連単体65件が成功。実AnnotationDragを用いて、旧明示構成と新context構成の補助点・追加variables・モデルidentity・文字位置同期・ドラッグ中のWorkspace置換・終了時の解除とUI通知順を比較した。native actor共有、factoryのreceiver／引数／key順、生成三段階での初期化前guard、Annotation／Query／Analysis生成例外、遅延method取得・同じanalysis receiver・無引数・戻り値・元例外、context間の独立性とundefined／nullを検証した。ソース逆変換では既存context・AnnotationFeature・AnnotationDrag・SolveScopeQuery・ConstraintAnalysis本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,580件、通常ja/light・en/dark・test起動が成功。関連E2E252件（8file、4.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 補助Geometryの描画設定を描画ownerと観測で共有（2026-11-11）
+
+CanvasDisplayのWorkspaceが返すcreateSceneWithAppearanceは、既定の補助Geometry透明度0.72を既存Scene生成へ渡す。GeometryDisplayは実GeometryPresentationへ渡したconstructionAlphaを凍結APIのreadonly値として公開する。PropertiesTestDriver.createBrowserSupportForDisplayはその実設定を既存Workspace用支援へ共有する。app.jsは透明度の定義と、通常描画・テスト支援への二重注入を持たない。
+
+新しいScene生成入口でも明示したconstructionAlphaは0・null・undefinedを含め既定値より優先する。既存createSceneForEditingとGeometryDisplay.createの未指定値はundefinedのままで、raw APIへ既定値を追加しない。テスト支援の新入口も明示overrideを優先し、その場合はdisplayの設定を読まない。旧createBrowserSupportForWorkspace等は変更せず、既存の実Scene／GeometryPresentation／renderer／支援recordと生成本体を維持する。設定の参照以外に生成時のmodel・DOM照会を追加せず、現在scope・可視性・選択・Hover・通常／PNG描画順・元例外を維持する。UI・履歴・保存形式v26は不変。既存application内のCanvasDisplay／GeometryDisplayとtesting内のPropertiesTestDriverに配置し、新file／global／全体contextを追加しない。
+
+app.jsは1,216→1,214行（2行減）、非空白774→772行、root216→215文・369→368束縛。構築440→439行、ASTの固定policy値分類1→0行（最小線長の式などは残る）。bind37行・別名88行・委譲2行・test hooks152行は不変。実描画の設定を通常描画と観測へ共有する所有関係を優先し、200〜500行の全体目標は未完了とする。
+
+関連単体77件が成功。新しい既定Scene入口が実GeometryDisplayを共有すること、既定0.72と明示値0／0.34／null／undefined、raw APIの未指定値を照合した。実描画APIのreadonly設定と通常／exportのCanvas stroke alphaを比較し、通常Geometryには係数を掛けないことを確認した。Properties支援では同じ設定を観測し、旧APIの未指定値、設定getter例外、明示override時のgetter無照会を検証した。ソース逆変換では既存の描画・Scene・支援生成本体は不変、ASTで新たな未束縛参照なし。正式な外観仕様の補助Geometry不透明度72%と一致する。
+
+構文639ファイル・全単体2,578件、通常ja/light・en/dark・test起動が成功。関連E2E207件（9file、3.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 編集の許容誤差と受理判定をSketchSolvingで対にして生成（2026-11-11）
+
+SketchSolving.createEditingPolicyは、現在の編集受入れ許容誤差1e-4と、その値を使う既存createResultAcceptanceの実判定関数を一組の凍結recordとして返す。app.jsは許容誤差を定義せず、同じpolicyから得た値と関数を既存の求解・拘束・寸法・Block編集へ接続する。policyの所有先は既存src/solver/sketch_solving.jsとし、描画透明度や最小線長など別責務の設定を混ぜない。
+
+判定関数の生成位置は従来のまま。既存createResultAcceptanceを同じnamespace receiver・一引数で一度だけ呼び、生成された実関数をそのまま共有し、生成時に結果を評価しない。Boolean(result)かつ有限のerrorNormが許容誤差以下というinclusive判定、result.successを条件にしない契約、元のgetter例外を維持する。既存raw createResultAcceptanceの明示した任意の許容誤差・undefined／nullも変更しない。求解アルゴリズム・反復条件・状態・復元・履歴・UI・保存形式v26は不変。新file／global／sessionを増やさない。
+
+app.jsは1,217→1,216行（1行減）、非空白775→774行、root217→216文。束縛369、構築440行・bind37行・別名88行・委譲2行・test hooks152行は不変。root独自のpolicy値は2→1行となった。行数よりも許容誤差と判定関数の不一致を防ぐ所有関係を優先した単位であり、200〜500行の全体目標は未完了。
+
+関連単体29件が成功。閾値ちょうど／直上、0・負値・NaN・Infinity・型違い・結果なし、successと残差が一致しない結果、getter例外を旧判定と比較した。native factoryのreceiver・引数・呼出回数・実関数参照・元例外、生成時の未評価、旧APIのundefined／nullの違いも検証した。ソースの逆変換では既存求解・受理判定本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,575件、通常ja/light・en/dark・test起動が成功。関連E2E190件（8file、3.3m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## Hatch・Stack・Frameの段階的な準備と公開をCanvasDisplayへ集約（2026-11-11）
+
+CanvasDisplay.prepareRenderingが返すprepareHatchFrameは、同じSceneのcreateHatchRenderingを呼んで実Hatch layerを返し、後段のprepareFrameで実DrawingStackを生成する。さらに完成したStackを使うFrame factoryと、同じprepareRenderingの描画用完成参照への公開を接続する。app.jsはHatch生成factoryとFrame公開factoryを別々に保持・中継せず、この描画準備の入口を使用する。
+
+Hatch content／layerの生成、DrawingStackの準備、Frameの生成と完成後の公開は従来の別々の位置で行い、生成中にモデルや描画状態を照会しない。各native factoryは従来と同じbare call・引数で呼び、実layer／Stack／Frame bundleを複製しない。通常描画とPNG出力、Hatch previewとDrawingStackのpreview除外、現在scope・可視性・描画順・model identityは既存実装が所有する。生成失敗は前の完成Frameを保持し、未公開guardと実renderer.drawのmember receiver・無引数・戻り値・元例外を維持する。旧createHatchRendering／prepareFrame／createFrameなどのAPIと既存生成本体は変更せず、新file／global／全体contextを追加しない。UI・履歴・保存形式v26は不変。
+
+app.jsは1,217→1,217行（変化なし）、非空白775行・root217文も不変。root束縛370→369。構築440行・bind37行・別名88行・委譲2行・test hooks152行は不変。行数削減とは扱わず、Hatch→Stack→Frame→公開の接続を既存描画ownerへ集めた単位とする。200〜500行の全体目標は未完了。
+
+関連単体61件が成功。明示的な従来経路と既存prepared経路で、実Hatch preview・描画順paint・置換された現在図形の描画結果が一致した。新しい公開接続経路では同じnative layer／Stack／Frameの共有と描画portへの公開を確認した。native layer／Stack／Frame参照、三段階の生成順、bare receiverと引数数、Hatch／Stack／Frame／renderer選択での例外と前Frame保持、独立した準備の未公開guardも確認した。構文639ファイル・全単体2,573件、通常ja/light・en/dark・test起動が成功。ソースの逆変換では既存描画生成本体は不変、ASTで新たな未束縛参照なし。
+
+関連E2E207件（9file、3.6m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+## 選択解除の完成参照をSelection自身へ集約（2026-11-11）
+
+CanvasSelectionFeature.createEditingWithOwnedClearingは、既存Selectionと後段で生成する選択解除actorへの安定したclearSelectionを所有する。CanvasInteractionFeature.createWithOwnedClearingは同じ関数をidentity選択と公開portへ共有する。app.jsは生成時に自分のclearSelectionを逆向きに渡さず、戻されたportを各機能へ接続する。後段presentationのhighlight／clearing／documentResetを従来の順で完成してから、実clearing参照を公開する。
+
+生成前のReferenceError、成功したundefined／null actorのTypeErrorを区別し、生成失敗は前の完成参照を保持する。解除時に実actor.clearを読み、同じmember receiver・無引数で呼び、戻り値と元例外を透過する。Selection／Hover／拘束対象sessionやモデルを複製せず、解除は拘束対象のoperandsを空にするがcommand自体は取り消さない。旧create／createEditingと外部clearSelection callbackの契約・公開recordを維持する。既存src/application/canvas_selection_feature.jsとcanvas_interaction_feature.jsへ集約し、新しいfileやglobalを増やさない。UI・履歴・保存形式v26は不変。
+
+app.jsは1,218→1,217行（1行減）、非空白776→775行。root218→217文・371→370束縛、委譲3→2行。構築440行・bind37行・別名88行・test hooks152行は不変。小さな行数削減より、Selection自身へのrootからの逆向き参照を解消したことを成果とする。200〜500行の全体目標は未完了。
+
+関連単体54件が成功。旧経路と所有経路で実Selection・Hover・拘束対象への効果とinactive Sketch選択を比較した。生成前guard、後段DocumentReset生成までの未公開、constructor失敗時の前参照保持、独立性、undefined／null、member receiver・引数数・getter取得時機・戻り値・元例外を検証した。構文639ファイル・全単体2,571件が成功。通常ja/light・en/dark・test起動でエラーなし。ASTと逆変換による比較では宣言した集約以外の生成本体とnative選択解除kernelは不変、新たな未束縛参照なし。
+
+関連E2E192件（9file、3.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。電源接続後の実行であり、電源が以前の性能失敗の原因だったとは断定しない。この単位では全E2E未実施。
+
+## 共有regionsの完成参照と画像向け判定を既存CanvasHitInteractionへ集約（2026-11-11）
+
+CanvasHitInteraction.prepareSceneWithAnnotationsForWorkspaceは、画像向けの安定したhitReferenceImageAtと、従来と同じScene生成を行うcreateSceneを返す。実createQueriesが全queryを完成し、返すrecordのregionsを選んだ後だけ内部完了recordを更新する。画像・Hover・Canvas press／contextは同じ実regionsを使い、画像用の別queryや判定規則を作らない。Operation sessionsのprepareSceneWithAnnotationsは実Read services／Interaction／Sessionsを共有して、このprepared recordをそのまま返す。
+
+app.jsはregionHitQueryの保持と画像向けの委譲を持たない。準備は画像機能生成の直前、Sceneと実queryの生成は従来の位置で行う。完成前には同じregionHitQueryのReferenceErrorを返し、完成したundefined／null regionsはTypeErrorとして区別する。実regions.hitReferenceImageAtを操作時にmember・全引数で呼び、返値と元例外を透過する。生成失敗は前の完成参照を保持し、prepareごとの参照は独立する。旧Scene生成APIとSessionのcreateSceneWithAnnotationsは維持し、実Scene／query recordをcloneしない。画像の配列逆順・回転後のinclusive境界・可視性・activeOnlyと現在scope／mode／Pendingの照会、UI・履歴・保存形式v26は不変。既存application内のCanvasHitInteraction／CanvasInteractionFeatureへ集約し、新しいfileやglobalを加えない。
+
+app.jsは1,218→1,218行（変化なし）、非空白776行・root218文・構文依存辺1,046も不変。root束縛372→371、委譲4→3行、構築439→440行。bind37行・別名88行・test hooks152行は不変。初期化時の準備が増えたため行数削減とは扱わず、完成参照と画像への中継を既存query ownerへ集めた単位とする。200〜500行の全体目標は未完了。
+
+関連単体93件が成功。旧経路とprepared経路で注記queryの引数・policy・例外・model参照も比較し、実画像queryの重なり順・回転境界・可視性・activeOnly・scope置換、生成前guardを確認した。getterの操作時取得、同じ実regions receiver・全引数・返値と元例外、四段階のquery生成失敗時の前参照保持、再生成成功後の切替、独立性とundefined／nullのTypeErrorも照合した。Sessionの新prepareはscopeを読まず実ownerを共有し、元factory返値・receiver・一引数と元例外を保つ。browser比較では画像生成中／policy／regions／geometry生成中／query record完成直前の五つのReferenceError、完成後の同じ実regions receiver・四引数、native optionのkey順／function名／arity、旧APIの名前／arityと公開204項目が一致した。通常ja/light・en/dark・test起動も成功。宣言した集約以外の生成本体と、native hit algorithm／ReferenceImageFeature／Interaction sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,569件と関連E2E160件（7file、2.3m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+## 保存形式の定義とwriter設定の共有を保存ownerへ集約（2026-11-11）
+
+現行の保存形式番号26はDocumentSnapshot.CURRENT_VERSIONで定義する。DocumentWorkspaceのRead contextが返すcreatePersistenceForWorkspaceは、この既定値と明示optionから既存createPersistenceを呼び、同じnative保存componentsを返す。components.versionは対応するwriterへ渡した生成時の値をreadonlyで公開する。app.jsは保存形式番号を定義せず、投影のテスト支援にも生成済みcomponents.versionを渡す。
+
+旧createPersistence／DocumentSnapshot.createWriter／codec APIのversion指定は変更せず、rawで未指定ならundefinedを維持する。Workspace用の新入口でも、明示したversionはundefined／nullを含め既定値より優先する。新入口の未指定時だけ現行26を採用する。writer／codec／loading／preparationをcloneせず、完成後の公開順、現在Document／Workspaceの読取り、元例外・参照同一性を維持する。保存JSONのfield・version・読込移行・UI・履歴は不変で、既存src/persistence/document_snapshot.jsとsrc/application/document_workspace.jsへ配置し、新しいglobalやfileを加えない。
+
+app.jsは1,219→1,218行（1行減）、非空白777→776行。root219→218文・373→372束縛、構文依存辺1,048→1,046。policy values3→2行、構築439行・bind37行・別名88行・委譲4行・test hooks152行は不変。形式の知識を保存ownerへ移し、native writer設定との一致を保つ単位であり、200〜500行の全体目標は未完了。
+
+関連単体44件が成功。実codec／writer／loaderで従来の明示26と新入口の既定26のJSON、Geometry／Constraintの参照を保つ読込、model非変更と生成中のscope無照会を比較した。明示undefined／null／27とraw未指定、writerへの実値・同じnative writer返却、readonly metadata、現行定義の不変とraw writerの明示0等も確認した。browser比較では生成前・writer生成中・components公開前の三つのReferenceError、同じ実writerとnative optionのkey順／function名／arity、通常reloadの26と明示25、保存時刻以外の三つの実JSONと公開204項目が一致した。ja/light・en/dark・test起動も成功。宣言した集約以外のroot／Workspaceと、raw Snapshot／writer・loader・投影支援本体のsourceは不変、新たな未束縛参照やapp.jsのglobal依存なし。保存仕様の冒頭だけ25と残っていた誤記を、同じ仕様の構造表・共通配置項目・互換性仕様と実装に一致する26へ訂正した。
+
+構文639file・全単体2,566件と関連E2E198件（7file、2.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+## Canvas入力の生成・gesture準備とPointer／Keyboard共有操作の接続を既存ownerへ集約（2026-11-11）
+
+CanvasInteractionFeatureのOperation sessionsが返すprepareInputForEditingは、既存createEditingInputで実入力featureを生成した後にreadGestureOptionsをbare・無引数で一度読み、同じ実featureのpreparePointerForEditingへ渡す。返すのは元のprepared recordで、app.jsは中間canvasEditingInputを保持しない。生成失敗時に後段readerやBlank gestureを作らず、gestureの公開は既存preparePointerForEditingが担当する。
+
+prepared recordのbindForWorkspaceは既存bindForEditingへ委譲し、Pointer binding→寸法入力bindの後だけreadKeyboardOwnersをbare・無引数で呼ぶ。既存KeyboardInput.createWorkspaceOptionsへメニュー／file／history等のownerと、Pointerに渡した同じSpline・Hatch・Block配置、準備時の同じSpline editingを渡す。app.jsはこの四つをKeyboardへ重複接続せず、KeyboardInputの設定生成も直接呼ばない。deleteSelectionを含む設定のkey順・native callback参照は維持する。
+
+入力・gesture・binding・Keyboardのstateは既存ownerに残し、実actorやprepared recordをcloneしない。既存createEditingInput／preparePointerForEditing／createBinding／bindForEditing等のraw API、入力生成→Blank準備→公開→Pointer／寸法／Keyboard接続の順、元例外・途中登録・再生成失敗時の前bindingとgesture保持、現在scope・Selection・Pendingを入力時に読む契約を維持する。新しい全体context／state holder／flagやfileは加えず、既存src/application/canvas_interaction_feature.jsに配置する。UI・履歴・保存形式v26は不変。
+
+app.jsは1,222→1,219行（3行減）、非空白779→777行。root220→219文・374→373束縛、構文依存辺1,053→1,048。構築440→439行、bind38→37行、別名・設定88行・委譲4行・test hooks152行は不変。中間featureの保持とKeyboardへの共有操作の再接続をrootから除いた単位であり、200〜500行の全体目標は未完了。
+
+関連単体47件が成功。実input／Blank gestureによる旧手順と新prepareの比較で、七つの入力生成段階とreader／Blank生成の失敗順・元例外、遅延readerの無引数と生成失敗後の非実行、同じ実gestureと候補reset、生成失敗時の前gesture保持を確認した。既存の入力lifecycle比較へWorkspace経路を追加し、八段階の接続失敗、部分公開・scheduler target・再生成と共有actor参照を照合した。browser比較では生成からWindow接続まで14段階、14の実参照、bare／member receiver・引数数、五つのnative設定recordのkey順・function名／arityと公開204項目が一致した。ja/light・en/dark・test起動も成功。rootの中間featureは準備一箇所にしか使われず、Blank aliasの一参照も完成後にあることをlexical dependencyで照合した。宣言した集約以外のCanvasInteractionFeature／rootと、native command input／Canvas binding／Keyboard／Blank gesture sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,564件と関連E2E153件（8file、2.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。性能を含むE2Eは他の検証終了後に実行し、矩形選択は183msで基準内だった。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+## Canvas描画実体の完成参照と描画入口を既存CanvasDisplayへ集約（2026-11-11）
+
+CanvasDisplay.prepareRenderingは、安定したdrawCanvasとcreateFrameを返し、既存factoryが完成したFrame bundleのframeを一度選んで内部完了recordへ保持する。factoryはbare・全引数で呼び、返されたnative bundleをそのままapp.jsとCanvasテストへ共有する。app.jsはcanvasFrameRendererの別名と描画委譲を持たず、Frame生成と既存ownerへの接続だけを行う。
+
+準備はdrawCanvasを最初に渡すpresentation.bindCanvasの直前、実Frameの生成は旧位置のままである。未生成時は従来のcanvasFrameRendererのReferenceErrorを保ち、成功したundefined／null rendererはTypeErrorとして区別する。描画ごとに実renderer.drawを読み、同じmember receiver・無引数で呼び、返値と元例外を透過する。factory／frame field取得の失敗は前の完成rendererを置き換えない。Frame／Viewport／Selection／描画modelは複製せず、通常／exportの描画順、surface／Frame rendererとCanvasDisplayの既存生成本体、UI・履歴・保存形式v26を維持する。新moduleは作らず既存src/application/canvas_display.jsへ集約する。
+
+app.jsは1,223→1,222行（1行減）、非空白780→779行。root221→220文・374束縛は同数、構文依存辺1,054→1,053。別名・設定89→88行、構築439→440行、委譲5→4行、bind38行・test hooks152行は不変。行数削減より、完成した描画実体への参照と描画入口を既存表示ownerへ集めた単位であり、200〜500行の全体目標は未完了。
+
+関連単体59件が成功。実Frame rendererで旧経路と新入口の通常描画／PNG出力／失敗後の復元を比較し、生成前guard、bare factoryの全引数、実bundle返却、field一度選択、member draw・無引数・返値・元例外と入力引数無視、生成失敗時の前renderer保持、独立性、undefined／nullのTypeErrorを確認した。browser比較で準備後／renderer生成中／bundle完成直前の三つのReferenceError、同じnative rendererと凍結bundle／readonly frame、生成一回、実drawのmember receiver・引数なし、function名／arityと公開204項目が一致した。ja/light・en/dark・test起動も成功。rootのdrawCanvas全二参照が新宣言後であることをlexical dependencyで確認し、宣言した集約以外のroot／CanvasDisplayとnative surface／export／Presentation sourceは不変、新たな未束縛参照なし。
+
+初回の関連E2Eは矩形選択267ms（基準250ms未満）で停止し、9成功・1失敗・160未実施だった。他の検証との同時実行があったため、終了後に変更前／後／後／前の固定ABBA比較を行い、全四回が成功した。矩形選択は変更前234／198ms、変更後216／165msで、継続的な悪化は再現しなかった。同時実行だけが原因とは断定せず、初回log／receiptをinitial名で保存し、同じ関連170件を単独実行した。閾値・期待値・sourceは変えていない。
+
+構文639file・全単体2,563件と単独再検証の関連E2E170件（6file、3.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。再検証時の矩形選択は199msで基準内だった。初回失敗を最終成功と混同せず、失敗・固定比較・再検証の各証跡を保持する。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+## キーボードのメニュー判定とWorkspace設定を既存KeyboardInputへ集約（2026-11-11）
+
+KeyboardInput.createWorkspaceOptionsは、既存Sketch navigationのcloseContext、Canvas menuのDOM参照とclose関数、file／historyの実操作からキーボード用menus／shortcutsを組み立てる。Canvas表示判定は入力時にhiddenを読み、null／undefined menuの短絡結果も従来どおり返す。copy／pasteは既存のnative clipboard優先を維持する。app.jsはUI判定やshortcut対応表を直接持たず、既存ownerとcommandを渡す。
+
+設定生成は従来のreadKeyboardOptions callback内で行い、Pointer bindingと寸法入力のbindが終わる前には実行しない。生成中に操作状態やmenu.hiddenを照会せず、同じ実関数をmutableな設定recordへ渡す。既存createWorkspaceShortcutsを同じnamespace receiver・一引数で呼び、元例外を透過する。raw KeyboardInput.create／shortcuts、Canvas入力の接続・公開順、keydown controllerとlistener lifetimeは不変。UI・履歴・保存形式v26を変えず、既存src/application/keyboard_input.jsへ配置する。
+
+app.jsは1,225→1,223行（2行減）、非空白782→780行。root221文・374束縛・構文依存辺1,054は不変で、bind区分40→38行。rootの依存数が減ったとは扱わず、キーボード固有のUI設定を所有者へ集約した単位とする。全体の200〜500行目標は未完了。
+
+関連単体46件が成功。実KeyboardInput／keydown controllerで旧手動設定と新入口を比較し、Sketch menu→Canvas menu→pending取消の優先、入力時のhidden照会、保存／履歴操作、native clipboard、listener解除、hidden照会とshortcut生成の元例外、欠落menuの短絡値を確認した。browser比較ではPointer接続→寸法入力接続→shortcuts→keyboard生成→開始の順、11の実参照、namespace／member receiver・引数数、全設定key順・function名／arity、入力時の表示判定と公開204項目が一致した。ja/light・en/dark・test起動も成功。旧rootへ逆変換でき、追加した設定生成以外のKeyboardInput本体／shortcut生成、Canvas入力とkeydown controller sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,560件と関連E2E125件（6file、2.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+## 拘束操作の接続開始を既存ConstraintEditingへ集約（2026-11-11）
+
+ConstraintEditing.createControlsが返すbindForEditingは、既存createBindingをbare・無引数で呼び、返された実ConstraintControlsView bindingのbindをmember・無引数で呼ぶ。app.jsは固定選択commandの準備後・Canvas window接続前という従来の位置で開始だけを依頼する。操作command・UI listenerの生成と接続手順は既存ConstraintEditingに集約し、新しいファイルや全体contextを追加しない。
+
+旧createBinding／viewとnative command／UIの実装は維持する。生成時にはlive scope・Selectionを照会せず、元の例外と部分listener登録、dispose／再接続、繰返し開始時の新binding生成を変えない。独自のstarted flag・rollbackを加えず、操作状態は既存session／Selection、listener状態は既存UI bindingが所有する。UI・履歴・保存形式v26とapplication／ui／commandsの配置は不変。
+
+app.jsは1,226→1,225行（1行減）、非空白783→782行、root222→221文・375→374束縛、構文依存辺1,055→1,054。単独でbindにしか使わないconstraintControlBindingをrootから除いた。全体の200〜500行目標は未完了。
+
+関連単体52件が成功。既存の実メニュー／固定／寸法／Selection操作を旧手動経路と新入口で比較し、接続解除と再接続、command／binding生成失敗と途中listener登録の元例外・残存状態、繰返し開始時の二つの実接続を確認した。browser比較で固定準備完了→接続生成→操作command→UI binding→実体完成→bind→window接続の順、同じ実commandの二操作、裸／member receiver・引数数、凍結実体と公開204項目が一致した。通常ja/light・en/dark・test起動も成功。宣言した集約を逆変換すると元のroot／ConstraintEditingと一致し、native command／UI sourceは不変、新たな未束縛参照なし。
+
+構文639file・全単体2,558件と関連E2E169件（9file、14.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。過去の全体589件成功（f0a7954）とは区別し、今回は全E2E未実施。
+
+## Toolbar Workspaceと作図接続の連続開始を既存Presentationへ集約（2026-11-11）
+
+PresentationFeature.createToolbarのprepareWorkspaceが返すstartWithDrawingToolsは、同じWorkspace recordのstart、createDrawingBinding、返された実drawingToolBindingのbindをこの順にmember・無引数で呼ぶ。app.jsはcloseAppMenusを従来の位置で公開した後にこの入口を呼び、作図bindingの生成・保持・bindを直接持たない。内部で生成するbindingは元のToolbarView実体で、直後のDocument file controls接続も以前と同じ位置に残す。
+
+旧start／createDrawingBindingはそのまま残し、旧startに暗黙の作図接続を追加しない。新入口はnative ownerの開始・生成・bindをそのまま調整し、独自のstarted flag・rollback・再試行を持たない。各段階の元例外、後続を実行しない境界と部分listener登録、手動の同じ三段階を繰り返したときの既存挙動、buttonのDOM receiver／event・typed instance引数・guardを維持する。完了したWorkspace recordをself参照して同じmember receiverを保ち、同じ実bindingへ接続する。UI・履歴・保存形式v26、既存Presentation／Toolbar／Menu／Flyoutのstate所有とapplication／ui配置を変えない。
+
+app.jsは1,228→1,226行（2行減）、非空白785→783行、root224→222文・376→375束縛、構文依存辺1,057→1,055。構築115→114文／441→440行、bind14→13文／41→40行。委譲5行・test hooks152行は不変。rootのdrawingToolBindingはbind一箇所にしか使われておらず、既存owner内の開始処理へ移した。全体の200〜500行目標は未完了。
+
+関連単体41件が成功。実Toolbar／Menu／Flyoutを使う既存比較へ新入口を追加し、全作図・編集buttonのreceiver／event・返値・guardと例外、10段階の生成／開始失敗・部分listener登録を比較した。繰返し開始でも旧手動三段階と同じnative start回数・新binding生成・listener数を照合し、旧startだけでは作図接続を生成しないことも維持した。browser比較ではWorkspace完了→開始→作図生成→実体完了→bind→File controlsという順、三member receiver・無引数、closeAppMenusの公開前ReferenceErrorと開始時公開済み、旧API／native optionの関数名・arity、実bindingとWorkspaceの凍結、公開204項目が一致。ja/light・en/dark・test起動も成功。宣言した開始集約を逆変換すると元のPresentation sourceと一致し、三つのnative UI actor sourceは不変、新たな未束縛参照なし。構文639file・全単体2,555件と関連E2E201件（11file、2.7m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+## Block表示更新の完成参照とvoidコールバックを既存ownerへ集約（2026-11-11）
+
+BlockEditingFeature.prepareCommandsWithViewは安定したupdateBlockUIと、実Block featureを受け取るcreateForFeatureを返す。後者は既存feature.createCommandsWithViewを同じmember receiver・一引数で呼び、完成した実command recordのupdateView関数を一度選んで内部完了recordへ保持する。Block feature／definition／completion／command record／Viewは包み直さず、元の実体をそのまま返し共有する。app.jsは後段updateBlockView bindingとvoid委譲を持たず、Presentation／Block configuration／Instance editingの三箇所へ同じ安定関数を渡す。
+
+公開前は元のupdateBlockViewのReferenceErrorを保ち、完成後のundefined／null updaterはTypeErrorとして未生成と区別する。updateBlockUIは保持した実関数をbare・無引数で呼び、返値を返さない従来のvoid契約と元例外を維持する。生成やfield取得の失敗は前updaterを保持し、prepareごとの参照は独立する。View生成前のprepareBlocks→render失敗、View生成・再生成と失敗時の前View保持は既存createCommandsWithViewが担当したままである。actorの生成位置、初期化前guard、live scope／Session／Documentの所有、操作・履歴・UI・保存形式v26、旧create／createForWorkspace／createCommandsWithView APIと既存application／ui配置を維持する。新しいmodelやlistener、全体contextを作らない。
+
+app.jsは1,228→1,228行（変化なし）、非空白785行、root224文・376束縛、構文依存辺1,057のまま。委譲6→5行、準備呼出しの追加により構築114→115文／440→441行となる。bind41行・test hooks152行は不変。分類・総行数を削減成果として装わず、Blockの実updaterの保持と公開を同じownerへ寄せる単位である。全体の200〜500行目標は未完了。
+
+関連単体34件が成功。既存の実Block session／command／View比較にprepared経路を追加し、最新Viewへの編集・取消・refresh、View再生成失敗、生成前guard、View前の準備とTypeError、void返値と元例外を確認した。新単体ではmember factory・一引数、実record返却、fieldの一度取得、bare無引数更新、生成／field取得失敗時の前updater保持、独立性、undefined／null updaterのTypeErrorを照合した。browser比較では三箇所での同じ関数、五時点のReferenceError、同じnative factory receiver・一引数、bare無引数更新と実View render receiver、五つの実参照と五fieldのreadonly、関数名／arity／prototype、native optionと公開204項目が一致。ja/light・en/dark・test起動も成功。元のBlock組立て本体と三つのnative actor sourceは不変、新たな未束縛参照なし。構文639file・全単体2,554件と関連E2E504件（40file、8.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+## Document resetの完成参照と安定コールバックを既存ownerへ集約（2026-11-11）
+
+DocumentEditingReset.prepareは、createForWorkspaceが成功した実reset actorだけを内部の完了recordへ保持し、安定したresetModelState関数を返す。app.jsはこの関数をDocument applicationと各TestDriverへ共有し、後段のdocumentEditingReset bindingを読む委譲を持たない。準備は旧委譲宣言位置で行い、22箇所への公開より前であることをlexical referenceで確認した。実actorの生成位置はCommand panel構築後・test hooks／expression highlight／Document起動前のまま。
+
+生成前には従来と同じdocumentEditingResetのReferenceErrorを投げる。成功したundefined／nullと未生成を完了recordで区別し、生成後は元のTypeErrorを保つ。reset時だけ実actor.resetを読み、同じmember receiver・引数なしで呼び、返値・元例外を透過する。raw factoryは同じnamespace receiverと全引数で呼ぶ。生成失敗は前actorを保持し、prepareごとの参照は独立する。Document／Selection／ID／各commandの状態は既存ownerが保持し、reset処理順・部分失敗・二段階のcontent／defaults初期化、旧create／createForWorkspace API、UI・履歴・保存形式v26は不変。新しいmodelやlistenerは作らず、既存application配置を使う。
+
+app.jsは1,228→1,228行（変化なし）、非空白785行、root224文・376束縛、構文依存辺1,057のまま。rootの一行委譲は7→6行。AST分類は後段const生成から早期prepare生成＋後段callへ変わり、構築446→440行・otherCalls23→30行となるが、実際の行数削減ではない。bind41行・test hooks152行は不変。全体の200〜500行目標は未完了。
+
+関連単体9件が成功。既存の実Document／Workspace／Selection／IDと各resetの比較へprepared経路を追加し、全副作用の失敗境界・最後のImage reset・二段階初期化・繰返し・Block scopeの保持を確認した。新たに生成前guard、生成失敗後の前actor保持、遅延method取得・member receiver・無引数・返値／例外・入力引数の無視、独立性、undefined／null／methodなしのTypeErrorを照合した。browser比較では公開→実生成→生成完了→起動reset、三時点の同じReferenceError、22箇所での同じコールバック、native factoryのnamespace receiver・一引数とresetの実actor receiver・無引数、関数名／arity／prototype、native optionと公開204項目が一致。ja/light・en/dark・test起動も成功。元のreset組立て本体と三つの状態owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,552件と関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+## Properties表示入力を既存ownerから遅延選択（2026-11-11）
+
+PropertiesDisplay.createEditingWithViewForPresentationは、編集機能とAppearance UIの生成後にreadViewOwnersをbare・引数なしで一度呼び、実Block layoutのsnappedBlockRotation、Authoring feedbackのhatchRegionErrorText／geometryInstanceTypeLabel、Parameter editorのinstallExpressionInputHighlightsを選ぶ。同じ関数と残る明示入力を従来のcreateViewForWorkspaceへ渡し、生成時の表示値・scope・Selectionをsnapshot化しない。app.jsはlayout／feedback／parameterEditorを渡し、表示用四関数の選択を持たない。通常の数式highlight開始にも使う既存aliasは残し、起動時のbare呼出しを変えない。
+
+prepareの新入口と旧createEditingWithViewForWorkspaceは同じpublish処理を使い、実editing／Appearance UI／Viewの完成後に、生成元Selectionとともに既存completed bindingへ公開する。編集生成→入力reader→View生成→公開の順と、各段階の例外・部分状態、失敗時の以前のView／外観編集の保持を維持する。新しいstateや別のcontrollerは作らず、旧APIのreceiver・引数（追加引数を含む）・返値も維持する。通常のPropertyEditing／Appearance UI／Controller／View本体、live操作対象と複数scope、UI・履歴・保存形式v26と既存application／editing／ui配置を変えない。
+
+app.jsは1,229→1,228行（1行減）、非空白786→785行。root224文・376束縛、構文依存辺1,057は不変。構築447→446行、別名・設定89行・bind41行・委譲7行・test hooks152行は不変。行数・依存辺の大幅削減を装わず、表示入力の選択と完成時公開をPropertiesの責務へ揃える単位である。全体の200〜500行目標は未完了。
+
+関連単体25件が成功。既存の実Properties／Selection／操作比較に新入口を加え、現在scopeと選択／表示operationの区別、外観・lock・guard付き操作、七つの生成段階とreaderの失敗、owner field取得失敗とView生成失敗後の旧View保持を照合した。browser比較では七constructorとreaderの順、bare・引数なし・一度のreader、公開前appearanceEditingのReferenceError、四fieldのreadonlyと六つの実参照、native option key順・function名／arityと公開204項目が一致。ja/light・en/dark・test起動も成功。宣言した変更を逆変換すると旧Properties組立てsourceと一致し、四つのnative UI／編集owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,550件と関連E2E218件（8file、3.5m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+## 作図コマンド集合の境界再監査（2026-11-11）
+
+Canvas入力5項目とToolbar9項目の共通は4項目であり、Preview／Lifecycle／寸法submit等の先行利用も残ることを、基準94b0653のASTと各ownerで確認した。単純なcommand集合化は対応表を増やし、registry化や後段同時生成は保持・guard・公開段階を広げるため採用しない。詳細・7bindingの利用表・再現方法と次の調査対象は[境界監査](bootstrap-boundary-audit.md)の先頭を参照する。
+
+製品・テスト・正式仕様は変更していない。app.jsは1,229→1,229行（変化なし）、非空白786行、root224文・376束縛のまま。今回の作業は設計判断の記録であり、実装の分離件数に加えない。AST再監査・差分／app blob不変を検証する。コード変更を伴わないため自動テストは再実行しない。直前の構文639file／単体2,549件／関連E2E218件成功は94b0653と同じ製品sourceに対する以前の結果であり、今回の新しいテスト実行結果とは扱わない。全体の200〜500行目標は未完了。
+
+## Sketch Treeの表示依存選択を既存Sketch機能へ集約（2026-11-11）
+
+SketchEditingFeature.createForInteractionが返すcreateTreeForPresentationは、既存Properties Selection・Constraint analysis／redundancy／reference state・Sketch Projection・Toolbar icons・Authoring feedback・Fixed-state queryから、Tree用objectOptionsの10項目を選ぶ。app.jsは実ownerを渡し、isHidden／投影照会／アイコン／ラベル／固定照会のfield選択とテスト専用ではないvisibility別名を持たない。個々のmodel／constraint／表示値は読まず、同じ実関数・recordを既存createTreeForEditingへ渡す。
+
+prepareNavigation経由でも新入口の成功した実Treeだけを既存contextへ公開する。field選択やTree生成の失敗は以前のController／Menuを保持し、完成前のものを公開しない。旧createTreeForEditing／createTree、実Tree／Objects／View本体、別々のDocument・bound view・dimension scope、live Selection／Hover／Block state、元例外・receiver／引数、生成→公開→明示startの段階、UI・履歴・保存形式v26を維持する。新たなview state・cache・listenerや全体contextを作らず、既存application／ui配置を使う。
+
+app.jsは1,231→1,229行（2行減）、非空白788→786行、root225→224文・377→376束縛、構文依存辺1,058→1,057。構築448→447行、別名・設定90→89行。bind41行・委譲7行・条件付きtest hooks152行は不変。表示10項目の組立てがSketch側へ移り、appに新しいまとめ用contextは追加しない。全体の200〜500行目標は未完了。
+
+関連単体26件が成功。既存の実Tree／Geometry／Selection／Hover比較に新入口を加え、live scopeの区別、可視性・lock・moveの実操作と一履歴、field選択失敗とTree生成失敗後の旧Controller保持・次の成功時の切替を確認した。browser比較では10項目の実参照、七つのreadonly field、Tree生成→完了→Menu開始、同じ実View／Menu receiver・引数なし、sketchTreeView生成前ReferenceError、native option key順・function名／arityと公開204項目が一致。ja/light・en/dark・test起動も成功。旧Sketch関数本体と三つのnative Tree owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,549件と関連E2E218件（9file、4.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+## Canvas Contextの取消準備と操作公開・開始を既存ownerへ集約（2026-11-11）
+
+CanvasContextInteraction.createMenuForWorkspaceのSceneはprepareInteractionを持つ。既存operationSessions.createCommandCancellationを同じ段階で呼び、Context専用の取消機能をclosureへ保持してstartInteractionを返す。取消は同じCanvasCommandCancellationが担当し、Context側でmodeやpending、drawing stateを複製しない。Block placementのreadonly restorePropertiesPanelとPresentationの同じupdateUIを選び、app.jsはその関数別名と取消recordを保持しない。
+
+startInteractionは既存createInteractionの成功後に同じ実Controller.startをmember・引数なしで呼び、実操作recordを返す。取消準備→外部の描画順操作生成→操作生成・成功時公開→listener開始の順を維持する。取消生成失敗では後続を始めず、操作生成失敗では以前の公開操作を保持し、listener登録失敗では新操作と既存の部分登録を残す。独自のstarted flagやrollbackを追加せず、native Controllerの重複開始・disposeを利用する。旧createInteraction／Scene API、通常取消・Keyboardの別ポリシー、例外、receiver／引数、live Selection／scope／pointer、UI・保存形式v26は不変。既存src/application／commands／uiの配置で責務が一致し、新しいbootstrapやフォルダは作らない。
+
+app.jsは1,233→1,231行（2行減）、非空白790→788行、root226→225文・378→377束縛、構文依存辺1,062→1,058。別名・設定91→90行。構築448行・bind41行・委譲7行・test hooks152行は不変。呼出し名がstartへ変わったためASTのotherCallsは35→23行、startupCallsは5→16行へ分類が移るが、実際の削減は2行である。全体の200〜500行目標は未完了。
+
+関連単体23件が成功。実Menu／Context Actions／Cancellationを使い、旧接続との操作順、取消全段階、操作の成功時公開、生成失敗と部分listener登録失敗、重複startとdisposeを照合した。browser比較では取消→描画順→Interaction→Actions→公開→startの六段階、六つの実参照とrestore fieldのreadonly、同じController receiver・引数なし・公開済み操作、closeAppMenus生成前ReferenceError、native option key順・function名／arityと公開204項目が一致。ja/light・en/dark・test起動も成功。既存Context関数本体と五つのnative owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,548件と関連E2E193件（8file、3.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+## Clipboardを使うテスト支援の入力を実ownerから共有（2026-11-11）
+
+SketchProjectionTestDriverとSplineTestDriverのcreateBrowserSupportForWorkspaceが、既存ClipboardFeatureから同じsessionを選び、Splineでは同じcopyableSelectionPayload関数も選んで既存createForWorkspaceへ渡す。app.jsは実ClipboardFeatureを共有し、テスト専用の二別名を持たない。コピー・貼付けの既存callback、選択した関数の参照・receiver・引数と順、現在Workspaceとbound editing scopeの区別、例外と途中状態を維持する。session.payloadは操作時に読む既存getterのままで、payload・貼付け回数の複製や新たな状態ownerを作らない。通常ClipboardFeature／ClipboardSession、旧driver本体・旧API、生成・公開・bind／start順、UI・保存形式v26とclassic script読込順は不変。既存src/testingとsrc/application／editingの配置を使い、新規フォルダは不要と判断した。
+
+app.jsは1,234→1,233行（1行減）、非空白791→790行、root227→226文・380→378束縛、構文依存辺1,064→1,062。別名・設定92→91行。構築448行・bind41行・委譲7行・条件付きtest hooks152行は不変。全体の200〜500行目標は未完了。
+
+関連単体9件が成功。既存の実Geometry／Selectionと操作・生成失敗比較を新経路へ拡張し、native ClipboardSessionの差替え・貼付け計数・失敗copy時の保持・clearを追加検証した。browser前後比較で二支援の生成順、五つの実参照、二fieldのreadonly、同じlive session／payload getter、option key順・function名／arity、公開204項目が一致。ja/light・en/dark・test起動も成功。旧driver本体と通常Clipboard ownerは不変、新たな未束縛参照なし。構文639file・全単体2,546件と関連E2E504件（40file、9.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+## 寸法テストの保存・外観入力を実ownerから共有（2026-11-11）
+
+DimensionTestDriver.createBrowserSupportFromOwners（src/testing/dimension_test_driver.js）が、実Geometry read servicesからGeometry外観と寸法外観を別々に選び、実Persistence componentsのdimensions.serializeを既存createBrowserSupportForWorkspaceへ接続する。Geometry外観はfixtureの可視性照会へ、寸法外観は第三引数として表示支援へ渡す。固定Documentを返すreaderと、操作時に読むWorkspace.currentを混同せず、従来のfixture→interaction→displayの順・実recordを保つ。旧三引数APIはそのまま残す。
+
+GeometryDragTestDriver.createForWorkspaceが返すcreateResponsiveFromPersistence（src/testing/geometry_drag_test_driver.js）は、同じPersistence componentsのensureDimensionDefaultsを選び、既存createResponsiveForEditingへ渡す。型constructorの捕捉、実Geometry参照とreset→寸法補完→求解→log→fit→draw→履歴→serialize、例外と途中状態、既存execution三入口と旧responsive APIを維持する。補完関数は既存readEditingScopeを呼ぶ同じ関数で、現在Workspaceへの独断の置換や新しい補完処理は作らない。
+
+app.jsは既存createPersistenceの返す同じ凍結recordをpersistenceComponentsとして保持し、通常Application用のcreateDocumentApplicationは同じ実関数のbare呼出し用別名に残す。serializeDimension／ensureDimensionDefaults／dimensionAppearanceのテスト専用別名を持たず、各TestDriverは必要なreadonly fieldのみを選ぶ。実recordは既にDocumentWorkspace側でも保持しており、model・writer・codec・loadingのコピーや新しいstateは作らない。Application生成前guard、生成・公開・bind／start段階、function参照・key順・receiver／引数と元例外、UI・保存形式v26、既存application／persistence／testing配置と読込順を維持する。
+
+app.jsは1,234→1,234行（変化なし）、非空白791行のまま。root226→227文・382→380束縛、構文依存辺1,063→1,064。実Persistence recordと、通常Applicationの既存bindingを別々に保持するため一文・一辺が増える一方、三つのテスト専用別名を除いて実record一つへ置き換える。構築449→448非空白行、別名・設定91→92行、bind41行・委譲7行・test hooks152行は不変。test専用のroot bindingは15→12個だが、残タスク数ではない。行数・辺数の減少を装わず、全体の200〜500行目標は未完了。
+
+関連単体24件・全単体2,545件・構文639fileが成功。既存の寸法比較とresponsive比較へowner入力経路を追加し、固定Documentと現在Workspaceの分離、実Geometry／Selection／投影参照、表示依存と型constructorの生成失敗、実サンプルのreset→補完→求解→表示→履歴順と途中状態を照合した。browser比較ではPersistence→Application→Dimension→responsiveの生成順、Application factoryの生成前ReferenceErrorとbare一引数呼出し、七つの実参照と六fieldのreadonly、別々のGeometry／寸法外観、同じ実支援result、optionのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧二driver本体とPersistence生成ownerは不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、9.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+## Propertiesテストの関数選択を実ownerから組み立てる（2026-11-11）
+
+PropertiesTestDriver.createBrowserSupportForWorkspace（src/testing/properties_test_driver.js）が、実Properties Selection／Drawing fit／Constraint insertion／Fixed-state queryから、selectedDisplayTarget／fitAllGeometryToViewport／push／assignSketch／findLineFixedConstraintを選び、既存createBrowserSupportへ接続する。app.jsは実ownerを渡し、テスト専用のselectedPropertiesTarget別名と五関数の対応選択を持たない。通常UIの選択可視性関数は従来どおり残す。
+
+五fieldは実ownerのreadonly data propertyで、同じ実関数をwrap・bind・実行せず、従来のkey順で渡す。選択対象値、scope、Geometry、hover、外観、倍率、履歴や設定をsnapshot化せず、既存支援が操作時に読む。十一支援は従来の生成順と完了時の凍結recordを維持し、途中失敗では未完成recordやBrowser APIを公開しない。旧createBrowserSupport／createBrowserFactoriesと個別fixture、元例外・途中状態、Geometry／Selection同一性、描画・取消・履歴・保存形式v26、通常機能のstate所有と生成・公開・bind／start、既存testing配置と読込順を変えない。Geometry外観と寸法外観の別ownerも混同しない。新しいmodel・cache・listenerや全体contextは追加しない。
+
+app.jsは1,235→1,234行（1行減）、非空白792→791行、root226文のまま・383→382束縛、構文依存辺1,063のまま。別名・設定92→91行。構築114文／449行・bind41行・委譲7行・test hooks152行は不変。test hooks内だけから使うroot bindingは16→15個だが、これは残タスク数を意味しない。行数の小さな変化を全体目標への到達とは扱わず、200〜500行の目標は未完了。
+
+関連単体8件・全単体2,545件・構文639fileが成功。既存の比較・生成失敗テストにowner入力経路を追加し、生成時のmodel／scope／DOM／履歴無照会、支援の独立性と完成前の失敗、現在Workspace／Selection／hover／style／theme／履歴の観測、複数選択fixtureと外観編集の元例外・途中状態を照合した。browser比較では十一支援の生成順、五つの実関数参照と五fieldのreadonly、同じ実支援result、optionのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体は不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、8.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+## Blockの寸法ケースと公開recordの組立てを既存TestDriverへ集約（2026-11-11）
+
+BlockTestDriver.createBrowserSupportForWorkspace（src/testing/block_test_driver.js）が、既存createForWorkspaceで実支援を生成した後、同じ支援のcreateDimensionCasesを呼び、従来BrowserTestApiが受け取るblockTestSupport／blockTestActionsの二fieldを持つ凍結recordを返す。app.jsは実Dimension placement／Read-only dimension／Geometry readのownerを渡し、寸法ケース用四関数の選択と二支援の再梱包を持たない。テスト専用のblockCatalog別名も除く。
+
+実defaultDimensionForTarget／forPlacement／add／blockDefinitionByIdを、従来の四key順・同じ参照で選ぶ。選択対象とcatalogは実ownerのreadonly data propertyで、生成時のscope読取りやsnapshotを追加しない。createDimensionCasesのmember receiverは同じ実支援で、返す二つの支援も同じnative recordのまま。支援→寸法ケース→後続Dimension TestDriver→Browser API公開の順、未完成時に公開しない境界、操作時のcurrent scope・Geometry／投影参照、元例外と途中状態、採番・求解・履歴・UI・保存形式v26を維持する。生のcreateForWorkspace／createBrowserSupport／createDimensionCasesと個別fixture、通常機能のstate所有と生成・bind／start、既存testing配置・読込順を変えない。Completion commandは三つのTestDriverで使うため今回の別名除去対象とせず、全体contextや新たなmodel・cache・listenerは追加しない。
+
+app.jsは1,238→1,235行（3行減）、非空白795→792行、root226文のまま・384→383束縛、構文依存辺1,063のまま。test hooks155→152行。別名・設定92行、構築114文／449行・bind41行・委譲7行は不変。test hooks内だけから使うroot bindingは17→16個だが、これは残タスク数を意味しない。全体の200〜500行目標は未完了。
+
+関連単体11件・全単体2,545件・構文639fileが成功。既存三比較テストへbrowser組立て経路を加え、生成時のscope無照会と二支援の凍結record、実Geometry／投影参照・scope／solver／hoverの観測、寸法作成と配置の引数、取消／求解／読込の元例外・途中状態を確認した。browser比較では支援→寸法ケースの生成順、実参照六項目、五fieldのreadonly、同じ実支援をreceiverにしたケース生成、既存支援／actionとoptionのkey順・function名／arity、公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体は不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、7.8m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+## Canvasテスト専用の関数選択を実ownerから組み立てる（2026-11-11）
+
+CanvasTestDriver.createBrowserSupportForWorkspace（src/testing/canvas_test_driver.js）は、実Block editing／placement、注記renderer、Frame bundle、Scene queriesからCanvasテスト支援の関数を選び、既存createBrowserSupportForSceneへ渡す。Sketch定数、型、Spline評価も同じ既存namespaceから選ぶ。app.jsはテスト専用のROOT_SKETCH_ID／DEFAULT_SKETCH_ID／blockDefinitionEditing／drawAnnotationLeader／hitArcEndpoint／hitSpline／drawSelectionRect別名を持たない。通常機能のstateや操作をtestingへ移さず、旧createBrowserSupportForScene／createForScene／個別fixtureは維持する。
+
+Frameは既存createCanvasFrameが返す同じ凍結bundleを保持し、通常のcanvasFrameRendererは同じframe fieldから取得する。描画時には従来の同名bindingを読み、生成前のReferenceErrorも変えない。実関数をwrap・bind・実行せず、従来のblocks三fieldとhits七fieldを同じkey順・参照で接続する。必要fieldは実ownerのreadonly data propertyで、テスト生成時の選択でも同じ値になる。scope／倍率／Selection／hover／pending／Documentは既存支援が操作時に読む。生成・公開・bind／start段階、通常起動でtest支援を生成しない条件、公開204項目、描画・履歴・取消・保存形式v26と既存testing／application／rendering配置・読込順を保つ。全体contextや追加のmodel・cache・listenerは作らない。
+
+app.jsは1,241→1,238行（3行減）、非空白798→795行、root227→226文・390→384束縛、構文依存辺1,065→1,063。テスト専用の七別名を除き、実Frame bundle一つの保持を加えたためroot束縛は差引六つ減る。別名・設定93→92行、test hooks157→155行。構築114文／449行、bind41行・委譲7行は不変。全体の200〜500行目標は未完了。
+
+関連単体21件・全単体2,545件・構文639fileが成功。既存の二つのScene比較テストへowner入力経路を加え、生成時のscope無照会、同じ描画支援・現在scope／pending／Selection／表示状態の観測、実profiler／PointerMoveSchedulerの計測とflush／生成失敗の同一性を確認した。新しい期待値や性能基準には変更していない。browser比較では実参照16項目、14fieldのreadonly、同じ実Frameと支援result、旧frame bindingの生成前ReferenceError、option／blocks／hitsのkey順・function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。旧driver本体とCanvasDisplay／CanvasSurface sourceは不変で、新しい未束縛参照もない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+## 空Documentの保存基準と起動時読込の開始を既存File Featureへ集約（2026-11-11）
+
+DocumentFileFeature.prepareが返すcreateForWorkspace（src/application/document_file.js）は、startForEmptyDocumentを公開する。app.jsのtest hooks公開・式入力装飾後の同じ段階から、既存resetModelStateとinitializePresentationだけを明示portとして渡す。入口はリセット→表示初期化（従来の新規Documentメッセージ）→実履歴のresetDocument("起動")→実markCheckpoint("new")→同じ完成Feature.start()の順で実行する。空Documentの保存基準を作ってから起動時のリンク読込を始め、別のbootstrapや全体contextは作らない。
+
+reset／表示初期化／履歴／checkpointは従来のbare呼出しと零／一引数を保つ。startは同じ外側の凍結完成Featureをmember receiverとして零引数で呼ぶ。履歴のresetDocumentは実controllerのreadonly data propertyで、同じ実関数を選び、checkpointのdefault serializeも既存処理に残す。起動例外はそのまま伝え、すでに終えたreset／履歴／checkpointやlistener開始状態を巻き戻さない。新入口は初期化全体の実行済みflagを追加せず、native startのlistener重複防止・dispose後の再起動、voidの起動時非同期読込を維持する。生のcreate／start／markCheckpoint／保存読込、Document／History／File sessionの状態所有、UI・保存形式v26、既存application／persistence／UI配置と読込順は不変。
+
+app.jsは1,245→1,241行（4行減）、非空白802→798行、root231→227文・391→390束縛、構文依存辺1,067→1,065。その他call38→35行、起動6→5行。構築114文／449行・bind41行・別名設定93行・委譲7行・test hooks157行は不変。全体の200〜500行目標は未完了。
+
+関連単体18件・全単体2,545件・構文639fileが成功。追加三単体は実DocumentFileFeature／History snapshot／File session／Status／Command／browser EventTargetを用いる旧手順比較で、初期化と起動時読込の順、dirty判定とbeforeunload、六段階の同期例外・途中状態、重複start時の明示初期化とlistener非重複、dispose後の再起動を確認した。browser比較では実reset→表示初期化→履歴→checkpoint→Feature.start→startup openの順、bare／member receiverと引数数、履歴関数のreadonly、初期保存状態・タイトル・履歴snapshotと公開204項目が一致した。保存データも実行時刻savedAtだけを除いて一致した。通常ja/light・en/darkとtest起動も成功。既存ownerの宣言した変更を逆変換すると旧sourceと一致し、四つのnative actor sourceは不変で、新しい未束縛参照もない。
+
+関連E2E147件（unified-ui／file-safety／document-bookmarks／application-menus／phase0-characterization／dxf-importの6file、2.2m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+## Canvas入力の実体保持と接続ライフサイクルを生成ownerへ集約（2026-11-11）
+
+CanvasInteractionFeature（src/application/canvas_interaction_feature.js）のoperation sessionsが、既存preparePointerForEditing.createBindingで成功して返された実CanvasInputBindingをprivateに保持する。新しいcreateMoveSchedulerForEditingは、その実体を遅延して読む既存createMoveSchedulerを生成する。app.jsからreadInput callbackと入力実体のroot保持を外し、生成ownerとスケジューラの参照先を揃える。生のcreateMoveSchedulerは明示readerを受ける従来APIとして維持する。
+
+bindForEditing(pointerOptions, readKeyboardOptions, dimensionInput)は、同じcreateBinding→実binding.bind→寸法input.bind→readKeyboardOptionsのbare零引数呼出し→既存createKeyboard→実keyboard.startの順で接続し、同じ実bindingを返す。Keyboard optionsとショートカットは寸法bindの後に初めて作る。blank gestureの既存成功時公開、query／pointer接続→実入力生成、入力公開→最初のlistener登録という順を維持する。早期readerは旧canvasInputBindingのReferenceErrorを保ち、実入力生成失敗では前の成功を保持する。入力生成後のbind／寸法bind／Keyboard生成・start失敗では、公開済み入力・登録済みlistenerを巻き戻したり自動disposeしたりしない。
+
+実PointerMoveScheduler／CanvasInputBinding／DimensionInput／KeyboardInputのmodel・listener・stateや処理は複製しない。member receiver、引数、返値・元例外、移動後にpendingを読む順・同期flush／discard、現在scope・Geometry参照、UI・取消・履歴・保存形式v26を維持する。新しいglobal contextやsetter登録口を作らず、同じsessionごとの実factoryと完成境界で所有する。既存application／UI配置と読込順は不変。
+
+app.jsは1,250→1,245行（5行減）、非空白806→802行、root235→231文・393→391束縛、構文依存辺1,072→1,067。構築分類は116文／466行から114文／449行、bind分類は15文／27行から14文／41行、起動分類は7→6行。二つの生成とbind／startが一つの接続呼出しになったため分類も変化しており、構築分類の17行減を実削減量とは扱わない。別名・設定93行、委譲7行、test hooks157行は不変。全体の200〜500行目標は未完了。
+
+関連単体39件・全単体2,542件・構文639fileが成功。追加三単体は実PointerMoveSchedulerと既存入力fixtureを使い、旧接続との順序比較、生成前guard、八段階の元例外・途中公開状態、生成失敗時の前実体保持・成功時の切替、移動失敗後の継続とsession間の独立性を確認する。browserの旧root／旧module比較では、Pointer生成→bind→寸法bind→ショートカット→Keyboard生成→start、生成前ReferenceErrorの文言、bind時の実入力参照・member receiver／一引数、同じ実scheduler・optionのkey／function名／arityと公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。宣言したowner変更を逆変換すると旧sourceと一致し、四つのnative actor sourceは不変。新しい未束縛参照もない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+## 参照画像テスト支援のWorkspace／Block command接続を既存TestDriverへ集約（2026-11-11）
+
+ReferenceImageTestDriver.createForWorkspace（src/testing/reference_image_test_driver.js）が、実DocumentWorkspaceのworkspace.currentと、既存BlockDefinitionCommand.open／BlockCompletionCommand.completeを選び、従来のcreateBrowserSupportへ接続する。app.jsは実ownerを渡し、テスト専用のopenBlockDefinitionEditor／completeBlockDefinitionEdit別名を持たない。通常入力にも使うenterBlockDefinitionEditは維持する。
+
+選択対象三fieldは実ownerのown readonly data propertyで、同じ実関数をwrap・bind・実行せず渡す。fixture／観測／画像importと完成済み凍結supportは従来のfactoryが生成する。現在scopeとlive Block画像は操作時に読み、reset抑止、Geometry参照、fetch→Blob→File→bare importerの非同期順、Block完了→serialize→structuredCloneの順と元例外・途中状態を保つ。生のcreateBrowserSupport／createObservation／createImport／createBlockFixture、test-mode判定と公開204項目、生成位置、通常機能の状態所有、UI・保存形式v26と既存testing配置・読込順は不変。
+
+app.jsは1,251→1,250行（1行減）、非空白807→806行、root236→235文・395→393束縛、構文依存辺1,075→1,072。別名・設定94→93行、構築116文／466非空白行・委譲7行・test hooks157行は不変。小さな接続整理であり、全体の200〜500行目標は未完了。
+
+構文639file・全単体2,539件・関連E2E147件（reference-images／blocks／unified-uiの3file、2.3m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。旧・新両経路の単体6件はscope／live Block切替、SelectionとGeometry参照、reset抑止、fetch／Blob／File／import各失敗と元例外、完了失敗時の未serializeと成功時のcloneを検証する。browser比較で実参照12項目、選択対象三fieldのreadonly、同じ実support resultと公開204項目が一致し、通常ja/light・en/darkとtest起動も成功した。既存driver本体の不変と新しい未束縛参照がないことも照合済み。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+## Parameterテスト支援の関数選択を既存TestDriverへ集約（2026-11-11）
+
+ParameterTestDriver.createForWorkspace（src/testing/parameter_test_driver.js）が、DocumentWorkspace／Geometry read／Block editing／Block selection／Constraint insertion／Dimension placement／Presentationの既存ownerから、Parameter fixture・観測・操作に必要な関数を選び、従来のcreateBrowserSupportへ接続する。app.jsはownerと操作portを渡し、テスト専用のblockSelectionGeometry／blockSelectionBoundsCenter別名を持たない。通常機能をtestingへ移さず、既存createBrowserSupport／createFixture／createObservation／createInteractionは維持する。
+
+実関数をwrap・bind・実行せず、同じfixture／observation／interactionの凍結resultを返す。選択対象11fieldは実ownerのown readonly data propertyで、遅いfield選択でも同じ参照になる。現在scopeは既存workspace.currentが操作時に読み、Document定義の追記、ID採番、Block選択と寸法削除、履歴・UI順・元例外と途中状態を維持する。生成位置、test-mode判定、公開204項目、通常の初期化と保存形式v26、既存testing配置・読込順は不変。アプリ全体contextや通常機能の状態を持つ別のtesting ownerは作らない。
+
+app.jsは1,253→1,251行（2行減）、非空白809→807行、root237→236文・397→395束縛、構文依存辺1,077→1,075。別名・設定95→94行、test hooks158→157行。構築116文／466非空白行と委譲7行は不変。全体目標は未完了。
+
+構文639file・全単体2,536件・関連E2E115件（unified-ui／free-text-input-drag／parameter-dialog-controllerの3file、1.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。旧・新両経路の単体6件は現在scopeの切替、Geometry／Selection参照、ID採番・定義追記、寸法削除と各失敗時の途中状態を確認する。browser比較で実関数・owner参照21項目、選択対象11fieldのreadonly、同じ実support resultと公開204項目が一致し、通常ja/light・en/darkとtest起動も成功した。生の既存driver本体の不変と新しい未束縛参照がないことを確認した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
+## 注記Editorのcheckpoint field選択を既存生成ownerへ集約（2026-11-11）
+
+AnnotationFeature.prepareが返すcreateEditorForCheckpoint（src/application/annotation_feature.js）は、実EditingCheckpointのcaptureValues／restoreValuesを注記Editorのcapture／restoreへ選択し、既存createEditorForEditingへ接続する。app.jsはcheckpoint自体を渡し、この接続だけのためのsnapshotModelState／restoreModelState別名を持たない。Editorとcheckpointを保持する別のcontrollerや登録setterは作らず、従来の生成・成功時公開をそのまま用いる。
+
+document／host／capture／restoreと後続optionsの順を維持し、選択する実関数を包み直し・bind・実行せずに渡す。checkpointの二fieldは凍結recordのown readonly data propertyで、早いroot別名から生成時の選択へ移しても同じ関数になる。後にoptionsを展開するため、明示されたcapture／restore／resetDrag等の値（null／undefinedを含む）による上書きも維持する。既存createEditorForEditingと生のcreate／createForEditing／createEditorは変更しない。未生成Featureのguard、入力のfield読取り・Parameter／Controller生成の例外、前の完成済みEditor保持と実Editor resultの返却を維持する。
+
+実checkpoint、AnnotationParameterCommandとAnnotationInputControllerの処理は変更しない。captureはbare零引数、restoreはbare一引数で呼ばれる同じ関数のままで、操作時のcurrent scope、値のrollbackとGeometry／AnnotationのObject同一性、Parameter値・採番index、projection→analysis無効化を保持する。value checkpointをgeometry membership／ID allocation checkpointへ置き換えず、履歴・UI・保存形式v26と既存application／editing配置・読込順も維持する。
+
+app.jsは1,254→1,253行（1行減）、非空白810→809行、root238→237文・399→397束縛、構文依存辺1,078→1,077。別名・設定96→95行。構築116文／466非空白行、委譲7行・test hooks158行は不変。rootの二つの部分function別名を、実checkpointの引渡しとEditor側の選択へ整理した。200〜500行の全体目標は未完了。
+
+関連単体41件・全単体2,533件・構文639fileが成功。追加二単体は、実GeometrySolver.Point／EditingCheckpoint／AnnotationParameterCommandを使う旧接続との比較、生成時のscope無照会、Parameter変更失敗後のPoint・Annotation参照と値・index復元、projection／analysis順、明示callback上書きと入力／Controller生成失敗後のEditor保持を確認する。browserの旧root／旧module比較では、実checkpoint二fieldのreadonly、実関数参照と組立て・Parameter・Controllerの生成順、optionのkey／descriptor／name／arity、同じ実Editor result、capture／restoreのbare receiverと引数数、公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに加え、製品へ残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+## Context Menu候補表示の七関数の接続を既存ownerへ集約（2026-11-11）
+
+CanvasContextInteraction.createMenuForWorkspaceが返すcreateSceneForPresentation（src/application/canvas_context_interaction.js）は、実Toolbar iconsとAuthoringFeedback record、保持済みPresentationから候補表示の七関数を選び、既存createSceneForEditingへ接続する。数値は既存NumberDisplay.formatDisplayNumber、Hatch外観は既存HatchData.hatchAppearanceForDisplayを使う。app.jsは実icons／feedbackを渡し、formatter選択と候補表示recordの対応を直接持たない。従来のcreateSceneForEditingと限定capabilityの生APIは維持する。
+
+選ぶtoolbarSvgMarkup／formatDisplayNumber／constraintToolbarIcon／localizedConstraintName／geometryInstanceTypeLabel／hatchPatternTypeLabel／hatchAppearanceForDisplayのkey順と実function参照を維持し、包み直したり生成時に実行したりしない。実Toolbar iconsの二field、実AuthoringFeedbackの二field、Presentation.constraintFeedback.localizedConstraintName、NumberDisplay／HatchDataの関数は凍結recordのown readonly data propertyである。classic loaderで先に読み込む同じ静的namespaceを使い、遅いfield選択でも同じ関数になる。localeや候補値は各関数を表示時に呼んで評価し、表示結果のsnapshotを持たない。
+
+rootは同じ実Toolbar iconsを保持し、Sketch Treeへは必要な元の関数を選択して渡す。Query→候補formatter→後段Interactionの生成と別々の成功時公開、native controllerのstart／dispose、hoverと選択、候補ranking、編集guard・取消・元例外と途中状態を維持する。UI record読取りやQuery／formatter生成の失敗時には前のmenu presentationを残す。必要fieldだけを読み、余分なfeedback fieldを列挙・評価しない。新しいmodel・scope・Selection・menu state・listenerやglobal contextは作らず、既存application／UI配置、保存形式v26とUI挙動を保つ。
+
+app.jsは1,257→1,254行（3行減）、非空白813→810行、root240→238文・402→399束縛、構文依存辺1,081→1,078。別名・設定98→96行、構築116文／467→466非空白行。委譲7行・test hooks158行は不変。rootの数値／Hatch formatter二別名とアイコン二別名を、既存表示ownerの選択と一つの実recordへ整理した。200〜500行の全体目標は未完了。
+
+関連単体62件・全単体2,531件・構文639fileが成功。追加二単体は、旧owned経路と七関数参照・実formatterの出力・数値とlive言語の一致、unused fieldの非読取り、UI／Query／formatter失敗後の表示・選択とlistener終了を検証する。既存の構築順／候補選択・hover・guard／例外比較にも新経路を加えた。単一候補をmenu open時に選ぶ既存挙動を基準とし、失敗後もその選択を保つ。browserの旧root／旧module比較では七つのreadonly field・全formatter関数参照、実icons／feedback共有、Sketch Treeの同じicon関数、Query→formatterの生成順、ja／enの候補表示と公開204項目のkey／descriptor／型／name／arityが一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに加え、製品へ残さない。
+
+関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+## Propertiesの完成componentと三つの遅延入口を既存ownerへ集約（2026-11-11）
+
+PropertiesDisplay.prepare（src/application/properties_display.js）は、Properties表示・外観編集参照・選択可視性操作を同じ完成境界で公開する。早期prepareはclosureと凍結portだけを作り、createForWorkspaceは従来位置で生の同名factoryを同じnamespace receiver・一引数で呼ぶ。準備用recordではcreateEditingWithViewForWorkspaceだけを包み、同じbare builderへ全引数を転送する。実Editor／AppearanceUI／Viewを含む同じ凍結resultをそのまま返し、すべて完成した後にだけView／AppearanceEditing／Visibility commandと、そのViewを生成したselectionのquery関数をprivateな組として保持する。
+
+render portは旧renderPropertiesと同じarrow・零引数で、実View.renderのmethod読取り→同じselectedDisplayTargetのbare零引数呼出し→実Viewをreceiverとする一引数renderを維持する。readAppearanceも同名のarrow・零引数で同じ実AppearanceEditingを返し、toggleSelectedVisibilityは同名の通常関数で実Visibility.toggleをmember receiver・零引数で呼ぶ。余剰引数の破棄、返値・元例外と、未完成時の旧propertiesView／appearanceEditing／selectionVisibilityCommandの初期化前ReferenceErrorを保つ。Editorだけ完成した時点やView生成直後のraw result返却前にも公開せず、途中失敗で前の完成済みcomponentを置き換えない。
+
+作り直したworkspaceを準備しただけでは現在Viewを切り替えず、成功した各builderに対応するselection queryとcomponentの組を保持する。別prepareの状態も独立する。Queryの結果・model・Selection・scope・Viewの複製や新しいlistener／setterは作らず、裸のcreateForWorkspace／各factoryと実component APIは維持する。凍結resultのediting／view／appearanceUI、編集recordのappearanceEditing／visibility、workspaceのselectionとqueryはown readonly data fieldであり、root取出しの直前または後段へ移しても同じ参照になる。rootのselectedPropertiesTargetは既存test driverへ渡す実queryとして残す。共有Appearance UI、操作時のscope・選択／表示の別policy、UI・保存形式v26と生成→公開→bind／start順を維持する。
+
+app.jsは1,258→1,257行（1行減）、非空白814→813行、root240文は不変。束縛405→402、構文依存辺1,082→1,081、委譲8→7行。構築115→116文／467非空白行、別名・設定98行・test hooks158行は不変。早期準備と一つのbuilder wrapperは増えるが、三つの関連する入口と一つの完成境界に限定する。実View／編集actorのfacadeや巨大contextは作らず、既存application／UI／editing配置を維持する。200〜500行の全体目標は未完了。
+
+関連単体32件・全単体2,529件・構文639fileが成功。追加三単体は、method→target→renderの順・receiver／引数／返値／例外、実Viewと外観・可視性・ロック入力の旧rootとのsnapshot一致、workspace再準備と失敗後の対応component保持・独立ownerを検証する。既存の七constructorとview-optionsの各失敗比較にもprepared経路を追加し、途中で三portが未公開なことを確認した。browserの旧root／旧module比較では九つのguard、七つのreadonly field、実result自体の返却、query・外観の同一参照、portのname／arity／arrow種別、生成順・呼出し／同じ例外、公開204項目が一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに挿入し、製品sourceへ残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+## Pending取消入口を実session生成ownerへ集約（2026-11-11）
+
+CanvasInteractionFeature.create（src/application/canvas_interaction_feature.js）はcancelPendingCommandを公開し、同じfeatureが完成させた実PendingCommandSessionへ取消を依頼する。DrawingPreview→Pending→Constraint target→Pointerの既存生成順を保ち、操作session recordの凍結が成功した後にだけ、その実Pending参照をprivateに保持する。app.jsは早期に同じportを選び、Sketch Projection／Derived Instance／Annotationへ接続し、pendingCommandSessionを捕捉するrootの転送関数を持たない。
+
+portは旧cancelPendingCommandと同名・arity=1で、messageを実Pending.cancelへmember receiver・一引数で渡す。undefinedによるnative既定message、null／空文字、余剰引数の破棄、元の返値・例外を維持する。session完成前には旧pendingCommandSessionの初期化前ReferenceErrorを出し、途中でPendingだけ生成済みでも取消しない。四段いずれかの生成失敗では前に完成した参照を保持し、成功した再生成後は新しいsessionを対象とする。独立したfeature間で参照を共有しない。
+
+実Pending／target／Pointer／previewと返却session recordは従来のままで、新しい操作state・Pending複製・scope snapshot・listenerやsetter／wrapper controllerを追加しない。既存の各session内部callbackはそのsessionのPendingを参照するままで、今回のportへ一律に置き換えない。現在appのsession builder呼出しは一箇所だけで、同じ実Pendingを選ぶ。空取消のplacement解除、注記／PNGの専用ownerへの委譲、Offsetのresetとpointer解除、通常入力・hint・Toolbar等の順序、失敗時の部分更新、UIと保存形式v26を維持する。既存application／editing配置と読込順は変更しない。
+
+app.jsは1,259→1,258行（1行減）、非空白815→814行。root241→240文・405束縛、構文依存辺1,083→1,082、委譲9→8行。構築115文／467非空白行、別名・設定98行、test hooks158行は不変。新しい上位組立て層を作らず、生成成功時の参照と取消を同じownerへ揃えた。200〜500行の全体目標は未完了。
+
+関連単体42件・全単体2,526件・構文639fileが成功。追加三単体は、最終Pointer生成時点までのguard、native receiver／一message／返値／元例外、通常・空・注記・PNG・Offsetの取消とhint既定値、hide失敗後の部分状態、各constructor失敗と成功再生成・独立ownerを確認する。実browserでも旧root／旧CanvasInteractionFeatureと比較し、早期・途中guard、各consumerの同一port、凍結sessionの同じPending、既存feature fieldと公開204項目のkey／descriptor／型／name／arity、生成順・取消呼出しと同じ例外が一致した。featureには新しい取消操作一fieldだけを追加する。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに挿入し、製品へ残さない。
+
+関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+## Clipboardの早期操作と実Command生成をSelection編集へ集約（2026-11-11）
+
+SelectionEditingFeature.prepare（src/application/selection_editing_feature.js）は、早期に渡すcopy／paste portと後段の実Selection編集生成を同じownerで接続する。createForEditingは従来位置で生の同名factoryを同じnamespace receiver・一引数で呼び、成功した実Clipboard command参照だけを保持し、返された実deletion／clipboard recordをそのまま返す。外で作ったcomponentをsetter登録する方式ではなく、payload・cut・paste回数・scope・modelを複製しない。
+
+copy portは旧copySelectionToClipboardと同名・同じoptions={}の既定値で、実Command.copyをmember receiver・一引数で呼ぶ。paste portも旧pasteGeometryClipboardと同名で、実Command.pasteを零引数で呼ぶ。明示null／undefined、余剰引数の破棄、返値・元例外を維持する。未生成時には、実methodやmodelを読む前に旧clipboardCommandの初期化前ReferenceErrorを出す。Deletion／Clipboardいずれの生成失敗でも前に成功したCommandを置き換えず、別prepare間は独立する。早期prepareはclosureと凍結portだけを作り、scope・Selection・DOMやCommandを照会・生成しない。
+
+生のSelectionEditingFeature.createForEditingとDeletion／Clipboard各factory・操作実装は変更しない。実Selection recordのclipboardと実Clipboard recordのcommandは凍結own data propertyであり、Command参照の捕捉を従来rootの取出し直前へ移しても同じ実体になる。Reference Imageのネイティブ入力、Context Menu、Keyboardとtest hooksへ同じ安定portを渡す。削除のWorkspace.currentとコピー／貼付けのbound editingScope.current、Cut拒否・例外後のpayload保持、paste失敗の限定rollback、保存形式v26と通常UIを維持する。配置は既存application／commands／editingのままとし、新module・global・listenerは追加しない。
+
+app.jsは1,260→1,259行（1行減）、非空白815行は不変。root242→241文・405束縛、構文依存辺1,087→1,083、委譲11→9行。早期準備一文の追加で構築114→115文／465→467非空白行、別名・設定98行とtest hooks158行は不変。行数だけを減らす分割ではなく、実生成と操作portの所有を同じ機能へ揃える。200〜500行の全体目標は未完了。
+
+関連単体24件・全単体2,523件・構文639fileが成功。追加三単体は、旧guard・引数／既定値・receiver／返値／元例外、失敗後の前回Commandと独立ownerの保持、実ClipboardCommand／ClipboardSessionを使う旧root委譲との比較を検証する。拒否Cutと削除例外後のpayload、異なるWorkspace／bound scope、paste成功とfinish失敗時のmodel rollback後に回数を戻さない挙動を元のまま照合した。browserでは早期guard、consumer間の同一port、実record・callbackのname／arity・公開204項目のkey／descriptor／型、生成順とnative receiver／引数数／返値／同じ例外が前後一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに挿入し、製品には残さない。
+
+関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+## 保存・履歴・Clipboardショートカット設定を入力側へ集約（2026-11-11）
+
+KeyboardInput.createWorkspaceShortcuts（src/application/keyboard_input.js）が、実DocumentFileFeatureのsave／saveAs、実HistoryControllerのundo／redo、明示copy／paste callbackとnative clipboard方針を既存の八field recordへまとめる。app.jsは実files／historyとコピー・貼付けの入口を渡し、八fieldの対応とnativePaste／nativeCopy=trueを直接管理しない。rootの保存専用二別名を除く。既存createとKeyboardInteractionControllerのroutingは変更せず、元の関数を包まずに同じ順序で選ぶ。返却は従来どおりObject prototypeの通常の可変own data propertyで、凍結やgetter化を追加しない。
+
+DocumentFileFeature.save／saveAsとHistoryController.undo／redoは凍結recordのown readonly data fieldであり、早期root別名からKeyboard生成時の同じ実record読取りへ移しても値は変わらない。save／saveAs／copy／paste／nativePaste／nativeCopy／undo／redoのkey順、callbackのObject同一性、receiver・引数・返値・元例外、現在Document／Block履歴の選択は維持する。作成時に保存や履歴操作を実行せず、Clipboardのネイティブイベント処理も移さない。生成→明示start／disposeのlistener管理と入力優先順、UI、保存形式v26は不変。新しいfile・global・state・wrapper controllerは不要である。
+
+app.jsは1,261→1,260行（1行減）、非空白816→815行。root242文・構築114文／465非空白行は不変、束縛407→405、別名・設定99→98行。構文依存辺1,087、委譲11行・test hooks158行は不変。行数だけのための新しい上位wrapperを作らず、既存application／UI配置を維持する。200〜500行の全体目標は未完了。
+
+関連単体46件・全単体2,520件・構文639fileが成功。追加した一単体は実KeyboardInput／KeyboardInteractionControllerで旧設定と生成recordを比較し、保存・別名保存・repeat抑制・Ctrl／MetaのUndo／Redo、ネイティブcopy／cut／pasteの非介入、重複start防止・dispose後の非実行と再startを検証する。実ブラウザでも四つのreadonly field・選択する同じ実関数・recordのkey／descriptor／型、生成順、実Keyboard APIと公開204項目を旧root／旧moduleと比較して一致した。通常ja/light・en/darkとtest起動も成功。診断は一時responseだけに加え、製品sourceへ残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。 最新の全体589件成功（f0a7954、30.0分）とは区別する。
+
+## 注記リサイズ可否の同期を既存AnnotationFeatureへ集約（2026-11-11）
+
+AnnotationFeature.prepareのsyncResizeSelectionが、実Dragに対応するInteractionのLifecycleとOperationSessionsのPending／拘束targetを使ってリサイズ可否を同期する。app.jsは既存UIへこの遅延portを渡し、条件式を直接持たない。Dragのmethod読取り後、select mode→Pending不在→拘束target不在の順に短絡評価し、実Dragをreceiverとしてboolean一引数で呼ぶ。返値・元例外を維持し、Drag未生成時は状態を読む前に旧annotationDragの初期化前ReferenceErrorを出す。
+
+成功した実Featureと、その生成時のsession／判定関数の組をowner内部に保持し、実Dragを生成した組と対応づける。Featureの再生成後や新Drag生成失敗時も、既存Dragは自分の生成時のcontextで同期する。既存の生Feature／Editor／Drag API自体は置き換えず、そのまま返す。mode／Pending／targetの値をsnapshotとして複製しない。早期prepareやFeature／Drag生成時に条件を読まない。新しいmodel・listener・globalやsetter登録APIは追加しない。
+
+app.jsは1,261→1,261行（0行変化）、非空白816行、root242文・407束縛のまま。構文依存辺は1,089→1,087。行数圧縮ではなく、UIと注記操作状態の判定をowner側へ移した。既存application／commands／editing配置を維持し、新fileやloader変更は不要。200〜500行の全体目標は未完了。
+
+追加単体4件は、初期化guard・truthiness・短絡順序・method receiver／一引数／返値／同じ例外、実Dragのhandle解除と非再有効化、Feature再生成と失敗時のcontext対応を検証する。関連単体44件・全単体2,519件・構文639fileが成功。実browserの一時response診断では旧root／旧AnnotationFeatureと変更後を比較し、実native recordの生成順、初期化前guard、可否5条件、receiverと引数数、Feature／Drag／公開204項目のkey・descriptor・型が一致した。共有するInteraction.lifecycleとsessions.pending／targetsは凍結recordのown readonly data fieldで、root別名と同じ実体である。通常ja/light・en/darkとtest起動も成功。診断は製品sourceに残さない。
+
+関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+## 実BlockLayoutを共有し部分recordへの再梱包を整理（2026-11-11）
+
+GeometryReadServices.createBlockLayoutが返す同じ実APIを、Block配置とDerived Instance編集へ共有する。rootのblockLocalGeometryBounds／blockInstanceDisplayCenter／blockInstanceTranslationForAnchor／snappedBlockRotationの四別名と、二つの二項目recordへの再梱包を除いた。生成位置・factory・model／scope・注記readerは変えず、BlockLayoutの現在定義・enabled Sketch・鏡像・中心・境界と各既存consumerの計算に手を加えない。新しいprepare／holder／adapterやmutable app contextを作らず、元のapplication／geometry配置を維持する。
+
+BlockLayoutのblockLocalGeometryBounds／blockInstanceDisplayCenter／blockInstanceTranslationForAnchor／snappedBlockRotationは、凍結recordのown readonly data fieldである。appは四つの重複別名と二つの部分recordへの再梱包を持たず、BlockEditingFeature.createPlacementへlayout、DerivedInstanceFeatureのcreateEditingWithTransformsへblockLayoutとして実APIを共有する。前者は回転とanchor平行移動、後者はlocal boundsと回転の各二fieldだけを読み、recordの列挙・identity比較・書込み・保存や別の転送をしない。他の単機能callback先には、同じ実recordから選択した元の関数だけを渡す。getterや可変snapshotへの同じ置換を一般化しない。
+
+app.jsは1,261→1,261行（0行変化）、非空白816行のまま。root242文・構築114文／465非空白行は不変、束縛410→407（3減）。構文依存辺1,089、別名・設定99行、委譲11行、test hooks158行も不変。九つの旧参照のうち四つを二つの実record引渡しへ揃え、残る五つは同じownerのfield参照へ替えた。行数の圧縮を成果として扱わず、200〜500行の全体目標は未完了。
+
+対象を逆展開したroot全体のASTが基準d43ab4cと一致し、src／tests／loader／toolsとfree identifier集合も不変である。二consumerのlayout参照は二fieldを取り出す一箇所だけで、arguments／evalによる別観測もないことを確認した。実browserのapp responseにだけ読取り用診断を挿入し、四fieldが凍結own data propertyであること、両consumerへ実BlockLayout自体が渡ること、選択する元のfunction参照・Object prototype・生成順、公開テスト204項目のkey／descriptor／型が前後一致することを照合した。未使用の二fieldの存在・freezeをconsumerは観測しない。診断は製品sourceやE2Eへ残さない。既存テストは実BlockLayoutを受ける経路を既に検証しており、forwardingだけを固定する新規テストは追加しない。
+
+関連単体40件・全単体2,515件・通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+## 線つぶれ検出Queryの組立てを求解contextへ集約（2026-11-11）
+
+SketchSolvingFeature.createContextForWorkspaceは、共有するScope query・元のConstraintReferences.constraintGraphNodes・minimumLengthから、createLineCollapseQueryで既存LineCollapseQueryを生成する。生成は明示的な零引数呼出し時だけで、context生成時にはLineCollapseQueryのnamespaceを先読みせず、Queryのためのmodel／scope読取りも行わない。prepareForWorkspaceからのcontextも同じbuilderを公開し、app.jsは従来の段階で実Queryを受け取り、拘束確定へそのまま渡す。実Queryを保持するsetter／cacheや新しいsolver・model・mutable app contextは追加しない。
+
+LineCollapseQuery.createは同じnamespace receiver・一引数で呼び、connectedComponentFromSeeds／constraintGraphNodes／localSolveLines／minLineLengthのkey順・実値とfunction参照を維持する。探索のScope queryは従来のAnnotation仮scopeを読む同じ実体を使い、起点は元のraw constraintGraphNodesを使う。Scope query内部のannotationGeometryNodes対応wrapperを検出起点へ流用しない。minimumLengthはrootからcontextへ既に渡された同じ最小長を使い、閾値・計算式と生LineCollapseQueryは変更しない。
+
+実factoryが返す凍結Queryをそのまま返し、findのsnapshot／Point／LineのObject同一性、指定Sketch・live scope、短絡と元例外、返値・無変更を維持する。context→円中心十字→Query→Spline編集の既存生成順、factory失敗時の後続停止・test API未公開、UIと保存形式v26も保つ。配置は既存application／constraintsのままとし、新file・loader／test一覧変更は不要である。
+
+app.jsは1,263→1,261行（2行減）、非空白818→816行。root242文は不変、束縛409→410（明示builderの一つ増）、構文依存辺1,091→1,089。構築114文／467→465非空白行、別名・設定99行、委譲11行、test hooks158行。rootが個々のgraph入力と最小長を再配線する責務を既存求解contextへ集約した。200〜500行の全体目標は未完了。
+
+新規二テストで、context生成時にLineCollapseQuery namespaceが存在しなくてもcoldに完成すること、raw起点とAnnotation仮scopeの区別、同じ実Scope query／最小長、native QueryのObject同一性、snapshotとPoint／Lineの参照、Sketch・scope・長さのlive変更と無変更、constructor／graph例外の同一性、既存Queryを保持したままの再生成と短絡を確認した。対象を逆展開したroot ASTが基準781ec6fと一致し、新builder／公開property以外の求解Feature本体、raw Query・Solver／loader／E2E、free identifier集合も不変である。実browserのapp／module responseだけへ診断を挿入し、四入力の実値／参照・receiver・引数数／key／prototype、三つのown readonly graph field、native Queryの実identity、生成順と強制例外時の停止点、既存context公開項目と公開テスト204項目のkey／descriptor／型を前後照合した。診断は製品sourceと通常E2Eには残さない。
+
+関連単体20件・全単体2,515件・通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+## 作図メッセージの生成をPresentationへ接続（2026-11-11）
+
+PresentationFeature.createAuthoringFeedback（src/application/presentation_feature.js）は、同じ実ApplicationSettingsのapplicationTextを既存AuthoringFeedback.createへ接続し、実フォーマッターrecordをそのまま返す。生成は明示的な呼出し時だけで、Presentation生成時の先読み・cache・新しいstate／listenerは追加しない。app.jsは従来の段階で零引数のbuilderを呼び、Hatch／Offsetの診断とHatch／Instanceの種別labelを実recordから各機能へ渡す。表示設定を別途注入し直したり、四つの文言関数をroot別名として再管理したりしない。
+
+生AuthoringFeedback.createは同じnamespace receiver・一引数で呼び、引数applicationTextは同じ実functionである。原formatterのbodyとfallback・result読取り順、二文字列の裸callback呼出し、返値・元例外、呼出し時の言語切替を維持する。recordをfacadeで包まず、反復生成は従来の生factoryと同じ独立recordを返す。Presentation生成→作図formatter生成→Document生成の段階と、失敗時の後続初期化・test API未公開を保つ。UI・保存形式v26とloader／folder構成は変更しない。
+
+app側のApplicationSettings／Constraint feedbackとlocalizedConstraintNameの重複別名も除き、実Presentationのown readonly data propertyを通して同じowner／functionを参照する。実SettingsのapplicationText、実ConstraintFeedbackのlocalizedConstraintNameと四formatterも凍結recordのown readonly data fieldであることを確認した。getter・可変snapshotへの同じ置換を一般化しない。Tooltipのmember receiverや、consumerへ渡す裸のfunction identity・引数key・初期化順を変えない。
+
+app.jsは1,264→1,263行（1行減）、非空白819→818行。root243→242文・415→409束縛（6減）、構文依存辺1,092→1,091。構築114文／467非空白行、委譲11行、test hooks158行は不変。別名・設定100→99行。新moduleや汎用app contextを作らず、表示用依存の組立てを既存Presentationへ集める一単位であり、200〜500行の全体目標は未完了。
+
+二つの追加単体で、明示生成までのcoldなnamespace参照、同じ実設定と実record／callback、後の言語切替・独立性、constructor／formatterの元例外と再生成を確認する。対象変更を逆展開したroot ASTが基準deec69aと一致し、新methodとexport propertyを除くPresentation本体AST・free identifier集合も不変である。実browserではapp／module responseだけに診断を挿入し、生成順、raw factoryのreceiver・引数数／key／prototype・applicationTextの参照、八つのreadonly data field、既存Presentation公開項目と公開テスト204項目のkey／descriptor／型を前後照合した。強制したraw factory例外も同じ実Errorで停止し、Document初期化とtest API公開へ進まない。診断を製品sourceやE2Eへ残さない。
+
+関連単体42件・全単体2,513件・通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。終了後に空白行末の二文字だけを整形し、AST・行数不変と整形後のapp構文を確認した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+## Canvasの実Scene recordを共有し再梱包と別名を整理（2026-11-11）
+
+app.jsはCanvasDisplay.createSceneForEditingが返す実SceneをcanvasSceneとして保持し、そのreadonly fieldを必要な機能へ直接渡す。CanvasTestDriver.createBrowserSupportForSceneのdisplayにも同じ実Sceneを渡し、app側のbounds／fit／geometryだけを詰め直す中間objectを作らない。どの表示fieldを使用するかは既存CanvasTestDriver.createForSceneが担当する。同factoryはdisplayのbounds／fit／geometryだけを一度取出し、三field以外の列挙・identity比較・書込みや保存はしない。生のfactoryと公開テストAPIは変更しない。
+
+共有するSceneはGeometry／Overlay／Bounds／Fit／commandTargets／Sketch style／Frame／Hatch生成の八つのown readonly data propertyを持つ凍結recordである。getter・可変snapshotへの置換を同じ読取り移動として扱わない。sketchPresentation／interactionOverlay／drawingBounds／drawingFitのroot別名を除き、同じ実ownerのfieldを参照する。早期CanvasRenderProbeから参照されるgeometryDisplayの別名は従来と同じ段階へ残し、未生成時の同名ReferenceErrorを維持する。createHatchRenderingも裸のfactory呼出しを保つため別名を残す。新しいfacade・中継module・mutable app context・model／cache／listenerは追加しない。
+
+実Sceneの生成位置・引数・生成順と他機能への実APIの同一性、現在scopeの遅延参照、裸関数／member receiver・引数の個数・返値と元例外、公開→bind／startの順、UIと保存形式v26を維持する。folder／loader／test一覧の変更は不要で、既存CanvasDisplayとCanvasTestDriverの責務を使う。
+
+app.jsは1,264→1,264行（0行変化）、非空白819行のまま。四別名・22参照を整理し、うち二参照を含むdisplay再梱包を実Sceneで置換した。root束縛418→415、root文242→243、構文依存辺1,090→1,092。Scene保持と残る二別名の宣言を分けるためroot文・辺は増える。構築468→467非空白行、別名・設定99→100行、委譲11行とtest hooks158行は不変。行数・辺数の減少を成果として装わず、所有者の実recordと利用側の表示契約へ接続を揃える一単位である。200〜500行の全体目標は未完了。
+
+変更を逆展開したroot全体のASTが基準bd96aa7と一致し、native factoryの位置・引数・順、他module／test／loader・free identifier集合が不変なことを照合した。CanvasTestDriverのdisplay読取りは三fieldの一箇所だけである。実browserのapp／driver responseにだけ読取り用診断を挿入し、実Scene八fieldのfreeze／own data descriptor、三fieldが同じ実体であること、変更後のdisplayが実Sceneそのものであること、geometryDisplay初期化前ReferenceError、公開204項目のkey／descriptor／型が前後で一致することを確認した。診断は製品sourceや通常E2Eへ残さない。
+
+全単体2,511件、通常二経路とtest一経路の起動が成功。構文639fileは成功（exit 0）。関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、一覧504件とfilter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。今回の関連検証を、最後の全体589件成功（f0a7954、30.0分）と区別する。
+
+
+## 生成元の系譜による構築依存の再監査（2026-11-11）
+
+開発用audit toolのconstructionOriginsでconst factory別名／入れ子の取得経路を追跡し、変更・default／rest／computed／循環とshadowingでは推定しない。アプリは実行しない。旧field全体の現物比較、114initializerとroot対応を確認した。大きな生成群を単に移す案の問題と、Canvasの実Scene recordを共有する次の候補をbootstrap-boundary-audit.mdへ記録した。製品の分離実装はこの単位では行わず、app.jsは1,264→1,264行（0行変化）。監査6件・全単体2,511件成功、構文639fileは成功（exit 0）。製品／E2E不変のため今回E2Eは再実行していない。
+
+## 履歴の早期操作portと後段生成を同じownerへ集約（2026-11-11）
+
+HistoryController.prepare（src/editing/history_controller.js）は、早期に渡すrecord／createBlockHistoryと後段の実履歴生成を同じownerで接続する。prepareはclosureと凍結portだけを生成し、model／scope／DOMを読まず、履歴stackを作らない。createForWorkspaceは従来位置で同名の生factoryを同じnamespace receiver・一引数で呼び、成功した実featureをそのまま返す。外部生成物をsetterで登録する方式や、別の履歴stack／session／app contextは追加しない。
+
+recordは既定label「変更」と一引数、createBlockHistoryは零引数を維持し、実featureをmember receiverとして呼ぶ。返値・元例外・余剰引数の破棄、生成前の旧historyFeature初期化前ReferenceErrorを維持する。生成失敗では完成済みfeatureを置き換えず、準備単位は独立する。Document／Blockの履歴選択、復元中の記録抑止、profiling、上限80・同一snapshot／Undo／Redo・通知順と保存形式v26は既存の実APIに残す。app.jsは早期portを接続して後段に実featureを生成し、実controllerを従来どおり共有する。新fileやloader／test一覧変更はない。
+
+app.jsは1,265→1,264行（1行減）、非空白820→819行。root243→242文、417→418束縛、依存辺1,091→1,090。二つのhoisted委譲を一つのcold準備に置換したため、委譲13→11行、構築467→468行となる。別名・設定99行とtest hooks158行は不変。束縛数の増加を隠さず、行数削減より初期化と操作の所有を優先する。200〜500行の全体目標は未完了。
+
+履歴関連21件・構文639file・全単体2,508件・通常二経路とtest経路の起動が成功。新規三テストは実Document／Block stackとlive scope・復元抑止・profiling・元例外、coldな生成と成功時のみの公開・独立性、receiver／引数数／既定値／返値を確認する。既存の期待値は変更しない。準備生成・旧二関数とnative factory呼出しを逆展開したroot ASTが基準と同じこと、生history APIのASTとfree identifier集合が不変なことも照合した。関連E2E504件（40file、9.0m、exit 0）も成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。全体589件の直近成功はdevelop f0a7954（30.0分）であり、この単位の関連検証とは区別する。
+
+
+### 最新：実support recordからの公開契約生成をBrowserTestApiへ集約（2026-11-11）
+
+BrowserTestApi.createFromSupportRecordsは、実driverのsupport recordから既存の公開契約を組み立てる。Canvasのdisplay／rendering／観測、Constraintのconstraints／referenceCases、Documentのdocuments／Sketch削除、Trimの三fixture、Splineのsetup／transfer、画像とParameterの各APIへの対応づけをsrc/testing/browser_test_api.jsが担当する。app.jsは実recordを渡し、別driverへの接続に必要なCanvas displayとconstraint status readerのみを引き続き明示的に受け渡す。driverの生成やtest-mode判定、window.__jot2dTestへの代入はapp.jsの元の段階に残す。
+
+対象は実起動でObject.isFrozen=true、own data property・writable=false／configurable=falseと確認した七record・二十一項目に限定する。これらの値の読取りを後段へ移しても実API／callbackの参照は同じである。getter・可変snapshotへ同じ整理を一般化しない。各groupの対応づけ後は既存createWithPropertiesを一引数で呼び、call(this, ...)により呼出し元のfactory receiverを渡す。従来のcreate／createWithPropertiesは変更しない。公開Objectのprototype・全keyの順序／属性／実function同一性、leaf lookup／spreadの順序と衝突時の優先、元例外とRHS完了後の公開を維持する。callbackを包み直したり、組立て時に実行したりしない。
+
+この境界はテストAPIの対応づけだけを担当し、model／scope／Selection／sessionやDOM、履歴、実driverの生成は所有しない。汎用app contextや新しいmodel・cache・listenerは追加しない。通常二経路では公開APIを生成せず、test queryのある既存経路でだけ同じ位置に公開する。既存UIと保存形式v26、script loader／一覧は維持する。
+
+app.jsは1,269→1,265行（4行減）、非空白824→820行。test hooks162→158行、同scopeの束縛39→28（11減）。root243文・417束縛・構文依存辺1,091、構築467行・別名／設定99行・委譲13行は不変。原driver生成は二十のwindow直接呼出しのcallee／引数／順序が同一で、二つのbareな後段creatorも変更していない。全test setupを別の大きなbootstrapへ移さず、公開に必要なprivate項目の知識を実契約ownerへ集める一単位である。200〜500行の全体目標は未完了。
+
+新規二テストで、全key／descriptor／function参照・prototype・lookup順・spread衝突の優先、liveな返値・引数・public receiver、失敗時の同じ例外／読取り順と未公開を検証する。実起動では七factoryの実戻り値をそのまま返す読取り用captureを別browserのapp responseへ挿入し、二十一data項目を前後で照合した。同じ実recordから基準e150be6の旧公開式を実行した結果と、新公開APIの全204項目のkey／属性／prototype／値参照が一致することも照合した。診断は製品sourceや通常E2Eには残さない。新methodとnamespaceへの公開を除くASTは基準と等しく、root十三編集／既存test-mode guard／公開位置／free identifier集合とload・E2E一覧も不変である。
+
+構文639file・全単体2,505件・関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、一覧504件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop e150be6、作業branch codex/browser-support-publication、開始時週枠残量92%。構文639file・公開関連10件・全単体2,505件・起動3経路が成功。関連40file・504件の成功と、709入力・開始HEAD不変を確認した。今回の公開204項目の実参照同一性と生成不変の証明を伴う関連検証を、直前e150be6の関連504件成功（8.9分）および最後の全体589件成功（develop f0a7954、30.0分）と区別する。証跡はTEMP cad-browser-support-publication-{focused,check,unit,smoke,e2e}.logとbefore／after／audit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
+
+### 最新：Annotationの生成とbounds・resize・reset・syncを実component ownerへ集約（2026-11-11）
+
+AnnotationFeature.prepareは、注記の既存生成段階と遅延操作の接続を担当する。prepareForWorkspaceの既存query／constrained drag／Featureの段階は維持し、成功した実Featureのみを保持する。createEditorForEditing／createDragForEditingは同じ実Featureのfactoryをmember receiverで呼び、成功した実Editor record／Dragのみを保持して、その実recordをそのまま返す。raw Featureを複製したfacadeで置き換えず、他機能は従来どおり実APIを直接受け取る。生成に失敗した場合は前に完成したcomponentを置き換えない。setterで外からcomponentを登録する方式にはしない。
+
+annotationBoundsは実spatialへ全引数をmember callし、resizeEnabledは実Dragへ一引数、resetDragとsyncInputは実Drag／実Editorのcontrollerへ零引数をmember callする。返値・元例外・余剰引数の破棄、Workspace／bound editing scope、実componentのObject同一性を維持する。未生成時は、bounds／Feature reader／Editor・Drag生成で旧annotationFeature、resize／resetで旧annotationDrag、syncで旧annotationInputControllerの初期化前ReferenceErrorを維持する。Editor recordのcontrollerはObject.freezeしたown data propertyであり、root aliasからの読取りを同じ完成recordのfield読取りへ移しても対象は変わらない。
+
+prepared createConstrainedDragForFeatureの既定readFeature、Feature生成の既定resizeEnabled、Editor生成の既定resetDragは実ownerの遅延portへ接続する。default propertyより後にoptionsを展開し、明示callback／undefined／nullによる上書きを維持する。native query・Feature・Editor・Dragの生成位置と公開→bind／start順は変えない。早期prepareはclosureとfrozen APIだけを生成し、model・DOM・viewport／scopeや未完成componentを読まない。モード／Pending／拘束targetを組み合わせるresize UI条件はapp.jsに残す。生のcreate／createForEditing／prepareForWorkspace等は変更せず、新しいmodel・Selection・scope・cache・listener／global contextは追加しない。UIと保存形式v26も維持する。
+
+app.jsは1,271→1,269行（2行減）、非空白826→824行。root243文・417束縛は不変、構文依存辺1,094→1,091、構築468→467行・委譲14→13行。別名／設定99行・test hooks162行は不変。構築文112→113は早期のcold prepare一つを追加した分であり、native componentの生成を移動したり増やしたりしていない。減行よりも五つの遅延接続を実生成ownerへ寄せる単位であり、200〜500行の全体目標は未完了。
+
+新規四テストは、未生成時guardとcoldな生成順・実record同一性、native constrained dragのvirtual geometry／leader移動とlive scale／元例外、実member receiver・引数・返値、factory失敗時の完成component保持とcontext独立性、明示callback／undefined／nullの上書きを検証する。callback上書きfixtureはケースごとに生成し、freeze済みrendererを再構築する初期fixtureの問題のみ修正した。既存の期待値は緩めていない。新しいprepare関数とnamespaceへの公開だけを除いたASTが基準と等しく、全ての従来APIは不変。root十四編集・free identifier集合・load／E2E一覧不変も照合した。
+
+構文639file・全単体2,503件・関連E2E504件（40file、8.9m、exit 0）が成功。709入力と開始HEAD不変、一覧504件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop f0a7954、作業branch codex/annotation-component-ownership、開始時週枠残量92%。構文639file・注記関連27件・全単体2,503件・通常二経路／test一経路の起動が成功。注記専用のanchor／display-sizeを含む関連40file・504件の成功と、709入力・開始HEAD不変を確認した。直前の全体589件成功（develop f0a7954、code b2905a1のtree、30.0分）と今回の関連検証を区別する。証跡はTEMP cad-annotation-component-ownership-{focused,check,unit,smoke,e2e}.logとaudit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
+
+### 最新：単一機能の固定既定値を各組立てownerへ移管（2026-11-11）
+
+app.jsから単一の機能へ渡していた固定の既定値は、その機能の組立てAPIが担当する。共有の数値基準、実行時に求める最小長、保存version等の接続はapp側に残し、全設定を別の汎用contextへ集めない。既定値を持つのは以下のapplication向け境界であり、生の計算・描画・履歴APIへ同じ変更を広げない。
+
+| 担当 | 入力の既定値 | 意味 |
+| --- | --- | --- |
+| HistoryController.createForWorkspace | limit=80 | Document／Blockそれぞれの履歴上限 |
+| SelectionEditingFeature.createForEditing | pasteOffsetScreenPx=24 | 貼り付けの画面上の間隔 |
+| BasicDrawingToolsのediting.createCenterline | parallelTolerance=1e-5 | 中心線の平行判定に渡す許容値 |
+| SketchSolvingFeatureのcontext.createSolving | maxPasses=20、relativeTolerance=1e-7 | Parameter feedbackの反復上限と収束判定 |
+| GeometryDragFeature.createForWorkspace | previewMaxModelError=0.125 | native DragSolver／DragEditingへ共通で渡すモデル誤差上限 |
+| CanvasDisplayのprepared workspace.createSceneForEditing | constructionExtensionScreenPx=12 | 補助線の画面上の延長量 |
+
+前五者はdestructuringの既定値であり、未指定／undefinedに既定値を適用し、明示の数値・0・nullはそのまま保持する。Canvasの延長量はoptionsより先に既定propertyを置くため、未指定に12を補い、明示undefined／nullを含むoptionsの上書きは従来どおり保持する。各raw childへ渡す既定値、primitive／functionの同一性、引数key、生成・公開・bind／start順、Workspace／bound scopeは維持する。計算アルゴリズム、反復・許容値、UI、保存形式v26の変更はない。新しいstate・model・cache・listenerやglobal設定objectは作らない。
+
+app.jsは1,280→1,271行（9行減）、非空白835→826行。root250→243文・424→417束縛、構文依存辺1,101→1,094。固定policy10→3行、構築470→468行、別名／設定99行・委譲14行・test hooks162行は不変。七つの固定値の受渡しを機能APIの既定値へ置き換える単位であり、200〜500行の全体目標は未完了。
+
+六moduleの変更は六つのparameter defaultと一つのCanvas既定propertyのみであり、それらを除いたASTが基準と等しいことを照合した。rootも十三の予定編集だけと照合し、test／manifest／index／toolsは変更していない。通常起動を別browserで計測し、実EditHistory／ClipboardSession／CenterlineGeometry／ParameterStabilization／GeometryDragSolver／GeometryDragEditing／GeometryDisplayの七factoryが受ける既定値と呼出し回数が変更前後で一致し、browser errorがないことを確認した。診断wrapperは別browserのapp responseだけへ挿入し、製品sourceと通常E2Eには残さない。数値移動をなぞるだけの新テストは増やさず、既存単体と全E2Eで検証する。
+
+構文639file・全単体2,499件・全E2E589件（50file、30.0m、exit 0）が成功。709入力と開始HEAD不変、全一覧589件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop eec3f9d、作業branch codex/feature-policy-defaults、開始時週枠残量93%。構文639file・全単体2,499件・通常二経路／test一経路の起動が成功。全50file・589件の成功と、709入力・開始HEAD不変を確認した。直前の全体589件成功（develop 0bbe1e6、27.2分）とは区別する。証跡はTEMP cad-feature-policy-defaults-{check,unit,smoke,e2e}.logとbefore／after／audit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
+
+### 最新：表示fitと寸法preview描画を実CanvasDisplay生成ownerへ集約（2026-11-11）
+
+CanvasDisplay.prepareForWorkspaceから生成したDisplayは、createSceneForEditingが成功した実sceneを保持し、同じfitのfitVisibleGeometryToViewportを安定した操作入口として公開する。NavigationのfitVisibleGeometryがundefinedの場合はこの入口へ接続し、明示callbackとnullは従来どおりそのまま渡す。fitは同じmember receiverで一引数、padding既定96、返値・元例外・余剰引数の破棄を維持する。未生成時は旧drawingFitの初期化前ReferenceErrorとし、scene factory失敗で完成済みsceneを置き換えない。Bounds／viewport／visibility／現在scopeの読取りや幾何計算は従来の実fitが担当する。
+
+同じDisplayのEditingWorkspaceは、createDimensionPreviewが成功した実previewを保持し、drawDimensionPreviewを公開する。実previewのdrawをmember receiverで零引数呼び、返値と元例外を維持する。未生成時は旧dimensionPreviewの初期化前ReferenceErrorを維持し、factory失敗では完成済みpreviewを残す。Pending・式評価・fillet描画は同じ実DimensionPreviewを使用する。実scene／previewの生成位置と、生factoryの返す実recordの同一性、公開後のbind／start順、描画・exportの順序は維持する。
+
+これは実factoryと呼出し口を同じ既存ownerへ集める変更であり、setter-only holderや新しいmodel・Selection・scope・Pending・cacheは追加しない。原CanvasDisplay.create／createRendering、Navigation、Viewport、DimensionDisplay／DimensionPreviewの計算と描画アルゴリズムは変更しない。既存UIと保存形式v26も維持する。
+
+app.jsは1,282→1,280行（2行減）、非空白837→835行。root252→250文・425→424束縛、構文依存辺1,105→1,101。委譲16→14行、構築471→470行、その他call37→38行、別名／設定99行・test hooks162行は不変。減行自体ではなく二つの描画操作の所有を実生成ownerへ移す単位であり、200〜500行の目標は未完了。
+
+新規四テストではnative fitによる表示対象・現在scope・padding・viewport結果・例外、Navigationの既定／明示callback／null、失敗時の完成scene保持、native DimensionPreviewのPending／式評価／fillet、drawのreceiver・零引数・返値／元例外、preview生成失敗とworkspace独立性を確認する。新preview fixtureで欠けていた式評価依存を補って正常経路を検証した。既存期待値・閾値・timeoutは変更しない。
+
+構文639file・全単体2,499件・関連E2E447件（38file、8.2m、exit 0）が成功。709入力と開始HEAD不変、一覧447件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop fe4a275、作業branch codex/canvas-display-operations、週枠残量94%。描画関連56件、全単体2,499件、通常二経路／test一経路の起動が成功。五つのroot編集だけであること、原create／createRenderingとNavigation／Viewport／DimensionDisplay／DimensionPreviewの不変、free identifier集合不変をsourceとASTで照合した。関連38file・447件の成功と、709入力・開始HEAD不変を確認した。直前全体589件成功（develop 0bbe1e6、27.2分）と今回の関連検証を区別する。証跡はTEMP cad-canvas-display-operations-{focused,check,unit,smoke,e2e}.logとaudit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
+
+### 最新：Parameter編集の削除guard・editor・適用処理を専用の組立てへ統合（2026-11-11）
+
+ParameterEditingFeature（src/application/parameter_editing_feature.js）は、同じDocumentWorkspaceとPresentationを用いるパラメータ編集の生成・接続を担当する。prepareForWorkspaceで既存ParameterApplication.createDeletionGuardと実ParameterEditor.createForWorkspaceをこの順に生成し、guardと実editorを公開する。createApplicationは従来の後段位置で実ParameterApplication.createForWorkspaceを呼び、成功した実applicationのみを保持する。計算・復元・Blockへの伝播は既存ParameterApplication、dialog draft／DOM入力は既存ParameterEditorが所有し、組立て側へ複製しない。
+
+prepareNamespaceと削除guardは捕捉したWorkspaceのcurrent関数を裸で呼び、編集UIには別のcurrentScope／readBlockEditorを遅延readerとして渡す。現在scopeと固定Documentを混同しない。languageは表示時に読む。editorのapplyDraftは同じ実applicationをmember receiverで呼び、全引数・返値・元例外をそのまま通す。生成前は旧parameterApplicationの初期化前ReferenceErrorを維持し、factory失敗では前に完成したapplicationを置き換えない。生成順・後段の適用処理生成位置・publish後のbind／start順は維持する。従来の二つのfactoryおよび生APIは変更しない。
+
+ParameterNamespaceの公開値と適用factoryの完成recordはObject.freezeしたown data propertyであり、dimensionUsesExpressionとapplication／stabilizeDocumentの受渡しの読取り順変更は実関数・値を変えない。getterや可変値snapshotへの一般化はしない。新しいmodel・Selection・scope・cache・dialog draft・DOM listenerや汎用app contextは追加しない。UIと保存形式v26の変更はない。
+
+app.jsは1,288→1,282行（6行減）、非空白843→837行。root253→252文・束縛425は不変、構文依存辺1,111→1,105、構築474→471行・別名／設定102→99行。委譲16行・test hooks162行は不変。二つの生成と後段適用接続を既存ownerへ渡す一単位であり、200〜500行の全体目標は未完了。
+
+新規三テストは、実editor／dialog適用とnative ParameterApplicationを通した成功・求解失敗復元、Workspace／編集scope／明示namespaceとlive language、実applicationのreceiver・余剰引数・返値・元例外・失敗時公開・独立contextを検証する。新規test fixtureのensure関数に不要なbare-call前提がありnative applicationの正常member callで失敗したため、その前提のみ除いた。製品処理はこの検証修正のためには変更していない。
+
+関連447件が成功（38file、7.8m、exit 0）。709入力と開始HEAD不変、一覧447件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop 0bbe1e6、作業branch codex/parameter-editing-assembly、週枠残量94%。構文639file・全単体2,495件・起動3経路が成功。関連38file・447件の成功と、709入力・開始HEAD不変を確認した。直前全体589件成功（b2619b0のtree、develop 0bbe1e6、27.2分）と今回の関連検証を区別する。TEMP cad-parameter-editing-{check,unit,smoke,e2e}.logとaudit／source-hashes／selection JSONに証跡を保持する。停止条件は週枠残量50%未満、mainは停止時の最後に反映する。
+
+### 最新：読取・描画APIの重複別名28個を実所有元への参照へ整理（2026-11-11）
+
+app.jsは、ConstraintReferences／SketchContext／Block catalog・projection／Geometry reads・creation／constraint insertion／Solve scope query／Viewport・Canvas surface／workspace layout／Dimension placement／Geometry display・bounds・fit等の実APIから、関数値を他機能へ渡す箇所で所有元のdata propertyを明示して読む。28個の重複した別名（未参照2個を含む）を外し、45参照を同じowner.propertyへ接続する。Object shorthandは元の引数名を保つ明示keyへ展開し、各子factoryが受け取る名前と実関数値を維持する。分離済みownerとの依存を明確にする段階であり、関数本体や機能の再分割を行わない。
+
+対象は、実アプリの読取り専用診断でObject.isFrozen=true、own data property、関数値、writable=false／configurable=false、旧別名との同一性を確認した28値に限定する。getter、可変値のsnapshot、直接call／tag／new、所有元bindingのshadowは対象外。参照は宣言後のrootの値受渡し、または全体構築後に一度だけ呼ぶinstallTestHooks内に限定する。data propertyの読取り位置は別名の束縛時から受渡し時へ移るが、値は同じ変更不可の実関数であり、model読取りやcallbackを早期実行しない。裸／member call・返値／例外、引数key、Workspace／bound scope、factory／公開／bind／start順、既存UIと保存形式v26を維持する。新しいstate・model・scope・cache・listener／wrapper／登録setterや汎用app contextを追加しない。
+
+app.jsは1,308→1,288行（20行減）、非空白863→843行。root268→253文・453→425束縛、別名／設定122→102行。構築474行・委譲16行・その他call37行・条件付きtest hooks162行は不変。構文依存辺1,138→1,111。十五の別名宣言を除き、一つの部分patternを維持した。空行削除や圧縮による減行ではなく、重複した値の束縛を取り除いた分である。200〜500行の全体目標は未完了。
+
+基準bc39e2bのASTで対象bindingの全参照・callee／scope／初期化段階を確認し、値だけを同じreadonly propertyへ展開して純粋な別名宣言を除いたASTが変更後と一致することを照合した。編集planのbefore／after hash、全28 APIの前後のdata property descriptor、原module／test／一覧の不変、新しい未使用／未束縛参照なしも照合した。既存自動テストと実起動で検証し、変換をなぞるだけの単体テストは追加しない。診断は別browserのresponseへ読取りだけのprobeを挿入して行い、製品sourceや通常起動へprobeを残さない。構文637file・全単体2,492件・全E2E589件が成功（50file、27.2m、exit 0）。E2E実行中の707入力と開始HEAD不変、全50fileの一覧589件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。28のreadonly function descriptorを前後で照合し、別名を展開したAST等価性・引数key／scope／callee receiver／初期化段階・原module／test／一覧の不変を確認した。TEMP cad-read-display-aliases-{check,unit,e2e,proof,smoke,before,after}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop bc39e2b、作業branch codex/read-display-port-aliases、開始時週枠残量95%。構文637file・全単体2,492件・起動3経路と前後の28 readonly property診断は成功済み。全50file・589件のE2Eが成功（27.2m）。707入力と開始HEADを固定し、TEMP cad-read-display-aliases-{check,unit,e2e,proof,smoke,before,after}.logとdescriptor／編集plan JSONに証跡を保持する。runnerはcad-read-display-aliases-run.ps1。全runner終了を回収済み。既存の全体検証7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
+### 最新：Sketch切替reset／表示切替／TreeとMenuの接続をnavigation生成ownerへ統合（2026-11-11）
+
+SketchEditingFeature.prepareNavigation（src/application/sketch_editing_feature.js）は、従来のMoveとMenuに加え、実createForInteractionが返した完成editing／resetと、実createTreeForEditingが返した完成Tree recordを所有する。clearInteractionForSketchChange／toggleSketchVisibility／isSidebarHighlightedElement／startContextを安定した操作入口として提供し、closeContextは同じTreeの実menuへ接続する。rootのreset・Tree Controller・Menu・表示切替関数の四別名と三つの委譲、Tree hoverとKeyboardの局所bridgeを外す。実Tree viewは表示更新・幅・creation bindに必要なためrootに残す。
+
+resetは同じreset.clearをmember receiverで零引数、表示切替は実commandのtoggleVisibilityを裸関数として一引数、強調照会は同じControllerのisHighlightedElementを一引数、hover clear・Menu start／closeは同じ実体をmember receiverで零引数呼出しする。返値・元例外・余剰引数の破棄と、未完成時の旧sketchInteractionReset／toggleSketchVisibilityCommand／sketchTreeController／sketchContextControllerの初期化前ReferenceErrorを維持する。従来からoptionalなclose／Move resetと、未生成moving照会のTypeErrorは維持する。
+
+prepared creatorのclearInteractionForSketchChange／clearTreeHover省略時だけ所有元の入口を接続し、明示した関数・undefinedを含むoptionsはspreadで従来どおり優先する。raw createForInteraction等のAPIは不変。編集・Treeの実factoryが成功した後だけ完成実体を保持し、初回失敗では未完成のまま、後続の生成失敗では以前の実体を保持する。Move生成・input bind、Tree生成・Menu startは同じroot位置で行い、完成後のstart例外でも実体を消さない。新しいreset／Controller／Menu／Selection／model・scope・listener／cacheや登録setter、汎用app contextを作らず、Workspace／bound scope・状態変更／履歴／UIと保存形式v26は各既存ownerに残す。
+
+app.jsは1,310→1,308行（2行減）、非空白865→863行。root270→268文・457→453束縛。委譲19→16行、別名／設定121→122行、構築474行・その他call37行・条件付きtest hooks162行は不変。構文依存辺1,142→1,138。実componentの生成と操作入口の所有元を揃えた段階であり、200〜500行の全体目標は未完了。
+
+SketchEditingFeature単体へ4件を追加。初期化guardと明示callback／undefined優先、実activateによる同じSelection／pointerとreset順・途中失敗、実commandの裸呼出し、Tree Controller／Menuのmember receiver・引数数／返値と元例外、独立したprepare、編集／Treeの初回と再構築失敗時に完成実体だけを保持する境界を確認する。root十編集以外とraw SketchCommand／Tree／View／Menu本体の不変、元のparameter／引数と裸toggle、callback優先のspread順、新しい未使用／未束縛／初期化前root参照なしを照合した。構文637file・全単体2,492件・focused25件・関連E2E447件が成功（38file、7.7m、exit 0）。E2E実行中の707入力と開始HEAD不変、選択38fileの一覧447件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-sketch-navigation-ownership-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直近の全体検証7557059の全589件成功（27.2分）とは区別する。
+
+基準develop 44ac8f1、作業branch codex/sketch-navigation-ownership、開始時週枠残量96%。構文637file・全単体2,492件・focused25件・起動3経路は成功済み。関連38file・447件が成功（7.7m）。707入力と開始HEADを固定し、TEMP cad-sketch-navigation-ownership-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。runnerはcad-sketch-navigation-ownership-run.ps1。全runner終了を回収済み。直近の全体検証7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
+### 最新：Toolbarの選択照会と編集可否の組立てをPresentationへ集約（2026-11-11）
+
+PresentationFeature.createToolbar().prepareControls().createForSelection（src/application/presentation_feature.js）は、PropertiesDisplayが返す実selection照会と実SketchContextを受け、visibilityTargets／visibilityIsHiddenとcanEditSketch／constraintSketchId／elementSketchIdを既存Toolbar Viewへ接続する。対象のkindがconstraintの場合だけconstraintSketchId、それ以外はelementSketchIdを一度選び、その結果だけをcanEditSketchへ裸呼出しで渡す。旧rootの同じarrow本体・一引数・条件分岐と返値／元例外を維持し、新しい編集可否の規則やfallbackを追加しない。
+
+既存createPreparedControlsへ同じ選択照会関数と同じcursor.updateを渡し、同じ位置でView→CommandStatusを生成して完成後だけ公開する。早期のbutton registry／Cursor生成、DOM再照会回避、既存createControls API、syncFlyoutsの省略時のdefaultと明示時の関数、raw ToolbarView／Cursor／PropertiesDisplay／SketchContextは維持する。生成時に選択・model／Sketchを読まず、表示更新時の照会・Sketch種別の迂回・permission短絡・Hidden表示／disable・履歴／flyout／cursorの順序はraw Viewに残す。原例外と部分DOM更新、Workspaceを操作時に読む既存Sketch関数を維持し、Selection／View／model・listener・cacheを複製しない。UI・操作・保存形式v26は不変。
+
+app.jsは1,313→1,310行（3行減）、非空白868→865行。root269→270文（選択照会recordの別名宣言を追加）、460→457束縛。構築474行・別名／設定121行・委譲19行・条件付きtest hooks162行は不変、その他call40→37行。構文依存辺1,141→1,142であり、すべての構文指標が減るとは扱わない。rootから三つのSketch照会とvisibilityTargetsの別名を外し、共有selection recordを渡して表示機能が同じ依存を選ぶ構成へ整理した段階で、200〜500行の全体目標は未完了。
+
+PresentationFeature単体へ3件を追加。raw接続と新しい組立てで、実View／Status／Cursor、liveな選択・permission／Hidden変更、Sketch迂回、拘束／Geometryの所属選択と短絡・一引数の裸呼出し、non-geometry／空選択、照会例外と部分DOM更新、flyoutの既存default、cold構築とView→Statusの元例外を比較する。root五編集以外と既存Toolbar／Properties／Sketch／Cursorの不変、旧permission arrowのAST同一、新しい未使用／未束縛／初期化前selection参照なしを照合した。構文637file・全単体2,488件・focused38件・関連E2E447件が成功（38file、7.7m、exit 0）。E2E実行中の707入力と開始HEAD不変、選択38fileの一覧447件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-toolbar-selection-assembly-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直近の全体検証7557059の全589件成功（27.2分）とは区別する。
+
+基準develop a8946b6、作業branch codex/toolbar-selection-assembly、開始時週枠残量96%。構文637file・全単体2,488件・focused38件・起動3経路は成功済み。関連38file・447件が成功（7.7m）。707入力と開始HEADを固定し、TEMP cad-toolbar-selection-assembly-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。runnerはcad-toolbar-selection-assembly-run.ps1。全runner終了を回収済み。直近の全体検証7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
+### 最新：Canvasの表示・作図・性能観測の組立てをCanvasTestDriverへ集約（2026-11-11）
+
+CanvasTestDriver.createBrowserSupportForScene（src/testing/canvas_test_driver.js）は、既存createForSceneによるdisplay／rendering支援を生成した後、同じCanvasViewControls・Lifecycle／OperationSessions・DrawingSnap・Workspace・Document persistence・Commit・Selection reader・profiler／schedulerから既存のviewObservation／authoringObservation／interactionProfilingTestApiを生成し、実APIを凍結recordで返す。追加のobservations入力はこのCanvas観測に必要な六つの既存owner／readerに限定し、他domainのtest fixtureや汎用app contextを受け取らない。raw createForSceneと各個別create API・観測計算・public browser test API名を維持する。
+
+三つの観測APIの確保は、従来の別々の位置から同じcreateForScene直後へ前進する。各raw constructorは関数／methodとObject.freezeによるAPIの確保だけで、model／scope／DOM・計測器を読んだりcallbackを実行したりしないことをASTとcold構築テストで照合した。全test constructorの絶対位置が不変とは扱わない。観測時のWorkspace.current読取り順、作図pending／targets・snap／Centerlineのlive値、metadata serialize／decorateと性能readerの裸呼出し、選択の実reader、pointer flush→profiler startのmember呼出し順・元例外を維持する。実display／renderingの同一性を保ち、model／Selection／session／計測器・cacheを複製しない。rootのtest query条件内でだけ生成し、全test支援完成後の一回の__jot2dTest公開、通常起動・UI・操作・保存形式v26は不変。
+
+app.jsは1,316→1,313行（3行減）、非空白871→868行。条件付きtest hooks165→162行。root269文・460束縛、構築474行・別名／設定121行・委譲19行は不変。構文依存辺1,143→1,141。Canvas観測の構築と共有依存の選択を既存testing ownerへ揃えた段階であり、200〜500行の全体目標は未完了。
+
+CanvasTestDriver単体へ2件を追加。raw構成と新しい組立てでcoldな生成、liveなscope／mode／pending／view変更、観測結果と読取り順の一致・pointer snapshotの独立、実profiler／scheduler、失敗flush時の既存profile保持、scene構築の元例外を検証する。root五編集以外、raw scene／三観測本体の不変、全scene入力と三観測の各入力が同じowner／関数であること、三観測constructorがObject.freeze以外の操作を行わないことを照合した。構文637file・全単体2,485件・focused14件・関連E2E447件が成功（38file、7.7m、exit 0）。E2E実行中の707入力と開始HEAD不変、選択38fileの一覧447件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-canvas-test-observation-assembly-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直近の全体検証7557059の全589件成功（27.2分）とは区別する。
+
+基準develop 6b35b90、作業branch codex/canvas-test-observation-assembly、開始時週枠残量97%。構文637file・全単体2,485件・focused14件・起動3経路は成功済み。関連38file・447件が成功（7.7m）。707入力と開始HEADを固定し、TEMP cad-canvas-test-observation-assembly-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。runnerはcad-canvas-test-observation-assembly-run.ps1。全runner終了を回収済み。直近の全体検証7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
+### 最新：拘束操作の安定した入口を実command／Viewの生成ownerへ統合（2026-11-11）
+
+ConstraintEditing.prepare（src/application/constraint_editing.js）は、実createForWorkspaceを従来の位置で生成するcreatorと、取消／距離入力開始／距離解決開始／Controls更新／通常確定／重複除外確定／距離拘束確定の七つの安定した入口を提供する。prepare自体は関数と凍結APIを確保するだけで、Workspace／command／Viewやlistenerを生成せず、model・scope・UI・callbackを読まない。後段creatorは既存の実Workspace featureの生成が成功した後だけ同じ完成実体をprivateに保持し、実体そのものを返す。外部生成物を登録するsetterや汎用app contextを追加しない。
+
+createForWorkspaceが従来から所有する成功済みCommit／Intentはその既存private変数に残す。追加のcommitCommand getterは同じ実commandを操作時に返し、未完成なら旧constraintCommitCommandの初期化前ReferenceErrorを送出する。prepared側にCommit stateを複製しない。七入口は旧rootと同じparameter／引数数を保ち、取消とvalue inputは一引数、distance resolutionは二引数、Controls更新は零引数で返値を捨て、三つの確定は全引数を渡す。各実command／Viewをmember receiverとして呼び、戻り値と元例外を維持する。feature生成前は旧constraintTargetCommand／dimensionPlacementCommand／constraintControlsView／constraintCommitCommandのbinding名を含むReferenceErrorを保つ。
+
+実Target／Dimension placement／Controlsと後段Commitの生成位置・順序、完成後だけのCommit公開、拒否／部分更新／UI・履歴の手順は既存ownerに残す。初回feature構築失敗では未初期化のまま、再構築失敗では以前の完成featureを保持する。各prepareは独立し、model／Selection／session／solver・cacheを追加しない。pending取消は既存OperationSessions、固定操作は既存Fixed ownerに残す。Document reset／性能照会等に必要な実Commitのroot参照は残る。UI・操作・保存形式v26は不変。
+
+app.jsは1,320→1,316行（4行減）、非空白875→871行。root275→269文、束縛460は不変（Controls View別名を除きcreator別名を追加）。委譲26→19行、構築471→474行（早期prepareの三行を追加）、別名・設定121行・条件付きtest hooks165行は不変。構文依存辺1,153→1,143。実componentの生成位置を保って七つのroot委譲を所有元へ揃えた段階であり、200〜500行の全体目標は未完了。
+
+既存ConstraintEditing単体へ4件を追加。featureとCommitの二段階の初期化guard、独立したprepare、実所有commandの同一性、三つの確定の可変長引数／receiver／返値／元例外、TargetとViewの引数数・更新のvoid、初回／再構築失敗時の公開境界と成功済みCommit保持を確認する。root九編集以外、既存feature／子constructor・raw command／View本体の不変、七入口のparameter／引数／void、新しい未使用／未束縛／初期化前root参照の追加なしを照合した。構文637file・全単体2,483件・focused49件・関連E2E447件が成功（38file、7.8m、exit 0）。E2E実行中の707入力と開始HEAD不変、選択38fileの一覧447件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-constraint-operation-ownership-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、直前の基準develop 7557059の全589件成功（27.2分）とは区別する。
+
+基準develop 7557059、作業branch codex/constraint-operation-ownership、開始時週枠残量97%。構文637file・全単体2,483件・focused49件・起動3経路は成功済み。関連は既存37fileにhead-symmetryを加えた38file・447件が成功（7.8m）。707入力と開始HEADを固定し、TEMP cad-constraint-operation-ownership-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。runnerはcad-constraint-operation-ownership-run.ps1。全runner終了を回収済み。直前の基準develop 7557059の全589件成功（27.2分）とは区別する。停止条件は週枠残量50%未満、mainは停止時に最新全体検証後、最後に反映・develop同期する。
+
+### 最新：参照拘束の妥当性と求解準備の組立てを求解機能へ集約（2026-11-11）
+
+SketchSolvingFeature.prepareWithReferencesForWorkspace（src/application/sketch_solving_feature.js）は、DocumentWorkspace／Geometry read／Constraint references／solver／PointUsage／Presentationの六つの既存ownerから、実ReferenceConstraintStateと既存prepareForWorkspaceによる実求解準備をこの順に生成し、同じreferenceStateとsolveState／createContextForWorkspace／solveAndRefreshを凍結recordで返す。appは参照妥当性を別途構築せず、返された同じ実体をSketch投影・求解・Tree・Block・Document resetとtestへ共有する。参照診断のMapと求解結果のMapは別々の既存ownerに残り、第二のmodel／solver／session／解析cacheや登録setter、汎用app contextを追加しない。
+
+ReferenceConstraintStateの生成位置は従来のまま。求解結果Mapを作るSketchSolving.createStateだけはその直後へ前進する。この二つのraw constructorはMap確保とObject.freezeによるAPI生成だけで、Workspace／Sketch・Solver・UI・callback・listenerを読んだり実行したりしないことをASTで照合した。全constructorの絶対位置が不変とは扱わない。Query／Analysis／Redundancy、後段求解とParameter構築、bind／startは従来の位置に残る。旧prepareForWorkspace／createContextForWorkspace／createForWorkspace等のAPI、各raw constructorと妥当性・求解アルゴリズムは維持する。Workspace.current、Annotation仮scope、bound editing scope、元のguard・member receiver・可変長引数・返値／例外、UI・履歴・保存形式v26は不変。
+
+app.jsは1,323→1,320行（3行減）、非空白878→875行。root276→275文・461→460束縛。構築473→471行、別名・設定122→121行、委譲26行・条件付きtest hooks165行は不変。構文依存辺1,159→1,153。appから参照状態の三入力の選択と別個の求解準備の接続を外し、実体の生成・共有を求解機能の組立てへ揃えた段階であり、200〜500行の全体目標は未完了。
+
+既存SketchSolvingFeature単体へ3件を追加。coldな構築とcontext間の診断／結果state独立、操作時に読むscope切替後の参照診断更新、同じReference stateをQuery／Analysis／実求解まで使うこと、初期guard、参照生成失敗時に結果stateを作らないことと元例外を検証する。root三編集以外と既存feature本体・raw妥当性／求解／Analysis／scope query実装の不変、未使用／未束縛／初期化前root参照の追加なしを照合した。構文637file・全単体2,479件・focused20件・全E2E589件が成功（50file、27.2m、exit 0）。E2E実行中の707入力と開始HEAD不変、全50fileの一覧589件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-solving-reference-assembly-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。
+
+基準develop 223a953、作業branch codex/solving-reference-assembly、開始時週枠残量98%。構文637file・全単体2,479件・focused20件・起動3経路は成功済み。生成位置変更の検証として全50file・589件のE2Eを実行して成功（27.2m）。707入力と開始HEADを固定し、TEMP cad-solving-reference-assembly-{check,unit,focused,e2e,proof,smoke}.logに証跡を保持する。実行runnerはcad-solving-reference-assembly-run.ps1。全runner終了を回収済み。停止条件は週枠残量50%未満、mainは停止時に最新の全体検証後、最後に反映・develop同期する。
+
+
+### 最新：DocumentApplicationと遅延load／正規化入口を生成ownerへ統合（2026-11-11）
+
+DocumentWorkspace.createReadContextのpersistence APIがnormalizeGeometryInstance／loadModelData／readRepairMessageを提供する。normalizeは生成済み実persistence bundleの同じ正規化関数を裸関数として呼び、既存のcreateApplicationが実DocumentApplicationを従来位置で生成し、成功後だけ同じcontext内に保持して同じobjectを返す。loadと修復messageは操作時にその実componentを読む。rootのDocumentApplication保持と二つの遅延委譲・修復getter callbackを外し、History／File／Parameter／testへ同じ狭い操作APIを共有する。raw DocumentApplication／DocumentLoading／GeometryInstance codec／Snapshot実装は各既存folderに残す。
+
+loadModelData(data, options = {})は旧rootと同じfresh default object、二引数のmember呼出し、余剰引数の破棄、返値と元例外を保つ。readRepairMessageは実componentのblockConstraintRepairMessageを毎回読む零引数のgetterで、getter receiver・動的な値・元例外を保つ。正規化はraw＋可変長引数を同じ裸関数へ渡し、元の既定resolver／index・Workspaceのactive Sketch読取りは実normalize関数が所有する。persistence生成前のnormalizeEditingGeometryInstance、Application生成前のdocumentApplicationに対応するReferenceErrorを維持する。
+
+read contextごとに成功済み実Applicationを所有する。constructorやreadEditingScopeが失敗した場合は以前の完成Applicationを維持し、初回失敗では未生成guardを保つ。persistence bundleの再生成だけでは既存Applicationを消したり再生成したりしない。実Applicationが捕捉するbound target、load時のWorkspace活性化／reset・Tree保存復元・ID復元、失敗時の部分更新は従来のDocumentApplicationが所有する。新しいmodel／scope／session・snapshot形式・cache・listenerや外部登録setter、汎用app contextを作らない。生成・bind／start、UI・操作・保存形式v26は不変。
+
+app.jsは1,326→1,323行（3行減）、非空白881→878行。root278→276文・462→461束縛。委譲30→26行、別名・設定121→122行、test hooks165行は不変。実createDocumentApplication呼出し自体は残り、戻り値のroot保持を外したため、その5行はAST分類上の構築からその他callへ移る（構築478→473行、その他call35→40行）。constructorの削減とは扱わない。構文依存辺1,166→1,159。実componentの生成と操作入口の所有先を揃えた段階であり、200〜500行の全体目標は未完了。
+
+既存DocumentWorkspace単体へ4件を追加し、初期guardのbinding名、実codecでのlive正規化、実loadによる捕捉target／Tree順／Geometry参照・ID復元、member receiver・二引数・fresh default／null／余剰引数／返値・元例外、修復getterのlive読取り、context独立・初回と再構築失敗・成功後だけの公開・bundle再生成時のApplication保持を検証する。root六編集以外、既存生成と読込・正規化・保存アルゴリズム不変、元のparameter／引数／裸呼出し、未使用／未束縛／初期化前root参照の追加なしを照合した。構文637file・全単体2,476件・関連E2E445件が成功（37file、7.7m、exit 0）。関連E2E実行中の707入力と開始HEAD不変、選択37fileの一覧445件、三つのCAD filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路の起動もbrowser errorなし。TEMP cad-document-application-ownership-{check,unit,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存期待値・性能閾値・timeoutは変更していない。この単位では全E2Eを再実行しておらず、最後の全体検証b42e963の全589件成功（27.1分）とは区別する。
+
+基準develop b42e963、作業branch codex/document-application-ownership、開始時週枠残量99%。関連E2Eは既存36fileにDXFを追加した37file・445件を選ぶ。直前の基準develop b42e963の全589件成功（27.1分）とは区別する。停止条件は残量50%未満、mainは停止時の最新全体検証後に最後に反映・同期する。
+
+### 最新：選択削除とClipboardの生成・共有を選択編集の組立てへ統合（2026-11-11再開）
+
+SelectionEditingFeature.createForEditing（src/application/selection_editing_feature.js）は、同じSelection・guard・Document／Read Services・Presentationから、既存DeletionFeatureとClipboardFeatureをこの順で生成し、実deletion／clipboardを凍結recordで返す。Cutが使うdeleteSelectionには、同じ実deletion.removeSelectionをそのまま接続する。削除計画・Geometry変更・履歴は既存削除owner、Clipboardのpayload・cut保持・paste graph・codecは各既存ownerに残る。新しいSelection・操作state・scope・Geometry・ID・snapshot・listenerは作らず、全アプリを扱えるcontextや登録setterは受け取らない。
+
+rootは共有済みAnnotationFeature／BlockEditingFeature／DocumentWorkspaceの実persistence APIを渡し、組立て側がdimensions／renderer、Block scope ID／error、serialize／decorate／deserializeの同じ凍結data propertyを選ぶ。DocumentPersistenceはcreateReadContextが返す同じ読み取りAPIで、実codecは操作時に読む。DeletionのWorkspace.currentとClipboardのbound editingScope.current、Parameter側のWorkspace.currentを別々に保つ。45の既存子factory入力が同一参照または同じcallback本体であることを照合した。明示null／undefinedにfallbackを追加せず、裸callback・member receiver・引数数／default・返値・元例外、拒否時のpaste可能なcut payload保持、履歴・失敗復元・UI・保存形式v26を維持する。
+
+rootの削除別名は、従来のClipboard生成前から両feature完成後の束縛へ変わる。Clipboardの七つの子constructorは関数／既存stateの確保と凍結API生成のみで、生成時にmodel・scope・DOMを読まず、操作callbackやlistenerを実行しないことを照合した。両factoryの実行順、全引数と実componentを維持し、構築失敗は元例外をそのまま伝える。未完成の組立てrecordを返したり、新たなcatch／rollbackを加えたりしない。通常bind／startとtest guard／公開順は不変。全てのalias位置が不変であるとは扱わない。
+
+app.jsは1,333→1,326行（7行減）、非空白887→881行。root280→278文・465→462束縛、構築・接続483→478行（116→115文）、別名・設定122→121行、委譲30行・test hooks165行は不変。二つのroot factoryの計45明示入力を一つの31入力へ整理し、codec APIの一つのbindingを追加する一方、四つの不要になった中間bindingを外す。Block queryはCanvasメニュー・test hooksにも必要なため維持する。構文依存辺1,177→1,166。新しい組立て入口が一段増える負担と引き換えに、共通依存とCut／削除APIの同一性を一か所で検証できる。独立依存数が45から31へ減ったという意味ではなく、200〜500行の全体目標は未完了。
+
+新規境界単体4件で、順序／cold生成と実owner・codec・返却objectの同一性、実ClipboardSessionによるcopy／cutの保存→削除・拒否／throw時payload保持、Workspaceとbound scopeの区別・置換、両構築失敗の元例外・順序、明示null／undefinedを検証する。root六編集以外の全文一致、全45子入力のAST上の等価性、Clipboard七constructorのcold生成、raw Deletion／Clipboard本体と子実装不変、新しい未使用／未束縛／初期化前bindingなしを照合した。indexと構文／unit明示一覧・unified UIのscript順期待へ新module／unitを追加し、既存機能の期待値・性能閾値・timeoutは変更しない。構文637file・全単体2,472件・関連単体19件・全E2E589件が成功（全50file、27.1m、exit 0）。全E2E実行中の707入力と開始HEAD不変、全件一覧589件と無filterの全件数一致、CAD三filter未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。通常二経路／test一経路もbrowser errorなし。TEMP cad-selection-editing-assembly-{check,unit,focused,e2e,proof,smoke}.logと検証JSONに証跡を保持する。既存機能の期待値・性能閾値・timeoutは変更していない。
+
+再開時は週枠残量100%、main／develop local・originともc2edef192bbbcd5a6d8620417e9c000fae706390で同期・clean。最新のユーザー指示により停止条件を残量50%未満へ戻した。基準develop c2edef1、作業branch codex/selection-editing-assembly。新moduleは選択編集の組立てとしてsrc/application/へ置き、各計算・操作stateの既存folderを維持する。全体目標はactive・未完了。mainは停止時の最新全体検証後に最後に反映・同期する。
+
 ### 停止checkpoint：週枠残量4%（2026-11-11）
 
 usage toolの週枠usedPercent 96、残量4%を確認し、合意した5%未満の停止条件に達したため、新しい分離を停止する。全体目標は未完了であり、クレジット回復後にユーザーの再開指示で継続する。app.jsは1,333行・非空白887行、root280文・465束縛、構築・接続483行・別名／設定122行・委譲30行・test hooks165行。数百行（目安200〜500行）には未到達である。空白削除や別の巨大bootstrapへの移動で数値を合わせない。

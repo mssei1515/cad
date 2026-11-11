@@ -1,14 +1,22 @@
 /* Assemble Canvas interaction owners in stages without copying their operation state. */
 (() => {
   "use strict";
-  function create({ sketches, readServices, constraintReferencesPoint, editedFitPoints, isGeometryMode,
-    setHint, applicationText, clearSnap, clearPointerPreview, clearSelection, updateGeometrySelectionUI, draw }) {
+  function createInteraction({ sketches, readServices, constraintReferencesPoint, editedFitPoints, isGeometryMode,
+    setHint, applicationText, clearSnap, clearPointerPreview, clearSelection: suppliedClearSelection, updateGeometrySelectionUI, draw }, ownsClearing, exposeMode = false) {
     const lifecycle = window.DrawOperationLifecycle.createSession();
-    const selectionFeature = window.CanvasSelectionFeature.createEditing({ sketches, isGeometryMode, setHint, applicationText,
-      clearSnap, clearPointerPreview, clearSelection, updateGeometrySelectionUI, draw });
+    const selectionOptions = { sketches, isGeometryMode, setHint, applicationText,
+      clearSnap, clearPointerPreview, clearSelection: suppliedClearSelection, updateGeometrySelectionUI, draw };
+    const selectionFeature = ownsClearing ? window.CanvasSelectionFeature.createEditingWithOwnedClearing(selectionOptions)
+      : window.CanvasSelectionFeature.createEditing(selectionOptions);
+    const clearSelection = ownsClearing ? selectionFeature.clearSelection : suppliedClearSelection;
     const pointUsage = readServices.createPointUsage({ constraintReferencesPoint, editedFitPoints });
     const hover = window.CanvasHover.create({ isEndpointPoint: pointUsage.isEndpointPoint });
     let preparedBlankGesture = null;
+    let preparedPending;
+    function cancelPendingCommand(message) {
+      if (preparedPending === undefined) throw new ReferenceError("Cannot access 'pendingCommandSession' before initialization");
+      return preparedPending.cancel(message);
+    }
     function resetBlankCandidate() {
       if (!preparedBlankGesture) throw new ReferenceError("Cannot access 'blankCanvasGesture' before initialization");
       return preparedBlankGesture.resetCandidate();
@@ -34,6 +42,9 @@
         return window.CanvasHitInteraction.createSceneWithAnnotationsForWorkspace({ documentWorkspace, readServices, interaction: feature, sessions,
           viewport, dimensionScope, dimensions, dimensionLabelForConstraint, annotationBounds, annotationSpatial, operandValues });
       }
+      function prepareSceneWithAnnotations() {
+        return window.CanvasHitInteraction.prepareSceneWithAnnotationsForWorkspace({ readServices, interaction: feature, sessions });
+      }
       function createConstruction({ projection, cancelConstraintTargetCommand, synchronizeSketchProjectionMetadata, updateUI, recordHistory, clearSnap, updateToolbar }) {
         return window.ConstructionCommand.create({ cancelConstraintTargetCommand,
           selectedConstructionTogglePrimitives: selectionFeature.selection.selectedConstructionTogglePrimitives,
@@ -48,6 +59,25 @@
             if (pending.current && ["distance-value", "offset-value"].includes(pending.current.type)) syncDimensionValueInput();
           }),
         });
+      }
+      let completedInputBinding;
+      function readInputBinding() {
+        if (completedInputBinding === undefined) throw new ReferenceError("Cannot access 'canvasInputBinding' before initialization");
+        return completedInputBinding.value;
+      }
+      function createMoveSchedulerForEditing(options) {
+        return createMoveScheduler({ ...options, readInput: readInputBinding });
+      }
+      function createMoveSchedulerForBrowser({ window: browserWindow, ...options }) {
+        const requestFrame = callback => {
+          const { requestAnimationFrame } = browserWindow;
+          return requestAnimationFrame(callback);
+        };
+        const cancelFrame = frame => {
+          const { cancelAnimationFrame } = browserWindow;
+          return cancelAnimationFrame(frame);
+        };
+        return createMoveSchedulerForEditing({ requestFrame, cancelFrame, ...options });
       }
       function createSelectionPresentation({ projections, constraintReferences }) {
         return selectionFeature.createPresentation({ hover, constraintTargets: targets, pointer, projections, constraintReferences, clearSnap });
@@ -114,11 +144,32 @@
             bindPointer({ canvasNavigation, recordHistory, pointerHover, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
               hatch, spline, splineEditing, blockPlacement, annotationInput, dimensionValues, dimensions, expressions, discardMoves, enterBlock,
               query, closeContextMenu, blankGesture });
-            return createCanvasInputBinding({ readPngExportCommand, blankCanvasGesture: blankGesture, isBlankCommandPanelPoint, scheduler });
+            const binding = createCanvasInputBinding({ readPngExportCommand, blankCanvasGesture: blankGesture, isBlankCommandPanelPoint, scheduler });
+            completedInputBinding = { value: binding };
+            return binding;
           }
-          return Object.freeze({ blankGesture, createBinding });
+          function bindForEditing(pointerOptions, readKeyboardOptions, dimensionInput) {
+            const binding = createBinding(pointerOptions);
+            binding.bind();
+            dimensionInput.bind();
+            const keyboard = createKeyboard(readKeyboardOptions());
+            keyboard.start();
+            return binding;
+          }
+          function bindForWorkspace(pointerOptions, readKeyboardOwners, dimensionInput) {
+            return bindForEditing(pointerOptions, () => {
+              const { deleteSelection, ...owners } = readKeyboardOwners();
+              return window.KeyboardInput.createWorkspaceOptions({ ...owners,
+                spline: pointerOptions.spline, hatch: pointerOptions.hatch, splineEditing, blockPlacement: pointerOptions.blockPlacement, deleteSelection });
+            }, dimensionInput);
+          }
+          return Object.freeze({ blankGesture, createBinding, bindForEditing, bindForWorkspace });
         }
         return Object.freeze({ bindPointer, createKeyboard, preparePointerForEditing });
+      }
+      function prepareInputForEditing(options, readGestureOptions) {
+        const input = createEditingInput(options);
+        return input.preparePointerForEditing(readGestureOptions());
       }
       function createCommandCancellation({ instances, constraints, blockPlacementCommand, restoreBlockPlacementPropertiesPanel, updateUI }) {
         return window.CanvasCommandCancellation.create({
@@ -129,12 +180,22 @@
           applicationText, setHint, updateUI, draw,
         });
       }
-      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, createConstruction, createMoveScheduler, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      const sessions = Object.freeze({ preview, pending, targets, pointer, createSceneWithAnnotations, prepareSceneWithAnnotations, createConstruction, createMoveScheduler, createMoveSchedulerForEditing, createMoveSchedulerForBrowser, createSelectionPresentation, createInputFeature, createInputForEditing, createEditingInput, prepareInputForEditing, bindPointer, bindEditingPointer, createKeyboard, createKeyboardForEditing, createCommandCancellation });
+      preparedPending = pending;
       return sessions;
     }
-    const feature = Object.freeze({ lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
-      identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring, resetBlankCandidate });
+    const capabilities = { lifecycle, selectionFeature, selection: selectionFeature.selection, scope: selectionFeature.scope,
+      identity: selectionFeature.identity, access: selectionFeature.access, pointUsage, hover, createOperationSessions, createOperationSessionsForAuthoring, resetBlankCandidate, cancelPendingCommand };
+    if (ownsClearing) capabilities.clearSelection = clearSelection;
+    if (exposeMode) capabilities.isGeometryMode = isGeometryMode;
+    const feature = Object.freeze(capabilities);
     return feature;
   }
-  window.CanvasInteractionFeature = Object.freeze({ create });
+  function create(options) { return createInteraction(options, false); }
+  function createWithOwnedClearing(options) { return createInteraction(options, true); }
+  function createGeometryWorkspace(options) {
+    function isGeometryMode() { return true; }
+    return createInteraction({ isGeometryMode, ...options }, true, true);
+  }
+  window.CanvasInteractionFeature = Object.freeze({ create, createWithOwnedClearing, createGeometryWorkspace });
 })();

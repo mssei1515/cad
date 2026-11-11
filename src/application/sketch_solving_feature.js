@@ -1,6 +1,41 @@
 /* Assemble solving, parameter feedback and application refresh around the same owners. */
 (() => {
   "use strict";
+  function prepare() {
+    let completedAnalysis;
+    function refreshConstraintAnalysis(options = {}) {
+      if (completedAnalysis === undefined) throw new ReferenceError("Cannot access 'constraintAnalysis' before initialization");
+      return completedAnalysis.value.refresh(options);
+    }
+    function readDuplicateCount() {
+      if (completedAnalysis === undefined) throw new ReferenceError("Cannot access 'constraintRedundancy' before initialization");
+      const constraintRedundancy = completedAnalysis.context.redundancy;
+      return constraintRedundancy.count;
+    }
+    function publishContext(build, options) {
+      const context = build(options);
+      completedAnalysis = { value: context.analysis, context };
+      return context;
+    }
+    function prepareWithReferences(options) {
+      const prepared = window.SketchSolvingFeature.prepareWithReferencesForWorkspace(options);
+      const { createContextForWorkspace: buildContext, createContextWithAnnotationDrag: buildWithAnnotationDrag } = prepared;
+      return Object.freeze({ ...prepared,
+        createContextForWorkspace(options) { return publishContext(buildContext, options); },
+        createContextWithAnnotationDrag(options) { return publishContext(buildWithAnnotationDrag, options); },
+      });
+    }
+    return Object.freeze({ refreshConstraintAnalysis, readDuplicateCount, prepareWithReferencesForWorkspace: prepareWithReferences });
+  }
+  function prepareWithReferencesForWorkspace({ documentWorkspace, readServices, references, solver, pointUsage, presentation }) {
+    const referenceState = window.ReferenceConstraintState.create({
+      currentScope: documentWorkspace.workspace.current,
+      constraintSketchId: documentWorkspace.sketches.constraintSketchId,
+      isReferenceSourceSketchId: documentWorkspace.sketches.isReferenceSourceSketchId,
+    });
+    const prepared = prepareForWorkspace({ documentWorkspace, readServices, references, referenceState, solver, pointUsage, presentation });
+    return Object.freeze({ referenceState, ...prepared });
+  }
   function prepareForWorkspace({ documentWorkspace, readServices, references, referenceState, solver, pointUsage, presentation }) {
     const solveState = window.SketchSolving.createState();
     let feature = null;
@@ -19,7 +54,19 @@
       }
       return Object.freeze({ ...context, createSolving });
     }
-    return Object.freeze({ solveState, solveAndRefresh, createContextForWorkspace: createContext });
+    function createContextWithAnnotationDrag({ createAnnotationDrag, geometryDrag, minimumLength, acceptError }) {
+      let completedAnalysis;
+      function invalidateAnalysis() {
+        if (completedAnalysis === undefined) throw new ReferenceError("Cannot access 'constraintAnalysis' before initialization");
+        return completedAnalysis.value.invalidate();
+      }
+      const annotationDrag = createAnnotationDrag({ buildPlan: geometryDrag.build, beginGeometryDrag: geometryDrag.begin, invalidateAnalysis });
+      const context = createContext({ annotationDrag, minimumLength, acceptError });
+      const result = Object.freeze({ ...context, annotationDrag });
+      completedAnalysis = { value: result.analysis };
+      return result;
+    }
+    return Object.freeze({ solveState, solveAndRefresh, createContextForWorkspace: createContext, createContextWithAnnotationDrag });
   }
   // Query/analysis precede Canvas construction; solving waits for the editing owners.
   function createContextForWorkspace({ documentWorkspace, readServices, references, referenceState, annotationDrag,
@@ -39,11 +86,17 @@
       refreshReferenceConstraintValidity, sketchHasSolveError: solveState.hasError, isExplicitPoint: pointUsage.isExplicitPoint, minimumLength, acceptError,
       profileAnalysis: work => profiler.active ? profileWork("analysis", work) : work(),
     });
-    function createSolving({ projectionEditing, geometry, checkpoint, editingScope, historyController, recordHistory, resultIsAccepted, maxPasses, relativeTolerance }) {
+    function createSolving({ projectionEditing, geometry, checkpoint, editingScope, historyController, recordHistory, resultIsAccepted, maxPasses = 20, relativeTolerance = 1e-7 }) {
       return createForWorkspace({ documentWorkspace, scopeQuery, references, referenceState, readServices, analysis, presentation, solveState, acceptError,
         projectionEditing, geometry, checkpoint, editingScope, historyController, recordHistory, resultIsAccepted, maxPasses, relativeTolerance });
     }
-    return Object.freeze({ scopeQuery, analysis, redundancy, createSolving });
+    function createLineCollapseQuery() {
+      return window.LineCollapseQuery.create({
+        connectedComponentFromSeeds: scopeQuery.connectedComponentFromSeeds, constraintGraphNodes,
+        localSolveLines: scopeQuery.localSolveLines, minLineLength: minimumLength,
+      });
+    }
+    return Object.freeze({ scopeQuery, analysis, redundancy, createSolving, createLineCollapseQuery });
   }
   function create({ currentScope, solver, scopeQuery, activeSketchId, elementSketchId, constraintSketchId,
     constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
@@ -85,5 +138,5 @@
       readEditingScope: () => editingScope.current, activateEditingScope: (...args) => editingScope.activate(...args), nextHatchIndex: () => documentIds.peek("hatch"),
       drawableSketchIds, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), setSolveResultHint, updateUI, draw, historyController, recordHistory });
   }
-  window.SketchSolvingFeature = Object.freeze({ prepareForWorkspace, create, createForWorkspace, createContextForWorkspace });
+  window.SketchSolvingFeature = Object.freeze({ prepareWithReferencesForWorkspace, prepareForWorkspace, create, createForWorkspace, createContextForWorkspace, prepare });
 })();

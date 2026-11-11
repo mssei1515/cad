@@ -54,7 +54,7 @@ test('presentation-owned toolbar updates retain real history, pending state and 
   }
   assert.deepEqual(run(true),run(false));
 });
-function fixture(){
+function fixture(configureOptions){
   const events=[],created={},state={moving:false,dialog:false,panel:null,derived:null,png:null,pending:null,mode:'select',frame:{id:'frame'},fail:null,domReads:0};
   const document={getElementById(id){state.domReads++;return id==='propertiesPanel'?state.properties:id==='blockDefinitionsDialog'?{open:state.dialog}:null;}};state.properties={inert:false};
   const settings={language:'ja',localizeApplicationUI:()=>events.push('localize'),applicationText:(ja,en)=>settings.language==='en'?en:ja},profiler={active:false,work:(category,work)=>{events.push('profile:'+category);return work();}};
@@ -62,7 +62,9 @@ function fixture(){
   const sandbox={window:{ApplicationSettings:{create(ports){events.push('settings');created.settings=ports;return settings;}},InteractionProfiler:{create(){events.push('profiler');return profiler;}},ApplicationFeedback:{create(ports){events.push('feedback');created.feedback=ports;return feedback;}}}};
   vm.createContext(sandbox);for(const file of ['src/application/application_refresh.js','src/ui/canvas_refresh.js','src/application/presentation_feature.js','src/ui/toolbar_view.js','src/ui/command_cursor.js','src/editing/edit_history.js','src/editing/history_controller.js','src/editing/draw_operation_lifecycle.js','src/editing/pending_command_session.js','src/editing/constraint_target_session.js'])vm.runInContext(fs.readFileSync(file,'utf8'),sandbox);
   const storage=()=>assert.fail('no eager storage read by assembly'),version=()=>events.push('version'),duplicates=()=>assert.fail('no eager duplicate query');
-  const feature=sandbox.window.PresentationFeature.create({document,storage,refreshVersion:version,readDuplicateCount:duplicates});
+  const options={document,storage,refreshVersion:version,readDuplicateCount:duplicates};
+  if(configureOptions)configureOptions(options);
+  const feature=sandbox.window.PresentationFeature.create(options);
   const step=name=>()=>{events.push(name);if(state.fail===name)throw state.marker;};
   const ui={syncAnnotationResize:step('annotation'),prepareParameterNamespace:step('prepare'),refreshConstraintAnalysis:step('analysis'),updateDocumentName:step('name'),updateToolbar:step('toolbar'),renderSketch:step('sketch'),updateBlockUI:step('blocks'),renderProperties:step('properties'),readSketchMoving:()=>state.moving,updateStatusUI:step('status'),updateConstraintButtons:step('buttons'),syncDimensionInput:step('dimension'),refreshSketchSelection:step('selection')};
   const canvas={readPngCommand:()=>state.png,readPending:()=>state.pending,readMode:()=>state.mode,readCommandPanel:()=>state.panel,
@@ -70,6 +72,42 @@ function fixture(){
     withGeometryReadCache(work){assert.equal(work,canvas.drawCanvas);events.push('cache');return work();},drawCanvas(){events.push('frame');return state.frame;}};
   return{feature,state,events,created,settings,profiler,feedback,storage,version,duplicates,ui,canvas,document,w:sandbox.window};
 }
+test('presentation builds authoring feedback on request from the same live settings and returns the actual formatter record',()=>{
+  const f=fixture(),calls=[];
+  assert.equal(f.w.AuthoringFeedback,undefined);
+  const text=f.settings.applicationText;
+  f.settings.applicationText=function(ja,en){'use strict';assert.equal(this,undefined);calls.push(Array.from(arguments));return text(ja,en);};
+  vm.runInNewContext(fs.readFileSync('src/ui/authoring_feedback.js','utf8'),{window:f.w});
+  const native=f.w.AuthoringFeedback;let options,actual;
+  f.w.AuthoringFeedback=Object.freeze({create:function(input){assert.equal(this,f.w.AuthoringFeedback);assert.equal(arguments.length,1);
+    options=input;actual=native.create(input);return actual;}});
+  const api=f.feature.createAuthoringFeedback();assert.equal(api,actual);
+  assert.deepEqual(Object.keys(options),['applicationText']);assert.equal(options.applicationText,f.settings.applicationText);
+  assert.equal(Object.isFrozen(api),true);assert.ok(Object.values(Object.getOwnPropertyDescriptors(api)).every(d=>Object.hasOwn(d,'value')&&!d.writable&&!d.configurable));
+  assert.deepEqual(calls,[]);assert.equal(f.state.domReads,0);assert.deepEqual(f.events,['settings','profiler','feedback']);
+  assert.equal(api.geometryInstanceTypeLabel('mirror'),'ミラー');f.settings.language='en';
+  assert.equal(api.geometryInstanceTypeLabel('mirror'),'Mirror');assert.equal(api.hatchPatternTypeLabel('solid'),'Solid fill');
+  const result=Object.freeze({code:'invalid-distance'});
+  assert.equal(api.offsetChainErrorText(result),'The offset distance is invalid');
+  assert.equal(api.hatchRegionErrorText({code:'unknown',reason:'Original reason'}),'Original reason');
+  assert.ok(calls.every(args=>args.length===2));assert.equal(result.code,'invalid-distance');
+});
+
+test('presentation authoring feedback preserves late factory lookup, independent settings and original construction or formatting failures',()=>{
+  const f=fixture(),other=fixture(),failure=new Error('authoring feedback failed');
+  assert.throws(()=>f.feature.createAuthoringFeedback(),error=>error.name==='TypeError');
+  f.w.AuthoringFeedback={create(){throw failure;}};
+  assert.throws(()=>f.feature.createAuthoringFeedback(),error=>error===failure);
+  for(const current of [f,other])vm.runInNewContext(fs.readFileSync('src/ui/authoring_feedback.js','utf8'),{window:current.w});
+  let fail=false;const text=f.settings.applicationText;
+  f.settings.applicationText=function(ja,en){'use strict';assert.equal(this,undefined);if(fail)throw failure;return text(ja,en);};
+  const first=f.feature.createAuthoringFeedback(),second=f.feature.createAuthoringFeedback(),independent=other.feature.createAuthoringFeedback();
+  assert.notEqual(first,second);f.settings.language='en';assert.equal(first.geometryInstanceTypeLabel('mirror'),'Mirror');
+  assert.equal(second.geometryInstanceTypeLabel('mirror'),'Mirror');assert.equal(independent.geometryInstanceTypeLabel('mirror'),'ミラー');
+  fail=true;assert.doesNotThrow(()=>f.feature.createAuthoringFeedback());
+  assert.throws(()=>first.hatchRegionErrorText(null),error=>error===failure);
+});
+
 test('presentation creates settings, profiler and feedback in order and exposes actual shared owners before view binding',()=>{
   const f=fixture();assert.deepEqual(f.events,['settings','profiler','feedback']);assert.equal(f.state.domReads,0);
   assert.equal(f.feature.settings,f.settings);assert.equal(f.feature.profiler,f.profiler);assert.equal(f.feature.constraintFeedback,f.feedback.constraints);
@@ -340,7 +378,7 @@ function preparedToolbarFixture(composed, probe = {}) {
       probe.prepared = prepared; probe.canvas = canvas; probe.writes = writes; probe.fixed = fixed; probe.distance = distance; probe.menu = menu;
       probe.preparationReads = [...f.events]; assert.deepEqual(probe.preparationReads, ['query:[data-constraint]', 'query:[data-menu-constraint]', 'dom:fixPointBtn']);
       if (probe.afterPrepare) probe.afterPrepare({ prepared, lists, nodes, button });
-      f.events.length = 0; return prepared.createControls(options);
+      f.events.length = 0; return probe.assemble ? probe.assemble(prepared, options) : prepared.createControls(options);
     } finally { f.w.CommandCursor = originalCursor; f.w.ToolbarView = originalView; }
   });
   return { ...f, probe };
@@ -744,8 +782,10 @@ test('Toolbar Workspace assembly keeps editing preparation, close publication, s
  }assert.equal(snapshots[1],snapshots[0]);
 });
 test('Toolbar Workspace dispatch preserves direct DOM receivers and events, typed instance calls and editing guards',()=>{
- const snapshots=[];for(const composed of [false,true]){
-  const f=toolbarWorkspaceFixture(composed),controls=f.prepare();controls.start();const binding=controls.createDrawingBinding();binding.bind();
+ const snapshots=[];for(const composed of [false,true,'startup']){
+  const f=toolbarWorkspaceFixture(composed),controls=f.prepare();let binding;
+  if(composed==='startup'){assert.equal(controls.startWithDrawingTools(),undefined);binding=f.probe.drawingBinding;}
+  else{controls.start();binding=controls.createDrawingBinding();binding.bind();}
   for(const id of ['toolCenterline','toolCircleCenterCross','toolSketchProjection','toolCreateBlock','toolSpline','toolHatch','toolFillet','toolOffset','toolConstructionLine'])assert.equal(f.nodes.get(id).dispatch(),f.result);
   for(const id of ['toolMirror','toolPattern','toolCircularPattern'])assert.equal(f.nodes.get(id).dispatch(),f.result);
   for(const id of ['undoBtn','redoBtn','selectionVisibilityBtn'])assert.equal(f.nodes.get(id).dispatch(),f.result);
@@ -756,20 +796,36 @@ test('Toolbar Workspace dispatch preserves direct DOM receivers and events, type
   f.state.failCommand='hatch';assert.throws(()=>f.nodes.get('toolHatch').dispatch(),error=>error===f.marker);
   const count=f.calls.length;binding.dispose();f.nodes.get('toolHatch').dispatch();assert.equal(f.calls.length,count);assert.equal(f.nodes.get('toolHatch').count(),0);
   snapshots.push(JSON.stringify(f.calls));
- }assert.equal(snapshots[1],snapshots[0]);
+ }assert.equal(snapshots[1],snapshots[0]);assert.equal(snapshots[2],snapshots[0]);
 });
 test('Toolbar Workspace assembly preserves construction and startup failures without constructing or binding later controls',()=>{
  for(const stage of ['editing create','editing bind','canvas','menu create','menu start','parameters','blocks','drawing create','drawing bind','drawing-partial']){
-  const snapshots=[];for(const composed of [false,true]){
+  const snapshots=[];for(const composed of [false,true,'startup']){
    const f=toolbarWorkspaceFixture(composed,stage);let controls,binding;
-   assert.throws(()=>{controls=f.prepare();controls.start();binding=controls.createDrawingBinding();binding.bind();},error=>error===f.marker);
+   assert.throws(()=>{controls=f.prepare();if(composed==='startup')controls.startWithDrawingTools();else{controls.start();binding=controls.createDrawingBinding();binding.bind();}},error=>error===f.marker);
    if(['editing create','editing bind','canvas','menu create'].includes(stage))assert.equal(controls,undefined);
    if(!['drawing create','drawing bind','drawing-partial'].includes(stage))assert.equal(f.probe.drawing,undefined);
    if(stage==='drawing-partial'){assert.equal(f.nodes.get('toolSelect').count(),1);assert.equal(f.nodes.get('toolPoint').count(),1);assert.equal(f.nodes.get('toolLine').count(),0);}
    snapshots.push(JSON.stringify({events:f.events,counts:f.counts,listeners:f.listeners,nodes:[...f.nodes].map(([id,node])=>[id,node.count()])}));
-  }assert.equal(snapshots[1],snapshots[0]);
+  }assert.equal(snapshots[1],snapshots[0]);assert.equal(snapshots[2],snapshots[0]);
  }
 });
+test('combined Toolbar startup preserves repeated native start and fresh drawing binding behavior',()=>{
+ const snapshots=[];
+ for(const combined of [false,true]){
+  const f=toolbarWorkspaceFixture(true),controls=f.prepare();
+  assert.equal(f.probe.drawing,undefined);assert.equal(controls.close,f.actualMenus.close);
+  for(let i=0;i<2;i++){
+   if(combined)assert.equal(controls.startWithDrawingTools(),undefined);
+   else{controls.start();const drawingToolBinding=controls.createDrawingBinding();drawingToolBinding.bind();}
+  }
+  assert.equal(f.counts.settings,2);assert.equal(f.events.filter(e=>e==='drawing create').length,2);
+  assert.equal(f.nodes.get('toolHatch').count(),2);assert.equal(f.nodes.get('undoBtn').count(),1);
+  snapshots.push(JSON.stringify({events:f.events,counts:f.counts,listeners:f.listeners,nodes:[...f.nodes].map(([id,node])=>[id,node.count()])}));
+ }
+ assert.equal(snapshots[1],snapshots[0]);
+});
+
 test('Toolbar Workspace startup retains the existing repeat behavior and never recreates or binds drawing controls implicitly',()=>{
  for(const composed of [false,true]){
   const f=toolbarWorkspaceFixture(composed),controls=f.prepare();controls.start();controls.start();assert.equal(f.probe.drawing,undefined);assert.equal(f.counts.settings,2);
@@ -803,4 +859,166 @@ test('toolbar icon assembly preserves constructor and namespace failures without
  assert.throws(()=>toolbar.createIcons(),error=>error===marker);assert.equal(count,1);const history=toolbar.updateHistory;toolbar.updateHistory();assert.equal(f.events.at(-1),'history-status');assert.equal(toolbar.updateHistory,history);
  const next={icons:true};f.w.ToolbarView={...raw,createIcons(){count++;return next;}};assert.equal(toolbar.createIcons(),next);assert.equal(count,2);
  Object.defineProperty(f.w,'DimensionQueries',{get(){throw marker;}});assert.throws(()=>toolbar.createIcons(),error=>error===marker);assert.equal(count,2);
+});
+
+function selectionToolbarFixture(composed, probe = {}, useDefaultFlyouts = false) {
+  const calls = [], marker = new Error('selection query failed'), state = { ready: false, targets: [], hidden: false, denied: new Set(), fail: null };
+  const note = (name, value) => { assert.equal(state.ready, true); calls.push([name, value]); if (state.fail === name) throw marker; };
+  const selection = Object.freeze({ visibilityTargets() { 'use strict'; assert.equal(this, undefined); note('targets'); return state.targets; },
+    visibilityIsHidden(targets) { 'use strict'; assert.equal(this, undefined); assert.equal(targets, state.targets); note('hidden'); return state.hidden; } });
+  const sketches = Object.freeze({ constraintSketchId(item) { 'use strict'; assert.equal(this, undefined); note('constraint', item.id); return item.constraintOwner; },
+    elementSketchId(item) { 'use strict'; assert.equal(this, undefined); note('element', item.id); return item.elementOwner; },
+    canEditSketch(id) { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 1); note('permission', id); return !state.denied.has(id); } });
+  probe.selectionCalls = calls; probe.assemble = (prepared, options) => {
+    const syncFlyouts = useDefaultFlyouts ? undefined : options.syncFlyouts;
+    return composed ? prepared.createForSelection({ selection, sketches, syncFlyouts }) : prepared.createControls({
+      selectedVisibilityTargets: selection.visibilityTargets, selectionVisibilityIsHidden: selection.visibilityIsHidden, syncFlyouts,
+      canEditTarget: target => sketches.canEditSketch.call(undefined, target.kind === 'constraint'
+        ? sketches.constraintSketchId.call(undefined, target.item) : sketches.elementSketchId.call(undefined, target.item)),
+    });
+  };
+  const f = preparedToolbarFixture(true, probe); assert.deepEqual(calls, []); state.ready = true;
+  return { ...f, selectionState: state, selection, sketches, selectionCalls: calls, selectionMarker: marker };
+}
+
+test('Toolbar selection assembly preserves live visibility, Sketch bypass, permission order and short circuit with actual View and Cursor', () => {
+  const traces = [];
+  for (const composed of [false, true]) {
+    const f = selectionToolbarFixture(composed), s = f.selectionState, button = f.nodes.get('selectionVisibilityBtn');
+    assert.equal(f.controls.view, f.probe.results.view); assert.equal(f.controls.status, f.probe.results.status);
+    assert.equal(f.probe.ports.view.selectedVisibilityTargets, f.selection.visibilityTargets);
+    assert.equal(f.probe.ports.view.selectionVisibilityIsHidden, f.selection.visibilityIsHidden);
+    s.targets = [{ kind: 'sketch', item: { id: 'SK' } }, { kind: 'constraint', item: { id: 'C', constraintOwner: 'S1', elementOwner: 'wrong' } },
+      { kind: 'line', item: { id: 'L', elementOwner: 'S2', constraintOwner: 'wrong' } }];
+    s.denied.add('S1'); s.hidden = true; f.controls.view.update(); assert.equal(button.disabled, true); assert.equal(button.attributes['aria-pressed'], 'true');
+    assert.deepEqual(f.selectionCalls, [['targets', undefined], ['hidden', undefined], ['constraint', 'C'], ['permission', 'S1']]);
+    f.selectionCalls.length = 0; s.denied.clear(); f.controls.view.update(); assert.equal(button.disabled, false);
+    assert.deepEqual(f.selectionCalls.slice(-4), [['constraint', 'C'], ['permission', 'S1'], ['element', 'L'], ['permission', 'S2']]);
+    f.selectionCalls.length = 0; f.state.geometry = false; f.controls.view.update(); assert.equal(button.disabled, true); assert.equal(f.selectionCalls.length, 2);
+    f.state.geometry = true; s.targets = []; s.hidden = false; f.controls.view.update(); assert.equal(button.disabled, true); assert.equal(button.attributes['aria-pressed'], 'false');
+    traces.push(JSON.stringify({ calls: f.selectionCalls, events: f.events, writes: f.probe.writes }));
+  }
+  assert.equal(traces[1], traces[0]);
+});
+
+test('Toolbar selection assembly retains query failure identity and partial DOM updates, and supports the existing flyout default', () => {
+  for (const composed of [false, true]) {
+    for (const stage of ['targets', 'hidden', 'constraint', 'permission']) {
+      const f = selectionToolbarFixture(composed), s = f.selectionState, button = f.nodes.get('selectionVisibilityBtn');
+      s.targets = [{ kind: 'constraint', item: { id: 'C', constraintOwner: 'S1' } }]; s.fail = stage; button.disabled = 'prior';
+      assert.throws(() => f.controls.view.update(), error => error === f.selectionMarker); assert.equal(button.disabled, 'prior');
+      assert.equal(f.selectionCalls.at(-1)[0], stage); assert.equal(f.events.includes('flyouts'), false);
+    }
+    const defaults = selectionToolbarFixture(composed, {}, true); defaults.controls.view.update();
+    assert.equal(defaults.nodes.get('selectionVisibilityBtn').disabled, true);
+  }
+});
+
+test('Toolbar selection assembly constructs View then Status without reading queries and preserves constructor errors', () => {
+  for (const composed of [false, true]) for (const stage of ['view', 'status']) {
+    const marker = new Error('construction failed'), probe = { failAt: stage, error: marker };
+    assert.throws(() => selectionToolbarFixture(composed, probe), error => error === marker);
+    assert.deepEqual(probe.selectionCalls, []);
+    assert.deepEqual(probe.steps, ['query-constraints', 'query-menu', 'fix', 'cursor', 'view', ...(stage === 'status' ? ['status'] : [])]);
+  }
+});
+
+
+function choicePresentationFixture(){
+  const f=fixture(),events=[],elements={};
+  function element(){const handlers={};return{handlers,dataset:{},classList:{add(){}},addEventListener(type,handler){handlers[type]=handler;},setAttribute(name,value){this[name]=value;},focus(){events.push('focus');}};}
+  for(const key of ['title','message','actions','close'])elements[key]=element();elements.actions.children=[];elements.actions.replaceChildren=function(){this.children=[];};elements.actions.append=function(button){this.children.push(button);};Object.defineProperty(elements.actions,'firstElementChild',{get(){return this.children[0];}});
+  const dialog={...element(),open:false,querySelector(selector){return elements[selector.match(/data-choice-([^\]]+)/)[1]];},showModal(){this.open=true;events.push('show');},close(){this.open=false;events.push('close');this.handlers.close?.();}};
+  f.document.getElementById=function(id){assert.equal(this,f.document);assert.equal(id,'choiceDialog');events.push('element');return dialog;};f.document.createElement=()=>element();
+  vm.runInNewContext(fs.readFileSync('src/ui/choice_dialog.js','utf8'),{window:f.w,document:f.document});
+  const raw=f.w.ChoiceDialog;let actual;
+  f.w.ChoiceDialog={create(value){assert.equal(this,f.w.ChoiceDialog);assert.equal(arguments.length,1);assert.equal(value,dialog);events.push('create');assert.throws(()=>f.feature.requestChoice({}),error=>error.name==='ReferenceError'&&error.message==="Cannot access 'choiceDialog' before initialization");return actual=raw.create(value);}};
+  return{...f,events,elements,dialog,get actual(){return actual;}};
+}
+
+test('presentation owns the actual shared Choice dialog and keeps modal values, pending exclusion, cancel and event propagation',async()=>{
+  const f=choicePresentationFixture();assert.deepEqual(f.events,[]);assert.equal(f.feature.requestChoice.name,'requestChoice');assert.equal(f.feature.requestChoice.length,1);
+  const request=f.feature.requestChoice;assert.throws(()=>request({}),error=>error.name==='ReferenceError');const actual=f.feature.createChoiceDialog();assert.equal(actual,f.actual);assert.deepEqual(f.events,['element','create']);
+  const options={title:'Title',message:'Message',choices:[{value:true,label:'Yes'},{value:false,label:'No'}],defaultValue:true,cancelLabel:'Cancel'},promise=request(options);
+  assert.equal(f.dialog.open,true);assert.equal(f.elements.title.textContent,'Title');assert.equal(f.elements.message.textContent,'Message');assert.equal(f.elements.actions.children.length,3);
+  await assert.rejects(request(options),/already open/);let stopped=0;f.dialog.handlers.keydown({stopPropagation(){stopped++;}});f.dialog.handlers.keyup({stopPropagation(){stopped++;}});assert.equal(stopped,2);
+  f.elements.actions.children[1].handlers.click();assert.equal(await promise,false);assert.equal(f.dialog.open,false);assert.equal(f.elements.actions.children.length,0);
+  const cancelled=request(options);let prevented=false;f.dialog.handlers.cancel({preventDefault(){prevented=true;}});assert.equal(await cancelled,null);assert.equal(prevented,true);
+});
+
+test('presentation choice dispatch preserves the actual receiver, one argument, promise identity and previous completed dialog on failures',()=>{
+  const f=fixture(),a={},b={},marker=new Error('choice failed'),promise=Promise.resolve(true);let fail=false,created,showFailure=false,received;
+  const make=id=>{const dialog={show(...args){assert.equal(this,dialog);assert.equal(args.length,1);received=args[0];if(showFailure)throw marker;return promise;},id};return dialog;};
+  const first=make(a),next=make(b);f.document.getElementById=()=>({});f.w.ChoiceDialog={create(){if(fail)throw marker;return created;}};
+  created=first;assert.equal(f.feature.createChoiceDialog(),first);const options={choices:[]};assert.equal(f.feature.requestChoice(options,'ignored'),promise);assert.equal(received,options);
+  fail=true;assert.throws(f.feature.createChoiceDialog,error=>error===marker);assert.equal(f.feature.requestChoice(options),promise);fail=false;created=next;assert.equal(f.feature.createChoiceDialog(),next);
+  showFailure=true;assert.throws(()=>f.feature.requestChoice(options),error=>error===marker);
+  for(const invalid of [undefined,null]){created=invalid;assert.equal(f.feature.createChoiceDialog(),invalid);assert.throws(()=>f.feature.requestChoice(options),error=>error.name==='TypeError');}
+});
+
+test('Presentation owns the native runtime version view and language refresh uses its actual stored build state', () => {
+  const f = fixture(), target = { textContent: '', dataset: {}, removeAttribute(name) { delete this[name]; } };
+  Object.assign(f.document, {
+    defaultView: { Node: { ELEMENT_NODE: 1 }, NodeFilter: { SHOW_TEXT: 4 } },
+    documentElement: { nodeType: 1, dataset: { theme: 'light' }, querySelectorAll: () => [], matches: () => false, closest: () => null, hasAttribute: () => false },
+    getElementById: id => id === 'runtimeCommit' ? target : null,
+    createTreeWalker: () => ({ nextNode: () => false }),
+  });
+  for (const file of ['src/ui/application_settings.js', 'src/ui/runtime_version_view.js']) vm.runInNewContext(fs.readFileSync(file, 'utf8'), { window: f.w });
+  const feature = f.w.PresentationFeature.create({ document: f.document, storage: () => ({ getItem: () => null }), readDuplicateCount: () => 0 });
+  assert.equal(target.textContent, '');
+  assert.throws(() => feature.settings.setApplicationLanguage('en', { persist: false, refresh: false }),
+    error => error.name === 'ReferenceError' && error.message === "Cannot access 'runtimeVersionView' before initialization");
+  const startup = feature.createStartup({});
+  assert.ok(Object.isFrozen(startup)); assert.equal(target.textContent, '');
+  startup.versionView.load({ available: true, branch: 'develop', commit: 'a'.repeat(40), shortCommit: 'a'.repeat(12), dirty: true });
+  assert.equal(target.textContent, 'develop@aaaaaaaaaaaa (dirty)');
+  feature.settings.setApplicationLanguage('ja', { persist: false, refresh: false });
+  assert.equal(target.textContent, 'develop@aaaaaaaaaaaa（変更あり）');
+  assert.equal(target.title, 'develop@' + 'a'.repeat(40)); assert.equal(target.dataset.state, 'available');
+  feature.settings.setApplicationLanguage('en', { persist: false, refresh: false });
+  assert.equal(target.textContent, 'develop@aaaaaaaaaaaa (dirty)');
+  startup.versionView.load(null); assert.equal(target.textContent, 'Unavailable');
+  feature.settings.setApplicationLanguage('ja', { persist: false, refresh: false });
+  assert.equal(target.textContent, '取得できません'); assert.equal(target.dataset.state, 'unavailable');
+});
+
+test('Presentation version refresh preserves initialization publication, native receiver, no arguments and original returns and errors', () => {
+  const f = fixture(options => { delete options.refreshVersion; });
+  const refresh = f.created.settings.refreshVersion, marker = new Error('runtime view failed'), result = {};
+  assert.equal(refresh.name, 'refreshVersion'); assert.equal(refresh.length, 0);
+  let fail = false, created, renderError = false, reads = 0;
+  const first = { render() { assert.equal(this, first); assert.equal(arguments.length, 0); reads++; if (renderError) throw marker; return result; } };
+  f.w.RuntimeVersionView = { create() {
+    if (fail) throw marker;
+    if (created === first) assert.throws(refresh, error => error.name === 'ReferenceError');
+    return created;
+  } };
+  assert.throws(refresh, error => error.name === 'ReferenceError');
+  created = first; assert.equal(f.feature.createStartup({}).versionView, first);
+  assert.equal(refresh('ignored'), result); assert.equal(reads, 1);
+  fail = true; assert.throws(() => f.feature.createStartup({}), error => error === marker);
+  assert.equal(refresh(), result); fail = false;
+  // A settings getter can run callbacks during Startup construction; publication follows that getter.
+  Object.defineProperty(f.settings, 'setApplicationLanguage', { configurable: true, get() { assert.equal(refresh(), result); throw marker; } });
+  created = { render() { assert.fail('incomplete view must not be published'); } };
+  assert.throws(() => f.feature.createStartup({}), error => error === marker); assert.equal(refresh(), result);
+  delete f.settings.setApplicationLanguage;
+  renderError = true; assert.throws(refresh, error => error === marker); renderError = false;
+  for (const invalid of [undefined, null]) {
+    created = invalid; assert.equal(f.feature.createStartup({}).versionView, invalid);
+    assert.throws(refresh, error => error.name === 'TypeError');
+  }
+});
+
+test('Presentation preserves explicit own and inherited version refresh overrides, including undefined and null', () => {
+  for (const inherited of [false, true]) for (const value of [undefined, null, () => 17]) {
+    const f = fixture(options => {
+      delete options.refreshVersion;
+      if (inherited) Object.setPrototypeOf(options, { refreshVersion: value }); else options.refreshVersion = value;
+    });
+    assert.equal(f.created.settings.refreshVersion, value);
+    if (typeof value === 'function') assert.equal(f.created.settings.refreshVersion(), 17);
+    else assert.throws(() => f.created.settings.refreshVersion(), error => error.name === 'TypeError');
+  }
 });

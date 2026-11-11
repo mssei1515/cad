@@ -15,6 +15,19 @@ function fixture() {
   const creation = GeometryCreation.create({ currentScope: () => state.scope, ids, assignSketchId: item => { item.sketchId = state.sketch; }, currentConstruction: () => state.construction, minLineLength: 1, minArcLength: 1 });
   return { state, ids, creation };
 }
+test('editing length policy preserves the legacy fallback, lower bound, coercion and matching normal arc default', () => {
+  for (const [value, expected] of [[undefined, 12], [null, 12], [false, 12], [0, 12], [NaN, 12], ['', 12],
+    [1e-6, 1e-6], [1e-12, 1e-9], [-3, 1e-9], [Infinity, Infinity], ['0', 1e-9], ['3', 3]]) {
+    const policy = GeometryCreation.createLengthPolicy(value, 1e-9);
+    assert.ok(Object.isFrozen(policy)); assert.equal(policy.minLineLength, expected); assert.equal(policy.minArcLength, expected);
+  }
+  assert.equal(GeometryCreation.createLengthPolicy(1, 2).minLineLength, 2);
+  assert.equal(GeometryCreation.createLengthPolicy(1, undefined).minLineLength, NaN);
+  const marker = new Error('length coercion'); let reads = 0;
+  assert.throws(() => GeometryCreation.createLengthPolicy({ valueOf() { reads++; throw marker; } }, 1e-9), error => error === marker);
+  assert.equal(reads, 1);
+});
+
 test('Geometry IDs isolate kinds and instances and restore only checkpointed kinds', () => {
   const ids = GeometryIds.create(), other = GeometryIds.create();
   assert.equal(ids.allocate('point'), 'P1');

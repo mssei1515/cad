@@ -7,6 +7,10 @@
       return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= acceptError;
     };
   }
+  function createEditingPolicy() {
+    const acceptError = 1e-4;
+    return Object.freeze({ acceptError, resultIsAccepted: window.SketchSolving.createResultAcceptance(acceptError) });
+  }
   function createState() {
     const sketchSolveStates = new Map();
     function clearSketchSolveState(sketchId) {
@@ -196,5 +200,5 @@
 
     return Object.freeze({ clearSketchSolveState, setSketchSolveOk, setSketchSolveError, sketchSolveState, solveActiveSketch, solveSketchById, solveReferenceDependentSketches, solveSketchAndDependents, solveConstraintComponentAndDependents, clearAll });
   }
-  window.SketchSolving = Object.freeze({ createResultAcceptance, createState, create });
+  window.SketchSolving = Object.freeze({ createResultAcceptance, createEditingPolicy, createState, create });
 })();

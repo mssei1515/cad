@@ -186,6 +186,7 @@ function fileOwnersFixture(composed, probe = {}) {
       for (const [key, name] of [["readDocumentName", "name"], ["currentSnapshot", "snapshot"], ["isEditingBlock", "block"]]) {
         const original = input[key]; input[key] = () => { assert.equal(probe.ready, true); reads.push(name); if (probe.failRead === name) throw probe.error; return original(); };
       }
+      if (probe.configureInput) probe.configureInput(input, w);
       const options = { window: input.window, document: input.document,
         documentWorkspace: { document: { get documentName() { return input.readDocumentName(); } } },
         history: { documentHistory: { get currentSnapshot() { return input.currentSnapshot(); } }, controller: { resetDocument: input.resetHistory } },
@@ -349,3 +350,144 @@ test('parent-owned DXF preserves constructor and completion failure identity or 
  assert.equal(results[1],results[0]);
 });
 })();
+
+function documentStartupFixture(composed) {
+ 'use strict';
+ const trace=[],state={fail:null,resets:0},marker=new Error('Document startup');
+ const step=name=>{trace.push(name);if(state.fail===name)throw marker;};
+ const f=fileOwnersFixture(true,{configureInput(input){
+  const history=input.resetHistory,serialize=input.serializeModel,descriptor=Object.getOwnPropertyDescriptor(input.document,'title'),listen=input.window.addEventListener;
+  input.resetHistory=function(label){assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(label,'起動');step('history');return history(label);};
+  input.serializeModel=function(){assert.equal(this,undefined);assert.equal(arguments.length,0);step('serialize');return serialize();};
+  Object.defineProperty(input.document,'title',{...descriptor,set(value){step('status');descriptor.set.call(this,value);}});
+  input.window.addEventListener=function(type,listener){assert.equal(this,input.window);assert.equal(type,'beforeunload');step('listen');return listen(type,listener);};
+ }});
+ const getElement=f.document.getElementById;
+ f.document.getElementById=function(id){if(id==='copyDocumentLinkBtn'){step('startup');assert.equal(f.session.checkpointKind,'new');assert.equal(f.session.matchesCheckpoint(f.state.data),true);}return getElement.call(this,id);};
+ function resetModelState(){assert.equal(this,undefined);assert.equal(arguments.length,0);step('reset');state.resets++;f.state.data={documentName:'New drawing',points:[]};}
+ function initializePresentation(message){assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(message,'空の新規Documentを作成しました');step('presentation');}
+ function start(){
+  if(composed)return f.feature.startForEmptyDocument({resetModelState,initializePresentation});
+  resetModelState();initializePresentation('空の新規Documentを作成しました');const {resetDocument:resetHistory}=f.probe.options.history.controller;resetHistory('起動');const {markCheckpoint}=f.feature;markCheckpoint('new');f.feature.start();
+ }
+ function snapshot(){return JSON.stringify({trace,events:f.events,data:f.state.data,snapshot:f.state.snapshot,checkpointKind:f.session.checkpointKind,checkpointMatches:f.session.matchesCheckpoint(f.state.data),status:f.status,title:f.document.title,resets:state.resets});}
+ assert.deepEqual(trace,[]);return {...f,trace,start,snapshot,startState:state,marker};
+}
+
+test('empty Document startup resets and presents before history and checkpoint, then installs unload protection before native startup opening',async()=>{
+ const snapshots=[];for(const composed of [false,true]){const f=documentStartupFixture(composed),original=f.state.data;assert.equal(f.start(),undefined);
+  await Promise.resolve();assert.notEqual(f.state.data,original);assert.deepEqual(f.trace,['reset','presentation','history','serialize','status','listen','startup']);
+  assert.equal(f.session.checkpointKind,'new');assert.equal(f.session.matchesCheckpoint(f.state.data),true);assert.equal(f.status.dataset.dirty,'false');
+  f.state.data.points.push({id:'P1'});const event=new Event('beforeunload',{cancelable:true});f.browser.dispatchEvent(event);assert.equal(event.defaultPrevented,true);snapshots.push(f.snapshot());
+ }assert.equal(snapshots[1],snapshots[0]);
+});
+
+test('empty Document startup propagates each synchronous failure without rolling back completed reset, history, checkpoint or listener-start state',()=>{
+ for(const stage of ['reset','presentation','history','serialize','status','listen']){const snapshots=[];for(const composed of [false,true]){
+  const f=documentStartupFixture(composed);f.startState.fail=stage;assert.throws(f.start,e=>e===f.marker);assert.equal(f.trace.at(-1),stage);assert.equal(f.trace.includes('startup'),false);snapshots.push(f.snapshot());
+ }assert.equal(snapshots[1],snapshots[0],stage);}
+});
+
+test('empty Document startup preserves native start idempotency while repeating explicit initialization and restarts after dispose',async()=>{
+ const snapshots=[];for(const composed of [false,true]){const f=documentStartupFixture(composed);f.start();f.start();await Promise.resolve();
+  assert.equal(f.startState.resets,2);assert.equal(f.trace.filter(x=>x==='history').length,2);assert.equal(f.trace.filter(x=>x==='listen').length,1);assert.equal(f.trace.filter(x=>x==='startup').length,1);
+  f.feature.dispose();f.start();await Promise.resolve();assert.equal(f.startState.resets,3);assert.equal(f.trace.filter(x=>x==='listen').length,2);assert.equal(f.trace.filter(x=>x==='startup').length,2);snapshots.push(f.snapshot());
+ }assert.equal(snapshots[1],snapshots[0]);
+});
+
+function fileExportControlsFixture(composed, failAt) {
+  'use strict';
+  const trace = [], state = { published: null, failAt, snap: null }, marker = new Error('file exports'); let completed;
+  const step = name => { trace.push(name); if (state.failAt === name) throw marker; };
+  const f = fileOwnersFixture(true, { configureInput(input, w) {
+    const original = w.DocumentFileControls;
+    w.DocumentFileControls = { ...original, createDocument(options) {
+      const controls = original.createDocument(options);
+      return { ...controls, bind() { assert.equal(this, completed); assert.equal(arguments.length, 0); step('file-bind'); return controls.bind(); } };
+    } };
+  } });
+  completed = f.feature;
+  for (const file of ['src/geometry/export_region.js', 'src/rendering/canvas_export.js', 'src/commands/png_export_command.js', 'src/persistence/png_file.js', 'src/application/png_export.js', 'src/persistence/dxf_import.js', 'src/commands/dxf_import_command.js']) {
+    vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), { window: f.w });
+  }
+  f.nodes.pngExportBtn = new EventTarget();
+  for (const [id, node] of Object.entries(f.nodes)) {
+    const listen = node.addEventListener;
+    node.addEventListener = function(type, handler) {
+      assert.equal(this, node); if (id === 'pngExportBtn') assert.equal(state.published, nativePng.command);
+      step('listen:' + id + ':' + type); return listen.call(this, type, handler);
+    };
+  }
+  const pngExport = f.w.PngExport.prepare(), nativeStart = pngExport.start; let nativePng, ports;
+  const lifecycle = { ...pngExport, start() { assert.equal(this, lifecycle); assert.equal(arguments.length, 0); step('png-start'); return nativeStart(); } };
+  const dxf = f.feature.createDxf({ geometry: {}, ids: {}, currentScope: () => f.state.data, activeSketchId: () => 'S1', canImport: () => true,
+    minimumLength: 1e-6, clearSelection() {}, updateUI() {}, recordHistory() {} });
+  const dxfImport = { bindControls(options) {
+    assert.equal(this, dxfImport); assert.equal(arguments.length, 1); assert.deepEqual(Object.keys(options), ['flushScheduledCanvasPointerMove']);
+    assert.equal(options.flushScheduledCanvasPointerMove, flushPointerMove); step('dxf-bind'); const controls = dxf.createControls(options); controls.bind(); return controls;
+  } };
+  const referenceImage = { get prepareImages() { step('images-port'); return prepareImages; } };
+  function prepareImages() { assert.equal(this, undefined); step('prepare-images'); }
+  function flushPointerMove() { assert.equal(this, undefined); step('flush'); }
+  const drawingSnap = { find(point, tolerance) { assert.equal(this, drawingSnap); assert.equal(arguments.length, 2); step('snap'); assert.equal(point, state.point); assert.equal(tolerance, 7); if (state.snapError) throw state.snapError; return state.snap; } };
+  function createPngExport(options) {
+    assert.equal(this, undefined); assert.equal(arguments.length, 1); step('png-create'); ports = options;
+    assert.deepEqual(Object.keys(options), ['documentName', 'prepareImages', 'fileSession', 'pngExport', 'findSnap', 'flushPointerMove']);
+    assert.equal(options.documentName, f.feature.effectiveDocumentName); assert.equal(options.prepareImages, prepareImages);
+    assert.equal(options.fileSession, f.session); assert.equal(options.pngExport, lifecycle); assert.equal(options.flushPointerMove, flushPointerMove);
+    return nativePng = options.pngExport.create({ ...options, document: f.document, window: f.browser, canvas: {}, rendering: {}, text: (_ja, en) => en,
+      readViewScale: () => 1, readMode: () => 'select', setMode() {}, pendingCommandSession: { current: null, replace() {}, clear() {} },
+      drawOperationLifecycle: { active: () => false }, constraintTargetSession: { command: null }, withGeometryReadCache: callback => callback(), setHint: value => f.events.push(['hint', value]), draw() {} });
+  }
+  function prepare() {
+    const options = { createPngExport, referenceImage, drawingSnap, pngExport: lifecycle, dxfImport, flushPointerMove };
+    if (composed) return f.feature.prepareExportControls(options);
+    f.feature.bindControls();
+    const png = createPngExport({ documentName: f.feature.effectiveDocumentName, prepareImages: referenceImage.prepareImages, fileSession: f.session, pngExport: lifecycle,
+      findSnap: (point, tolerance) => drawingSnap.find(point, tolerance), flushPointerMove });
+    return { png, start() { lifecycle.start(); dxfImport.bindControls({ flushScheduledCanvasPointerMove: flushPointerMove }); } };
+  }
+  const snapshot = () => JSON.stringify({ trace, events: f.events, data: f.state.data, published: Boolean(state.published), busy: f.session.busy });
+  assert.deepEqual(trace, []); assert.deepEqual(f.events, []);
+  return { ...f, trace, exportState: state, marker, prepare, snapshot, readPorts: () => ports, nativePng: () => nativePng };
+}
+
+test('file export controls share the actual session, live document name and snap port while publishing PNG before starting native controls', () => {
+  const results = [];
+  for (const composed of [false, true]) {
+    const f = fileExportControlsFixture(composed), controls = f.prepare();
+    if (composed) assert.ok(Object.isFrozen(controls)); assert.equal(controls.png, f.nativePng());
+    assert.equal(f.exportState.published, null); assert.equal(f.trace.includes('png-start'), false);
+    f.nodes.pngExportBtn.dispatchEvent(new Event('click')); assert.deepEqual(f.events, []);
+    f.exportState.published = controls.png.command; assert.equal(controls.start(), undefined);
+    assert.ok(f.trace.indexOf('file-bind') < f.trace.indexOf('png-create')); assert.ok(f.trace.indexOf('png-create') < f.trace.indexOf('png-start'));
+    assert.ok(f.trace.indexOf('png-start') < f.trace.indexOf('dxf-bind'));
+    f.state.data.documentName = '  Later name  '; assert.equal(f.readPorts().documentName(), 'Later name');
+    const point = {}; f.exportState.point = point; f.exportState.snap = { x: 2 }; assert.equal(f.readPorts().findSnap(point, 7), f.exportState.snap);
+    const marker = new Error('live snap'); f.exportState.snap = null; const old = f.readPorts().findSnap;
+    assert.equal(old.length, 2); assert.equal(old.name, 'findSnap'); assert.equal(old(point, 7), null);
+    f.exportState.snapError = marker; assert.throws(() => old(point, 7), error => error === marker); f.exportState.snapError = null;
+    f.session.beginSave(); f.nodes.pngExportBtn.dispatchEvent(new Event('click')); f.nodes.dxfImportBtn.dispatchEvent(new Event('click'));
+    assert.equal(controls.png.command.active, false); assert.equal(f.events.includes('dxf-input'), false); f.session.finishSave();
+    f.nodes.importBtn.dispatchEvent(new Event('click')); f.nodes.dxfImportBtn.dispatchEvent(new Event('click'));
+    assert.equal(f.events.includes('fileInput'), true); assert.equal(f.events.includes('dxf-input'), true);
+    controls.start(); assert.equal(f.trace.filter(x => x === 'listen:pngExportBtn:click').length, 1);
+    assert.equal(f.trace.filter(x => x === 'listen:exportBtn:click').length, 1);
+    results.push(f.snapshot());
+  }
+  assert.equal(results[1], results[0]);
+});
+
+test('file export control preparation and start retain partial binding and PNG publication on each original failure boundary', () => {
+  for (const stage of ['file-bind', 'listen:exportBtn:click', 'listen:importBtn:click', 'images-port', 'png-create', 'png-start', 'listen:pngExportBtn:click', 'dxf-bind', 'listen:dxfFileInput:change']) {
+    const results = [];
+    for (const composed of [false, true]) {
+      const f = fileExportControlsFixture(composed, stage);
+      assert.throws(() => { const controls = f.prepare(); f.exportState.published = controls.png.command; controls.start(); }, error => error === f.marker);
+      assert.equal(f.trace.at(-1), stage); assert.equal(Boolean(f.exportState.published), ['png-start', 'listen:pngExportBtn:click', 'dxf-bind', 'listen:dxfFileInput:change'].includes(stage));
+      f.exportState.failAt = null; f.nodes.importBtn.dispatchEvent(new Event('click')); f.nodes.dxfImportBtn.dispatchEvent(new Event('click'));
+      results.push(f.snapshot());
+    }
+    assert.equal(results[1], results[0], stage);
+  }
+});

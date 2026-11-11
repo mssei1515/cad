@@ -1,6 +1,47 @@
 /* Assemble Properties queries, editing commands, shared appearance UI and display around existing owners. */
 (() => {
   "use strict";
+  function prepare() {
+    let completed;
+    function readCompleted(binding) {
+      if (completed === undefined) throw new ReferenceError(`Cannot access '${binding}' before initialization`);
+      return completed;
+    }
+    const renderProperties = () => {
+      const { view, selectedPropertiesTarget } = readCompleted("propertiesView");
+      return view.render(selectedPropertiesTarget());
+    };
+    const readAppearance = () => readCompleted("appearanceEditing").appearanceEditing;
+    function toggleSelectedVisibility() { return readCompleted("selectionVisibilityCommand").visibility.toggle(); }
+    function createWorkspace(options) {
+      const feature = window.PropertiesDisplay.createForWorkspace(options);
+      const build = feature.createEditingWithViewForWorkspace;
+      const buildForPresentation = feature.createEditingWithViewForPresentation;
+      function publish(result) {
+        const { editing: { appearanceEditing, visibility }, view } = result;
+        const binding = Object.freeze({ appearanceEditing, visibility, view, selectedPropertiesTarget: feature.selection.selectedDisplayTarget });
+        completed = binding;
+        return result;
+      }
+      function createEditingWithViewForWorkspace(editingOptions, readViewOptions) {
+        return publish(build(...arguments));
+      }
+      function createEditingWithViewForPresentation(editingOptions, readViewOwners) {
+        return publish(buildForPresentation(...arguments));
+      }
+      function createEditingWithViewForBrowser(editingOptions, readViewOwners) {
+        return publish(buildForPresentation(editingOptions, () => {
+          const owners = { ...readViewOwners() };
+          for (const name of ["HTMLTextAreaElement", "HTMLInputElement"]) {
+            if (!Object.hasOwn(owners, name)) owners[name] = options.document.defaultView[name];
+          }
+          return owners;
+        }));
+      }
+      return Object.freeze({ ...feature, createEditingWithViewForWorkspace, createEditingWithViewForPresentation, createEditingWithViewForBrowser });
+    }
+    return Object.freeze({ createForWorkspace: createWorkspace, render: renderProperties, readAppearance, toggleSelectedVisibility });
+  }
   function createForWorkspace({ document, documentWorkspace, readServices, interaction, presentation, operations }) {
     const { document: documentModel, workspace, sketches: sketchContext, parameters: parameterNamespace } = documentWorkspace;
     const { hatchAppearanceForDisplay } = window.HatchData;
@@ -34,7 +75,15 @@
       const view = createViewForWorkspace(readViewOptions());
       return Object.freeze({ editing, appearanceUI, view });
     }
-    return Object.freeze({ ...feature, createEditingForWorkspace, createEditingWithViewForWorkspace });
+    function createEditingWithViewForPresentation(editingOptions, readViewOwners) {
+      return createEditingWithViewForWorkspace(editingOptions, () => {
+        const { analysis, selectionHighlight, layout, feedback, parameterEditor, ...options } = readViewOwners();
+        return { analysis, selectionHighlight, snappedBlockRotation: layout.snappedBlockRotation,
+          hatchRegionErrorText: feedback.hatchRegionErrorText, geometryInstanceTypeLabel: feedback.geometryInstanceTypeLabel,
+          installExpressionInputHighlights: parameterEditor.installExpressionInputHighlights, ...options };
+      });
+    }
+    return Object.freeze({ ...feature, createEditingForWorkspace, createEditingWithViewForWorkspace, createEditingWithViewForPresentation });
   }
   function createFeature({ document, documentModel, currentScope, canvasSelection, readServices, sketchContext,
     hatchAppearanceForDisplay, operations, selectionOperation = operations ? () => ({ mode: operations.lifecycle.mode,
@@ -180,5 +229,5 @@
       localizeApplicationUI, installExpressionInputHighlights,
     });
   }
-  window.PropertiesDisplay = Object.freeze({ create, createFeature, createForWorkspace, createSelection, createEditing, createWithController });
+  window.PropertiesDisplay = Object.freeze({ prepare, create, createFeature, createForWorkspace, createSelection, createEditing, createWithController });
 })();

@@ -1,6 +1,9 @@
 /* Sketch Projection browser fixtures and observations through live application owners. */
 (() => {
   "use strict";
+  function createBrowserSupportForWorkspace({ clipboard, ...options }) {
+    return createForWorkspace({ ...options, clipboardSession: clipboard.session });
+  }
   function createObservation({ types, currentScope, readMode, readStagedCount, readConstraints,
     constraintGeometryId, constraintSketchId, effectiveAppearanceForElement, geometryDisplayColor,
     constraintStatusOf, constraintStatusColor, constraintIsRedundant, serializeModel, readHistory, document }) {
@@ -616,5 +619,5 @@
       sketchProjectionEntryFromOperand: projection.sources.sketchProjectionEntryFromOperand, copySelectionToClipboard, pasteGeometryClipboard, clipboardSession,
       blockSelectionGeometry: blockSelection.read, createBlockDefinitionFromSelection: blocks.editing.fromSelection, blockSelectionBoundsCenter: blockSelection.center });
   }
-  window.SketchProjectionTestDriver = Object.freeze({ createForWorkspace, createSupport, createLegacyTargetConstruction, createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload, createEligibilityFixture, createTransfer });
+  window.SketchProjectionTestDriver = Object.freeze({ createBrowserSupportForWorkspace, createForWorkspace, createSupport, createLegacyTargetConstruction, createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload, createEligibilityFixture, createTransfer });
 })();

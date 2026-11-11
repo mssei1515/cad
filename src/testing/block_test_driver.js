@@ -1,6 +1,15 @@
 /* Browser-test Block creation fixtures and observations delegate model, command and solver state to product owners. */
 (() => {
   "use strict";
+  function createBrowserSupportForWorkspace({ dimensionPlacement, readOnlyDimensions, ...options }) {
+    const blockTestSupport = createForWorkspace(options);
+    const blockTestActions = blockTestSupport.createDimensionCases({
+      defaultDimensionForTarget: dimensionPlacement.defaultDimensionForTarget,
+      readOnlyDimensionConstraintForPlacement: readOnlyDimensions.forPlacement,
+      addReadOnlyDimensionConstraint: readOnlyDimensions.add, blockDefinitionById: options.readServices.catalog.blockDefinitionById,
+    });
+    return Object.freeze({ blockTestSupport, blockTestActions });
+  }
   function createCreationFixture({ resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, VerticalConstraint, canvasSelection, fitAllGeometryToViewport, updateUI, draw, canvas, worldToCanvasScreen }) {
     function reset() {
       resetModelState();
@@ -492,5 +501,5 @@
       constraintTargetSession: sessions.targets, canvasHover: interaction.hover, blockSelectionGeometry: selectionQuery.read,
       geometryRefForItem: window.GeometryObjects.geometryRefForItem });
   }
-  window.BlockTestDriver = Object.freeze({ createForWorkspace, createBrowserSupport, createObservationSupport, createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
+  window.BlockTestDriver = Object.freeze({ createBrowserSupportForWorkspace, createForWorkspace, createBrowserSupport, createObservationSupport, createEditorSupport, createCreationFixture, createEmptyFixture, createRotationObservation, createEndpointObservation, createHoverObservation, createEditorObservation, createPlacementAction, createNestedConstraintAction, createChildGeometryAction, createCancelAction, createCompleteAction, createEnabledSketchAction, createRejectionFixture, createStateObservation, createReload, createLegacyReload, createDefinitionUpdateFixture, createReadOnlyDimensionFixture, createExternalConstraintFixture, createInteractionObservation });
 })();

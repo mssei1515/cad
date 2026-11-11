@@ -135,7 +135,7 @@ test('export uses the shared viewport and restores its frame before interactive 
 
 const interactiveOrder = ['block-handles', 'dimensions', 'dimension-preview', 'annotations', 'annotation-preview', 'authoring',
   'block-placement', 'free-instance', 'offset', 'trim', 'snap', 'arc-handles', 'spline-handles', 'points', 'image-overlays', 'identity', 'selection-rect', 'export-overlay'];
-function workspaceRenderingFixture() {
+function workspaceRenderingFixture(owned = false) {
   const f = fixture(), stages = [];
   f.state.ready = false;
   function stage(name) {
@@ -150,7 +150,7 @@ function workspaceRenderingFixture() {
     for (const [method, name] of Object.entries(methods)) api[method] = function () { assert.equal(this, api); stage(name); };
     return api;
   }
-  const rendering = f.workspace.createRendering({ recordDraw: () => stage('record'),
+  const options = { recordDraw: () => stage('record'),
     geometry: owner({ drawArcEndpointHandles: 'arc-handles', drawSplineEditHandles: 'spline-handles', drawPoints: 'points' }),
     dimensions: owner({ draw: 'dimensions' }), annotations: owner({ draw: 'annotations', drawPreview: 'annotation-preview' }),
     drawDimensionPreview: () => stage('dimension-preview'), authoringPreview: owner({ draw: 'authoring', drawTrimPreview: 'trim' }),
@@ -158,16 +158,20 @@ function workspaceRenderingFixture() {
     offsetPreview: owner({ draw: 'offset' }), drawBlockInstanceHandles: () => stage('block-handles'), drawSnapMarker: () => stage('snap'),
     drawReferenceImages: () => stage('images'), drawHatches: () => stage('hatches'), drawDrawingStack: () => stage('stack'),
     drawReferenceImageOverlays: () => stage('image-overlays'), drawSketchIdentityLabel: () => stage('identity'),
-    drawSelectionRect: () => stage('selection-rect'), drawExportOverlay: () => stage('export-overlay') });
+    drawSelectionRect: () => stage('selection-rect'), drawExportOverlay: () => stage('export-overlay') };
+  const prepared = sandbox.window.CanvasDisplay.prepareRendering();
+  const build = options => Object.freeze({ frame: f.workspace.createRendering(options) });
+  const bundle = owned ? prepared.createFrame(build, options) : build(options);
+  const rendering = bundle.frame, drawFrame = owned ? prepared.drawCanvas : () => rendering.draw();
   assert.deepEqual(f.calls, []); assert.deepEqual(stages, []); assert.ok(Object.isFrozen(rendering));
-  f.state.onContent = rendering.draw; f.state.onDraw = rendering.draw; f.state.ready = true;
-  return { ...f, rendering, stages };
+  f.state.onContent = drawFrame; f.state.onDraw = drawFrame; f.state.ready = true;
+  return { ...f, rendering, drawFrame, stages };
 }
 
-test('Workspace rendering shares the live viewport, bitmap, zoom display and PNG frame without repeated infrastructure ports', () => {
-  const f = workspaceRenderingFixture(), other = workspaceRenderingFixture();
+for (const owned of [false, true]) test(`Workspace rendering shares the live viewport, bitmap, zoom display and PNG frame without repeated infrastructure ports (${owned ? 'owned' : 'direct'})`, () => {
+  const f = workspaceRenderingFixture(owned), other = workspaceRenderingFixture(owned);
   f.display.viewport.update({ x: 10, y: 20, scale: 4 });
-  f.rendering.draw(); assert.equal(f.button.textContent, '200%');
+  f.drawFrame(); assert.equal(f.button.textContent, '200%');
   assert.equal(f.canvas.width, 400); assert.equal(f.workspace.surface.dpr, 2);
   assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
   assert.equal(other.canvas.width, 0); assert.deepEqual(other.stages, []);
@@ -181,8 +185,8 @@ test('Workspace rendering shares the live viewport, bitmap, zoom display and PNG
   assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
 });
 
-test('Workspace rendering retains export failure and restore boundaries on the same renderer', () => {
-  const f = workspaceRenderingFixture(), error = new Error('annotations failed');
+for (const owned of [false, true]) test(`Workspace rendering retains export failure and restore boundaries on the same renderer (${owned ? 'owned' : 'direct'})`, () => {
+  const f = workspaceRenderingFixture(owned), error = new Error('annotations failed');
   f.state.failure = 'annotations'; f.state.error = error;
   assert.throws(() => f.workspace.exportRenderer.render({ x: 0, y: 0, width: 10, height: 10 }, { x: 1, y: 1 }), value => value === error);
   assert.ok(f.workspace.exportRenderer.frame); assert.deepEqual(f.stages, ['images', 'hatches', 'stack', 'dimensions', 'annotations']);
@@ -190,6 +194,28 @@ test('Workspace rendering retains export failure and restore boundaries on the s
   f.state.failure = null; f.stages.length = 0; f.workspace.exportRenderer.restore();
   assert.equal(f.workspace.exportRenderer.frame, null);
   assert.deepEqual(f.stages, ['record', 'images', 'hatches', 'stack', ...interactiveOrder]);
+});
+
+test('prepared Canvas rendering publishes only completed native renderers and preserves draw calls and failures', () => {
+  const prepared = sandbox.window.CanvasDisplay.prepareRendering(), independent = sandbox.window.CanvasDisplay.prepareRendering();
+  const unready = () => assert.throws(() => prepared.drawCanvas(), error => error.name === 'ReferenceError' && error.message === "Cannot access 'canvasFrameRenderer' before initialization");
+  unready(); const marker = {}, input = {}, extra = {}, failure = new Error('frame'), drawFailure = new Error('draw');
+  let reads = 0, drawReads = 0;
+  const renderer = { get draw() { drawReads++; return function () { assert.equal(this, renderer); assert.equal(arguments.length, 0); return marker; }; } };
+  const bundle = Object.freeze({ get frame() { reads++; unready(); return renderer; } });
+  function factory() { 'use strict'; assert.equal(this, undefined); assert.deepEqual(Array.from(arguments), [input, extra]); unready(); return bundle; }
+  assert.equal(prepared.createFrame(factory, input, extra), bundle); assert.equal(reads, 1); assert.equal(drawReads, 0);
+  assert.equal(prepared.drawCanvas(input), marker); assert.equal(prepared.drawCanvas(), marker); assert.equal(drawReads, 2);
+  assert.throws(() => independent.drawCanvas(), error => error.name === 'ReferenceError');
+  assert.throws(() => prepared.createFrame(() => { throw failure; }), error => error === failure);
+  assert.throws(() => prepared.createFrame(() => ({ get frame() { throw failure; } })), error => error === failure);
+  assert.equal(prepared.drawCanvas(), marker); assert.equal(reads, 1);
+  const failing = { draw() { assert.equal(this, failing); throw drawFailure; } };
+  prepared.createFrame(() => ({ frame: failing })); assert.throws(() => prepared.drawCanvas(), error => error === drawFailure);
+  for (const value of [undefined, null]) {
+    prepared.createFrame(() => ({ frame: value }));
+    assert.throws(() => prepared.drawCanvas(), error => error.name === 'TypeError');
+  }
 });
 
 function renderingFixture() {
@@ -857,8 +883,10 @@ function hatchStackSceneFixture(composed, probe = {}) {
   const painters=Object.fromEntries(Object.entries(ports.painters).map(([name,paint])=>[name,(...args)=>{paints.push([name,...args]);return paint.apply(ports.painters,args);}]));
   return probe.stack=originalStack.create({...ports,painters});}};
  let rendering,stack,framePreparation;
+ const publication=composed==='published'?sceneWindow.CanvasDisplay.prepareRendering():null;
  try{
-  if(composed)rendering=f.scene.createHatchRendering({readCommand});
+  if(publication)rendering=publication.prepareHatchFrame(f.scene,{readCommand});
+  else if(composed)rendering=f.scene.createHatchRendering({readCommand});
   else{
    const {Line,Circle,Arc,Spline}=sceneWindow.GeometrySolver,{hatchAppearanceForDisplay,hatchPatternOrigin}=sceneWindow.HatchData;
    const {drawLines,drawCircles,drawArcs,drawSplines}=f.scene.geometry,{isVisibleSketchId,isVisibleSketchElement,isVisibleValue}=options.readServices.geometryAppearance;
@@ -874,17 +902,17 @@ function hatchStackSceneFixture(composed, probe = {}) {
     isVisibleSketchId,isVisibleSketchElement,hatchAppearanceForDisplay,isVisibleValue,painters:{hatch:items=>drawHatches(items,{includePreview:false}),line:drawLines,circle:drawCircles,arc:drawArcs,spline:drawSplines}})};
   }
   assert.deepEqual(probe.order,['content','layer']);assert.deepEqual(f.reads,[]);probe.order.push('between');
-  if(composed==='frame'){framePreparation=rendering.prepareFrame();stack=framePreparation.stack;}else stack=rendering.createStack();
+  if(composed==='frame'||publication){framePreparation=rendering.prepareFrame();stack=framePreparation.stack;}else stack=rendering.createStack();
  }finally{sceneWindow.HatchRenderer=originalHatch;sceneWindow.DrawingStack=originalStack;}
  assert.deepEqual(f.reads,[]);assert.deepEqual(f.calls,[]);assert.equal(state.commandReads,0);f.state.ready=true;
  const hatch=(id,sketchId='S1',drawingOrder=1)=>({id,sketchId,drawingOrder,appearance:{patternType:'solid',color:'#556677',opacity:0.5},
   resolved:{ok:true,loops:[{points:[{x:0,y:0},{x:20,y:0},{x:20,y:20},{x:0,y:20}]}]}});
  const line=(id,sketchId='S1',drawingOrder=2)=>Object.assign(new sceneWindow.GeometrySolver.Line(id,new sceneWindow.GeometrySolver.Point(id+'A',0,0),new sceneWindow.GeometrySolver.Point(id+'B',20,0)),{sketchId,drawingOrder});
- return {...f,selection,hover,rendering,drawingStack:stack,framePreparation,probe,options,paints,fills,hatch,line};
+ return {...f,selection,hover,rendering,drawingStack:stack,framePreparation,publication,probe,options,paints,fills,hatch,line};
 }
 
 function hatchFrameFixture(prepared) {
- const f=hatchStackSceneFixture(prepared?'frame':true),original=sceneWindow.CanvasSurface;
+ const f=hatchStackSceneFixture(prepared==='published'?'published':prepared?'frame':true),original=sceneWindow.CanvasSurface;
  const frame={},events=[];let ports;
  const input={rectangle:{preview:()=>null},snap:{active:null},pointer:{lastWorld:null},readPngCommand:()=>null,
   referenceImageLayer:{drawImages(){'use strict';assert.equal(this,undefined);events.push('images');},drawOverlays(){}},
@@ -939,6 +967,34 @@ test('Hatch frame preparation propagates stack and later frame failures without 
  }finally{sceneWindow.CanvasSurface=original;}
  assert.equal(f.framePreparation.stack,f.drawingStack);assert.equal(f.probe.order.filter(s=>s==='stack').length,1);
  f.ports.drawContent();assert.deepEqual(f.events,['images']);
+});
+
+test('Hatch pipeline shares its native layer, stack and frame with the published Canvas draw port',()=>{
+ const f=hatchFrameFixture('published'),value={};let calls=0;
+ assert.equal(f.rendering.layer,f.probe.layer);assert.equal(f.framePreparation.stack,f.probe.stack);
+ assert.deepEqual(f.probe.order,['content','layer','between','stack']);assert.equal(f.result.frame,f.frame);
+ f.frame.draw=function(){assert.equal(this,f.frame);assert.equal(arguments.length,0);calls++;return value;};
+ assert.equal(f.publication.drawCanvas('ignored'),value);assert.equal(calls,1);
+});
+
+test('Hatch pipeline keeps construction stages cold, preserves native calls and retains the previous frame on failure',()=>{
+ const publication=sandbox.window.CanvasDisplay.prepareRendering(),independent=sandbox.window.CanvasDisplay.prepareRendering();
+ const events=[],layer={},stack={},options={},input={},value={},failure=new Error('pipeline');let failAt=null;
+ const unready=()=>assert.throws(()=>publication.drawCanvas(),error=>error.name==='ReferenceError');
+ const renderer={draw(){assert.equal(this,renderer);assert.equal(arguments.length,0);return value;}};
+ const frame=Object.freeze({get frame(){events.push('renderer');if(failAt==='renderer')throw failure;return renderer;}});
+ function build(actual){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(actual,input);events.push('frame');if(failAt==='frame')throw failure;return frame;}
+ const scene={createHatchRendering(actual){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);assert.equal(actual,options);events.push('hatch');if(failAt==='hatch')throw failure;
+  return {layer,prepareFrame(){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,0);events.push('stack');if(failAt==='stack')throw failure;return {stack,createFrame:build};}};}};
+ const prepared=publication.prepareHatchFrame(scene,options);assert.ok(Object.isFrozen(prepared));assert.equal(prepared.layer,layer);assert.deepEqual(events,['hatch']);unready();
+ const ready=prepared.prepareFrame();assert.equal(ready.stack,stack);assert.deepEqual(events,['hatch','stack']);unready();
+ assert.equal(ready.createFrame(input),frame);assert.deepEqual(events,['hatch','stack','frame','renderer']);assert.equal(publication.drawCanvas(),value);
+ for(const stage of ['hatch','stack','frame','renderer']){failAt=stage;
+  assert.throws(()=>stage==='hatch'?publication.prepareHatchFrame(scene,options):stage==='stack'?prepared.prepareFrame():ready.createFrame(input),error=>error===failure);
+  assert.equal(publication.drawCanvas(),value);
+ }
+ assert.throws(()=>independent.drawCanvas(),error=>error.name==='ReferenceError');
+ failAt=null;const other=independent.prepareHatchFrame(scene,options).prepareFrame();assert.equal(other.createFrame(input),frame);assert.equal(independent.drawCanvas(),value);
 });
 
 test('scene Hatch and stack assembly shares real content, painter and query owners at separate cold construction stages',()=>{
@@ -1013,7 +1069,7 @@ function preparedWorkspaceFixture(composed, probe) {
   for (const [namespace, method, name] of factories) {
     if (!originals.has(namespace)) { originals.set(namespace, w[namespace]); w[namespace] = { ...w[namespace] }; }
     const original = originals.get(namespace)[method];
-    w[namespace][method] = ports => { probe.order.push(name); probe.ports[name] = ports; if (probe.failAt === name) throw probe.marker; return probe.results[name] = original(ports); };
+    w[namespace][method] = ports => { probe.beforeCreate?.(name); probe.order.push(name); probe.ports[name] = ports; if (probe.failAt === name) throw probe.marker; return probe.results[name] = original(ports); };
   }
   let prepared, controls, color, display, workspace, scene, placement, binding, png;
   try {
@@ -1021,12 +1077,16 @@ function preparedWorkspaceFixture(composed, probe) {
     else { controls = w.CanvasViewControls.create({ document: f.document, window: f.browser, setHint: presentation.setHint, draw: presentation.draw }); color = value => w.CanvasThemeColors.color(value, settings.theme); }
     assert.deepEqual(probe.order, ['controls']); assert.deepEqual(f.reads, []);
     const displayOptions = { initialScale: 2, minLength: 1e-6, fitVisibleGeometry: () => true, flushPointerMoves: () => f.calls.push('flush'), syncDimensionValueInput: () => f.calls.push('sync') };
-    display = composed ? prepared.createForEditing(displayOptions) : w.CanvasDisplay.create({ ...displayOptions, canvas: f.canvas, document: f.document, minZoom: .002, maxZoom: 20000000, draw: presentation.draw, setHint: presentation.setHint });
+    if (probe.configureDisplay) probe.configureDisplay(displayOptions);
+    display = composed ? (composed === 'scale' ? prepared.createForBrowser(displayOptions) : prepared.createForEditing(displayOptions)) : w.CanvasDisplay.create({ ...displayOptions, canvas: f.canvas, document: f.document, minZoom: .002, maxZoom: 20000000, draw: presentation.draw, setHint: presentation.setHint });
+    if (probe.afterDisplay) probe.afterDisplay(display);
     const dimensionInput = { syncHighlight() {}, scheduleFrame() {}, evaluateDimensionExpressionDraft: (_c,text) => Number(text), expressionFromUserInput: text => text,
       cancelPendingCommand() {}, startDistanceValueInput() {}, submitOffsetValue() {}, submitDistanceValue() {} };
     if (probe.configureInput) probe.configureInput(dimensionInput);
     const workspaceOptions = { dimensionScene: { onExpressionMark() {} }, dimensionInput, drawCanvas: () => f.calls.push('content'), closeContextMenu: () => f.calls.push('close'), applySketchTreeWidth: () => f.calls.push('tree') };
-    workspace = display.createEditingWorkspace(composed ? workspaceOptions : { ...workspaceOptions,
+    const createWorkspace = options => composed === 'browser' ? display.createEditingWorkspaceForBrowser(options) : display.createEditingWorkspace(options);
+    const buildWorkspace = probe.wrapWorkspace ? options => probe.wrapWorkspace(createWorkspace, options, f.document) : createWorkspace;
+    workspace = buildWorkspace(composed ? workspaceOptions : { ...workspaceOptions,
       dimensionScene: { ...workspaceOptions.dimensionScene, currentLines: () => documentWorkspace.workspace.current().lines, minLineLength: 1e-6, canvasThemeColor: color, appearance: readServices.dimensionAppearance, sketches: seed.sketches },
       dimensionInput: { ...dimensionInput, pending }, ctx: f.ctx, readPixelRatio: () => f.browser.devicePixelRatio || 1, ResizeObserverClass: f.browser.ResizeObserver,
       withGeometryReadCache: readServices.reads.withGeometryReadCache, isValueInputPending: () => pending.current && ['distance-value','offset-value'].includes(pending.current.type),
@@ -1035,6 +1095,7 @@ function preparedWorkspaceFixture(composed, probe) {
     for (const name of ['currentScope','sketches','readServices','viewState','canvasThemeColor','applicationText']) delete common[name];
     const sceneOptions = { ...common, solveState: f.editing.solveState, analysis: { statusOf: () => state.status }, operandElement: operand => operand.element,
       instanceSources: { includesRef: () => false }, projection: { includes: () => false }, instances: { reference: null, sources: [] } };
+    probe.sceneOptions = sceneOptions;
     scene = workspace.createSceneForEditing(composed ? sceneOptions : { ...sceneOptions, currentScope: documentWorkspace.workspace.current, sketches: seed.sketches, readServices, interaction, targets, pending,
       readPanelSelection: () => presentation.selectedItem, viewState: controls.state, canvasThemeColor: color, applicationText: settings.applicationText });
     const placementOptions = { geometry: scene.geometry, annotations: { drawAnnotationLeader() {}, drawAnnotationText() {} }, hatchLayer: { drawResolvedHatch() {} }, blockPlacementCommand: {}, geometryInstanceCommand: {}, createBlockProjectionBundle() {} };
@@ -1058,6 +1119,37 @@ test('Canvas workspace preparation preserves staged construction and shares actu
   assert.equal(p.geometry.ctx, f.ctx); assert.equal(p.geometry.viewState, f.controls.state); assert.equal(p.targets.readMode, f.interaction.lifecycle.readMode);
   assert.equal(p.input.pending, f.pending); assert.equal(p.routing.canvasPoint, f.display.viewport.canvasPoint); assert.equal(p.routing.pointer, f.sessions.pointer); assert.equal(p.png.pendingCommandSession, f.pending); assert.equal(p.png.constraintTargetSession, f.targets);
   assert.equal(p.dimensions.appearance, f.readServices.dimensionAppearance); assert.equal(p.dimensions.canvasThemeColor, f.color);
+});
+
+test('Properties layout ports stay unpublished through native layout, dimensions and input construction', () => {
+  for (const failAt of [undefined, 'layout', 'dimensions', 'input']) {
+    let panel, workspace; const marker = new Error('workspace phase'), phases = [];
+    const unready = () => assert.throws(panel.setPropertiesPanelCollapsed, { name: 'ReferenceError', message: "Cannot access 'canvasWorkspaceLayout' before initialization" });
+    const build = () => preparedWorkspaceFixture(true, { failAt, marker,
+      wrapWorkspace(factory, options, document) { panel = sceneWindow.CanvasWorkspaceLayout.prepare({ document }); return workspace = panel.createWorkspace(factory, options); },
+      beforeCreate(name) { if (panel && ['layout', 'dimensions', 'input'].includes(name)) { phases.push(name); unready(); } },
+    });
+    if (failAt) { assert.throws(build, error => error === marker); unready(); }
+    else { const f = build(); assert.equal(workspace.layout, f.workspace.layout); assert.deepEqual(phases, ['layout', 'dimensions', 'input']); assert.equal(panel.setPropertiesPanelCollapsed(true), undefined); }
+  }
+});
+
+test('Canvas scene appearance defaults share the actual display configuration while explicit values and the raw API remain distinct', () => {
+  const f = preparedWorkspaceFixture(true), options = { ...f.probe.sceneOptions }, original = sceneWindow.GeometryDisplay;
+  delete options.constructionAlpha;
+  let actual, input;
+  sceneWindow.GeometryDisplay = { ...original, create(value) { input = value; return actual = original.create(value); } };
+  try {
+    f.state.ready = false; f.calls.length = 0; f.reads.length = 0;
+    const normal = f.workspace.createSceneWithAppearance(options);
+    assert.equal(normal.geometry, actual); assert.equal(input.constructionAlpha, .72); assert.equal(normal.geometry.constructionAlpha, .72);
+    for (const constructionAlpha of [0, .34, null, undefined]) {
+      const scene = f.workspace.createSceneWithAppearance({ ...options, constructionAlpha });
+      assert.equal(scene.geometry, actual); assert.equal(input.constructionAlpha, constructionAlpha); assert.equal(scene.geometry.constructionAlpha, constructionAlpha);
+    }
+    assert.equal(f.workspace.createSceneForEditing(options).geometry.constructionAlpha, undefined);
+    assert.deepEqual(f.calls, []); assert.deepEqual(f.reads, []);
+  } finally { sceneWindow.GeometryDisplay = original; }
 });
 
 test('Canvas workspace preparation preserves live scope, language, theme, DPR, pending resize and original zoom bounds', () => {
@@ -1254,4 +1346,196 @@ test('Workspace input Parameter default failure stops before creating the surfac
  const marker=new Error('Parameter defaults failed'),probe={configureOwners({documentWorkspace}){documentWorkspace.parameters={get evaluateEditingExpressionDraft(){throw marker;}};},configureInput(input){delete input.evaluateDimensionExpressionDraft;}};
  assert.throws(()=>preparedWorkspaceFixture(true,probe),error=>error===marker);
  assert.deepEqual(probe.order,['controls','viewport','navigation','zoom']);
+});
+
+test('prepared Canvas fit owns the completed scene, shares navigation and preserves live visible geometry, padding and errors', () => {
+  const f = preparedWorkspaceFixture(true, {
+    configureDisplay(options) { delete options.fitVisibleGeometry; },
+    afterDisplay(display) { assert.throws(() => display.fitVisibleGeometryToViewport(), /Cannot access 'drawingFit' before initialization/); },
+  });
+  assert.equal(f.probe.ports.navigation.fitVisibleGeometry, f.display.fitVisibleGeometryToViewport);
+  const { Point, Line } = sceneWindow.GeometrySolver;
+  const line = Object.assign(new Line('L1', new Point('P1', 0, 0), new Point('P2', 20, 10)), { sketchId: 'S1' });
+  f.sceneState.scope.lines.push(line);
+  const initial = { ...f.display.viewport.snapshot() };
+  for (const padding of [undefined, 0, 12, null]) {
+    f.display.viewport.update(initial); const expected = f.scene.fit.fitVisibleGeometryToViewport(padding);
+    const view = { ...f.display.viewport.snapshot() };
+    f.display.viewport.update(initial); assert.equal(f.display.fitVisibleGeometryToViewport(padding, 'ignored'), expected);
+    assert.deepEqual({ ...f.display.viewport.snapshot() }, view);
+  }
+  line.visible = false; assert.equal(f.display.fitVisibleGeometryToViewport(), false);
+  line.visible = true; f.sceneState.scope = { ...f.sceneState.scope, lines: [] };
+  assert.equal(f.probe.ports.navigation.fitVisibleGeometry(), false);
+  f.sceneState.scope.lines = [line]; const marker = new Error('bounds failed'), before = { ...f.display.viewport.snapshot() };
+  f.sceneState.failure = marker; assert.throws(() => f.display.fitVisibleGeometryToViewport(), error => error === marker);
+  assert.deepEqual({ ...f.display.viewport.snapshot() }, before); f.sceneState.failure = null;
+  assert.equal(f.display.fitVisibleGeometryToViewport(0), true); assert.equal(f.sceneState.scope.lines[0], line);
+});
+
+test('Canvas fit preserves explicit navigation callbacks and completed-scene publication after factory failure', () => {
+  const explicit = () => false;
+  for (const supplied of [explicit, null]) {
+    const f = preparedWorkspaceFixture(true, { configureDisplay(options) { options.fitVisibleGeometry = supplied; } });
+    assert.equal(f.probe.ports.navigation.fitVisibleGeometry, supplied);
+  }
+  const f = preparedWorkspaceFixture(true), other = preparedWorkspaceFixture(true);
+  const { Point, Line } = sceneWindow.GeometrySolver;
+  f.sceneState.scope.lines.push(Object.assign(new Line('L', new Point('P1', 0, 0), new Point('P2', 10, 10)), { sketchId: 'S1' }));
+  const raw = sceneWindow.GeometryDisplay, marker = new Error('scene construction failed');
+  sceneWindow.GeometryDisplay = { ...raw, create() { throw marker; } };
+  try { assert.throws(() => f.workspace.createSceneForEditing(f.probe.sceneOptions), error => error === marker); }
+  finally { sceneWindow.GeometryDisplay = raw; }
+  assert.equal(f.display.fitVisibleGeometryToViewport(0), true);
+  assert.equal(other.display.fitVisibleGeometryToViewport(0), false);
+});
+
+test('owned dimension preview uses the actual preview with live Pending, expression evaluation and fillet presentation', () => {
+  const f = preparedWorkspaceFixture(true, { configureOwners({ documentWorkspace }) {
+    documentWorkspace.parameters = { evaluateEditingExpressionDraft: (_constraint, text) => Number(text) };
+  } }), paints = [], fillets = [], raw = sceneWindow.DimensionPreview;
+  assert.throws(() => f.workspace.drawDimensionPreview(), /Cannot access 'dimensionPreview' before initialization/);
+  let actual;
+  sceneWindow.DimensionPreview = { ...raw, create(options) { return actual = raw.create({ ...options, drawDimension: (...args) => paints.push(args) }); } };
+  try { assert.equal(f.workspace.createDimensionPreview({ drawFilletPreviewArc: value => fillets.push(value) }), actual); }
+  finally { sceneWindow.DimensionPreview = raw; }
+  assert.deepEqual(paints, []); f.workspace.drawDimensionPreview(); assert.deepEqual(paints, []);
+  const target = { kind: 'radius', value: 10 }, dimension = { offset: 4 };
+  f.pending.replace({ type: 'distance-value', target, dimension, buffer: '12', editing: false });
+  f.workspace.drawDimensionPreview(); assert.equal(paints[0][0], target); assert.equal(paints[0][1], dimension); assert.equal(paints[0][2], '12|');
+  f.pending.current.buffer = '-1'; f.workspace.drawDimensionPreview(); assert.equal(paints.at(-1)[5].invalid, true);
+  const geometry = { ok: true, radius: 5, center: { x: 0, y: 0 }, startAngle: 0, endAngle: 1 };
+  f.pending.replace({ type: 'fillet-radius-place', preview: geometry }); f.workspace.drawDimensionPreview();
+  assert.equal(fillets[0], geometry); assert.equal(paints.at(-1)[2], 'R5');
+  f.pending.clear(); const count = paints.length; f.workspace.drawDimensionPreview(); assert.equal(paints.length, count);
+});
+
+test('dimension preview publication retains the actual receiver, zero arguments, return and errors and isolates workspaces', () => {
+  const f = preparedWorkspaceFixture(true), other = preparedWorkspaceFixture(true), raw = sceneWindow.DimensionPreview;
+  const value = {}, marker = new Error('preview failed'); let fail = false;
+  const actual = { draw() { assert.equal(this, actual); assert.equal(arguments.length, 0); if (fail) throw marker; return value; } };
+  sceneWindow.DimensionPreview = { ...raw, create: () => actual };
+  try {
+    assert.equal(f.workspace.createDimensionPreview({ drawFilletPreviewArc() {} }), actual);
+    assert.equal(f.workspace.drawDimensionPreview('ignored'), value);
+    fail = true; assert.throws(() => f.workspace.drawDimensionPreview(), error => error === marker);
+    sceneWindow.DimensionPreview.create = () => { throw marker; };
+    assert.throws(() => f.workspace.createDimensionPreview({ drawFilletPreviewArc() {} }), error => error === marker);
+    fail = false; assert.equal(f.workspace.drawDimensionPreview(), value);
+    assert.throws(() => other.workspace.drawDimensionPreview(), /before initialization/);
+  } finally { sceneWindow.DimensionPreview = raw; }
+});
+
+test('browser Workspace dimension focus uses the live frame API after construction and retains deferred sync, input identity and failures', () => {
+  const frames=[],events=[],classes=new Set(),marker=new Error('dimension frame');let reads=0,failure;
+  const input={hidden:true,value:'',style:{setProperty(){}},classList:{contains:name=>classes.has(name),remove:name=>classes.delete(name),toggle:(name,on)=>on?classes.add(name):classes.delete(name)},addEventListener(){},focus(){events.push('focus');},select(){events.push('select');}};
+  const shell={hidden:true,style:{setProperty(){}}};
+  const f=preparedWorkspaceFixture('browser',{
+    configureOwners({f}){
+      const get=f.document.getElementById;f.document.getElementById=function(id){if(id==='dimensionValueInput')return input;if(id==='dimensionValueInputShell')return shell;return get.call(this,id);};
+      Object.defineProperty(f.browser,'requestAnimationFrame',{get(){assert.equal(f.state.ready,true);reads++;if(failure)throw failure;return function(callback){'use strict';assert.equal(this,undefined);assert.equal(arguments.length,1);frames.push(callback);return 0;};}});
+    },configureInput(options){delete options.scheduleFrame;}
+  });
+  assert.equal(reads,0);assert.deepEqual(events,[]);assert.equal(f.workspace.dimensions.element,input);
+  const schedule=f.probe.ports.input.scheduleFrame;assert.equal(schedule.name,'scheduleFrame');assert.equal(schedule.length,1);
+  const g=sceneWindow.GeometrySolver,target={kind:'point-point',p1:new g.Point('A',0,0),p2:new g.Point('B',100,0),value:100};
+  const dimension=f.workspace.dimensions.display.placement.dimensionFromAnchor(target,{x:50,y:20}),pending={type:'distance-value',target,dimension,buffer:'11'};
+  f.pending.replace(pending);assert.equal(f.workspace.dimensions.input.controller.focus(),undefined);assert.equal(reads,1);assert.equal(frames.length,1);assert.equal(input.hidden,true);
+  pending.buffer='12';f.display.viewport.update({scale:4,x:25,y:30});frames.shift()();assert.equal(input.value,'12');assert.equal(input.hidden,false);assert.deepEqual(events,['focus','select']);
+  const before=input.value;failure=marker;assert.throws(()=>f.workspace.dimensions.input.controller.focus(),error=>error===marker);assert.equal(input.value,before);assert.equal(f.pending.current,pending);
+  failure=null;const callback=()=>{};assert.equal(schedule(callback),0);assert.equal(frames.shift(),callback);assert.equal(reads,3);
+});
+
+test('browser Workspace dimension frame defaults preserve explicit undefined or null callbacks without reading browser APIs', () => {
+  for(const supplied of [undefined,null]){
+    const f=preparedWorkspaceFixture('browser',{
+      configureOwners({f}){Object.defineProperty(f.browser,'requestAnimationFrame',{get(){assert.fail('explicit callback bypasses browser API');}});},
+      configureInput(input){input.scheduleFrame=supplied;}
+    });
+    assert.equal(f.probe.ports.input.scheduleFrame,supplied);assert.throws(()=>f.workspace.dimensions.input.controller.focus(),error=>error.name==='TypeError');
+  }
+});
+
+
+test('browser display scale uses the canonical CSS millimeter baseline with native zoom, empty fit, DPR and export restoration', () => {
+  const scale = sceneWindow.Appearance.CSS_PX_PER_MM, results = [];
+  for (const browser of [false,true]) {
+    const f=preparedWorkspaceFixture(browser?'scale':true,{configureDisplay(options){if(browser)delete options.initialScale;else options.initialScale=scale;}});
+    assert.equal(f.display.viewport,f.probe.results.viewport);assert.equal(f.display.viewport.scale,scale);
+    assert.equal(f.probe.ports.viewport.minZoom,scale*.001);assert.equal(f.probe.ports.viewport.maxZoom,scale*10000000);
+    assert.equal(f.display.viewport.formatZoom(scale),'100%');assert.equal(f.display.viewport.clampZoom(0),scale*.001);
+    assert.equal(f.display.viewport.clampZoom(Infinity),scale*10000000);
+    assert.equal(f.display.navigation.setScale(scale*2),true);assert.equal(f.display.viewport.formatZoom(f.display.viewport.scale),'200%');
+    f.scene.fit.resetEmptyViewport();assert.equal(f.display.viewport.scale,scale);
+    f.workspace.surface.syncCanvasBitmapSize();const bitmap=[f.canvas.width,f.canvas.height];assert.ok(bitmap[0]>0);
+    const before=f.display.viewport.snapshot();f.workspace.exportRenderer.render({x:2,y:3,width:10,height:20},{x:8,y:12});
+    assert.notEqual(f.workspace.exportRenderer.frame,null);f.workspace.exportRenderer.restore();assert.deepEqual(f.display.viewport.snapshot(),before);
+    assert.deepEqual([f.canvas.width,f.canvas.height],bitmap);assert.equal(f.display.viewport.scale,scale);
+    results.push(JSON.stringify({snapshot:before,bitmap,order:f.probe.order,reads:f.reads,calls:f.calls}));
+  }
+  assert.equal(results[1],results[0]);
+});
+
+test('browser display scale preserves explicit values including undefined and null and leaves raw missing scale unchanged', () => {
+  for(const scale of [0,1,7.5,null,undefined]){
+    const f=preparedWorkspaceFixture('scale',{configureDisplay(options){options.initialScale=scale;}});
+    assert.equal(f.display.viewport.scale,scale);assert.equal(f.probe.ports.viewport.initialScale,scale);
+    assert.equal(f.probe.ports.viewport.minZoom,scale*.001);assert.equal(f.probe.ports.viewport.maxZoom,scale*10000000);
+  }
+  const f=preparedWorkspaceFixture(true,{configureDisplay(options){delete options.initialScale;}});assert.equal(f.display.viewport.scale,undefined);
+});
+
+test('browser display construction preserves native failure identity and partial publication order', () => {
+  for(const failAt of ['viewport','navigation','zoom','surface','layout','dimensions','input']){
+    const marker=new Error(failAt),raw={failAt,marker},browser={failAt,marker};
+    for(const [mode,probe]of [[true,raw],['scale',browser]])assert.throws(()=>preparedWorkspaceFixture(mode,probe),error=>error===marker);
+    assert.deepEqual(browser.order,raw.order);assert.deepEqual(browser.calls,raw.calls);
+  }
+});
+
+test('owned Canvas traversal uses the native Parameter namespace expression policy and keeps explicit overrides', () => {
+  const f = dimensionTraversalFixture(true), w = sceneWindow;
+  const namespace = w.ParameterNamespace.create({ currentParameterNamespace: () => f.state.scope, applicationText: (_ja, en) => en });
+  f.documentWorkspace.parameters = namespace;
+  const input = { currentScope: f.probe.ports.currentScope, readDraggedDimension: f.probe.ports.readDraggedDimension };
+  const explicit = f.workspace.dimensions.display.createTraversal({ ...f.probe.ports, dimensionUsesExpression: namespace.dimensionUsesExpression });
+  const owned = f.workspace.createDimensionTraversal(input);
+  f.active.expression = 'span'; f.inactive.expression = '12';
+  const paint = traversal => { f.probe.draws.length = 0; traversal.layer.draw(); return f.probe.draws.map(args => [args[2], args[8]]); };
+  assert.deepEqual(paint(owned), paint(explicit)); assert.deepEqual(paint(owned), [['inactive', false], ['active', true]]);
+  f.active.expression = '18'; assert.deepEqual(paint(owned), [['inactive', false], ['active', false]]);
+  f.state.scope = { constraints: [f.active] }; f.active.expression = '2 * span';
+  assert.deepEqual(paint(owned), paint(explicit)); assert.deepEqual(paint(owned), [['active', true]]);
+  const marker = new Error('unused Parameter owner');
+  Object.defineProperty(f.documentWorkspace, 'parameters', { get() { throw marker; } });
+  for (const inherited of [false, true]) for (const value of [null, undefined, () => false]) {
+    const options = inherited ? Object.assign(Object.create({ dimensionUsesExpression: value }), input) : { ...input, dimensionUsesExpression: value };
+    const traversal = f.workspace.createDimensionTraversal(options);
+    if (value == null) assert.throws(() => traversal.layer.draw(), error => error.name === 'TypeError');
+    else assert.deepEqual(paint(traversal), [['active', false]]);
+  }
+});
+
+test('owned placement preview captures the projection function without drawing early and preserves override copy rules', () => {
+  const f = preparedWorkspaceFixture(true), calls = [], instance = {}, definition = {}, pointer = { x: 1, y: 2 };
+  const bundle = { lines: [], circles: [], arcs: [], points: [] }, marker = new Error('projection failure'); let gets = 0, failure;
+  const project = function(a, b) { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 2); assert.equal(a, instance); assert.equal(b, definition); calls.push('project'); if (failure) throw failure; return bundle; };
+  f.readServices.projections = {};
+  Object.defineProperty(f.readServices.projections, 'createBlockProjectionBundle', { configurable: true, get() { gets++; return project; } });
+  const input = { geometry: f.scene.geometry, annotations: { drawAnnotationLeader() {}, drawAnnotationText() {} }, hatchLayer: { drawResolvedHatch() {} },
+    blockPlacementCommand: { definitionId: 'B1', preview(value) { assert.equal(this, input.blockPlacementCommand); assert.equal(value, pointer); return { instance, definition }; } }, geometryInstanceCommand: { preview: () => null } };
+  const owned = f.workspace.createPlacementPreview(input); assert.equal(gets, 1); assert.deepEqual(calls, []);
+  const explicit = f.workspace.createPlacementPreview({ ...input, createBlockProjectionBundle: project }); assert.equal(gets, 1);
+  f.sceneState.mode = 'block-place'; f.sessions.preview.pointer = pointer;
+  owned.drawBlockPlacementPreview(); explicit.drawBlockPlacementPreview(); assert.deepEqual(calls, ['project', 'project']); assert.equal(gets, 1);
+  failure = marker; assert.throws(() => owned.drawBlockPlacementPreview(), error => error === marker); failure = null;
+  Object.defineProperty(f.readServices.projections, 'createBlockProjectionBundle', { get() { throw marker; } });
+  for (const value of [null, undefined]) {
+    const layer = f.workspace.createPlacementPreview({ ...input, createBlockProjectionBundle: value });
+    assert.throws(() => layer.drawBlockPlacementPreview(), error => error.name === 'TypeError');
+  }
+  const inherited = Object.assign(Object.create({ createBlockProjectionBundle: project }), input);
+  const layer = f.workspace.createPlacementPreview(inherited);
+  assert.throws(() => layer.drawBlockPlacementPreview(), error => error.name === 'TypeError');
+  owned.drawBlockPlacementPreview(); assert.equal(gets, 1);
 });

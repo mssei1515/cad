@@ -7,6 +7,61 @@ const playwrightRoot = path.dirname(require.resolve('playwright/package.json'));
 // Development-only parser already installed with Playwright. Fail explicitly if its bundle changes.
 const babel = require(path.join(playwrightRoot, 'lib/transform/babelBundle.js'));
 
+// Follow lexical factory aliases, not function bodies or the runtime ownership of their results.
+function constructionOrigins(root, statements, nodes, source) {
+  function propertyPath(pattern, identifier) {
+    if (pattern === identifier) return [];
+    if (pattern.type !== 'ObjectPattern') return null;
+    for (const property of pattern.properties) {
+      if (property.type !== 'ObjectProperty' || property.computed || property.key.type !== 'Identifier') continue;
+      const nested = propertyPath(property.value, identifier);
+      if (nested) return [property.key.name, ...nested];
+    }
+    return null;
+  }
+  function trace(node, seen = new Set()) {
+    if (!node) return null;
+    if (node.type === 'Identifier') {
+      if (seen.has(node.name)) return null;
+      const binding = root.scope.getBinding(node.name);
+      if (!binding || binding.scope !== root.scope || binding.kind !== 'const' || !binding.constant
+        || !binding.path.isVariableDeclarator()) return null;
+      const next = new Set(seen); next.add(node.name);
+      const path = propertyPath(binding.path.node.id, binding.identifier);
+      if (!path) return null;
+      const origin = trace(binding.path.node.init, next);
+      return origin && { namespace: origin.namespace, path: [...origin.path, ...path] };
+    }
+    if (node.type === 'MemberExpression' && !node.computed && node.property.type === 'Identifier') {
+      if (node.object.type === 'Identifier' && node.object.name === 'window' && !root.scope.getBinding('window')) {
+        return { namespace: 'window.' + node.property.name, path: [] };
+      }
+      const origin = trace(node.object, seen);
+      return origin && { namespace: origin.namespace, path: [...origin.path, node.property.name] };
+    }
+    if (node.type === 'CallExpression' || node.type === 'NewExpression') {
+      const origin = trace(node.callee, seen);
+      if (!origin) return null;
+      const path = [...origin.path], marker = node.type === 'NewExpression' ? ' new()' : '()';
+      if (path.length) path[path.length - 1] += marker;
+      else path.push(marker.trim());
+      return { namespace: origin.namespace, path };
+    }
+    return null;
+  }
+  const result = [];
+  statements.forEach((statement, index) => {
+    if (statement.type !== 'VariableDeclaration') return;
+    for (const declaration of statement.declarations) {
+      if (!['CallExpression', 'NewExpression'].includes(declaration.init?.type)) continue;
+      result.push({ statement: nodes[index].id, kind: declaration.init.type,
+        callee: source.slice(declaration.init.callee.start, declaration.init.callee.end),
+        origin: trace(declaration.init.callee) });
+    }
+  });
+  return result;
+}
+
 function components(nodes, edges) {
   const graph = new Map(nodes.map(node => [node.id, []]));
   for (const edge of edges) graph.get(edge.from).push(edge.to);
@@ -41,7 +96,7 @@ function auditSource(input) {
   const callName = node => node?.type === 'CallExpression' ? text(node.callee) : null;
   function category(node) {
     if (node.type === 'FunctionDeclaration') {
-      if (node.id.name === 'installTestHooks') return 'testHooks';
+      if (['installTestHooks', 'createTestApi'].includes(node.id.name)) return 'testHooks';
       const body = node.body.body;
       return body.length === 1 && (body[0].type === 'ReturnStatement' && body[0].argument?.type === 'CallExpression'
         || body[0].type === 'ExpressionStatement' && body[0].expression.type === 'CallExpression') ? 'delegates' : 'otherFunctions';
@@ -112,7 +167,7 @@ function auditSource(input) {
     limits: 'Syntactic references only; writes are listed separately. Calls can execute callbacks immediately. SCCs are not module boundaries or a runtime-order proof.',
     summary: { statements: nodes.length, bindings: bindings.size, categories, outsideStatements, freeIdentifiers: [...free].sort(),
       cyclesIncludingDeferred: components(nodes, dependencies), cyclesImmediateSyntax: components(nodes, dependencies.filter(edge => edge.phase === 'immediateSyntax')) },
-    statements: nodes, dependencies };
+    statements: nodes, dependencies, constructionOrigins: constructionOrigins(root, statements, nodes, source) };
 }
 
 if (require.main === module) {

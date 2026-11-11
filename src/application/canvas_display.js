@@ -218,8 +218,14 @@
     const controls = window.CanvasViewControls.create({ document, window: browserWindow, setHint, draw });
     function canvasThemeColor(value) { return window.CanvasThemeColors.color(value, settings.theme); }
     function createForEditing({ initialScale, minLength, fitVisibleGeometry, flushPointerMoves, syncDimensionValueInput }) {
+      let completedScene = null;
+      function fitVisibleGeometryToViewport(paddingPx = 96) {
+        if (completedScene === null) throw new ReferenceError("Cannot access 'drawingFit' before initialization");
+        return completedScene.fit.fitVisibleGeometryToViewport(paddingPx);
+      }
       const display = create({ canvas, document, initialScale, minZoom: initialScale * 0.001, maxZoom: initialScale * 10000000,
-        minLength, draw, setHint, fitVisibleGeometry, flushPointerMoves, syncDimensionValueInput });
+        minLength, draw, setHint, fitVisibleGeometry: fitVisibleGeometry === undefined ? fitVisibleGeometryToViewport : fitVisibleGeometry,
+        flushPointerMoves, syncDimensionValueInput });
       function createEditingWorkspace({ dimensionScene, dimensionInput, ...options }) {
         const displayWorkspace = display.createEditingWorkspace({ ...options,
           dimensionScene: { ...dimensionScene, currentLines: () => workspace.current().lines, minLineLength: minLength,
@@ -231,10 +237,19 @@
           window: browserWindow, updatePropertiesUI, applicationText, readLanguage: () => settings.language,
         });
         function createSceneForEditing(options) {
-          return displayWorkspace.createSceneForEditing({ ...options, currentScope: workspace.current, sketches, readServices, interaction,
+          const scene = displayWorkspace.createSceneForEditing({ constructionExtensionScreenPx: 12, ...options, currentScope: workspace.current, sketches, readServices, interaction,
             targets, pending, readPanelSelection: () => presentation.selectedItem, viewState: controls.state, canvasThemeColor, applicationText });
+          completedScene = scene;
+          return scene;
         }
-        function createPlacementPreview(options) { return displayWorkspace.createPlacementPreview({ ...options, readServices, interaction, sessions }); }
+        function createSceneWithAppearance(options) {
+          return createSceneForEditing({ constructionAlpha: 0.72, ...options });
+        }
+        function createPlacementPreview(options) {
+          const defaults = {};
+          if (!("createBlockProjectionBundle" in options)) defaults.createBlockProjectionBundle = readServices.projections.createBlockProjectionBundle;
+          return displayWorkspace.createPlacementPreview({ ...defaults, ...options, readServices, interaction, sessions });
+        }
         function createInputBinding(options) {
           return displayWorkspace.createInputBinding({ ...options, pointer: sessions.pointer, readCommandPanel: presentation.readCommandPanel,
             profileCommit: work => profilePhase("commit", work) });
@@ -242,7 +257,9 @@
         function createPngExport(options) {
           return displayWorkspace.createPngExport({ ...options, drawOperationLifecycle: interaction.lifecycle, pendingCommandSession: pending, constraintTargetSession: targets });
         }
-        function createDimensionTraversal({ currentScope, readDraggedDimension, dimensionUsesExpression }) {
+        function createDimensionTraversal(options) {
+          const { currentScope, readDraggedDimension, dimensionUsesExpression: suppliedUsesExpression } = options;
+          const dimensionUsesExpression = "dimensionUsesExpression" in options ? suppliedUsesExpression : documentWorkspace.parameters.dimensionUsesExpression;
           const { isActiveSketchConstraint, constraintSketchId } = sketches;
           const { isVisibleSketchId, isVisibleValue } = readServices.geometryAppearance;
           return displayWorkspace.dimensions.display.createTraversal({ currentScope, isActiveSketchConstraint, isVisibleSketchId,
@@ -252,15 +269,57 @@
             readConstraintStatus: () => controls.state.constraintStatus, inactiveColor: window.GeometryPresentation.INACTIVE_CONSTRAINT_STATUS_COLOR,
             dimensionLabelForConstraint: displayWorkspace.dimensions.labels.label, dimensionUsesExpression });
         }
-        function createDimensionPreview({ drawFilletPreviewArc }) {
-          return displayWorkspace.dimensions.display.createPreview({ readPending: () => pending.current, drawFilletPreviewArc,
-            evaluateDimensionExpressionDraft: documentWorkspace.parameters?.evaluateEditingExpressionDraft });
+        let dimensionPreview = null;
+        function drawDimensionPreview() {
+          if (dimensionPreview === null) throw new ReferenceError("Cannot access 'dimensionPreview' before initialization");
+          return dimensionPreview.draw();
         }
-        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview });
+        function createDimensionPreview({ drawFilletPreviewArc }) {
+          const preview = displayWorkspace.dimensions.display.createPreview({ readPending: () => pending.current, drawFilletPreviewArc,
+            evaluateDimensionExpressionDraft: documentWorkspace.parameters?.evaluateEditingExpressionDraft });
+          dimensionPreview = preview;
+          return preview;
+        }
+        return Object.freeze({ ...displayWorkspace, createSceneForEditing, createSceneWithAppearance, createPlacementPreview, createInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview });
       }
-      return Object.freeze({ ...display, createEditingWorkspace });
+      function createEditingWorkspaceForBrowser({ dimensionInput, ...options }) {
+        const scheduleFrame = callback => {
+          const { requestAnimationFrame } = browserWindow;
+          return requestAnimationFrame(callback);
+        };
+        return createEditingWorkspace({ ...options, dimensionInput: { scheduleFrame, ...dimensionInput } });
+      }
+      return Object.freeze({ ...display, createEditingWorkspace, createEditingWorkspaceForBrowser, fitVisibleGeometryToViewport });
     }
-    return Object.freeze({ controls, canvasThemeColor, createForEditing });
+    function createForBrowser(options) {
+      const defaults = Object.hasOwn(options, "initialScale") ? {} : { initialScale: window.Appearance.CSS_PX_PER_MM };
+      return createForEditing({ ...defaults, ...options });
+    }
+    return Object.freeze({ controls, canvasThemeColor, createForEditing, createForBrowser });
   }
-  window.CanvasDisplay = Object.freeze({ prepareForWorkspace, create, createRendering });
+  function prepareRendering() {
+    let completed;
+    function drawCanvas() {
+      if (completed === undefined) throw new ReferenceError("Cannot access 'canvasFrameRenderer' before initialization");
+      return completed.value.draw();
+    }
+    function createFrame(factory, ...options) {
+      const frame = factory(...options);
+      const renderer = frame.frame;
+      completed = { value: renderer };
+      return frame;
+    }
+    function prepareHatchFrame(scene, options) {
+      const { createHatchRendering } = scene;
+      const { layer, prepareFrame: prepare } = createHatchRendering(options);
+      function prepareFrame() {
+        const { stack, createFrame: build } = prepare();
+        function createFrameForDisplay(options) { return createFrame(build, options); }
+        return Object.freeze({ stack, createFrame: createFrameForDisplay });
+      }
+      return Object.freeze({ layer, prepareFrame });
+    }
+    return Object.freeze({ drawCanvas, createFrame, prepareHatchFrame });
+  }
+  window.CanvasDisplay = Object.freeze({ prepareForWorkspace, create, createRendering, prepareRendering });
 })();

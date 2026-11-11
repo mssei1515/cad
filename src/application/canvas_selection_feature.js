@@ -9,13 +9,13 @@
   function create({ sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
     return assemble({ ...createOwners(), sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw });
   }
-  function createEditing({ sketches, isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview,
-    clearSelection, updateGeometrySelectionUI, draw }) {
+  function createEditingFeature({ sketches, isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview,
+    clearSelection, updateGeometrySelectionUI, draw }, ownsClearing) {
     const { selection, scope } = createOwners();
     const access = window.SketchCommand.createEditAccess({ activeSketchId: sketches.activeSketchId, canEditSketch: sketches.canEditSketch,
       sketchById: sketches.sketchById, selectionItems: scope.selectionItems, elementSketchId: sketches.elementSketchId,
       isGeometryMode, setHint, applicationText, clearSnap, clearPointerPreview, draw });
-    const feature = assemble({ selection, scope, sketches, guardSketchEdit: access.guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw });
+    const feature = assemble({ selection, scope, sketches, guardSketchEdit: access.guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }, ownsClearing);
     function createDrawingOrder({ editingScope, ordinarySelectionMode, updateUI, recordHistory }) {
       return window.DrawingOrderCommand.create({ currentScope: () => editingScope.current, canvasSelection: selection,
         activeSketchId: sketches.activeSketchId, selectionSketchId: scope.selectionSketchId, ordinarySelectionMode,
@@ -23,10 +23,18 @@
     }
     return Object.freeze({ ...feature, access, createDrawingOrder });
   }
-  function assemble({ selection, scope, sketches, guardSketchEdit, clearSelection, updateGeometrySelectionUI, draw }) {
+  function createEditing(options) { return createEditingFeature(options, false); }
+  function createEditingWithOwnedClearing(options) { return createEditingFeature(options, true); }
+  function assemble({ selection, scope, sketches, guardSketchEdit, clearSelection: suppliedClearSelection, updateGeometrySelectionUI, draw }, ownsClearing = false) {
+    let completedClearing;
+    function clearSelection() {
+      if (completedClearing === undefined) throw new ReferenceError("Cannot access 'selectionClearing' before initialization");
+      return completedClearing.value.clear();
+    }
+    const clear = ownsClearing ? clearSelection : suppliedClearSelection;
     const identity = window.CanvasSelectionInteraction.createIdentitySelection({
       canvasSelection: selection, selectionSketchId: (...args) => scope.selectionSketchId(...args),
-      clearSelection, updateGeometrySelectionUI, draw, sketchById: sketches.sketchById, guardSketchEdit,
+      clearSelection: clear, updateGeometrySelectionUI, draw, sketchById: sketches.sketchById, guardSketchEdit,
     });
     function createConstraintOperands({ targets, pointer, solver, acceptError }) {
       const candidates = window.ConstraintCandidates.create({ sameSketchElements: sketches.sameSketchElements,
@@ -56,9 +64,13 @@
       const documentReset = window.CanvasSelectionInteraction.createDocumentReset({
         canvasSelection: selection, canvasHover: hover, selectionHighlight: highlight, clearPointer: pointer.clearLastPointer, clearSnap,
       });
-      return Object.freeze({ highlight, clearing, documentReset });
+      const result = Object.freeze({ highlight, clearing, documentReset });
+      if (ownsClearing) completedClearing = { value: result.clearing };
+      return result;
     }
-    return Object.freeze({ selection, scope, identity, createConstraintOperands, createPresentation });
+    const feature = { selection, scope, identity, createConstraintOperands, createPresentation };
+    if (ownsClearing) feature.clearSelection = clearSelection;
+    return Object.freeze(feature);
   }
-  window.CanvasSelectionFeature = Object.freeze({ create, createEditing });
+  window.CanvasSelectionFeature = Object.freeze({ create, createEditing, createEditingWithOwnedClearing });
 })();

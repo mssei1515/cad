@@ -30,6 +30,7 @@
       geometryDisplayColor: presentation.geometryDisplayColor, geometryStrokeWidth: presentation.geometryStrokeWidth,
       traceSplinePath: renderer.traceSplinePath, drawLines: layer.drawLines, drawCircles: layer.drawCircles,
       drawArcs: layer.drawArcs, drawSplines: layer.drawSplines, drawPoints, drawArcEndpointHandles, drawSplineEditHandles, drawBlockInstanceHandles,
+      constructionAlpha,
     });
   }
   window.GeometryDisplay = Object.freeze({ create });
