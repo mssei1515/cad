@@ -65,3 +65,11 @@ test('construction origins respect a shadowed window and report each constructor
   assert.deepEqual(result.constructionOrigins.map(item => item.statement), [1, 1]);
   assert.deepEqual(result.constructionOrigins.map(item => item.origin.namespace), ['window.A', 'window.B']);
 });
+
+
+test('composition audit retains the test-hooks category for construction-only API factories and the legacy installer', () => {
+  for(const name of ['installTestHooks','createTestApi']){
+    const result=auditSource('(function(){\nfunction '+name+'(){\nreturn window.Test.create();\n}\n})();');
+    assert.equal(result.summary.categories.testHooks.statements,1);assert.equal(result.summary.categories.testHooks.nonblank,3);assert.equal(result.summary.categories.construction,undefined);
+  }
+});

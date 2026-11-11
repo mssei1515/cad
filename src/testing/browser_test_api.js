@@ -128,5 +128,9 @@
       blocks,
     });
   }
-  window.BrowserTestApi = Object.freeze({ create, createWithProperties, createFromSupportRecords });
+  function installForBrowser(browserWindow, createApi) {
+    if (!new browserWindow.URLSearchParams(browserWindow.location.search).has("test")) return;
+    browserWindow.__jot2dTest = createApi();
+  }
+  window.BrowserTestApi = Object.freeze({ create, createWithProperties, createFromSupportRecords, installForBrowser });
 })();
