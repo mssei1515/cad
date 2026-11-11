@@ -234,16 +234,16 @@
   const { scopeQuery: solveScopeQuery, analysis: constraintAnalysis, redundancy: constraintRedundancy, createSolving } = createSolveContext({
     annotationDrag: constrainedAnnotationDrag, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
-  const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace } = createCanvasDisplay({
+  const { viewport, navigation: canvasNavigation, createEditingWorkspace: createCanvasWorkspace, fitVisibleGeometryToViewport } = createCanvasDisplay({
     initialScale: CSS_PX_PER_MM, minLength: MIN_LINE_LENGTH,
-    fitVisibleGeometry: fitVisibleGeometryToViewport, flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
+    flushPointerMoves: pointerMoveScheduler.flush, syncDimensionValueInput: () => syncDimensionValueInput(),
   });
   const { transient: transientAuthoring, createCheckpoint: createEditingCheckpoint, geometryCheckpoint: authoringCheckpoint } = window.GeometryMutationFeature.prepareForWorkspace({
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction,
     history: historyFeature, analysis: constraintAnalysis, updateHistoryButtons,
   });
   const { surface: canvasSurface, exportRenderer: pngRendering, layout: canvasWorkspaceLayout, createSceneForEditing: createCanvasScene, createPlacementPreview,
-    createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, dragPointer,
+    createInputBinding: createCanvasInputBinding, createPngExport, createDimensionTraversal, createDimensionPreview, drawDimensionPreview, dragPointer,
     dimensions: { display: dimensionDisplay, labels: { label: dimensionLabelForConstraint }, input: dimensionInput, element: dimensionValueInput } } = createCanvasWorkspace({
     dimensionScene: { onExpressionMark: canvasRenderProbe.captureExpressionMark },
     dimensionInput: { syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
@@ -264,7 +264,6 @@
     editingQueries: { ...geometryDragPreparation.queries, editedSpline: () => splineEditing.current?.spline },
     annotationBounds,
   });
-  function fitVisibleGeometryToViewport(paddingPx = 96) { return drawingFit.fitVisibleGeometryToViewport(paddingPx); }
   const dimensionValueEditing = window.ConstraintEditing.prepareDimensionValues({
     workspace, sketches: sketchContext, bounds: drawingBounds, minimumLineLength: MIN_LINE_LENGTH,
   });
@@ -711,8 +710,7 @@
     constrained: constrainedAnnotationDrag, pointer: dragPointer,
   });
 
-  const dimensionPreview = createDimensionPreview({ drawFilletPreviewArc });
-  function drawDimensionPreview() { return dimensionPreview.draw(); }
+  createDimensionPreview({ drawFilletPreviewArc });
 
 
 

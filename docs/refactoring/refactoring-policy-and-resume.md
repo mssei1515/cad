@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のParameter編集組立て単位ではapp.jsは1,282行、非空白837行。AST監査ではroot252文・425束縛、構築・接続471非空白行、別名・設定99行、委譲16行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11のCanvas描画操作owner統合単位ではapp.jsは1,280行、非空白835行。AST監査ではroot250文・424束縛、構築・接続470非空白行、別名・設定99行、委譲14行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,20 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：表示fitと寸法preview描画を実CanvasDisplay生成ownerへ集約（2026-11-11）
+
+CanvasDisplay.prepareForWorkspaceから生成したDisplayは、createSceneForEditingが成功した実sceneを保持し、同じfitのfitVisibleGeometryToViewportを安定した操作入口として公開する。NavigationのfitVisibleGeometryがundefinedの場合はこの入口へ接続し、明示callbackとnullは従来どおりそのまま渡す。fitは同じmember receiverで一引数、padding既定96、返値・元例外・余剰引数の破棄を維持する。未生成時は旧drawingFitの初期化前ReferenceErrorとし、scene factory失敗で完成済みsceneを置き換えない。Bounds／viewport／visibility／現在scopeの読取りや幾何計算は従来の実fitが担当する。
+
+同じDisplayのEditingWorkspaceは、createDimensionPreviewが成功した実previewを保持し、drawDimensionPreviewを公開する。実previewのdrawをmember receiverで零引数呼び、返値と元例外を維持する。未生成時は旧dimensionPreviewの初期化前ReferenceErrorを維持し、factory失敗では完成済みpreviewを残す。Pending・式評価・fillet描画は同じ実DimensionPreviewを使用する。実scene／previewの生成位置と、生factoryの返す実recordの同一性、公開後のbind／start順、描画・exportの順序は維持する。
+
+これは実factoryと呼出し口を同じ既存ownerへ集める変更であり、setter-only holderや新しいmodel・Selection・scope・Pending・cacheは追加しない。原CanvasDisplay.create／createRendering、Navigation、Viewport、DimensionDisplay／DimensionPreviewの計算と描画アルゴリズムは変更しない。既存UIと保存形式v26も維持する。
+
+app.jsは1,282→1,280行（2行減）、非空白837→835行。root252→250文・425→424束縛、構文依存辺1,105→1,101。委譲16→14行、構築471→470行、その他call37→38行、別名／設定99行・test hooks162行は不変。減行自体ではなく二つの描画操作の所有を実生成ownerへ移す単位であり、200〜500行の目標は未完了。
+
+新規四テストではnative fitによる表示対象・現在scope・padding・viewport結果・例外、Navigationの既定／明示callback／null、失敗時の完成scene保持、native DimensionPreviewのPending／式評価／fillet、drawのreceiver・零引数・返値／元例外、preview生成失敗とworkspace独立性を確認する。新preview fixtureで欠けていた式評価依存を補って正常経路を検証した。既存期待値・閾値・timeoutは変更しない。
+
+構文639file・全単体2,499件・関連E2E447件（38file、8.2m、exit 0）が成功。709入力と開始HEAD不変、一覧447件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop fe4a275、作業branch codex/canvas-display-operations、週枠残量94%。描画関連56件、全単体2,499件、通常二経路／test一経路の起動が成功。五つのroot編集だけであること、原create／createRenderingとNavigation／Viewport／DimensionDisplay／DimensionPreviewの不変、free identifier集合不変をsourceとASTで照合した。関連38file・447件の成功と、709入力・開始HEAD不変を確認した。直前全体589件成功（develop 0bbe1e6、27.2分）と今回の関連検証を区別する。証跡はTEMP cad-canvas-display-operations-{focused,check,unit,smoke,e2e}.logとaudit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
 
 ### 最新：Parameter編集の削除guard・editor・適用処理を専用の組立てへ統合（2026-11-11）
 

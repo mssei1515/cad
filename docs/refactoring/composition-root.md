@@ -1,5 +1,19 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：表示fitと寸法preview描画を実CanvasDisplay生成ownerへ集約（2026-11-11）
+
+CanvasDisplay.prepareForWorkspaceから生成したDisplayは、createSceneForEditingが成功した実sceneを保持し、同じfitのfitVisibleGeometryToViewportを安定した操作入口として公開する。NavigationのfitVisibleGeometryがundefinedの場合はこの入口へ接続し、明示callbackとnullは従来どおりそのまま渡す。fitは同じmember receiverで一引数、padding既定96、返値・元例外・余剰引数の破棄を維持する。未生成時は旧drawingFitの初期化前ReferenceErrorとし、scene factory失敗で完成済みsceneを置き換えない。Bounds／viewport／visibility／現在scopeの読取りや幾何計算は従来の実fitが担当する。
+
+同じDisplayのEditingWorkspaceは、createDimensionPreviewが成功した実previewを保持し、drawDimensionPreviewを公開する。実previewのdrawをmember receiverで零引数呼び、返値と元例外を維持する。未生成時は旧dimensionPreviewの初期化前ReferenceErrorを維持し、factory失敗では完成済みpreviewを残す。Pending・式評価・fillet描画は同じ実DimensionPreviewを使用する。実scene／previewの生成位置と、生factoryの返す実recordの同一性、公開後のbind／start順、描画・exportの順序は維持する。
+
+これは実factoryと呼出し口を同じ既存ownerへ集める変更であり、setter-only holderや新しいmodel・Selection・scope・Pending・cacheは追加しない。原CanvasDisplay.create／createRendering、Navigation、Viewport、DimensionDisplay／DimensionPreviewの計算と描画アルゴリズムは変更しない。既存UIと保存形式v26も維持する。
+
+app.jsは1,282→1,280行（2行減）、非空白837→835行。root252→250文・425→424束縛、構文依存辺1,105→1,101。委譲16→14行、構築471→470行、その他call37→38行、別名／設定99行・test hooks162行は不変。減行自体ではなく二つの描画操作の所有を実生成ownerへ移す単位であり、200〜500行の目標は未完了。
+
+新規四テストではnative fitによる表示対象・現在scope・padding・viewport結果・例外、Navigationの既定／明示callback／null、失敗時の完成scene保持、native DimensionPreviewのPending／式評価／fillet、drawのreceiver・零引数・返値／元例外、preview生成失敗とworkspace独立性を確認する。新preview fixtureで欠けていた式評価依存を補って正常経路を検証した。既存期待値・閾値・timeoutは変更しない。
+
+構文639file・全単体2,499件・関連E2E447件（38file、8.2m、exit 0）が成功。709入力と開始HEAD不変、一覧447件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop fe4a275、作業branch codex/canvas-display-operations、週枠残量94%。描画関連56件、全単体2,499件、通常二経路／test一経路の起動が成功。五つのroot編集だけであること、原create／createRenderingとNavigation／Viewport／DimensionDisplay／DimensionPreviewの不変、free identifier集合不変をsourceとASTで照合した。関連38file・447件の成功と、709入力・開始HEAD不変を確認した。直前全体589件成功（develop 0bbe1e6、27.2分）と今回の関連検証を区別する。証跡はTEMP cad-canvas-display-operations-{focused,check,unit,smoke,e2e}.logとaudit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
+
 ### 最新：Parameter編集の削除guard・editor・適用処理を専用の組立てへ統合（2026-11-11）
 
 ParameterEditingFeature（src/application/parameter_editing_feature.js）は、同じDocumentWorkspaceとPresentationを用いるパラメータ編集の生成・接続を担当する。prepareForWorkspaceで既存ParameterApplication.createDeletionGuardと実ParameterEditor.createForWorkspaceをこの順に生成し、guardと実editorを公開する。createApplicationは従来の後段位置で実ParameterApplication.createForWorkspaceを呼び、成功した実applicationのみを保持する。計算・復元・Blockへの伝播は既存ParameterApplication、dialog draft／DOM入力は既存ParameterEditorが所有し、組立て側へ複製しない。
