@@ -64,7 +64,7 @@
   }
   function createForWorkspace({ documentWorkspace, blocks, readServices, presentation, serializeDocument, loadDocument,
     serializeConstraint, decorateSerializedConstraint, constructionCommand, clearInteractionForSketchChange,
-    solveAndRefresh, changed, limit }) {
+    solveAndRefresh, changed, limit = 80 }) {
     const documentModel = documentWorkspace.document;
     return createFeature({ serializeDocument, document: { getName: () => documentModel.documentName,
       setName: name => { documentModel.documentName = name; }, load: loadDocument },

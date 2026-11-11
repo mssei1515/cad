@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-11のCanvas描画操作owner統合単位ではapp.jsは1,280行、非空白835行。AST監査ではroot250文・424束縛、構築・接続470非空白行、別名・設定99行、委譲14行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-11の機能policy既定値移管単位ではapp.jsは1,271行、非空白826行。AST監査ではroot243文・417束縛、構築・接続468非空白行、別名・設定99行、委譲14行、条件付きtest hooks162行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -97,6 +97,27 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-11-11）
+
+### 最新：単一機能の固定既定値を各組立てownerへ移管（2026-11-11）
+
+app.jsから単一の機能へ渡していた固定の既定値は、その機能の組立てAPIが担当する。共有の数値基準、実行時に求める最小長、保存version等の接続はapp側に残し、全設定を別の汎用contextへ集めない。既定値を持つのは以下のapplication向け境界であり、生の計算・描画・履歴APIへ同じ変更を広げない。
+
+| 担当 | 入力の既定値 | 意味 |
+| --- | --- | --- |
+| HistoryController.createForWorkspace | limit=80 | Document／Blockそれぞれの履歴上限 |
+| SelectionEditingFeature.createForEditing | pasteOffsetScreenPx=24 | 貼り付けの画面上の間隔 |
+| BasicDrawingToolsのediting.createCenterline | parallelTolerance=1e-5 | 中心線の平行判定に渡す許容値 |
+| SketchSolvingFeatureのcontext.createSolving | maxPasses=20、relativeTolerance=1e-7 | Parameter feedbackの反復上限と収束判定 |
+| GeometryDragFeature.createForWorkspace | previewMaxModelError=0.125 | native DragSolver／DragEditingへ共通で渡すモデル誤差上限 |
+| CanvasDisplayのprepared workspace.createSceneForEditing | constructionExtensionScreenPx=12 | 補助線の画面上の延長量 |
+
+前五者はdestructuringの既定値であり、未指定／undefinedに既定値を適用し、明示の数値・0・nullはそのまま保持する。Canvasの延長量はoptionsより先に既定propertyを置くため、未指定に12を補い、明示undefined／nullを含むoptionsの上書きは従来どおり保持する。各raw childへ渡す既定値、primitive／functionの同一性、引数key、生成・公開・bind／start順、Workspace／bound scopeは維持する。計算アルゴリズム、反復・許容値、UI、保存形式v26の変更はない。新しいstate・model・cache・listenerやglobal設定objectは作らない。
+
+app.jsは1,280→1,271行（9行減）、非空白835→826行。root250→243文・424→417束縛、構文依存辺1,101→1,094。固定policy10→3行、構築470→468行、別名／設定99行・委譲14行・test hooks162行は不変。七つの固定値の受渡しを機能APIの既定値へ置き換える単位であり、200〜500行の全体目標は未完了。
+
+六moduleの変更は六つのparameter defaultと一つのCanvas既定propertyのみであり、それらを除いたASTが基準と等しいことを照合した。rootも十三の予定編集だけと照合し、test／manifest／index／toolsは変更していない。通常起動を別browserで計測し、実EditHistory／ClipboardSession／CenterlineGeometry／ParameterStabilization／GeometryDragSolver／GeometryDragEditing／GeometryDisplayの七factoryが受ける既定値と呼出し回数が変更前後で一致し、browser errorがないことを確認した。診断wrapperは別browserのapp responseだけへ挿入し、製品sourceと通常E2Eには残さない。数値移動をなぞるだけの新テストは増やさず、既存単体と全E2Eで検証する。
+
+構文639file・全単体2,499件・全E2E589件（50file、30.0m、exit 0）が成功。709入力と開始HEAD不変、全一覧589件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop eec3f9d、作業branch codex/feature-policy-defaults、開始時週枠残量93%。構文639file・全単体2,499件・通常二経路／test一経路の起動が成功。全50file・589件の成功と、709入力・開始HEAD不変を確認した。直前の全体589件成功（develop 0bbe1e6、27.2分）とは区別する。証跡はTEMP cad-feature-policy-defaults-{check,unit,smoke,e2e}.logとbefore／after／audit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
 
 ### 最新：表示fitと寸法preview描画を実CanvasDisplay生成ownerへ集約（2026-11-11）
 

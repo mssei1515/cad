@@ -1,5 +1,26 @@
 # app.jsを起動・接続専用にする継続作業
 
+### 最新：単一機能の固定既定値を各組立てownerへ移管（2026-11-11）
+
+app.jsから単一の機能へ渡していた固定の既定値は、その機能の組立てAPIが担当する。共有の数値基準、実行時に求める最小長、保存version等の接続はapp側に残し、全設定を別の汎用contextへ集めない。既定値を持つのは以下のapplication向け境界であり、生の計算・描画・履歴APIへ同じ変更を広げない。
+
+| 担当 | 入力の既定値 | 意味 |
+| --- | --- | --- |
+| HistoryController.createForWorkspace | limit=80 | Document／Blockそれぞれの履歴上限 |
+| SelectionEditingFeature.createForEditing | pasteOffsetScreenPx=24 | 貼り付けの画面上の間隔 |
+| BasicDrawingToolsのediting.createCenterline | parallelTolerance=1e-5 | 中心線の平行判定に渡す許容値 |
+| SketchSolvingFeatureのcontext.createSolving | maxPasses=20、relativeTolerance=1e-7 | Parameter feedbackの反復上限と収束判定 |
+| GeometryDragFeature.createForWorkspace | previewMaxModelError=0.125 | native DragSolver／DragEditingへ共通で渡すモデル誤差上限 |
+| CanvasDisplayのprepared workspace.createSceneForEditing | constructionExtensionScreenPx=12 | 補助線の画面上の延長量 |
+
+前五者はdestructuringの既定値であり、未指定／undefinedに既定値を適用し、明示の数値・0・nullはそのまま保持する。Canvasの延長量はoptionsより先に既定propertyを置くため、未指定に12を補い、明示undefined／nullを含むoptionsの上書きは従来どおり保持する。各raw childへ渡す既定値、primitive／functionの同一性、引数key、生成・公開・bind／start順、Workspace／bound scopeは維持する。計算アルゴリズム、反復・許容値、UI、保存形式v26の変更はない。新しいstate・model・cache・listenerやglobal設定objectは作らない。
+
+app.jsは1,280→1,271行（9行減）、非空白835→826行。root250→243文・424→417束縛、構文依存辺1,101→1,094。固定policy10→3行、構築470→468行、別名／設定99行・委譲14行・test hooks162行は不変。七つの固定値の受渡しを機能APIの既定値へ置き換える単位であり、200〜500行の全体目標は未完了。
+
+六moduleの変更は六つのparameter defaultと一つのCanvas既定propertyのみであり、それらを除いたASTが基準と等しいことを照合した。rootも十三の予定編集だけと照合し、test／manifest／index／toolsは変更していない。通常起動を別browserで計測し、実EditHistory／ClipboardSession／CenterlineGeometry／ParameterStabilization／GeometryDragSolver／GeometryDragEditing／GeometryDisplayの七factoryが受ける既定値と呼出し回数が変更前後で一致し、browser errorがないことを確認した。診断wrapperは別browserのapp responseだけへ挿入し、製品sourceと通常E2Eには残さない。数値移動をなぞるだけの新テストは増やさず、既存単体と全E2Eで検証する。
+
+構文639file・全単体2,499件・全E2E589件（50file、30.0m、exit 0）が成功。709入力と開始HEAD不変、全一覧589件、CAD filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合済み。基準develop eec3f9d、作業branch codex/feature-policy-defaults、開始時週枠残量93%。構文639file・全単体2,499件・通常二経路／test一経路の起動が成功。全50file・589件の成功と、709入力・開始HEAD不変を確認した。直前の全体589件成功（develop 0bbe1e6、27.2分）とは区別する。証跡はTEMP cad-feature-policy-defaults-{check,unit,smoke,e2e}.logとbefore／after／audit／selection／source-hashes JSONに保持する。週枠残量50%未満で新規分離を停止し、mainは停止時の最後に反映する。
+
 ### 最新：表示fitと寸法preview描画を実CanvasDisplay生成ownerへ集約（2026-11-11）
 
 CanvasDisplay.prepareForWorkspaceから生成したDisplayは、createSceneForEditingが成功した実sceneを保持し、同じfitのfitVisibleGeometryToViewportを安定した操作入口として公開する。NavigationのfitVisibleGeometryがundefinedの場合はこの入口へ接続し、明示callbackとnullは従来どおりそのまま渡す。fitは同じmember receiverで一引数、padding既定96、返値・元例外・余剰引数の破棄を維持する。未生成時は旧drawingFitの初期化前ReferenceErrorとし、scene factory失敗で完成済みsceneを置き換えない。Bounds／viewport／visibility／現在scopeの読取りや幾何計算は従来の実fitが担当する。
