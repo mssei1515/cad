@@ -1,6 +1,15 @@
 /* Assemble solving, parameter feedback and application refresh around the same owners. */
 (() => {
   "use strict";
+  function prepareWithReferencesForWorkspace({ documentWorkspace, readServices, references, solver, pointUsage, presentation }) {
+    const referenceState = window.ReferenceConstraintState.create({
+      currentScope: documentWorkspace.workspace.current,
+      constraintSketchId: documentWorkspace.sketches.constraintSketchId,
+      isReferenceSourceSketchId: documentWorkspace.sketches.isReferenceSourceSketchId,
+    });
+    const prepared = prepareForWorkspace({ documentWorkspace, readServices, references, referenceState, solver, pointUsage, presentation });
+    return Object.freeze({ referenceState, ...prepared });
+  }
   function prepareForWorkspace({ documentWorkspace, readServices, references, referenceState, solver, pointUsage, presentation }) {
     const solveState = window.SketchSolving.createState();
     let feature = null;
@@ -85,5 +94,5 @@
       readEditingScope: () => editingScope.current, activateEditingScope: (...args) => editingScope.activate(...args), nextHatchIndex: () => documentIds.peek("hatch"),
       drawableSketchIds, refreshConstraintAnalysis: (options = {}) => analysis.refresh(options), setSolveResultHint, updateUI, draw, historyController, recordHistory });
   }
-  window.SketchSolvingFeature = Object.freeze({ prepareForWorkspace, create, createForWorkspace, createContextForWorkspace });
+  window.SketchSolvingFeature = Object.freeze({ prepareWithReferencesForWorkspace, prepareForWorkspace, create, createForWorkspace, createContextForWorkspace });
 })();

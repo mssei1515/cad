@@ -64,7 +64,6 @@
   });
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
   const {
-    isReferenceSourceSketchId,
     activeSketchId, assignSketchId,
     elementSketchId, canEditSketch,
     constraintSketchId,
@@ -123,8 +122,9 @@
     documentWorkspace, readServices: geometryReadServices, interaction: canvasInteraction, presentation, viewportScale: () => viewport.scale,
   });
   const { hitAnnotationTarget, annotationLeaderTargetFromItem, annotationLeaderAnchor } = annotationTargets;
-  const referenceConstraintState = window.ReferenceConstraintState.create({
-    currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
+  const { referenceState: referenceConstraintState, solveState: sketchSolveResultState,
+    createContextForWorkspace: createSolveContext, solveAndRefresh } = window.SketchSolvingFeature.prepareWithReferencesForWorkspace({
+    documentWorkspace, readServices: geometryReadServices, references: constraintReferences, solver, pointUsage, presentation,
   });
   const { refreshReferenceConstraintValidity } = referenceConstraintState;
   const sketchProjectionFeature = window.SketchProjectionFeature.createForWorkspace({
@@ -173,9 +173,6 @@
   const { editing: blockDefinitionEditing, session: blockEditor, queries: blockEditingQueries } = blockEditingFeature;
   const { fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition } = blockDefinitionEditing;
 
-  const { solveState: sketchSolveResultState, createContextForWorkspace: createSolveContext, solveAndRefresh } = window.SketchSolvingFeature.prepareForWorkspace({
-    documentWorkspace, readServices: geometryReadServices, references: constraintReferences, referenceState: referenceConstraintState, solver, pointUsage, presentation,
-  });
   const canvasRenderProbe = window.CanvasRenderProbe.createForScene({
     ctx, readServices: geometryReadServices, readGeometry: () => geometryDisplay, readDimensions: () => dimensionLayer,
   });
