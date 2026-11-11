@@ -98,7 +98,17 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：ファイル操作のControls接続とPNG公開後の開始をDocumentFileFeatureへ集約（2026-11-12）
+### 最新：構築・公開段階の再監査（2026-11-12）
+
+開始基準developはc4ef8442003d2fe5a1f9447054b92cf0014dd524、作業branchはcodex/composition-boundaries-review。開始週枠残量63%。製品・テスト・仕様を変更しない監査単位で、app.jsは1,202→1,202行（0行変化）。全体目標は未完了。
+
+現物のASTと既存ownerの生成／公開契約を再確認した。構築115文・435非空白行のうち大きい上位8文は77行で、多くは既に分離されたowner間の接続である。Geometry／投影metadata／Authoring、Solve context／Viewport／checkpoint／Canvas Workspace、作図commandの各生成段階、入力とFileの公開前後を一括化しない。根拠・現物行・採らない案と次候補は[構築・公開段階の再監査](bootstrap-boundary-audit.md)の先頭節に記録した。
+
+次はSketchProjectionFeatureが持つqueryとドラッグ拒否文の組立てを狭いdrag capabilityとして共有できるか調べる。Geometry drag全体の所有はGeometryDragFeatureに残し、通常操作時の翻訳・既存raw APIと明示override・callback契約・拒否時の無変更を検証する。新しい全command registryや巨大contextを作らない。
+
+監査toolの単体6件が成功。製品コードは不変で、前単位の構文639／全単体2,594／関連E2E150成功を再実行の結果と混同しない。最新全E2Eは未実施。mainはc2edef1を維持し、停止時の全体検証後に最後に反映する。
+
+### ファイル操作のControls接続とPNG公開後の開始をDocumentFileFeatureへ集約（2026-11-12）
 
 開始基準developは2efecaf2f9e3e64d5b5806f7aad0334625a71047、作業branchはcodex/file-export-controls。開始週枠残量63%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

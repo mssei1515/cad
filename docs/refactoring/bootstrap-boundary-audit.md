@@ -1,5 +1,41 @@
 # Composition rootの残存責務と依存監査
 
+## 構築・公開段階の再監査（2026-11-12）
+
+基準はdevelop c4ef8442003d2fe5a1f9447054b92cf0014dd524、app.jsのGit blobは5e086c3d9160c86193efb648ae013bca8de344fa。現物をtools/audit-composition-root.jsで再計測した。1,202行／非空白760行、root210文・369束縛、構築115文／435非空白行、別名・設定87行、bind35行、startup16行、その他呼出30行、条件付きtest hooks152行。115 initializerの生成元系譜を取得した。構文上の即時参照には循環がない一方、遅延callbackを含む依存には大きな循環成分が残る。これは起動の安全性や実ownerの循環を直接証明するものではない。
+
+この単位は監査と再開方針の記録であり、製品・テスト・仕様の変更や責務分離の実装として数えない。app.jsは1,202→1,202行（0行変化）。空行削除や折畳みで目標へ近づいたと扱わない。
+
+### 大きい接続文と既存owner
+
+| rootの呼出し | 基準版行 | 非空白行 | 既存owner／接続の性質 |
+| --- | ---: | ---: | --- |
+| createPropertiesForEditing | 809 | 11 | PropertiesDisplayが編集とViewを順に生成。第二引数は編集生成後に読むView依存reader |
+| prepareCanvasEditingInput | 963 | 11 | OperationSessions側からCanvas入力を準備。後続bindとKeyboard依存readerを分離 |
+| createSelectionEditing | 588 | 10 | SelectionEditingFeatureが同じ削除・Clipboardを組み立て、画像Clipboard等の外部actorを共有 |
+| geometryDragPreparation.createForWorkspace | 881 | 10 | GeometryDragFeatureがPlan／Solver／Editing／Commandを生成し、完成後にprepareへ公開 |
+| createOperationSessions | 131 | 9 | 操作sessionと早期Previewを生成。後段のhit／offset／annotation等はcallbackで接続 |
+| propertiesPanel.createWorkspace | 234 | 9 | CanvasDisplayのLayout／DimensionDisplay／DimensionInput全体が完成後にProperties用layoutを公開 |
+| createConstraintEditing | 700 | 9 | ConstraintEditingがtargets／dimensions／controls等の実ownerと後段factoryを公開 |
+| createCanvasScene | 246 | 8 | CanvasDisplayがgeometry／overlay／bounds／fitを同じWorkspaceから構築 |
+
+上位8文の合計は77非空白行で、構築435行の一部である。各文の長さを巨大な未分離実装と読み違えない。現在の多くは実装本体を持たず、異なるownerの実actorや操作portを接続している。これらをそのまま一つのfactoryへ移すだけでは新しいcomposition rootを作ることになる。
+
+### 公開段階をまたぐ一括化を採らない箇所
+
+- Geometry作成→SketchProjectionEditing→投影metadata関数のroot公開→Authoring生成：連続しているが、先行Constructionのcallbackはmetadata関数を読む。ProjectionとAuthoringを一つの戻り値にすると、その関数のroot公開がAuthoring生成後へ遅れる。BasicDrawingTools.prepareのauthoring公開も全生成成功後である。読取時機の検証なしに一括化しない。
+- Solve context→Viewport→GeometryMutation→Canvas Workspace：analysis／redundancyの完成公開、Viewport生成、checkpoint準備、LayoutとDimension部品の完成が別段階。Properties側はLayout単体の完成ではなくWorkspace全体の完成を待つ。これを単一のCanvas factoryへ押し込めると求解と履歴まで描画ownerへ流入する。
+- Geometry／Authoring→Offset→Checkpoint／Solving→Fillet→Centerline／Preview→Spline／Hatch／Trim：既存actorがそれぞれ途中から利用される。後段でまとめるために既存actorを再生成したり、全command registryの保持slotとguardを増やしたりしない。作図集合の先行監査とも整合する。
+- Canvas inputのprepare／bind、File exportのprepare／start：返却actorやcommandの公開が後段起動に先行する。二段階を一つのstartへまとめない。
+
+### 今後の実装判断
+
+次は大きな関数の移動ではなく、接続先が既に持つownerから導出できるportをrootが再構成している箇所を減らす。具体的にはGeometryDragFeatureへの投影queryとローカライズ済み拒否理由の結線を調べる。現在rootはSketchProjectionFeatureからqueriesとsketchProjectionShapeEditBlockedMessageを別々に抜き、ドラッグ名の翻訳と拒否文生成を合成している。投影機能が同じqueryと操作時の言語読取りを持つ狭いdrag capabilityを返し、GeometryDragFeatureが受け取る案を検討する。全Geometry dragを投影ownerへ移さず、既存raw API・明示override・拒否時のモデル無変更を維持する。採用前に参照数、生成時の無読取り、callback receiver／引数／例外、日英の言語変更を検証する。
+
+これは次の候補を具体化する監査であり、200〜500行へ到達する行数・タスク数を約束しない。最終形に向けた構築境界の改善を継続し、単一portの移管だけで全体が完成すると扱わない。巨大context、不要なstate保持、通常featureからtestingへの依存は導入しない。
+
+監査toolの既存単体6件が成功した。製品コードを変更していないため構文・全単体・E2Eは再実行しておらず、直前c4ef844の構文639・単体2,594・関連E2E150成功と区別する。最新コードの全E2Eは依然未実施で、main反映前に実施する。
+
 ## 作図コマンド集合の境界再監査（2026-11-11）
 
 基準はdevelop 94b065322e57db90b8d5cbbf71ce6649c405fcd1、app.jsのGit blobはe1649b02cc3839cfa8c3a40a973d52c5b3adabf2。現物のBabel lexical bindingとObjectExpressionを照合した。app.jsは1,229行／非空白786行、root224文・376束縛、構築114文／447非空白行、条件付きtest hooks152行。この監査では製品・テストを変更せず、app.jsは1,229→1,229行（変化なし）。実装の分離単位として数えない。
