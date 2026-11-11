@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Document resetの完成参照と安定コールバックを既存ownerへ集約（2026-11-11）
+
+DocumentEditingReset.prepareは、createForWorkspaceが成功した実reset actorだけを内部の完了recordへ保持し、安定したresetModelState関数を返す。app.jsはこの関数をDocument applicationと各TestDriverへ共有し、後段のdocumentEditingReset bindingを読む委譲を持たない。準備は旧委譲宣言位置で行い、22箇所への公開より前であることをlexical referenceで確認した。実actorの生成位置はCommand panel構築後・test hooks／expression highlight／Document起動前のまま。
+
+生成前には従来と同じdocumentEditingResetのReferenceErrorを投げる。成功したundefined／nullと未生成を完了recordで区別し、生成後は元のTypeErrorを保つ。reset時だけ実actor.resetを読み、同じmember receiver・引数なしで呼び、返値・元例外を透過する。raw factoryは同じnamespace receiverと全引数で呼ぶ。生成失敗は前actorを保持し、prepareごとの参照は独立する。Document／Selection／ID／各commandの状態は既存ownerが保持し、reset処理順・部分失敗・二段階のcontent／defaults初期化、旧create／createForWorkspace API、UI・履歴・保存形式v26は不変。新しいmodelやlistenerは作らず、既存application配置を使う。
+
+app.jsは1,228→1,228行（変化なし）、非空白785行、root224文・376束縛、構文依存辺1,057のまま。rootの一行委譲は7→6行。AST分類は後段const生成から早期prepare生成＋後段callへ変わり、構築446→440行・otherCalls23→30行となるが、実際の行数削減ではない。bind41行・test hooks152行は不変。全体の200〜500行目標は未完了。
+
+関連単体9件が成功。既存の実Document／Workspace／Selection／IDと各resetの比較へprepared経路を追加し、全副作用の失敗境界・最後のImage reset・二段階初期化・繰返し・Block scopeの保持を確認した。新たに生成前guard、生成失敗後の前actor保持、遅延method取得・member receiver・無引数・返値／例外・入力引数の無視、独立性、undefined／null／methodなしのTypeErrorを照合した。browser比較では公開→実生成→生成完了→起動reset、三時点の同じReferenceError、22箇所での同じコールバック、native factoryのnamespace receiver・一引数とresetの実actor receiver・無引数、関数名／arity／prototype、native optionと公開204項目が一致。ja/light・en/dark・test起動も成功。元のreset組立て本体と三つの状態owner sourceは不変、新たな未束縛参照なし。構文639file・全単体2,552件と関連E2E504件（40file、9.0m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
 ## Properties表示入力を既存ownerから遅延選択（2026-11-11）
 
 PropertiesDisplay.createEditingWithViewForPresentationは、編集機能とAppearance UIの生成後にreadViewOwnersをbare・引数なしで一度呼び、実Block layoutのsnappedBlockRotation、Authoring feedbackのhatchRegionErrorText／geometryInstanceTypeLabel、Parameter editorのinstallExpressionInputHighlightsを選ぶ。同じ関数と残る明示入力を従来のcreateViewForWorkspaceへ渡し、生成時の表示値・scope・Selectionをsnapshot化しない。app.jsはlayout／feedback／parameterEditorを渡し、表示用四関数の選択を持たない。通常の数式highlight開始にも使う既存aliasは残し、起動時のbare呼出しを変えない。
