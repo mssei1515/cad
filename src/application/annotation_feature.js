@@ -36,6 +36,9 @@
       editor = completed;
       return completed;
     }
+    function createEditorForCheckpoint({ document, host, checkpoint, ...options }) {
+      return createEditorForEditing({ document, host, capture: checkpoint.captureValues, restore: checkpoint.restoreValues, ...options });
+    }
     function createDragForEditing(options) {
       const owner = requireComponent(feature, "annotationFeature");
       const completed = owner.api.createDragForEditing(options);
@@ -43,7 +46,7 @@
       return completed;
     }
     return Object.freeze({ annotationBounds, resizeEnabled, resetDrag, syncResizeSelection, syncInput,
-      prepareForWorkspace: prepareWorkspace, createEditorForEditing, createDragForEditing });
+      prepareForWorkspace: prepareWorkspace, createEditorForEditing, createEditorForCheckpoint, createDragForEditing });
   }
   function prepareForWorkspace({ documentWorkspace, readServices, interaction, presentation, viewportScale }) {
     const { workspace, sketches } = documentWorkspace;

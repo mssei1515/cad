@@ -318,7 +318,6 @@
   const { command: offsetCommand, previewLayer: offsetPreviewLayer, chainDraft: offsetChainDraft } = offsetFeature;
   const { submit: submitOffsetValue } = offsetCommand;
   const editingCheckpoint = createEditingCheckpoint();
-  const { captureValues: snapshotModelState, restoreValues: restoreModelState } = editingCheckpoint;
   const { dimensions: { serialize: serializeDimension },
     ensureDimensionDefaults, createApplication: createDocumentApplication } = createPersistence({
     placement: dimensionPlacement, pointUsage, readEditingScope: () => editingScopeBinding.current, readBlockEditor: () => blockEditor.current,
@@ -388,8 +387,8 @@
 
 
 
-  const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationPreparation.createEditorForEditing({
-    document, host: canvas.parentElement, capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
+  const { controller: annotationInputController, commitParameterEdit: commitAnnotationParameterEdit } = annotationPreparation.createEditorForCheckpoint({
+    document, host: canvas.parentElement, checkpoint: editingCheckpoint, guardDimensionSymbolDeletion,
     stabilize: stabilizeDocumentParameters,
   });
 

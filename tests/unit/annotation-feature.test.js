@@ -731,3 +731,43 @@ test('Annotation resize synchronization stays with the Drag producing context th
   sessions.pending.current = null; f.options.interaction.lifecycle.mode = 'line';
   owner.syncResizeSelection(); assert.deepEqual(calls.pop(), ['second', true]);
 });
+
+test('checkpoint-backed Annotation editor preserves native value rollback and referenced geometry and annotation identities',()=>{
+ const results=[];
+ for(const composed of [false,true]){
+  const f=workspaceStagesFixture('owned'),owner=f.probe.owner,support={structuredClone,window:{}};vm.createContext(support);
+  for(const file of ['src/geometry/geometry_kernel.js','src/geometry/spline_geometry.js','src/solver/constraint_solver.js','src/editing/geometry_ids.js','src/editing/checkpoint.js'])vm.runInContext(fs.readFileSync(file,'utf8'),support,{filename:file});
+  const point=new support.window.GeometrySolver.Point('PCK',1,2),model=f.state.scope,events=[];let reads=0,ready=false;
+  Object.assign(model,{points:[point],lines:[],circles:[],arcs:[],splines:[],blockInstances:[],geometryInstances:[],constraints:[],parameters:[{name:'p',expression:'1'}],nextDimensionParameterIndex:2});
+  f.item.expression='old';
+  const checkpoint=support.window.EditingCheckpoint.create({currentScope(){assert.equal(ready,true);reads++;return model;},ids:support.window.GeometryIds.create(),
+   invalidateProjection:()=>events.push('projection'),invalidateAnalysis:()=>events.push('analysis')});
+  vm.runInNewContext(fs.readFileSync('src/commands/annotation_parameter_command.js','utf8'),{window:f.probe.window});
+  const native=f.probe.window.AnnotationParameterCommand;
+  f.probe.window.AnnotationParameterCommand={create(options){assert.equal(this,f.probe.window.AnnotationParameterCommand);assert.equal(arguments.length,1);f.ports['parameter-editing']=options;return native.create(options);}};
+  const options={document:{},host:{},guardDimensionSymbolDeletion:()=>true,stabilize(){point.x=99;model.parameters[0].expression='changed';model.nextDimensionParameterIndex=99;return {success:false,result:{reason:'unstable'}};}};
+  const editor=composed?owner.createEditorForCheckpoint({...options,checkpoint}):owner.createEditorForEditing({...options,capture:checkpoint.captureValues,restore:checkpoint.restoreValues});
+  assert.equal(reads,0);assert.equal(editor.controller,f.editor);assert.equal(f.ports['parameter-editing'].capture,checkpoint.captureValues);assert.equal(f.ports['parameter-editing'].restore,checkpoint.restoreValues);
+  ready=true;assert.equal(editor.commitParameterEdit(f.item,'annotation-expression','new'),false);
+  assert.equal(model.points[0],point);assert.equal(model.annotations[0],f.item);assert.equal(point.x,1);assert.equal(point.y,2);assert.equal(f.item.expression,'old');
+  assert.equal(model.parameters[0].expression,'1');assert.equal(model.nextDimensionParameterIndex,2);assert.deepEqual(events,['projection','analysis']);
+  results.push(JSON.stringify({reads,events,model}));
+ }
+ assert.equal(results[1],results[0]);
+});
+
+test('checkpoint-backed Editor retains native defaults, explicit callback overrides and completed Editor after input or factory failure',()=>{
+ const checkpoint=Object.freeze({captureValues(){assert.fail('no eager capture');},restoreValues(){assert.fail('no eager restore');}});
+ const f=workspaceStagesFixture('owned',{beforeWorkspace(owner){assert.throws(()=>owner.createEditorForCheckpoint({checkpoint}),/Cannot access 'annotationFeature' before initialization/);}});
+ const owner=f.probe.owner,result={},marker=new Error('editor failed');f.editor.sync=function(){assert.equal(this,f.editor);assert.equal(arguments.length,0);return result;};
+ const editor=owner.createEditorForCheckpoint({document:{},host:{},checkpoint});assert.equal(editor.controller,f.editor);assert.equal(owner.syncInput(),result);
+ const events=f.events.slice(),broken=Object.freeze(Object.defineProperty({},'captureValues',{get(){throw marker;}}));
+ assert.throws(()=>owner.createEditorForCheckpoint({checkpoint:broken}),error=>error===marker);assert.deepEqual(f.events,events);assert.equal(owner.syncInput(),result);
+ const namespace=f.probe.window.AnnotationInputController;
+ try{f.probe.window.AnnotationInputController={create(){throw marker;}};assert.throws(()=>owner.createEditorForCheckpoint({checkpoint}),error=>error===marker);}
+ finally{f.probe.window.AnnotationInputController=namespace;}
+ assert.equal(owner.syncInput(),result);
+ owner.createEditorForCheckpoint({checkpoint,capture:null,restore:undefined,resetDrag:null});
+ assert.equal(f.ports['parameter-editing'].capture,null);assert.equal(f.ports['parameter-editing'].restore,undefined);
+ assert.equal(typeof f.ports.editor.prepare,'function');
+});
