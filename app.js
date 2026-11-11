@@ -474,8 +474,7 @@
     referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, choiceDialog,
     blockLocalGeometryBounds: blockLayout.blockLocalGeometryBounds, references: constraintReferences, acceptError: CONSTRAINT_ACCEPT_ERROR, solveState: sketchSolveResultState,
   });
-  const { open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
-  const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
+  const { enter: enterBlockDefinitionEdit } = blockDefinitionCommand;
 
 
   function resetModelState() { return documentEditingReset.reset(); }
@@ -1178,9 +1177,9 @@
       insertion: constraintInsertion, placement: dimensionPlacement, presentation, resetModelState, stabilizeActiveParameterNamespace,
       resetHistory, serializeModel, clearSelection, canvasSelection, deleteElements, document,
     });
-    const referenceImageTestSupport = window.ReferenceImageTestDriver.createBrowserSupport({
-      feature: referenceImageFeature, blocks: blockEditingFeature, canvasSelection, currentScope: workspace.current, readHistory: readTestHistory, viewport,
-      fetch, File, resetModelState, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel,
+    const referenceImageTestSupport = window.ReferenceImageTestDriver.createForWorkspace({
+      feature: referenceImageFeature, blocks: blockEditingFeature, canvasSelection, documentWorkspace, readHistory: readTestHistory, viewport,
+      fetch, File, resetModelState, blockDefinition: blockDefinitionCommand, blockCompletion: blockCompletionCommand, serializeModel,
     });
     const derivedInstanceTestApi = window.DerivedInstanceTestDriver.createForWorkspace({
       documentWorkspace, geometry: geometryCreation, readServices: geometryReadServices, interaction: canvasInteraction, presentation,

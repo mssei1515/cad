@@ -1,5 +1,16 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 参照画像テスト支援のWorkspace／Block command接続を既存TestDriverへ集約（2026-11-11）
+
+ReferenceImageTestDriver.createForWorkspace（src/testing/reference_image_test_driver.js）が、実DocumentWorkspaceのworkspace.currentと、既存BlockDefinitionCommand.open／BlockCompletionCommand.completeを選び、従来のcreateBrowserSupportへ接続する。app.jsは実ownerを渡し、テスト専用のopenBlockDefinitionEditor／completeBlockDefinitionEdit別名を持たない。通常入力にも使うenterBlockDefinitionEditは維持する。
+
+選択対象三fieldは実ownerのown readonly data propertyで、同じ実関数をwrap・bind・実行せず渡す。fixture／観測／画像importと完成済み凍結supportは従来のfactoryが生成する。現在scopeとlive Block画像は操作時に読み、reset抑止、Geometry参照、fetch→Blob→File→bare importerの非同期順、Block完了→serialize→structuredCloneの順と元例外・途中状態を保つ。生のcreateBrowserSupport／createObservation／createImport／createBlockFixture、test-mode判定と公開204項目、生成位置、通常機能の状態所有、UI・保存形式v26と既存testing配置・読込順は不変。
+
+app.jsは1,251→1,250行（1行減）、非空白807→806行、root236→235文・395→393束縛、構文依存辺1,075→1,072。別名・設定94→93行、構築116文／466非空白行・委譲7行・test hooks157行は不変。小さな接続整理であり、全体の200〜500行目標は未完了。
+
+構文639file・全単体2,539件・関連E2E147件（reference-images／blocks／unified-uiの3file、2.3m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。旧・新両経路の単体6件はscope／live Block切替、SelectionとGeometry参照、reset抑止、fetch／Blob／File／import各失敗と元例外、完了失敗時の未serializeと成功時のcloneを検証する。browser比較で実参照12項目、選択対象三fieldのreadonly、同じ実support resultと公開204項目が一致し、通常ja/light・en/darkとtest起動も成功した。既存driver本体の不変と新しい未束縛参照がないことも照合済み。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
+
 ## Parameterテスト支援の関数選択を既存TestDriverへ集約（2026-11-11）
 
 ParameterTestDriver.createForWorkspace（src/testing/parameter_test_driver.js）が、DocumentWorkspace／Geometry read／Block editing／Block selection／Constraint insertion／Dimension placement／Presentationの既存ownerから、Parameter fixture・観測・操作に必要な関数を選び、従来のcreateBrowserSupportへ接続する。app.jsはownerと操作portを渡し、テスト専用のblockSelectionGeometry／blockSelectionBoundsCenter別名を持たない。通常機能をtestingへ移さず、既存createBrowserSupport／createFixture／createObservation／createInteractionは維持する。
