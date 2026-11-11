@@ -731,6 +731,7 @@ test("Block selection feature preserves constructor, reference, codec, label, pr
 
 function commandViewOwnersFixture(owned) {
  const f=workspacePlacementFixture(true),state={generation:0,constructorFailure:false,prepareFailure:false,renderFailure:false,error:new Error('view owner')};
+ const preparation=owned==='prepared'?w.BlockEditingFeature.prepareCommandsWithView():null;
  let view,api;const reads=[],listeners=[],elements={};
  for(const id of ['blockList','blockOverlayTitle','blockEditorOverlay','blockEditorNameInput','blockEditorActions','openBlockDefinitionsBtn','completeBlockEditBtn','cancelBlockEditBtn','blockDefinitionsDialog']){
   const element={value:'',hidden:false,style:{},dataset:{},classList:{toggle(){}},addEventListener(type,handler){listeners.push([id,type,handler]);},
@@ -745,10 +746,10 @@ function commandViewOwnersFixture(owned) {
   Object.assign(f.owners.interaction,options.interaction);Object.assign(f.owners.presentation,options.presentation);
   f.owners.presentation.settings.localizeApplicationUI=localize;Object.assign(f.owners.documentWorkspace.sketches,options.sketches);
   const {interaction,presentation,sketches,readView,updateBlockUI,...input}=options;
-  return api=owned?feature.createCommandsWithView({...input,prepareBlocks}):feature.createCommandsForEditing({...options,readView:()=>view,updateBlockUI:updateView});
+  return api=preparation?preparation.createForFeature(feature,{...input,prepareBlocks}):owned?feature.createCommandsWithView({...input,prepareBlocks}):feature.createCommandsForEditing({...options,readView:()=>view,updateBlockUI:updateView});
  });
  assert.deepEqual(f.events,[]);assert.deepEqual(reads,[]);assert.deepEqual(listeners,[]);
- const update=owned?bundle.updateView:updateView;
+ const update=preparation?preparation.update:owned?bundle.updateView:updateView;
  function publish(){
   const original=w.BlockView;w.BlockView={create(input){assert.equal(this,w.BlockView);state.ports=input;if(state.constructorFailure)throw state.error;
    const actual=original.create(input),generation=++state.generation;
@@ -765,21 +766,21 @@ function commandViewOwnersFixture(owned) {
 
 test('Block command View owner stays cold, shares preparation and later View, and preserves void rendering and failure order',()=>{
  const traces=[];
- for(const owned of [false,true]){
+ for(const owned of [false,true,'prepared']){
   const f=commandViewOwnersFixture(owned);if(owned)assert.equal(Object.isFrozen(f.api),true);
   f.publish();assert.deepEqual(f.events,[]);assert.deepEqual(f.reads,[]);assert.deepEqual(f.listeners,[]);
-  assert.equal(f.viewState.ports.refresh,f.update);
+  assert.equal(f.viewState.ports.refresh,owned==='prepared'?f.bundle.updateView:f.update);
   assert.equal(f.update(),undefined);assert.deepEqual(f.events.slice(0,2),['prepare',['render',1]]);
   f.events.length=0;f.viewState.prepareFailure=true;assert.throws(()=>f.update(),error=>error===f.viewState.error);assert.deepEqual(f.events,['prepare']);
   f.viewState.prepareFailure=false;f.viewState.renderFailure=true;f.events.length=0;assert.throws(()=>f.update(),error=>error===f.viewState.error);assert.deepEqual(f.events,['prepare',['render',1]]);
   traces.push(JSON.stringify(f.events));
  }
- assert.equal(traces[1],traces[0]);
+ assert.equal(traces[1],traces[0]);assert.equal(traces[2],traces[0]);
 });
 
 test('Block command View owner routes opening, cancellation and refresh to the latest completed View without replacing the editing session',()=>{
  const traces=[];
- for(const owned of [false,true]){
+ for(const owned of [false,true,'prepared']){
   const f=commandViewOwnersFixture(owned),session=f.feature.session,first=f.publish(),second=f.publish();assert.notEqual(first,second);
   const outer=scope('outer');f.geometry(outer);f.document.blockDefinitions.push(outer);f.events.length=0;
   f.bundle.definition.enter('outer');f.update();assert.equal(f.feature.session,session);assert.ok(session.current);assert.notEqual(f.workspace.current(),f.document);
@@ -790,16 +791,61 @@ test('Block command View owner routes opening, cancellation and refresh to the l
   f.bundle.definition.startCreation();assert.ok(f.events.some(e=>Array.isArray(e)&&e[0]==='close'&&e[1]===2));f.bundle.definition.cancel();
   traces.push(JSON.stringify(f.events));
  }
- assert.equal(traces[1],traces[0]);
+ assert.equal(traces[1],traces[0]);assert.equal(traces[2],traces[0]);
 });
 
 test('Block command View owner retains the previously published View after constructor failure',()=>{
  const traces=[];
- for(const owned of [false,true]){
+ for(const owned of [false,true,'prepared']){
   const f=commandViewOwnersFixture(owned);f.publish();f.viewState.constructorFailure=true;
   assert.throws(()=>f.publish(),error=>error===f.viewState.error);f.events.length=0;assert.equal(f.update(),undefined);
   assert.deepEqual(f.events.slice(0,2),['prepare',['render',1]]);assert.equal(f.feature.session.current,null);assert.equal(f.workspace.current(),f.document);
   traces.push(JSON.stringify(f.events));
  }
- assert.equal(traces[1],traces[0]);
+ assert.equal(traces[1],traces[0]);assert.equal(traces[2],traces[0]);
+});
+
+
+test('prepared Block updates retain the same pre-View preparation and TypeError phase', () => {
+  const traces = [];
+  for (const mode of [false, true, 'prepared']) {
+    const f = commandViewOwnersFixture(mode);
+    assert.throws(f.update, { name: 'TypeError', message: "Cannot read properties of undefined (reading 'render')" });
+    assert.deepEqual(f.events, ['prepare']); f.events.length = 0;
+    f.publish(); assert.equal(f.update('ignored'), undefined); traces.push(JSON.stringify(f.events));
+  }
+  assert.equal(traces[1], traces[0]); assert.equal(traces[2], traces[0]);
+});
+
+test('prepared Block command View keeps native records, bare void updates and the previous updater after build or field failure', () => {
+  const p = w.BlockEditingFeature.prepareCommandsWithView(), marker = new Error('Block update failed'), events = [], input = {}, result = {};
+  let next, failBuild = false, failGet = false, failUpdate = false;
+  const make = name => {
+    const commands = Object.freeze(Object.defineProperty({}, 'updateView', { get() {
+      assert.equal(this, commands); events.push('get-' + name); if (failGet) throw marker;
+      return function() { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 0); events.push(name); if (failUpdate) throw marker; return result; };
+    } })); return commands;
+  };
+  const a = make('A'), b = make('B'), feature = Object.freeze({ createCommandsWithView(options) {
+    assert.equal(this, feature); assert.equal(arguments.length, 1); assert.equal(options, input); events.push('build');
+    if (failBuild) throw marker; return next;
+  } });
+  assert.ok(Object.isFrozen(p)); assert.equal(p.update.name, 'updateBlockUI'); assert.equal(p.update.length, 0); assert.ok(Object.hasOwn(p.update, 'prototype'));
+  const guard = { name: 'ReferenceError', message: "Cannot access 'updateBlockView' before initialization" };
+  assert.deepEqual(events, []); assert.throws(p.update, guard);
+  failBuild = true; assert.throws(() => p.createForFeature(feature, input), error => error === marker); assert.throws(p.update, guard);
+  failBuild = false; next = a; assert.equal(p.createForFeature(feature, input), a); assert.deepEqual(events.slice(-2), ['build', 'get-A']);
+  assert.equal(p.update('ignored'), undefined); assert.equal(events.at(-1), 'A');
+  failBuild = true; next = b; assert.throws(() => p.createForFeature(feature, input), error => error === marker); failBuild = false;
+  assert.equal(p.update(), undefined); assert.equal(events.at(-1), 'A');
+  failGet = true; assert.throws(() => p.createForFeature(feature, input), error => error === marker); failGet = false;
+  assert.equal(p.update(), undefined); assert.equal(events.at(-1), 'A');
+  assert.equal(p.createForFeature(feature, input), b); assert.equal(p.update(), undefined); assert.equal(events.at(-1), 'B');
+  failUpdate = true; assert.throws(p.update, error => error === marker); failUpdate = false;
+  const separate = w.BlockEditingFeature.prepareCommandsWithView(); assert.throws(separate.update, guard);
+  for (const value of [undefined, null]) {
+    const updater = w.BlockEditingFeature.prepareCommandsWithView(), commands = Object.freeze({ updateView: value });
+    updater.createForFeature({ createCommandsWithView: () => commands }, {});
+    assert.throws(updater.update, { name: 'TypeError', message: 'updateBlockView is not a function' });
+  }
 });

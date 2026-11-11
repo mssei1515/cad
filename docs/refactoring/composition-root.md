@@ -1,5 +1,15 @@
 # app.jsを起動・接続専用にする継続作業
 
+## Block表示更新の完成参照とvoidコールバックを既存ownerへ集約（2026-11-11）
+
+BlockEditingFeature.prepareCommandsWithViewは安定したupdateBlockUIと、実Block featureを受け取るcreateForFeatureを返す。後者は既存feature.createCommandsWithViewを同じmember receiver・一引数で呼び、完成した実command recordのupdateView関数を一度選んで内部完了recordへ保持する。Block feature／definition／completion／command record／Viewは包み直さず、元の実体をそのまま返し共有する。app.jsは後段updateBlockView bindingとvoid委譲を持たず、Presentation／Block configuration／Instance editingの三箇所へ同じ安定関数を渡す。
+
+公開前は元のupdateBlockViewのReferenceErrorを保ち、完成後のundefined／null updaterはTypeErrorとして未生成と区別する。updateBlockUIは保持した実関数をbare・無引数で呼び、返値を返さない従来のvoid契約と元例外を維持する。生成やfield取得の失敗は前updaterを保持し、prepareごとの参照は独立する。View生成前のprepareBlocks→render失敗、View生成・再生成と失敗時の前View保持は既存createCommandsWithViewが担当したままである。actorの生成位置、初期化前guard、live scope／Session／Documentの所有、操作・履歴・UI・保存形式v26、旧create／createForWorkspace／createCommandsWithView APIと既存application／ui配置を維持する。新しいmodelやlistener、全体contextを作らない。
+
+app.jsは1,228→1,228行（変化なし）、非空白785行、root224文・376束縛、構文依存辺1,057のまま。委譲6→5行、準備呼出しの追加により構築114→115文／440→441行となる。bind41行・test hooks152行は不変。分類・総行数を削減成果として装わず、Blockの実updaterの保持と公開を同じownerへ寄せる単位である。全体の200〜500行目標は未完了。
+
+関連単体34件が成功。既存の実Block session／command／View比較にprepared経路を追加し、最新Viewへの編集・取消・refresh、View再生成失敗、生成前guard、View前の準備とTypeError、void返値と元例外を確認した。新単体ではmember factory・一引数、実record返却、fieldの一度取得、bare無引数更新、生成／field取得失敗時の前updater保持、独立性、undefined／null updaterのTypeErrorを照合した。browser比較では三箇所での同じ関数、五時点のReferenceError、同じnative factory receiver・一引数、bare無引数更新と実View render receiver、五つの実参照と五fieldのreadonly、関数名／arity／prototype、native optionと公開204項目が一致。ja/light・en/dark・test起動も成功。元のBlock組立て本体と三つのnative actor sourceは不変、新たな未束縛参照なし。構文639file・全単体2,554件と関連E2E504件（40file、8.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。最新の全体589件成功（f0a7954、30.0分）とは区別し、今回は全E2E未実施。
+
 ## Document resetの完成参照と安定コールバックを既存ownerへ集約（2026-11-11）
 
 DocumentEditingReset.prepareは、createForWorkspaceが成功した実reset actorだけを内部の完了recordへ保持し、安定したresetModelState関数を返す。app.jsはこの関数をDocument applicationと各TestDriverへ共有し、後段のdocumentEditingReset bindingを読む委譲を持たない。準備は旧委譲宣言位置で行い、22箇所への公開より前であることをlexical referenceで確認した。実actorの生成位置はCommand panel構築後・test hooks／expression highlight／Document起動前のまま。

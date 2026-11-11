@@ -1,6 +1,21 @@
 /* Compose Block drafts, nested editing sessions and queries over the same owners. */
 (() => {
   "use strict";
+  function prepareCommandsWithView() {
+    let published;
+    function createForFeature(feature, options) {
+      const commands = feature.createCommandsWithView(options);
+      const updateBlockView = commands.updateView;
+      published = Object.freeze({ value: updateBlockView });
+      return commands;
+    }
+    function updateBlockUI() {
+      if (published === undefined) throw new ReferenceError("Cannot access 'updateBlockView' before initialization");
+      const updateBlockView = published.value;
+      updateBlockView();
+    }
+    return Object.freeze({ createForFeature, update: updateBlockUI });
+  }
   function create({ workspace, documentModel, ids, catalog, projections, instances, rebinding, readEditingScope,
     normalizedSketchCopy, normalizeGeometryInstance, isDimensionConstraint, isReadOnlyDimension,
     numericDimensionExpression, ensureParameterNamespace, activeSketchId, blockProjectionBundles, geometryElementKey,
@@ -161,5 +176,5 @@
     }
     return Object.freeze({ ...feature, createCommandsWithView, createPlacement, createSelectionQuery, createConfiguration });
   }
-  window.BlockEditingFeature = Object.freeze({ create, createForWorkspace });
+  window.BlockEditingFeature = Object.freeze({ prepareCommandsWithView, create, createForWorkspace });
 })();

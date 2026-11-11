@@ -25,6 +25,7 @@
   const constraintReferences = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
   const annotationPreparation = window.AnnotationFeature.prepare();
   const propertiesPreparation = window.PropertiesDisplay.prepare();
+  const { createForFeature: createBlockCommandsWithView, update: updateBlockUI } = window.BlockEditingFeature.prepareCommandsWithView();
   const { createForEditing: createSelectionEditing, copy: copySelectionToClipboard,
     paste: pasteGeometryClipboard } = window.SelectionEditingFeature.prepare();
   const { createForWorkspace: createHistoryFeature, createBlockHistory: createBlockEditHistory, record: recordHistory } = window.HistoryController.prepare();
@@ -465,7 +466,7 @@
 
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
-  const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView, updateView: updateBlockView } = blockEditingFeature.createCommandsWithView({
+  const { definition: blockDefinitionCommand, completion: blockCompletionCommand, createView: createBlockView } = createBlockCommandsWithView(blockEditingFeature, {
     isGeometryMode, selectionQuery: blockSelectionQuery, guardDimensionSymbolDeletion, prepareBlocks: ensureBlockState,
     resetBlockEditorHistory, clearSelection, drawingFit: canvasScene.fit, recordHistory,
     referenceState: referenceConstraintState, solving: sketchSolving, resultIsAccepted, choiceDialog,
@@ -804,7 +805,6 @@
 
   const blockView = createBlockView({ document, escapeHtml, startBlockPlacement });
 
-  function updateBlockUI() { updateBlockView(); }
 
   const expressionInputController = parameterEditor.createReferenceInput({
     TextAreaElement: HTMLTextAreaElement, currentNamespace: () => editingScopeBinding.current, dimensionValueInput, pendingCommandSession,
