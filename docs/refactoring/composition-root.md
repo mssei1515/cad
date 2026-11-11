@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 編集の許容誤差と受理判定をSketchSolvingで対にして生成（2026-11-11）
+
+SketchSolving.createEditingPolicyは、現在の編集受入れ許容誤差1e-4と、その値を使う既存createResultAcceptanceの実判定関数を一組の凍結recordとして返す。app.jsは許容誤差を定義せず、同じpolicyから得た値と関数を既存の求解・拘束・寸法・Block編集へ接続する。policyの所有先は既存src/solver/sketch_solving.jsとし、描画透明度や最小線長など別責務の設定を混ぜない。
+
+判定関数の生成位置は従来のまま。既存createResultAcceptanceを同じnamespace receiver・一引数で一度だけ呼び、生成された実関数をそのまま共有し、生成時に結果を評価しない。Boolean(result)かつ有限のerrorNormが許容誤差以下というinclusive判定、result.successを条件にしない契約、元のgetter例外を維持する。既存raw createResultAcceptanceの明示した任意の許容誤差・undefined／nullも変更しない。求解アルゴリズム・反復条件・状態・復元・履歴・UI・保存形式v26は不変。新file／global／sessionを増やさない。
+
+app.jsは1,217→1,216行（1行減）、非空白775→774行、root217→216文。束縛369、構築440行・bind37行・別名88行・委譲2行・test hooks152行は不変。root独自のpolicy値は2→1行となった。行数よりも許容誤差と判定関数の不一致を防ぐ所有関係を優先した単位であり、200〜500行の全体目標は未完了。
+
+関連単体29件が成功。閾値ちょうど／直上、0・負値・NaN・Infinity・型違い・結果なし、successと残差が一致しない結果、getter例外を旧判定と比較した。native factoryのreceiver・引数・呼出回数・実関数参照・元例外、生成時の未評価、旧APIのundefined／nullの違いも検証した。ソースの逆変換では既存求解・受理判定本体は不変、ASTで新たな未束縛参照なし。
+
+構文639ファイル・全単体2,575件、通常ja/light・en/dark・test起動が成功。関連E2E190件（8file、3.3m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## Hatch・Stack・Frameの段階的な準備と公開をCanvasDisplayへ集約（2026-11-11）
 
 CanvasDisplay.prepareRenderingが返すprepareHatchFrameは、同じSceneのcreateHatchRenderingを呼んで実Hatch layerを返し、後段のprepareFrameで実DrawingStackを生成する。さらに完成したStackを使うFrame factoryと、同じprepareRenderingの描画用完成参照への公開を接続する。app.jsはHatch生成factoryとFrame公開factoryを別々に保持・中継せず、この描画準備の入口を使用する。

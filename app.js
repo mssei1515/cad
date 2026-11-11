@@ -209,8 +209,7 @@
   const { state: viewState, constraintStatus: constraintStatusView } = canvasViewControls;
 
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
-  const CONSTRAINT_ACCEPT_ERROR = 1e-4;
-  const resultIsAccepted = window.SketchSolving.createResultAcceptance(CONSTRAINT_ACCEPT_ERROR);
+  const { acceptError: CONSTRAINT_ACCEPT_ERROR, resultIsAccepted } = window.SketchSolving.createEditingPolicy();
   const constraintOperandFeature = selectionFeature.createConstraintOperands({
     targets: constraintTargetSession, pointer: pointerInteractionController, solver, acceptError: CONSTRAINT_ACCEPT_ERROR,
   });
