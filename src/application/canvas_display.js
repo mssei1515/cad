@@ -289,7 +289,17 @@
       completed = { value: renderer };
       return frame;
     }
-    return Object.freeze({ drawCanvas, createFrame });
+    function prepareHatchFrame(scene, options) {
+      const { createHatchRendering } = scene;
+      const { layer, prepareFrame: prepare } = createHatchRendering(options);
+      function prepareFrame() {
+        const { stack, createFrame: build } = prepare();
+        function createFrameForDisplay(options) { return createFrame(build, options); }
+        return Object.freeze({ stack, createFrame: createFrameForDisplay });
+      }
+      return Object.freeze({ layer, prepareFrame });
+    }
+    return Object.freeze({ drawCanvas, createFrame, prepareHatchFrame });
   }
   window.CanvasDisplay = Object.freeze({ prepareForWorkspace, create, createRendering, prepareRendering });
 })();
