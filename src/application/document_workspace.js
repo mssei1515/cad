@@ -4,12 +4,12 @@
   function create(options) {
     const { applicationText, constraintGraphNodes, nextHatchIndex: suppliedHatchIndex } = options;
     let completedBinding;
-    function requireEditingScopeBinding() {
+    function readEditingScope() {
       if (completedBinding === undefined) throw new ReferenceError("Cannot access 'editingScopeBinding' before initialization");
-      return completedBinding.value;
+      return completedBinding.value.current;
     }
-    const nextHatchIndex = () => requireEditingScopeBinding().current.nextHatchIndex;
-    const currentSketches = () => requireEditingScopeBinding().current.sketches;
+    const nextHatchIndex = () => readEditingScope().nextHatchIndex;
+    const currentSketches = () => readEditingScope().sketches;
     const document = window.DocumentState.create();
     const workspace = window.EditingWorkspace.create(document);
     const parameters = window.ParameterNamespace.create({ currentParameterNamespace: workspace.current, applicationText });
@@ -124,7 +124,7 @@
       }
       return Object.freeze({ services, persistence, createRebinding, createScopeBinding, createEditingScope, createPersistence, createPersistenceForWorkspace });
     }
-    return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, createGeometryReadServices, createReadContext });
+    return Object.freeze({ document, workspace, parameters, sketches, geometryIds, documentIds, reservation, readEditingScope, createGeometryReadServices, createReadContext });
   }
   window.DocumentWorkspace = Object.freeze({ create });
 })();

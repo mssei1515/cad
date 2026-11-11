@@ -802,3 +802,18 @@ test('Document-owned scope defaults preserve explicit own and inherited readers 
     assert.equal(sketches, undefined);
   } finally { w.DocumentIds = originalIds; w.GeometryReadServices = originalReads; }
 });
+
+test('Document editing-scope query returns the actual bound model independently of Workspace restoration and failed reconstruction', () => {
+  const { model, context } = ownedBoundWorkspace(), read = model.readEditingScope;
+  assert.equal(read.name, 'readEditingScope'); assert.equal(read.length, 0);
+  assert.throws(read, { name: 'ReferenceError', message: "Cannot access 'editingScopeBinding' before initialization" });
+  const editing = context.createEditingScope({ closeSketchContext() {}, resetSketchMove() {} }), host = model.workspace.capture();
+  assert.equal(read('ignored'), editing.binding.current); assert.equal(read(), model.document);
+  const unbound = w.DocumentState.create(); model.workspace.activate(unbound);
+  assert.equal(read(), model.document); assert.notEqual(read(), model.workspace.current());
+  const draft = w.DocumentState.create(); editing.binding.activate(draft); assert.equal(read(), draft); assert.equal(editing.solver.model, draft);
+  model.workspace.restore(host); assert.equal(model.workspace.current(), model.document); assert.equal(read.call({}), draft);
+  const marker = new Error('scope query reconstruction'); class FailingSolver { constructor() { throw marker; } }
+  assert.throws(() => context.createEditingScope({ Solver: FailingSolver, closeSketchContext() {}, resetSketchMove() {} }), error => error === marker);
+  assert.equal(read(), draft); assert.equal(model.workspace.current(), model.document);
+});

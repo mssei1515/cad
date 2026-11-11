@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12の結線済みscope照会単位ではapp.jsは1,169行、非空白736行。AST監査ではroot200文・360束縛、構築422非空白行とbind35行、別名・設定77行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のParameter Workspace照会単位ではapp.jsは1,168行、非空白735行。AST監査ではroot199文・359束縛、構築422非空白行とbind35行、別名・設定76行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,25 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：Hatch採番とSketch外観の結線済みscope照会をDocumentへ移管（2026-11-12）
+### 最新：Parameter編集のWorkspaceと結線済みscope依存を整理（2026-11-12）
+
+開始基準developはc471611cf7ead7268bedc9c13e9ca2344cd115e0、作業branchはcodex/parameter-workspace-readers。開始週枠残量53%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
+
+DocumentWorkspace.readEditingScopeは、既存の完成binding参照から現在の結線済みmodelそのものを返す。Hatch番号／Sketch配列の既定readerも同じ照会を使い、既存の初期化前ReferenceError・完成公開・失敗時の前回参照保持・raw binding生成の無公開を維持する。追加のslot・model copy・cacheは作らない。Workspaceを直接activate／restoreした場合とbinding.activateした場合の区別、実model／Solverの同一性も変えない。
+
+ParameterEditingFeature.prepareForWorkspaceはcurrentNamespace未指定時に既存documentWorkspace.workspace.currentの実関数を一度取得し、名前空間準備と削除guardへそのまま渡す。currentScope未指定時は操作ごとにDocumentWorkspace.readEditingScopeをmember・ゼロ引数で呼ぶ遅延readerをParameterEditorへ渡す。reader名currentScope・arity 0、余分な引数の無視・返値／元例外を維持し、Feature生成時にはreadEditingScopeのlookupも行わない。NamespaceはWorkspaceの現在値、式参照候補は結線済みscopeを読む従来の違いを保持する。
+
+明示currentNamespace／currentScopeはown／継承とundefined／nullを含め優先し、fallback ownerを読まない。ParameterEditor・ParameterApplication・DeletionGuard、既存のbinding／採番・外観reader・namespace更新・draftの確定／復元の全処理本体、raw生成API、UI・履歴・保存形式v26は不変。新file・global・registry・全体contextを追加しない。新しいscopeモデルではなく、既存Document ownerからの狭い照会を共有する。フォルダ配置も既存ownerに合致しているため維持する。
+
+app.jsは1,169→1,168行（1行減）、非空白736→735行。root200→199文・360→359束縛、構築422行・109文、別名77→76行・bind35行・test hooks151行。currentParameterNamespaceの別名とParameter向けscope中継を除き、editingScopeBindingの初期化前root consumerは1→0か所となった。他の後段依存がすべて解消したという意味ではない。rootの後段可変参照・代入を追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体51件が成功。実Document binding照会のguard・scope切替・Workspace復元・再構築失敗時の保持を確認した。実ParameterEditorの式候補表示と名前空間準備／削除guardへ既定readerを接続し、Workspaceとbound modelの読取り先が混ざらないことを検証した。名前空間の関数同一性と一度の取得、scope readerのcold／live lookup・receiver／ゼロ引数・元例外、明示／継承overrideとinvalid値を保持することも確認した。ソース逆変換で既存Parameter・scope本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,655件・関連単体51件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E185件（7file、2.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は保存準備・Sketch移動等に残るreadEditingScopeの指定を、受け手が保持するDocumentWorkspaceと照合する。今回の照会を便利な全app contextへ広げず、Workspace.currentとbound scopeの区別・完成公開の時機・明示readerを維持する。巨大bootstrapや余白削除で数百行へ達したと扱わない。
+
+### Hatch採番とSketch外観の結線済みscope照会をDocumentへ移管（2026-11-12）
 
 開始基準developはe36e8ee2d66fe4de4ee89b84682457d610552b9c、作業branchはcodex/workspace-bound-scope-reads。開始週枠残量53%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。
 

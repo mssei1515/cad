@@ -1,6 +1,21 @@
 # app.jsを起動・接続専用にする継続作業
 
 
+## Parameter編集のWorkspaceと結線済みscope依存を整理（2026-11-12）
+
+DocumentWorkspace.readEditingScopeは、既存の完成binding参照から現在の結線済みmodelそのものを返す。Hatch番号／Sketch配列の既定readerも同じ照会を使い、既存の初期化前ReferenceError・完成公開・失敗時の前回参照保持・raw binding生成の無公開を維持する。追加のslot・model copy・cacheは作らない。Workspaceを直接activate／restoreした場合とbinding.activateした場合の区別、実model／Solverの同一性も変えない。
+
+ParameterEditingFeature.prepareForWorkspaceはcurrentNamespace未指定時に既存documentWorkspace.workspace.currentの実関数を一度取得し、名前空間準備と削除guardへそのまま渡す。currentScope未指定時は操作ごとにDocumentWorkspace.readEditingScopeをmember・ゼロ引数で呼ぶ遅延readerをParameterEditorへ渡す。reader名currentScope・arity 0、余分な引数の無視・返値／元例外を維持し、Feature生成時にはreadEditingScopeのlookupも行わない。NamespaceはWorkspaceの現在値、式参照候補は結線済みscopeを読む従来の違いを保持する。
+
+明示currentNamespace／currentScopeはown／継承とundefined／nullを含め優先し、fallback ownerを読まない。ParameterEditor・ParameterApplication・DeletionGuard、既存のbinding／採番・外観reader・namespace更新・draftの確定／復元の全処理本体、raw生成API、UI・履歴・保存形式v26は不変。新file・global・registry・全体contextを追加しない。新しいscopeモデルではなく、既存Document ownerからの狭い照会を共有する。フォルダ配置も既存ownerに合致しているため維持する。
+
+app.jsは1,169→1,168行（1行減）、非空白736→735行。root200→199文・360→359束縛、構築422行・109文、別名77→76行・bind35行・test hooks151行。currentParameterNamespaceの別名とParameter向けscope中継を除き、editingScopeBindingの初期化前root consumerは1→0か所となった。他の後段依存がすべて解消したという意味ではない。rootの後段可変参照・代入を追加せず、新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体51件が成功。実Document binding照会のguard・scope切替・Workspace復元・再構築失敗時の保持を確認した。実ParameterEditorの式候補表示と名前空間準備／削除guardへ既定readerを接続し、Workspaceとbound modelの読取り先が混ざらないことを検証した。名前空間の関数同一性と一度の取得、scope readerのcold／live lookup・receiver／ゼロ引数・元例外、明示／継承overrideとinvalid値を保持することも確認した。ソース逆変換で既存Parameter・scope本体と他のroot接続は不変。
+
+構文639ファイル・全単体2,655件・関連単体51件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E185件（7file、2.7m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+
 ## Hatch採番とSketch外観の結線済みscope照会をDocumentへ移管（2026-11-12）
 
 DocumentWorkspaceは、同じWorkspaceで最後に完成したcreateEditingScopeの実EditingScopeBinding参照を保持し、既定のnextHatchIndexとcurrentSketchesをそのcurrentから操作時に読む。app.jsは二つの後段binding参照callbackを組み立てない。採番は既存DocumentIds／GeometryIds、外観解決はGeometryReadServices、現在scopeとSolverの結線はEditingScopeBindingが引き続き所有する。
