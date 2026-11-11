@@ -54,7 +54,7 @@
 
 ## 5. 現在地と残作業
 
-2026-11-12のSelection owner接続単位ではapp.jsは1,167行、非空白734行。AST監査ではroot199文・360束縛、構築421非空白行とbind35行、別名・設定76行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
+2026-11-12のCanvas読取り接続単位ではapp.jsは1,166行、非空白733行。AST監査ではroot198文・359束縛、構築421非空白行とbind35行、別名・設定75行、委譲0行、条件付きtest hooks151行。rootの後段可変参照・代入はゼロ。これは構文上の計測であり、即時実行callbackや初期化順の安全性を単独で証明しない。全体目標はactive・未完了であり、最新の検証・基準ref・作業場所はsection 8を参照する。
 
 前回2026-10-24の停止時点（develop e84648b）ではapp.jsは2,208行、非空白1,756行、root493文、条件付きtest hooks362行。rootの可変参照は五つで、最新の監査と再開候補はsection 8の停止地点を参照する。目安200〜500行には未到達である。
 
@@ -98,7 +98,27 @@ Document／Workspace、Geometry read、solver・constraint、command／session�
 
 ## 8. 再開地点（2026-11-12）
 
-### 最新：全E2Eの再検証checkpoint（2026-11-12）
+### 最新：Canvas表示の読取りcapabilityを既存ownerから接続（2026-11-12）
+
+開始基準developは540177dcc315e91b34baa5dc33307b618e2555fc、作業branchはcodex/canvas-owned-read-capabilities。開始週枠残量50%。mainはc2edef1を維持し、停止時に最新全体検証後、最後に反映する。直前の全E2E589件成功は変更前6b3fcc6の証跡であり、今回以後のコードに流用しない。
+
+CanvasDisplay.prepareForWorkspaceが保持済みのDocumentWorkspace.parametersとreadServices.projectionsから、寸法式判定とBlock配置の投影bundle生成を既存の通常factoryへ接続する。app.jsのdimensionUsesExpression別名と、二つの個別port指定を除く。新しいwrapper API・module・global・可変slot・model cacheは設けず、フォルダ配置は既存application／rendering／parametersの責務に合っているため維持する。
+
+createDimensionTraversalはdimensionUsesExpression省略時だけParameter namespaceの実関数を取得する。明示own／継承の関数・undefined／nullはそのまま優先する。元のnamespaceは不変な実関数値を公開するため、rootの早期別名から通常生成時の取得へ変えても参照する関数は同じである。拘束のexpressionは従来どおり描画操作時に評価し、判定結果やscopeをcacheしない。注記を含むdimensionPresentationScopeを受け取る入口をWorkspace.currentへ置換しない。
+
+createPlacementPreviewはcreateBlockProjectionBundleを省略したときだけ、同じreadServices.projectionsの実関数を一度取得する。個別ownのundefined／nullを含む上書きを優先し、未使用のowner getterは読まない。既存のoptions spreadが継承fieldをコピーしない規則も維持する。関数は包装せずnative PlacementPreviewRendererへ渡し、プレビュー描画時のbare・二引数呼出し、実instance／definitionとbundle・元例外を保つ。生成中に投影や描画を実行しない。
+
+Canvas各native constructorの生成→公開→bind／start順、低水準CanvasDisplay.createの個別注入、実actor同一性とUI・操作・保存形式v26は不変。逆変換照合で変更は上記二つの既存normal factoryとroot接続だけで、Parameter／DimensionDisplay／PlacementPreviewRenderer本体は不変。新たな未束縛参照なし。
+
+app.jsは1,167→1,166行（1行減）、非空白734→733行。root199→198文・360→359束縛、構築109文・421行、別名76→75行・bind35行・test hooks151行。200〜500行の全体目標は未完了。
+
+関連単体70件が成功。native Parameter namespaceによる数値／式の判定が、明示注入と通常生成の両方で同じ寸法描画へ届き、expression変更とscope切替を追うことを確認した。native PlacementPreviewRendererの同じ描画層で投影の遅延・引数／receiver／返値・元例外を確認した。明示null／undefined／継承port、owner getterの未使用時非評価と取得後の実関数保持も検証した。
+
+構文639ファイル・全単体2,666件・関連単体70件と通常ja/light・en/dark・test起動とcontest=1／test=0の計5条件が成功。関連E2E187件（7file、2.8m、exit 0）が成功。710入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
+次は残る構築421行・109文について、Canvasの寸法input生成とsync／hideの後段参照を実owner・発火時機から監査する。単なるcallback移動のために複数段のfactory portや汎用setterを増やすなら採用しない。現在のGeometryMutationFeatureがCanvas生成の間に入り、PropertiesPanelの公開はnative input生成後であることを保つ。全体context・全test registry・余白削除は行わず、数百行の目標を縮小しない。
+
+### 全E2Eの再検証checkpoint（2026-11-12）
 
 develop 6b3fcc6b342e8ebc6c3c18dbe548a0a9a9090381を対象に全E2E589件・50fileを実行し、22.5分・exit 0ですべて成功した。対象suite指定なし、CAD_REGRESSION_TARGET／CAD_GEOMETRY_VARIANT／CAD_GEOMETRY_PATHはすべて未設定。710入力のraw SHA256と開始HEAD不変、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。テスト中にソース・テスト・閾値・timeoutを変更していない。
 

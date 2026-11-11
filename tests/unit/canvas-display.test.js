@@ -1492,3 +1492,50 @@ test('browser display construction preserves native failure identity and partial
     assert.deepEqual(browser.order,raw.order);assert.deepEqual(browser.calls,raw.calls);
   }
 });
+
+test('owned Canvas traversal uses the native Parameter namespace expression policy and keeps explicit overrides', () => {
+  const f = dimensionTraversalFixture(true), w = sceneWindow;
+  const namespace = w.ParameterNamespace.create({ currentParameterNamespace: () => f.state.scope, applicationText: (_ja, en) => en });
+  f.documentWorkspace.parameters = namespace;
+  const input = { currentScope: f.probe.ports.currentScope, readDraggedDimension: f.probe.ports.readDraggedDimension };
+  const explicit = f.workspace.dimensions.display.createTraversal({ ...f.probe.ports, dimensionUsesExpression: namespace.dimensionUsesExpression });
+  const owned = f.workspace.createDimensionTraversal(input);
+  f.active.expression = 'span'; f.inactive.expression = '12';
+  const paint = traversal => { f.probe.draws.length = 0; traversal.layer.draw(); return f.probe.draws.map(args => [args[2], args[8]]); };
+  assert.deepEqual(paint(owned), paint(explicit)); assert.deepEqual(paint(owned), [['inactive', false], ['active', true]]);
+  f.active.expression = '18'; assert.deepEqual(paint(owned), [['inactive', false], ['active', false]]);
+  f.state.scope = { constraints: [f.active] }; f.active.expression = '2 * span';
+  assert.deepEqual(paint(owned), paint(explicit)); assert.deepEqual(paint(owned), [['active', true]]);
+  const marker = new Error('unused Parameter owner');
+  Object.defineProperty(f.documentWorkspace, 'parameters', { get() { throw marker; } });
+  for (const inherited of [false, true]) for (const value of [null, undefined, () => false]) {
+    const options = inherited ? Object.assign(Object.create({ dimensionUsesExpression: value }), input) : { ...input, dimensionUsesExpression: value };
+    const traversal = f.workspace.createDimensionTraversal(options);
+    if (value == null) assert.throws(() => traversal.layer.draw(), error => error.name === 'TypeError');
+    else assert.deepEqual(paint(traversal), [['active', false]]);
+  }
+});
+
+test('owned placement preview captures the projection function without drawing early and preserves override copy rules', () => {
+  const f = preparedWorkspaceFixture(true), calls = [], instance = {}, definition = {}, pointer = { x: 1, y: 2 };
+  const bundle = { lines: [], circles: [], arcs: [], points: [] }, marker = new Error('projection failure'); let gets = 0, failure;
+  const project = function(a, b) { 'use strict'; assert.equal(this, undefined); assert.equal(arguments.length, 2); assert.equal(a, instance); assert.equal(b, definition); calls.push('project'); if (failure) throw failure; return bundle; };
+  f.readServices.projections = {};
+  Object.defineProperty(f.readServices.projections, 'createBlockProjectionBundle', { configurable: true, get() { gets++; return project; } });
+  const input = { geometry: f.scene.geometry, annotations: { drawAnnotationLeader() {}, drawAnnotationText() {} }, hatchLayer: { drawResolvedHatch() {} },
+    blockPlacementCommand: { definitionId: 'B1', preview(value) { assert.equal(this, input.blockPlacementCommand); assert.equal(value, pointer); return { instance, definition }; } }, geometryInstanceCommand: { preview: () => null } };
+  const owned = f.workspace.createPlacementPreview(input); assert.equal(gets, 1); assert.deepEqual(calls, []);
+  const explicit = f.workspace.createPlacementPreview({ ...input, createBlockProjectionBundle: project }); assert.equal(gets, 1);
+  f.sceneState.mode = 'block-place'; f.sessions.preview.pointer = pointer;
+  owned.drawBlockPlacementPreview(); explicit.drawBlockPlacementPreview(); assert.deepEqual(calls, ['project', 'project']); assert.equal(gets, 1);
+  failure = marker; assert.throws(() => owned.drawBlockPlacementPreview(), error => error === marker); failure = null;
+  Object.defineProperty(f.readServices.projections, 'createBlockProjectionBundle', { get() { throw marker; } });
+  for (const value of [null, undefined]) {
+    const layer = f.workspace.createPlacementPreview({ ...input, createBlockProjectionBundle: value });
+    assert.throws(() => layer.drawBlockPlacementPreview(), error => error.name === 'TypeError');
+  }
+  const inherited = Object.assign(Object.create({ createBlockProjectionBundle: project }), input);
+  const layer = f.workspace.createPlacementPreview(inherited);
+  assert.throws(() => layer.drawBlockPlacementPreview(), error => error.name === 'TypeError');
+  owned.drawBlockPlacementPreview(); assert.equal(gets, 1);
+});

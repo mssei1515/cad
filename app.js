@@ -50,7 +50,6 @@
     readBlockEditor: () => blockEditor.current,
     recordHistory, pickDimension: event => expressionInputController.pickCanvas(event),
   });
-  const { dimensionUsesExpression } = parameterNamespace;
   const { syncExpressionInputHighlight, installExpressionInputHighlights } = parameterEditor;
 
   const { services: geometryReadServices, createEditingScope, createPersistenceForWorkspace, createRebinding,
@@ -267,7 +266,7 @@
   const { createFrame: createCanvasFrame } = prepareCanvasFrame();
   const placementPreviewLayer = createPlacementPreview({
     geometry: geometryDisplay, annotations: annotationFeature.renderer, hatchLayer,
-    blockPlacementCommand, geometryInstanceCommand, createBlockProjectionBundle: blockProjections.createBlockProjectionBundle,
+    blockPlacementCommand, geometryInstanceCommand,
   });
   const { geometry: geometryCreation, createAuthoringWithProjectionForEditing: createAuthoringTools } = createDrawingGeometry({
     currentScope: workspace.current, ids: geometryIds, assignSketchId: sketchContext.assignSketchId, currentConstruction: () => constructionCommand.enabled,
@@ -577,7 +576,7 @@
 
 
   const { selectionBounds: dimensionSelectionBounds, layer: dimensionLayer } = createDimensionTraversal({
-    currentScope: dimensionPresentationScope, readDraggedDimension: () => dimensionDrag.constraint, dimensionUsesExpression,
+    currentScope: dimensionPresentationScope, readDraggedDimension: () => dimensionDrag.constraint,
   });
 
   const { query: rectangleSelectionQuery, rectangle: selectionRectangle } = sceneHitInteraction.createRectangleSelection({
