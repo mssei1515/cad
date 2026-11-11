@@ -12,6 +12,9 @@
       feature = completed;
       return completed;
     }
+    function createWorkspaceWithProjection({ projection, ...options }) {
+      return createPreparedWorkspace({ ...projection.createDragInputs(), ...options });
+    }
     function build(...args) {
       const { build } = requireFeature("buildDragSession");
       return build(...args);
@@ -23,7 +26,7 @@
       isDraggingPoint(point) { return requireFeature("geometryDrag").command.isPoint(point); },
       isDraggingCenter(point) { return requireFeature("geometryDrag").command.isCenter(point); },
     });
-    return Object.freeze({ createForWorkspace: createPreparedWorkspace, build, begin, reset, queries });
+    return Object.freeze({ createForWorkspace: createPreparedWorkspace, createForWorkspaceWithProjection: createWorkspaceWithProjection, build, begin, reset, queries });
   }
   function create({ solver, currentScope, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
     viewScale, arcEndpointPoint, acceptError, previewMaxModelError,

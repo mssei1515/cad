@@ -123,8 +123,7 @@
     cancelConstraintTargetCommand, cancelPendingCommand, clearSelection, clearSnap: () => clearSnap(),
     updateToolbar, normalizeGeometryInstance, refreshConstraintAnalysis, recordHistory,
   });
-  const { queries: sketchProjectionQueries, command: sketchProjectionCommand, sources: sketchProjectionSources,
-    sketchProjectionShapeEditBlockedMessage } = sketchProjectionFeature;
+  const { command: sketchProjectionCommand, sources: sketchProjectionSources } = sketchProjectionFeature;
   const { toggle: toggleSketchProjectionSource } = sketchProjectionCommand;
   const { prepareGeometryForSolver: prepareDrawingGeometry, createEditing: createDrawingEditing, createCenterline, createTrim, createSplineEditing,
     resetSplineEditing, preview: authoringPreview } = window.BasicDrawingTools.prepare();
@@ -878,14 +877,13 @@
 
 
 
-  const geometryDragFeature = geometryDragPreparation.createForWorkspace({
-    documentWorkspace, interaction: canvasInteraction, presentation, sourceQueries: derivedDragQueries, projectionQueries: sketchProjectionQueries,
+  const geometryDragFeature = geometryDragPreparation.createForWorkspaceWithProjection({
+    documentWorkspace, interaction: canvasInteraction, presentation, sourceQueries: derivedDragQueries, projection: sketchProjectionFeature,
     solver, scopeQuery: solveScopeQuery, solving: sketchSolving,
     checkpoint: editingCheckpoint, geometry: geometryCreation, readServices: geometryReadServices,
     viewport, pointer: dragPointer, acceptError: CONSTRAINT_ACCEPT_ERROR,
     minimumLength: MIN_ORIENTATION_LENGTH,
     blockLocalGeometryBounds: blockLayout.blockLocalGeometryBounds, fixedState: fixedStateQueries,
-    projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     stabilizeActiveParameterNamespace, refreshConstraintAnalysis, recordHistory, clearSelection,
   });
   const { command: geometryDrag } = geometryDragFeature;

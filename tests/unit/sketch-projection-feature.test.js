@@ -293,3 +293,14 @@ test('Projection model editing preserves constructor errors and partial endpoint
       return JSON.parse(JSON.stringify({namespace,seq:f.ids.peek('point')}));};assert.deepEqual(run(true),run(false),failure);
   }
 });
+
+test('projection drag inputs share the native query and defer both translations until each blocked operation', () => {
+  const f = projectionWorkspaceFixture(true); f.state.ready = false;
+  const inputs = f.feature.createDragInputs(); assert.ok(Object.isFrozen(inputs)); assert.equal(inputs.projectionQueries, f.queries);
+  assert.equal(f.state.reads, 0); assert.deepEqual(f.events, []); assert.deepEqual(f.hints, []);
+  const { projectionBlockedMessage } = inputs; assert.equal(projectionBlockedMessage.name, 'projectionBlockedMessage'); assert.equal(projectionBlockedMessage.length, 0);
+  f.workspaceState.language = 'en'; assert.equal(projectionBlockedMessage(), 'Drag: Delete the legacy sketch projection constraint before editing the shape.');
+  f.workspaceState.language = 'ja'; assert.equal(projectionBlockedMessage(), 'ドラッグ: 旧形式の投影拘束を削除してから形状を編集してください');
+  f.workspaceState.fail = 'text'; assert.throws(projectionBlockedMessage, error => error === f.marker);
+  assert.equal(f.state.reads, 0); assert.deepEqual(f.events, []); assert.deepEqual(f.hints, []);
+});

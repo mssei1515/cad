@@ -1,5 +1,17 @@
 # app.jsを起動・接続専用にする継続作業
 
+## 投影のdrag入力と操作時の拒否文をSketchProjectionFeatureへ集約（2026-11-12）
+
+SketchProjectionFeature.createForWorkspaceのcreateDragInputsは、同じ実projectionQueriesとprojectionBlockedMessageを凍結recordで返す。拒否文は操作時に既存applicationTextでドラッグ名を翻訳し、既存の投影形状編集拒否文を生成する。GeometryDragFeature.prepareのcreateForWorkspaceWithProjectionがこれを既存Workspace生成へ接続し、完成した同じfeatureを既存経路で公開する。app.jsは投影queryと拒否文関数を個別に抜き出したり、翻訳と拒否文を組み立てたりしない。
+
+入力準備ではモデル・scope・言語・描画・listenerを読み書きしない。queryは実参照を共有し、native Plan／Solver／Editing／Commandの生成と投影lock判定・preview／finish・rollback・履歴は従来のownerに残す。拒否文callbackは元と同じ名前・arity 0、翻訳と文生成はbare呼出しで同じ順序・引数・戻り値・元例外を維持する。翻訳関数の実参照はWorkspace生成時に既存と共有し、言語は操作時に読む。新routeの明示projectionQueries／projectionBlockedMessageはundefined／nullを含め既定値より優先する。provider／生成失敗では完成featureの公開を更新せず、前の実drag sessionと初期化前guardを維持する。raw APIと既存生成本体は不変。既存application/sketch_projection_feature.jsとgeometry_drag_feature.jsに配置し、新file／global／全体contextや可変保持slotを追加しない。UI・操作・保存形式v26は変更しない。
+
+app.jsは1,202→1,200行（2行減）、非空白760→758行。root210文は不変、束縛369→367。構築435→434行・115文、別名87→86行・68文、bind35行・test hooks152行は不変。新たな未束縛参照なし。200〜500行の全体目標は未完了。
+
+関連単体30件が成功。投影の実queryと準備時の無読取り、実際の日英拒否文・言語変更・元例外、native dragの投影lock拒否時のPoint identity／座標・履歴無変更、provider失敗時の前session保持と未生成guard、明示callbackとundefined／null overrideを確認した。ソース逆変換で投影の既存生成／操作本体とdragの既存生成／公開／操作本体は不変で、rootは宣言した接続置換だけである。
+
+構文639ファイル・全単体2,597件・関連単体30件と通常ja/light・en/dark・test起動が成功。関連E2E193件（8file、4.4m、exit 0）が成功。709入力と開始HEAD不変、filter三つ未設定、receipt exitCode 0／listeners 0、last-run passed／failedTests空を照合した。この単位では全E2E未実施。
+
 ## ファイル操作のControls接続とPNG公開後の開始をDocumentFileFeatureへ集約（2026-11-12）
 
 DocumentFileFeature.prepareのcreateForWorkspaceが返すprepareExportControlsは、同じ完成File featureのDocument controlsをbindし、共有File session・文書名・参照画像準備・Canvas snap・pointer flushを既存PNG factoryへ接続する。返すpngはfactoryが返した実recordで、startを別に返す。app.jsはpng.commandを従来の位置で公開した後にstartを呼び、同じPNG lifecycleのstart、同じDXF featureのcontrols bindを順に実行する。
